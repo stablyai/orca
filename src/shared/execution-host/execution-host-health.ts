@@ -1,6 +1,6 @@
-import type { SshConnectionStatus } from '../ssh-types'
+import type { SshConnectionStatus } from '../remote-runtime/ssh/ssh-types'
 import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
-import type { EphemeralVmRuntimeStatus } from '../ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeStatus } from '../remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 export type ExecutionHostHealth =
   | 'local'

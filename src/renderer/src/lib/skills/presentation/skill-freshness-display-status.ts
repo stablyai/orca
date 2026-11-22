@@ -1,8 +1,8 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillPlanState,
   type BundledSkillPlanState
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 
 export type SkillFreshnessDisplayStatus =
   | 'installed'

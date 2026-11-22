@@ -1,8 +1,9 @@
 import type { DetailComment } from './mobile-tasks-provider-detail-types'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
-import type { GitHubProjectSettings, GitHubProjectRef } from './mobile-tasks-dependencies'
-import type { GitHubProjectSortDirection } from '../../../src/shared/github/project-types'
+import type { GitHubProjectSettings } from './project-board/github-project-reference'
+import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../src/shared/github/projects/project-identity'
+import type { GitHubProjectSortDirection } from '../../../src/shared/github/projects/project-types'
 import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export type GitHubTaskKind = 'issues' | 'prs'

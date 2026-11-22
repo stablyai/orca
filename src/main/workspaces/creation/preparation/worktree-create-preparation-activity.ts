@@ -1,4 +1,4 @@
-import type { PreparedCheckoutOrigin } from '../../../../shared/worktree/create-timing-vocabulary'
+import type { PreparedCheckoutOrigin } from '../../../../shared/worktree/creation/create-timing-vocabulary'
 import { beginPreparationWork, type PreparationWork } from '../worktree-create-concurrency'
 
 /** Record preparation origin and disk timing without controlling the pool. */

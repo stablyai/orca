@@ -6,7 +6,7 @@ import type {
   BrowserIdentityModeSnapshot,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../../shared/browser-user-agent-mode'
+} from '../../../../shared/browser/identity/browser-user-agent-mode'
 import {
   BROWSER_IDENTITY_MODE_VERSION,
   browserIdentityModeRecordPath,
@@ -216,11 +216,4 @@ export async function markBrowserIdentityMigrationNoticePending(
   }
   notifySnapshotListeners(store.snapshot)
   return true
-}
-
-export function resetBrowserIdentityModeStoreForTests(): void {
-  modeStore = null
-  snapshotListeners.clear()
-  migrationNoticeDegraded = false
-  launchMigrationNoticePending = false
 }

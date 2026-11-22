@@ -5,7 +5,7 @@
  * calls proceed (or fail) as usual.
  */
 import { isWslHostRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { WslHostStatus } from '../../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { AppState } from '../../types'
 import type { PRRefreshState } from '../refresh/pr-refresh-state'
 

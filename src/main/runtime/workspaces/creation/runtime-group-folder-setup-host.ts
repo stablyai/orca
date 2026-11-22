@@ -1,0 +1,118 @@
+import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
+import {
+  prepareGroupFolderCreation,
+  groupFolderCreationIsUserAct,
+  type RuntimeGroupFolderCreateInput
+} from './runtime-group-folder-setup'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
+import { wslUserAct } from '../startup/workspace-create-activation'
+import {
+  buildWorktreeStartupForAgent,
+  buildWorktreeStartupForDraft
+} from '../startup/runtime-worktree-agent-startup'
+import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
+
+export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+  protected finishGroupFolderCreation = async (
+    input: RuntimeGroupFolderCreateInput,
+    group: ProjectGroup,
+    workspace: FolderWorkspace
+  ) => {
+    const store = this.requireStore()
+    const worktree = this.folderWorkspaceToResolvedWorktree(workspace)
+    const activation: { wslUserAct?: true } = groupFolderCreationIsUserAct(input)
+      ? { wslUserAct: true }
+      : {}
+    const scope = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${worktree.id}`,
+      undefined,
+      activation,
+      worktree,
+      workspace
+    )
+    const owner = projectGroupHookOwner(group)
+    return prepareGroupFolderCreation({
+      input,
+      group,
+      workspace,
+      settings: store.getSettings(),
+      ports: this.localWorktreeTerminalPorts(
+        { ...activation, terminalImageViewerSupported: input.terminalImageViewerSupported },
+        () => {},
+        worktree
+      ),
+      wait: (handle, signal) => this.waitForSetupTerminalCompletion(handle, signal),
+      startupBuilders: {
+        agent: (agent, prompt, launchPreferences, inputs) =>
+          buildWorktreeStartupForAgent({
+            repo: owner ?? {
+              path: workspace.folderPath,
+              connectionId: workspace.connectionId,
+              executionHostId: workspace.executionHostId
+            },
+            agent,
+            prompt,
+            launchPreferences,
+            ...inputs,
+            settings: store.getSettings(),
+            getLaunchRuntime: (requested) =>
+              resolveStartupAgentLaunchRuntime(store, scope, requested),
+            toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+          }),
+        draft: (draft, requestedAgent, launchSource, inputs) =>
+          buildWorktreeStartupForDraft({
+            repo: owner ?? {
+              path: workspace.folderPath,
+              connectionId: workspace.connectionId,
+              executionHostId: workspace.executionHostId
+            },
+            draft,
+            requestedAgent,
+            originalAgent: inputs?.createdWithAgent ?? requestedAgent,
+            agentArgs: inputs?.startupAgentArgs,
+            sessionOptions:
+              inputs?.startupSessionOptions ??
+              this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
+            launchSource,
+            settings: store.getSettings(),
+            getLaunchRuntime: (agent) => resolveStartupAgentLaunchRuntime(store, scope, agent)
+          })
+      }
+    })
+  }
+  protected localWorktreeTerminalPorts(
+    args: Pick<TerminalCreateOptions, 'terminalImageViewerSupported' | 'wslUserAct'> & {
+      navigation?: RuntimeNavigationTarget
+    },
+    activate: RuntimeLocalWorktreeTerminalPorts['activate'],
+    worktree?: Worktree
+  ): RuntimeLocalWorktreeTerminalPorts {
+    const launchContext = {
+      ...wslUserAct(args),
+      ...(args.terminalImageViewerSupported !== undefined
+        ? { terminalImageViewerSupported: args.terminalImageViewerSupported }
+        : {})
+    }
+    return {
+      canSpawn: Boolean(this.ptyController?.spawn),
+      provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
+      createTerminal: (selector, options) =>
+        worktree
+          ? this.createTerminal(selector, { ...options, ...launchContext }, worktree)
+          : this.createTerminal(selector, { ...options, ...launchContext }),
+      pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
+      sendFollowup: (handle, followup, terminal) => {
+        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+      },
+      provision: (options) =>
+        this.provisionManagedWorktreeTerminals({ ...options, ...launchContext }, worktree),
+      activate
+    }
+  }
+}

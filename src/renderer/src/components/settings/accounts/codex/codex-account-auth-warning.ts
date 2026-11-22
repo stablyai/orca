@@ -1,9 +1,9 @@
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
-} from '../../../../../../shared/rate-limit-types'
-import type { CodexSystemDefaultIdentity } from '../../../../../../shared/managed-account-types'
-import { isCodexAuthError } from '../../../../../../shared/codex-auth-errors'
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexSystemDefaultIdentity } from '../../../../../../shared/agent-accounts/managed-account-types'
+import { isCodexAuthError } from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'
@@ -47,6 +47,15 @@ export function getCodexAccountAuthWarning(args: {
     return null
   }
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
+    return null
+  }
+  // WSL system defaults have no resolved authKind; the fetcher marks a home it proved has no ChatGPT login instead.
+  if (
+    args.accountId === null &&
+    args.authKind === undefined &&
+    args.runtime.runtime === 'wsl' &&
+    args.limits.usageMetadata?.failureKind === 'usage-unavailable'
+  ) {
     return null
   }
   return 'stale-sign-in'

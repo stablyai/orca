@@ -1,5 +1,9 @@
 import { BaseWindow, WebContentsView } from 'electron'
-import { isBackgroundLaunch } from '../../../../window/foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  revealWindowsAwaitingAppActive,
+  showWhenAppActive
+} from '../../../../window/activation/foreground-activation-policy'
 import {
   discardBrowserPopupContents,
   prepareNativeBrowserPopup
@@ -84,6 +88,24 @@ function closeUnpreparedPopup(
   }
 }
 
+/** A child Chromium opened without adoptable contents (its OpenURL path) has no opener. */
+export function popupChildOpener(options: PopupChildWindowOptions): Electron.WebFrameMain | null {
+  return (options.nativeWindow?.webContents ?? options.webContents)?.opener ?? null
+}
+
+/** Another surface loads the URL; discard the provisional popup before its first request. */
+export function discardPopupChildWindow(
+  options: PopupChildWindowOptions,
+  url: string
+): Electron.WebContents {
+  if (options.webContents && !options.nativeWindow) {
+    // Discard directly to avoid flashing a window that would immediately close.
+    discardBrowserPopupContents(options.webContents)
+    return options.webContents
+  }
+  return openPopupWithOriginBar(options, url, () => false).contentWebContents
+}
+
 // Native child windows lack an address bar; untrusted popups need an Orca-controlled origin display.
 export function openPopupWithOriginBar(
   options: PopupChildWindowOptions,
@@ -95,6 +117,10 @@ export function openPopupWithOriginBar(
     return prepareNativeBrowserPopup(options.nativeWindow, prepareContent)
   }
   const { width, height } = clampPopupContentSize(options)
+  const presentable =
+    Boolean(options.webContents || options.loadInitialUrl) &&
+    !isBackgroundLaunch() &&
+    options.show !== false
   const window = new BaseWindow({
     width,
     height: height + POPUP_ORIGIN_BAR_HEIGHT,
@@ -108,10 +134,7 @@ export function openPopupWithOriginBar(
     title: 'about:blank',
     // Windows/Linux attach the app menu to web popups too.
     autoHideMenuBar: true,
-    show:
-      Boolean(options.webContents || options.loadInitialUrl) &&
-      !isBackgroundLaunch() &&
-      options.show !== false
+    show: presentable && !options.showWhenAppActive
   })
 
   // Isolate the trusted origin bar from the arbitrary web content below it.
@@ -143,6 +166,8 @@ export function openPopupWithOriginBar(
   // Re-pin on explicit fullscreen events; resize alone does not cover every platform.
   window.on('enter-full-screen', layoutViews)
   window.on('leave-full-screen', layoutViews)
+  // Off macOS, a return to Orca through this popup alone raises no app event.
+  window.on('focus', revealWindowsAwaitingAppActive)
   layoutViews()
 
   const contentWebContents = contentView.webContents
@@ -242,6 +267,9 @@ export function openPopupWithOriginBar(
     }
   })
 
+  if (presentable && options.showWhenAppActive) {
+    showWhenAppActive(window)
+  }
   return {
     contentWebContents,
     close: (): void => {

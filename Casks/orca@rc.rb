@@ -8,7 +8,7 @@ cask "orca@rc" do
   url "https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg"
   name "Orca RC"
   desc "IDE for orchestrating AI coding agents across terminals and worktrees"
-  homepage "https://onorca.dev/"
+  homepage "https://orca.dev/"
 
   livecheck do
     url "https://github.com/stablyai/orca"

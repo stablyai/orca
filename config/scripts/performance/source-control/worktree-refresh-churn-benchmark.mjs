@@ -5,7 +5,7 @@ import { createJiti } from 'jiti'
 // Use jiti: Node type stripping cannot resolve graph’s extensionless imports.
 const jiti = createJiti(import.meta.url)
 const { planWorktreeSortOrderUpdates } = await jiti.import(
-  '../../../../src/shared/worktree/sort-order-update.ts'
+  '../../../../src/shared/worktree/metadata/sort-order-update.ts'
 )
 const { reuseEqualCatalogRows } = await jiti.import(
   '../../../../src/renderer/src/lib/catalog-reconciliation/catalog-row-reconciliation.ts'

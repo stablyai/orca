@@ -1,5 +1,5 @@
-import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
-import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
+import { UNFLUSHED_SETTLE_MS } from './transcript-watching/transcript-watch-contract'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-history/opencode/transcript-opencode-subscribe'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
@@ -7,23 +7,19 @@ import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
   type WslTranscriptResolutionSnapshot
-} from './host-readable-transcript-path'
+} from './transcript-discovery/host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { installTranscriptWatcher } from './transcript-watch-engine'
+import { installTranscriptWatcher } from './transcript-watching/transcript-watch-engine'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-contract'
+} from './transcript-watching/transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
-import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import { observeRunningWslDistros } from './wsl-transcript-running-observer'
-
-export { readNativeChatTranscriptTail } from './transcript-tail-reader'
-export { getActiveNativeChatWatcherCount } from './transcript-watcher-count'
-export type {
-  NativeChatTranscriptSubscription,
-  SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-contract'
+import {
+  WslTranscriptFsError,
+  wslTranscriptFsRefusal
+} from './transcript-filesystem/wsl-transcript-fs-error'
+import { observeRunningWslDistros } from './transcript-filesystem/wsl-transcript-running-observer'
 
 /** Unresolved files retry; native watch failure still permits reconciliation-only mode. */
 async function attemptInstall(

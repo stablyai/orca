@@ -21,8 +21,8 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { createAcpOwnershipReader } from './acp-ownership-reader'
 import type { AcpTextDrop } from '../timeline/acp-turn-messages'
+import { AcpAgentTurnQuiet } from './acp-agent-turn-quiet'
 
 const BACKPRESSURE_RETRY_MS = 250
 
@@ -56,6 +56,7 @@ export class AcpStructuredLane {
   private readonly turnWatchers = new Set<() => void>()
   private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
   private retryTimer: ReturnType<typeof setTimeout> | null = null
+  readonly agentTurn = new AcpAgentTurnQuiet(this, () => this.deps.now?.() ?? Date.now())
   private failed = false
   private ended = false
   private disposed = false
@@ -71,9 +72,6 @@ export class AcpStructuredLane {
       sessionId: deps.providerSessionId,
       dialect: deps.dialect,
       agentName: deps.agentName,
-      ownership: createAcpOwnershipReader(this.requestIdentity, deps.providerSessionId, () =>
-        deps.sink.journalItems()
-      ),
       onTextDropped: (drop) => this.reportTextDrop(drop)
     })
     this.assembler = createProviderTimelineAssembler({
@@ -131,6 +129,7 @@ export class AcpStructuredLane {
       this.backlog.push({ type: 'ownership.publish', publish })
     }
     this.drain()
+    this.agentTurn.restart()
   }
 
   /** Resolves when the turn leaves or further writes become impossible. */
@@ -179,6 +178,7 @@ export class AcpStructuredLane {
     this.disposed = true
     this.translator.dispose()
     this.clearRetry()
+    this.agentTurn.dispose()
     this.backlog.length = 0
     this.assembler.dispose()
     this.notifyTurnWatchers()
@@ -240,9 +240,10 @@ export class AcpStructuredLane {
   }
 
   private publishChildWork(event: ProviderTimelineEvent): void {
-    const observedAt = this.deps.now?.() ?? Date.now()
-    const stops = this.deps.childStops?.()
-    const evidence = acpBackgroundTaskChildWork(event, observedAt, stops?.backgroundTasks === true)
+    const at = this.deps.now?.() ?? Date.now()
+    const stoppable = this.deps.childStops?.().backgroundTasks === true
+    const synthetic = this.translator.isSyntheticBackgroundTask
+    const evidence = acpBackgroundTaskChildWork(event, at, stoppable, synthetic)
     if (evidence.length > 0) {
       this.publishEvidence(evidence)
     }

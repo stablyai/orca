@@ -4,7 +4,7 @@ import {
   type RuntimeWorktreeRemovalTarget
 } from '../catalog/runtime-worktree-selection'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export async function resolveRuntimeWorktreeRemovalTarget(args: {
   selector: string

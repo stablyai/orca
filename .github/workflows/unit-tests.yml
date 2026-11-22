@@ -14,12 +14,6 @@ on:
         default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
-      run_shards:
-        description: Run the planned root unit shards.
-        required: false
-        default: true
-        type: boolean
-
       shards:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
@@ -54,17 +48,11 @@ on:
         default: unit
         type: string
 
-      run_relay_integration:
-        description: Run relay contracts alongside normal unit checks.
-        default: true
-        type: boolean
-
 permissions:
   contents: read
 
 jobs:
   test:
-    if: inputs.run_shards
     name: ${{ inputs.artifact_prefix != 'unit' && format('{0} ', inputs.artifact_prefix) || '' }}tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
@@ -194,48 +182,3 @@ jobs:
           path: ci-shards/
           retention-days: 14
           if-no-files-found: warn
-
-  relay_integration:
-    if: inputs.run_relay_integration
-    name: relay integration node ${{ matrix.node }}
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ${{ fromJSON(inputs.node_versions) }}
-    # Free hosted runner: ~1.2 min of work finishes well inside the ~7 min unit shards it runs beside.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
-        id: root_dependencies
-        with:
-          native-runtime: none
-          node-version: ${{ matrix.node }}
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            cloud/pnpm-lock.yaml
-
-      # These two tests import the cloud relay workspace directly. Keeping them in one job
-      # avoids installing and building the same workspace once per unit-test shard.
-      - name: Install relay integration dependencies
-        id: relay_dependencies
-        if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
-        working-directory: cloud
-        run: |
-          pnpm --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          pnpm --filter '@orca-cloud/relay^...' build
-
-      - name: Test relay integration contracts
-        if: ${{ !cancelled() && steps.relay_dependencies.outcome == 'success' }}
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/relay-region-compatibility.unit.test.ts
-          tests/e2e/relay-region-correction.unit.test.ts

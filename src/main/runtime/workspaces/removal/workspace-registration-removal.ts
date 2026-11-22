@@ -1,11 +1,14 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeTeardownRuntime } from './worktree-teardown'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isRepoOnCatalogHost, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRepoOnCatalogHost,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
@@ -16,7 +19,7 @@ import {
   removeFolderWorkspaceRunnerFiles
 } from '../../../workspaces/removal/folder-workspace-archive-hook'
 import { invalidateAuthorizedRootsCache } from '../../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getRuntimeFolderWorkspaceRootId } from '../catalog/runtime-folder-workspace'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'

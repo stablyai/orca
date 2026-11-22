@@ -1,20 +1,14 @@
-import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
-import {
-  acquire,
-  assertPositiveInt,
-  extractExecError,
-  ghExecFileAsync,
-  noteRepositoryRateLimitSpend,
-  projectGhExecOptions,
-  projectHostAuthenticationError,
-  release,
-  repositoryRateLimitGuard,
-  runRest,
-  validateSlugArgs
-} from './internals'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../attachments/body-image-urls'
+import { acquire, release } from '../execution/github-operation-slots'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../api/rate-limit'
+import { projectGhExecOptions, projectHostAuthenticationError } from './project-host-execution'
+import { runRest } from './project-rest'
 import { classifyProjectError, rateLimitedError } from './project-error-classification'
-import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
-import type { UpdateIssueBySlugArgs } from '../../../shared/github/project-request-types'
+import type { GitHubProjectMutationResult } from '../../../shared/github/projects/project-result-types'
+import type { UpdateIssueBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 export async function updateIssueBySlug(
   args: UpdateIssueBySlugArgs

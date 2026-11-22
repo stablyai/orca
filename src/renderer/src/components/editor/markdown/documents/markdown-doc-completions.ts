@@ -1,5 +1,5 @@
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 
 export type MarkdownDocCompletionContext = {
   partial: string

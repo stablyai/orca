@@ -1,4 +1,4 @@
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 

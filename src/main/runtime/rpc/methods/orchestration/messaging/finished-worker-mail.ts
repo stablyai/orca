@@ -5,7 +5,7 @@ import { dispatchReportMailbox } from '../../../../orchestration/workers/reports
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/workers/reports/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { MessageRouting } from '../routing'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;

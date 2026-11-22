@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   executionHostIdForStructuredTarget,
   legacyStructuredChatRenameOwner,

@@ -1,28 +1,68 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
-import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import { rejectedReportInTurn } from '../../db/messages/rejected-worker-report'
 import type {
   DispatchContextRow,
   RemoteDispatchAttachmentRow
 } from '../../db/orchestration-records'
 import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
-import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
+import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
+import { describeApprovalClosed } from './worker-approval-text'
+import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
-// One screenful: enough to show the agent's last words or error banner without flooding the inbox.
-const LAST_OUTPUT_MAX_CHARS = 2_000
-
-export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited'
+export type WorkerTurnStopReason =
+  | 'finished'
+  | 'errored'
+  | 'needs-input'
+  | 'exited'
+  | 'lost'
+  | 'start-unconfirmed'
+  | 'start-blocked'
+  | 'never-ready'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
   from: string
-  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead. */
-  stopKey: string
   reason: WorkerTurnStopReason
+  /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
+  mailTaken?: number
   lastOutput: string | undefined
-  /** Why the process ended, for an `exited` stop. */
-  exitCause?: string
+  /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
+  awaitsReply?: boolean
+  /** A permission prompt Orca can answer; its id keys the report. */
+  approval?: WorkerApprovalPayload
+  /** When the stopping turn began, on this host's clock; absent when unknown, which mutes nothing. */
+  turnStartedAt?: number
+  /** Why the worker went away, for an `exited` or `lost` stop. */
+  cause?: string
+  /** An exited chat: mail starts it again, keeping its history. */
+  restartsOnMail?: true
+  /** What the worker left behind, such as the workspace of a start that failed. */
+  leftover?: string
+  /** A start that never got a terminal has no output to read. */
+  neverStarted?: true
+  /** For `start-blocked`: the screen a person must answer, and when the start fails if its agent
+   *  is still not ready. */
+  blockedStart?: { screen: string; readyBy: number }
+  /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
+  startSurface?: 'terminal' | 'chat'
+  /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
+  settled?: 'failed' | 'circuit_broken'
+  /** A chat request that failed, reported in the chat's own error words. */
+  requestError?: WorkerRequestError
+}
+
+export type WorkerRequestError = {
+  text: string
+  detail?: string
+  /** The shared failure kind, when the failure was typed. */
+  kind?: string
+  /** A terminal's failure, held back like its other rests while it waits for mail; a chat's is not. */
+  heldByWaits?: true
+  /** What the coordinator's mail carries about the failed request. */
+  facts: Record<string, unknown>
 }
 
 export type WorkerTurnStopDispatch =
@@ -34,124 +74,213 @@ export type WorkerTurnStopReportDeps = {
   /** `check --wait` holds a `dispatch:<id>` waiter: a deliberate wait. */
   isWaitingForMail: (mailbox: string) => boolean
   notify: (handle: string, messageType: string) => void
+  /** Whether a mailbox reaches a chat coordinator, whose user sees the approval card; unknown reads as no. */
+  isChatMailbox?: (mailbox: string) => boolean
+  /** Whether the user lets coordinator agents allow this machine's workers' prompts; unknown reads as no. */
+  coordinatorApprovals?: () => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }
 
-const SUBJECTS: Record<WorkerTurnStopReason, string> = {
-  finished: 'Worker stopped without reporting',
-  errored: 'Worker stopped on an error without reporting',
-  'needs-input': 'Worker is waiting on a prompt',
-  exited: 'Worker exited without reporting'
+/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
+ *  A failed request a chat showed never is. */
+export function isDeliberateRest(
+  db: OrchestrationDb,
+  target: WorkerTurnStopDispatch,
+  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError'>,
+  deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
+): boolean {
+  const dispatchId = workerTurnStopDispatchId(target)
+  if (stop.requestError && !stop.requestError.heldByWaits) {
+    return false
+  }
+  return (
+    deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
+    (stop.reason === 'finished' &&
+      (db.awaitsAnswerToLatestQuestion(dispatchId) ||
+        rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
+        (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))))
+  )
 }
 
-function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): string {
-  const what =
-    stop.reason === 'needs-input'
-      ? `Worker ${stop.from} is stopped at a prompt that needs a person (approval or a question) while running task ${task}.`
-      : stop.reason === 'exited'
-        ? `Worker ${stop.from} exited (${stop.exitCause ?? 'process ended'}) without sending worker_done for task ${task}.`
-        : `Worker ${stop.from} ended its turn ${stop.reason === 'errored' ? 'on an error ' : ''}without sending worker_done for task ${task}.`
-  // Agent prose can echo its injected capability; mail must never carry it.
-  const output = stop.lastOutput && replaceDispatchCapabilities(stop.lastOutput).value.trim()
-  return [
-    what,
-    stop.reason === 'exited'
-      ? 'The Dispatch is still open. Stop the worker, then retry it or tell the user.'
-      : // The reader runs its own CLI build, so name the subcommand, never an executable.
-        `The Dispatch is still open. Answer it with your Orca CLI's \`orchestration send --to dispatch:${dispatchId} --subject "<topic>" --body "<guidance>"\`, retry it, or stop the worker.`,
-    ...(stop.reason === 'finished'
-      ? [
-          'If it is idle on purpose, leave it: its later idle turns are not reported until you write to it.'
-        ]
-      : []),
-    ...(output
-      ? [
-          'Last output:',
-          output.length > LAST_OUTPUT_MAX_CHARS
-            ? `…${output.slice(-LAST_OUTPUT_MAX_CHARS)}`
-            : output
-        ]
-      : []),
-    `Full output: orchestration worker-read --dispatch ${dispatchId}`
-  ].join('\n')
-}
-
-/** Tell the coordinator once that a worker is at rest with its Dispatch unsettled; never settles it. */
-export function reportWorkerTurnStop(
+/** Writes a stop report under `id`; `stored` runs in the same transaction as a local report's mail.
+ *  True when the report is in the coordinator's mail, or queued for its Run home. */
+export function sendWorkerReport(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
   stop: WorkerTurnStop,
-  deps: WorkerTurnStopReportDeps
-): void {
+  id: string,
+  deps: WorkerTurnStopReportDeps,
+  stored: () => void = () => {}
+): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
-  // Waiting on mail, or a clean finish resting on its own question or helpers, is deliberate; an exit never is.
-  if (
-    stop.reason !== 'exited' &&
-    (deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
-      (stop.reason === 'finished' &&
-        (db.awaitsAnswerToLatestQuestion(dispatchId) ||
-          (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId)))))
-  ) {
-    return
+  const subject = stop.approval
+    ? 'Worker is waiting for permission'
+    : stop.requestError?.kind === 'usageLimitReached'
+      ? 'Worker hit its usage limit'
+      : WORKER_STOP_SUBJECTS[stop.reason]
+  const payload = {
+    dispatchId,
+    handle: stop.from,
+    ...(stop.requestError ? stop.requestError.facts : { stopReason: stop.reason }),
+    ...(stop.approval ? { approval: stop.approval } : {})
   }
-  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
-  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
-  const stopKey =
-    stop.reason === 'finished'
-      ? `finished:${readCoordinatorMailCount(db, dispatchId)}`
-      : stop.stopKey
-  const id = `msg_stop_${createHash('sha256')
+  // A worker_done its Run home has not acknowledged yet is still a report.
+  if (target.kind === 'remote' && db.hasPendingFederatedWorkerReport(dispatchId)) {
+    return false
+  }
+  const woken: [string, string][] = []
+  let sent: boolean
+  try {
+    // The report and the record of having sent it commit together.
+    sent = runLifecycleWriteTransaction(db.db, 'worker_stop_report', () => {
+      const inMail =
+        target.kind === 'local'
+          ? mailWorkerReport(db, target.dispatch, stop, { id, subject, payload }, deps, woken)
+          : relayWorkerReport(db, target.attachment, stop, { id, subject, payload }, deps)
+      if (inMail) {
+        stored()
+      }
+      return inMail
+    })
+  } catch (error) {
+    console.warn('[orchestration] failed to send a worker stop report', dispatchId, error)
+    return false
+  }
+  // Committed is sent: a wake that fails does not unsend it.
+  for (const [handle, type] of woken) {
+    try {
+      deps.notify(handle, type)
+    } catch (error) {
+      console.warn('[orchestration] waking for a worker stop report failed', handle, error)
+    }
+  }
+  return sent
+}
+
+export type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
+
+/** Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox. */
+function mailWorkerReport(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  stop: WorkerTurnStop,
+  { id, subject, payload }: WorkerReportMail,
+  deps: WorkerTurnStopReportDeps,
+  woken: [string, string][]
+): boolean {
+  escalateWorkerFailure(
+    db,
+    dispatch,
+    {
+      id,
+      from: stop.from,
+      mailbox: () => dispatchReportMailbox(db, dispatch),
+      describe: (task) => ({
+        subject,
+        body: describeStop(stop, {
+          task,
+          taskId: dispatch.task_id,
+          dispatchId: dispatch.id,
+          chatCoordinator: deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true,
+          taskReady: db.getTask(dispatch.task_id)?.status === 'ready',
+          coordinatorApprovals: deps.coordinatorApprovals?.() === true
+        })
+      }),
+      payload: { taskId: dispatch.task_id, ...payload }
+    },
+    (handle, type) => woken.push([handle, type])
+  )
+  return db.getMessageById(id) !== undefined
+}
+
+/** The Run home imports relayed worker mail into the coordinator's Run and wakes it. The queued
+ *  item outlives a crash, and the stable id makes a repeat a no-op here and at the home. */
+function relayWorkerReport(
+  db: OrchestrationDb,
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'>,
+  stop: WorkerTurnStop,
+  { id, subject, payload }: WorkerReportMail,
+  deps: WorkerTurnStopReportDeps
+): true {
+  const body = describeStop(stop, {
+    task: attachment.task_id,
+    taskId: attachment.task_id,
+    dispatchId: attachment.dispatch_id,
+    coordinatorApprovals: deps.coordinatorApprovals?.() === true
+  })
+  return relayWorkerMail(db, attachment, { id, from: stop.from, subject, body, payload })
+}
+
+/** Queues worker mail for its Run home, which imports it into the coordinator's Run and wakes it. */
+export function relayWorkerMail(
+  db: OrchestrationDb,
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'>,
+  mail: WorkerReportMail & { from: string; body: string; notice?: true }
+): true {
+  db.enqueueFederationRelay({
+    dispatchId: attachment.dispatch_id,
+    direction: 'to_home',
+    kind: 'escalation',
+    messageId: mail.id,
+    payload: JSON.stringify({
+      from: mail.from,
+      subject: mail.subject,
+      body: mail.body,
+      type: mail.notice ? 'status' : 'escalation',
+      priority: mail.notice ? 'normal' : 'high',
+      threadId: null,
+      // Relayed payloads travel as strings, as a worker's own `send` relays them.
+      payload: JSON.stringify({ taskId: attachment.task_id, ...mail.payload })
+    })
+  })
+  return true
+}
+
+/** A stable message id: writing the same report twice is a no-op. */
+export function stopReportId(dispatchId: string, stopKey: string): string {
+  return `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stopKey]))
     .digest('hex')
     .slice(0, 24)}`
-  const payload = { dispatchId, handle: stop.from, stopReason: stop.reason }
-  if (target.kind === 'local') {
-    const { dispatch } = target
-    escalateWorkerFailure(
-      db,
-      dispatch,
-      {
-        id,
-        from: stop.from,
-        mailbox: () => dispatchReportMailbox(db, dispatch),
-        describe: (task) => ({
-          subject: SUBJECTS[stop.reason],
-          body: describeStop(stop, task, dispatch.id)
-        }),
-        payload: { taskId: dispatch.task_id, ...payload }
-      },
-      deps.notify
-    )
+}
+
+/** The one closing line for a reported approval; the same stable id makes a second closer a no-op. */
+export function reportWorkerApprovalClosed(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  closed: { from: string; approval: WorkerApprovalPayload },
+  deps: Pick<WorkerTurnStopReportDeps, 'notify'>,
+  /** Names how an already-closed prompt closed: its card's receipt changes, the coordinator is not woken. */
+  refines = false
+): void {
+  const { approval } = closed
+  const status = db.getDispatchContextById(dispatch.id)?.status
+  // Unanswered, and its worker already ended: the card reads that on its own, and the coordinator
+  // was told the worker ended; a second notice adds nothing.
+  if (!approval.outcome?.decision && status !== 'pending' && status !== 'dispatched') {
     return
   }
-  // The Run home imports relayed worker mail into the coordinator's Run and wakes it.
-  const { attachment } = target
-  // A worker_done the home has not acknowledged yet is still a report.
-  if (db.hasPendingFederatedWorkerReport(dispatchId)) {
-    return
-  }
-  // The stable message id makes a repeated report of the same stop a no-op on both sides.
-  try {
-    db.enqueueFederationRelay({
-      dispatchId,
-      direction: 'to_home',
-      kind: 'escalation',
-      messageId: id,
-      payload: JSON.stringify({
-        from: stop.from,
-        subject: SUBJECTS[stop.reason],
-        body: describeStop(stop, attachment.task_id, dispatchId),
-        type: 'escalation',
-        priority: 'high',
-        threadId: null,
-        // Relayed payloads travel as strings, as a worker's own `send` relays them.
-        payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
-      })
-    })
-  } catch (error) {
-    console.warn('[orchestration] failed to relay a worker stop report', dispatchId, error)
-  }
+  escalateWorkerFailure(
+    db,
+    dispatch,
+    {
+      id: stopReportId(
+        dispatch.id,
+        `approval:${approval.approvalId}:${refines ? 'refined' : 'closed'}`
+      ),
+      from: closed.from,
+      mailbox: () => dispatchReportMailbox(db, dispatch),
+      describe: () => ({
+        subject: approval.outcome?.decision ? 'Worker approval answered' : 'Worker approval closed',
+        body: describeApprovalClosed(approval)
+      }),
+      payload: { taskId: dispatch.task_id, dispatchId: dispatch.id, handle: closed.from, approval },
+      // Only a person at the worker's terminal can answer it now: that needs the coordinator to act.
+      ...(approval.outcome?.by === 'terminal-only' ? {} : { notice: true as const })
+    },
+    refines ? () => {} : deps.notify
+  )
 }

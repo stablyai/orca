@@ -1,5 +1,5 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
 import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
 import { executeSkillInstallRequest } from '../../../skills/install/skill-install-request'
@@ -10,11 +10,11 @@ import type {
   SkillBundleInstallProgress,
   SkillBundleInstallRequest,
   SkillBundleInstallResult
-} from '../../../../shared/skill-bundle-install-contract'
+} from '../../../../shared/skills/installation/skill-bundle-install-contract'
 import type {
   SkillInstallRequest,
   SkillInstallResult
-} from '../../../../shared/skill-install-contract'
+} from '../../../../shared/skills/installation/skill-install-contract'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import type {
   BundledSkillAutoUpdateRequest,
@@ -22,7 +22,7 @@ import type {
   BundledSkillInstallResult,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../../shared/bundled-skill-plan'
+} from '../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   autoUpdateLocalBundledSkills,
   executeLocalBundledSkills,

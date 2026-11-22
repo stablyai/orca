@@ -3,7 +3,7 @@ import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import type {
@@ -15,14 +15,13 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
 import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { AgentHookServerAgentIdentities } from './server-agent-identities'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
-  protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
+export abstract class AgentHookServerListeners extends AgentHookServerAgentIdentities {
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
@@ -65,14 +64,23 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected override resetCanonicalStatus(): void {
     super.resetCanonicalStatus()
+    this.statusQueryIndex = null
+    this.agentIdentities.dropCanonical()
     this.providerRowsByTab = null
   }
 
-  private combinedStatusEntries(paneKey?: string): EnrichedAgentHookEventPayload[] {
+  /** `withAgentIds` false: an internal notification that outputs no ID does no ID work. */
+  private combinedStatusEntries(
+    paneKey?: string,
+    withAgentIds = true
+  ): EnrichedAgentHookEventPayload[] {
     return combinedAgentStatusEntries(
       {
         state: this.state,
         programStatusFacets: this.programStatusFacets,
+        ...(withAgentIds
+          ? { canonicalIdentity: (key: string) => this.agentIdentities.canonicalIdentity(key) }
+          : {}),
         canonicalStatusStore: this.canonicalStatusStore,
         canonicalSubjectsByPane: this.canonicalSubjectsByPane,
         canonicalListingOrder: this.canonicalListingOrder
@@ -206,34 +214,30 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }
 
-  /** Provider-source projection; status timestamps still use the uncached status getter. */
-  getProviderSessionSourceRowsForTab(tabId: string): AgentStatusIpcPayload[] {
-    // Media reads share the owner's snapshot until the next status mutation.
-    if (!this.providerRowsByTab) {
-      const byTab = new Map<string, AgentStatusIpcPayload[]>()
-      for (const entry of this.combinedStatusEntries()) {
-        const row = toAgentStatusIpcPayload(entry)
-        const owner = row.tabId ?? parsePaneKey(row.paneKey)?.tabId
-        if (owner) {
-          const rows = byTab.get(owner) ?? []
-          rows.push(row)
-          byTab.set(owner, rows)
-        }
-      }
-      this.providerRowsByTab = byTab
-    }
-    return [...(this.providerRowsByTab.get(tabId) ?? [])]
-  }
-
   /** Include metadata-only provider identities. */
   getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
     return this.buildStatusChangeNotification().providerSessions
   }
 
-  getPublicStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    return this.combinedStatusEntries(paneKey)
-      .filter((entry) => entry.providerSessionOnly !== true)
+  getStatusRowsForPaneOrHandle(
+    paneKey: string,
+    terminalHandle?: string | null
+  ): AgentStatusIpcPayload[] {
+    const handlePaneKey = terminalHandle
+      ? this.paneKeyByTerminalHandle.get(terminalHandle)
+      : undefined
+    return Array.from(new Set([paneKey, ...(handlePaneKey ? [handlePaneKey] : [])]))
+      .flatMap((key) => this.combinedStatusEntries(key))
       .map(toAgentStatusIpcPayload)
+  }
+
+  getPublicStatusSnapshotForPane(
+    paneKey: string,
+    terminalHandle?: string | null
+  ): AgentStatusIpcPayload[] {
+    return this.getStatusRowsForPaneOrHandle(paneKey, terminalHandle).filter(
+      (row) => row.providerSessionOnly !== true
+    )
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
@@ -244,10 +248,14 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
-    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+    for (const [subjectKey, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
+      const identity = status?.structuredHost
+        ? undefined
+        : this.agentIdentities.canonicalIdentity(subjectKey)
       if (status) {
-        rows.push(status)
+        const orcaSessionId = publishedOrcaSessionId(identity)
+        rows.push(orcaSessionId !== undefined ? { ...status, orcaSessionId } : status)
       }
     }
     return rows
@@ -278,7 +286,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
-    for (const enriched of this.combinedStatusEntries()) {
+    for (const enriched of this.combinedStatusEntries(undefined, false)) {
       const paneKey = enriched.paneKey
       if (enriched.providerSession) {
         providerSessions.push({

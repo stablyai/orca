@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function getWorktreeMetaDialogOwner(state: {
   activeModal: string

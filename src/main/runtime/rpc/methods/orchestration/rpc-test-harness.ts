@@ -7,19 +7,12 @@ import '../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../orchestration/db/dispatch-row-writer'
 import '../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import type { TerminalHandleRecord } from '../../../terminal/identity/terminal-handle-records'
-
-class OrchestrationRpcRuntime extends OrcaRuntimeService {
-  seedTerminalHandle(handle: string, record: TerminalHandleRecord): void {
-    this.terminalIdentity.setHandle(handle, record)
-  }
-}
 
 export const COORDINATOR_PANE_KEY = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
 export type OrchestrationRpcState = {
   db: OrchestrationDb
-  runtime: OrchestrationRpcRuntime
+  runtime: OrcaRuntimeService
   ctx: RpcContext
   activeRunId: string | undefined
 }
@@ -28,7 +21,7 @@ export type OrchestrationRpcState = {
 export function createOrchestrationRpcHarness() {
   let db: OrchestrationDb
   let dbOpen = false
-  let runtime: OrchestrationRpcRuntime
+  let runtime: OrcaRuntimeService
   let activeRunId: string | undefined
   let databasePath = ':memory:'
 
@@ -42,7 +35,7 @@ export function createOrchestrationRpcHarness() {
     databasePath = path
     db = new OrchestrationDb(path)
     dbOpen = true
-    runtime = new OrchestrationRpcRuntime(store)
+    runtime = new OrcaRuntimeService(store)
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null

@@ -1,9 +1,11 @@
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../../shared/file-access/runtime-editor-file-open'
-import type { ClaudeAccountSelectionChange } from '../../../../shared/managed-account-types'
+import type { ClaudeAccountSelectionChange } from '../../../../shared/agent-accounts/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -12,28 +14,29 @@ import type {
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
+import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabRequest
-} from '../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
+import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   AgentListPublication,
   AgentPaneActivityChange
@@ -55,6 +58,10 @@ export type RuntimeNotifier = {
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void
+  /** A bot, its automations or its Activity's work changed; debounced by the runtime. */
+  botsChanged?(scope: BotChangeScope): void
+  orchestrationSessionWorkersChanged?(sessionId: string): void
+  workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -122,14 +129,7 @@ export type RuntimeNotifier = {
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
-    opts: {
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-    }
+    opts: Omit<RendererTerminalSplitRequest, 'tabId' | 'paneRuntimeId'>
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void

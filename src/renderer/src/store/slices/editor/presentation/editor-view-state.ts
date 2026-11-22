@@ -1,13 +1,13 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
-import type { MarkdownDefaultViewMode } from '../../../../../../shared/markdown-default-view-mode'
+import type { MarkdownDefaultViewMode } from '../../../../../../shared/editor/markdown/markdown-default-view-mode'
 import { markdownViewModesForNewDefault } from '../markdown/markdown-default-view-mode-action'
-import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
+import { clampMarkdownTocPanelWidth } from '../../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import {
   clampCombinedDiffFileTreeWidth,
   COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
-} from '../../../../../../shared/combined-diff-file-tree-width'
+} from '../../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 
 export type EditorViewState = {
   markdownViewMode: Record<string, MarkdownViewMode>

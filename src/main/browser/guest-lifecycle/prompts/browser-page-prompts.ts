@@ -7,6 +7,7 @@ import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
 } from '../../../../shared/browser/prompts/browser-page-prompt'
+import { BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN } from '../../../../shared/browser/site-settings/browser-site-permission'
 import { isBrowserPagePromptQuiet, quietBrowserPagePrompts } from './browser-page-prompt-quiet'
 
 export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000
@@ -47,6 +48,13 @@ export function browserPagePromptOrigin(rawUrl: string | null): string | null {
   } catch {
     return null
   }
+}
+
+/** Returns null for opaque sites; local files share one permission origin. */
+export function browserSitePermissionOrigin(rawUrl: string | null): string | null {
+  return rawUrl?.startsWith('file:')
+    ? BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN
+    : browserPagePromptOrigin(rawUrl)
 }
 
 function takePending(requestId: string): PendingPrompt | null {

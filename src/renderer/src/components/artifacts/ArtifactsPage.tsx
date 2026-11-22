@@ -3,8 +3,8 @@ import type {
   ArtifactCloudOperation,
   ArtifactListItem
 } from '../../../../shared/artifacts/artifacts'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -101,7 +101,7 @@ export default function ArtifactsPage(): React.JSX.Element {
     const name = item.artifact.title || item.artifact.originalFileName || item.artifact.slug
     if (!settings?.skipDeleteArtifactConfirm) {
       const accepted = await confirm({
-        title: t('auto.components.artifacts.ArtifactsPage.deleteTitle', 'Delete artifact?'),
+        title: t('common.delete', 'Delete'),
         description: t(
           'auto.components.artifacts.ArtifactsPage.deleteDescription',
           '“{{name}}” will no longer be available at its public link.',

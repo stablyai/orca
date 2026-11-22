@@ -23,7 +23,7 @@ import {
   GitRemoteFileUrl,
   GitTargetedRemote,
   WorktreeSelector
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 export const GIT_METHODS = [
   ...GIT_STATUS_METHODS,

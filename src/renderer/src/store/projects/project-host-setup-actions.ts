@@ -7,17 +7,17 @@ import type {
   ProjectHostSetupDeleteResult,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
-import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
+import { normalizeProjectRow } from '../../../../shared/project/catalog/project-catalog-row-normalization'
 import {
   assertNotSshProjectHost,
   assertProjectHostSetupMutationRuntimeCapabilities,

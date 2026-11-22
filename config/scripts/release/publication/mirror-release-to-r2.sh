@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # Needs bash 4+ (mapfile); on macOS use Homebrew bash.
 # Mirror Orca release assets from GitHub Releases to the public R2 bucket
-# served at https://downloads.onorca.dev. onorca.dev's "Download started" page
+# served at https://downloads.orca.dev. orca.dev's "Download started" page
 # offers these as an opt-in "mirror link" for when GitHub returns 5xx.
 # Run by .github/workflows/release-mirror-r2.yml after each published release.
 #
 # Usage:
 #   mirror-release-to-r2.sh                 # latest desktop release, website assets
 #   mirror-release-to-r2.sh v1.4.254        # a specific desktop tag
-#   mirror-release-to-r2.sh mobile-android-v0.0.64 app-release.apk
+#   mirror-release-to-r2.sh android-v0.0.65 app-release.apk
 #   ALL_ASSETS=1 mirror-release-to-r2.sh    # every asset except sourcemaps
 #
 # Layout written to the bucket:
 #   releases/<tag>/<asset>       immutable, versioned copy
 #   latest/<asset>               stable desktop tags (vX.Y.Z) only — what the mirror link points at
-#   android/latest/<asset>       mobile-android-v* tags only
+#   android/latest/<asset>       android-v* tags (dev.orca.app) only
 #   latest/release.json          {tag, mirroredAt, assets[]} for the desktop alias
 #
 # Requires: gh (authenticated), curl, jq, and an uploader:
@@ -29,7 +29,7 @@ set -euo pipefail
 
 REPO="${REPO:-stablyai/orca}"
 BUCKET="${BUCKET:-orca-downloads}"
-PUBLIC_BASE="${PUBLIC_BASE:-https://downloads.onorca.dev}"
+PUBLIC_BASE="${PUBLIC_BASE:-https://downloads.orca.dev}"
 WEBSITE_ASSETS=(orca-macos-arm64.dmg orca-macos-x64.dmg orca-windows-setup.exe orca-linux.AppImage)
 CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-57e6ddd3bb755dbf8e8dc7ff557e9014}"
 R2_ENDPOINT="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
@@ -82,7 +82,7 @@ fi
 # Why: GitHub's /releases/latest skips RCs, so an RC must never move latest/.
 if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   ALIAS_PREFIX="latest"
-elif [[ "$TAG" == mobile-android-v* ]]; then
+elif [[ "$TAG" == android-v* ]]; then
   ALIAS_PREFIX="android/latest"
 else
   ALIAS_PREFIX=""

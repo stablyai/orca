@@ -15,7 +15,7 @@ import {
 import { addOrcaWslInteropEnv } from '../../pty/shell-startup/wsl-orca-env'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { resolveWslExecutablePath } from '../../wsl/execution/wsl-executable-path'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
@@ -25,7 +25,7 @@ import {
   WSL_HOOK_RELAY_STALE_EXIT_CODE,
   WSL_HOOK_RELAY_VERSION_ENV,
   WSL_HOOK_RELAY_VERSION_FILE
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 const INSTALL_TIMEOUT_MS = 30_000
 

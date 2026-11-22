@@ -7,7 +7,7 @@ import type {
 import { findWorkspace } from '../pages/browser-page-records'
 import { restoreRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   afterPendingEntityTabs,
   hasPendingEntityTab

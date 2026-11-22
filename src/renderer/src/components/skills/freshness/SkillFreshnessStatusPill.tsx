@@ -1,4 +1,4 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
@@ -6,7 +6,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActivePr
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import { IntegrationStatusPill } from '@/components/integrations/presentation/integration-status-pill'
 import { cn } from '@/lib/class-names'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import {

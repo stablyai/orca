@@ -1,7 +1,7 @@
 // Centralize runtime consent precedence. Environment/CI overrides never mutate persisted preference, so removing them restores user intent.
 
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { TelemetryConsentState } from '../../shared/telemetry/telemetry-consent-types'
 
 // Retain pending-banner vs explicit-disabled reasons for UI; shared types cross IPC while this re-export preserves main callers.
 export type ConsentState = TelemetryConsentState
@@ -43,10 +43,6 @@ function isEnvVarTruthy(name: string): boolean {
   }
   warnOnceMisconfigured(name, v)
   return false
-}
-
-export function _resetMisconfigWarnCacheForTests(): void {
-  warnedMisconfigured.clear()
 }
 
 function resolveEnvOverride(): ConsentState | null {

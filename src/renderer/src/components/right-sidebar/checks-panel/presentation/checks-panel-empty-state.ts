@@ -12,7 +12,7 @@ import {
   workflowActionForComposer,
   type ChecksPanelReviewState,
   type ChecksPanelReviewStateInput
-} from '../checks-panel-review-state-model'
+} from '../review-state/checks-panel-review-state-model'
 import {
   concurrentLookupDetail,
   hardRefreshErrorState,

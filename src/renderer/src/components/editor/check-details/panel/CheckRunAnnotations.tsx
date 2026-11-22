@@ -1,11 +1,11 @@
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { PRCheckAnnotation } from '../../../../../../shared/github/check-types'
+import type { PRCheckAnnotation } from '../../../../../../shared/github/checks/check-types'
 import { openAnnotationLocation } from '../actions/check-annotation-open'
 import { getOpenableAnnotationLine } from '../actions/check-annotation-path'
 import { formatAnnotationsForClipboard } from '../actions/check-run-clipboard-text'
-import { CheckRunCopyButton } from './CheckRunCopyButton'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 
 export function CheckRunAnnotations({
   annotations,
@@ -37,7 +37,7 @@ export function CheckRunAnnotations({
         <div className="text-sm font-medium">
           {t('auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f', 'Annotations')}
         </div>
-        <CheckRunCopyButton
+        <CopyTextButton
           text={clipboardText}
           label={t('auto.components.editor.CheckRunAnnotations.copy', 'Copy annotations')}
         />

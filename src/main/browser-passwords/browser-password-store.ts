@@ -3,7 +3,7 @@ import type {
   BrowserPasswordEntrySummary,
   BrowserPasswordImportSummary,
   BrowserPasswordsAvailability
-} from '../../shared/browser-passwords-types'
+} from '../../shared/browser/passwords/browser-passwords-types'
 import {
   mergeBrowserPasswordImportRows,
   type BrowserPasswordImportRow

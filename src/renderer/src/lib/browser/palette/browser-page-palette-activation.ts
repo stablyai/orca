@@ -3,7 +3,7 @@ import {
   activateBrowserWorkspaceTab,
   getActivatableBrowserWorkspaceTab
 } from '@/lib/browser/workspace/browser-workspace-tab-activation'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorkspace } from '../../workspace/activation/worktree-activation'
 

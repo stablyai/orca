@@ -1,4 +1,4 @@
-import type { DocPreviewGrantRequest } from '../../../../../preload/api/doc-preview-api'
+import type { DocPreviewGrantRequest } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { basename, dirname, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'

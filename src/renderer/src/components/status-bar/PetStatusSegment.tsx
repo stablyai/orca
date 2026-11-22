@@ -13,12 +13,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
-import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
+import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pets/pet-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { isPetImportFailure } from '../../../../shared/pet-import-failure-copy'
+import { isPetImportFailure } from '../../../../shared/pets/pet-import-failure-copy'
 import { customPetLabel, petImportFailureText } from '../pet/pet-import-failure-text'
 
 // Keep visibility separate from experimental enablement so users can dismiss the pet without revisiting Settings.

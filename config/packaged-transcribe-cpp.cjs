@@ -2,7 +2,7 @@ const { cpSync, existsSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join } = require('node:path')
 
-const TRANSCRIBE_CPP_PACKAGES = require('../src/shared/transcribe-cpp-packages.json')
+const TRANSCRIBE_CPP_PACKAGES = require('../src/shared/speech/native-recognizer/transcribe-cpp-packages.json')
 // transcribe.dll needs MSVC runtime >= 14.40 (older ones crash in std::mutex); the system copy may be older.
 const WINDOWS_CRT_DLLS = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll']
 const MIN_WINDOWS_CRT_VERSION = [14, 40]

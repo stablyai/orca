@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import {
@@ -13,7 +13,10 @@ import {
   type CodexBackendRequest
 } from './codex-backend-auth'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
-import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
+import {
+  mapCodexIndividualLimitWindow,
+  mapCodexRateLimitWindow
+} from './codex-rate-limit-window-mapper'
 import { mapBackendRateLimitResetCredits } from './codex-reset-credit-client'
 
 type BackendRateLimitWindow = {
@@ -27,6 +30,9 @@ type BackendUsageResponse = {
   rate_limit?: {
     primary_window?: BackendRateLimitWindow | null
     secondary_window?: BackendRateLimitWindow | null
+  } | null
+  spend_control?: {
+    individual_limit?: { remaining_percent?: number; reset_at?: number } | null
   } | null
   rate_limit_reset_credits?: Parameters<typeof mapBackendRateLimitResetCredits>[0]
 }
@@ -79,16 +85,28 @@ export async function fetchCodexRateLimitsViaBackend(
     primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
     secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
   })
+  const session = mapCodexRateLimitWindow(
+    classified.session,
+    snapshotWindowMinutes(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+  )
+  const weekly = mapCodexRateLimitWindow(
+    classified.weekly,
+    snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
+  )
+  const individualLimit = payload.spend_control?.individual_limit
+  // Why: match the app-server mapping so an RPC fallback does not drop the monthly meter.
+  const monthly =
+    session || weekly
+      ? null
+      : mapCodexIndividualLimitWindow({
+          remainingPercent: individualLimit?.remaining_percent,
+          resetsAt: individualLimit?.reset_at
+        })
   return {
     provider: 'codex',
-    session: mapCodexRateLimitWindow(
-      classified.session,
-      snapshotWindowMinutes(classified.session, CODEX_SESSION_WINDOW_MINUTES)
-    ),
-    weekly: mapCodexRateLimitWindow(
-      classified.weekly,
-      snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
-    ),
+    session,
+    weekly,
+    monthly,
     planType: payload.plan_type,
     ...(payload.rate_limit_reset_credits !== undefined
       ? {
@@ -102,12 +120,13 @@ export async function fetchCodexRateLimitsViaBackend(
   }
 }
 
-export async function supplementCodexSessionWindow(
+export async function supplementCodexUsageWindows(
   limits: ProviderRateLimits,
   request: CodexBackendRequest,
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
-  if (options?.signal?.aborted || limits.session || !limits.weekly) {
+  // Why: app-servers that omit individualLimit report no window for spend-capped seats (#8664).
+  if (options?.signal?.aborted || limits.status !== 'ok' || limits.session || limits.monthly) {
     return limits
   }
   try {
@@ -116,16 +135,20 @@ export async function supplementCodexSessionWindow(
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+    const planType = backend.planType ?? limits.planType
     if (!backend.session) {
-      return rateLimitResetCredits === limits.rateLimitResetCredits
+      const monthly = limits.weekly ? null : backend.monthly
+      return !monthly &&
+        rateLimitResetCredits === limits.rateLimitResetCredits &&
+        planType === limits.planType
         ? limits
-        : { ...limits, rateLimitResetCredits }
+        : { ...limits, monthly, rateLimitResetCredits, planType }
     }
     return {
       ...limits,
       session: backend.session,
       weekly: backend.weekly ?? limits.weekly,
-      planType: backend.planType ?? limits.planType,
+      planType,
       ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
       updatedAt: backend.updatedAt
     }

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { isLazyChunkLoadError } from '@/app-shell/startup/lazy-with-retry'
 import { reportReactErrorBoundaryCrash } from '@/diagnostics/crash-reporting/react-error-boundary-reporting'
-import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting'
+import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting/crash-reporting'
 import { translate } from '@/i18n/i18n'
 
 type BoundaryFallbackArgs = {

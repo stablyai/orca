@@ -6,8 +6,9 @@ import {
 } from '../navigation/host-stack-navigation'
 import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
 
-/** `create` opens the page straight into a new automation's editor. */
-export type AutomationsPageOptions = { create?: boolean }
+/** `create` opens the page straight into a new automation's editor, `automation` on that one's
+ *  runs; `server` picks the server they live on instead of the paired host. */
+export type AutomationsPageOptions = { create?: boolean; automation?: string; server?: string }
 
 function automationsPageRoute(
   hostId: string,
@@ -15,7 +16,12 @@ function automationsPageRoute(
 ): HostStackRouteTarget {
   return {
     name: '[hostId]/automations',
-    params: options.create ? { hostId, new: '1' } : { hostId }
+    params: {
+      hostId,
+      ...(options.create ? { new: '1' } : {}),
+      ...(options.automation ? { automation: options.automation } : {}),
+      ...(options.server ? { server: options.server } : {})
+    }
   }
 }
 

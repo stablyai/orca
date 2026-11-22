@@ -8,10 +8,21 @@ import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
 } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
+import {
+  NativeChatSignInStrip,
+  nativeChatSignInTitle,
+  type NativeChatSignInStripState
+} from './NativeChatSignInStrip'
+import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
+import {
+  antigravityChatSignInPrompt,
+  antigravityOrcaRuntimeSignsIn
+} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
+import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
 export type NativeChatInstallSlotState =
   | { kind: 'none' }
@@ -36,34 +47,91 @@ export function useNativeChatInstallSlot(
   layout: ManagedRuntimeInstallLayout
 ): {
   slot: NativeChatInstallSlotState
+  signIn: NativeChatSignInStripState | null
   sendBlockedReason: string | null
   unavailableHint: string | undefined
+  /** How this Antigravity chat signs in on its host; null for every other chat. */
+  antigravityAuth: NativeChatAntigravityAuthTarget | null
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  const slot = nativeChatInstallSlotState(
-    useManagedRuntimeInstall(props.target, props.agent, props.isVisible && !hostProgram),
-    layout,
-    hostProgram
-  )
+  // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
+  const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
+  const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
+  // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
+  const signsIn =
+    props.agent === 'antigravity' &&
+    props.isVisible &&
+    !hostProgram &&
+    slot.kind === 'none' &&
+    observation.kind === 'active' &&
+    antigravityOrcaRuntimeSignsIn(observation)
+  const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
+  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
+  const signIn =
+    prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
-      : undefined
+      : signIn
+        ? nativeChatSignInTitle(agentLabel, t)
+        : undefined
   return {
     slot,
+    signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
-    unavailableHint
+    unavailableHint,
+    antigravityAuth: signsIn
+      ? {
+          host: props.target,
+          backend: 'managed',
+          managedVersion:
+            observation.snapshot.kind === 'known'
+              ? observation.snapshot.state.installedVersion
+              : null
+        }
+      : props.agent === 'antigravity' && props.isVisible && hostProgram
+        ? {
+            host: props.target,
+            backend: 'agy',
+            ...orcasAgy(observation),
+            // Until the host says which agy is there, or while none is, the chip names none.
+            programPending:
+              slot.kind === 'install' ||
+              observation.kind === 'pending' ||
+              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+          }
+        : null
   }
 }
 
-/** A chat running the host's own program needs no managed install, whatever its state. */
+/** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
+function orcasAgy(observation: ManagedRuntimeInstallObservation) {
+  const state =
+    observation.kind === 'active' && observation.snapshot.kind === 'known'
+      ? observation.snapshot.state
+      : null
+  return state?.program === 'cli' && state.source === 'managed'
+    ? { orcasAgy: true, managedVersion: state.installedVersion }
+    : {}
+}
+
+/** A chat on the host's own program needs an install only when that program is Orca's missing
+ *  copy; an unanswered status never holds its sends. */
 export function nativeChatInstallSlotState(
   observation: ManagedRuntimeInstallObservation,
   layout: ManagedRuntimeInstallLayout,
   hostProgram: boolean
 ): NativeChatInstallSlotState {
-  if (hostProgram || observation.kind === 'inactive') {
+  if (hostProgram) {
+    return observation.kind === 'active' &&
+      observation.snapshot.kind === 'known' &&
+      observation.snapshot.state.program === 'cli' &&
+      observation.snapshot.state.source === null
+      ? { kind: 'install', observation, state: observation.snapshot.state, layout }
+      : NONE
+  }
+  if (observation.kind === 'inactive') {
     return NONE
   }
   if (observation.kind === 'pending') {
@@ -98,17 +166,24 @@ function installSlotSendBlockedReason(
 
 /** Setup stays reachable whenever the empty pane is not showing the hero. */
 export function NativeChatInstallSlot(props: {
-  slot: NativeChatInstallSlotState
+  install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
+  /** A new bot's setup card offers the install and the sign-in itself. */
+  inCard?: boolean
 }): React.JSX.Element | null {
-  const { slot } = props
-  if (slot.kind !== 'install' || slot.layout !== 'strip') {
+  const { slot, signIn } = props.install
+  const strip = props.inCard ? null : slot.kind === 'install' && slot.layout === 'strip' ? (
+    <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+  ) : signIn ? (
+    <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
+  ) : null
+  if (!strip) {
     return null
   }
   return (
     <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
-        <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+        {strip}
       </div>
     </div>
   )

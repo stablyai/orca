@@ -1,9 +1,12 @@
 import type { MessagePortMain } from 'electron'
-import { dictationVocabulary, type DictationTerm } from '../../shared/dictation-dictionary'
+import {
+  dictationVocabulary,
+  type DictationTerm
+} from '../../shared/speech/dictation/dictation-dictionary'
 import {
   createDictationTextPipeline,
   type DictationTextSettings
-} from '../../shared/dictation-text-pipeline'
+} from '../../shared/speech/dictation/dictation-text-pipeline'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 import { sileroVadLanded } from './speech-vad-model'
@@ -18,13 +21,11 @@ import {
   teardownIdleSttEngine
 } from './stt-session-stop'
 
-export { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
-
 export type SttEvent =
   | { type: 'ready' }
   | { type: 'partial'; text?: string }
   | { type: 'final'; text?: string }
-  /** Speech was heard that no final has committed yet; only from pause-cut on-device models. */
+  /** Speech was heard whose text hasn't arrived yet; only from pause-cut on-device models. */
   | { type: 'speech-pending'; pending: boolean }
   | { type: 'stopped' }
   | { type: 'error'; error?: string }

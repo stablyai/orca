@@ -12,7 +12,7 @@ import {
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   isCodexSkipQuestionInput
-} from '../../../../../../shared/codex-async-question-input'
+} from '../../../../../../shared/native-chat/input/questions/codex-async-question-input'
 
 export type AgentQuestionAnsweredInference = {
   observeSentTerminalInput(data: string): void

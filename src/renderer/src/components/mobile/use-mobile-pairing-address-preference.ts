@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { selectRefreshedNetworkAddress } from './pairing/mobile-network-interface-selection'
-import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import {
   useMobilePairingCustomAddress,
   useMobilePairingCustomAddresses

@@ -1,25 +1,24 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { isResourceWindowVisible } from '../../../window/resource-view-admission'
+import { isResourceWindowVisible } from '../../../window/visibility/resource-view-admission'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
-import { isAgentRpcCaller } from '../../../runtime/rpc/rpc-caller-identity'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import {
   getActiveRpcAgentSessionId,
   getActiveRpcCaller
-} from '../../../runtime/rpc/rpc-active-caller'
+} from '../../../runtime/rpc/callers/active-call'
 import {
   remoteCliBrowserScopeController,
   type RemoteCliBrowserController
 } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { AGENT_PAGE_ACTIVITY_IDLE_MS } from '../../agent-browser/session-routing/person-pick-hold'
 
-// Spans an agent's thinking between steps; a finished, failed or disconnected agent clears within it.
-const ACTIVITY_IDLE_MS = 20_000
 const CURSOR_ARRIVAL_TIMEOUT_MS = 1500
 
 /** A CDP mouse event's params, as the agent sent them. */
@@ -157,7 +156,7 @@ export class BrowserAgentActivity {
     if (page.idleTimer) {
       clearTimeout(page.idleTimer)
     }
-    page.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
+    page.idleTimer = setTimeout(() => this.end(browserPageId), AGENT_PAGE_ACTIVITY_IDLE_MS)
   }
 
   /** A person stopped this SSH host; its pages stop showing it at once instead of after idling. */
@@ -171,6 +170,10 @@ export class BrowserAgentActivity {
 
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
+  }
+
+  activePageIds(): IterableIterator<string> {
+    return this.pages.keys()
   }
 
   end(browserPageId: string): void {

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { BrowserMouseModifier } from '../../cdp/input/cdp-pointer-targets'
 import { BrowserError } from '../../browser-error'
 import {
@@ -13,6 +14,12 @@ import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
+
+const AgentBrowserDevice = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+  deviceScaleFactor: z.number().positive()
+})
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   async mouseClick(
@@ -134,6 +141,16 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         'Emulation.setTouchEmulationEnabled',
         touchEmulationParams(mobile)
       )
+      const device = AgentBrowserDevice.safeParse(result)
+      if (device.success) {
+        // Like `viewport`: a pane smaller than the device clips what the page draws and captures.
+        this.browserManager.showAgentViewportInPane(target.webContentsId, {
+          width: device.data.width,
+          height: device.data.height,
+          deviceScaleFactor: device.data.deviceScaleFactor,
+          mobile
+        })
+      }
       return result
     })
   }

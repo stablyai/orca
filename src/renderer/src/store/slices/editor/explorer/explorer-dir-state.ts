@@ -1,5 +1,5 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
-import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../../../shared/file-access/cross-platform-path'
 
 export type ExplorerDirState = {
   expandedDirs: Record<string, Set<string>>

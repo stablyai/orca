@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
-import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
-import type { ServerTarget } from '../../../../../shared/node-runtime-pin'
-import { OPENCODE_SQLITE_READER_FILENAME } from '../../../../../shared/remote-bundle-artifacts'
-import { parseWslUncPath, toWindowsWslUncPath } from '../../../../../shared/wsl-paths'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
+import type { ServerTarget } from '../../../../../shared/node-runtime/node-runtime-pin'
+import { OPENCODE_SQLITE_READER_FILENAME } from '../../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { NODE_SQLITE_READER_API_SOURCE } from '../../../../sqlite/node-sqlite-reader-api'
 import { relayBundleCandidates } from '../../../../wsl/execution/relay-bundle-paths'
 import { materializeNodeRuntimeArchive } from '../../../../node-runtime/pinned-runtime-materializer'
@@ -20,7 +20,7 @@ import { REMOTE_NODE_RUNTIME_READY } from '../../../../managed-server/install/or
 import { getRemoteHostPlatform } from '../../../../ssh/remote-host/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../../wsl/execution/wsl-process-failure'
-import { admitWslTranscriptPath } from '../../../../native-chat/wsl-transcript-running-admission'
+import { admitWslTranscriptPath } from '../../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { AI_VAULT_SCAN_ISSUE_COPY } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
@@ -107,6 +107,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     script: [
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
       'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ]; then printf present; exit 0; fi',
+      // Hermes scans the distro's ~/.hermes root and its named profiles.
+      'for db in "$HOME/.hermes/state.db" "$HOME"/.hermes/profiles/*/state.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       // WSL discovery still enumerates the default data root independently of guest overrides.
       'for db in "$HOME/.local/share/opencode"/opencode.db "$HOME/.local/share/opencode"/opencode-*.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'case "${OPENCODE_DB-}" in',
@@ -119,7 +121,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     loginPath: 'none'
   })
   if (hasDatabase !== 'present') {
-    return { distro, error: 'No OpenCode or ZCode database is present in this WSL distro.' }
+    return { distro, error: 'No OpenCode, ZCode or Hermes database is present in this WSL distro.' }
   }
   const readerPath = await run({
     program: 'wslpath',

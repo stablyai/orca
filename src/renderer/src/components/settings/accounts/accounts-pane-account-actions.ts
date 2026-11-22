@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -30,6 +30,7 @@ import {
 } from '../../../lib/provider-accounts/provider-account-action-errors'
 import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
 import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
+import { createAccountRenameRunner, type AccountRenameContext } from './account-rename-runner'
 
 type CodexActionContext = {
   settings: GlobalSettings
@@ -180,7 +181,7 @@ export function createClaudeAccountActionRunner(
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
-      const next = await operation()
+      const { runningSessions, ...next } = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -205,14 +206,16 @@ export function createClaudeAccountActionRunner(
           }
         )
       }
-      if (switched) {
+      // A server's report counts even when this view already showed the account it switched to.
+      if (switched || runningSessions) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: accountOwner,
           target: actionRuntime,
           before: { state: claudeAccounts, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
+          after: { state: next, accountId: nextActiveAccountId },
+          ...(runningSessions ? { hostMove: runningSessions } : {})
         }).then((outcome) => {
-          if (outcome === 'show-confirmation') {
+          if (outcome === 'show-confirmation' && switched) {
             showUpdatedToast()
           }
         })
@@ -235,5 +238,19 @@ export function createClaudeAccountActionRunner(
     } finally {
       setClaudeAction('idle')
     }
+  }
+}
+
+export function createAccountsPaneRunners(
+  context: CodexActionContext & ClaudeActionContext & AccountRenameContext
+): {
+  runCodexAccountAction: CodexAccountActionRunner
+  runClaudeAccountAction: ClaudeAccountActionRunner
+  renameAccount: ReturnType<typeof createAccountRenameRunner>
+} {
+  return {
+    runCodexAccountAction: createCodexAccountActionRunner(context),
+    runClaudeAccountAction: createClaudeAccountActionRunner(context),
+    renameAccount: createAccountRenameRunner(context)
   }
 }

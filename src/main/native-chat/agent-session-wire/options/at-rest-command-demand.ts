@@ -1,10 +1,16 @@
-import type { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import type { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 
 /** A modern request can take over queued eager work, but joins work already admitted. */
 export class AtRestCommandDemand {
   private readonly listeners = new Set<() => void>()
 
   constructor(public independent: boolean) {}
+
+  /** Called when an explicit read joins this work; returns the unsubscribe. */
+  onRequest(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
 
   request(): void {
     this.independent = true

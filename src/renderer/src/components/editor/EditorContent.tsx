@@ -7,20 +7,24 @@ import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
-import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
-import { EditorDiffFileSurface } from './EditorDiffFileSurface'
-import { EditorEditFileSurface } from './EditorEditFileSurface'
-import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
+import { EditorConflictReviewSurface } from './conflict-review/EditorConflictReviewSurface'
+import { EditorDiffFileSurface } from './panel/EditorDiffFileSurface'
+import { EditorEditFileSurface } from './panel/EditorEditFileSurface'
+import { EditorFileLoadErrorView } from './loading/EditorFileLoadErrorView'
 import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
-import type { FileContent } from './editor-panel-content-types'
-import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type FileContent,
+  type ReloadContentOptions
+} from './loading/editor-panel-content-types'
+import { buildFileViewPreferenceKey as buildPdfScalePreferenceKey } from './view-mode/file-view-preference-storage'
 import { useTranslate } from '@/i18n/use-translate'
-import { useEditorConflictNavigation } from './useEditorConflictNavigation'
+import { useEditorConflictNavigation } from './conflict-review/useEditorConflictNavigation'
 import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 
 // Retry is a user act: it may start a stopped WSL distro.
-const USER_RETRY = { wakeWslDistro: true }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
@@ -101,7 +105,7 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const editorViewStateKey =
@@ -212,7 +216,7 @@ export function EditorContent({
           code={fileContent.loadErrorCode}
           worktreeId={activeFile.worktreeId}
           onRetry={() => reloadContent(activeFile, USER_RETRY)}
-          onHostStarted={() => reloadContent(activeFile)}
+          onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
         />
       )
     }

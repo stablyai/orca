@@ -5,13 +5,13 @@ import {
   structuredAgentSessionQueueSendsNext
 } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
-import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/native-chat-turn-activity'
-import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
-import { structuredSessionForegroundCommands } from '../../../../../../shared/structured-session-foreground-commands'
+import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
+import { structuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../../../../shared/agent-session/view/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from '../../conversation/turns/use-structured-agent-turn-timing'
-import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
@@ -88,6 +88,9 @@ export function useStructuredAgentSessionTransportState(
     turnId,
     isWorking,
     turnActivity,
+    // A queued message is the next prompt already; a guess beside it would mislead.
+    promptSuggestion:
+      enabled && !state.queuedMessages?.length ? (state.promptSuggestion ?? null) : null,
     turnTiming,
     // null = no drafts or no claim; the projection treats both as an empty list.
     queuedMessages: (enabled ? state.queuedMessages : null) ?? null,

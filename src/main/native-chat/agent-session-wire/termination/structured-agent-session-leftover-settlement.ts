@@ -1,22 +1,11 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import {
-  continuingStructuredAgentSessionInput,
-  finalizingStructuredAgentSessionInput
-} from '../delivery/structured-agent-session-handing-over'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import {
-  planStructuredAgentSessionDeadGeneration,
-  type StructuredAgentSessionDeadGenerationInput
-} from './structured-agent-session-dead-generation-settlement'
-import {
-  planStaleStructuredAgentSessionState,
-  type StaleStructuredAgentSessionStateJournal
-} from './structured-agent-session-stale-state-settlement'
-import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
-import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import type { StructuredAgentSessionDeadGenerationInput } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
-import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-current-work'
+import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-work-policy'
 
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionWorkEvidence } from '../observations/structured-agent-session-work-evidence'
 // Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
 // absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
@@ -33,7 +22,7 @@ export type StructuredAgentSessionExitSettlement = Omit<
 export type StructuredAgentSessionLeftoverSettlementInput = {
   store: StructuredAgentSessionLeftoverStore
   sessionId: string
-  journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal
+  journal: AgentSessionJournal
   exit?: StructuredAgentSessionExitSettlement
   /** Observed root exit ends the generation even if lease release failed. */
   ended?: StructuredAgentSessionWorkEvidence['ended']
@@ -64,51 +53,30 @@ export async function settleStructuredAgentSessionLeftovers(
     const exit = liveFence === null ? input.exit : undefined
     const below = exit ? exit.ownerFence : (liveFence ?? fence + 1)
     const failureTextContext = structuredAgentSessionFailureWordsContext(record)
-    let planned = 0
-    await journal.appendPlannedLifecycleBatch({
-      settlementId: exit
-        ? `dead-generation:${exit.settlementId}`
-        : `${STALE_SESSION_ROW_PREFIX}${sessionId}:${fence}:seq-${journal.cursor().sequence}`,
+    const handovers = [...structuredAgentSessionHandingOver(journal)]
+    const planned = await journal.settleDeadGeneration({
+      sessionId,
       fence,
-      recovered: true,
-      keepFailedStart: exit?.exitedDuringStartup !== undefined,
-      plan: () => {
-        const exited = exit
-          ? planStructuredAgentSessionDeadGeneration(
-              { ...exit, journal, sessionId, fence },
-              (itemFence) => itemFence === undefined || itemFence >= exit.ownerFence
-            )
-          : { mutations: [], dispatches: [] }
-        const settledByExit = new Set(exited.dispatches.map((entry) => entry.clientMessageId))
-        const stale = planStaleStructuredAgentSessionState({
-          journal,
-          sessionId,
-          fence,
-          acquisitionGeneration: null,
-          // Read current lease proof with the rows; observed exits supply proof before release.
-          deathEvidence: input.store.getRecord(sessionId)?.lease.deathEvidence ?? null,
-          replaced,
-          failureTextContext,
-          below
-        })
-        const mutations = [...exited.mutations, ...stale.mutations]
-        const dispatches = [
-          ...exited.dispatches,
-          ...stale.dispatches.filter((entry) => !settledByExit.has(entry.clientMessageId))
-        ].filter(
-          (entry) =>
-            !continuingStructuredAgentSessionInput(journal, entry.clientMessageId) &&
-            // Exit proof can settle a send now; generic doubt waits for its own result.
-            (entry.state === 'rejected' ||
-              !finalizingStructuredAgentSessionInput(
-                journal,
-                entry.clientMessageId,
-                input.finalizingOwner
-              ))
-        )
-        planned = mutations.length + dispatches.length
-        return { mutations, dispatches }
-      }
+      ...(exit ? { exit } : {}),
+      below,
+      deathEvidence: record.lease.deathEvidence ?? null,
+      replaced,
+      failureTextContext,
+      continuingInputs: handovers.flatMap(([id, entry]) =>
+        entry.input?.unadmitted === true && entry.input.signal?.aborted !== true ? [id] : []
+      ),
+      finalizingInputs: handovers.flatMap(([id, entry]) =>
+        entry.input?.finalization
+          ? [
+              {
+                clientMessageId: id,
+                ...(entry.input.owner === input.finalizingOwner
+                  ? { settlementOwner: true as const }
+                  : {})
+              }
+            ]
+          : []
+      )
     })
     return { ok: true, planned }
   } catch (error) {

@@ -1,9 +1,7 @@
 import { useCallback } from 'react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
-import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
-import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import { restoreTerminalFitToDesktop } from './terminal-fit-restore'
+import { scheduleRestoredTerminalRefit, takeBackAllFromPhone } from './take-back-all-from-phone'
 import type { TerminalPaneContextController } from '../controller/use-terminal-pane-context-actions'
 
 export function useMobileTerminalFitActions({
@@ -14,19 +12,6 @@ export function useMobileTerminalFitActions({
   TerminalPaneContextController,
   'paneTransportsRef' | 'refreshMobileOverlays' | 'settingsRef'
 >) {
-  const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
-    const ptyIds = new Set(getMobileFitOverridePtyIds())
-    for (const [ptyId, driver] of getAllDrivers()) {
-      if (driver.kind === 'mobile') {
-        ptyIds.add(ptyId)
-      }
-    }
-    return [...ptyIds]
-  }, [])
-  const scheduleRestoredTerminalRefit = useCallback((): void => {
-    requestAnimationFrame(refitAndRefreshAllTerminalPanes)
-    window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
-  }, [])
   const restorePaneTerminalFit = useCallback(
     async (pane: ManagedPane, ptyId: string): Promise<void> => {
       const currentPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
@@ -40,25 +25,19 @@ export function useMobileTerminalFitActions({
         pane.terminal.focus()
       }
     },
-    [refreshMobileOverlays, scheduleRestoredTerminalRefit, paneTransportsRef, settingsRef]
+    [refreshMobileOverlays, paneTransportsRef, settingsRef]
   )
   const restoreAllTerminalFits = useCallback(
-    async (focusPane: ManagedPane): Promise<void> => {
-      const restored = await restoreTerminalFitsToDesktop(
-        getMobileOwnedTerminalPtyIds(),
-        settingsRef.current ?? undefined
-      )
-      if (restored) {
-        scheduleRestoredTerminalRefit()
+    async (focusPane: ManagedPane, phoneIsDriving: boolean): Promise<void> => {
+      const { terminalsRestored } = await takeBackAllFromPhone(settingsRef.current ?? undefined, {
+        // Why: held-fit "Restore all" only resizes; it must not cut a phone still browsing.
+        includeBrowserPages: phoneIsDriving
+      })
+      if (terminalsRestored) {
         focusPane.terminal.focus()
       }
     },
-    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit, settingsRef]
+    [settingsRef]
   )
-  return {
-    getMobileOwnedTerminalPtyIds,
-    scheduleRestoredTerminalRefit,
-    restorePaneTerminalFit,
-    restoreAllTerminalFits
-  }
+  return { restorePaneTerminalFit, restoreAllTerminalFits }
 }

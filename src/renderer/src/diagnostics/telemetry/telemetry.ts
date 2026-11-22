@@ -1,14 +1,17 @@
 // Typed renderer-side wrapper around the preload bridge: gives call sites EventMap type safety, while main stays the single validator.
 // Security invariant: the renderer bundles no PostHog SDK — the sole client lives in main, off the renderer's attack surface.
 
-import type { EventName, EventProps } from '../../../../shared/telemetry-events'
-import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
-import { utcDayIndex } from '../../../../shared/telemetry-day'
+import type {
+  EventName,
+  EventProps
+} from '../../../../shared/telemetry/telemetry-event-classification'
+import type { TelemetryConsentState } from '../../../../shared/telemetry/telemetry-consent-types'
+import { utcDayIndex } from '../../../../shared/telemetry/telemetry-day'
 
-import '../../../../shared/agent-kind'
+import '../../../../shared/agent-status/identity/agent-kind'
 
 // Single source-of-truth for the privacy doc URL so FirstLaunchBanner and PrivacyPane can't drift.
-export const PRIVACY_URL = 'https://www.onorca.dev/docs/telemetry'
+export const PRIVACY_URL = 'https://orca.dev/docs/telemetry'
 
 let lastTerminalUserInputAt: number | null = null
 

@@ -1,10 +1,13 @@
-import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import type { PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../../../shared/github/check-details-deadline'
+} from '../../../../shared/github/checks/check-details-deadline'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   nullableString,

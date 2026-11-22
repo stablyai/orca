@@ -1,4 +1,4 @@
-import type { GitHubApiRepository } from '../../github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { readGraphQLPRCheckRollup } from './pr-check-rollup'

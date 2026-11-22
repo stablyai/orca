@@ -1,4 +1,4 @@
-import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
+import type { EmulatorStreamInfo } from '@/components/emulator-pane/session/emulator-pane-types'
 
 export const EMULATOR_MANUAL_LAUNCH_STARTED_EVENT = 'orca:emulator-launch-started'
 export const EMULATOR_MANUAL_LAUNCH_FAILED_EVENT = 'orca:emulator-launch-failed'
@@ -63,11 +63,6 @@ export function consumePrelaunchedSimulatorSession(worktreeId: string): Emulator
   const info = prelaunchedSessionsByWorktree.get(worktreeId)?.info ?? null
   prelaunchedSessionsByWorktree.delete(worktreeId)
   return info
-}
-
-export function resetSimulatorLaunchCoordinationForTests(): void {
-  manualLaunchesByWorktree.clear()
-  prelaunchedSessionsByWorktree.clear()
 }
 
 export function dispatchManualSimulatorLaunchStarted(worktreeId: string): void {

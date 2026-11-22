@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { structuredAgentSessionOptionStamp } from '../../../../../../shared/agent-session/options/structured-agent-session-option-state'
-import { runtimePermissionReport } from '../../../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { structuredAgentSessionOptionStamp } from '../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-option-state'
+import { runtimePermissionReport } from '../../../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
 
 /** The host feed plus a subscription that wakes only for this chat's updates. */
 function useSessionFeed(
@@ -32,6 +32,8 @@ export function useStructuredAgentSessionPermissionStatus(
   fence: number | null
 ): {
   permissionReport: ReturnType<typeof runtimePermissionReport>
+  launchPermissionMode: string | undefined
+  runningPermissionMode: string | undefined
   observation: 'live' | 'unverifiable'
 } {
   const { feed, subscribe } = useSessionFeed(sessionId, target)
@@ -45,7 +47,17 @@ export function useStructuredAgentSessionPermissionStatus(
     () => feed.getSessionObservation(sessionId),
     () => 'unverifiable' as const
   )
-  return { permissionReport, observation }
+  const launchPermissionMode = useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.launchPermissionMode,
+    () => undefined
+  )
+  const runningPermissionMode = useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.runningPermissionMode,
+    () => undefined
+  )
+  return { permissionReport, launchPermissionMode, runningPermissionMode, observation }
 }
 
 export function useStructuredAgentSessionOptionStamp(
@@ -71,6 +83,32 @@ export function useStructuredAgentSessionHostExecutionPhase(
     () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
     () => null
   )
+}
+
+/** Which of these chats the host says are starting their agent; wakes only for their updates. */
+export function useStructuredAgentSessionsStarting(
+  sessionIds: readonly string[],
+  target: RuntimeClientTarget
+): ReadonlySet<string> {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const unsubscribes = sessionIds.map((id) => feed.subscribeSession(id, listener))
+      return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
+    },
+    [feed, sessionIds]
+  )
+  // A joined key keeps the snapshot stable between unrelated updates.
+  const key = useSyncExternalStore(
+    subscribe,
+    () =>
+      sessionIds
+        .filter((id) => feed.getSnapshot().get(id)?.hostExecutionPhase === 'starting')
+        .join('\n'),
+    () => ''
+  )
+  return useMemo(() => new Set(key ? key.split('\n') : []), [key])
 }
 
 /** Whether the host says this chat runs a program the host already has; an older host never does. */

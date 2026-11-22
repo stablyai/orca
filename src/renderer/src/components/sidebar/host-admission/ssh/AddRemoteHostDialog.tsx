@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { EMPTY_FORM, type EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
-import type { SshConfigHostSummary } from '../../../../../../shared/ssh-types'
+import type { SshConfigHostSummary } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   translateHostAccessLinkError,

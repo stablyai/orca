@@ -1,5 +1,4 @@
 /** D2c/C6 classify watch exits against fresh running lists and guest incarnation, publishing through onChange. Boot only for visible demand; background work waits for running evidence. Use monotonic timers and reverify after resume. */
-/** D2c/C6 classify watch exits against fresh running lists and guest incarnation, publishing through onChange. Boot only for visible demand; background work waits for running evidence. Use monotonic timers and reverify after resume. */
 import type { WslOrcadConnection } from './wsl-orcad-connection-types'
 import { settleExitedDistroRunning } from './wsl-orcad-liveness-stopping-poll'
 import { isNoBootRefusal } from './wsl-orcad-connection-errors'
@@ -14,6 +13,7 @@ import {
   ensureHolderQuietly,
   probeOrcadPort,
   scheduleSupervisedHeartbeat,
+  scheduleSupervisedVerify,
   subscribeWake
 } from './wsl-orcad-liveness-monitor'
 import {
@@ -33,9 +33,7 @@ import {
   type WslLivenessEvidence,
   type WslLivenessVerdict
 } from './wsl-orcad-liveness-verdict'
-import { WslOrcadReconnectBackoff, wslOrcadVerifyRetryDelayMs } from './wsl-orcad-reconnect-backoff'
-
-const VERIFY: Trigger = { source: 'verify' }
+import { WslOrcadReconnectBackoff } from './wsl-orcad-reconnect-backoff'
 
 export class WslOrcadLivenessSupervisor {
   private readonly supervised = new Map<string, Supervised>()
@@ -175,19 +173,17 @@ export class WslOrcadLivenessSupervisor {
   }
 
   private scheduleHeartbeat(entry: Supervised): void {
-    scheduleSupervisedHeartbeat(entry, this.schedule, this.now, this.heartbeatMs, (trigger) =>
-      this.trigger(entry, trigger)
+    scheduleSupervisedHeartbeat(
+      entry,
+      this.schedule,
+      this.now,
+      this.heartbeatMs,
+      this.trigger.bind(this, entry)
     )
   }
 
   private scheduleVerify(entry: Supervised): void {
-    entry.timer?.cancel()
-    const delayMs = wslOrcadVerifyRetryDelayMs(entry.verifyStreak)
-    entry.verifyStreak += 1
-    entry.timer = this.schedule(delayMs, () => {
-      entry.timer = null
-      this.trigger(entry, { source: 'verify' })
-    })
+    scheduleSupervisedVerify(entry, this.schedule, () => this.trigger(entry, { source: 'verify' }))
   }
 
   private trigger(entry: Supervised, trigger: Trigger): void {
@@ -283,14 +279,20 @@ export class WslOrcadLivenessSupervisor {
       case 'distro-restarted':
         disarmSupervised(entry)
         return this.recover(entry, 'distro-restarted')
-      case 'orcad-exited':
+      case 'orcad-exited': {
         disarmSupervised(entry)
-        if (!this.deps.hasUserVisibleWork(entry.distro)) {
+        const generation = entry.generation
+        const visible = await this.deps.hasUserVisibleWork(entry.distro)
+        if (entry.generation !== generation) {
+          return
+        }
+        if (!visible) {
           // Relaunch without visible demand would defeat managed orcad idle exit.
           this.publish(entry, { state: 'idle', terminals: 'unverifiable' })
           return this.deps.manager.retireListener(entry.distro)
         }
         return this.recover(entry, 'orcad-exited')
+      }
     }
   }
 
@@ -301,11 +303,12 @@ export class WslOrcadLivenessSupervisor {
       this.publish(entry, { state: 'distro-stopped', terminals: 'exited', recovering: false })
     }
     // Read before the retire: a connect starting during it must make the deferred verify a no-op.
-    const { generation, key } = entry
+    const { generation } = entry
     await this.deps.manager.retireListener(entry.distro)
     // A confirmed stop stays down, even with visible work, until the user or a running distro (E9).
-    const verify = (): unknown => entry.generation === generation && this.trigger(entry, VERIFY)
-    this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${key}`, verify)
+    const verify = () =>
+      entry.generation === generation && this.trigger(entry, { source: 'verify' })
+    this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${entry.key}`, verify)
   }
 
   private async recover(entry: Supervised, reason: WslOrcadRecoveryReason): Promise<void> {

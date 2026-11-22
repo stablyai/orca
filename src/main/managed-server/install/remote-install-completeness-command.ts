@@ -2,7 +2,7 @@ import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platfo
 import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 
 import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 /** Require the directory and every declared regular-file artifact; incomplete installs must report missing. */

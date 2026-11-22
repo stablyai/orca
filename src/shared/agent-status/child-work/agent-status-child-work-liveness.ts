@@ -1,4 +1,4 @@
-import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../orca-cli-invocations'
+import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../cli/orca-cli-invocations'
 import type {
   AgentChildWorkKind,
   AgentChildWorkMembership,

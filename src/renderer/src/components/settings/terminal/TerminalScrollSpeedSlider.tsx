@@ -46,6 +46,7 @@ export function ScrollSpeedSlider({
         max={max}
         step={step}
         value={[value]}
+        thumbLabels={[label]}
         onValueChange={([next]) => {
           if (next !== undefined) {
             onChange(next)

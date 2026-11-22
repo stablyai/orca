@@ -1,5 +1,5 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../../../../shared/terminal/stream/terminal-stream-end-verdict'
 import { shouldHoldE2eRemoteTerminalEnd } from '../diagnostics/remote-runtime-terminal-e2e-control'

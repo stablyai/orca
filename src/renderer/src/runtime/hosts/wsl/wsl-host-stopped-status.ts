@@ -9,6 +9,15 @@ export function selectStoppedWslDistro(
   return status?.state === 'distro-stopped' ? status.distro : null
 }
 
+/** The distro of a WSL host still connecting, such as after Start while it boots or updates its server. */
+export function selectConnectingWslDistro(
+  state: Pick<AppState, 'wslHostStatuses'>,
+  environmentId: string | null | undefined
+): string | null {
+  const status = environmentId ? state.wslHostStatuses[environmentId] : undefined
+  return status?.state === 'connecting' || status?.state === 'reconnecting' ? status.distro : null
+}
+
 /**
  * Whether a pane shows the stopped distro's Start card. A pane whose create failed has no server
  * yet and is still the workspace's; one on another server, or a host that cannot run, keeps its own

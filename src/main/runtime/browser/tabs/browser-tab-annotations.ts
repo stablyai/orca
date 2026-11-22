@@ -3,7 +3,7 @@ import type {
   BrowserTabAnnotationsResult,
   BrowserTabInfo
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { isHostReachableDocument } from '../../../../shared/desktop-browser-bridge-protocol'
+import { isHostReachableDocument } from '../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { BrowserError } from '../../../browser/browser-error'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'

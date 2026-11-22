@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
@@ -7,7 +8,7 @@ import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
   normalizeBrowserDownloadFilename
-} from '../../../../shared/browser-download-filename'
+} from '../../../../shared/browser/downloads/browser-download-filename'
 import type { RuntimeFileMutationExpectation } from '../../files/file-mutation-expectation'
 
 // Remote downloads need an in-workspace home reachable through containment-checked transfers.
@@ -15,8 +16,8 @@ export const BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY = '.orca/browser-downlo
 
 type TransferMutation = { workspaceId: string; expectation: RuntimeFileMutationExpectation }
 export type BrowserClientDownloadTransferDependencies = {
-  /** Pins the workspace's current host and creates the directory there. */
-  prepareDirectory(workspaceId: string, directory: string): Promise<RuntimeFileMutationExpectation>
+  /** Pins the workspace's current host; the first chunk write creates the directory there. */
+  pinWorkspaceHost(workspaceId: string): Promise<RuntimeFileMutationExpectation>
   writeChunk(
     input: TransferMutation & { relativePath: string; contentBase64: string; append: boolean }
   ): Promise<void>
@@ -34,6 +35,8 @@ type TransferSession = {
   workspaceId: string
   tempRelativePath: string
   pinnedExpectation: RuntimeFileMutationExpectation | null
+  /** Set once the first write created the temp file; cleanup never touches a file it did not create. */
+  ownsTempFile: boolean
   bytesWritten: number
   /** Set synchronously before queued cleanup. */
   canceled: boolean
@@ -168,10 +171,7 @@ export class BrowserClientDownloadTransferStore {
     let expectation = session.pinnedExpectation
     try {
       if (!expectation) {
-        expectation = await this.dependencies.prepareDirectory(
-          session.workspaceId,
-          BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY
-        )
+        expectation = await this.dependencies.pinWorkspaceHost(session.workspaceId)
         session.pinnedExpectation = expectation
         this.assertLive(session)
       }
@@ -180,8 +180,9 @@ export class BrowserClientDownloadTransferStore {
         expectation,
         relativePath: session.tempRelativePath,
         contentBase64: input.contentBase64,
-        append: session.bytesWritten > 0
+        append: session.ownsTempFile
       })
+      session.ownsTempFile = true
     } catch (error) {
       await this.release(session)
       throw error
@@ -236,8 +237,10 @@ export class BrowserClientDownloadTransferStore {
       browserPageId: input.browserPageId,
       pageHostGeneration: input.pageHostGeneration,
       workspaceId: input.workspaceId,
-      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${input.transferId}`,
+      // Server-generated so a client-chosen transfer id never names a file it did not create.
+      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${randomUUID()}`,
       pinnedExpectation: null,
+      ownsTempFile: false,
       bytesWritten: 0,
       canceled: false,
       operations: Promise.resolve(),
@@ -289,8 +292,7 @@ export class BrowserClientDownloadTransferStore {
   private async release(session: TransferSession): Promise<void> {
     const owned = this.sessions.get(session.key) === session
     this.settle(session)
-    // Nothing reached the workspace before an expectation was pinned.
-    if (!owned || !session.pinnedExpectation) {
+    if (!owned || !session.ownsTempFile || !session.pinnedExpectation) {
       return
     }
     try {

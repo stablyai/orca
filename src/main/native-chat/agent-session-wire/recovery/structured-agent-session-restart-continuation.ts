@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   refusedBy,
-  verdictOf,
+  settledVerdict,
   type ContinuationSubmission
 } from './structured-agent-session-continuation-verdict'
 import {
@@ -21,16 +21,16 @@ import {
   type AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
-import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { continuationEnvelopeOf } from './structured-agent-session-restart-continuation-envelope'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
 
@@ -50,7 +50,8 @@ export type StructuredAgentSessionContinuationHost = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
-    beforeRun?: () => void
+    continuation?: true
+    beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -60,24 +61,29 @@ export type StructuredAgentSessionContinuationHost = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDispatched: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
-  stillResumable: (marker: AgentSessionResumeMarker) => boolean
+  stillResumable: (marker: AgentSessionResumeMarker) => Promise<boolean>
 }
 
 /** Bind serialized acceptance checks, settlement waits and attribution notes to the host. */
 export function continuationDeps(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
-  stillWanted: () => boolean
+  stillWanted: () => Promise<boolean>
 ): StructuredAgentSessionContinuationDeps {
   return {
     currentFence: host.conversationFence,
     send: (input) =>
       host.send({
         ...input,
-        beforeRun: () => {
-          if (!stillWanted()) {
+        continuation: true,
+        beforeRun: async () => {
+          if (!(await stillWanted())) {
             throw new RestartContinuationSupersededError()
           }
         }
@@ -89,6 +95,10 @@ export function continuationDeps(
     awaitHandedOver: async (sessionId, clientMessageId) =>
       agentSessionSendSubmission(
         (await host.awaitSendHandedOver(sessionId, clientMessageId))?.value
+      ),
+    awaitDispatched: async (sessionId, clientMessageId) =>
+      agentSessionSendSubmission(
+        (await host.awaitSendDispatched(sessionId, clientMessageId))?.value
       ),
     logger: host.logger,
     note: restartNoteWriter(host),
@@ -157,6 +167,11 @@ export type StructuredAgentSessionContinuationDeps = {
   ) => Promise<ContinuationSubmission | undefined>
   /** Wait for handover/rejection; undefined means the wait ended without proof. */
   awaitHandedOver: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<ContinuationSubmission | undefined>
+  /** Provider's own answer, past a turn that ended without taking the send; undefined proves nothing. */
+  awaitDispatched: (
     sessionId: string,
     clientMessageId: string
   ) => Promise<ContinuationSubmission | undefined>
@@ -271,7 +286,7 @@ async function sendContinuation(
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
   }
-  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker, continuationId)
+  const { envelope, body } = await continuationEnvelopeOf(sessionId, fence, marker, continuationId)
   const sent = await deps.send({ envelope, body }).catch((error: unknown) => {
     if (error instanceof AgentSessionPreDispatchError) {
       throw error
@@ -298,14 +313,8 @@ async function sendContinuation(
   }
   const clientMessageId = envelope.clientOperationId
   const handOver = () => deps.awaitHandedOver(sessionId, clientMessageId).catch(() => undefined)
-  const settle = async (handedOver: ContinuationSubmission | undefined) =>
-    verdictOf(
-      sessionId,
-      // Initial acceptance is usually pending; settled provider state decides.
-      (await deps.awaitSettlement(sessionId, clientMessageId).catch(() => undefined)) ??
-        handedOver ??
-        sent.value?.submission
-    )
+  const settle = (handedOver: ContinuationSubmission | undefined) =>
+    settledVerdict(deps, sessionId, clientMessageId, handedOver ?? sent.value?.submission)
   if (deps.answerAtAcceptance) {
     // Startup may outlast the client’s wait; verdict notes report later refusal.
     return { verdict: async () => settle(await handOver()) }

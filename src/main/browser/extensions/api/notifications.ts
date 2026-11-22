@@ -5,7 +5,11 @@ import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
 } from '../../../../shared/browser/extensions/browser-extension-url'
-import { isBackgroundLaunch } from '../../../window/foreground-activation-policy'
+import { isBackgroundLaunch } from '../../../window/activation/foreground-activation-policy'
+import {
+  closeDesktopNotification,
+  showDesktopNotification
+} from '../../../notifications/desktop-notification'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { resolveInsideExtensionDirectory } from '../installation/browser-extension-manifest'
 import {
@@ -15,6 +19,7 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 
 const optionsSchema = z
   .object({
@@ -47,9 +52,14 @@ function shownFor(caller: BrowserExtensionCaller): Map<string, Shown> {
     byExtension = new Map()
     shownBySession.set(caller.session, byExtension)
     const owned = byExtension
+    const profileId = caller.browserProfileId
     caller.session.extensions.on('extension-unloaded', (_event, extension) => {
       const shown = owned.get(extension.id)
       owned.delete(extension.id)
+      // Why: the notifications close with no event, so only a clean start shows them again.
+      if (shown && shown.size > 0) {
+        noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
+      }
       for (const entry of shown?.values() ?? []) {
         detach(entry)
       }
@@ -99,7 +109,7 @@ function detach(entry: Shown, closeNative = true): void {
   if (notification) {
     notification.removeAllListeners()
     if (closeNative) {
-      notification.close()
+      closeDesktopNotification(notification)
     }
   }
 }
@@ -148,7 +158,7 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
     detach(entry, false)
   })
   entry.notification = notification
-  notification.show()
+  showDesktopNotification(notification)
 }
 
 function create(caller: BrowserExtensionCaller, id: string, options: NotificationOptions): string {

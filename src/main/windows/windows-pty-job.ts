@@ -1,6 +1,6 @@
 import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 
 /** Kernel job handles own ConPTY descendants across PID reuse/reparenting (#9045/#10475/#10087). Per-PTY jobs make explicit teardown exact without kill-on-close, preserving background children on clean shell exit. */
 
@@ -183,13 +183,6 @@ export function setPtyActiveProcessLimit(limit: number): boolean {
 /** Whether this build can own PTY trees with job objects at all. */
 export function isPtyJobOwnershipAvailable(): boolean {
   return nativeLoader() !== null
-}
-
-/** Test-only: substitute the native module (it is resolved via createRequire). */
-export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null): void {
-  nativeLoader = loader ?? loadConptyNative
-  cachedNative = undefined
-  hostJobAssigned = null
 }
 
 type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }

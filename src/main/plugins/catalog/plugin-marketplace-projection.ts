@@ -16,6 +16,7 @@ import {
   type PluginHostImages
 } from '../../../shared/plugins/images/plugin-image-url'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
+import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
 
 export type PluginMarketplaceSourceState = {
   id: string
@@ -44,6 +45,9 @@ export type PluginMarketplaceListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
+   *  official plugins and undated releases; catalogs carry no listing date of their own. */
+  addedAt?: string
   /** The release offered to this host: the newest it can install, else the one needing the least
    *  newer Orca. Absent for v1 catalogs. */
   release?: PluginCatalogRelease
@@ -137,6 +141,7 @@ export function pluginMarketplaceListing(input: {
     isOfficialMarketplaceGitSource(source.source.url) &&
     snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
     isOfficialOrganizationGitSource(entry.source.url)
+  const addedAt = estimatePluginAddedAt(entry.releases, official)
   return {
     marketplaceSourceId: source.id,
     marketplaceName: snapshot.marketplace.name,
@@ -145,6 +150,7 @@ export function pluginMarketplaceListing(input: {
     pluginKey: entry.id,
     source: entry.source,
     ...(entry.description ? { description: entry.description } : {}),
+    ...(addedAt ? { addedAt } : {}),
     categories: entry.categories,
     official,
     bundled: false,

@@ -5,7 +5,7 @@ import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
 } from '../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
-import { WSL_BROWSER_NETWORK_RELAY_SENTINEL } from '../shared/wsl-browser-network-relay-contract'
+import { WSL_BROWSER_NETWORK_RELAY_SENTINEL } from '../shared/browser/network/tunnels/wsl-browser-network-relay-contract'
 
 function main(): void {
   let shuttingDown = false

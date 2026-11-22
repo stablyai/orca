@@ -1,6 +1,6 @@
 import type { JournalSubmissionConsume } from '../journal-store-contracts'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -81,18 +81,16 @@ export function nextEligibleQueuedCard(input: {
   return first
 }
 
-/** Automatic consumption validates the same current selection on the journal write lane. */
+/** Manual Send validates the exact named card before its handoff. */
 export function assertQueuedCardConsumable(
   input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string },
-  card: QueuedMessageRow | null,
-  next: () => QueuedMessageRow | null
+  card: QueuedMessageRow | null
 ): void {
   if (
     card !== null &&
     card.state === input.expect &&
     card.fingerprint === input.fingerprint &&
-    input.consumedAs !== input.messageId &&
-    (!input.yieldsToPause || next()?.messageId === input.messageId)
+    input.consumedAs !== input.messageId
   ) {
     return
   }

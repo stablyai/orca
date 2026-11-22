@@ -1,5 +1,7 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { WebSessionTabsSnapshotApplyOptions } from '../state'
+import { recordBrowserInitializationReceipt } from '../tab-projection/browser-initialization-presentation'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { useAppStore } from '../../../store/index'
 import {
@@ -11,25 +13,25 @@ import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from '../identity/web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from '../../browser/creation/testing/web-runtime-browser-creation-e2e-fault'
-import { getSessionTabsRuntimeIdFromResponse } from '../publisher-identity-fences'
-import { WEB_SESSION_TABS_FRAME_OUTRANKED } from '../tracking-decisions'
+import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
+import { WEB_SESSION_TABS_FRAME_OUTRANKED } from '../tracking/tracking-decisions'
 // Static import is required: receipt ordering gates this path and cannot be omitted by a caller’s module mock.
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
-} from '../tracking'
-import { recoverMirroredTerminalOrphansBeforeApply } from '../mirror-terminal-orphan-recovery'
-import { applyReceivedAgentSenderPublications } from '../received-agent-sender-publications'
+} from '../tracking/tracking'
+import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
+import { applyReceivedAgentSenderPublications } from '../tracking/received-agent-sender-publications'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
 
 function importSessionTabsApplyModules() {
   return Promise.all([
-    import('../snapshot-api'),
-    import('../store-patch'),
-    import('../tracking-decisions'),
-    import('../tracking-lifecycle'),
+    import('../snapshots/snapshot-api'),
+    import('../snapshots/store-patch'),
+    import('../tracking/tracking-decisions'),
+    import('../tracking/tracking-lifecycle'),
     import('../state')
   ])
 }
@@ -44,26 +46,47 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
   return sessionTabsApplyModules
 }
 
-/** Lets a test pay this lazy load before a timed wait instead of inside it. */
-export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
-  await loadSessionTabsApplyModules()
+type SnapshotRefreshOptions = {
+  expectedEnvironmentPairingRevision?: number
+  acceptCurrentSnapshot?: boolean
+  confirmAgentSessionHandoff?: {
+    provisionalTabId: string
+    hostTabId: string
+    hostTerminalHandle: string
+  }
+  afterCurrentInFlight?: boolean
+  reconcileBrowserPage?: WebSessionTabsSnapshotApplyOptions['reconcileBrowserPage']
+  errorMode?: 'warn' | 'throw'
+  isCurrent?(): boolean
 }
 
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string,
-  options: {
-    expectedEnvironmentPairingRevision?: number
-    acceptCurrentSnapshot?: boolean
-    confirmAgentSessionHandoff?: {
-      provisionalTabId: string
-      hostTabId: string
-      hostTerminalHandle: string
-    }
-    afterCurrentInFlight?: boolean
-    errorMode?: 'warn' | 'throw'
-  } = {}
+  options: SnapshotRefreshOptions = {}
 ): Promise<void> {
+  await reconcileWebRuntimeSessionTabs(environmentId, worktreeId, options)
+}
+
+export async function applyWebRuntimeSessionTabsAnswer(
+  environmentId: string,
+  worktreeId: string,
+  answer: { snapshot: RuntimeMobileSessionTabsResult; receivedFrame: number; runtimeId?: string },
+  options: SnapshotRefreshOptions & { beforeApply?(): void; isCurrent?(): boolean } = {}
+): Promise<boolean> {
+  recordBrowserInitializationReceipt(environmentId, answer.snapshot, answer.receivedFrame)
+  return reconcileWebRuntimeSessionTabs(environmentId, worktreeId, { ...options, answer })
+}
+
+async function reconcileWebRuntimeSessionTabs(
+  environmentId: string,
+  worktreeId: string,
+  options: SnapshotRefreshOptions & {
+    answer?: { snapshot: RuntimeMobileSessionTabsResult; receivedFrame: number; runtimeId?: string }
+    beforeApply?(): void
+    isCurrent?(): boolean
+  } = {}
+): Promise<boolean> {
   // Await up front; list application and its receipt must not yield between them.
   const [
     { applyWebSessionTabsSnapshot },
@@ -94,25 +117,27 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (options.afterCurrentInFlight) {
       throwIfE2eWebRuntimeBrowserReconciliationFails()
     }
-    const { snapshot, receivedFrame, runtimeId } = await listSessionTabs({
-      environmentId,
-      worktreeId,
-      load: async () => {
-        const response = await callEnvironment({
-          method: 'session.tabs.list',
-          params: {
-            worktree: toRuntimeWorktreeSelector(worktreeId)
-          },
-          timeoutMs: 15_000
-        })
-        return {
-          snapshot: unwrapRuntimeRpcResult(
-            response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
-          ),
-          runtimeId: getSessionTabsRuntimeIdFromResponse(response)
+    const { snapshot, receivedFrame, runtimeId } =
+      options.answer ??
+      (await listSessionTabs({
+        environmentId,
+        worktreeId,
+        load: async () => {
+          const response = await callEnvironment({
+            method: 'session.tabs.list',
+            params: {
+              worktree: toRuntimeWorktreeSelector(worktreeId)
+            },
+            timeoutMs: 15_000
+          })
+          return {
+            snapshot: unwrapRuntimeRpcResult(
+              response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
+            ),
+            runtimeId: getSessionTabsRuntimeIdFromResponse(response)
+          }
         }
-      }
-    })
+      }))
     if (options.confirmAgentSessionHandoff) {
       const { confirmWebAgentSessionHandoffAfterCreate } =
         await import('../../hosted-terminals/creation/agent-launch/web-agent-session-handoff')
@@ -132,7 +157,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       'bootstrap'
     )
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
-      return
+      return false
     }
     applyReceivedAgentSenderPublications(environmentId, [snapshot], runtimeId)
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
@@ -149,7 +174,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       !recovered ||
       getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
     ) {
-      return
+      return false
     }
     // Only the frame decision proves this host answer was accepted; discarded workspaces supply no evidence.
     const decision = shouldApplyRecoveredWebSessionTabsSnapshot(
@@ -160,16 +185,29 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     )
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
+    if (options.isCurrent && !options.isCurrent()) {
+      return false
+    }
+    let applied = false
     const settleMirror = applyWebSessionTabsStorePatch(
       (state, changedAgentPaneKeys) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
+        if (options.isCurrent && !options.isCurrent()) {
+          return state
+        }
+        if (decision.apply) {
+          options.beforeApply?.()
+          applied = true
+        }
         const patch = decision.apply
           ? applyWebSessionTabsSnapshot(
               state,
               recovered,
               environmentId,
               undefined,
-              undefined,
+              options.reconcileBrowserPage
+                ? { reconcileBrowserPage: options.reconcileBrowserPage }
+                : undefined,
               changedAgentPaneKeys
             )
           : state
@@ -191,6 +229,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       recovered
     )
     settleMirror()
+    return applied
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error
@@ -200,6 +239,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',
       error instanceof Error ? error.message : String(error)
     )
+    return false
   }
 }
 

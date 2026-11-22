@@ -4,8 +4,11 @@ import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bound
 import {
   SKILL_DELETE_PLACEMENT_KINDS,
   type SkillDeletePlacementKind
-} from '../../../shared/skill-delete-contract'
-import { nativeSkillPathSemantics, skillPathInside } from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/deletion/skill-delete-contract'
+import {
+  nativeSkillPathSemantics,
+  skillPathInside
+} from '../../../shared/skills/paths/skill-path-containment'
 import {
   nativeSkillInstallFilesystem,
   type SkillInstallFilesystem

@@ -1,4 +1,4 @@
-import type { NestedRepoScanOptions } from '../../shared/project-group-types'
+import type { NestedRepoScanOptions } from '../../shared/project/groups/project-group-types'
 
 export type NestedRepoDirectoryEntry = {
   name: string

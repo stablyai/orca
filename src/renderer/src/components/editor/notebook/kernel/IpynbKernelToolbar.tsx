@@ -28,7 +28,7 @@ import { cn } from '@/lib/class-names'
 import type {
   PythonEnvironment,
   PythonEnvironments
-} from '../../../../../../shared/notebook-kernel-types'
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 import { IpynbToolbarButton } from '../cells/IpynbCellToolbar'
 import { IpynbKernelSetupDialog } from './IpynbKernelSetupDialog'
 import {

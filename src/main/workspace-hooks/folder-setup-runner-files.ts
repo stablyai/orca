@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
@@ -8,6 +8,9 @@ const FOLDER_RUNNER_DIR = '.orca'
 
 // One directory per workspace, so removal deletes it without listing its siblings' runners.
 function runnerDirName(worktreeId: string): string {
+  if (worktreeId.startsWith('folder:')) {
+    return `setup-runner-group-${createHash('sha256').update(worktreeId).digest('hex')}`
+  }
   const separatorIdx = worktreeId.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
   const instance =
     separatorIdx === -1

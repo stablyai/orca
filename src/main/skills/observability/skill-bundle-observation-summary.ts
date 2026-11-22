@@ -1,4 +1,4 @@
-import type { SkillBundleInstallResult } from '../../../shared/skill-bundle-install-contract'
+import type { SkillBundleInstallResult } from '../../../shared/skills/installation/skill-bundle-install-contract'
 
 const MAX_ERROR_CATEGORIES = 32
 const SAFE_ERROR_CATEGORY = /^[a-z0-9][a-z0-9._-]{0,63}$/i

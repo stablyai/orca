@@ -1,4 +1,4 @@
-import type { RefreshCurrentOrcaProfileAuthResult } from '../../../shared/orca-profiles'
+import type { RefreshCurrentOrcaProfileAuthResult } from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
 import { refreshOrcaCloudCapabilities } from './profile-cloud-client'

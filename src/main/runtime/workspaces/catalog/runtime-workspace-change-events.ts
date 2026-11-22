@@ -1,9 +1,11 @@
 import type { RuntimeWorktreeLifecycleEvent } from '../lifecycle/worktree-lifecycle-event'
-import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
-import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/folder-repo-git-upgrade-wake'
+import type { AutomationsChangedPayload } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../../../ipc/worktrees/creation/worktree-base-directory-watcher'
+import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/worktrees/listing/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import { NativeChatLaunchDraftOwner } from '../../agent-session/launch/native-chat-launch-draft-owner'
 
 export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraftOwner {
@@ -56,6 +58,8 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
+    // Same as the desktop IPC path: repo or nesting changes move the roots the watcher follows.
+    scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
     this.notifyAutomationsChanged({ reason: 'definition' })
   }
@@ -64,5 +68,12 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.notifier?.automationsChanged?.(payload)
     this.emitClientEvent({ type: 'automationsChanged', ...payload })
+    this.botChangeNotices.changed({ kinds: ['automations'] })
+  }
+
+  /** The cleanup runner finished a run on this host; clients may toast. */
+  notifyWorkspaceCleanupRunFinished(run: WorkspaceCleanupRunFinishedEvent['run']): void {
+    this.notifier?.workspaceCleanupRunFinished?.(run)
+    this.emitClientEvent({ type: 'workspaceCleanupRunFinished', run })
   }
 }

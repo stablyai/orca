@@ -1,5 +1,5 @@
-import type { TerminalLeafMoveRequest } from '../../../../../shared/workspace-layout/terminal-leaf-move'
-import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import type { TerminalLeafMoveRequest } from '../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
+import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'

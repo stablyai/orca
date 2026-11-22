@@ -1,10 +1,12 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
 import type { ActiveDownload } from './downloads/browser-active-download'
@@ -15,11 +17,13 @@ import type { BrowserGuestPolicy } from './registration/browser-guest-policy-pro
 import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
-  BrowserDownloadProgressEvent
+  BrowserDownloadProgressEvent,
+  BrowserLoadStall
 } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from '../devtools/browser-guest-devtools-dock'
+import { createKeyedTrailingEdgeCoalescer } from '../../../runtime/client/events/keyed-trailing-edge-coalescer'
 
 export type BrowserManagerSettings = {
   keybindings?: KeybindingOverrides
@@ -37,6 +41,8 @@ export type OffscreenBrowserTabOpenRequest = {
 }
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
+  abstract invalidateGuestMemoryProtection(guest: Electron.WebContents): void
+
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext?: PopupOwnerContext | null,
@@ -66,6 +72,12 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     event: PendingPermissionEvent
   ): void
   protected abstract flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void
+  protected abstract flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void
+  protected abstract sendLoadStall(
+    browserPageId: string,
+    webContentsId: number,
+    stall: BrowserLoadStall | null
+  ): void
   protected abstract flushPendingPermissionEvents(
     browserTabId: string,
     guestWebContentsId: number
@@ -129,7 +141,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,
-    activate?: boolean
+    activate?: boolean,
+    agentOpened?: boolean
   ): boolean
 
   protected settingsResolver: (() => BrowserManagerSettings) | null = null
@@ -158,6 +171,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
+  // Guests an agent command targeted since the desktop user last gave them input.
+  protected readonly agentLedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly devToolsDock = new BrowserGuestDevToolsDock()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
@@ -167,6 +182,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Offscreen pages have no renderer to hold their icon for session-tab rows.
   protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
+  // Title and spinner churn on offscreen pages publishes at most about once a second.
+  protected readonly offscreenGuestStateNotices = createKeyedTrailingEdgeCoalescer(
+    (webContentsId) => this.notifyBrowserGuestStateChanged(Number(webContentsId)),
+    { flushMs: 250, maxWaitMs: 1000 }
+  )
   protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
   protected siteDisplayController: BrowserSiteDisplayController | null = null
@@ -175,11 +195,18 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     number,
     { code: number; description: string; validatedUrl: string }
   >()
+  protected readonly pendingLoadStallsByGuestId = new Map<number, BrowserLoadStall>()
+  /** The page showing a guest's stall; cleanup unmaps the guest before its clear is sent. */
+  protected readonly loadStallPageIdByGuestId = new Map<number, string>()
   protected readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   protected readonly downloadsById = new Map<string, ActiveDownload>()
-  protected readonly grabSessionController = new BrowserGrabSessionController()
+  protected readonly grabSessionController = new BrowserGrabSessionController((pageId, guest) => {
+    if (this.webContentsIdByTabId.get(pageId) === guest.id) {
+      this.invalidateGuestMemoryProtection(guest)
+    }
+  })
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate
@@ -199,6 +226,14 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setSiteDisplayController(controller: BrowserSiteDisplayController): void {
     this.siteDisplayController = controller
+  }
+
+  /** Runtime zoom for hosted pages, which have no renderer IPC of their own. */
+  zoomGuestPage(
+    guestId: number,
+    direction: BrowserPageZoomDirection
+  ): BrowserPageSiteDisplay | null {
+    return this.siteDisplayController?.zoomPage(guestId, direction) ?? null
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {
@@ -226,6 +261,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       if (browserTabId) {
         this.recordAppliedViewportOverride(browserTabId, guest.id, null)
       }
+      this.invalidateGuestMemoryProtection(guest)
     }
     try {
       guest.debugger.on('detach', onDetach)

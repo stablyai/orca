@@ -1,8 +1,11 @@
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Checkbox } from '../../../ui/checkbox'
-import { VirtualizedList } from '../../../virtualized-list'
+import { VirtualizedList } from '../../../ui/virtualized-list'
 import { useSettingsContentScrollElement } from '../../page/settings-content-scroll-element'
 import type { SshTargetBusyAction } from './ssh-target-action-state'
 import {

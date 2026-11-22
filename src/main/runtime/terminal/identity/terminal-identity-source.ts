@@ -1,4 +1,4 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

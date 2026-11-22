@@ -3,7 +3,7 @@ import type {
   CheckStatus,
   PRMergeableState,
   ProviderCheckSummary
-} from '../../shared/github/pull-request-types'
+} from '../../shared/github/pull-requests/pull-request-types'
 
 export type RawAzureDevOpsStatus = {
   state?: string | null

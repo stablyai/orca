@@ -1,19 +1,23 @@
 import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
-import type { OrchestrationDb } from '../db/orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../db/orchestration-db'
+import { FEDERATED_DISPATCH_COLUMN_LIST } from '../db/row-column-lists'
 
 export function getFederatedDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): FederatedDispatchRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
-    .prepare('SELECT * FROM federated_dispatches WHERE dispatch_id = ?')
+    .prepare(
+      `SELECT ${FEDERATED_DISPATCH_COLUMN_LIST} FROM federated_dispatches WHERE dispatch_id = ?`
+    )
     .get(dispatchId) as FederatedDispatchRow | undefined
 }
 
 /** One statement for a whole worker-list page; the per-id lookup was an N+1 over the page. */
 export function listFederatedDispatchesByIds(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   dispatchIds: readonly string[]
 ): FederatedDispatchRow[] {
   if (dispatchIds.length === 0) {

@@ -1,7 +1,7 @@
 import {
   DICTATION_SESSION_LOST_MESSAGE,
   hostDictationErrorMessage
-} from '../../../src/shared/host-dictation-error-messages'
+} from '../../../src/shared/speech/dictation/host-dictation-error-messages'
 import { translate } from '../i18n/mobile-i18n'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'

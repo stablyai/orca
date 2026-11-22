@@ -1,4 +1,4 @@
-import type { TerminalTabCloseIntent } from '../../terminal/terminal-tab-close-intent'
+import type { TerminalTabCloseIntent } from '../../terminal/tab-lifecycle/terminal-tab-close-intent'
 
 /** 'layout' fits the hidden pane at real size; 'warm' also keeps its renderer live. */
 export type HiddenTerminalPrewarm = 'layout' | 'warm'

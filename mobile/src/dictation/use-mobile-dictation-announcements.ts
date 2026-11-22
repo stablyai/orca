@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
-import { useAccessibilityAnnouncer } from '../platform/accessibility-announcer'
+import { useAccessibilityAnnouncer } from '../platform/accessibility/accessibility-announcer'
 import { dictationAnnounceCopy } from './mobile-dictation-announce-copy'
 import { dictationKeptFailureCause } from './mobile-dictation-controls-copy'
 

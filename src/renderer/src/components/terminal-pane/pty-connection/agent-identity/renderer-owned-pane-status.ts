@@ -47,7 +47,7 @@ export function installRendererOwnedPaneStatus(session: ConnectPanePtySession): 
     // Only actual byte-derived status proves authority to fence out host mirroring.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
     const timing = resolveRendererOwnedAgentStatusTiming(
-      currentState.agentStatusByPaneKey[session.cacheKey]
+      currentState.agentStatusByPaneKey.get(session.cacheKey)
     )
     if (session.launchToken) {
       currentState.setAgentStatus(
@@ -72,7 +72,7 @@ export function installRendererOwnedPaneStatus(session: ConnectPanePtySession): 
     if (payload.state === 'working' && session.syncAgentTaskCompleteTrackingEnabled()) {
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
     }
-    const storedStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const storedStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     const notificationPayload =
       typeof storedStatus?.stateStartedAt === 'number'
         ? { ...statusPayload, stateStartedAt: storedStatus.stateStartedAt }

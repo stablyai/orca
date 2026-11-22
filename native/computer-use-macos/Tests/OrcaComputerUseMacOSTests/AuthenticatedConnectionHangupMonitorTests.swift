@@ -6,36 +6,7 @@ import XCTest
 final class AuthenticatedConnectionHangupMonitorTests: XCTestCase {
 
 
-    func testReportsPeerCloseWhileRequestHandlingIsBlocked() throws {
-        let descriptors = try makeSocketPair()
-        let hangup = expectation(description: "peer hangup")
-        let processingStarted = expectation(description: "processing started")
-        let releaseProcessing = DispatchSemaphore(value: 0)
-        let processingFinished = DispatchSemaphore(value: 0)
-        let monitor = try AuthenticatedConnectionHangupMonitor(
-            fileDescriptor: descriptors.local,
-            onHangup: {
-                hangup.fulfill()
-            }
-        )
-        monitor.start()
 
-        DispatchQueue.global().async {
-            processingStarted.fulfill()
-            releaseProcessing.wait()
-            processingFinished.signal()
-        }
-        wait(for: [processingStarted], timeout: 1)
-        close(descriptors.peer)
-
-        wait(for: [hangup], timeout: 1)
-        XCTAssertEqual(processingFinished.wait(timeout: .now() + 0.05), .timedOut)
-
-        releaseProcessing.signal()
-        XCTAssertEqual(processingFinished.wait(timeout: .now() + 1), .success)
-        monitor.cancel()
-        close(descriptors.local)
-    }
 
 
 

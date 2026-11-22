@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { stripAnsiEscapeSequences } from '../../../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import {
   GIT_AUTHENTICATION_FAILED_MESSAGE,
   formatSubmodulePushFailureDetail,

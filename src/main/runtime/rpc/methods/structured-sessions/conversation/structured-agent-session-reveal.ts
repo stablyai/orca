@@ -1,6 +1,8 @@
+import { assertBotLinkOpenAuthority } from '../../../../../bots/bot-link-open-authority'
+import { holdAgentSessionPublicationFence } from '../../../../agent-session/agent-session-publication-fence'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/structured-workspace-authority'
-import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../../../shared/open-structured-agent-session'
+import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
+import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../../../shared/agent-session/view/open-structured-agent-session'
 // Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
 // Unlike ensure, read workspace/provider from host state so callers cannot redirect publication.
 
@@ -22,11 +24,11 @@ import {
 import {
   structuredSessionSurfaceIsCurrent,
   type StructuredSessionSurface
-} from '../../../../agent-session/structured-agent-session-close'
-import { RevealParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
+import { RevealParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
   defineMethod({
@@ -40,6 +42,15 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
       }
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
+      if (params.botLinkTarget) {
+        if (params.navigation !== 'caller') {
+          throw new Error('forbidden')
+        }
+        assertBotLinkOpenAuthority(ctx.runtime, params.botLinkTarget, {
+          sessionId: params.sessionId,
+          worktreeId: params.botLinkTarget.worktreeId
+        })
+      }
       let publication: StructuredSessionSurface | null = null
       let revealed: StructuredAgentSessionReveal
       try {
@@ -66,6 +77,19 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         | undefined
       let effects = false
       let saving = Promise.resolve()
+      const publicationFence = params.botLinkTarget
+        ? holdAgentSessionPublicationFence([
+            JSON.stringify(['bot', params.botLinkTarget.botId]),
+            JSON.stringify([
+              'conversation',
+              params.botLinkTarget.conversation.source,
+              params.botLinkTarget.conversation.externalId
+            ]),
+            ...(params.botLinkTarget.workerDispatchId
+              ? [JSON.stringify(['worker', params.botLinkTarget.workerDispatchId])]
+              : [])
+          ])
+        : undefined
       try {
         const host = requireStructuredHost(ctx)
         const record = host.deps.store.getConversation(revealed.sessionId)
@@ -88,6 +112,12 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           )
         }
         const check = () => {
+          if (params.botLinkTarget) {
+            assertBotLinkOpenAuthority(ctx.runtime, params.botLinkTarget, {
+              sessionId: revealed.sessionId,
+              worktreeId: revealed.workspaceId
+            })
+          }
           workspace!.check()
           if (!current()) {
             throw new StructuredWorkspaceUnavailable('obsolete')
@@ -95,6 +125,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         }
         await ctx.runtime.publishStructuredAgentSessionTab({
           workspaceAuthority: {
+            writerFence: publicationFence?.fence,
             check,
             current,
             committed: () => {
@@ -126,34 +157,39 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         }
         if (
           caller?.kind === 'paired-device' &&
-          !ctx.runtime.reopenMobileSessionTabForClient(
+          !(await ctx.runtime.reopenMobileSessionTabForClient(
             revealed.workspaceId,
             revealed.sessionId,
             caller.deviceId
-          )
+          ))
         ) {
           throw new Error('Could not publish the chat to its caller.')
         }
         check()
+        // A bot thread is no longer new once opened anywhere.
+        for (const id of new Set([params.sessionId, revealed.sessionId])) {
+          ctx.runtime.markBotThreadSeen(id)
+        }
         // Return named fields only; private journal-open reasons stay on the host.
         const { sessionId, workspaceId, agent, readable } = revealed
         return { ok: true as const, sessionId, workspaceId, agent, readable }
       } catch (error) {
-        if (!(error instanceof StructuredWorkspaceUnavailable)) {
+        if (!effects && !(error instanceof StructuredWorkspaceUnavailable)) {
           throw error
         }
+        const removed =
+          error instanceof StructuredWorkspaceUnavailable && error.reason === 'removed'
         return {
           ok: false as const,
           refusal: {
             code:
-              error.reason === 'removed' && !effects
+              removed && !effects
                 ? 'agent_session_workspace_removed'
                 : 'agent_session_operation_unknown',
-            message:
-              error.reason === 'removed'
-                ? 'This workspace is no longer available.'
-                : 'The structured agent session is not available yet. Retry in a moment.',
-            ...(error.reason === 'removed' && !effects && error.workspaceKind
+            message: removed
+              ? 'This workspace is no longer available.'
+              : 'The structured agent session is not available yet. Retry in a moment.',
+            ...(removed && !effects && error.workspaceKind
               ? {
                   details: {
                     workspaceKind: error.workspaceKind
@@ -163,6 +199,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           }
         }
       } finally {
+        publicationFence?.release()
         const owned = workspace
         void saving.finally(() => owned?.release())
       }

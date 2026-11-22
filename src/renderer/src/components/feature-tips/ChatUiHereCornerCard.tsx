@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
 import { X } from 'lucide-react'
-import { FEATURE_TIPS } from '../../../../shared/feature-tips'
+import { FEATURE_TIPS } from '../../../../shared/feature-education/feature-tips'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -61,14 +61,20 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     }
     focusSwitchedNote.current = event.detail === 0 && document.activeElement === event.currentTarget
     setState({ stage: 'saving' })
-    const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
-    if (mountedRef.current) {
-      setState(
-        saved
-          ? { stage: 'switched', focusSettings: focusSwitchedNote.current }
-          : { stage: 'prompt' }
-      )
+    const result = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
+    if (!mountedRef.current) {
+      return
     }
+    if (result === 'reported') {
+      // The notice already told the user what changed; a second confirmation would contradict it.
+      onClose()
+      return
+    }
+    setState(
+      result === 'saved'
+        ? { stage: 'switched', focusSettings: focusSwitchedNote.current }
+        : { stage: 'prompt' }
+    )
   }
 
   const handleStayInTerminal = (): void => {

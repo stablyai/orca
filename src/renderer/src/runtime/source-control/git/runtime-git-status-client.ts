@@ -9,6 +9,7 @@ import type {
   GitStagingArea,
   GitStatusResult
 } from '../../../../../shared/git/status/git-status-types'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/removal/at-risk-local-files'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
@@ -95,8 +96,8 @@ export async function setRuntimeGitStatusUpstreamRefWatch(
 
 let nextGitStatusRequestToken = 0
 
-function createGitStatusAbortError(): Error {
-  const error = new Error('Git status request aborted')
+function createGitRequestAbortError(): Error {
+  const error = new Error('Git request aborted')
   error.name = 'AbortError'
   return error
 }
@@ -109,7 +110,7 @@ async function callLocalGitStatus(
     return window.api.git.status(args)
   }
   if (signal.aborted) {
-    throw createGitStatusAbortError()
+    throw createGitRequestAbortError()
   }
   const requestToken = `git-status-${Date.now()}-${++nextGitStatusRequestToken}`
   const cancel = (): void => {
@@ -120,7 +121,7 @@ async function callLocalGitStatus(
     const status = await window.api.git.status({ ...args, requestToken })
     // Why: best-effort cancellation must not publish a late result as fresh.
     if (signal.aborted) {
-      throw createGitStatusAbortError()
+      throw createGitRequestAbortError()
     }
     return status
   } finally {
@@ -171,6 +172,51 @@ export async function getRuntimeGitIgnoredPaths(
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), paths },
     { timeoutMs: 15_000 }
   )
+}
+
+export async function getRuntimeWorktreeAtRiskLocalFiles(
+  context: RuntimeGitContext,
+  signal?: AbortSignal
+): Promise<WorktreeAtRiskLocalFiles> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    const args = {
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    }
+    return signal ? callLocalAtRiskLocalFiles(args, signal) : window.api.git.atRiskLocalFiles(args)
+  }
+  return callRuntimeRpc<WorktreeAtRiskLocalFiles>(
+    context.target,
+    'git.atRiskLocalFiles',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000, ...(signal ? { signal } : {}) }
+  )
+}
+
+let nextAtRiskLocalFilesRequestToken = 0
+
+async function callLocalAtRiskLocalFiles(
+  args: { worktreePath: string; connectionId?: string },
+  signal: AbortSignal
+): Promise<WorktreeAtRiskLocalFiles> {
+  if (signal.aborted) {
+    throw createGitRequestAbortError()
+  }
+  const requestToken = `git-at-risk-${Date.now()}-${++nextAtRiskLocalFilesRequestToken}`
+  // Why: a closed preview must stop main's queued git ls-files and file comparisons, not just drop the result.
+  const cancel = (): void => {
+    void window.api.git.cancelAtRiskLocalFiles({ requestToken }).catch(() => {})
+  }
+  signal.addEventListener('abort', cancel, { once: true })
+  try {
+    const files = await window.api.git.atRiskLocalFiles({ ...args, requestToken })
+    if (signal.aborted) {
+      throw createGitRequestAbortError()
+    }
+    return files
+  } finally {
+    signal.removeEventListener('abort', cancel)
+  }
 }
 
 export async function getRuntimeGitRefs(

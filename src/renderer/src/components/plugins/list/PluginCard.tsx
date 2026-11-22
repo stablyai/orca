@@ -19,6 +19,8 @@ type PluginCardProps = {
   /** Replaces the description, e.g. an install error; keeps the two-line height. */
   notice?: { text: string; tone: 'destructive' | 'warning' }
   chips?: React.ReactNode
+  /** Replaces the install count after the publisher, e.g. "Added 3h ago". */
+  metaDetail?: string
   action: React.ReactNode
   onOpen: () => void
   onIntent?: () => void
@@ -35,6 +37,7 @@ export function PluginCard({
   palettes,
   notice,
   chips,
+  metaDetail,
   action,
   onOpen,
   onIntent,
@@ -105,7 +108,12 @@ export function PluginCard({
         </div>
         <p className="h-4 truncate text-xs text-muted-foreground">
           {entry.publisher}
-          {installCount !== null ? (
+          {metaDetail ? (
+            <span data-plugin-meta-detail="">
+              {entry.publisher ? ' · ' : ''}
+              {metaDetail}
+            </span>
+          ) : installCount !== null ? (
             <span data-plugin-install-count="">
               {entry.publisher ? ' · ' : ''}
               {pluginInstallCountLabel(installCount, t, intlLocale)}

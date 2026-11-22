@@ -37,7 +37,7 @@ export function useRemoteBrowserPageStream({
   applyTabInfo,
   clearStreamFrame,
   closeMissingRemotePage,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   setPaneNotice,
   setPaneBusy,
   setFrameUrl,
@@ -58,16 +58,18 @@ export function useRemoteBrowserPageStream({
   pendingFrameDecodeRef: React.MutableRefObject<number>
   streamBridgeRef: React.MutableRefObject<RemoteBrowserStreamBridge>
   isActiveRef: React.RefObject<boolean>
-  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  applyTabInfo: (tab: BrowserTabInfo) => void
   clearStreamFrame: () => void
   closeMissingRemotePage: (remotePageId?: string | null) => void
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
   setFrameUrl: (url: string | null) => void
   setFrameMetadata: (metadata: BrowserScreencastFrameMetadata | null) => void
 }): {
   reconnectRemoteStream: () => void
+  /** Re-reads the page's CSS viewport, which this pane's own zoom just changed. */
+  resyncRemoteViewport: () => void
 } {
   const [reopenNonce, setReopenNonce] = useState(0)
   const lastFrameDeviceSizeRef = useRef<string | null>(null)
@@ -228,8 +230,8 @@ export function useRemoteBrowserPageStream({
           }
           const prevUrl = streamFrameUrlRef.current
           streamFrameUrlRef.current = nextUrl
-          // The host can refit its painted viewport independently, invalidating cached CSS size.
-          const deviceSize = `${frame.metadata.deviceWidth}x${frame.metadata.deviceHeight}`
+          // A refit painted viewport or a page zoom (from any viewer, or a site's saved zoom) changes the CSS size.
+          const deviceSize = `${frame.metadata.deviceWidth}x${frame.metadata.deviceHeight}@${frame.metadata.zoomFactor ?? 1}`
           const previousDeviceSize = lastFrameDeviceSizeRef.current
           lastFrameDeviceSizeRef.current = deviceSize
           if (previousDeviceSize !== null && previousDeviceSize !== deviceSize) {
@@ -291,7 +293,7 @@ export function useRemoteBrowserPageStream({
   useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,
     browserPageId,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     isActive,
     lifecycle,
     reopenNonce,
@@ -299,5 +301,14 @@ export function useRemoteBrowserPageStream({
     stagedPage
   })
 
-  return { reconnectRemoteStream }
+  const resyncRemoteViewport = useCallback((): void => {
+    const pageId = lifecycle.tokens.remotePage
+    if (pageId) {
+      // The frame after a zoom re-reads too, in case this read beat the guest's relayout.
+      lastFrameDeviceSizeRef.current = ''
+      void syncRemoteViewport(pageId).catch(() => {})
+    }
+  }, [lifecycle, syncRemoteViewport])
+
+  return { reconnectRemoteStream, resyncRemoteViewport }
 }

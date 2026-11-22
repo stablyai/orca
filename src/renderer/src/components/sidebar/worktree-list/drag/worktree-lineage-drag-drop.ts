@@ -1,7 +1,7 @@
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getLineageRenderInfo } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getLineageRenderInfo } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
@@ -91,7 +91,12 @@ export function getReorderedWorktreeIdsToUnnest(args: {
 }
 
 /** Where a reorder dropped: the pointer, and the insertion line it committed to, in client pixels. */
-export type WorktreeReorderDropPoint = { clientX: number; clientY: number; lineClientY: number }
+export type WorktreeReorderDropPoint = {
+  clientX: number
+  clientY: number
+  lineClientY: number
+  retainedFolderIdentities?: ReadonlySet<string>
+}
 
 export function getWorktreeReorderDropPoint(
   pointer: { clientX: number; clientY: number },
@@ -109,23 +114,13 @@ export function getWorktreeReorderDropPoint(
   }
 }
 
-/** Whether a reorder landed inside a folder workspace's card, which holds its nested rows: the
- * pointer and the committed insertion line both within it. */
-export function isReorderInsideFolderRow(
-  folderIdentity: string,
-  point: WorktreeReorderDropPoint | undefined
+/** The full logical folder surface, including unmounted descendants and closing padding. */
+export function isReorderInsideFolderBounds(
+  point: WorktreeReorderDropPoint | undefined,
+  rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'> | undefined
 ): boolean {
-  if (!point) {
-    return false
-  }
-  const row = document.querySelector<HTMLElement>(
-    `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
-  )
-  // The visible card, not the full-width row around it.
-  const rect = (
-    row?.querySelector<HTMLElement>('[data-worktree-card-surface]') ?? row
-  )?.getBoundingClientRect()
   return (
+    point !== undefined &&
     rect !== undefined &&
     point.clientX >= rect.left &&
     point.clientX <= rect.right &&

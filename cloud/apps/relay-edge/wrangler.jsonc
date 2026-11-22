@@ -19,12 +19,16 @@
   "durable_objects": {
     "bindings": [
       { "name": "HOST_RELAY", "class_name": "HostRelay" },
-      { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+      { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" },
+      // Erasure index, one object per user (src/user-hosts.ts). A new class is a lifecycle change:
+      // every deploy config needs this binding and the v3 migration, deployed on its own.
+      { "name": "USER_HOSTS", "class_name": "UserHosts" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["HostRelay"] },
-    { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] }
+    { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] },
+    { "tag": "v3", "new_sqlite_classes": ["UserHosts"] }
   ],
   // Local dev/tests only: Postgres on 127.0.0.1:55432 (see test/mvp.ts). Deployed environments
   // bind a real Hyperdrive config instead.
@@ -44,5 +48,9 @@
     "PING_INTERVAL_MS": "30000",
     "SILENCE_TIMEOUT_MS": "75000",
     "ORPHAN_GRACE_MS": "30000"
+    // Edge-native director endpoints (src/director-config.ts) are dark: unset in every environment.
+    // Example only, for a test hostname:
+    //   "DIRECTOR_HOSTNAME": "director-next.relay.example",
+    //   "DIRECTOR_EDGE_URL": "https://edge.relay.example"
   }
 }

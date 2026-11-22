@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
-import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugin-host-api'
+import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginHostVersion } from '../../../../../../shared/plugins/installation/plugin-host-version'
 import { buildPluginListEntries, needsNewerOrca } from '../../../plugins/list/plugin-list-entries'

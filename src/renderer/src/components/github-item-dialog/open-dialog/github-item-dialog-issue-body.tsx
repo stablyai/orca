@@ -1,10 +1,10 @@
 import React from 'react'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { ConversationTab } from '../discuss-item/conversation-tab'
 import { GHEditSection } from '../edit-item-fields/gh-edit-section'

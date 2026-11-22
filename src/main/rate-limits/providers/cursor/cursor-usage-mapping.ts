@@ -3,8 +3,11 @@ import {
   CURSOR_MODELS_BUCKET_NAME,
   CURSOR_ON_DEMAND_BUCKET_NAME,
   CURSOR_OTHER_MODELS_BUCKET_NAME
-} from '../../../../shared/cursor-usage-buckets'
-import type { RateLimitBucket, RateLimitWindow } from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import type {
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 const MONTHLY_WINDOW_MINUTES = 43_200
 

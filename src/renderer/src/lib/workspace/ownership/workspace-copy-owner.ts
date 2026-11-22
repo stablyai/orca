@@ -8,15 +8,15 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   authorityKey,
   hostAuthorityFromOperationRoute,
   type HostAuthority,
   type HostAuthorityEndpoint
-} from '../../../../../shared/host-authority'
+} from '../../../../../shared/execution-host/host-authority'
 import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   selectDetectedWorktreesByRepo,

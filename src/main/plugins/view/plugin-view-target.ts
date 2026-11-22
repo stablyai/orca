@@ -4,8 +4,8 @@ import {
 } from '../../../shared/plugins/approval/plugin-cli-approval'
 import { matchPluginFile } from '../../../shared/plugins/contributions/plugin-file-match'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
-import { pluginFrameContentRevision } from '../plugin-dev-revision'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import { pluginFrameContentRevision } from '../development/plugin-dev-revision'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 
 /** What `plugins.open` / `plugins.shot` need of the plugin service; a fake in tests. */
 export type PluginViewSource = {

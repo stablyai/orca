@@ -3,7 +3,8 @@ import { dirname } from 'node:path'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
-  writeFileDurableIfCurrent
+  writeFileDurableIfCurrent,
+  type DurableFilePayload
 } from '../../filesystem/durable-file-write'
 
 // Serialize durable writes per store and skip superseded snapshots.
@@ -20,7 +21,7 @@ export class UsageCacheSnapshotWriter {
   }
 
   /** `serialize` runs only if this snapshot is still the newest one when its turn comes. */
-  write(serialize: () => string): Promise<void> {
+  write(serialize: () => DurableFilePayload): Promise<void> {
     const generation = ++this.generation
     const write = this.pending.then(() => this.commit(generation, serialize))
     // Keep the queue usable after failure; the caller still receives the rejection.
@@ -35,7 +36,7 @@ export class UsageCacheSnapshotWriter {
     return this.pending
   }
 
-  private async commit(generation: number, serialize: () => string): Promise<void> {
+  private async commit(generation: number, serialize: () => DurableFilePayload): Promise<void> {
     if (generation !== this.generation) {
       return
     }

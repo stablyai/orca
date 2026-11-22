@@ -1,12 +1,12 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { AgentDefaultSurface } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { AgentDefaultSurface } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   buildNativeChatProviderUpdate,
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
-} from '../../../../../shared/native-chat/native-chat-providers'
-import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
+} from '../../../../../shared/native-chat/settings/native-chat-providers'
+import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { chatProviderAgents } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
@@ -100,17 +100,20 @@ export function buildAgentOpensAs({
   cliDetected,
   chatProgramHere,
   settings,
-  updateSettings
+  updateSettings,
+  includeDisabled = false
 }: {
   agent: TuiAgent
   cliDetected: boolean | null
   chatProgramHere: boolean
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  /** Keep the choice for a turned-off agent so its row can show it grayed out. */
+  includeDisabled?: boolean
 }): AgentOpensAs | undefined {
   const offered =
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined).includes(agent) &&
-    isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+    (includeDisabled || isTuiAgentEnabled(agent, settings.disabledTuiAgents))
   if (!offered) {
     return undefined
   }

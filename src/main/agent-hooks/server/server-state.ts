@@ -1,7 +1,5 @@
-import type {
-  AgentProcessPresence,
-  AgentProcessVerdict
-} from '../../../shared/agent-status/process/agent-process-presence'
+import { AgentHookServerStateContract } from './server-state-contract'
+
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -17,15 +15,10 @@ import {
 } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import {
   AgentStatusObservationSequencer,
-  createAgentStatusAuthorityId,
-  type AgentStatusObservation,
-  type AgentStatusObservationOrigin
+  createAgentStatusAuthorityId
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { SpoolRecord } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+
 import {
   createAgentStatusStore,
   type AgentStatusStore
@@ -34,18 +27,12 @@ import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-sta
 import type { AgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import type {
   AgentHookAuthorityEvidence,
-  AgentHookProviderSessionIdentity,
-  AgentHookStatusChangeEntry,
-  AgentHookStatusFreshnessObservation,
-  AgentStatusDispositionEvent,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
-  NormalizedLocalHook,
   PaneKeyAliasEntry,
   PaneKeyAliasPersistenceListener,
   PaneStatusClearListener,
   ProviderSessionChangeListener,
-  RetiredPaneAlias,
   RetiredPaneFence,
   ServerAgentStatusListener,
   ServerStatusLineListener,
@@ -55,10 +42,155 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
-import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
-import type { LastStatusStore } from './last-status-store'
+import type { TerminalModelWait } from './server-model-wait'
+import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
+import { cliWriterTopology } from './cli-writer-observation'
+import { toAgentStatusIpcPayload } from './server-status-identity'
+import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
-export abstract class AgentHookServerState {
+export abstract class AgentHookServerState extends AgentHookServerStateContract {
+  protected terminalPaneLifecycle: {
+    /** Answers the record that was saved when the agent quit. */
+    retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
+    readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
+    /** True where the host proves the shell alone; null where it cannot tell (remote). */
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean | null>
+    /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
+     *  where the host gives none (remote, Windows), so a command mark stands as on main. */
+    confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
+    /** The pane's agent ended, proven: its process gone, its shell alone, or its own end hook. */
+    agentExited?(paneKey: string): void
+    /** Claude waited on its model this long with no hook; true keeps the stopwatch running. */
+    modelWaitElapsed?(paneKey: string, wait: TerminalModelWait): Promise<boolean>
+    ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
+    isStopping(paneKey: string): boolean
+    isReversibleStop(ptyId: string, incarnationId?: string): boolean
+    isPlaced(row: EnrichedAgentHookEventPayload): boolean | undefined
+  } | null = null
+
+  setTerminalPaneLifecycle(
+    lifecycle: NonNullable<AgentHookServerState['terminalPaneLifecycle']>
+  ): void {
+    this.terminalPaneLifecycle = lifecycle
+  }
+
+  /** An idle agent's row outlives the TTL while its pane is placed; until placement is readable,
+   *  the prune after binding decides. */
+  protected placementKeepsRow(row: EnrichedAgentHookEventPayload): boolean {
+    return !this.terminalPaneLifecycle || this.terminalPaneLifecycle.isPlaced(row) === true
+  }
+
+  /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was
+   *  already read and found absent, so it isn't read again. */
+  paneAgentIdentity(
+    paneKey: string,
+    passedRecord?: SleepingAgentSessionRecord | null,
+    worktreeId = passedRecord?.worktreeId
+  ): PaneAgentIdentity | null {
+    let savedRecord = passedRecord ?? undefined
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const row = legacy ?? this.getTmuxSelectedStatus(resolved)
+    if (!row && passedRecord === undefined) {
+      savedRecord = this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
+    }
+    worktreeId ??= savedRecord?.worktreeId
+    const exit =
+      this.agentExitedAtByPaneKey.get(resolved) ?? this.agentExitedAtByPaneKey.get(paneKey)
+    const identity = paneAgentIdentity({
+      paneKey: resolved,
+      ...(row ? { row: toAgentStatusIpcPayload(this.programStatusFacets.stitch(row)) } : {}),
+      ...(savedRecord ? { savedRecord } : {}),
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(exit ? { exitedAt: exit.at } : {}),
+      ended: row?.agentPresence?.ended === true
+    })
+    return identity
+      ? {
+          ...identity,
+          ...(row?.connectionId === null &&
+          row.agentPresence?.process &&
+          row.agentPresence.suspended &&
+          !row.agentPresence.ended
+            ? { suspended: true as const }
+            : {}),
+          // A shared host's conversation never leaves a saved record, so one is the pane's.
+          executionHost: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
+        }
+      : null
+  }
+
+  protected recordPaneAgentExit(
+    paneKey: string,
+    endedPresence: AgentProcessPresence,
+    status = this.paneAgentIdentity(paneKey)?.status
+  ): void {
+    const paneKeys = this.paneKeysWithAliases(paneKey)
+    const exitedAt = Date.now()
+    recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
+    this.retirePaneResume(paneKeys, status, exitedAt)
+  }
+
+  private paneKeysWithAliases(paneKey: string): Set<string> {
+    const stable = this.resolvePaneKeyAlias(paneKey)
+    const aliases = [...this.legacyPaneKeyAliases].filter(([, a]) => a.stablePaneKey === stable)
+    return new Set([stable, paneKey, ...aliases.map(([aliasKey]) => aliasKey)])
+  }
+
+  private retirePaneResume(
+    paneKeys: Set<string>,
+    status: PaneAgentIdentity['status'] | undefined,
+    exitedAt: number
+  ): void {
+    for (const key of paneKeys) {
+      const saved = this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+      const agent = status?.agentType ?? saved?.agent
+      const providerSession = status?.providerSession ?? saved?.providerSession
+      if (agent && providerSession) {
+        this.emitPaneStatusCleared({
+          paneKey: key,
+          refusedResume: {
+            agent,
+            providerSession,
+            ...(status
+              ? {
+                  expectedStatus: {
+                    paneKey: key,
+                    receivedAt: status.receivedAt,
+                    stateStartedAt: status.stateStartedAt
+                  }
+                }
+              : {}),
+            ...(saved && saved.updatedAt <= exitedAt
+              ? {
+                  expectedSavedRecord: {
+                    paneKey: key,
+                    capturedAt: saved.capturedAt,
+                    updatedAt: saved.updatedAt
+                  }
+                }
+              : {})
+          }
+        })
+      }
+    }
+    this.scheduleStatusPersist()
+  }
+
+  /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
+  protected preservesStoppingAgent(paneKey: string): boolean {
+    // A saved record never rests in sleep, so only a stopping pane reads one.
+    const stopping = this.terminalPaneLifecycle?.isStopping(paneKey) === true
+    const identity = this.paneAgentIdentity(paneKey, stopping ? undefined : null)
+    return (
+      identity !== null && !identity.ended && (identity.status.paneSleep !== undefined || stopping)
+    )
+  }
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,
@@ -79,7 +211,10 @@ export abstract class AgentHookServerState {
   }
   protected readonly canonicalListingOrder = new Map<string, number>()
   /** Proven exits outlive the rows they reconcile. */
-  protected readonly agentExitedAtByPaneKey = new Map<string, AgentExitEvidence>()
+  protected tracksStatusPersistence = (): boolean => false
+  protected readonly agentExitedAtByPaneKey = new RevisionedMap<string, AgentExitEvidence>(() =>
+    this.tracksStatusPersistence()
+  )
 
   /** A successor or worker attach invalidates the old agent's exit. */
   forgetAgentExit(paneKey: string): void {
@@ -89,6 +224,12 @@ export abstract class AgentHookServerState {
       forgotten
     ) {
       this.scheduleStatusPersist()
+    }
+  }
+  /** An exit recorded before a launch belongs to the process that launch replaced. */
+  forgetAgentExitBefore(paneKey: string, launchedAt: number): void {
+    if ((this.agentExitedAtByPaneKey.get(paneKey)?.at ?? Infinity) < launchedAt) {
+      this.forgetAgentExit(paneKey)
     }
   }
   protected readonly canonicalSubjectsByPane = new Map<string, Map<string, AgentStatusSubject>>()
@@ -130,8 +271,26 @@ export abstract class AgentHookServerState {
   protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
-    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks,
+    onMutation: (key, before, after) => {
+      if (this.tracksStatusPersistence()) {
+        this.statusPersistDirtyKeys.add(key)
+        if (!after) {
+          this.statusPersistRemovedKeys.add(key)
+        }
+      }
+      if (before?.launchToken !== after?.launchToken) {
+        this.statusAuthorityRevision++
+      }
+    }
   })
+  protected readonly statusPersistDirtyKeys = new Set<string>()
+  protected readonly statusPersistRemovedKeys = new Set<string>()
+  protected statusAuthorityRevision = 0
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(
@@ -144,11 +303,13 @@ export abstract class AgentHookServerState {
   protected runtimeObservedStatusPaneKeys = new Set<string>()
   protected hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
   // Authority revisions bypass throttling to preserve replay fencing after a crash.
-  protected hydratedLaunchTokenHashByPaneKey = new RevisionedMap<string, string>()
+  protected hydratedLaunchTokenHashByPaneKey = new RevisionedMap<string, string>(() =>
+    this.tracksStatusPersistence()
+  )
   protected persistedAuthorityCommitmentsByPaneKey = new RevisionedMap<
     string,
     AgentHookAuthorityEvidence
-  >()
+  >(() => this.tracksStatusPersistence())
   protected revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
   protected currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   protected legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
@@ -178,142 +339,4 @@ export abstract class AgentHookServerState {
   protected readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
-
-  protected abstract withdrawReplayObservation(paneKey: string): void
-  protected abstract getTmuxSelectedStatus(
-    paneKey: string
-  ): EnrichedAgentHookEventPayload | undefined
-  protected abstract deleteTmuxSelectedStatus(
-    paneKey: string
-  ): EnrichedAgentHookEventPayload | undefined
-  protected abstract clearTmuxInnerSubjects(paneKey: string): void
-  protected abstract clearTmuxTabSubjects(tabId: string): void
-  protected abstract ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void
-  protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
-  protected abstract buildStatusChangeNotification(): {
-    statuses: AgentHookStatusChangeEntry[]
-    providerSessions: AgentHookProviderSessionIdentity[]
-  }
-  protected abstract notifyStatusChangeListeners(): void
-  protected abstract emitStatusFreshnessObservation(
-    status: AgentHookStatusFreshnessObservation
-  ): void
-  protected abstract markTabClosedForAgentStatus(tabId: string): void
-  protected abstract getAgentStatusDisposition(
-    paneKey: string,
-    event?: AgentStatusDispositionEvent
-  ): 'accept' | 'restart' | 'suppress'
-  protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
-  protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined
-  protected abstract recordRetiredPaneFence(
-    paneKeys: ReadonlySet<string>,
-    aliases: readonly RetiredPaneAlias[],
-    retirementId?: string
-  ): void
-  protected abstract markPaneClosedForAgentStatus(paneKey: string): void
-  protected abstract attachStatusTiming(
-    payload: AgentHookEventPayload,
-    now?: number,
-    observedAt?: number
-  ): EnrichedAgentHookEventPayload
-  protected abstract hashPromptForTelemetryDedupe(prompt: string): string
-  protected abstract maybeTrackAgentPromptSent(
-    payload: AgentHookEventPayload,
-    previousStatus: EnrichedAgentHookEventPayload | undefined
-  ): void
-  protected abstract stampObservation(
-    payload: AgentHookEventPayload,
-    origin: AgentStatusObservationOrigin,
-    observedAt: number
-  ): AgentStatusObservation
-  protected abstract applyNormalizedStatus(
-    payload: AgentHookEventPayload,
-    onAccepted?: () => void,
-    origin?: AgentStatusObservationOrigin,
-    observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload | undefined
-  protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
-  protected abstract clearAssistantMessageRetry(paneKey: string): void
-  protected abstract clearTranscriptPoll(paneKey: string): void
-  protected abstract clearAllTranscriptPolls(): void
-  protected abstract scheduleTranscriptPoll(
-    source: AgentHookSource,
-    body: unknown,
-    original: EnrichedAgentHookEventPayload
-  ): void
-  protected abstract scheduleAssistantMessageRetry(
-    source: AgentHookSource,
-    body: unknown,
-    original: EnrichedAgentHookEventPayload,
-    attempt?: number,
-    discoveryReady?: boolean
-  ): void
-  protected abstract applyAssistantMessageRetry(
-    source: AgentHookSource,
-    body: unknown,
-    original: EnrichedAgentHookEventPayload,
-    nextAttempt: number,
-    requireExactOriginal: boolean
-  ): void
-  protected abstract getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[]
-  protected abstract notifyPaneKeyAliasPersistenceListener(): void
-  protected abstract boundPaneKeyAliases(): void
-  protected abstract getPhysicalPaneKeyForAuthority(paneKey: string, ptyId?: string): string
-  protected abstract restoreRetiredPaneFence(fence: RetiredPaneFence): void
-  protected abstract revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean
-  protected abstract resolvePaneKeyAlias(paneKey: string): string
-  protected abstract normalizeHookBodyPaneKeyAlias(body: unknown): unknown
-  protected abstract normalizeLocalHookPayload(
-    source: AgentHookSource,
-    body: unknown
-  ): NormalizedLocalHook
-  protected abstract setClaudeBackgroundEvidence(
-    paneKey: string,
-    hasRunningTask: boolean,
-    hasActiveCron: boolean
-  ): void
-  protected abstract toRetainedProviderSessionRow(
-    entry: EnrichedAgentHookEventPayload | null | undefined
-  ): EnrichedAgentHookEventPayload | null
-  protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
-  abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
-  abstract checkAgentPresenceAfterHook(
-    event: AgentHookEventPayload,
-    row: AgentHookEventPayload
-  ): void
-
-  abstract reconcileEndedProcessForPaneKeys(
-    paneKeys: Iterable<string>,
-    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
-  ): number
-
-  protected abstract clearPaneState(
-    paneKey: string,
-    options?: {
-      emitStatusRowMutation?: boolean
-      preserveTmuxInnerSubjects?: boolean
-      statusUnavailable?: true
-      forgetAgentExit?: true
-    }
-  ): void
-  protected abstract deleteStatusEntry(
-    paneKey: string,
-    options?: { preserveAuthority?: boolean }
-  ): EnrichedAgentHookEventPayload | null
-  protected abstract maybeWriteEndpointFile(): void
-  protected abstract hydrateLastStatusFromDisk(): void
-  protected abstract captureHydratedAuthorityCommitments(): void
-  protected abstract recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void
-  protected abstract toAuthorityEvidence(
-    payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
-    launchTokenHashOverride?: string
-  ): AgentHookAuthorityEvidence | null
-  protected abstract scheduleStatusPersist(): void
-  protected abstract runStatusPersist(): boolean
-  protected abstract getStatusStore(): LastStatusStore | null
-
-  abstract _getStateForTests(): HookListenerState
-  abstract _resetPromptSentDedupeForTests(): void
-  abstract _resetConnectionTimestampWatermarksForTests(): void
 }

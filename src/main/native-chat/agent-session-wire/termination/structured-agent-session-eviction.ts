@@ -2,7 +2,7 @@
 // Attempt every cleanup step despite failures; bookkeeping cannot gate later sends.
 
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 export type StructuredAgentSessionEvictionContext = {
@@ -25,11 +25,11 @@ export type StructuredAgentSessionEvictionStep = {
 /** Capture already-delivered output before shutdown; snapshot failures are log-only. */
 export async function snapshotBeforeStructuredAgentSessionStop(
   context: Pick<StructuredAgentSessionEvictionContext, 'sessionId' | 'eventSink' | 'logger'>,
-  snapshot: () => void
+  snapshot: () => void | Promise<void>
 ): Promise<void> {
   await withTimeout<unknown>(context.eventSink.drained(), SNAPSHOT_DRAIN_TIMEOUT_MS, null)
   try {
-    snapshot()
+    await snapshot()
   } catch {
     context.logger.warn('capturing a recovery witness before a stop failed', {
       scope: 'recovery-witness',

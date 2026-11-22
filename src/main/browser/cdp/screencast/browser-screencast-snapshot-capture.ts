@@ -11,7 +11,8 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { positiveInteger, scaleSnapshotToFit } from './browser-screencast-viewport-fit'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 
 // Bound capture time so queued viewport updates and stop can proceed.
 const SNAPSHOT_CAPTURE_TIMEOUT_MS = 10_000
@@ -22,6 +23,8 @@ type BrowserScreencastSnapshotCaptureDeps = {
   options: BrowserScreencastOptions
   isClosed: () => boolean
   isStopping: () => boolean
+  // Stop must not wait out a capturePage a non-drawing guest leaves pending; its result is stale anyway.
+  stopSignal: AbortSignal
   getSeq: () => number
   queueFrame: (frame: PendingScreencastFrame) => void
   applyDeviceMetricsOverride: () => Promise<void>
@@ -29,7 +32,7 @@ type BrowserScreencastSnapshotCaptureDeps = {
 
 export type BrowserScreencastSnapshotCapture = {
   emitSnapshotFrame: (initialOnly: boolean, generation?: number) => Promise<void>
-  scheduleNavigationFrameCapture: () => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpGeneration: () => void
 }
@@ -37,30 +40,42 @@ export type BrowserScreencastSnapshotCapture = {
 export function createBrowserScreencastSnapshotCapture(
   deps: BrowserScreencastSnapshotCaptureDeps
 ): BrowserScreencastSnapshotCapture {
-  const { webContents, dbg, options, isClosed, isStopping, getSeq, queueFrame } = deps
+  const { webContents, dbg, options, isClosed, isStopping, stopSignal, getSeq, queueFrame } = deps
   const { applyDeviceMetricsOverride } = deps
   const { holdPaint } = options
 
   let snapshotGeneration = 0
   let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
+  let navigationCaptureGeneration: number | null = null
 
   const clearNavigationCaptureTimer = (): void => {
     if (navigationCaptureTimer) {
       clearTimeout(navigationCaptureTimer)
       navigationCaptureTimer = null
+      navigationCaptureGeneration = null
     }
   }
 
-  const scheduleNavigationFrameCapture = (): void => {
+  const scheduleNavigationFrameCapture = (
+    reason: 'navigation' | 'viewport-recovery' = 'navigation'
+  ): void => {
     if (isClosed() || isStopping()) {
+      return
+    }
+    if (reason === 'viewport-recovery' && navigationCaptureGeneration === snapshotGeneration) {
       return
     }
     clearNavigationCaptureTimer()
     const generation = ++snapshotGeneration
+    navigationCaptureGeneration = generation
     // Static pages may finish navigation without emitting a live frame.
     navigationCaptureTimer = setTimeout(() => {
       navigationCaptureTimer = null
-      void emitSnapshotFrame(false, generation)
+      void emitSnapshotFrame(false, generation).finally(() => {
+        if (navigationCaptureGeneration === generation) {
+          navigationCaptureGeneration = null
+        }
+      })
     }, 250)
   }
 
@@ -86,8 +101,16 @@ export function createBrowserScreencastSnapshotCapture(
         try {
           // Prefer capturePage to avoid CDP tiling; stopped compositing can leave it pending.
           const nativeImage = await withTimeout(
-            holdPaintUntilSettled(holdPaint, () =>
-              webContents.capturePage({ x: 0, y: 0, width: viewportWidth, height: viewportHeight })
+            waitForPromiseWithSignal(
+              holdPaintUntilSettled(holdPaint, () =>
+                webContents.capturePage({
+                  x: 0,
+                  y: 0,
+                  width: viewportWidth,
+                  height: viewportHeight
+                })
+              ),
+              stopSignal
             ),
             SNAPSHOT_CAPTURE_TIMEOUT_MS,
             null
@@ -125,6 +148,7 @@ export function createBrowserScreencastSnapshotCapture(
             : {}),
           captureBeyondViewport: false
         }
+        // Not raced with stop: a clipped capture Chromium finishes late re-applies the phone metrics after the clear.
         const result = await runDebuggerCommandWithTimeout('Page.captureScreenshot', () =>
           holdPaintUntilCdpCaptureSettles(webContents, holdPaint, () =>
             dbg.sendCommand('Page.captureScreenshot', screenshotParams)

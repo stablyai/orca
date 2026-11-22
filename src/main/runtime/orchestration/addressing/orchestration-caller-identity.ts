@@ -5,7 +5,7 @@ import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-o
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../shared/orca-session-address'
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../shared/orchestration/mailbox/orchestration-party-identity'
 
 /** The part of a caller a Run binding stores and matches. */
@@ -67,6 +67,13 @@ export function isPeerCaller(
   caller: OrchestrationCallerIdentity | null | undefined
 ): caller is OrchestrationPeerCaller {
   return !!caller && 'kind' in caller && caller.kind === 'peer'
+}
+
+/** The chat session behind a caller; a paired Orca has none here. */
+export function sessionCallerOf(
+  caller: OrchestrationEntryCaller | undefined
+): OrchestrationSessionCaller | undefined {
+  return caller?.kind === 'peer' ? undefined : caller
 }
 
 /** A caller with neither a pane nor an Orca session id can never be bound to a Run. */

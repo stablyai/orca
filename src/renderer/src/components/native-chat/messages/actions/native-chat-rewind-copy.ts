@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   agentSessionRewindReasonNotice,
   type AgentSessionRewindNotice
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind-request'
+} from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 
 const copy = {
   unsupported: () =>
@@ -15,11 +15,7 @@ const copy = {
       'components.native-chat.rewind.historyNotPaginated',
       "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here."
     ),
-  busy: () =>
-    translate(
-      'components.native-chat.rewind.busy',
-      'Available once the agent is idle and nothing in this chat is waiting on you.'
-    ),
+  busy: () => translate('components.native-chat.rewind.busy', 'Available when chat is idle'),
   'stale-epoch': () =>
     translate(
       'components.native-chat.rewind.staleEpoch',

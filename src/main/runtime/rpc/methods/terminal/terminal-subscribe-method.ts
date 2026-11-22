@@ -1,5 +1,6 @@
+import { remoteTerminalViewer } from './terminal-remote-viewer'
 import { defineStreamingMethod } from '../../core'
-import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 import { isTerminalReadPayloadIncomplete } from './terminal-stream-replay'
 import { runTerminalBinarySubscription } from './terminal-subscribe-binary'
 import {
@@ -26,7 +27,8 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         signal,
         clientKind,
         pairedDeviceId,
-        clientId: viewerDeviceId
+        clientId: viewerDeviceId,
+        clientCapabilities
       },
       emit
     ) => {
@@ -100,7 +102,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           emit,
           ptyId,
           clientId,
-          viewerDeviceId,
+          viewer: remoteTerminalViewer(viewerDeviceId, clientCapabilities),
           pairedDeviceId,
           isMobile,
           supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,

@@ -1,5 +1,5 @@
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({
@@ -31,6 +31,7 @@ export const automationStyles = themedStyleSheet(() => ({
     minHeight: 44
   },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
+  placeField: { marginTop: spacing.sm },
   button: {
     minHeight: 44,
     justifyContent: 'center',

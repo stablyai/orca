@@ -1,4 +1,5 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { buildLocaleLowercaseIndex } from '../../../../shared/locale-lowercase-index'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 
 export const TEXT_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
@@ -131,49 +132,4 @@ function isWordGraphemeBefore(text: string, index: number): boolean {
 
 function isWholeWordMatch(text: string, start: number, end: number): boolean {
   return !isWordGraphemeBefore(text, start) && !isWordCharacter(codePointAt(text, end))
-}
-
-function buildLocaleLowercaseIndex(text: string): {
-  text: string
-  originalStartByNormalizedOffset: number[] | null
-  originalEndByNormalizedOffset: number[] | null
-} {
-  // ASCII has no contextual casing or multi-unit characters, so every offset stays identical.
-  if (!/[\u0080-\uffff]/.test(text)) {
-    return {
-      text: text.toLocaleLowerCase(),
-      originalStartByNormalizedOffset: null,
-      originalEndByNormalizedOffset: null
-    }
-  }
-
-  let normalized = ''
-  let originalStartByNormalizedOffset: number[] | null = null
-  let originalEndByNormalizedOffset: number[] | null = null
-  let originalOffset = 0
-
-  for (const char of text) {
-    const normalizedChar = char.toLocaleLowerCase()
-    const originalEnd = originalOffset + char.length
-    if (!originalStartByNormalizedOffset && (char.length !== 1 || normalizedChar.length !== 1)) {
-      originalStartByNormalizedOffset = Array.from({ length: originalOffset }, (_, index) => index)
-      originalEndByNormalizedOffset = Array.from(
-        { length: originalOffset },
-        (_, index) => index + 1
-      )
-    }
-    // Locale folding can expand UTF-16 (İ → i + combining dot); map normalized matches back to original DOM offsets.
-    for (let i = 0; i < normalizedChar.length; i += 1) {
-      originalStartByNormalizedOffset?.push(originalOffset)
-      originalEndByNormalizedOffset?.push(originalEnd)
-    }
-    normalized += normalizedChar
-    originalOffset = originalEnd
-  }
-
-  return {
-    text: normalized,
-    originalStartByNormalizedOffset,
-    originalEndByNormalizedOffset
-  }
 }

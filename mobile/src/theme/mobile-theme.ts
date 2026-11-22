@@ -20,6 +20,13 @@ const darkColors = {
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
   composerControl: '#262626',
+  // A floating card's hairline edge (the answer card), a step stronger than the composer's.
+  floatingCardBorder: 'rgba(250, 250, 250, 0.16)',
+  // An unfilled choice's edge on a card, 3:1 against it (WCAG 1.4.11), and the faint fill of the picked one.
+  choiceBorder: 'rgba(255, 255, 255, 0.34)',
+  choiceSelectedFill: 'rgba(134, 239, 172, 0.08)',
+  // A small filled pill on a card (a queued row's Steer): light needs more than bgRaised to read on white.
+  cardPillFill: '#262626',
   // A text field's edge, 3:1 on the screen, a sheet and a sheet group (WCAG 1.4.11): desktop's dark --ring.
   inputBorder: '#737373',
   skillToken: '#8ab4f8',
@@ -47,6 +54,8 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Desktop's --agent-question: something waits on the owner (an item that needs you).
+  agentQuestion: '#f97316',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -57,6 +66,7 @@ const darkColors = {
   statusPurple: '#d8b4fe',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
+  gitDecorationModified: '#e2c08d',
   // GitHub's (Primer) diff colours, Kelvin's choice for every phone diff: row ground, line-number cell over it,
   // the +/− sign, unchanged line numbers, and the blue "unchanged lines" fold band.
   diffAddedBg: 'rgba(46, 160, 67, 0.15)',
@@ -103,6 +113,10 @@ const lightColors: MobilePalette = {
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
+  floatingCardBorder: 'rgba(10, 10, 10, 0.14)',
+  choiceBorder: 'rgba(0, 0, 0, 0.44)',
+  choiceSelectedFill: 'rgba(20, 118, 56, 0.06)',
+  cardPillFill: 'rgba(120, 120, 128, 0.16)',
   // Desktop's light --ring (#a1a1a1) is under 3:1 on white, so both schemes share the dark one.
   inputBorder: '#737373',
   skillToken: '#1d4ed8',
@@ -124,6 +138,7 @@ const lightColors: MobilePalette = {
 
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
+  agentQuestion: '#ea580c',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
@@ -131,6 +146,7 @@ const lightColors: MobilePalette = {
   statusPurple: '#9333ea',
   gitDecorationAdded: '#587c0c',
   gitDecorationDeleted: '#ad0707',
+  gitDecorationModified: '#895503',
   diffAddedBg: '#dafbe1',
   diffDeletedBg: '#ffebe9',
   diffAddedGutter: '#aceebb',
@@ -193,6 +209,8 @@ export function subscribeMobileColorScheme(listener: () => void): () => void {
 }
 
 export const spacing = {
+  /** Between quiet lines that read as one list (item lines in a chat). */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,

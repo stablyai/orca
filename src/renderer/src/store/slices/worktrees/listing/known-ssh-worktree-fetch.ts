@@ -5,7 +5,7 @@ import type { DetectedWorktreeListResult } from '../../../../../../shared/worktr
 import type {
   HostQualifiedKnownWorktreeResult,
   SshExecutionHostId
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { areDetectedWorktreeResultsEqual } from './worktree-catalog-visibility'
 import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import {
@@ -20,7 +20,7 @@ import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isDetectedWorktreeListResult } from './detected-worktree-provider-request'
 import { getAuthoritativelyRemovedWorktreeIds } from './authoritative-worktree-removal-memory'
 import type { WorktreeHostMatchOptions } from './worktree-slice-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function appendMissingWorktreesForHost<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }

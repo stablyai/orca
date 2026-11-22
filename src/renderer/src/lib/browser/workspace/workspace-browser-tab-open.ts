@@ -14,8 +14,11 @@ import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/we
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store/index'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import type { ClientCreationActionAvailability } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import {
@@ -32,7 +35,7 @@ import type {
   BrowserOpenOutcome
 } from '../navigation/browser-link-destination'
 import type { AppState } from '@/store/types'
-import type { SearchEngine } from '../../../../../shared/browser-url'
+import type { SearchEngine } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
@@ -57,6 +60,8 @@ export type OpenWorkspaceBrowserTabRequest = {
   expectedSshConnectionId?: string
   /** Keep an existing desktop provider, only after matching the asserted source owner. */
   allowClientBrowserFallback?: boolean
+  /** Let an SSH-owned link open a desktop tab when its host browses from this device. */
+  allowSshDeviceBrowser?: boolean
   /** Override placement for links whose pane explicitly requires server ownership. */
   placementPreference?: BrowserClientHostPlacementPreference
 }
@@ -164,7 +169,8 @@ export async function openWorkspaceBrowserTab(
       availability,
       route,
       request.workspaceId,
-      expectedEnvironmentId
+      expectedEnvironmentId,
+      request.allowSshDeviceBrowser
     )
   if (expectedEnvironmentId !== null && !runtimeOwnerRoute && !sshDeploymentClientRoute) {
     throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
@@ -177,7 +183,7 @@ export async function openWorkspaceBrowserTab(
       route,
       request.workspaceId,
       expectedSshConnectionId,
-      request.allowClientBrowserFallback
+      request.allowClientBrowserFallback || request.allowSshDeviceBrowser
     )
   ) {
     throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
