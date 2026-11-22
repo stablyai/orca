@@ -10,6 +10,8 @@ import { readWorkerThreadMemoryData } from '../worker-threads/worker-thread-diag
  */
 export const MAIN_MEMORY_SPIKE_RISE_MB = 300
 export const MAIN_MEMORY_SPIKE_WINDOW_MS = 2 * 60_000
+/** Interval timers fire a few ms late, so the sample from two ticks ago is just past the window. */
+const SAMPLE_LATENESS_SLACK_MS = 30_000
 export const MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS = 60 * 60_000
 const MB = 2 ** 20
 
@@ -38,7 +40,10 @@ export function observeMainMemorySample(
   if (nowMs < armedAtMs) {
     return
   }
-  while (recent.length > 0 && nowMs - recent[0].atMs > MAIN_MEMORY_SPIKE_WINDOW_MS) {
+  while (
+    recent.length > 0 &&
+    nowMs - recent[0].atMs > MAIN_MEMORY_SPIKE_WINDOW_MS + SAMPLE_LATENESS_SLACK_MS
+  ) {
     recent.shift()
   }
   let baselineMB = mainMB

@@ -52,6 +52,16 @@ it('ignores the launch ramp', async () => {
   expect(records).toHaveLength(0)
 })
 
+it('compares against the sample from two late-firing ticks ago', async () => {
+  observeMainMemorySample(900, 0, {})
+  observeMainMemorySample(1000, 3 * MINUTE, {})
+  observeMainMemorySample(1150, 4 * MINUTE + 1, {})
+  observeMainMemorySample(1300, 5 * MINUTE + 3, {})
+  await settle()
+  expect(records).toHaveLength(1)
+  expect(records[0].attributes).toMatchObject({ baselineWorkingSetMB: 1000, riseMB: 300 })
+})
+
 it('writes one record for a spike and none for another within the hour', async () => {
   observeMainMemorySample(400, 0, {})
   observeMainMemorySample(850, 3 * MINUTE, {})
