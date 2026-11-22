@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
@@ -25,6 +25,7 @@ const events: BotItemEvent[] = [
 ]
 
 afterEach(() => {
+  vi.useRealTimers()
   window.getSelection()?.removeAllRanges()
   cleanup()
 })
@@ -64,9 +65,10 @@ it('adds a selection in item activity to the comment box as a chat quote', async
   expect(added).toEqual([`> ${COMMENT}\n> Then rebase.\n\n`])
 })
 
-it('offers nothing for text outside the activity', async () => {
+it('offers nothing for text outside the activity', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   render(<ItemPage box={{ acceptsText: () => true, appendText: () => {} }} />)
   selectText('Item title outside the activity')
-  await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+  act(() => vi.runAllTimers())
   expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
 })
