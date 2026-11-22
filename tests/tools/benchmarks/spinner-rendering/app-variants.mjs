@@ -59,6 +59,10 @@ export async function spinnerCensus(page) {
           right = Math.min(right, bounds.right)
         }
       }
+      // A clip collapsed to zero size hides everything, even a wrapper that straddles its edge.
+      if (left >= right || top >= bottom) {
+        return false
+      }
       return rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right
     }
     return {
