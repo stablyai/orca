@@ -49,7 +49,7 @@ describe('fetchWithPinnedAddresses', () => {
 
   it('rejects, rather than throwing in the socket callback, for a status Response cannot carry', async () => {
     server = http.createServer((_req, res) => {
-      res.writeHead(199).end()
+      res.writeHead(600).end()
     })
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r))
 
@@ -57,6 +57,6 @@ describe('fetchWithPinnedAddresses', () => {
       fetchWithPinnedAddresses(`http://rebind.invalid:${portOf(server)}/`, {}, [
         { address: '127.0.0.1' }
       ])
-    ).rejects.toThrow()
+    ).rejects.toThrow(RangeError)
   })
 })
