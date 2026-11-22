@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Check, Circle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import { IntegrationStatusPill } from '@/components/integrations/presentation/integration-status-pill'
 import { translate } from '@/i18n/i18n'
 
 export type PlaneSetupStepStatus = {

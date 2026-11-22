@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const callMock = vi.fn()
+const { callMock } = vi.hoisted(() => ({
+  callMock: vi.fn()
+}))
 
 vi.mock('../runtime/client', async () => {
   class RuntimeClient {
@@ -19,7 +21,9 @@ vi.mock('../runtime/client', async () => {
     }
   }
 
-  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import(
+    '../runtime/connection/types.js'
+  )
 
   return {
     RuntimeClient,
@@ -29,7 +33,23 @@ vi.mock('../runtime/client', async () => {
 })
 
 import { main } from '../index'
-import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
+
+type OkFixture = {
+  id: string
+  ok: true
+  result: unknown
+  _meta: { runtimeId: string }
+}
+
+function okFixture(id: string, result: unknown): OkFixture {
+  return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+}
+
+function queueFixtures(mock: any, ...fixtures: OkFixture[]): void {
+  for (const fixture of fixtures) {
+    mock.mockResolvedValueOnce(fixture)
+  }
+}
 
 describe('orca plane CLI handlers', () => {
   const originalEnv = { ...process.env }

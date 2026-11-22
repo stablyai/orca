@@ -28,7 +28,7 @@ import {
   formatPlaneStatusSet,
   formatPlaneWorkspaceList
 } from './plane-format'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 const VALID_PRIORITIES = new Set(['none', 'urgent', 'high', 'medium', 'low'])
 

@@ -168,10 +168,11 @@ export const useAppStore = create<AppState>()(
               ...createEphemeralVmLifecycleSlice(...a)
             }
           })
-        )
-      )
+        ),
+        import.meta.env.DEV || e2eConfig.exposeStore
+      ),
+      import.meta.env.DEV || e2eConfig.exposeStore
     )
-  )
   )
 )
 

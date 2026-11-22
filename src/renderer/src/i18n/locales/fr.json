@@ -10199,19 +10199,6 @@
               "inWindow": "dans la fenêtre",
               "worktrees": "arbres de travail",
               "eaf17a7214": "Tableau de bord des agents"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "natif",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agent",
-              "description": "Ouvrez les nouveaux agents pris en charge dans l'interface utilisateur de Chat."
             }
           }
         },

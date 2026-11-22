@@ -5706,19 +5706,6 @@
               "inWindow": "na própria janela",
               "worktrees": "worktrees",
               "eaf17a7214": "Painel de Agentes"
-            },
-            "nativeChat": {
-              "title": "Interface de Chat",
-              "description": "Abra os novos agentes compatíveis na interface de Chat.",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agente"
             }
           }
         },

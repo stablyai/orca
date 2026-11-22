@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,

@@ -9876,19 +9876,6 @@
               "inWindow": "en la ventana",
               "worktrees": "árboles de trabajo",
               "eaf17a7214": "Panel de agentes"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "claudia abierta",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agente",
-              "description": "Abra nuevos agentes admitidos en la interfaz de usuario de Chat."
             }
           }
         },

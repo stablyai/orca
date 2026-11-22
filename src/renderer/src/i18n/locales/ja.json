@@ -10228,19 +10228,6 @@
               "inWindow": "窓内",
               "worktrees": "ワークツリー",
               "eaf17a7214": "Agent ダッシュボード"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "ネイティブ",
-              "chat": "チャット",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "ああ",
-              "terminal": "ターミナル",
-              "agent": "Agent",
-              "description": "チャット UI でサポートされている新規 Agent を開きます。"
             }
           }
         },
