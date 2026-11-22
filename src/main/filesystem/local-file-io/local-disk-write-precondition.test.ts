@@ -1,4 +1,4 @@
-import { link, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,4 +46,21 @@ describe('local provider guarded write', () => {
       expect(results.filter((result) => result.ok)).toHaveLength(1)
     }
   )
+
+  it.each([
+    ['refuses bytes that are not UTF-8', Buffer.from('caf\xe9\n', 'latin1'), false],
+    ['saves UTF-8 that spells U+FFFD itself', Buffer.from('caf\uFFFD\n', 'utf8'), true]
+  ])('%s when a save must be lossless', async (_label, bytes, saves) => {
+    const target = join(base, 'text.txt')
+    await writeFile(target, bytes)
+    const decoded = bytes.toString('utf8')
+
+    const result = await provider().writeFileWithDiskPrecondition(target, `${decoded}edited\n`, {
+      expectedSignature: getDiskBaselineSignature(decoded),
+      requireLosslessUtf8: true
+    })
+
+    expect(result).toEqual(saves ? { ok: true } : { ok: false, diskConflict: 'not-utf8' })
+    expect((await readFile(target)).equals(bytes)).toBe(!saves)
+  })
 })
