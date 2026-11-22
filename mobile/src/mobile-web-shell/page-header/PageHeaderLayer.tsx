@@ -11,6 +11,7 @@ import {
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
   BRIDGE_PAGE_HEADER_BACK_ID,
+  BRIDGE_PAGE_HEADER_TITLE_ID,
   type BridgePageHeader,
   type BridgePageHeaderMenuItem
 } from '../bridge/native-capabilities/bridge-page-header'
@@ -142,6 +143,8 @@ export function PageHeaderLayer({
               label: action.label,
               symbol: pageHeaderSymbol(action.icon),
               disabled: action.disabled,
+              badge: action.badge,
+              tint: action.tint,
               onPress: () => send(action.id)
             }
       ),
@@ -169,6 +172,11 @@ export function PageHeaderLayer({
     () => ({ headerBackVisible: header?.back === true && !ownBack }),
     [header?.back, ownBack]
   )
+  const titlePressable = header?.titlePressable === true
+  const onTitlePress = useMemo(
+    () => (titlePressable ? () => send(BRIDGE_PAGE_HEADER_TITLE_ID) : undefined),
+    [titlePressable, send]
+  )
   if (header === null) {
     return <Stack.Screen options={HEADER_HIDDEN} />
   }
@@ -178,6 +186,8 @@ export function PageHeaderLayer({
       items={items}
       leftItems={leftItems}
       options={options}
+      subtitle={header.subtitle}
+      onTitlePress={onTitlePress}
     />
   )
 }

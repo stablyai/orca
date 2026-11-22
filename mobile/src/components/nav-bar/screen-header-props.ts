@@ -9,6 +9,10 @@ export type ScreenHeaderAction =
       label: string
       onPress: () => void
       disabled?: boolean
+      /** A count on the icon, e.g. items that need you; none at 0. */
+      badge?: number
+      /** Colours the icon with a state, e.g. a PR's open, merged or closed colour. */
+      tint?: string
       testID?: string
     }
   | {
@@ -28,7 +32,13 @@ export type ScreenHeaderProps = {
   actions?: readonly ScreenHeaderAction[]
   /** A top-level screen's large title, which shrinks into the bar on scroll (iOS). */
   largeTitle?: boolean
+  /** One line under the title, with an optional status dot. */
+  subtitle?: ScreenHeaderSubtitle
+  /** Makes the title a button, e.g. one that opens the item's details. */
+  onTitlePress?: () => void
 }
+
+export type ScreenHeaderSubtitle = { text: string; dotColor?: string }
 
 export function isMenuAction(
   action: ScreenHeaderAction

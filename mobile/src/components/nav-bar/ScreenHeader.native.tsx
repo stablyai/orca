@@ -31,12 +31,16 @@ function menuEntry(item: MenuItem, key: string): NativeHeaderMenuEntry {
 export function ScreenHeader({
   title,
   actions = NO_ACTIONS,
-  largeTitle = false
+  largeTitle = false,
+  subtitle,
+  onTitlePress
 }: ScreenHeaderProps) {
   return (
     <NativeStackHeader
       title={title}
       largeTitle={largeTitle}
+      subtitle={subtitle}
+      onTitlePress={onTitlePress}
       items={actions.map((action) =>
         isMenuAction(action)
           ? {
@@ -52,6 +56,8 @@ export function ScreenHeader({
               label: action.label,
               symbol: action.icon.nativeSymbol,
               disabled: action.disabled,
+              badge: action.badge,
+              tint: action.tint,
               onPress: action.onPress
             }
       )}

@@ -5,9 +5,14 @@ import {
   type MenuItem
 } from '../../components/menu/native-menu-items'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
-import { isMenuAction, type ScreenHeaderAction } from '../../components/nav-bar/screen-header-props'
+import {
+  isMenuAction,
+  type ScreenHeaderAction,
+  type ScreenHeaderSubtitle
+} from '../../components/nav-bar/screen-header-props'
 import {
   BRIDGE_PAGE_HEADER_BACK_ID,
+  BRIDGE_PAGE_HEADER_TITLE_ID,
   BridgePageHeaderSchema,
   type BridgePageHeader,
   type BridgePageHeaderMenuItem
@@ -20,6 +25,13 @@ export type PageHeaderRequest = {
   titleVisible?: boolean
   onBack?: () => void
   actions?: readonly ScreenHeaderAction[]
+  subtitle?: ScreenHeaderSubtitle
+  onTitlePress?: () => void
+}
+
+// The shell takes hex only; a colour the page wrote another way leaves the item untinted.
+function hexColor(color: string | undefined): string | undefined {
+  return color !== undefined && /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(color) ? color : undefined
 }
 
 export type PageHeaderPayload = {
@@ -51,6 +63,11 @@ export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload
   if (request.onBack) {
     handlers.set(BRIDGE_PAGE_HEADER_BACK_ID, request.onBack)
   }
+  if (request.onTitlePress) {
+    handlers.set(BRIDGE_PAGE_HEADER_TITLE_ID, request.onTitlePress)
+  }
+  const subtitle = request.subtitle
+  const dotColor = hexColor(subtitle?.dotColor)
   const menuAction = (prefix: string, item: ActionSheetAction) => ({
     id: register(`${prefix}/${item.id ?? item.label}`, item.onPress),
     label: item.label,
@@ -71,6 +88,8 @@ export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload
     title: request.title,
     titleVisible: request.titleVisible ?? true,
     back: request.onBack !== undefined,
+    ...(subtitle ? { subtitle: { text: subtitle.text, ...(dotColor ? { dotColor } : {}) } } : {}),
+    ...(request.onTitlePress ? { titlePressable: true } : {}),
     actions: (request.actions ?? []).map((action) =>
       isMenuAction(action)
         ? {
@@ -87,7 +106,9 @@ export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload
             id: register(action.id, action.onPress),
             label: action.label,
             icon: iconName(action.icon),
-            ...(action.disabled ? { disabled: true } : {})
+            ...(action.disabled ? { disabled: true } : {}),
+            ...(action.badge ? { badge: Math.min(action.badge, 999) } : {}),
+            ...(hexColor(action.tint) ? { tint: hexColor(action.tint) } : {})
           }
     )
   }

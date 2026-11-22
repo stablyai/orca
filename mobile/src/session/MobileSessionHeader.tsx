@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
-  GitBranch,
   ListChecks,
   MoreHorizontal,
   PanelLeftOpen
@@ -15,7 +14,8 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useSessionMoreMenuGroups } from './MobileSessionHeaderMoreMenu'
 import { NativeMenu } from '../components/menu/NativeMenu'
 import { MobileBotItemsStrip } from '../bots/items/MobileBotItemsStrip'
-import { MobileSourceControlButton } from './MobileSourceControlButton'
+import { MobileSourceControlButton, useSourceControlButtonLook } from './MobileSourceControlButton'
+import { statusDotColor } from '../components/feedback/StatusDot'
 import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
@@ -110,6 +110,9 @@ export function MobileSessionHeader({
       : t('session.header.items', 'Items')
   const moreLabel = t('session.header.moreActions', 'More session actions')
   const moreGroups = useSessionMoreMenuGroups(controller, actionsCollapsed)
+  const sourceControlLook = useSourceControlButtonLook(hostId, worktreeId)
+  const statusLine =
+    botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary
   // Sideways or beside the sidebar the tabs share the bar, so it stays the page's own.
   const native = usePageHeaderClaim(
     tabsInTopBar || layout.isWideLayout
@@ -117,6 +120,11 @@ export function MobileSessionHeader({
       : {
           title,
           onBack: leave,
+          // The title still opens the workspace's details card, and keeps its status line.
+          onTitlePress: details.toggle,
+          subtitle: statusLine
+            ? { text: statusLine, dotColor: statusDotColor(presentedConnState) }
+            : undefined,
           actions: [
             ...(itemsInBar
               ? [
@@ -124,6 +132,7 @@ export function MobileSessionHeader({
                     id: 'items',
                     icon: ListChecks,
                     label: itemsLabel,
+                    badge: routeBot.needsYou,
                     onPress: () => openBotPanel({ tab: 'items' })
                   }
                 ]
@@ -132,7 +141,8 @@ export function MobileSessionHeader({
               ? [
                   {
                     id: 'sourceControl',
-                    icon: GitBranch,
+                    icon: sourceControlLook.icon,
+                    tint: sourceControlLook.color,
                     label: t('session.header.openSourceControl', 'Open source control'),
                     onPress: () => handlePanelTap('sourceControl')
                   }

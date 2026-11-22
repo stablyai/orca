@@ -4,6 +4,8 @@ import { Stack, type NativeStackNavigationOptions } from 'expo-router'
 import type { SFSymbol } from 'expo-symbols'
 import type { NativeIconSymbol } from '../icons/app-icon-types'
 import { useMaterialSymbolImages } from '../icons/material-symbol-images'
+import { NativeHeaderTitle } from './native-header-title'
+import type { ScreenHeaderSubtitle } from './screen-header-props'
 
 type HeaderSymbol = Pick<NativeIconSymbol, 'ios' | 'android'>
 
@@ -22,7 +24,15 @@ export type NativeHeaderMenuEntry =
 
 /** A bar button, or a bar button that opens a menu whose groups become its sections. */
 export type NativeHeaderItem =
-  | { key: string; label: string; symbol?: HeaderSymbol; disabled?: boolean; onPress: () => void }
+  | {
+      key: string
+      label: string
+      symbol?: HeaderSymbol
+      disabled?: boolean
+      badge?: number
+      tint?: string
+      onPress: () => void
+    }
   | {
       key: string
       label: string
@@ -42,6 +52,17 @@ function entrySymbols(entries: readonly NativeHeaderMenuEntry[]): (HeaderSymbol 
   )
 }
 
+// Toolbar.Button refuses empty slots: a label (when there's no icon) and a badge only when present.
+function buttonChildren(label: string | undefined, badge: number | undefined) {
+  if (!badge) {
+    return label
+  }
+  const count = <Stack.Toolbar.Badge key="badge">{String(badge)}</Stack.Toolbar.Badge>
+  return label === undefined
+    ? count
+    : [<Stack.Toolbar.Label key="label">{label}</Stack.Toolbar.Label>, count]
+}
+
 /**
  * The native stack header: UINavigationBar (Liquid Glass on iOS 26) or the Material top app bar,
  * with UIMenu / dropdown menus. Native screens and the web shell's pages both draw through this.
@@ -51,17 +72,42 @@ export function NativeStackHeader({
   largeTitle = false,
   items = NO_ITEMS,
   leftItems = NO_ITEMS,
-  options
+  options,
+  subtitle,
+  onTitlePress,
+  titleHint
 }: {
   title: string
   largeTitle?: boolean
   items?: readonly NativeHeaderItem[]
   leftItems?: readonly NativeHeaderItem[]
   options?: NativeStackNavigationOptions
+  subtitle?: ScreenHeaderSubtitle
+  onTitlePress?: () => void
+  titleHint?: string
 }) {
+  // A plain title stays the system's; a status line or a pressable title needs a view of our own.
+  const customTitle = title !== '' && (subtitle !== undefined || onTitlePress !== undefined)
   const screenOptions = useMemo(
-    () => ({ ...options, headerShown: true, title, headerLargeTitle: largeTitle }),
-    [options, title, largeTitle]
+    () => ({
+      ...options,
+      headerShown: true,
+      title,
+      headerLargeTitle: largeTitle,
+      ...(customTitle
+        ? {
+            headerTitle: () => (
+              <NativeHeaderTitle
+                title={title}
+                subtitle={subtitle}
+                onPress={onTitlePress}
+                accessibilityHint={titleHint}
+              />
+            )
+          }
+        : {})
+    }),
+    [options, title, largeTitle, customTitle, subtitle, onTitlePress, titleHint]
   )
   const all = [...leftItems, ...items]
   const androidImages = useMaterialSymbolImages(
@@ -118,9 +164,10 @@ export function NativeStackHeader({
         icon={icon}
         accessibilityLabel={item.label}
         disabled={item.disabled}
+        tintColor={item.tint}
         onPress={item.onPress}
       >
-        {icon === undefined ? item.label : undefined}
+        {buttonChildren(icon === undefined ? item.label : undefined, item.badge)}
       </Stack.Toolbar.Button>
     )
   }
