@@ -203,12 +203,25 @@ function deferSave(): { finish: (saved: boolean) => Promise<void> } {
   }
 }
 
+function holdClose(closeWith: ReturnType<typeof vi.fn>): { finish: () => Promise<void> } {
+  let resolve: (closed: boolean) => void = () => {}
+  closeWith.mockImplementationOnce(() => new Promise<boolean>((done) => (resolve = done)))
+  return {
+    finish: async () => {
+      await act(async () => resolve(true))
+    }
+  }
+}
+
 describe('leaving onboarding early while choices are saving', () => {
-  it('keeps the flow locked during the save, then opens Add Project', async () => {
+  it('keeps the flow locked during the save, then names Add Project and opens it', async () => {
     const save = deferSave()
     const view = renderLeavingEarly(true)
+    const idleLabel = view.primary().textContent
     await act(async () => fireEvent.click(screen.getAllByRole('button')[0]))
+    const labelWhileSaving = view.primary().textContent
 
+    expect(labelWhileSaving).toBe(idleLabel)
     expect(view.primary()).toHaveProperty('disabled', true)
     expect(view.back()).toHaveProperty('disabled', true)
     fireEvent.click(view.back())
@@ -220,7 +233,10 @@ describe('leaving onboarding early while choices are saving', () => {
     expect(view.handle.current!.stepIndex).toBe(AGENT_STEP)
     expect(view.closeWith).not.toHaveBeenCalled()
 
+    const close = holdClose(view.closeWith)
     await save.finish(true)
+    expect(view.primary().textContent).not.toBe(labelWhileSaving)
+    await close.finish()
     expect(view.closeWith).toHaveBeenCalledWith(
       'completed',
       expect.any(Number),
@@ -248,5 +264,17 @@ describe('leaving onboarding early while choices are saving', () => {
       durationMs: expect.any(Number),
       advancedVia: 'keyboard'
     })
+  })
+
+  it('keeps the same busy label from saving to closing in the home workspace', async () => {
+    const save = deferSave()
+    const view = renderLeavingEarly(false)
+    await act(async () => fireEvent.click(screen.getAllByRole('button')[0]))
+    const labelWhileSaving = view.primary().textContent
+    const close = holdClose(view.closeWith)
+    await save.finish(true)
+    expect(view.primary().textContent).toBe(labelWhileSaving)
+    await close.finish()
+    expect(view.openModal).not.toHaveBeenCalled()
   })
 })

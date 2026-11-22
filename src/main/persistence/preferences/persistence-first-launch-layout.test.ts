@@ -15,15 +15,19 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/official-build', () => ({
   isOfficialTelemetryBuild: vi.fn(() => true)
 }))
-const draw = vi.hoisted(() => ({ value: 0 }))
+const draw = vi.hoisted(() => ({ value: 0, calls: 0 }))
 vi.mock('node:crypto', async (original) => ({
   ...(await original<typeof crypto>()),
-  randomInt: () => draw.value
+  randomInt: () => {
+    draw.calls += 1
+    return draw.value
+  }
 }))
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-first-launch-layout-'))
   draw.value = 0
+  draw.calls = 0
   vi.mocked(isOfficialTelemetryBuild).mockReturnValue(true)
 })
 afterEach(async () => {
@@ -47,6 +51,7 @@ describe('first launch layout for a missing desktop profile', () => {
     const reopened = createStore({ initializeHomeWorkspace: true })
     expect(reopened.getSettings().telemetry?.firstLaunchLayout).toBe('home-workspace')
     expect(homeRepoNames(reopened)).toEqual(['~'])
+    expect(draw.calls).toBe(1)
   })
 
   it('starts on the landing page without a workspace and remembers it through restart', async () => {
@@ -61,6 +66,7 @@ describe('first launch layout for a missing desktop profile', () => {
     const reopened = createStore({ initializeHomeWorkspace: true })
     expect(reopened.getSettings().telemetry?.firstLaunchLayout).toBe('project-picker')
     expect(reopened.getRepos()).toEqual([])
+    expect(draw.calls).toBe(1)
   })
 
   it('leaves saved profiles untouched, including empty ones', () => {
@@ -68,12 +74,14 @@ describe('first launch layout for a missing desktop profile', () => {
     const store = createStore({ initializeHomeWorkspace: true })
     expect(store.getSettings().telemetry?.firstLaunchLayout).toBeUndefined()
     expect(store.getRepos()).toEqual([])
+    expect(draw.calls).toBe(0)
   })
 
   it('leaves headless and remote stores untouched', () => {
     const store = createStore({ initializeHomeWorkspace: false })
     expect(store.getSettings().telemetry?.firstLaunchLayout).toBeUndefined()
     expect(store.getRepos()).toEqual([])
+    expect(draw.calls).toBe(0)
   })
 
   it('keeps development builds in the home workspace without recording a layout', () => {
@@ -81,6 +89,7 @@ describe('first launch layout for a missing desktop profile', () => {
     const store = createStore({ initializeHomeWorkspace: true })
     expect(store.getSettings().telemetry?.firstLaunchLayout).toBeUndefined()
     expect(homeRepoNames(store)).toEqual(['~'])
+    expect(draw.calls).toBe(0)
   })
 })
 
