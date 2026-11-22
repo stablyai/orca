@@ -204,7 +204,7 @@ export function CodexSwitcherMenu({
         !hasActiveRuntimeEnvironment ? (
           <AccountRuntimeToggle
             groups={switchGroups}
-            value={selectedGroup?.key ?? selectedRuntimeKey}
+            value={selectedRuntimeKey}
             onChange={(group) => void handleSelectRuntime(group)}
             ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
           />
