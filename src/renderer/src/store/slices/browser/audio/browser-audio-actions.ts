@@ -2,6 +2,8 @@ import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-
 import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { setRemoteBrowserPageAudioMuted } from '../hosts/browser-remote-audio-mute'
 
+const remoteMuteGenerationByTabId = new Map<string, number>()
+
 export function createBrowserAudioActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -34,17 +36,25 @@ export function createBrowserAudioActions(
         })
       setMuted(muted)
       const state = get()
+      const generation = (remoteMuteGenerationByTabId.get(tabId) ?? 0) + 1
+      remoteMuteGenerationByTabId.set(tabId, generation)
+      // A refusal puts the icon back, unless a newer toggle already superseded this one.
+      const rollBack = (): void => {
+        if (remoteMuteGenerationByTabId.get(tabId) === generation) {
+          setMuted(!muted)
+        }
+      }
       for (const page of state.browserPagesByWorkspace[tabId] ?? []) {
         const handle = state.remoteBrowserPageHandlesByPageId[page.id]
         if (handle && handle.placement?.kind !== 'client') {
-          // The host's next row confirms the change; a refusal puts the icon back.
+          // The host's next row confirms the change.
           void setRemoteBrowserPageAudioMuted(page.worktreeId, handle, muted)
             .then((applied) => {
               if (!applied) {
-                setMuted(!muted)
+                rollBack()
               }
             })
-            .catch(() => setMuted(!muted))
+            .catch(rollBack)
           continue
         }
         void window.api.browser.setPageAudioMuted({ browserPageId: page.id, muted })

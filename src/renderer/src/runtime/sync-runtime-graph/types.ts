@@ -20,6 +20,9 @@ export type RuntimeMobileSessionSyncKey = {
   activeTabTypeByWorktree: AppState['activeTabTypeByWorktree']
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
+  // Sound changes nothing else a row reads, so a host's speaker icon needs its own publish trigger.
+  browserAudiblePageIds: AppState['browserAudiblePageIds']
+  browserAudioMutedTabIds: AppState['browserAudioMutedTabIds']
   generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string

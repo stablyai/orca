@@ -159,6 +159,13 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
   setGuestAudioMuted(guest: Electron.WebContents, muted: boolean): void {
     guest.setAudioMuted(muted)
     const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+    if (browserPageId && this.offscreenGuestIds.has(guest.id)) {
+      if (muted) {
+        this.mutedOffscreenPageIds.add(browserPageId)
+      } else {
+        this.mutedOffscreenPageIds.delete(browserPageId)
+      }
+    }
     if (browserPageId) {
       this.resolveRendererForBrowserTab(browserPageId)?.send('browser:audio-muted-changed', {
         browserPageId,
