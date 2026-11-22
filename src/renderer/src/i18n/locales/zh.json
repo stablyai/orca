@@ -18058,7 +18058,6 @@
           "failed7d": "失败 · 7 天",
           "automation": "自动化",
           "triggered": "已触发",
-          "trigger": "触发",
           "loading": "正在加载运行…",
           "noRuns": "尚无运行",
           "emptyDescription": "触发自动化后，运行记录会显示在这里",
@@ -18183,11 +18182,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "还没有运行",
-          "13988187b3": "Token",
           "86a248187e": "花费",
           "149c0b49c7": "工作区",
           "8faaa00726": "执行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "无法从此主机获取运行历史，这并不表示自动化运行失败或从未运行"
         },
         "AutomationSchedulePicker": {
@@ -18257,7 +18254,6 @@
           "missingWorkspace": "缺少工作区",
           "usageUnavailable": "用量不可用",
           "noRunUsageYet": "尚无运行用量",
-          "noWorkspace": "无工作区",
           "latestSavedOutput": "最近保存的输出",
           "fullOutputUnavailable": "无法加载完整输出。",
           "retryFullOutput": "重试",
@@ -18572,7 +18568,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "已花费 {{spend}}",
+          "tokens_other": "{{tokens}} token"
         },
         "externalDisplay": {
           "sshHost": "SSH 主机",
@@ -18617,7 +18615,6 @@
           "needsCredentials": "{{host}} 需要凭据才能重新连接，因此此次运行未启动",
           "signIn": "登录 {{host}}",
           "output": "输出",
-          "details": "详情",
           "runNumber": "运行 #{{number}}",
           "runFailed": "运行失败",
           "scheduledAt": "计划于 {{time}}",

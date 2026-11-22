@@ -17318,7 +17318,6 @@
           "failed7d": "Fallidas · 7 días",
           "automation": "Automatización",
           "triggered": "Activada",
-          "trigger": "Activar",
           "loading": "Cargando ejecuciones…",
           "noRuns": "Aún no hay ejecuciones",
           "emptyDescription": "Las ejecuciones aparecerán aquí después de activar una automatización.",
@@ -17445,11 +17444,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aún no hay carreras.",
-          "13988187b3": "Fichas",
           "86a248187e": "Gastar",
           "149c0b49c7": "Espacio de trabajo",
           "8faaa00726": "Correr",
-          "a00e38d1a3": "—",
           "historyUnavailable": "El historial de ejecuciones no está disponible desde este host. Esto no significa que la automatización haya fallado ni que no tenga ejecuciones."
         },
         "AutomationSchedulePicker": {
@@ -17519,7 +17516,6 @@
           "missingWorkspace": "Espacio de trabajo ausente",
           "usageUnavailable": "Uso no disponible",
           "noRunUsageYet": "Aún no hay uso de ejecución",
-          "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
           "fullOutputUnavailable": "No se pudo cargar la salida completa.",
           "retryFullOutput": "Reintentar",
@@ -17845,7 +17841,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} gastados",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",

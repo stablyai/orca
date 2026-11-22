@@ -38,6 +38,7 @@ import type {
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
+import type { HostCatalogIdentity } from '../host-catalog/host-catalog-fence'
 
 export type FolderWorkspaceDeleteOptions = {
   executionHostId?: ExecutionHostId
@@ -190,6 +191,7 @@ export type RepoSlice = {
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaceCatalogByHost: Partial<Record<ExecutionHostId, HostCatalogIdentity>>
   /** Local projects a WSL host now owns: never in `repos`/`folderWorkspaces`, read-only, chats only. */
   wslMovedProjects: readonly WslMovedProject[]
   fetchWslMovedProjects: () => Promise<void>
