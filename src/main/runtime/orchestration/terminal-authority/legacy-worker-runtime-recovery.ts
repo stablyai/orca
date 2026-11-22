@@ -28,6 +28,8 @@ import {
 import { redactWorkerTerminalView } from './views/worker-terminal-redaction'
 import {
   describeUnconfirmedStartEvidence,
+  SUBMIT_WITHHELD_STAGE,
+  WITHHELD_AFTER_RESTART_EVIDENCE,
   type UnconfirmedStartDelivery
 } from '../workers/turn-stops/unconfirmed-start-evidence'
 import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
@@ -194,7 +196,9 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
                       : null
                   )
                 }
-              : {})
+              : worker.stage === SUBMIT_WITHHELD_STAGE
+                ? { evidence: WITHHELD_AFTER_RESTART_EVIDENCE }
+                : {})
           }
         : { surface: 'chat' }
     observeUnconfirmedWorkerStart(db, dispatchId, start, this.workerTurnStopReportDeps)

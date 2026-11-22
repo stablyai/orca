@@ -6,7 +6,7 @@ import {
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
-import type { UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
+import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
@@ -17,7 +17,8 @@ const START_UNCONFIRMED_FENCE = 'start-unconfirmed'
 const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
   'dispatch_input',
   'turn_observation',
-  'turn_start_unobserved'
+  'turn_start_unobserved',
+  SUBMIT_WITHHELD_STAGE
 ])
 
 export type UnconfirmedWorkerStart =

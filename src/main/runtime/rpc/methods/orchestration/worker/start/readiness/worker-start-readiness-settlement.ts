@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../../../../../../orchestration/db/orchest
 import type { RunRow, TaskRow } from '../../../../../../orchestration/db/orchestration-records'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { SUBMIT_WITHHELD_STAGE } from '../../../../../../orchestration/workers/turn-stops/unconfirmed-start-evidence'
 import { reportedWorkerOutcome } from '../worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from '../launch/worker-launch-preferences'
@@ -119,9 +120,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       state: 'turn_unobserved'
     })
     const reason = turnStart.reason ?? describeUnobservedWorkerTurnStart(args.agent)
+    const submit = deliveredPrompt?.submit
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
-      'turn_start_unobserved',
+      // Durable, so a report a restart sends still warns that Enter would answer the dialog.
+      submit && 'withheldFor' in submit ? SUBMIT_WITHHELD_STAGE : 'turn_start_unobserved',
       reason,
       effects
     )

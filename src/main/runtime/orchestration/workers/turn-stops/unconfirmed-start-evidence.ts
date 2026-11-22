@@ -2,7 +2,6 @@ import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalPromptSubmit
 } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   AgentPromptAftermath,
   AgentStatusReport
@@ -29,7 +28,17 @@ const REPORT_WORDS: Record<AgentStatusReport['status'], string> = {
 /** What a start-unconfirmed alert says of how the brief went in; a withheld Enter changes its advice. */
 export type UnconfirmedStartEvidence = {
   lines: string[]
-  withheldFor?: RuntimeTerminalWaitBlockedReason
+  /** Orca left the brief unsent because a dialog was on screen; Enter would answer the dialog. */
+  withheld?: true
+}
+
+/** The stage of a start whose Enter Orca withheld, so a restart's report still knows it. */
+export const SUBMIT_WITHHELD_STAGE = 'submit_withheld'
+
+/** A withheld start reported after a restart: its delivery record is gone, its stage is not. */
+export const WITHHELD_AFTER_RESTART_EVIDENCE: UnconfirmedStartEvidence = {
+  lines: ['Orca typed the brief but did not press Enter: a dialog showed on its screen.'],
+  withheld: true
 }
 
 /** What tells a lost Enter, a dialog that took it, and a turn Orca missed apart. */
@@ -56,7 +65,7 @@ export function describeUnconfirmedStartEvidence(
       lines: [
         `${typed}, but did not press Enter: a dialog showed on its screen (${submit.withheldFor}).`
       ],
-      withheldFor: submit.withheldFor
+      withheld: true
     }
   }
   const wait = submit.renderWait ? ` ${RENDER_WAIT_WORDS[submit.renderWait]}` : ''
