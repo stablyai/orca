@@ -52,18 +52,21 @@ describe('template words in the English catalogs', () => {
 const zh = JSON.parse(
   readFileSync(join(process.cwd(), 'src/renderer/src/i18n/locales/zh.json'), 'utf8')
 )
-const tZh = (key: string, fallback: string, values: Record<string, unknown> = {}): string => {
-  const found = key
-    .split('.')
-    .reduce<unknown>(
-      (node, part) => (node && typeof node === 'object' ? Reflect.get(node, part) : undefined),
-      zh
-    )
-  const text = typeof found === 'string' ? found : fallback
-  return text.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+const zhWords = new Map<string, string>()
+const flatten = (node: unknown, path: string): void => {
+  if (typeof node === 'string') {
+    zhWords.set(path, node)
+  } else if (node && typeof node === 'object') {
+    for (const [key, child] of Object.entries(node)) {
+      flatten(child, path ? `${path}.${key}` : key)
+    }
+  }
+}
+flatten(zh, '')
+const tZh = (key: string, fallback: string, values: Record<string, unknown> = {}): string =>
+  (zhWords.get(key) ?? fallback).replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
     name in values ? String(values[name]) : match
   )
-}
 const standup = BOT_TEMPLATES.find((template) => template.id === 'standup')!
 
 describe('a template in Chinese', () => {
