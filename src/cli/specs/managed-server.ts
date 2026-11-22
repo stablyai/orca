@@ -18,10 +18,12 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['environment', 'update'],
     summary: 'Update a managed Orca server to this build’s version',
-    usage: 'orca environment update --environment <selector> [--force] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'force'],
+    usage:
+      'orca environment update --environment <selector> [--force [--end-server-terminals]] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'force', 'end-server-terminals'],
     notes: [
       'Without --force, an update that would restart over running terminals is deferred and reported, not applied.',
+      'When the server cannot count its terminals, --force still defers; add --end-server-terminals to update anyway. It goes ahead only if no terminal daemon is running, and any terminals the server runs itself end.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],

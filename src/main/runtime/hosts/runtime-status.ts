@@ -32,6 +32,7 @@ import {
 } from '../../../shared/remote-runtime/protocol/protocol-version'
 
 import {
+  MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
   MANAGED_SERVER_RUNTIME_CAPABILITY,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
 } from '../../../shared/remote-runtime/protocol/host-runtime-capabilities'
@@ -131,7 +132,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())
     if (getManagedServerActions()) {
-      capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
+      capabilities.push(
+        MANAGED_SERVER_RUNTIME_CAPABILITY,
+        MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY
+      )
     }
     if (getRecipeVmWaker()) {
       capabilities.push(HOST_RECIPE_VM_WAKE_CAPABILITY)

@@ -2,11 +2,13 @@ import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
+import type { OrcadManagedPastLiveTerminals } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
   refuseOrcadHostDowngrade,
   type OrcadHostVersionRefusal
 } from '../activation/orcad-host-version-admission'
+import type { OrcadUpdateForce } from '../activation/orcad-update-plan'
 
 export type ManagedOrcadAutoUpdateSkip =
   | 'current'
@@ -136,4 +138,19 @@ export function admitConfirmedIncumbent(
     record.active !== incumbentVersion
       ? "This host's server changed since the update was confirmed. Review it and update again."
       : admit(record, candidateVersion)
+}
+
+/** Full force can end terminals the server runs itself, so only a confirmed one gets it; plain force passes counted terminals only. */
+export function managedUpdateForce(args: {
+  force?: boolean
+  endServerTerminals?: boolean
+  pastLiveTerminals?: OrcadManagedPastLiveTerminals
+}): OrcadUpdateForce | undefined {
+  if (args.pastLiveTerminals) {
+    return args.pastLiveTerminals.uncounted ? true : 'live-terminals'
+  }
+  if (!args.force) {
+    return undefined
+  }
+  return args.endServerTerminals ? true : 'live-terminals'
 }

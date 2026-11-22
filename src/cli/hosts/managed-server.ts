@@ -7,8 +7,14 @@ import type {
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
 } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
-import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
-import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import {
+  isOrcadUncountedTerminalsDeferral,
+  ORCAD_RECOVERY_CHANGED_STATE_CODE
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import {
+  MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
+  MANAGED_SERVER_RUNTIME_CAPABILITY
+} from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
@@ -21,6 +27,11 @@ import { reportAfterClosedConnection } from './managed-server-reconnect'
 const UNSUPPORTED_MESSAGE =
   'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
 
+const END_SERVER_TERMINALS_HINT =
+  'To update anyway, re-run with --force --end-server-terminals. It goes ahead only if no terminal daemon is running, and any terminals the server runs itself end.'
+const OLDER_DESKTOP_FORCE_MESSAGE =
+  'This Orca desktop app may restart over terminals it cannot count when given --force, so nothing was sent. Update the Orca desktop app to keep --force to counted terminals.'
+
 // Windows promotion and readiness waits can take ten minutes; allow headroom on slow hosts.
 export const MANAGED_SERVER_ACTION_TIMEOUT_MS = 20 * 60_000
 const READ_ONLY_METHODS = new Set(['managedServer.status'])
@@ -29,15 +40,21 @@ function unsupported(): RuntimeClientError {
   return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
 }
 
+/** Refuses a request this runtime would carry out differently than the CLI promises. */
+type CapabilityCheck = (capabilities: readonly string[]) => void
+
 async function callManagedServer<TResult>(
   { client }: HandlerContext,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  checkCapabilities?: CapabilityCheck
 ): Promise<RuntimeRpcSuccess<TResult>> {
   const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(MANAGED_SERVER_RUNTIME_CAPABILITY)) {
+  const capabilities = status.result.capabilities ?? []
+  if (!capabilities.includes(MANAGED_SERVER_RUNTIME_CAPABILITY)) {
     throw unsupported()
   }
+  checkCapabilities?.(capabilities)
   const readOnly = READ_ONLY_METHODS.has(method)
   try {
     return await client.call<TResult>(
@@ -64,10 +81,11 @@ async function callManagedServer<TResult>(
 async function callExpectingRestart<TResult>(
   context: HandlerContext,
   method: string,
-  params: { selector: string } & Record<string, unknown>
+  params: { selector: string } & Record<string, unknown>,
+  checkCapabilities?: CapabilityCheck
 ): Promise<RuntimeRpcSuccess<TResult> | null> {
   try {
-    return await callManagedServer<TResult>(context, method, params)
+    return await callManagedServer<TResult>(context, method, params, checkCapabilities)
   } catch (error) {
     if (!(error instanceof RuntimeClientError) || error.code !== 'runtime_unavailable') {
       throw error
@@ -121,19 +139,56 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
     printResult(response, context.json, formatManagedServerStatus)
   },
   'environment update': async (context) => {
-    const params = { ...selectorOf(context), force: context.flags.get('force') === true }
+    const force = context.flags.get('force') === true
+    const endServerTerminals = context.flags.get('end-server-terminals') === true
+    if (endServerTerminals && !force) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--end-server-terminals only applies with --force. Re-run with --force --end-server-terminals.'
+      )
+    }
+    const params = {
+      ...selectorOf(context),
+      force,
+      ...(endServerTerminals ? { endServerTerminals } : {})
+    }
     const response = await callExpectingRestart<OrcadManagedDeployResult>(
       context,
       'managedServer.update',
-      params
+      params,
+      (capabilities) => {
+        // An older desktop gives plain force full force, which can end uncounted terminals unasked.
+        if (
+          force &&
+          !endServerTerminals &&
+          !capabilities.includes(MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY)
+        ) {
+          throw new RuntimeClientError(
+            'incompatible_runtime',
+            `${OLDER_DESKTOP_FORCE_MESSAGE} ${END_SERVER_TERMINALS_HINT}`
+          )
+        }
+      }
     )
     if (!response) {
       return
     }
-    report(response, context.json, ['created', 'updated', 'already-current'], (result) =>
-      result.outcome === 'already-current'
-        ? `Already on ${result.activeVersion}.`
-        : `Updated ${result.environment.name} to ${result.activeVersion}.`
+    report(
+      response,
+      context.json,
+      ['created', 'updated', 'already-current'],
+      (result) =>
+        result.outcome === 'already-current'
+          ? `Already on ${result.activeVersion}.`
+          : `Updated ${result.environment.name} to ${result.activeVersion}.`,
+      (result) =>
+        !endServerTerminals &&
+        result.outcome === 'deferred' &&
+        'code' in result &&
+        result.forceable === true &&
+        isOrcadUncountedTerminalsDeferral(result.code)
+          ? END_SERVER_TERMINALS_HINT
+          : null
     )
   },
   'environment rollback': async (context) => {

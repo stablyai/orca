@@ -32,7 +32,11 @@ import {
 } from './orcad-managed-version-gc'
 
 import { clearOrcadUpdateFailedThisLaunch } from './orcad-managed-update-failure-memory'
-import { admitConfirmedIncumbent, admitOrcadRecordForIntent } from './orcad-managed-update-decision'
+import {
+  admitConfirmedIncumbent,
+  admitOrcadRecordForIntent,
+  managedUpdateForce
+} from './orcad-managed-update-decision'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from '../activation/orcad-fenced-stop'
 import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
@@ -41,7 +45,12 @@ import { withManagedOrcadLifecycle, followLaunchedServerPort } from './orcad-man
 
 export async function updateManagedOrcadEnvironment(
   userDataPath: string,
-  args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
+  args: LifecycleArgs & {
+    force?: boolean
+    /** With force: the caller confirmed that terminals the server runs itself end. */
+    endServerTerminals?: boolean
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+  }
 ): Promise<OrcadManagedDeployResult> {
   const { pastLiveTerminals } = args
   // Update anyway keeps Update's version admission even if a caller also passed force.
@@ -52,18 +61,11 @@ export async function updateManagedOrcadEnvironment(
     const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
       ? admitConfirmedIncumbent(admitIntent, pastLiveTerminals.incumbentVersion)
       : admitIntent
-    // A confirmed uncounted census needs full force, which still requires proof no daemon is running.
-    const force: OrcadUpdateForce | undefined = pastLiveTerminals
-      ? pastLiveTerminals.uncounted
-        ? true
-        : 'live-terminals'
-      : // A bare force (CLI, RPC) carries no confirmation that in-process terminals will end.
-        args.force && 'live-terminals'
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
       await resolveLinkedOrcadContext(managed.environment, managed.deployment, args.signal),
-      { signal: args.signal, force, admitRecord }
+      { signal: args.signal, force: managedUpdateForce(args), admitRecord }
     )
     // A completed manual update clears automatic failure suppression; deferred attempts do not.
     if (result.outcome !== 'deferred') {

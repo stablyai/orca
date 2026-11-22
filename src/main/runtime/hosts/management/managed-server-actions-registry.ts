@@ -15,7 +15,9 @@ export type ManagedServerActions = {
   update: (
     selector: string,
     force: boolean,
-    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals,
+    /** With force: the caller confirmed that terminals the server runs itself end. */
+    endServerTerminals?: boolean
   ) => Promise<OrcadManagedDeployResult>
   rollback: (selector: string) => Promise<OrcadManagedRollbackResult>
   /** `acceptChangedState` restores the snapshot over state a rejected build changed. */

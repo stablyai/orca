@@ -12,6 +12,8 @@ export const ManagedServerRecover = ManagedServerSelector.extend({
 })
 
 export const ManagedServerUpdate = ManagedServerSelector.extend({
-  // Restarts over live terminals when the update would otherwise defer.
-  force: z.boolean().optional()
+  // Restarts over counted live terminals when the update would otherwise defer.
+  force: z.boolean().optional(),
+  // With force: also passes an uncounted census, ending terminals the server runs itself.
+  endServerTerminals: z.boolean().optional()
 })

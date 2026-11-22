@@ -42,7 +42,11 @@ export function recountLostInProcessCount(
     : null
 }
 
-/** `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. */
+/**
+ * `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. Full force (`true`)
+ * can pass an answered uncounted census and end terminals the server runs itself, so only a caller that
+ * confirmed that may pass it.
+ */
 export type OrcadUpdateForce = boolean | 'live-terminals'
 
 export type OrcadUpdateDeferCode =
@@ -140,7 +144,7 @@ export function planOrcadUpdate(input: {
         reason:
           'The terminal daemon did not answer a session count, so this update cannot tell ' +
           'whether work is running on the host. Retry, or force the update: it goes ahead only ' +
-          'if no terminal daemon is running, and terminals orcad runs itself end.'
+          'if no terminal daemon is running, and any terminals orcad runs itself end.'
       }
     }
     return {

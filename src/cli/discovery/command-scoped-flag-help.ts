@@ -86,7 +86,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     name: '--name <display name>  Plugin name shown in Orca'
   },
   'environment update': {
-    force: '--force                Restart over running terminals instead of deferring the update'
+    force:
+      '--force                Restart over running terminals the server can count instead of deferring',
+    'end-server-terminals':
+      '--end-server-terminals With --force, also restart when terminals cannot be counted; any terminals the server runs itself end'
   },
   'environment recover': {
     'accept-changed-state':

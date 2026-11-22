@@ -58,11 +58,12 @@ export function createManagedOrcadActions(
   }
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),
-    update: (selector, force, pastLiveTerminals) =>
+    update: (selector, force, pastLiveTerminals, endServerTerminals) =>
       asExplicitServerAction(userDataPath(), selector, async () => {
         const result = await updateManagedOrcadEnvironment(userDataPath(), {
           selector,
           force,
+          ...(endServerTerminals ? { endServerTerminals } : {}),
           ...(pastLiveTerminals ? { pastLiveTerminals } : {})
         })
         if (result.outcome === 'updated') {

@@ -23,6 +23,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'delete-branch',
   'delta',
   'dry-run',
+  'end-server-terminals',
   'enter',
   'focus',
   'grant-desktop-control',

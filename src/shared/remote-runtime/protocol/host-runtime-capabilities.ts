@@ -10,6 +10,9 @@ import { ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY } from '../../workspace-setup/env
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 // Why conditional: only a desktop runtime holds the SSH registry managed servers are run from.
 export const MANAGED_SERVER_RUNTIME_CAPABILITY = 'managedServer.v1' as const
+// Desktops with this treat a plain update force as counted-terminals only; older ones may end uncounted terminals.
+export const MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY =
+  'managedServer.update.limited-force.v1' as const
 // Why: clients offer "Resume automatic restores" only on hosts that can clear a recorded pause.
 export const RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY = 'runtime.automatic-work.v1' as const
 // Hosts without this capability ignore a request's expectedRuntimeSource; the CLI's pre-send probe
