@@ -84,6 +84,116 @@ afterEach(() => {
 })
 
 describe('useSourceControlGitHistory stale completion', () => {
+  it('defaults to all branches and discards pending pages when switching to Current branch', async () => {
+    const page = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockReturnValueOnce(page.promise)
+      .mockResolvedValueOnce(historyResult('current-only'))
+    await mount()
+    await flush()
+    expect(latest?.gitHistoryScope).toBe('all')
+    expect(mocks.getRuntimeGitHistory.mock.calls[0]?.[1]).toMatchObject({ refs: 'all' })
+    void latest?.loadMoreGitHistory()
+    await flush()
+    await act(async () => {
+      latest?.setGitHistoryScope('current')
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory.mock.calls[2]?.[1]).toMatchObject({
+      refs: 'head'
+    })
+    await act(async () => {
+      page.resolve(historyResult('stale-all-branch-page'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual(['current-only'])
+  })
+
+  function firstPage(): GitHistoryResult {
+    return {
+      ...historyResult('first'),
+      hasMore: true,
+      historyToken: 'token-1'
+    }
+  }
+
+  it('appends older commits, retains graph metadata and deduplicates concurrent requests', async () => {
+    const page = deferred<GitHistoryResult>()
+    const first = { ...firstPage(), currentRef: { id: 'refs/heads/main', name: 'main' } }
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(first).mockReturnValueOnce(page.promise)
+    await mount()
+    await flush()
+    void latest?.loadMoreGitHistory()
+    void latest?.loadMoreGitHistory()
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    expect(latest?.gitHistoryState.isLoadingMore).toBe(true)
+    expect(mocks.getRuntimeGitHistory.mock.calls[1]?.[1]).toEqual({
+      limit: 50,
+      baseRef: 'origin/main',
+      refs: 'all',
+      skip: 1,
+      historyToken: 'token-1'
+    })
+    await act(async () => {
+      page.resolve(historyResult('second'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual([
+      'first',
+      'second'
+    ])
+    expect(latest?.gitHistoryState.result?.currentRef).toEqual(first.currentRef)
+    expect(latest?.gitHistoryState.result?.hasMore).toBe(false)
+  })
+
+  it('keeps earlier commits on page failure and supports retry', async () => {
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValueOnce(historyResult('older'))
+    await mount()
+    await flush()
+    await act(async () => {
+      await latest?.loadMoreGitHistory()
+    })
+    expect(latest?.gitHistoryState.loadMoreError).toBe('Offline')
+    expect(latest?.gitHistoryState.result?.items).toEqual(firstPage().items)
+    await act(async () => {
+      await latest?.loadMoreGitHistory()
+    })
+    expect(latest?.gitHistoryState.result?.items).toHaveLength(2)
+  })
+
+  it('does not append a stale page after refresh', async () => {
+    const page = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockReturnValueOnce(page.promise)
+      .mockResolvedValueOnce(historyResult('fresh'))
+    await mount()
+    await flush()
+    void latest?.loadMoreGitHistory()
+    await flush()
+    await act(async () => {
+      await latest?.refreshGitHistory()
+    })
+    await act(async () => {
+      page.resolve(historyResult('stale'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual(['fresh'])
+  })
+
+  it('does not repeatedly request the first page from an older execution host', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValue({ ...historyResult('old-host'), hasMore: true })
+    await mount()
+    await flush()
+    await latest?.loadMoreGitHistory()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
+  })
+
   it('drops a stale response for a worktree the user already left and returned to', async () => {
     const firstA = deferred<GitHistoryResult>()
     const b = deferred<GitHistoryResult>()
@@ -189,5 +299,73 @@ describe('useSourceControlGitHistory stale completion', () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
     })
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
+  })
+  it('re-fetches when the compare base moves and passes it to the history read', async () => {
+    const root = await mount({ compareBaseRef: 'origin/main' })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
+      { limit: 50, baseRef: 'origin/main', refs: 'all' }
+    )
+    await act(async () => {
+      root.render(<Probe compareBaseRef="origin/dev" />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
+      limit: 50,
+      baseRef: 'origin/dev',
+      refs: 'all'
+    })
+  })
+  it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
+    const root = await mount({
+      activeRepoTarget: { kind: 'local' }
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ target: { kind: 'local' } }),
+      expect.anything()
+    )
+    await act(async () => {
+      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ target: { kind: 'environment', environmentId: 'env-1' } }),
+      expect.anything()
+    )
+    await act(async () => {
+      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+  })
+  it('does not shell out to git while collapsed, hidden, or on a folder workspace', async () => {
+    await mount({ isGitHistoryExpanded: false })
+    await mount({ isGitHistoryVisible: false })
+    await mount({ isBranchVisible: false })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
+    await mount({ isFolder: true })
+    await act(async () => {
+      await latest?.refreshGitHistory()
+    })
+    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
+  })
+  it('replaces the list when the history token went stale', async () => {
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockResolvedValueOnce({ ...historyResult('rotated'), historyChanged: true, historyToken: 'token-2' })
+    await mount()
+    await flush()
+    await act(async () => {
+      await latest?.loadMoreGitHistory()
+    })
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual(['rotated'])
+    expect(latest?.gitHistoryState.result?.historyToken).toBe('token-2')
   })
 })

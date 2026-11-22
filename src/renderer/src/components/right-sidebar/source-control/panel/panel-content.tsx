@@ -32,6 +32,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     filterQuery,
     filteredBranchEntries,
     gitHistoryState,
+    gitHistoryScope,
+    setGitHistoryScope,
     handleAbortOperationForConflict,
     handleCommitAction,
     handleCompleteMerge,
@@ -64,6 +66,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     refreshActiveGitStatus,
     refreshBranchCompare,
     refreshGitHistory,
+    loadMoreGitHistory,
     repositoryHuge,
     resolveSplitTargetGroupId,
     requestDiscardAllInArea,
@@ -241,9 +244,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           <GitHistoryPanel
             worktreeId={currentWorktreeId ?? undefined}
             state={gitHistoryState}
+            scope={gitHistoryScope}
+            onScopeChange={setGitHistoryScope}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}
             onRefresh={() => void refreshGitHistory({ wakeWslDistro: true })}
+            onLoadMore={loadMoreGitHistory}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}
             onLoadCommitFiles={loadCommitFiles}
             onOpenCommitFile={openCommitFile}

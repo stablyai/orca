@@ -1,4 +1,18 @@
 {
+  "source-control": {
+    "history": {
+      "label": "提交历史",
+      "all-branches": "全部分支",
+      "current-branch": "当前分支",
+      "scope": "历史分支范围",
+      "unsupported-scope": "请重启 Orca 或更新执行主机，以显示全部分支。",
+      "loading-more": "正在加载更多提交…",
+      "retry": "重试加载提交",
+      "load-more": "加载更多提交",
+      "update-host": "请重启 Orca 或更新执行主机，以加载更早的提交。",
+      "all-loaded": "已加载全部提交"
+    }
+  },
   "agentLaunch": {
     "connectSsh": "连接到此工作区的 SSH 主机，然后重试。",
     "sshUnavailable": "此 SSH 主机无法启动终端会话。请在工作区中打开终端，并在那里启动智能体。",

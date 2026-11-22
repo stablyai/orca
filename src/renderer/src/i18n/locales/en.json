@@ -1,4 +1,18 @@
 {
+  "source-control": {
+    "history": {
+      "label": "Commit history",
+      "all-branches": "All branches",
+      "current-branch": "Current branch",
+      "scope": "History branches",
+      "unsupported-scope": "Restart Orca or update the execution host to display all branches.",
+      "loading-more": "Loading more commits…",
+      "retry": "Retry loading commits",
+      "load-more": "Load more commits",
+      "update-host": "Restart Orca or update the execution host to load older commits.",
+      "all-loaded": "All commits loaded"
+    }
+  },
   "agentLaunch": {
     "connectSsh": "Connect to this workspace’s SSH host, then try again.",
     "sshUnavailable": "Terminal launch is unavailable on this SSH host. Open a terminal in the workspace and start the agent there.",
