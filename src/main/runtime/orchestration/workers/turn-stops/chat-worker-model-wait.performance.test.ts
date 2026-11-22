@@ -44,17 +44,26 @@ it('reads a streaming tool row once per read in flight, not once per commit', as
     state: 'running'
   }
   let reads = 0
+  const answers: (() => void)[] = []
+  const answerReads = async () => {
+    while (answers.length > 0) {
+      answers.shift()?.()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  }
   const feed: { onItems?: (ids: readonly string[] | null) => void } = {}
   const journal: ChatModelWaitJournal = {
     observe: (_sessionId, listener) => {
       feed.onItems = listener
       return () => {}
     },
-    item: async (_sessionId, itemId) => {
+    item: (_sessionId, itemId) => {
       reads += 1
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watch reads only these fields.
-      return { itemId, body } as AgentJournalRenderItem
+      // The test answers each read, so commits pile up while one is in flight.
+      return new Promise((resolve) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watch reads only these fields.
+        answers.push(() => resolve({ itemId, body } as AgentJournalRenderItem))
+      })
     }
   }
   const watch = new ChatWorkerModelWait(
@@ -65,13 +74,14 @@ it('reads a streaming tool row once per read in flight, not once per commit', as
   for (let chunk = 0; chunk < 100; chunk++) {
     feed.onItems?.(['tool-1'])
   }
-  await vi.advanceTimersByTimeAsync(1_000)
+  await answerReads()
   expect(reads).toBe(2)
 
   // The latest revision still lands: the tool's end restarts the stopwatch.
   body = { ...body, state: 'completed' }
   feed.onItems?.(['tool-1'])
-  await vi.advanceTimersByTimeAsync(11 * MINUTE)
+  await answerReads()
+  await vi.advanceTimersByTimeAsync(10 * MINUTE)
   expect(
     db.getUnreadRunMailbox(run.id, 100, ['escalation']).map((message) => message.subject)
   ).toEqual(['Worker is waiting on the model'])
