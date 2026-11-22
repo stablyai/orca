@@ -42,7 +42,7 @@ import { askScreencastViewerPagePrompts } from './browser-screencast-page-prompt
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
-  private readonly guestReplacements = new BrowserScreencastGuestReplacements(
+  readonly guestReplacements = new BrowserScreencastGuestReplacements(
     this.activeScreencastsByPageId
   )
 
@@ -277,11 +277,6 @@ export class RuntimeBrowserScreencasts {
         ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {})
       }
     }
-  }
-
-  /** Swaps a page's guest without failing its viewers; see BrowserScreencastGuestReplacements. */
-  replacePageGuest(browserPageId: string, swap: () => Promise<void>): Promise<void> {
-    return this.guestReplacements.replace(browserPageId, swap)
   }
 
   private leaveScreencastSubscriber(
