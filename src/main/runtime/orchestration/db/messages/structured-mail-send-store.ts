@@ -108,6 +108,14 @@ export function getStructuredMailSendMailboxesForSession(
     .flatMap(({ mailbox_handle }) => (typeof mailbox_handle === 'string' ? [mailbox_handle] : []))
 }
 
+/** The chats holding orchestration mail as a send or card, by the session index. */
+export function getStructuredMailSendSessions(this: OrchestrationDb): string[] {
+  return this.db
+    .prepare('SELECT DISTINCT session_id FROM structured_mail_sends')
+    .all()
+    .flatMap(({ session_id }) => (typeof session_id === 'string' ? [session_id] : []))
+}
+
 export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] {
   return this.db
     .prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends')
@@ -227,6 +235,7 @@ export type StructuredMailSendStoreMethods = {
   hasStructuredMailSend: typeof hasStructuredMailSend
   holdsStructuredMailSendOperation: typeof holdsStructuredMailSendOperation
   getStructuredMailSendMailboxesForSession: typeof getStructuredMailSendMailboxesForSession
+  getStructuredMailSendSessions: typeof getStructuredMailSendSessions
   reserveStructuredMailSend: typeof reserveStructuredMailSend
   releaseStructuredMailSend: typeof releaseStructuredMailSend
   retireStructuredMailSend: typeof retireStructuredMailSend
@@ -241,6 +250,7 @@ export function attachStructuredMailSendStore(ctor: { prototype: object }): void
     hasStructuredMailSend,
     holdsStructuredMailSendOperation,
     getStructuredMailSendMailboxesForSession,
+    getStructuredMailSendSessions,
     reserveStructuredMailSend,
     releaseStructuredMailSend,
     retireStructuredMailSend
