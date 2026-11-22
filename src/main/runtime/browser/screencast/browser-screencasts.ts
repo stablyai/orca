@@ -274,6 +274,18 @@ export class RuntimeBrowserScreencasts {
     }
   }
 
+  /** Ends a page's streams with `end`, not a detach error, so viewers resubscribe to its next guest. */
+  async endPageStreams(browserPageId: string): Promise<void> {
+    const active = this.activeScreencastsByPageId.get(browserPageId)
+    const session = active ? await active.started.catch(() => null) : null
+    if (!active || !session) {
+      return
+    }
+    active.stopping = true
+    session.stop()
+    await session.done
+  }
+
   private leaveScreencastSubscriber(
     active: Pick<
       ActiveBrowserScreencastPage,
