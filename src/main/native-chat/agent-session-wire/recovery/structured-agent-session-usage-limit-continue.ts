@@ -18,6 +18,9 @@ import {
   type UsageLimitCutDisposition
 } from './structured-agent-session-usage-limit-disposition'
 
+/** Sends per 10 s pass; 64 limited chats freed by one reset start over about 5 minutes. */
+export const USAGE_LIMIT_CONTINUE_SENDS_PER_PASS = 2
+
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 
@@ -232,8 +235,9 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
       }
       due.sort((a, b) => a.at - b.at || a.cut.resetsAt - b.cut.resetsAt)
-      // Every due chat goes this pass; one at a time, since a cold send can start an agent process.
-      for (const next of due) {
+      // One at a time, since a cold send can start an agent process; the rest stay due for later
+      // passes, so a reset that frees many chats does not start their agents all at once.
+      for (const next of due.slice(0, USAGE_LIMIT_CONTINUE_SENDS_PER_PASS)) {
         await this.send(next.id, next.cut)
       }
     } catch (error) {

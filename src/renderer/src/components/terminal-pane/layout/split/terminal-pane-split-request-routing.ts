@@ -208,14 +208,3 @@ export function resolveTerminalPaneSplitSourceId(
     ? (getNumericIdForLeaf(detail.sourceLeafId) ?? -1)
     : detail.paneRuntimeId
 }
-
-export function _resetTerminalPaneSplitRequestRoutingForTests(): void {
-  queuedRequests.splice(0)
-  for (const lease of splitMountLeasesByTarget.values()) {
-    clearTimeout(lease.timer)
-  }
-  splitMountLeasesByTarget.clear()
-  mountHoldsByTarget.clear()
-  splitMountLeaseListeners.clear()
-  splitMountLeaseTabIds = new Set()
-}

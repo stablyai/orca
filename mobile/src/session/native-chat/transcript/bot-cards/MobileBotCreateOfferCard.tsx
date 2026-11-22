@@ -170,10 +170,7 @@ export function MobileBotCreateOfferCard({
 
   const Chevron = open ? ChevronUp : ChevronDown
   const avatar = created ? (
-    <MobileBotAvatar
-      avatar={mobileBotAvatarSource(created, undefined)}
-      size={BOT_CARD_AVATAR_SIZE}
-    />
+    <MobileBotAvatar avatar={mobileBotAvatarSource(created)} size={BOT_CARD_AVATAR_SIZE} />
   ) : (
     <MobileBotAvatar
       avatar={

@@ -556,7 +556,8 @@
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -564,6 +565,13 @@
         "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browsers on this device",
+        "destination": "Imports into the browser for {{host}}.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "stored": "Stored in the browser for {{host}}.",
+        "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
     },
     "passwords": {
@@ -1332,7 +1340,8 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "chat": "Deleting a chat"
       },
       "pages": {
         "folder": "Workspace folder",
@@ -7221,7 +7230,7 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree, local changes, and its branch if merged."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
@@ -8410,7 +8419,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "description": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
+          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -13863,7 +13873,8 @@
             "updateOrcaOnHost": "Update Orca on this host",
             "updateAnyway": "Update anyway",
             "notNow": "Not now",
-            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts."
+            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.",
+            "forceUpdateUncounted": "Orca couldn’t count the terminals on this host. The update goes ahead only if no terminal daemon is running there, and any terminals Orca’s server runs itself will end."
           },
           "description": "Orca installs itself on an empty SSH host and keeps itself up to date.",
           "deploy": {
@@ -14114,7 +14125,15 @@
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "restartAsWslHost": {
+            "button": "Restart as WSL host",
+            "title": "Restart as WSL host?",
+            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "cancel": "Cancel",
+            "action": "End terminals and restart"
+          }
         },
         "restartServer": {
           "action": "Restart Orca’s server…",
@@ -19120,11 +19139,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -19194,7 +19211,6 @@
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
-          "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
@@ -19464,7 +19480,6 @@
           "failed7d": "Failed · 7d",
           "automation": "Automation",
           "triggered": "Triggered",
-          "trigger": "Trigger",
           "loading": "Loading runs…",
           "noRuns": "No runs yet",
           "emptyDescription": "Runs appear here after an automation is triggered.",
@@ -19543,7 +19558,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} spent",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19590,7 +19608,6 @@
           "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
           "signIn": "Sign in to {{host}}",
           "output": "Output",
-          "details": "Details",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
@@ -21164,7 +21181,12 @@
         "placeholder": "Ask anything, @ to mention files, / for commands",
         "loadingFiles": "Loading files...",
         "noFiles": "No matching files",
-        "noMembers": "No matching bots",
+        "noBots": "No bots",
+        "noBotsMatch": "No bots match \"{{query}}\"",
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "filesLoadFailed": "Couldn't load files",
         "attach": "Attach file",
         "startDictation": "Start dictation",
@@ -21280,6 +21302,7 @@
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
         "agents": "Agents",
+        "recent": "Recent",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21550,7 +21573,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21710,6 +21743,7 @@
         "open": "Open {{name}}",
         "row": {
           "started": "Started",
+          "forItems": "for",
           "reopened": "Reopened",
           "followedUp": "Sent follow-up to",
           "handedOff": "Handed off to",
@@ -21775,7 +21809,6 @@
         "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
-        "moreActions": "More actions",
         "moveChanged": "The queue changed before this move. Try dragging the message again.",
         "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
         "reorderMessage": "Reorder message",
@@ -21785,7 +21818,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",
@@ -21800,13 +21832,17 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
-        "collapse": "Collapse",
-        "expand": "Expand",
         "queued": "Queued",
         "clearAll": "Clear all",
         "editReturned": "Your edit is in the chat box.",
         "commandsUnsupported": "Commands can't be saved in a queued message.",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -22031,6 +22067,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
@@ -22585,6 +22622,9 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {
@@ -22623,9 +22663,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24734,7 +24771,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
@@ -25795,6 +25833,8 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "hostLaunchUnproven": "The Orca server in {{distro}} runs this version of Orca but can't take these projects, so updating won't help. It may have been started outside WSL hosts, such as by an SSH host. Remove the {{distro}} host in Settings, then add it again.",
+      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
       "exportIncompletePreview": "Some saved state in these projects can't move yet:",
@@ -27199,7 +27239,14 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
@@ -27596,7 +27643,14 @@
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
-        "tryIt": "Try it on any issue or pull request",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "label": "Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”.",
+          "commented": "commented now",
+          "ask": "review this PR",
+          "bot": "bot",
+          "reply": "On it."
+        },
         "connectTitle": "Connect GitHub",
         "manage": "Manage"
       },
@@ -28102,6 +28156,7 @@
       "peerAsked": "{{from}} asked {{to}}",
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
+      "peerReadItems": "{{bot}} read an update to its items",
       "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
@@ -29154,7 +29209,10 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "delete": "Delete chat",
+      "open": "Open",
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29330,7 +29388,6 @@
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
-        "chatNeedsYou": "Nothing in {{chat}} needs you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
@@ -29344,7 +29401,6 @@
         "title": "title"
       },
       "filter": {
-        "all": "All chats",
         "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
@@ -29418,7 +29474,8 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links"
+        "moreLinks": "{{count}} more links",
+        "loading": "Loading item…"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",
@@ -29443,8 +29500,11 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet",
         "next": "Next question",
         "notSentYet": "not sent yet",
+        "sendHeld": "Send now",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
@@ -30118,5 +30178,18 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Update {{host}} to delete chats",
+      "failed": "Couldn't delete the chat",
+      "undone": "This can't be undone.",
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "groupRoom": "A group room's chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat",
+      "home": "A managed agent's Home Chat can't be deleted"
+    }
   }
 }

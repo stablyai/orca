@@ -22,7 +22,8 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
   /** What a host's idle exit reads to know whether any client is still using this server. */
   readClientActivity(): RuntimeRpcClientActivity {
     return {
-      openConnections: this.mobileSocketWiring?.connectionCount ?? 0,
+      // Passive watchers (keep-awake on a WSL host) must not hold the server and its distro up.
+      openConnections: this.mobileSocketWiring?.idleBlockingConnectionCount ?? 0,
       requestsInFlight: this.clientRequestsInFlight,
       lastRequestAt: this.lastClientRequestAt
     }

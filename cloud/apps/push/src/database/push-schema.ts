@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS push_devices (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS push_devices_host_device
   ON push_devices(host_fingerprint, device_id);
+-- A phone's icon total reads every host's registration of its token.
+CREATE INDEX IF NOT EXISTS push_devices_token ON push_devices(token);
 `
 
 export function pushSchemaStatements(): string[] {

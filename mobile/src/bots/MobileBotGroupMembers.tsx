@@ -151,7 +151,7 @@ export function MobileBotGroupMembers({
             ringColor={colors.sheetSurface}
             faces={picked.map((bot) => ({
               id: bot.id,
-              avatar: mobileBotAvatarSource(bot, undefined)
+              avatar: mobileBotAvatarSource(bot)
             }))}
           />
         ) : (
@@ -183,7 +183,7 @@ export function MobileBotGroupMembers({
               key={bot.id}
               title={bot.name}
               subtitle={purposes.get(bot.id)}
-              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={28} />}
+              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} />}
               selected={selected.includes(bot.id)}
               accessibilityRole="checkbox"
               disabled={busy}

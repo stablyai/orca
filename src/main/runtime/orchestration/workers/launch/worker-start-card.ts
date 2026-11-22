@@ -136,3 +136,21 @@ function logStartCardFailure(error: unknown): void {
     // Display bookkeeping cannot change a successful launch.
   }
 }
+
+/** An unknown outcome with an agent launched may yet be a running worker: a bot records it, with no
+ *  card. One that failed before any agent (a lost worktree reply) is no worker at all; one still
+ *  starting is recorded when its wait settles. A reused terminal is never a new worker. */
+export function recordWorkerStartOutcome(
+  record: (started: WorkerStarted) => void,
+  outcome: unknown,
+  started: Omit<WorkerStarted, 'ready' | 'workerAddress'> & {
+    workerAddress: string | undefined
+    reusedTerminal: boolean
+  }
+): void {
+  const state = outcome && typeof outcome === 'object' && 'state' in outcome ? outcome.state : null
+  const { reusedTerminal, workerAddress, ...card } = started
+  if (!reusedTerminal && workerAddress && (state === 'ready' || state === 'outcome_unknown')) {
+    record({ ...card, workerAddress, ready: state === 'ready' })
+  }
+}

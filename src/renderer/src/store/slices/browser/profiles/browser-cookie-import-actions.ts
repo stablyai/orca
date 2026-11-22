@@ -14,13 +14,24 @@ import {
   retainCookieImportExecutionHost
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { importSshPageCookies } from './browser-ssh-page-cookie-import'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
+    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, sshRoute?) => {
+      if (sshRoute) {
+        return importSshPageCookies(get, sshRoute, () =>
+          window.api.browser.sessionImportFromBrowser({
+            profileId,
+            browserFamily,
+            browserProfile,
+            sshTargetId: sshRoute.sshTargetId
+          })
+        )
+      }
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)

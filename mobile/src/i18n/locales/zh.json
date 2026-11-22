@@ -750,6 +750,7 @@
       "open": "打开 {{name}}",
       "row": {
         "started": "已启动",
+        "forItems": "处理",
         "reopened": "已重新打开",
         "followedUp": "已发送后续消息给",
         "handedOff": "已移交给",
@@ -1757,6 +1758,7 @@
         "groupMessage": "{{source}} 群组私信",
         "you": "你",
         "someone": "某人",
+        "anApp": "某个应用",
         "label": "{{name}}，来自 {{place}}",
         "open": "在 {{source}} 中打开",
         "noAccess": "无访问权限",
@@ -6023,7 +6025,9 @@
     "section": {
       "title": "Bots",
       "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
-      "newBot": "新建 bot"
+      "newBot": "新建 bot",
+      "reorderTitle": "调整 bots 顺序",
+      "reorder": "调整顺序…"
     },
     "groups": {
       "manageMembers": "管理成员",
@@ -6079,6 +6083,7 @@
       "newThreadTab": "新话题",
       "newThreadHint": "全新开始",
       "newThread": "在 {{name}} 中新建话题",
+      "peerReadItems": "{{bot}} 已读取其事项的更新",
       "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
       "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -6222,7 +6227,6 @@
       "filter": {
         "needsYou": "仅显示需要你处理的",
         "label": "筛选事项",
-        "all": "所有聊天",
         "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选",
         "clearAll": "清除筛选",

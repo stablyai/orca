@@ -22,6 +22,7 @@ import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
 import { formerLeavesBesideKeep, planFormerSkillPlacements } from './renamed-skill-placement'
+import { planFormerRootPlacements } from './former-skill-roots'
 import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import {
   bundledSkillPathKey,
@@ -54,6 +55,7 @@ type SkillContext = {
   source: BundledSkillSource
   digest: string
   force: Set<string> | 'all'
+  roots: readonly BundledSkillTargetRoot[]
   sharedRoot?: BundledSkillTargetRoot
 }
 
@@ -107,6 +109,7 @@ async function planTarget(
     context.sharedRoot
   )
   const retiresFormer = former.previous.some((previous) => !previous.retain)
+  const formerRoots = await planFormerRootPlacements(context, root)
   let folderClass = bundledSkillFreshnessClass(classified, context.digest)
   // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
@@ -201,15 +204,11 @@ async function planTarget(
     decision.kind === 'keep' && classified.folderClass === 'current' && retiresFormer
       ? files('update')
       : decision
+  const keepsFormer = decided.kind === 'keep' && former.previous.every((entry) => entry.retain)
+  const previous = [...(keepsFormer ? [] : former.previous), ...formerRoots]
   const op =
     WRITES_SHARED_CURRENT.has(decided.kind) || decided.kind === 'copy' || decided.kind === 'link'
-      ? {
-          ...decided,
-          ...(former.previous.length &&
-          !(decided.kind === 'keep' && former.previous.every((previous) => previous.retain))
-            ? { previous: former.previous }
-            : {})
-        }
+      ? { ...decided, ...(previous.length ? { previous } : {}) }
       : decided
   const leaves =
     op.kind === 'keep'
@@ -245,6 +244,7 @@ async function planSkill(
     source,
     digest: bundledSkillTextDigest(Buffer.from(source.text, 'utf8')),
     force: input.force === 'all' ? 'all' : new Set((input.force ?? []).map(bundledSkillPathKey)),
+    roots,
     sharedRoot: roots.find((root) => root.role === 'shared')
   }
   const sharedRoot = roots.find((root) => root.role === 'shared')
