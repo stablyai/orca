@@ -94,6 +94,7 @@ export function refreshWorkerDockActivity(
   const next = new Map<string, WorkerDockActivity>()
   let changed = previous !== undefined && previous.size !== candidates.length
   for (const row of candidates) {
+    const id = String(row.id)
     const session = sessionFor({
       agentTerminalHandle: typeof row.assignee_handle === 'string' ? row.assignee_handle : null,
       resource: {
@@ -111,7 +112,7 @@ export function refreshWorkerDockActivity(
     const status = pane ? byPane.get(pane) : undefined
     const bound =
       observed?.kind === 'observed' &&
-      observed.dispatchId === row.id &&
+      observed.dispatchId === id &&
       observed.terminalHandle === row.assignee_handle &&
       runtime.getAgentStatusTerminalHandleForPaneKey(pane!) === observed.terminalHandle &&
       runtime.getTerminalProcessIncarnation(observed.terminalHandle) ===
@@ -147,11 +148,11 @@ export function refreshWorkerDockActivity(
     const episode = fresh
       ? JSON.stringify([row.process_incarnation, status.stateStartedAt, state])
       : 'unavailable'
-    const kept = previous?.get(row.id)
+    const kept = previous?.get(id)
     if (kept?.episode === episode) {
-      next.set(row.id, kept)
+      next.set(id, kept)
     } else {
-      next.set(row.id, { episode, state, changedAt: now })
+      next.set(id, { episode, state, changedAt: now })
       changed = true
     }
   }

@@ -7,7 +7,10 @@ import type {
   AgentChildRowModel
 } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { agentChildRowName, agentChildRowDetailText } from '@/components/agent/status/agent-child-row-text'
+import {
+  agentChildRowName,
+  agentChildRowDetailText
+} from '@/components/agent/status/agent-child-row-text'
 import { compareWorkerDockEntries } from '../../../../../../shared/orchestration/dock/worker-dock'
 import { backgroundTaskRowStopId } from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { structuredSessionBackgroundTaskGroups } from './background-task-roster'
