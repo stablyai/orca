@@ -151,7 +151,7 @@ export function PluginMoreFromAuthor({
             <span className="block truncate text-sm font-medium">{plugin.name}</span>
             {plugin.description ? (
               <span className="block truncate text-xs text-muted-foreground">
-                {pluginDisplayText(plugin.description, t)}
+                {pluginDisplayText(plugin.description, plugin.official, t)}
               </span>
             ) : null}
           </span>

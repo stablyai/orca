@@ -98,7 +98,7 @@ export function PluginDetailPage({
   // Why: a fetched manifest names the plugin exactly; older catalogs only give its key.
   const name = entry.nameShowsPublisher
     ? entry.name
-    : pluginDisplayText(plugin?.name ?? preview?.manifest.name ?? entry.name, t)
+    : pluginDisplayText(plugin?.name ?? preview?.manifest.name ?? entry.name, entry.official, t)
   const action = usePluginPageAction({
     entry,
     name,
@@ -133,6 +133,7 @@ export function PluginDetailPage({
   const version = plugin?.version ?? preview?.manifest.version ?? entry.version
   const description = pluginDisplayText(
     plugin?.description ?? preview?.manifest.description ?? entry.description ?? '',
+    entry.official,
     t
   )
 

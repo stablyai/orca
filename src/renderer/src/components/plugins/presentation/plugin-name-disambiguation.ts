@@ -29,7 +29,10 @@ export function disambiguatedPluginNames(
 ): Map<string, string> {
   // Orca's own plugin names read in the UI language; other plugins keep theirs.
   const named = t
-    ? items.map((item) => ({ ...item, name: pluginDisplayText(item.name, t) }))
+    ? items.map((item) => ({
+        ...item,
+        name: pluginDisplayText(item.name, item.official, t)
+      }))
     : items
   const clashing = pluginNameClashKeys(named)
   return new Map(

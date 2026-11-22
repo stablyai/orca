@@ -125,7 +125,7 @@ export function PluginCard({
           data-tone={notice?.tone}
           className="mt-0.5 line-clamp-2 h-9 text-xs leading-[18px] text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning-text"
         >
-          {notice?.text ?? pluginDisplayText(entry.description ?? '', t)}
+          {notice?.text ?? pluginDisplayText(entry.description ?? '', entry.official, t)}
         </p>
         {/* Why the footer wraps: the card clips overflow, so when chips and the action can't share a row the action drops below them instead of a chip being cut off. */}
         <div className="mt-auto flex min-h-6 flex-wrap items-center gap-x-1.5 gap-y-1 pt-1.5">
