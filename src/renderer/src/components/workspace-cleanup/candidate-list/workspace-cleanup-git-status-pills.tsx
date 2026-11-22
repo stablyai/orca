@@ -95,7 +95,7 @@ export function WorkspaceCleanupGitStatusPills({
             tone={status.tone}
             tabIndex={firstTruncated ? 0 : undefined}
             className={cn(
-              'min-w-16 shrink',
+              'min-w-[min(4rem,100%)] shrink',
               firstTruncated &&
                 'rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
             )}
@@ -126,7 +126,7 @@ export function WorkspaceCleanupGitStatusPills({
           <StatusPill
             key={status.label}
             tone={status.tone}
-            className={index === 0 ? 'min-w-16' : undefined}
+            className={index === 0 ? 'min-w-[min(4rem,100%)]' : undefined}
           >
             {status.label}
           </StatusPill>
