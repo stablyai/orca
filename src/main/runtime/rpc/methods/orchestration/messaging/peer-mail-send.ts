@@ -18,6 +18,10 @@ import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { uploadPeerMailFiles } from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  forgetPeerQuestionOut,
+  recordPeerQuestionOut
+} from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -110,20 +114,41 @@ export async function sendPeerMail(args: {
           }
         ]
       : []
-  await deliverPeerMail(runtime, server, conversation, {
-    id,
-    to,
-    senderLabel: peerMailSenderLabel(runtime, caller.address),
-    subject: params.subject,
-    body: params.body,
-    type,
-    priority: params.priority,
-    threadId: params.threadId,
-    chat: params.chat,
-    item: params.item,
-    attachments,
-    sender: peerMailSender(runtime, caller.address)
-  })
+  const db = runtime.getOrchestrationDb()
+  if (type === 'question') {
+    // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
+    // recorded first, so an answer pulled before delivery returns still settles it.
+    recordPeerQuestionOut(db, {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId: server.environmentId,
+      peerFingerprint: conversation.peer_fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
+  }
+  try {
+    const held = await deliverPeerMail(runtime, server, conversation, {
+      id,
+      to,
+      senderLabel: peerMailSenderLabel(runtime, caller.address),
+      subject: params.subject,
+      body: params.body,
+      type,
+      priority: params.priority,
+      threadId: params.threadId,
+      chat: params.chat,
+      item: params.item,
+      attachments,
+      sender: peerMailSender(runtime, caller.address)
+    })
+    warnings.push(...held)
+  } catch (error) {
+    if (type === 'question') {
+      forgetPeerQuestionOut(db, id)
+    }
+    throw error
+  }
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, to }, server: server.name, ...(warnings.length > 0 ? { warnings } : {}) },

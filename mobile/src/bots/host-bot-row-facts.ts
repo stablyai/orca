@@ -18,7 +18,10 @@ import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-wor
 export type MobileBotAvatarSource =
   /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
   | { kind: 'mascot'; id: BotMascotId; color?: string; outfit?: BotAvatarOutfit }
+  /** A picture in hand, such as one just picked. */
   | { kind: 'image'; uri: string }
+  /** A bot's uploaded picture, drawn once read; until then, `text`. */
+  | { kind: 'upload'; botId: string; avatar: string; text: string }
   | { kind: 'text'; text: string }
 
 /** What a bot's row draws over its home folder's row. */
@@ -35,8 +38,6 @@ export type MobileBotRowFacts = {
   foldLive: ReturnType<typeof botFoldLiveStatus>
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
-  /** Its Needs you items that aren't stale; a down host's row keeps the last count, greyed. */
-  needsYou?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
   line: Omit<BotRowLineInput<never>, 'paused' | 'rows' | 'now' | 'startingSessionIds'>
   /** The first person asking for access, whom the Needs you line names. */
@@ -80,10 +81,10 @@ export type MobileBotChatLineFacts = {
   note?: BotSidebarLineNote
 }
 
-/** An upload shows once its bytes are read; until then, like a missing picture, the emoji or initial. */
+/** The bot's mascot, its upload, or its emoji or initial, as the desktop draws it. */
 export function mobileBotAvatarSource(
-  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'>,
-  uploadUri: string | undefined
+  /** No id: a draft, whose upload no host can answer yet. */
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & { id?: string }
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
   const outfit = wornBotOutfit(bot.avatarOutfit)
@@ -95,8 +96,8 @@ export function mobileBotAvatarSource(
       ...(outfit ? { outfit } : {})
     }
   }
-  if (parsed?.kind === 'upload' && uploadUri) {
-    return { kind: 'image', uri: uploadUri }
+  if (parsed?.kind === 'upload' && bot.avatar && bot.id) {
+    return { kind: 'upload', botId: bot.id, avatar: bot.avatar, text: botFallback(bot) }
   }
   return { kind: 'text', text: botFallback(bot) }
 }

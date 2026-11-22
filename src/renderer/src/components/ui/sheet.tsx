@@ -100,7 +100,7 @@ function SheetContent({
           {showCloseButton && (
             <SheetPrimitive.Close
               data-slot="sheet-close"
-              className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-[opacity,box-shadow] hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
             >
               <XIcon />
               <span className="sr-only">{t('auto.components.ui.sheet.1189e9fe0a', 'Close')}</span>

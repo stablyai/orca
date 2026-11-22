@@ -3,6 +3,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
+import { useBotAvatarUpload } from './bot-avatar-uploads'
 import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
 import {
   mobileBotOutfitAsset,
@@ -28,21 +29,25 @@ export function MobileBotAvatar({
   circular?: boolean
 }) {
   useMobileColorScheme()
+  const upload = useBotAvatarUpload(
+    avatar.kind === 'upload' ? avatar.botId : null,
+    avatar.kind === 'upload' ? avatar.avatar : null
+  )
   const frame = { width: size, height: size, borderRadius: circular ? size / 2 : size / 4 }
-  if (avatar.kind === 'text') {
+  const picture = (uri: string) => (
+    <Image source={{ uri }} style={[styles.tile, frame]} accessibilityIgnoresInvertColors />
+  )
+  if (avatar.kind === 'image') {
+    return picture(avatar.uri)
+  }
+  if (upload) {
+    return picture(upload)
+  }
+  if (avatar.kind !== 'mascot') {
     return (
       <View style={[styles.tile, frame]}>
         <Text style={[styles.letter, { fontSize: Math.round(size * 0.6) }]}>{avatar.text}</Text>
       </View>
-    )
-  }
-  if (avatar.kind === 'image') {
-    return (
-      <Image
-        source={{ uri: avatar.uri }}
-        style={[styles.tile, frame]}
-        accessibilityIgnoresInvertColors
-      />
     )
   }
   // The mascot pictures are transparent: their tile color goes behind, on a dark one the light rim, and

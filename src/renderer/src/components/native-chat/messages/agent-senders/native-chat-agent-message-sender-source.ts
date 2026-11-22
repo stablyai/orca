@@ -11,9 +11,6 @@ import {
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
-let rowBuilds = 0
-/** Counts addressed sender presentations built for owning render tests. */
-export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
   /** A fallback endpoint supplies its kind, never an earlier actor's activity. */
   activity?: false
@@ -56,7 +53,6 @@ export function readAgentMessageSenderRow(
       progress: presentation.progress
     }
     senderViews.set(row, view)
-    rowBuilds++
   }
   return view
 }

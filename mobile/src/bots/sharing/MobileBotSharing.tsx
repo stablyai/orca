@@ -75,9 +75,16 @@ export function useMobileBotSharingSettings(
             ? t('bots.settingsPage.off', 'Off')
             : link
               ? t('bots.settingsView.sharingOn', 'On')
-              : ''
+              : read.kind === 'offline'
+                ? t('bots.settings.readFailed', 'Couldn’t load')
+                : ''
         }
-        onPress={() => push({ kind: 'sharing' })}
+        onPress={() => {
+          if (read.kind === 'offline') {
+            linkState.reread()
+          }
+          push({ kind: 'sharing' })
+        }}
       />
     </SettingsSection>
   )
@@ -201,7 +208,7 @@ export function MobileLinkShareFlow(
   return (
     <MobileBotShareFlow
       {...props}
-      avatar={mobileBotAvatarSource(props.bot, undefined)}
+      avatar={mobileBotAvatarSource(props.bot)}
       linkState={linkState}
     />
   )

@@ -23,7 +23,10 @@ import {
 import { readForgottenJournalChats } from './journal-forgotten-chats'
 import { readDeletedChats } from './journal-deleted-chats'
 import type { DeletedChat } from '../chat-deletion/deleted-chats'
-import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from './connector-replies/journal-connector-replies-read'
 import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
@@ -53,6 +56,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'forgotten-chats'; after: string | null }
   | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
+  | { kind: 'connector-replies-owed'; account: string; after: string | null; limit: number }
 
 export type JournalSqlDatabaseReadResult =
   | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
@@ -114,6 +118,16 @@ function read(
       return {
         kind: 'connector-replies',
         rows: readJournalConnectorReplies(db, operation.sessionId)
+      }
+    case 'connector-replies-owed':
+      return {
+        kind: 'connector-replies',
+        rows: readOwedJournalConnectorReplies(
+          db,
+          operation.account,
+          operation.after,
+          operation.limit
+        )
       }
     case 'epoch':
       return {

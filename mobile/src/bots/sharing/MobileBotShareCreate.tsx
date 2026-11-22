@@ -192,7 +192,7 @@ export function MobileBotShareCreate(props: {
             // The shared mascot, picked again by shuffling, keeps its shared look: the host gives it that.
             avatar &&
             !(sharedMascot && isBotMascotId(sharedMascot) && avatar === mascotAvatar(sharedMascot))
-              ? mobileBotAvatarSource({ name, avatar }, undefined)
+              ? mobileBotAvatarSource({ name, avatar })
               : reviewAvatar(review)
           }
           size={72}

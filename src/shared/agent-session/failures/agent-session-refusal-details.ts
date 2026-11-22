@@ -218,7 +218,10 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_operation_expired: NoFacts
   agent_session_operation_capacity: NoFacts
   agent_session_journal_unreadable: NoFacts
-  structured_agent_session_unsupported: NoFacts
+  structured_agent_session_unsupported: {
+    /** On `hostUnsupported`: the installed release is older than chats need. Older clients drop it. */
+    agentInstallation?: AgentCliInstallationProblem
+  }
   agent_session_owner_restart_failed: NoFacts
 }
 
@@ -274,7 +277,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
       ? readAgentSessionArgumentProblem(value.argumentProblem)
       : undefined
   const agentInstallation =
-    code === 'agent_session_operation_invalid'
+    code === 'agent_session_operation_invalid' || code === 'structured_agent_session_unsupported'
       ? readAgentCliInstallationProblem(value.agentInstallation)
       : undefined
   const codexInstallation =

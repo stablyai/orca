@@ -75,7 +75,8 @@ export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): v
   )
 }
 
-/** One per chat view: paths in its transcript are checked on the workspace's host. */
+/** One per chat view: paths in its transcript are checked on the workspace's host, from the
+ *  folder the chat runs in. */
 
 export function useNativeChatTabFileLinkExistence(
   tabId: string
@@ -83,22 +84,24 @@ export function useNativeChatTabFileLinkExistence(
   const context = useNativeChatFileLinkContext(tabId)
   const worktreeId = context?.worktreeId
   const worktreePath = context?.worktreePath
+  // Relative paths are checked where they resolve; files are still addressed from the workspace.
+  const cwd = context?.pathBase ?? worktreePath
   const runtimeEnvironmentId = context?.runtimeEnvironmentId ?? null
   const connectionId = useAppStore((s) =>
     worktreeId ? getConnectionIdFromState(s, worktreeId) : null
   )
   const existence = useMemo(
     () =>
-      worktreeId && worktreePath
+      worktreeId && worktreePath && cwd
         ? createNativeChatFileLinkExistence({
-            cwd: worktreePath,
+            cwd,
             worktreeId,
             worktreePath,
             runtimeEnvironmentId,
             connectionId
           })
         : null,
-    [connectionId, runtimeEnvironmentId, worktreeId, worktreePath]
+    [connectionId, cwd, runtimeEnvironmentId, worktreeId, worktreePath]
   )
   useRecheckWhenHostReturns(existence, useFileLinkHostEpoch(connectionId, runtimeEnvironmentId))
   return existence

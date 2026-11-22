@@ -1,5 +1,9 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import {
+  automationRunEventSourceKey,
+  sayAutomationRunEnglish
+} from '../../../src/shared/automations/automation-run-row-words'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
@@ -77,7 +81,9 @@ export function AutomationRunList(props: {
             {automationDate(run.scheduledFor)} ·{' '}
             {run.trigger === 'manual'
               ? t('automations.mobile.runNow', 'Run now')
-              : t('automations.mobile.scheduled', 'Scheduled')}
+              : run.trigger === 'event'
+                ? sayAutomationRunEnglish(automationRunEventSourceKey(run))
+                : t('automations.mobile.scheduled', 'Scheduled')}
           </Text>
           {run.workspaceDisplayName ? (
             <Text style={styles.meta}>{run.workspaceDisplayName}</Text>

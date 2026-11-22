@@ -42,10 +42,10 @@ function sharedSetup(sharedBy: string | null, plan: BotPackagePlan): BotPackageS
 
 /** The shared mascot's tile color and outfit, for a client from before shared looks, which sends the mascot
  *  alone; a newer one sends the look it shows (`lookSent`). */
-function lookForOlderClient(
-  params: BotCreateParams,
-  fromShare: BotShareCreateParams['fromShare'],
-  shared: BotPackageV1
+export function lookForOlderClient(
+  params: Pick<BotCreateParams, 'avatar'>,
+  fromShare: Pick<BotShareCreateParams['fromShare'], 'lookSent'>,
+  shared: Pick<BotPackageV1, 'avatar'>
 ): Pick<BotCreateParams, 'avatarColor' | 'avatarOutfit'> {
   const avatar = shared.avatar && 'mascot' in shared.avatar ? shared.avatar : null
   if (fromShare.lookSent || !avatar || params.avatar !== mascotAvatar(avatar.mascot)) {

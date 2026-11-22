@@ -158,18 +158,16 @@ export function MobileBotGroupTurn({
   const identity = useMemo(
     () => ({
       name: turn.botName,
-      avatar: mobileBotAvatarSource(
-        {
-          name: turn.botName,
-          avatar: turn.avatar,
-          avatarColor: turn.avatarColor,
-          avatarOutfit: turn.avatarOutfit
-        },
-        undefined
-      ),
+      avatar: mobileBotAvatarSource({
+        id: turn.botId,
+        name: turn.botName,
+        avatar: turn.avatar,
+        avatarColor: turn.avatarColor,
+        avatarOutfit: turn.avatarOutfit
+      }),
       showName: true
     }),
-    [turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
+    [turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.

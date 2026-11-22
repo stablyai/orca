@@ -1,6 +1,6 @@
 // A bot's items as the panel's Items tab shows them: every open one, closed ones a page at a time, read
 // again with the route's other reads (botsChanged, reconnect, foreground). A failed re-read keeps the
-// last good read up. Some chats' items, while the filter shows them, come from their own read.
+// last good read up. A group can request only its rooms’ items.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotItemsListRead } from '../../../../src/shared/bots/bot-item-schema'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
