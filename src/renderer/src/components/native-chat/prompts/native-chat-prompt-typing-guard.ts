@@ -8,17 +8,17 @@ let lastKeyAt = Number.NEGATIVE_INFINITY
 let previousKeyAt = Number.NEGATIVE_INFINITY
 const guardedCards = new WeakSet<HTMLElement>()
 
+// Tab, arrows and modifiers are not typing.
+const isTypingKey = (key: string): boolean =>
+  key.length === 1 || key === 'Enter' || key === 'Backspace'
+
 if (typeof document !== 'undefined') {
   document.addEventListener(
     'keydown',
     (event) => {
       previousKeyAt = lastKeyAt
       lastKeyAt = event.timeStamp
-      // Only text typed into a field arms the guard; Tab, arrows and modifiers do not.
-      if (
-        isEditableTarget(event.target) &&
-        (event.key.length === 1 || event.key === 'Enter' || event.key === 'Backspace')
-      ) {
+      if (isEditableTarget(event.target) && isTypingKey(event.key)) {
         lastTypedAt = event.timeStamp
       }
     },
@@ -45,6 +45,8 @@ export function isTypedIntoPromptCard(card: HTMLElement, event: KeyboardEvent): 
     return false
   }
   // The burst goes on here, so a card that replaces this one is guarded too.
-  lastTypedAt = event.timeStamp
+  if (isTypingKey(event.key)) {
+    lastTypedAt = event.timeStamp
+  }
   return event.key === 'Enter' || event.key === ' '
 }
