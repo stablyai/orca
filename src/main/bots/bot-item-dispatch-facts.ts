@@ -1,6 +1,8 @@
 // What orchestration's own records say about workers started for items: the item a Dispatch was
 // started for (`worker-start --item`), the chat that started it, and a Dispatch's lineage.
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import type { Bot } from '../../shared/bot-types'
+import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotItemLinkInput } from './bot-items-input'
 import {
   lineageLiveSession,
@@ -62,4 +64,15 @@ export function dispatchStarter(
   const records = creator ? readAgentSessionRecordStore() : null
   const live = creator && records ? lineageLiveSession(records, creator) : null
   return creator && live ? { sessionId: live.sessionId, chatId: chatRoot(creator) } : null
+}
+
+/** The agent whose chat started a Dispatch: the one whose home its starting session ran in. */
+export function dispatchStarterBotId(
+  db: OrchestrationDb,
+  dispatchId: string,
+  bots: readonly Bot[]
+): string | null {
+  const creator = db.getDispatchContextById(dispatchId)?.creator_orca_session_id
+  const record = creator ? readAgentSessionRecordStore()?.getRecord(creator) : null
+  return botOfHomeWorkspace(bots, record?.location.workspaceId)?.id ?? null
 }

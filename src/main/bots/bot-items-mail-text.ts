@@ -48,7 +48,13 @@ export function botItemChangeMail(
 ): { subject: string; body: string } | null {
   const actor = changes[0]?.event.actor
   const who =
-    actor?.kind === 'owner' ? 'Your owner' : actor?.kind === 'bot' ? 'Your other chat' : null
+    actor?.kind === 'owner'
+      ? 'Your owner'
+      : actor?.kind === 'bot'
+        ? actor.botId === changes[0]?.item.ownerBotId
+          ? 'Your other chat'
+          : 'Another bot'
+        : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []

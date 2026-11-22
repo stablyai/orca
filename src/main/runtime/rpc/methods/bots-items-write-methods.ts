@@ -9,7 +9,10 @@ import {
 } from '../../../../shared/rpc-contract/bots-items-params'
 
 import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
-import { linksOutsideLinkedChains } from '../../../bots/bot-item-dispatch-facts'
+import {
+  dispatchStarterBotId,
+  linksOutsideLinkedChains
+} from '../../../bots/bot-item-dispatch-facts'
 import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
 import { admitBotItemFiles } from './bots-items-bot-files'
@@ -120,13 +123,25 @@ const LINK = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
+    const db = context.runtime.getOrchestrationDb()
     // A step of a follow-up chain the item already links is that worker again: no second link.
     const links = linksOutsideLinkedChains(
-      context.runtime.getOrchestrationDb(),
+      db,
       await store.links(item.uid),
       params.refs.map(parseItemLink)
     )
-    const outcome = await store.link(item.uid, links, writer.actor)
+    // Who started each worker matters only when linking to someone else's item.
+    const startedBy =
+      item.ownerBotId === writer.bot.id
+        ? {}
+        : Object.fromEntries(
+            links.flatMap((link) =>
+              link.kind === 'dispatch'
+                ? [[link.ref, dispatchStarterBotId(db, link.ref, context.runtime.bots.list())]]
+                : []
+            )
+          )
+    const outcome = await store.link(item.uid, links, writer.actor, startedBy)
     return writeResult(context.runtime, outcome, writer)
   }
 })
