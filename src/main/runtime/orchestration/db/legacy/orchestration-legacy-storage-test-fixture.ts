@@ -101,7 +101,10 @@ export function createLegacyStorageCutoverFixture(): {
       subject: 'second worker page'
     })
   ]
-  first.markAsRead(legacyMessages.map((message) => message.id))
+  first.markAsRead(
+    legacyMessages.map((message) => message.id),
+    { kind: 'orca' }
+  )
   const question = first.createQuestion({
     runId: LEGACY_RUN_ID,
     dispatchId: retryDispatch.id,

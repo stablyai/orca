@@ -153,7 +153,8 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
         "Orca Cloud can't list the bot's workspaces yet. Update Orca, and find Slack channels with `orca slack find <name|link>`."
       )
     }
-    if (args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
+    // A titled post is an issue; a canvas or a list is titled too, and needs only Slack's verbs.
+    if (verb === 'post' && args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
       throw new ConnectorActError(
         'cloud_lacks_create',
         "Orca Cloud can't make issues yet. Say what the issue should be instead, and try again after Orca Cloud updates."

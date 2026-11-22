@@ -1,9 +1,9 @@
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -147,17 +147,19 @@ describe('Import file on the agent’s host', () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-8' }
     writeFileSync(join(downloads, 'client_secret_c.json'), key('c'))
     const [picked] = candidatesOf(await importGoogleSetupKeySavedHere(BOT, async () => {}))
-    // The folder turns read-only during the import, so the cleanup that follows fails.
-    mocks.importClient.mockImplementationOnce(async () => chmodSync(downloads, 0o555))
+    // The claimed copy turns into a folder during the import, so the file cleanup that follows
+    // fails. A read-only folder would not do: Windows and root still delete from it.
+    mocks.importClient.mockImplementationOnce(async () => {
+      for (const name of readdirSync(downloads).filter((n) => n.startsWith('.importing-'))) {
+        unlinkSync(join(downloads, name))
+        mkdirSync(join(downloads, name))
+      }
+    })
     const arrived = vi.fn(async () => {})
-    try {
-      expect(await importGoogleSetupKeySavedHere(BOT, arrived, picked)).toEqual({ found: true })
-      expect(arrived).toHaveBeenCalledOnce()
-      // The cleanup really failed: the claimed copy is still there.
-      expect(readdirSync(downloads).some((name) => name.startsWith('.importing-'))).toBe(true)
-    } finally {
-      chmodSync(downloads, 0o755)
-    }
+    expect(await importGoogleSetupKeySavedHere(BOT, arrived, picked)).toEqual({ found: true })
+    expect(arrived).toHaveBeenCalledOnce()
+    // The cleanup really failed: the claimed copy is still there.
+    expect(readdirSync(downloads).some((name) => name.startsWith('.importing-'))).toBe(true)
   })
 
   it('keeps the file when the import fails', async () => {

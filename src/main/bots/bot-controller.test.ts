@@ -277,7 +277,7 @@ describe('BotController', () => {
   it('renames the bot and its files but keeps its folder and soul', async () => {
     const bot = await bots.create({ name: 'Reviewer' })
     const folder = join(botsRoot(), 'reviewer')
-    writeFileSync(join(folder, 'SOUL.md'), 'Terse.\n')
+    writeFileSync(join(folder, 'SOUL.md'), '# Reviewer\n\nTerse.\n')
 
     const renamed = await bots.update(bot.id, {
       name: 'Critic',
@@ -291,7 +291,7 @@ describe('BotController', () => {
       folderPath: folder
     })
     expect(readFileSync(join(folder, 'AGENTS.md'), 'utf8')).toContain('You are Critic')
-    expect(readFileSync(join(folder, 'SOUL.md'), 'utf8')).toBe('Terse.\n')
+    expect(readFileSync(join(folder, 'SOUL.md'), 'utf8')).toBe('# Reviewer\n\nTerse.\n')
     await expect(bots.update('missing', { paused: true })).rejects.toThrow('bot_not_found')
   })
 

@@ -20,7 +20,7 @@ import {
   relinkedSkills
 } from './bot-turn-linked-skills'
 import type { BotTurnContext, BotFirstRun } from './bot-turn-context-types'
-import type { StructuredAgentSessionTurnContextPlan } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
+import type { StructuredAgentSessionTurnContextPlan as TurnPlan } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import { botLaunchedInstructions, withBotRulesUpdate } from './bot-turn-rules-update'
 import { type BotTurnGiven as Given, launchedBotTurnGiven } from './bot-turn-given'
 import { writesHomeFile } from './bot-turn-source'
@@ -48,7 +48,6 @@ const COPY = {
 
 export type { BotTurnContext, BotFirstRun } from './bot-turn-context-types'
 
-type TurnPlan = StructuredAgentSessionTurnContextPlan
 type Held = string | null | undefined
 
 const NO_FIRST_RUN: BotFirstRun = { rules: () => null, ownerTurnEnded: () => {} }
@@ -78,7 +77,9 @@ export function createBotTurnContext(
     message: AgentJournalMessageItem
   ) => Promise<BotRecentChatsSection | null> = async () => null,
   /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered. */
-  unansweredQuestionNote: (sessionId: string) => Promise<string | null> = async () => null
+  unansweredQuestionNote: (sessionId: string) => Promise<string | null> = async () => null,
+  /** Current metadata, so a rename also reaches an already-running chat. */
+  currentBotName: (botId: string) => string | null = () => null
 ): BotTurnContext {
   const readTopics = (folder: string): Promise<BotMemoryTopics> => readBotMemoryTopics(fs, folder)
   // Per session, in memory: after a host restart, `launched` says what the relaunched agent read.
@@ -97,9 +98,11 @@ export function createBotTurnContext(
     }
     return given.get(sessionId) ?? entry
   }
-  /** Orca's Tools and Rules go first, as at launch, where they outrank what memory remembers. */
-  const withOrcaRules = (sessionId: string, entry: Given, held: Held, plan: TurnPlan | null) =>
-    withBotRulesUpdate(entry.orcaRules, held, plan, (orcaRules) => update(sessionId, { orcaRules }))
+  /** Orca's Tools and Rules, under the bot's current name, go first, where they outrank memory. */
+  const withOrcaRules = (sessionId: string, entry: Given, held: Held, plan: TurnPlan | null) => {
+    const known = { ...entry.orcaRules, name: currentBotName(entry.botId) ?? entry.orcaRules.name }
+    return withBotRulesUpdate(known, held, plan, (orcaRules) => update(sessionId, { orcaRules }))
+  }
   return {
     launched: (sessionId, botId, folder, files, delivered, orcaRules) => {
       record.started(botId, files.memory)

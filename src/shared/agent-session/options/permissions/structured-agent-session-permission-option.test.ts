@@ -10,6 +10,7 @@ import {
   createStructuredAgentSessionOptionState
 } from '../structured-agent-session-options'
 import '../view/structured-agent-session-option-view'
+import { projectRuntimePermission } from './structured-agent-session-permission-option'
 import { structuredAgentSessionSeedCatalog } from '../model-catalog/structured-agent-session-seed-catalog'
 
 const permission = (state: Parameters<typeof structuredAgentSessionOptionSnapshot>[0]) =>
@@ -65,6 +66,59 @@ describe('the permission mode picker', () => {
     expect(
       permission({ ...capable, permissionMode: 'full-access', reportedPermissionMode: null })
     ).toMatchObject({ settable: true, kind: { currentValue: 'full-access' } })
+  })
+
+  it('passes the reported mode along only while the chat follows its agent settings', () => {
+    const own = {
+      ...live('claude', { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own'
+    }
+    for (const reportedPermissionMode of ['full-access', 'ask', 'plan']) {
+      expect(permission({ ...own, reportedPermissionMode })?.kind).toMatchObject({
+        currentValue: 'own',
+        reportedValue: reportedPermissionMode
+      })
+    }
+    for (const reportedPermissionMode of [undefined, null]) {
+      expect(permission({ ...own, reportedPermissionMode })?.kind).not.toHaveProperty(
+        'reportedValue'
+      )
+    }
+    const explicit = permission({ ...own, permissionMode: 'ask', reportedPermissionMode: 'plan' })
+    expect(explicit?.kind).toMatchObject({ currentValue: 'ask' })
+    expect(explicit?.kind).not.toHaveProperty('reportedValue')
+  })
+
+  it('reads a null report as no report, since null carries no mode', () => {
+    // A Codex reply without policy fields, a Claude clear and an ACP agent without a mode selector all report null.
+    for (const agent of ['codex', 'claude', 'opencode']) {
+      const own = {
+        ...live(agent, { permissionMode: 'ask' }),
+        permissionOwnSupported: true,
+        permissionMode: 'own'
+      }
+      const cleared = permission({ ...own, reportedPermissionMode: null })
+      expect(cleared?.kind).toMatchObject({ currentValue: 'own' })
+      expect(cleared).toEqual(permission({ ...own, reportedPermissionMode: undefined }))
+    }
+  })
+
+  it("shows a newer child's report and keeps the read report over an older one", () => {
+    const own = {
+      ...live('claude', { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own',
+      reportedPermissionMode: 'ask'
+    }
+    const reported = (runtimePermission: unknown, fence: number) =>
+      permission(projectRuntimePermission(own, { runtimePermission }, fence))?.kind
+    // A new chat attaches at fence 1; its first child starts at fence 2.
+    expect(reported({ fence: 2, mode: 'full-access' }, 1)).toMatchObject({
+      reportedValue: 'full-access'
+    })
+    expect(reported({ fence: 1, mode: 'full-access' }, 2)).toMatchObject({ reportedValue: 'ask' })
+    expect(reported(null, 1)).not.toHaveProperty('reportedValue')
   })
 
   it('admits supported Own delegation through the same descriptor/readiness predicate', () => {

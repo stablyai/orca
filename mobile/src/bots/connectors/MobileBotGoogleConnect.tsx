@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { FileUp } from 'lucide-react-native'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../src/shared/google/google-who-can-ask-warning'
@@ -73,7 +74,11 @@ export function MobileBotGoogleConnect(props: {
     }
     setBusy(true)
     void googleBotSet
-      .request(client, { botId: bot.id, on: true }, { failWhenDisconnected: true })
+      .request(
+        client,
+        { botId: bot.id, on: true, confirmedAskers: botAskerKeys(bot) },
+        { failWhenDisconnected: true }
+      )
       .then((reply) => googleBotSet.interpret(reply))
       .then(props.onOn, fail)
       .finally(() => setBusy(false))

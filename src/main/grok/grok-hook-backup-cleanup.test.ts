@@ -74,7 +74,8 @@ describe('the Grok hook file backup after removal', () => {
     expect(backup).not.toContain('orca')
   })
 
-  it('leaves a symlinked backup alone', () => {
+  // Windows file symlinks need elevation, and a junction can only link a directory.
+  it.skipIf(process.platform === 'win32')('leaves a symlinked backup alone', () => {
     const service = new GrokHookService()
     expect(service.install().state).toBe('installed')
     const target = join(homeDir, 'elsewhere.json')

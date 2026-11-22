@@ -87,40 +87,38 @@ async function startShell(
   }
 }
 
-describe.each(SHELLS)(
-  'startup question ($shellPath $prompt)',
-  ({ shellPath, startupFile, prompt, timeout }) => {
-    it(
-      'accepts the answer before readiness and runs startup once',
-      async () => {
-        const command = timeout
-          ? `[[ -o nonomatch ]] && printf 'ORCA_STARTUP_%s\\n' COMMAND_RAN\r`
-          : undefined
-        const running = await startShell(
-          shellPath,
-          startupFile,
-          timeout ? 2_000 : 15_000,
-          prompt,
-          command
+// Windows has no POSIX shell; an empty `.each` alone fails the file as "no test found".
+describe.skipIf(SHELLS.length === 0)('startup question', () => {
+  it.each(SHELLS)(
+    '$shellPath $prompt accepts the answer before readiness and runs startup once',
+    async ({ shellPath, startupFile, prompt, timeout }) => {
+      const command = timeout
+        ? `[[ -o nonomatch ]] && printf 'ORCA_STARTUP_%s\\n' COMMAND_RAN\r`
+        : undefined
+      const running = await startShell(
+        shellPath,
+        startupFile,
+        timeout ? 2_000 : 15_000,
+        prompt,
+        command
+      )
+      try {
+        await waitFor(() => running.output().includes('Enter passphrase:'), 5_000)
+        expect(running.session.shellState).toBe('pending')
+        expect(running.output()).not.toContain(STARTUP_OUTPUT)
+        running.session.write(`${SECRET}\r`)
+        await waitFor(() => running.output().includes(`RC_GOT:${SECRET}`), 1_000)
+        await waitFor(() => running.output().includes(STARTUP_OUTPUT), 5_000)
+        expect(running.session.shellState).toBe(timeout ? 'timed_out' : 'ready')
+        expect(running.output().split(STARTUP_OUTPUT).length - 1).toBe(1)
+        expect(running.output()).not.toContain(
+          'no such hash table element: __orca_deferred_sched_init'
         )
-        try {
-          await waitFor(() => running.output().includes('Enter passphrase:'), 5_000)
-          expect(running.session.shellState).toBe('pending')
-          expect(running.output()).not.toContain(STARTUP_OUTPUT)
-          running.session.write(`${SECRET}\r`)
-          await waitFor(() => running.output().includes(`RC_GOT:${SECRET}`), 1_000)
-          await waitFor(() => running.output().includes(STARTUP_OUTPUT), 5_000)
-          expect(running.session.shellState).toBe(timeout ? 'timed_out' : 'ready')
-          expect(running.output().split(STARTUP_OUTPUT).length - 1).toBe(1)
-          expect(running.output()).not.toContain(
-            'no such hash table element: __orca_deferred_sched_init'
-          )
-        } finally {
-          await running.cleanup()
-        }
-      },
-      // Real shell startup and the no-ZLE readiness fallback must complete before cleanup.
-      15_000
-    )
-  }
-)
+      } finally {
+        await running.cleanup()
+      }
+    },
+    // Real shell startup and the no-ZLE readiness fallback must complete before cleanup.
+    15_000
+  )
+})

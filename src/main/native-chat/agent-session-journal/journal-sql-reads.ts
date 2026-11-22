@@ -265,8 +265,14 @@ export function journalSqlReads(
       (await read({ kind: 'claude-history-prompts', sessionId, uuids })).prompts,
     submission: async (clientMessageId) =>
       (await read({ kind: 'submission', clientMessageId })).submission,
-    submissionBody: async (clientMessageId) =>
-      (await read({ kind: 'submission-body', clientMessageId })).body,
+    submissionBody: async (clientMessageId, options) =>
+      (
+        await read({
+          kind: 'submission-body',
+          clientMessageId,
+          ...(options?.family ? { family: true } : {})
+        })
+      ).body,
     receiptFor: async (clientMessageId) =>
       (await read({ kind: 'acceptance', clientMessageId })).receipt,
     lastProviderActivityAt: async (fence) => (await read({ kind: 'provider-activity', fence })).at,

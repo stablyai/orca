@@ -273,6 +273,27 @@ describe('connector.act', () => {
     expect(newer.calls[0]?.body).toMatchObject({ verb: 'pin', ref: 'slack:T1:C1::1.1' })
   })
 
+  it('sends a titled canvas or list to a cloud with Slack’s verbs but no issue making', async () => {
+    for (const verb of ['canvas', 'list']) {
+      const titled = {
+        sessionId: 'bot-session',
+        verb,
+        ref: 'slack:T1:C1',
+        args: { title: 'Plan', ...(verb === 'list' ? { items: ['a'] } : { text: '# Plan' }) }
+      }
+      const older = actContext({ features: ['actions'] })
+      await expect(run(titled, older.context)).rejects.toMatchObject({
+        code: 'cloud_lacks_slack_tools'
+      })
+      const newer = actContext({
+        features: ['actions', 'slack.tools'],
+        answers: [{ ok: true, value: { ok: true, result: {} } }]
+      })
+      await run(titled, newer.context)
+      expect(newer.calls[0]?.body).toMatchObject({ verb, args: { title: 'Plan' } })
+    }
+  })
+
   it('sends a search only to a cloud that takes one', async () => {
     const find = {
       sessionId: 'bot-session',

@@ -75,7 +75,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: true,
+      confirmedExit: alone === true ? 'proven' : true,
       known: { paneKey: resolved, identity }
     })
     return true

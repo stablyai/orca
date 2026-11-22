@@ -88,26 +88,26 @@ function hostHome(hostId: string): void {
 
 beforeEach(() => hostHome('local'))
 
-describe('a bot chat banner', () => {
-  it('offers the bot page only in its own Home and side chats on supported hosts', () => {
-    for (const [host, visible] of [
-      ['local', true],
-      ['runtime:new', true],
-      ['runtime:old', false]
-    ] as const) {
-      hostHome(host)
-      for (const sessionId of ['home', 'side']) {
-        renderHeader('folder:bot-home', sessionId)
-        expect(screen.queryByRole('button', { name: OPEN_PAGE }) !== null).toBe(visible)
-        cleanup()
-      }
-    }
-    hostHome('local')
+describe("a bot's Home Chat banner", () => {
+  it.each([
+    ['local', true],
+    ['runtime:new', true],
+    ['runtime:old', false]
+  ] as const)('shows only supported Home chats on %s', (host, homeVisible) => {
+    hostHome(host)
+    renderHeader('folder:bot-home', 'home')
+    expect(screen.queryByRole('button', { name: OPEN_PAGE }) !== null).toBe(homeVisible)
+    cleanup()
+    renderHeader('folder:bot-home', 'side')
+    expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
+  })
+
+  it('requires the Home workspace and host', () => {
     renderHeader('folder:project', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
     cleanup()
     owner.hostId = 'runtime:new'
-    renderHeader('folder:bot-home', 'side')
+    renderHeader('folder:bot-home', 'home')
     expect(screen.queryByRole('button', { name: OPEN_PAGE })).toBeNull()
   })
 })

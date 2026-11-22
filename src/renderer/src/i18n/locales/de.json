@@ -260,6 +260,10 @@
       "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} brauchen dich",
+      "needsYou": "Braucht dich"
     }
   },
   "app": {
@@ -972,6 +976,10 @@
           "devinDesktop": "devin desktop",
           "antigravity": "antigravity"
         }
+      },
+      "about": {
+        "title": "Info",
+        "version": "Orca {{version}}"
       }
     },
     "openInApp": {
@@ -1101,6 +1109,31 @@
         "showMore": "{{count}} weitere anzeigen",
         "notLoaded": "Kein Agent lädt ihn"
       }
+    },
+    "automaticUpdates": {
+      "title": "Automatische Updates",
+      "description": "Bei unterstützten Desktop-Installationen lädt Orca verfügbare Updates bei der regulären Prüfung herunter und startet zur Installation automatisch neu.",
+      "info": "Über automatische Updates",
+      "saveFailed": "Die Einstellung für automatische Updates konnte nicht gespeichert werden."
+    },
+    "updateDelay": {
+      "1b4d825e0e": "Update-Verzögerung",
+      "ab7e864374": "Info zur Update-Verzögerung",
+      "ee1d96f74a": "Verzögerung einmal überspringen",
+      "description": "Nach Veröffentlichung einer Version wartet Orca so viele Tage, bevor es sie anbietet.",
+      "none": "Keine",
+      "availableSoon": "Für dich verfügbar {{relative}}",
+      "availableOn": "Für dich verfügbar am {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} ist verfügbar",
+      "heldTitle": "Orca {{version}} wird später angeboten",
+      "released": "Veröffentlicht am {{released}}",
+      "progress": "Zeit bis Orca {{version}} verfügbar ist",
+      "skipDelayOnceHint": "Jetzt nach dieser Version suchen. Die Verzögerungseinstellung bleibt unverändert.",
+      "upToDateWithHeld": "Du bist auf dem aktuellen Stand. Eine neuere Version wird bis {{date}} zurückgehalten.",
+      "heldReleaseReady": "Eine neuere Version ist verfügbar. Suche nach Updates, um sie zu erhalten.",
+      "keywordDelay": "Verzögerung",
+      "keywordCooldown": "Wartezeit",
+      "keywordSecurity": "Sicherheit"
     }
   },
   "menu": {
@@ -2044,6 +2077,10 @@
         "mergeRequest": "Merge Request",
         "linkedIssue": "Verknüpftes Issue",
         "listeningPort": "Lauschender Port"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+Klick sucht nach dem neuesten Release-Kandidaten (RC). {{perfKey}}+Klick sucht nach dem neuesten Build für Leistungstests.",
+        "localMacBuildHint": "⌥+Klick wählt einen lokalen macOS-Build aus."
       }
     },
     "hooks": {
@@ -6103,7 +6140,7 @@
           "removeWithChildrenGit_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
           "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
           "removeSingleFolderFromOrca": "Entfernt ihn aus Orca. Der Ordner auf der Festplatte bleibt erhalten.",
-          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und seinen Branch (bleibt erhalten, falls nicht gemergt)."
+          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und lokale Änderungen. Der zugehörige Branch wird gelöscht, wenn er gemergt wurde."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Geladene Pfade anzeigen",
@@ -7256,7 +7293,6 @@
           "stopped": "Gestoppt",
           "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
-          "description": "Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals nativ unter Linux laufen. Projekte in dieser Distribution, die über \\\\wsl.localhost geöffnet wurden, werden automatisch auf diesen Host verschoben, sobald ihre Terminals inaktiv sind; Projekte auf einem Windows-Laufwerk (/mnt/…) bleiben auf diesem Computer. Ein verschobenes Projekt lässt sich über die Seitenleiste auf diesen Computer zurückholen.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
@@ -8137,21 +8173,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Versionshinweise",
-          "d89806cc89": "ist zur Installation bereit.",
-          "a6b37929dc": "Version",
-          "8311da27ba": "ist verfügbar.",
           "02dc082e70": "Der Update-Download konnte nicht gestartet werden.",
           "ceb579abaf": "Nach App-Updates suchen und eine neuere Orca-Version installieren.",
           "bd79d412f0": "Suche nach Updates fehlgeschlagen. {{value0}}",
           "b9ad70c30d": "Update-Fehler. {{value0}}",
-          "2a48034c4c": "v{{value0}} wird heruntergeladen… {{value1}}%",
           "f40d88390d": "Die neueste Version ist installiert.",
           "31fd7150cf": "Nach Updates wird gesucht…",
           "d69a09b672": "Beim Start wird automatisch nach Updates gesucht.",
-          "e3b9d21c07": "ist verfügbar. Orca über die Paketverwaltung des Systems aktualisieren – Orca kann diese Version nicht selbst installieren.",
           "6d27bd46e3": "Nach Updates suchen",
-          "857ca887da": "Update herunterladen (",
-          "c0a8f827c7": "Zum Aktualisieren neu starten ("
+          "downloadUpdate": "Update herunterladen",
+          "restartToUpdate": "Zum Aktualisieren neu starten",
+          "versionAvailable": "Version {{version}} ist verfügbar.",
+          "externallyManagedVersionAvailable": "Version {{version}} ist verfügbar. Aktualisiere Orca über die Paketverwaltung deines Systems. Orca kann diese Version nicht selbst installieren.",
+          "versionReadyToInstall": "Version {{version}} ist bereit zur Installation.",
+          "versionInstalling": "Version {{version}} wird installiert.",
+          "downloadingVersion": "Version {{version}} wird heruntergeladen ({{percent}} %)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Apps auswählen, die im Menü „Öffnen in“ eines Arbeitsbereichs verfügbar sind.",
@@ -11884,7 +11920,8 @@
           "updating": "Server werden aktualisiert…",
           "serverCountOne": "1 gekoppelter Server",
           "fdd271abf0": "Entfernte Orca-Server",
-          "e4e5937469": "Nach Updates suchen"
+          "e4e5937469": "Nach Updates suchen",
+          "newerCount": "{{value0}} neuer als diese App"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version nicht verfügbar",
@@ -12245,32 +12282,41 @@
           "setUpRecipes": "Rezepte einrichten"
         },
         "ReleaseBuildPicker": {
-          "build": "Build",
-          "searchLabel": "Builds suchen",
-          "searchPlaceholder": "Builds suchen…",
-          "noMatches": "Keine passenden Builds."
+          "build": "Version",
+          "searchLabel": "Versionen suchen",
+          "searchPlaceholder": "Versionen suchen…",
+          "noMatches": "Keine passenden Versionen."
         },
         "ReleaseChannelSection": {
-          "switchFailed": "Zu diesem Build konnte nicht gewechselt werden.",
-          "title": "Veröffentlichungskanal",
-          "description": "Update-Kanal wechseln oder zu einem beliebigen veröffentlichten Build wechseln, auch zu älteren. Ein Wechsel zu älteren Versionen ist zulässig; ungeprüfte Builds können fehlerhaft sein.",
+          "switchFailed": "Wechsel zu dieser Version fehlgeschlagen.",
+          "title": "Update-Kanal",
+          "description": "Update-Kanal wechseln oder eine veröffentlichte Version auswählen, auch eine ältere. Ungeprüfte Versionen funktionieren möglicherweise nicht.",
           "devOnly": "Nur für die Entwicklung",
-          "channelAriaLabel": "Update-Kanal",
-          "hourlyWarning": "Hourly-Builds werden direkt aus main veröffentlicht, ohne dass zuvor Tests bestanden werden müssen; die Windows-Builds sind nicht signiert. Eine stabile Version bereithalten.",
-          "dailyWarning": "Daily-Builds werden direkt aus main veröffentlicht, ohne dass zuvor Tests bestanden werden müssen; die Windows-Builds sind nicht signiert. Eine stabile Version bereithalten.",
-          "adhocWarning": "Adhoc-Builds stammen aus einem noch nicht integrierten Branch, und die Windows-Builds sind nicht signiert. Ihre Pflege kann jederzeit eingestellt werden – eine stabile Version bereithalten.",
-          "loadingBuilds": "Builds werden geladen…",
-          "noBuilds": "Keine Builds gefunden",
-          "refresh": "Build-Liste aktualisieren",
-          "cacheHint": "Build-Listen werden 5 Minuten lang zwischengespeichert. Zum Suchen nach neuen Builds aktualisieren.",
-          "switchTo": "Zu diesem Build wechseln",
-          "alreadyRunning": "Dieser Build wird derzeit ausgeführt.",
+          "adhocWarning": "Versionen für Windows sind nicht signiert. Die Verantwortlichen können die Pflege einstellen. Halte eine stabile Version bereit.",
+          "loadingBuilds": "Versionen werden geladen…",
+          "noBuilds": "Keine Versionen gefunden",
+          "refresh": "Versionsliste aktualisieren",
+          "cacheHint": "Die Versionsliste bleibt 5 Minuten im Cache. Aktualisiere sie, um nach neuen Versionen zu suchen.",
+          "switchTo": "Version wechseln",
+          "alreadyRunning": "Diese Version läuft bereits.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Ein Build-Wechsel ist nur in der Desktop-App möglich.",
+          "webUnavailable": "Ein Versionswechsel ist nur in der Desktop-App möglich.",
           "devChannelUnsupportedAria": "{{value0}} (nur {{value1}})",
-          "devChannelUnsupported": "{{value0}}-Builds werden nur für {{value1}} erstellt. Linux bleibt bei Stable oder RC.",
+          "devChannelUnsupported": "Versionen aus dem Kanal „{{value0}}“ sind nur für {{value1}} verfügbar. Unter Linux sind „{{stable}}“ und „{{rc}}“ verfügbar.",
           "downloadInstaller": "Installationsprogramm herunterladen",
-          "manualInstallHint": "{{value0}}-Builds sind unter Windows nicht signiert und können daher vom integrierten Updater nicht über einen signierten Build installiert werden. Das heruntergeladene Installationsprogramm einmal ausführen – Windows warnt dabei vor einem unbekannten Herausgeber – danach funktioniert jeder weitere Wechsel, auch zurück zu Stable, von hier aus."
+          "manualInstallHint": "Windows-Versionen aus dem Kanal „{{value0}}“ sind nicht signiert. Der integrierte Updater kann sie nicht über eine signierte Version installieren. Führe das heruntergeladene Installationsprogramm einmal aus. Windows warnt dabei vor einem unbekannten Herausgeber. Danach kannst du hier die Version wechseln, auch zurück zum Kanal „{{stable}}“.",
+          "stableLabel": "Stabil",
+          "stableDescription": "Stabile Versionen für den allgemeinen Einsatz.",
+          "rcLabel": "RC",
+          "rcDescription": "Release-Kandidaten vor der Veröffentlichung einer stabilen Version.",
+          "hourlyLabel": "Stündlich",
+          "hourlyDescription": "Wird stündlich aus main gebaut.",
+          "dailyLabel": "Täglich",
+          "dailyDescription": "Wird einmal täglich aus main gebaut.",
+          "adhocLabel": "Ad hoc",
+          "adhocDescription": "Einmalige Versionen aus einem Branch, um Änderungen vor dem Merge auszuprobieren.",
+          "devChannelPlatforms": "macOS und Windows",
+          "scheduledWarning": "Diese Versionen werden ohne vorgeschaltete Tests veröffentlicht. Versionen für Windows sind nicht signiert. Halte eine stabile Version bereit."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Systemstandard",
@@ -19536,6 +19582,10 @@
         "permissionAuto": "Genehmigen lassen",
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccess": "Vollzugriff",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionAgentSettingsUsedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Orca kann diesen Modus nicht anzeigen.",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen",
         "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
         "permissionFullAccessSharedDescription": "Fragt nie vor Änderungen oder Befehlen",
@@ -19550,6 +19600,7 @@
         "imageUnavailable": "Vorschau nicht verfügbar",
         "moreControls": "Weitere Chat-Steuerelemente",
         "exitPlanMode": "Planungsmodus verlassen",
+        "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
         "botFor": "Für: {{detail}}",
         "bots": "Bots"
       },
@@ -19927,7 +19978,6 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
-        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
@@ -19952,8 +20002,6 @@
         "editGonePrompt": "Diese Nachricht wurde bereits gesendet oder entfernt. Die bearbeitete Fassung steht nach der Antwort an den Agenten im Chat-Eingabefeld.",
         "imageCount_one": "{{count}} Bild",
         "imageCount_other": "{{count}} Bilder",
-        "collapse": "Einklappen",
-        "expand": "Ausklappen",
         "queued": "In der Warteschlange",
         "clearAll": "Warteschlange leeren",
         "editReturned": "Die bearbeitete Nachricht ist im Chat-Eingabefeld.",
@@ -22477,8 +22525,8 @@
     "failure": {
       "releaseNotReady": "Für dieses Gerät ist noch keine neuere Version verfügbar. Später erneut prüfen.",
       "updateServerUnreachable": "Der Update-Server konnte nicht erreicht werden. In einigen Minuten erneut versuchen.",
-      "channelUnsupportedPlatform": "{{channel}}-Builds werden nur für macOS und Windows erstellt.",
-      "unsignedDevChannel": "{{channel}}-Builds sind nicht signiert. Dieser signierte Build installiert nur Updates, die vom Herausgeber von Orca signiert wurden. Das Installationsprogramm von der Release-Seite herunterladen und einmal ausführen – danach funktionieren Updates wie gewohnt, auch zurück zu Stable.",
+      "channelUnsupportedPlatform": "Versionen aus dem Kanal „{{channel}}“ sind nur für macOS und Windows verfügbar.",
+      "unsignedDevChannel": "Versionen aus dem Kanal „{{channel}}“ sind nicht signiert. Die aktuelle signierte Version installiert nur Updates mit der Signatur des Orca-Herausgebers. Lade das Installationsprogramm von der Release-Seite herunter und führe es einmal aus. Danach funktionieren Updates wie gewohnt, auch beim Wechsel zurück zum stabilen Kanal.",
       "linuxPackageMissing": "Das heruntergeladene Paket ist nicht mehr im Update-Cache vorhanden. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
       "linuxPackageNotRegular": "Das heruntergeladene Paket ist im Update-Cache keine gültige Datei mehr. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
       "linuxPackageHashMismatch": "Das heruntergeladene Paket stimmt nicht mehr mit der überprüften Version überein. Orca übergibt es daher nicht an eine Paketverwaltung. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
@@ -22493,8 +22541,8 @@
       "unknownReleaseChannel": "Unbekannter Veröffentlichungskanal „{{channel}}“.",
       "invalidReleaseTag": "„{{tag}}“ ist kein gültiges Release-Tag.",
       "releaseRepoNotFound": "Unter {{repo}} wurde kein Release-Repository gefunden.",
-      "releaseListFailed": "{{channel}}-Builds konnten nicht aufgelistet werden (HTTP {{status}}).",
-      "releaseListUnreadable": "Die Release-Liste für {{channel}} konnte nicht gelesen werden.",
+      "releaseListFailed": "Die Versionsliste für den Kanal „{{channel}}“ konnte nicht abgerufen werden (HTTP {{status}}).",
+      "releaseListUnreadable": "Die Versionsliste für den Kanal „{{channel}}“ konnte nicht gelesen werden.",
       "rateLimitedSoon": "GitHub-Ratenlimit erreicht. In einigen Minuten erneut versuchen.",
       "rateLimitedSoonSignedOut": "GitHub-Ratenlimit erreicht. In einigen Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
       "rateLimitedInMinute": "GitHub-Ratenlimit erreicht. In etwa einer Minute erneut versuchen.",
@@ -22502,7 +22550,10 @@
       "rateLimitedInMinutes_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen.",
       "rateLimitedInMinutes_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen.",
       "rateLimitedInMinutesSignedOut_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
-      "rateLimitedInMinutesSignedOut_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann."
+      "rateLimitedInMinutesSignedOut_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
+      "automaticInstallCheckpointFailed": "Orca konnte das aktuelle Fenster vor dem Neustart nicht sichern. Versuche erneut, das Update zu installieren.",
+      "automaticInstallTerminalBusy": "Einige Terminals würden beim Neustart beendet. Orca versucht es bei einer späteren Update-Prüfung erneut.",
+      "macStagingTimeout": "macOS bereitet das Update noch vor. Falls es dabei bleibt, beende Orca und öffne es erneut."
     }
   },
   "jira": {
@@ -23790,7 +23841,9 @@
       "title": "Aktivität"
     },
     "connectors": {
-      "tab": "Konnektoren"
+      "tab": "Konnektoren",
+      "needYou_one": "{{count}} braucht dich",
+      "needYou_other": "{{count}} brauchen dich"
     },
     "files": {
       "tab": "Dateien"

@@ -12,7 +12,7 @@ import { resolveChromiumCookiesPath } from '../chromium/chromium-cookie-path'
 import {
   CHROMIUM_BROWSERS,
   browserRootPath,
-  discoverProfiles,
+  discoverListedChromiumProfiles,
   detectFirefox,
   firefoxProfilesRoot,
   isSafeBrowserProfileDirectory,
@@ -61,7 +61,8 @@ export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
     if (!root) {
       continue
     }
-    const profiles = discoverProfiles(root)
+    const listed = discoverListedChromiumProfiles(root)
+    const profiles = listed.length ? listed : [{ name: 'Default', directory: 'Default' }]
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
       const cookiesPath = resolveChromiumCookiesPath(profileDir)
@@ -73,6 +74,7 @@ export function detectInstalledBrowsers(family?: string): DetectedBrowser[] {
           keychainAccount: browser.keychainAccount,
           cookiesPath,
           profiles,
+          profilesFromLocalState: listed.length > 0,
           selectedProfile: profile.directory
         })
         break
@@ -131,7 +133,11 @@ export function selectBrowserProfile(
   if (directory && !isSafeBrowserProfileDirectory(directory)) {
     return browserCookieImportFailure('invalidBrowserProfile')
   }
-  if (selection.refresh && !browser?.profiles.some((profile) => profile.directory === directory)) {
+  if (
+    selection.refresh &&
+    (!browser?.profilesFromLocalState ||
+      !browser.profiles.some((profile) => profile.directory === directory))
+  ) {
     return browserCookieImportFailure('savedChromeProfileUnavailable')
   }
   if (!browser) {

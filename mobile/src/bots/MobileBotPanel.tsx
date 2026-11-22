@@ -357,6 +357,7 @@ export function MobileBotPanel(props: {
         {...shownItem}
         client={props.client}
         hostKey={props.hostKey}
+        hostId={props.hostId}
         bot={bot}
         showToast={showToast}
         reads={props.routeBot.itemReads}

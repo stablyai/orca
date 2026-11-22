@@ -6,6 +6,7 @@ import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   BOT_ORCA_CLI as SESSION_CLI,
   botSessionPreamble,
+  botNameLine,
   buildBotPreamble,
   capBotMemoryIndex,
   readBotPreamble
@@ -41,6 +42,16 @@ describe('buildBotPreamble', () => {
     expect(preamble).toContain(BOT_QUIET_MARKER)
     expect(preamble).toContain(`${SESSION_CLI} bot reply --text`)
   })
+
+  it.each(['# Reviewer\n\nTerse.', 'You are Reviewer, a terse bot.'])(
+    'follows a SOUL.md that names the bot differently with its current name: %j',
+    (soul) => {
+      const preamble = buildBotPreamble({ name: 'Critic', agent: 'claude', soul, memory: null })
+      expect(preamble).toContain(
+        `## SOUL.md\n\n${soul}\n\n${botNameLine('Critic')}\n\n## MEMORY.md`
+      )
+    }
+  )
 
   it("lets only the owner's and Who can ask's PR comments reach the worker from a PR wait", () => {
     const preamble = buildBotPreamble({

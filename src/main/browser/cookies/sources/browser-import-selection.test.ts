@@ -67,3 +67,30 @@ it('refuses a refresh for a different destination with the same Chrome directory
     reasonCode: 'savedChromeProfileUnavailable'
   })
 })
+
+it('refreshes Default only while Chrome lists it, even when its old database remains', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-chrome-default-'))
+  try {
+    vi.spyOn(profiles, 'browserRootPath').mockReturnValue(root)
+    mkdirSync(join(root, 'Default'))
+    writeFileSync(join(root, 'Default', 'Cookies'), '')
+    const localState = join(root, 'Local State')
+    writeFileSync(localState, JSON.stringify({ profile: { info_cache: { Default: {} } } }))
+    const refresh = { browserFamily: 'chrome', browserProfile: 'Default', refresh: true } as const
+    expect(selectBrowserProfile(detectInstalledBrowsers('chrome')[0], refresh)).toMatchObject({
+      selectedProfile: 'Default'
+    })
+
+    writeFileSync(localState, JSON.stringify({ profile: { info_cache: {} } }))
+    const [detected] = detectInstalledBrowsers('chrome')
+    expect(selectBrowserProfile(detected, { browserFamily: 'chrome' })).toMatchObject({
+      selectedProfile: 'Default'
+    })
+    expect(selectBrowserProfile(detected, refresh)).toMatchObject({
+      ok: false,
+      reasonCode: 'savedChromeProfileUnavailable'
+    })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

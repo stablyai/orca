@@ -15,6 +15,7 @@ export type DetectedBrowser = {
   keychainService?: string
   keychainAccount?: string
   profiles: BrowserProfile[]
+  profilesFromLocalState?: boolean
   selectedProfile: string
 }
 
@@ -145,17 +146,14 @@ export function isSafeBrowserProfileDirectory(directory: unknown): directory is 
 }
 
 // Local State maps profile directories to display names.
-export function discoverProfiles(browserRoot: string): BrowserProfile[] {
+export function discoverListedChromiumProfiles(browserRoot: string): BrowserProfile[] {
   try {
     const localStatePath = join(browserRoot, 'Local State')
-    if (!existsSync(localStatePath)) {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
     const raw = readFileSync(localStatePath, 'utf-8')
     const localState = JSON.parse(raw)
     const infoCache = localState?.profile?.info_cache
-    if (!infoCache || typeof infoCache !== 'object') {
-      return [{ name: 'Default', directory: 'Default' }]
+    if (!infoCache || typeof infoCache !== 'object' || Array.isArray(infoCache)) {
+      return []
     }
     const profiles: BrowserProfile[] = []
     for (const [dir, info] of Object.entries(infoCache)) {
@@ -166,9 +164,9 @@ export function discoverProfiles(browserRoot: string): BrowserProfile[] {
       const profileName = (info as { name?: string })?.name ?? dir
       profiles.push({ name: profileName, directory: dir })
     }
-    return profiles.length > 0 ? profiles : [{ name: 'Default', directory: 'Default' }]
+    return profiles
   } catch {
-    return [{ name: 'Default', directory: 'Default' }]
+    return []
   }
 }
 

@@ -54,24 +54,28 @@ async function writePayload(rootPath: string): Promise<string> {
 }
 
 describe('AppImage generation namespace', () => {
-  it('reclaims idle legacy generations but keeps resident and installed ones', async () => {
-    const { options, keep } = await makeFixture()
-    const legacyNamespace = resolveLegacyAppImageNamespacePath(options)
-    const [idle, resident, installed] = ['c', 'd', 'e'].map((key) =>
-      join(legacyNamespace, key.repeat(24))
-    )
-    const installedLauncher = await writePayload(installed!)
-    await Promise.all([writePayload(keep.rootPath), writePayload(idle!), writePayload(resident!)])
-    publishAppImageLauncherEndpoint(options.cacheRootPath, 'installed', installedLauncher)
-    residentExecutables.paths = [join(resident!, 'orca-ide')]
+  // Publishing the installed endpoint is a file symlink, which Windows only permits elevated.
+  it.skipIf(process.platform === 'win32')(
+    'reclaims idle legacy generations but keeps resident and installed ones',
+    async () => {
+      const { options, keep } = await makeFixture()
+      const legacyNamespace = resolveLegacyAppImageNamespacePath(options)
+      const [idle, resident, installed] = ['c', 'd', 'e'].map((key) =>
+        join(legacyNamespace, key.repeat(24))
+      )
+      const installedLauncher = await writePayload(installed!)
+      await Promise.all([writePayload(keep.rootPath), writePayload(idle!), writePayload(resident!)])
+      publishAppImageLauncherEndpoint(options.cacheRootPath, 'installed', installedLauncher)
+      residentExecutables.paths = [join(resident!, 'orca-ide')]
 
-    await pruneAppImageExtractedRoots(keep.rootPath, legacyNamespace)
+      await pruneAppImageExtractedRoots(keep.rootPath, legacyNamespace)
 
-    expect(existsSync(idle!)).toBe(false)
-    expect(existsSync(resident!)).toBe(true)
-    expect(existsSync(installed!)).toBe(true)
-    expect(existsSync(keep.rootPath)).toBe(true)
-  })
+      expect(existsSync(idle!)).toBe(false)
+      expect(existsSync(resident!)).toBe(true)
+      expect(existsSync(installed!)).toBe(true)
+      expect(existsSync(keep.rootPath)).toBe(true)
+    }
+  )
 
   it.runIf(process.platform === 'linux')(
     'keeps a generation leased by a live process and reclaims it once the lease is stale',

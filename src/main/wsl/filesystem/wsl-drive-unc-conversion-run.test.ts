@@ -127,6 +127,56 @@ describe('startWslDriveUncConversion', () => {
     })
   })
 
+  it('pauses only the local row when an SSH row shares the repo id', async () => {
+    const remote = String.raw`\\wsl.localhost\Ubuntu\mnt\c\remote`
+    const withSibling = (): PersistedState => {
+      const value = state()
+      value.repos = [...value.repos, { ...value.repos[0], path: remote, connectionId: 'ssh-1' }]
+      return value
+    }
+    const run = deps({ readProfileState: async () => withSibling() })
+    await startWslDriveUncConversion(run, REQUEST)
+    expect(run.pause).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceKeys: new Set([`repo-a::${UNC}`]) })
+    )
+  })
+
+  it("refuses a conversion whose saved worktree is a refused project's folder", async () => {
+    const WT1 = String.raw`\\wsl.localhost\Ubuntu\mnt\c\work\wt1`
+    const withWorktree = (): PersistedState => {
+      const value = state()
+      // Its Linux worktree base leaves no single drive path, so it is refused as mixed-locations.
+      value.repos.push({
+        id: 'repo-x',
+        path: WT1,
+        displayName: 'wt1',
+        badgeColor: '',
+        addedAt: 0,
+        worktreeBasePath: '/home/me/worktrees'
+      })
+      value.worktreeMeta = {
+        [`repo-a::${WT1}`]: {
+          displayName: 'wt1',
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          linkedLinearIssue: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0
+        }
+      }
+      return value
+    }
+    const run = deps({ readProfileState: async () => withWorktree() })
+    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
+      outcome: 'refused',
+      blockers: [{ kind: 'not-convertible', id: 'repo-x', reason: 'overlaps-refused-project' }]
+    })
+  })
+
   it('refuses a second conversion while one waits for its restart', async () => {
     await startWslDriveUncConversion(deps(), REQUEST)
     expect(await startWslDriveUncConversion(deps(), REQUEST)).toEqual({
