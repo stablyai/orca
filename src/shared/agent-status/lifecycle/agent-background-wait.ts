@@ -1,7 +1,11 @@
 import type { AgentStatusPayload } from '../contracts/agent-status-types'
 import { isAgentChildWork, isLiveChildWork } from '../child-work/agent-status-child-work-liveness'
 import type { AgentChildWorkRecord } from '../child-work/agent-status-child-work'
-import { AGENT_STATUS_BACKGROUND_COMMANDS_MAX } from '../contracts/agent-status-field-normalization'
+import {
+  AGENT_STATUS_BACKGROUND_COMMANDS_MAX,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  normalizeOptionalField
+} from '../contracts/agent-status-field-normalization'
 
 /** The lead agent ended its turn while background tasks it started still run: when, and what they run. */
 export type AgentBackgroundWait = { since: number; commands: string[] }
@@ -33,7 +37,12 @@ export function childWorkBackgroundCommands(
 ): string[] | undefined {
   const commands = children.flatMap((child) =>
     child.membership === 'live' && isLiveChildWork(child) && !isAgentChildWork(child)
-      ? [child.operation?.input ?? child.description ?? child.name ?? 'background task']
+      ? [
+          normalizeOptionalField(
+            child.operation?.input ?? child.description ?? child.name,
+            AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
+          ) ?? 'background task'
+        ]
       : []
   )
   return commands.length > 0 ? commands.slice(0, AGENT_STATUS_BACKGROUND_COMMANDS_MAX) : undefined

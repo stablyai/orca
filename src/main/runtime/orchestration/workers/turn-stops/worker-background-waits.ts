@@ -6,13 +6,17 @@ import {
   structuredAgentSessionStatusPaneKey
 } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import {
+  readWorkerPresence,
+  settleWorkerRestUnreported
+} from '../../db/worker-presence/worker-presence-store'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-turn-stops'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
 import {
   workerTurnStopDispatchId,
+  type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
@@ -28,7 +32,6 @@ type PaneWorker = {
   db: OrchestrationDb
   target: WorkerTurnStopDispatch
   from: string
-  fence: string
 }
 
 /** A worker whose turn ended while its own background tasks still run is waiting, not stopped: its
@@ -42,6 +45,11 @@ export class WorkerBackgroundWaits {
   constructor(private readonly deps: WorkerBackgroundWaitsDeps) {}
 
   observe(change: AgentPaneChange): void {
+    // A held turn's row is always working: a resting pane reads nothing unless it was waiting.
+    const phase = change.kind === 'moved' ? change.to : change.phase
+    if (phase !== 'working' && !this.waitingSince.has(change.paneKey)) {
+      return
+    }
     try {
       this.observePane(change.paneKey)
     } catch (error) {
@@ -51,11 +59,11 @@ export class WorkerBackgroundWaits {
 
   /** Re-arms a recorded wait's notice, as after a restart; a wait already due is decided now. */
   arm(db: OrchestrationDb, dispatchId: string): void {
-    const since = recordedWaitSince(db, dispatchId)
-    if (since === null) {
+    const recorded = recordedWait(db, dispatchId)
+    if (!recorded) {
       return
     }
-    const dueAt = workerBackgroundWaitDueAt(since)
+    const dueAt = workerBackgroundWaitDueAt(recorded.since)
     if (this.timers.get(dispatchId)?.dueAt === dueAt) {
       return
     }
@@ -85,19 +93,24 @@ export class WorkerBackgroundWaits {
       if (this.waitingSince.get(paneKey) === wait.since) {
         return
       }
-      this.waitingSince.set(paneKey, wait.since)
-      for (const worker of this.workersOf(paneKey, row, wait.since)) {
+      const workers = this.workersOf(paneKey, row)
+      // Seen again until a worker is found: a first sighting before its Dispatch resolves still counts.
+      if (workers.length > 0) {
+        this.waitingSince.set(paneKey, wait.since)
+      }
+      for (const worker of workers) {
         observeWorker(
           worker.db,
           worker.target,
           {
             presence: 'at-rest',
-            fence: worker.fence,
+            // The turn end names the wait: a restart that remints the process id is the same wait.
+            fence: `background:${wait.since}`,
             legacyStopKey: `${paneKey}:background:${wait.since}`,
             rest: {
               from: worker.from,
               reason: 'background-wait',
-              backgroundWait: wait,
+              backgroundWait: { ...wait, paneKey },
               lastOutput: row?.lastAssistantMessage,
               turnStartedAt: row?.turnStartedAt
             }
@@ -114,19 +127,30 @@ export class WorkerBackgroundWaits {
     // Its lead took a turn again (a finished task woke it, or mail did): the wait is over. A rest,
     // a prompt or an exit is the other edges' own news.
     if (row && row.mainAgent?.state !== 'done' && row.state !== 'done') {
-      for (const worker of this.workersOf(paneKey, row, null)) {
+      for (const worker of this.workersOf(paneKey, row)) {
         observeWorker(worker.db, worker.target, { presence: 'working' }, this.deps)
+        const dispatchId = workerTurnStopDispatchId(worker.target)
+        this.timers.get(dispatchId)?.cancel()
+        this.timers.delete(dispatchId)
       }
     }
   }
 
-  /** A notice falls due: the stored rest decides, so a turn, worker_done, stop or exit since supersedes it. */
+  /** A notice falls due: the stored rest decides, so a turn, worker_done, stop or exit since supersedes
+   *  it; and its pane's row must still show this wait, whichever edge ended it unseen. A pane with no
+   *  row yet (not restored) leaves the record to decide. */
   private decide(dispatchId: string): void {
     const db = this.deps.getDb()
-    if (!db) {
+    const recorded = db ? recordedWait(db, dispatchId) : null
+    if (!db || !recorded) {
       return
     }
     try {
+      const row = recorded.paneKey ? this.deps.readHookRow(recorded.paneKey) : null
+      if (row && agentBackgroundWait(row)?.since !== recorded.since) {
+        settleWorkerRestUnreported(db, dispatchId)
+        return
+      }
       reconsiderWorkerRest(db, dispatchId, this.deps)
     } catch (error) {
       console.warn('[orchestration] deciding a worker background wait failed', dispatchId, error)
@@ -134,11 +158,7 @@ export class WorkerBackgroundWaits {
   }
 
   /** The open Dispatches this pane's worker runs: a terminal's by its handle, a chat's by its session. */
-  private workersOf(
-    paneKey: string,
-    row: AgentStatusIpcPayload | null,
-    since: number | null
-  ): PaneWorker[] {
+  private workersOf(paneKey: string, row: AgentStatusIpcPayload | null): PaneWorker[] {
     const sessionId =
       row?.structuredHost && row.tabId ? structuredAgentSessionIdOfTab(row.tabId) : null
     if (sessionId) {
@@ -147,8 +167,7 @@ export class WorkerBackgroundWaits {
         ? chatWorkerDispatches(sessionId, db).map(({ dispatch, from }) => ({
             db,
             target: { kind: 'local' as const, dispatch },
-            from,
-            fence: `background:${sessionId}:${since}`
+            from
           }))
         : []
     }
@@ -156,44 +175,33 @@ export class WorkerBackgroundWaits {
     if (!resolved) {
       return []
     }
-    // A relaunched agent in the same pane is a new process, whatever its hook clock says.
-    const incarnation = this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle
-    return [
-      {
-        db: resolved.db,
-        target: resolved.target,
-        from: resolved.handle,
-        fence: `background:${incarnation}:${since}`
-      }
-    ]
+    return [{ db: resolved.db, target: resolved.target, from: resolved.handle }]
   }
 }
 
-/** The turn end a Dispatch's undecided background wait counts from; null for any other rest. */
-function recordedWaitSince(db: OrchestrationDb, dispatchId: string): number | null {
+/** A Dispatch's undecided background wait: its turn end and pane; null for any other rest. */
+function recordedWait(
+  db: OrchestrationDb,
+  dispatchId: string
+): { since: number; paneKey?: string } | null {
   const row = readWorkerPresence(db, dispatchId)
   if (!row?.report || row.presence !== 'resting') {
     return null
   }
   try {
-    const rest: unknown = JSON.parse(row.report)
-    if (
-      rest &&
-      typeof rest === 'object' &&
-      'reason' in rest &&
-      rest.reason === 'background-wait' &&
-      'backgroundWait' in rest &&
-      rest.backgroundWait &&
-      typeof rest.backgroundWait === 'object' &&
-      'since' in rest.backgroundWait &&
-      typeof rest.backgroundWait.since === 'number'
-    ) {
-      return rest.backgroundWait.since
-    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only observeWorker writes this column, from a stored rest; every field is checked below.
+    const rest = JSON.parse(row.report) as Partial<WorkerTurnStop> | null
+    const wait = rest?.reason === 'background-wait' ? rest.backgroundWait : undefined
+    return typeof wait?.since === 'number'
+      ? {
+          since: wait.since,
+          ...(typeof wait.paneKey === 'string' ? { paneKey: wait.paneKey } : {})
+        }
+      : null
   } catch {
     // An unreadable rest is decided by the presence report itself.
+    return null
   }
-  return null
 }
 
 /** A chat whose turn its own background tasks hold open, by its status row. */

@@ -56,8 +56,9 @@ export type WorkerTurnStop = {
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */
   requestError?: WorkerRequestError
-  /** For `background-wait`: when the turn ended and what its background tasks run. */
-  backgroundWait?: AgentBackgroundWait
+  /** For `background-wait`: when the turn ended, what its background tasks run, and the pane whose
+   *  row showed it (absent on a paired server's relayed copy). */
+  backgroundWait?: AgentBackgroundWait & { paneKey?: string }
 }
 
 /** What the report of a rest, as opposed to a worker gone, carries. */
@@ -117,12 +118,16 @@ export function isDeliberateRest(
   if (stop.requestError && !stop.requestError.heldByWaits) {
     return false
   }
-  if (stop.reason === 'background-wait') {
-    return Date.now() < workerBackgroundWaitDueAt(stop.backgroundWait?.since ?? 0)
+  if (
+    stop.reason === 'background-wait' &&
+    Date.now() < workerBackgroundWaitDueAt(stop.backgroundWait?.since ?? 0)
+  ) {
+    return true
   }
+  // Past its bound, a background wait is still deliberate for every reason a clean finish is.
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
-    (stop.reason === 'finished' &&
+    ((stop.reason === 'finished' || stop.reason === 'background-wait') &&
       (db.awaitsAnswerToLatestQuestion(dispatchId) ||
         rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
         (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))))

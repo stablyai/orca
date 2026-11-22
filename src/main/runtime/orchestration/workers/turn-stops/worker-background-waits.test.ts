@@ -74,14 +74,14 @@ describe('a worker waiting on its own background task', () => {
   })
 
   // One Orca process: a restart is a new one over the same database.
-  function startOrca(): WorkerBackgroundWaits {
+  function startOrca(incarnation = 'incarnation_1'): WorkerBackgroundWaits {
     return new WorkerBackgroundWaits({
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {},
       readHookRow: () => row,
       getHandle: () => HANDLE,
-      getProcessIncarnation: () => 'incarnation_1',
+      getProcessIncarnation: () => incarnation,
       setTimer: (run, delayMs) => {
         const timer = { at: Date.now() + delayMs, run, cancelled: false }
         timers.push(timer)
@@ -124,9 +124,9 @@ describe('a worker waiting on its own background task', () => {
       `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 60 min`
     )
 
-    // The same wait seen again, live or after a restart, is the same fact.
+    // The same wait seen again, live or after a restart that remints the process id, is the same fact.
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
-    const restarted = startOrca()
+    const restarted = startOrca('incarnation_after_restart')
     restarted.observe({
       kind: 'seeded',
       paneKey: PANE,
@@ -151,6 +151,23 @@ describe('a worker waiting on its own background task', () => {
     advanceTo(TURN_END + 30 * MINUTE)
     row = leadWorkingRow(TURN_END + 30 * MINUTE)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
+    advanceTo(TURN_END + 90 * MINUTE)
+    expect(notices()).toEqual([])
+  })
+
+  it('stays quiet when the row shows a new turn that no edge reported', () => {
+    row = heldRow(TURN_END)
+    startOrca().observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: null,
+      phase: 'working',
+      at: 0
+    })
+    // Orca was down while a finished task woke the worker: the restored row is already a new turn.
+    timers = []
+    row = leadWorkingRow(TURN_END + 10 * MINUTE)
+    startOrca().arm(db, dispatchId)
     advanceTo(TURN_END + 90 * MINUTE)
     expect(notices()).toEqual([])
   })
