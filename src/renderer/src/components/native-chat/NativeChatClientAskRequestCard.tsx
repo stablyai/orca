@@ -67,7 +67,9 @@ export function NativeChatClientAskRequestCard({
   const t = useTranslate()
   const reading = useClientAskReading(card.messageId)
   const here = useOwnInstallation() === client.installationId
-  const computer = here ? t('bots.groups.thisComputer', 'This computer') : client.computer
+  const computer = here
+    ? t('bots.groups.thisComputer', 'This computer')
+    : client.computer || t('components.native-chat.clientAsk.pairedComputer', 'Paired computer')
   const sent = Boolean(card.messageId)
   const held = useHeldPairedServerAsk(card.messageId, here && reading.outcome === null)
   const heading = !sent

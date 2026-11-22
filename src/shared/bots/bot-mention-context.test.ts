@@ -140,7 +140,7 @@ it("tells the agent how to message a paired computer's bot with --on-client, nam
       }
     ])
   ).toBe(
-    `<orca_context>Perf bot is an agent on "Alice's Mac", a computer paired to this one. To message it, run \`orca orchestration send --on-client install-a --to "bot:Perf bot" --type question|handoff --subject … --body-file …\`; a person on that computer approves it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.</orca_context>`
+    `<orca_context>Perf bot is an agent on "Alice's Mac", a computer paired to this one. To message it, run \`orca orchestration send --on-client install-a --to "bot:Perf bot" --type question|handoff --subject … --body-file …\`; that computer's owner may need to approve it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.</orca_context>`
   )
   expect(
     botMentionContext([

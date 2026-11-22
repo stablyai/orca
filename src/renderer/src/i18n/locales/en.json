@@ -22613,6 +22613,7 @@
       "clientAsk": {
         "declined": "Declined",
         "notConnected": "Wasn’t connected",
+        "pairedComputer": "Paired computer",
         "waitingForYou": "Waiting for you",
         "waitingOn": "Waiting for approval on {{computer}}"
       }

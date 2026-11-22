@@ -14,7 +14,10 @@ import {
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 import { clientEnvironmentId } from '../../../../orchestration/federation/client-asks/client-ask-environment'
-import { requireListeningClient } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import {
+  lastClientAskName,
+  requireListeningClient
+} from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import { clientAskRootSession } from '../../../../orchestration/federation/client-asks/client-ask-root-session'
 import {
@@ -83,8 +86,11 @@ export function sendClientAsk(args: {
   try {
     client = requireListeningClient(runtime, params.onClient, 'Nothing was sent.')
   } catch (error) {
-    // Offline: the asking chat's card says it wasn't sent.
-    cardFor({ installationId: params.onClient, computer: params.onClient }).refused(error)
+    // Offline: the asking chat's card says it wasn't sent, naming the computer if it pulled here before.
+    cardFor({
+      installationId: params.onClient,
+      computer: lastClientAskName(runtime, params.onClient) ?? ''
+    }).refused(error)
     throw error
   }
   const card = cardFor({ installationId: client.installationId, computer: client.name })
