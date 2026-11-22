@@ -1,5 +1,6 @@
 import { moveDisposition, notApplicableDisposition } from './wsl-move-dispositions'
 import type { WslMoveFieldDisposition } from './wsl-move-dispositions'
+import { GLOBAL_PREFERENCE_STORAGE_MODULES } from './wsl-move-global-preference-storage-modules'
 
 /** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
@@ -48,56 +49,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'Web client only; the desktop keeps visit recency in the session.'
     ),
   ...Object.fromEntries(
-    [
-      'src/renderer/src/components/browser-pane/annotate/markup-tools/use-markup-draw-hint.ts',
-      'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
-      'src/renderer/src/components/floating-terminal/geometry/floating-terminal-panel-bounds.ts',
-      'src/renderer/src/components/floating-terminal/state/floating-terminal-panel-view-state.ts',
-      'src/renderer/src/components/floating-terminal/trigger/floating-terminal-trigger-position.ts',
-      'src/renderer/src/components/floating-terminal/orchestration/use-floating-terminal-orchestration-dismissal.ts',
-      'src/renderer/src/components/github-project/column-widths.ts',
-      'src/renderer/src/components/github-project/columns.ts',
-      'src/renderer/src/components/github-project/roadmap-zoom-preference.ts',
-      'src/renderer/src/components/task-page/jira/listing/jira-linked-view-storage.ts',
-      'src/renderer/src/components/task-page/jira/listing/jira-list-columns.ts',
-      'src/renderer/src/components/task-page/jira/creation/jira-prompt-templates.ts',
-      'src/renderer/src/components/task-page/jira/listing/jira-view-mode-storage.ts',
-      'src/renderer/src/components/onboarding/landing/landing-preflight-dismissal.ts',
-      'src/renderer/src/components/task-page/linear/filters/linear-issue-view-storage.ts',
-      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx',
-      'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
-      'src/renderer/src/components/pet/PetOverlay.tsx',
-      'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',
-      'src/renderer/src/components/right-sidebar/checks-panel/comments/pr-comment-presentation.ts',
-      'src/renderer/src/components/settings/browser/use/BrowserUsePane.tsx',
-      'src/renderer/src/components/settings/developer-permissions/local-network-connection-history.ts',
-      'src/renderer/src/components/skills/setup/linear-agent-skill-runtime.ts',
-      'src/renderer/src/components/skills/setup/LinearAgentSkillSetupPrompt.tsx',
-      'src/renderer/src/components/sidebar/chrome/mobile-sidebar-onboarding-badge.ts',
-      'src/renderer/src/components/maintenance/terminal-daemon/SeveredTerminalDaemonBanner.tsx',
-      'src/renderer/src/components/sidebar/chrome/SidebarToolbar.tsx',
-      'src/renderer/src/components/task-page/jira/boards/task-page-jira-board-column-order.ts',
-      'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
-      'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
-      'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
-      'src/renderer/src/components/unexpected-signout/UnexpectedSignoutCard.tsx',
-      'src/renderer/src/lib/document-theme.ts',
-      'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
-      'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
-      'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
-      'src/renderer/src/web/preload-api/keybindings/web-keybindings-api.ts',
-      'src/renderer/src/web/preload-api/app/web-onboarding-api.ts',
-      'src/renderer/src/web/preload-api/preferences/web-preferences-store.ts',
-      'src/renderer/src/web/preload-api/preferences/web-settings-api.ts',
-      'src/renderer/src/web/preload-api/web-storage.ts',
-      'src/renderer/src/web/preload-api/workspaces/web-workspace-session-api.ts',
-      'src/renderer/src/web/testing/web-preload-api-test-harness.ts',
-      'src/renderer/src/web/runtime/security/web-runtime-credential-source.ts',
-      'src/renderer/src/web/pairing/web-runtime-environment.ts',
-      'src/shared/settings/default-global-settings.ts'
-    ].map((path) => [
+    GLOBAL_PREFERENCE_STORAGE_MODULES.map((path) => [
       path,
       notApplicableDisposition(62, 'Global preference or web-client storage.')
     ])

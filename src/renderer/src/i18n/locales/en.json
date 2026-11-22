@@ -7742,7 +7742,10 @@
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
-          "unmuteNotifications": "Unmute Notifications"
+          "unmuteNotifications": "Unmute Notifications",
+          "removeFromGridView": "Remove from Grid View",
+          "addToGridView": "Add to Grid View",
+          "gridViewFull": "Grid View holds up to {{value0}} workspaces. Remove one to add another."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -20592,6 +20595,18 @@
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
         "stateStopped": "Stopped"
+      },
+      "workspace-grid-view": {
+        "WorkspaceGridViewCellHeader": {
+          "cellNameWithProject": "{{value0}} ({{value1}})",
+          "removeFromGridView": "Remove from Grid View",
+          "removeNamedFromGridView": "Remove from Grid View: {{value0}}"
+        },
+        "WorkspaceGridViewEmptyCell": {
+          "openingWorkspace": "Opening workspace…",
+          "openNamedWorkspace": "Open Workspace: {{value0}}",
+          "openWorkspace": "Open Workspace"
+        }
       }
     },
     "i18n": {
