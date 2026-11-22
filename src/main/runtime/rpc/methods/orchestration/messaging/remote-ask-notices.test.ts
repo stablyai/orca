@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { openRemoteRunLink } from '../../../../orchestration/db/remote-owned/remote-run-links'
+import {
+  openRemoteRunLink,
+  remoteServerPin
+} from '../../../../orchestration/db/remote-owned/remote-run-links'
+import { importRemoteOwnedItem } from '../../../../orchestration/db/remote-owned/remote-owned-import'
 import {
   getRemoteOwnedQuestion,
   recordRemoteAskAnswered
@@ -106,6 +110,53 @@ describe("a paired worker's question its coordinator here stopped on", () => {
 
     expect(call.send).toHaveBeenCalledTimes(2)
     expect(getRemoteOwnedQuestion(db, id)).toMatchObject({ ended: 'unanswered', awaiting: null })
+  })
+
+  it('tells a worker there at once when no one coordinates its Run here', async () => {
+    call.send.mockResolvedValue({})
+    const reconciler = start()
+    const run = db.createRun({ objective: 'o', coordinatorHandle: null, coordinatorPaneKey: null })
+    const task = db.createTask({ spec: 'work', runId: run.id })
+    const server = {
+      environmentId: 'env_box',
+      name: 'Build Box',
+      peerFingerprint: 'fp-host',
+      homePeerFingerprint: 'fp-home',
+      pairingRevision: 1
+    }
+    const link = openRemoteRunLink(db, run.id, server)
+    importRemoteOwnedItem(db, remoteServerPin(server), {
+      conversationId: link.conversation_id,
+      sequence: 1,
+      messageId: 'msg_box_q',
+      kind: 'worker_mail',
+      payload: JSON.stringify({
+        v: 1,
+        id: 'msg_box_q',
+        homeRunId: run.id,
+        peerRunId: 'run_on_box',
+        message: {
+          from: 'term_w',
+          type: 'question',
+          subject: 'Question',
+          body: 'Which color?',
+          payload: null,
+          priority: 'normal',
+          threadId: null
+        },
+        dispatchId: 'ctx_box',
+        taskId: task.id
+      })
+    })
+    await decided(reconciler)
+
+    expect(call.send.mock.calls[0]?.[2]).toMatchObject({
+      params: {
+        to: 'dispatch:ctx_box',
+        body: `No one coordinates Run ${run.id} now, so no one will read your question. Decide it yourself and say what you chose when you report.`
+      }
+    })
+    expect(getRemoteOwnedQuestion(db, 'msg_box_q')).toMatchObject({ ended: 'dropped' })
   })
 
   it('owes nothing once the answer reached that computer', async () => {
