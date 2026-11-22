@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyBotMemoryChange, type BotMemoryChange } from '../../shared/bot-memory-lines'
+import { applyBotMemoryChange } from '../../shared/bot-memory-lines'
 import { TIDY_UP_FAILURES } from './bot-memory-tidy-up'
 import { applyTidyUpDraft } from './bot-memory-tidy-up-apply'
 
@@ -11,33 +11,30 @@ const range = (from: number, to: number): number[] =>
 async function tidy(memory: string, index: string) {
   let file = memory
   const files = new Map<string, string>()
-  const deps = {
+  const deps: Parameters<typeof applyTidyUpDraft>[0] = {
     memory: {
-      change: async (
-        _botId: string,
-        _folder: string,
-        _by: unknown,
-        compute: (file: string) => BotMemoryChange,
-        beforeWrite: (change: BotMemoryChange) => Promise<void>
-      ) => {
-        const change = compute(file)
-        await beforeWrite(change)
+      change: async (_botId, _folder, _by, make, beforeWrite) => {
+        const change = await make(file, null)
+        await beforeWrite?.(change)
         file = applyBotMemoryChange(file, change)
         return change
       }
     },
     fs: {
-      readText: async (path: string) => files.get(path) ?? null,
-      writeText: async (path: string, text: string) => (files.set(path, text), true),
-      replaceText: async (path: string, _before: string, text: string) => (
-        files.set(path, text),
-        true
-      ),
+      readText: async (path) => files.get(path) ?? null,
+      writeText: async (path, text) => {
+        files.set(path, text)
+        return true
+      },
+      replaceText: async (path, _expected, text) => {
+        files.set(path, text)
+        return true
+      },
       makeDirectory: async () => {}
     }
   }
   const reply = `BEGIN MEMORY.md\n${index}END MEMORY.md`
-  const outcome = await applyTidyUpDraft(deps as never, {
+  const outcome = await applyTidyUpDraft(deps, {
     botId: 'b',
     folder: '/home',
     memory,
