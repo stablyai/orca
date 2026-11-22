@@ -34,20 +34,24 @@ export function inspectTerminalHostSession(
     retiredIncarnation: retired.get(sessionId),
     authorityGeneration,
     nextObservationEpoch
-  }).then((result) =>
-    foregroundExitWatches?.noteInspection(
+  }).then((result) => {
+    const proven = provenAgentProcess(result.foregroundProcessEvidence)
+    return foregroundExitWatches?.noteInspection(
       sessionId,
       sessions.get(sessionId),
       result.foregroundProcess,
-      provenAgentPid(result.foregroundProcessEvidence)
+      proven?.pid,
+      proven?.startTime
     )
       ? { ...result, foregroundExitWatched: true as const }
       : result
-  )
+  })
 }
 
-function provenAgentPid(evidence: RemoteForegroundEvidence | undefined): number | undefined {
+function provenAgentProcess(
+  evidence: RemoteForegroundEvidence | undefined
+): { pid: number; startTime: string } | undefined {
   return evidence?.verdict === 'live' && evidence.fence.platform === 'posix'
-    ? evidence.fence.process?.pid
+    ? evidence.fence.process
     : undefined
 }

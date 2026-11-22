@@ -63,6 +63,27 @@ describe('ForegroundExitWatches', () => {
     expect(watches.noteInspection('pane', source, 'gemini.exe')).toBe(true)
   })
 
+  it('drops a watch whose pid now belongs to another process and never re-arms it', async () => {
+    // The agent exited and its pid was reused before the watch was armed.
+    const checked: [number, string | undefined][] = []
+    const recycled = new ForegroundExitWatches(
+      (ptyId) => notices.push(ptyId),
+      async (pid, expected) => {
+        checked.push([pid, expected.startTime])
+        return false
+      }
+    )
+    const source = { isAlive: true, foregroundAgent: () => null }
+    expect(recycled.noteInspection('pane', source, 'codex', 300, 'start-a')).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(checked).toEqual([[300, 'start-a']])
+    expect(watched.size).toBe(0)
+    expect(notices).toEqual(['pane'])
+    expect(recycled.noteInspection('pane', source, 'codex', 300, 'start-a')).toBe(false)
+  })
+
   it('announces once an agent a lookup names after the read returned', async () => {
     let agentPid: number | null = null
     let land: () => void = () => {}

@@ -7,6 +7,15 @@ import { setProcessExitWatchNativeForTests } from '../../../pty/process-retireme
 vi.mock('../../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: vi.fn(async () => {})
 }))
+// The fake pids are not real processes; identity checks belong to the watch unit tests.
+vi.mock('../foreground-agent-identity-check', async () => {
+  const { ForegroundExitWatches } =
+    await import('../../../pty/process-retirement/foreground-exit-watches')
+  return {
+    createForegroundExitWatches: (onAgentChange?: (sessionId: string) => void) =>
+      new ForegroundExitWatches(onAgentChange, async () => true)
+  }
+})
 
 function createFakeExitWatchNative() {
   const live = new Map<number, { pid: number; onExit: () => void }>()

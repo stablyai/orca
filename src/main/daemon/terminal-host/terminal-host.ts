@@ -33,6 +33,7 @@ import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import { inspectTerminalHostSession } from './terminal-host-session-inspection'
+import { createForegroundExitWatches } from './foreground-agent-identity-check'
 
 import {
   confirmTerminalHostForegroundProcess,
@@ -44,7 +45,7 @@ import {
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
 
-import { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
+import type { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -75,7 +76,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.foregroundExitWatches = new ForegroundExitWatches(opts.onSessionForegroundChange)
+    this.foregroundExitWatches = createForegroundExitWatches(opts.onSessionForegroundChange)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 

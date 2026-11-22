@@ -9,6 +9,9 @@ export type ForegroundPidSource = {
   pendingForegroundRefresh?(): Promise<unknown> | null
 }
 
+/** The agent a read named, for a check that the watched pid still belongs to it (a pid can be recycled). */
+export type ForegroundAgentIdentity = { processName: string; startTime?: string }
+
 // A read naming a stale agent can add a pid before the real one is reported; keep a few, never unbounded.
 const MAX_WATCHES_PER_PTY = 4
 
@@ -23,7 +26,13 @@ export class ForegroundExitWatches {
   /** One re-read notice per cached pid a stale read disagreed with, so a lagging cache cannot loop. */
   private readonly mismatchedPids = new Map<string, number>()
 
-  constructor(private readonly onAgentChange?: (ptyId: string) => void) {}
+  constructor(
+    private readonly onAgentChange?: (ptyId: string) => void,
+    private readonly isSameAgent?: (
+      pid: number,
+      expected: ForegroundAgentIdentity
+    ) => Promise<boolean>
+  ) {}
 
   /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it.
    * identifiedPid is the agent process a full read proved; a group leader alone may be a wrapper that outlives it. */
@@ -31,7 +40,8 @@ export class ForegroundExitWatches {
     ptyId: string,
     source: ForegroundPidSource | undefined,
     foreground: string | null,
-    identifiedPid?: number
+    identifiedPid?: number,
+    identifiedStartTime?: string
   ): boolean {
     if (!source?.isAlive) {
       this.forget(ptyId)
@@ -83,6 +93,10 @@ export class ForegroundExitWatches {
       return false
     }
     watches.set(pid, watch)
+    this.confirmIdentity(ptyId, pid, watch, {
+      processName: foreground,
+      startTime: identifiedStartTime
+    })
     for (const [oldPid, oldWatch] of watches) {
       if (watches.size <= MAX_WATCHES_PER_PTY) {
         break
@@ -92,6 +106,30 @@ export class ForegroundExitWatches {
     }
     this.watches.set(ptyId, watches)
     return true
+  }
+
+  /** The agent may have exited and its pid been reused before the watch was armed; then the watch proves nothing. */
+  private confirmIdentity(
+    ptyId: string,
+    pid: number,
+    watch: ProcessExitWatch,
+    expected: ForegroundAgentIdentity
+  ): void {
+    if (!this.isSameAgent) {
+      return
+    }
+    void this.isSameAgent(pid, expected)
+      .catch(() => false)
+      .then((same) => {
+        if (same || this.watches.get(ptyId)?.get(pid) !== watch) {
+          return
+        }
+        watch.dispose()
+        this.watches.get(ptyId)?.delete(pid)
+        // Never re-arm this pid; the pane keeps its slow re-check until a read names another.
+        this.reportedPids.set(ptyId, pid)
+        this.onAgentChange?.(ptyId)
+      })
   }
 
   /** A lookup that lands after the read returned can name a new agent; announce it once, from the lookup itself. */
