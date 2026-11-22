@@ -111,7 +111,9 @@ export function codexWaitBesideQuestion(
       open.running.delete(callId)
     }
     dropEndedApprovals(open, startedAs)
-    dropEndedApprovals(open, asksAs)
+    // Another PreToolUse hook can rewrite input, so this call's unfinished twins can ask as it ended.
+    const twins = [...open.running.values()].filter((asked) => asked === startedAs).length
+    dropEndedApprovals(open, asksAs, twins)
   } else {
     if (eventName !== 'PreToolUse' || STARTS_AFTER_APPROVALS.has(toolName ?? '')) {
       open.approvals = []

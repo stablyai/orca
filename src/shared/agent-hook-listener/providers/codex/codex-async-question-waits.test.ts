@@ -105,6 +105,20 @@ it('keeps an approval when an identical parallel call finishes', () => {
   expect(agentWorksBehindQuestion(report({ hook_event_name: 'PostToolUse', ...inApp }))).toBe(true)
 })
 
+// Another PreToolUse hook can rewrite the command: only the two later hooks carry the new one.
+it('keeps an approval for a rewritten command while its twin finishes', () => {
+  const report = workingBehindQuestion()
+  for (const id of ['first', 'second']) {
+    report({ hook_event_name: 'PreToolUse', ...bash('git push', id) })
+  }
+  report({ hook_event_name: 'PermissionRequest', ...asked(bash('proxy git push', 'first')) })
+
+  const twin = report({ hook_event_name: 'PostToolUse', ...bash('proxy git push', 'second') })
+  expect(agentWorksBehindQuestion(twin)).toBe(false)
+  const done = report({ hook_event_name: 'PostToolUse', ...bash('proxy git push', 'first') })
+  expect(agentWorksBehindQuestion(done)).toBe(true)
+})
+
 it('keeps an MCP approval until its own call ends, even with rewritten arguments', () => {
   const report = workingBehindQuestion()
   const upload = (id: string) => ({
