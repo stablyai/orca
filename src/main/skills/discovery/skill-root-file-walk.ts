@@ -25,6 +25,8 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
 export type SkillFileWalkOptions = {
   skipHiddenDirectories?: boolean
   stopAtSkillDirectories?: boolean
+  /** Reject with SkillRootUnreadableError when the root fails to list for any reason but absence. */
+  rejectUnreadableRoot?: boolean
 }
 
 function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
@@ -76,6 +78,7 @@ export async function findSkillFiles(
   const visitedDirectoryPaths = new Set<string>()
   const readAhead = createDirectoryReadAhead({
     signal,
+    rejectUnreadableRoot: options.rejectUnreadableRoot,
     enteredChildIndexes: (dirPath, entries) =>
       enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options)
   })

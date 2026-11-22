@@ -201,7 +201,7 @@ export function MobileLinkShareFlow(
   return (
     <MobileBotShareFlow
       {...props}
-      avatar={mobileBotAvatarSource(props.bot, undefined)}
+      avatar={mobileBotAvatarSource(props.bot)}
       linkState={linkState}
     />
   )

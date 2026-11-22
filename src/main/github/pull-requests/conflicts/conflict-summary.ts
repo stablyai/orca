@@ -9,14 +9,9 @@ import {
   type GitRuntimeOptions
 } from '../../../git/command-runner/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../../../git/objects/local-git-object-quarantine'
-import { _resetCanonicalRepoKeyCacheForTests } from '../../../git/repositories/canonical-repo-key'
 import { RuntimeRemoteFetchController } from '../../../runtime/repositories/runtime-remote-fetch-controller'
+import { withLocalGitCapabilityCacheForExecution } from '../../../git/command-runner/host-routing/git-capability-state'
 import {
-  clearGitCapabilityStateForTests,
-  withLocalGitCapabilityCacheForExecution
-} from '../../../git/command-runner/host-routing/git-capability-state'
-import {
-  __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,
   dedupeBaseOidResolve,
   dedupeSummaryDerivation,
@@ -38,13 +33,6 @@ let remoteFetches: BaseRefreshController | null = null
 
 export function setPRConflictSummaryRemoteFetches(controller: BaseRefreshController): void {
   remoteFetches = controller
-}
-
-export function __resetPRConflictSummaryCachesForTests(): void {
-  clearGitCapabilityStateForTests()
-  __resetPRConflictSummaryDerivationCachesForTests()
-  _resetCanonicalRepoKeyCacheForTests()
-  remoteFetches = null
 }
 
 export async function getPRConflictSummary(

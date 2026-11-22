@@ -1,9 +1,6 @@
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 import type { RecognizedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
-import type {
-  AgentCompletionIdentityScope,
-  LastCompletionIdentity
-} from './agent-completion-identity-store'
+import type { LastCompletionIdentity } from './agent-completion-identity-store'
 import type { PendingTitleController } from './agent-completion-pending-title'
 import type { PollCadenceTier } from './agent-completion-poll-cadence'
 
@@ -34,7 +31,6 @@ export type ProcessMonitorState = {
 export type ProcessMonitorOptions = {
   options: AgentCompletionCoordinatorOptions
   state: ProcessMonitorState
-  identityScope: AgentCompletionIdentityScope
   pendingTitle: PendingTitleController
   establishAgentEvidence: () => void
   clearAgentRunEvidence: () => void

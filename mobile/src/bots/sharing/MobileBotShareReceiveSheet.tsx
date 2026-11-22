@@ -199,7 +199,7 @@ export function MobileBotShareReceiveSheet(props: {
             }}
           />
           <View style={styles.hero}>
-            <MobileBotAvatar avatar={mobileBotAvatarSource(step.bot, undefined)} size={56} />
+            <MobileBotAvatar avatar={mobileBotAvatarSource(step.bot)} size={56} />
             <Text style={styles.detail}>
               {t('bots.share.receive.haveDetail', '{{name}} · made {{date}}', {
                 name: step.bot.name,

@@ -12,6 +12,8 @@ export type QuestionEdge =
   | { kind: 'pane'; ptyId: string }
   /** A Dispatch or its worker's start changed state. */
   | { kind: 'dispatch'; id: string }
+  /** A paired computer answered a pull again: a notice it couldn't take before is sent again. */
+  | { kind: 'reachable'; environmentId: string }
 
 const listeners = new Set<(edge: QuestionEdge) => void>()
 

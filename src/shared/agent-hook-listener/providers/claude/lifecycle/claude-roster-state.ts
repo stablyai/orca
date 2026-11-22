@@ -115,6 +115,18 @@ export function readClaudeLeadModel(hookPayload: Record<string, unknown>): strin
   return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
 }
 
+/** A model observed outside the hooks (/model fires none); later lead events rebuild the row from it. */
+export function retainClaudeLeadModel(
+  state: HookListenerState,
+  paneKey: string,
+  model: string
+): void {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  if (lead && lead.model !== model) {
+    state.claudeLeadStateByPaneKey.set(paneKey, { ...lead, model })
+  }
+}
+
 /** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
 export function setClaudeMainAgentTurnState(
   state: HookListenerState,
