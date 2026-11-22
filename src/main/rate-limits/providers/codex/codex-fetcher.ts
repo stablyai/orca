@@ -26,6 +26,7 @@ import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process
 import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { getMainHttpClient } from '../../../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
+import { classifyCodexApiKeyUsageRejection } from './codex-api-key-usage-rejection'
 import {
   fetchCodexRateLimitsViaBackend,
   supplementCodexUsageWindows
@@ -45,6 +46,11 @@ import {
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import {
+  wslDistroStoppedMessage,
+  wslDistroUnverifiableMessage
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -80,6 +86,20 @@ function buildWslCodexCommand(
   }
 }
 
+/** A background poll must not start a stopped distro (E9); the home gate ran before slow awaits. */
+async function stoppedWslHomeRefusal(codexHomePath: string): Promise<ProviderRateLimits | null> {
+  const blocked = await blockedWslDistroForPath(codexHomePath)
+  if (!blocked) {
+    return null
+  }
+  return codexUnavailable(
+    blocked.state === 'stopped'
+      ? wslDistroStoppedMessage(blocked.distro, false)
+      : wslDistroUnverifiableMessage(blocked.distro),
+    'error'
+  )
+}
+
 function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   const env = { ...process.env }
   delete env.CODEX_HOME
@@ -96,9 +116,16 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     return abortedCodexRateLimitResult()
   }
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
-  const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, codexArgs)
-    : null
+  const codexHomePath = options?.codexHomePath
+  const wslCodex = codexHomePath ? buildWslCodexCommand(codexHomePath, codexArgs) : null
+  // The home was gated before the process lock, which can wait tens of seconds; a stop since must hold.
+  const refusal = wslCodex && codexHomePath ? await stoppedWslHomeRefusal(codexHomePath) : null
+  if (refusal) {
+    return refusal
+  }
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   // Worker spawn avoids cold Windows process-creation stalls (#27362); bare npm shims stay visible to spawnProcess.
   const child = spawnProcessOnWorkerThread({
@@ -203,6 +230,12 @@ async function readCodexRateLimits(
     }
   }
 
+  // The pending check reads state.sqlite over UNC after the auth probe and HTTP read.
+  const homeRefusal =
+    isWslHome && options?.codexHomePath ? await stoppedWslHomeRefusal(options.codexHomePath) : null
+  if (homeRefusal) {
+    return homeRefusal
+  }
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
     // HTTP usage never opens the state DB, so it cannot contend with the backfill (#15741).
@@ -235,7 +268,7 @@ async function readCodexRateLimits(
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
     }
     if (isCodexAuthError(rpcResult.error)) {
-      return rpcResult
+      return await classifyCodexApiKeyUsageRejection(rpcResult, options)
     }
     rpcFailure = rpcResult
   } catch {
