@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
@@ -135,13 +136,13 @@ export function collectRemoteAnswers(
     }
   })
   if (read.length > 0) {
-    db.markAsRead(read)
+    db.markAsRead(read, { kind: 'orca' })
   }
   return messages.map((message) => updated.get(message.id) ?? message)
 }
 
 /** The bot's own answer, which carries the question's id; a notice carries none. */
-function isBotAnswer(row: MessageRow, requestId: string): boolean {
+export function isBotAnswer(row: Pick<MessageRow, 'payload'>, requestId: string): boolean {
   if (!row.payload) {
     return false
   }
@@ -159,18 +160,93 @@ function isBotAnswer(row: MessageRow, requestId: string): boolean {
   }
 }
 
-/** Mail for a room's remote members arrived: copy it onto the room's posts, and open rooms re-read. */
+/** Where a room mail goes: onto its post; settled, when no post will ever take it (none, another
+ *  group's, or one whose record can't be read); or left unread, when it may be placed later. */
+type MailPlace = { post: BotGroupMessage } | 'settle' | 'wait'
+
+function placeMail(groups: BotGroupRuntime, groupId: string, threadId: unknown): MailPlace {
+  if (!threadId) {
+    return 'settle'
+  }
+  try {
+    const post = groups.store.remoteAskMessage(String(threadId))
+    if (!post) {
+      // Posts are indexed when stored, before their question is sent, and older ones when the
+      // store opens; only when that pass failed may a later start still place this mail.
+      return groups.store.remoteAsksIndexed ? 'settle' : 'wait'
+    }
+    return post.groupId === groupId ? { post } : 'settle'
+  } catch (error) {
+    console.warn('[bot-groups] could not read the post a remote answer is for', error)
+    return error instanceof ZodError || error instanceof SyntaxError ? 'settle' : 'wait'
+  }
+}
+
+/** Mail for a room's remote members arrived: copy it onto the posts it answers, and open rooms
+ *  re-read. Only the room's unread mail is read, each found by the post its question went with,
+ *  so no room's history is read here. Mail is marked read once it is on its post or no post will
+ *  take it, so it isn't looked up on every arrival; a room read still finds read mail by its
+ *  question's id. Mail whose post couldn't be written stays unread for the next arrival. */
 export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string): void {
   try {
-    const group = groups.store.list().find((entry) => entry.id === groupId)
-    if (!group) {
+    const db = groups.runtime.getOrchestrationDb()
+    const rows = db.db
+      .prepare('SELECT id, thread_id FROM messages WHERE to_handle = ? AND read = 0')
+      .all(botGroupRoomMailAddress(groupId))
+    if (rows.length === 0) {
+      groups.changed()
       return
     }
-    for (const threadId of [undefined, ...(group.threads ?? []).map((thread) => thread.id)]) {
-      collectRemoteAnswers(groups, groups.store.roomMessages(groupId, threadId, 40))
+    if (!db.db.prepare('SELECT 1 FROM bot_groups WHERE id = ?').get(groupId)) {
+      db.markAsRead(
+        rows.map((row) => String(row.id)),
+        { kind: 'orca' }
+      )
+      return
+    }
+    const settled: string[] = []
+    const posts = new Map<string, { post: BotGroupMessage; mail: string[] }>()
+    for (const row of rows) {
+      const place = placeMail(groups, groupId, row.thread_id)
+      if (place === 'settle') {
+        settled.push(String(row.id))
+      } else if (place !== 'wait') {
+        const entry = posts.get(place.post.id) ?? { post: place.post, mail: [] }
+        entry.mail.push(String(row.id))
+        posts.set(place.post.id, entry)
+      }
+    }
+    // One post at a time, so a post that can't be merged keeps no other answer back.
+    for (const { post, mail } of posts.values()) {
+      try {
+        collectRemoteAnswers(groups, [post])
+        settled.push(...mail)
+      } catch (error) {
+        console.warn('[bot-groups] could not read a remote member answer', error)
+      }
+    }
+    if (settled.length > 0) {
+      db.markAsRead(settled, { kind: 'orca' })
     }
   } catch (error) {
     console.warn('[bot-groups] could not read a remote member answer', error)
   }
   groups.changed()
+}
+
+/** At startup: settle room mail that arrived while this build wasn't running, as if it had just
+ *  come. Each room's unread mail is one seek in the inbox index. */
+export function settleStoredRoomMail(groups: BotGroupRuntime): void {
+  try {
+    const db = groups.runtime.getOrchestrationDb().db
+    const unread = db.prepare('SELECT 1 FROM messages WHERE to_handle = ? AND read = 0 LIMIT 1')
+    for (const row of db.prepare('SELECT id FROM bot_groups').all()) {
+      const groupId = String(row.id)
+      if (unread.get(botGroupRoomMailAddress(groupId))) {
+        remoteRoomMailArrived(groups, groupId)
+      }
+    }
+  } catch (error) {
+    console.warn('[bot-groups] could not read stored remote member answers', error)
+  }
 }

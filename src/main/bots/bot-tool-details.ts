@@ -85,7 +85,16 @@ export function resolveBotToolInput(
     return [row.key, value]
   })
   const secrets = Object.fromEntries(entries)
+  // The editor never sees a sign-in: with no headers it stays, and a new address starts a new one.
+  const signIn =
+    previous && 'url' in previous && entries.length === 0 ? previous.credential : undefined
   return remote
-    ? { name: draft.name, url: draft.url, transport: 'http', headers: secrets }
+    ? {
+        name: draft.name,
+        url: draft.url,
+        transport: 'http',
+        headers: secrets,
+        ...(signIn ? { credential: signIn } : {})
+      }
     : { name: draft.name, command: draft.command, args: draft.args, env: secrets }
 }

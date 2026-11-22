@@ -4,6 +4,7 @@
 import { translate } from '@/i18n/i18n'
 import type { BotConnector } from '../bot-connectors'
 import {
+  BOT_APP_CATEGORIES,
   BOT_MCP_APPS,
   type BotAppCategory,
   type BotMcpApp
@@ -14,17 +15,7 @@ import {
 } from '../../../../../shared/composio/composio-curated-apps'
 
 export type { BotAppCategory }
-
-/** Rail order; a category shows only while it lists an app. */
-export const BOT_APP_CATEGORIES: readonly BotAppCategory[] = [
-  'coding',
-  'chat',
-  'monitoring',
-  'docs',
-  'mail',
-  'sales',
-  'design'
-]
+export { BOT_APP_CATEGORIES }
 
 export function botAppCategoryName(category: BotAppCategory): string {
   switch (category) {

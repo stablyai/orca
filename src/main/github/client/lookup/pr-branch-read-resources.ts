@@ -222,7 +222,3 @@ function holdPRBranchReadFailure(
     }
   }
 }
-
-export function _prBranchReadResourceCountForTests(): number {
-  return resources.size
-}

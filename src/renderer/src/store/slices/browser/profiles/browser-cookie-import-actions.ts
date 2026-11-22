@@ -14,13 +14,24 @@ import {
   retainCookieImportExecutionHost
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { importSshPageCookies } from './browser-ssh-page-cookie-import'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
+    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, sshRoute?) => {
+      if (sshRoute) {
+        return importSshPageCookies(get, sshRoute, () =>
+          window.api.browser.sessionImportFromBrowser({
+            profileId,
+            browserFamily,
+            browserProfile,
+            sshTargetId: sshRoute.sshTargetId
+          })
+        )
+      }
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
@@ -165,20 +176,28 @@ export function createBrowserCookieImportActions(
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
       if (runtimeEnvironmentId) {
-        try {
-          const result = await callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
+        // The profile has two jars: this desktop's for This-device pages (where import lands)
+        // and the server's for its own pages, phones and agents. Clearing it signs out of both.
+        const [clientCleared, serverCleared] = await Promise.all([
+          window.api.browser
+            .sessionClearDefaultCookiesForClientHost({ environmentId: runtimeEnvironmentId })
+            .catch(() => false),
+          callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileClearDefaultCookies',
             undefined,
             { timeoutMs: 15_000 }
+          ).then(
+            (result) => result.cleared,
+            () => false
           )
-          if (result.cleared && getBrowserSettingsHostId(get()) === hostId) {
-            await get().fetchBrowserSessionProfiles()
-          }
-          return result.cleared
-        } catch {
-          return false
+        ])
+        if ((clientCleared || serverCleared) && getBrowserSettingsHostId(get()) === hostId) {
+          await get()
+            .fetchBrowserSessionProfiles()
+            .catch(() => {})
         }
+        return clientCleared !== false && serverCleared
       }
       try {
         const ok = await window.api.browser.sessionClearDefaultCookies()

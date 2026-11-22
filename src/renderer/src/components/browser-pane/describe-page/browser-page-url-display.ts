@@ -4,7 +4,8 @@ import '../../../../../shared/orca-profiles/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
@@ -28,6 +29,11 @@ export function getNotebookPathFromBrowserUrl(url: string): string | null {
 
 export function getOpenableExternalUrl(currentUrl: string): string | null {
   return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
+}
+
+/** For a page that browses through a remote host, whose loopback this desktop's browser cannot reach. */
+export function getRemoteRoutedOpenableExternalUrl(currentUrl: string): string | null {
+  return resolveRemoteFailureExternalUrl(redactKagiSessionToken(currentUrl))
 }
 
 export function retryBrowserTabLoad(

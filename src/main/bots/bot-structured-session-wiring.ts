@@ -64,6 +64,8 @@ export function botStructuredSessionWiring(deps: {
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   /** The bots on these paired servers as last read, without waiting on the network. */
   pairedBotRosters?: (servers: ReadonlySet<string>) => Promise<readonly KnownPairedBotRoster[]>
+  /** A paired computer's name while it is connected; null otherwise. */
+  clientName?: (installationId: string) => string | null
   /** Moves saved values an older Orca left behind out of reach; a launch waits for it. */
   scrubToolSecrets?: (bot: Bot) => Promise<void>
 }): Required<
@@ -127,7 +129,8 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     deps.recentChats,
-    deps.unansweredQuestionNote
+    deps.unansweredQuestionNote,
+    (botId) => botById(botId)?.name ?? null
   )
   // The host's bots at install move their saved values out now, not when each next launches.
   const scrub = deps.scrubToolSecrets
@@ -151,7 +154,8 @@ export function botStructuredSessionWiring(deps: {
   const mentions = createBotSessionMentions({
     botById,
     botChats: deps.botChats,
-    pairedBotRosters: deps.pairedBotRosters
+    pairedBotRosters: deps.pairedBotRosters,
+    clientName: deps.clientName
   })
   return {
     resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {

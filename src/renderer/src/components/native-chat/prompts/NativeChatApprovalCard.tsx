@@ -1,8 +1,7 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
-import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -19,6 +18,8 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
+import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
@@ -44,6 +45,8 @@ export type NativeChatApprovalCardProps = {
   placement?: 'composer' | 'stacked'
   /** Read off a terminal screen (folder trust, startup menus): keeps the full card. */
   parsedFromTerminal?: boolean
+  /** Shown as the title, with mention pills; `approval.title` stays its name for assistive tech. */
+  titleContent?: React.ReactNode
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -59,7 +62,8 @@ export function NativeChatApprovalCard({
   worker,
   countdown,
   placement = 'composer',
-  parsedFromTerminal = false
+  parsedFromTerminal = false,
+  titleContent
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -85,28 +89,19 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailClamped, setDetailClamped] = useState(false)
-  const detailRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const node = detailRef.current
-    if (!node || detailOpen) {
-      return undefined
-    }
-    const measure = (): void => setDetailClamped(node.scrollHeight > node.clientHeight + 1)
-    measure()
-    // A narrower pane can wrap a short command past the clamp.
-    if (typeof ResizeObserver === 'undefined') {
-      return undefined
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [approval.detail, detailOpen])
-  const quietDetail = quiet ? (approval.detail ?? null) : null
-  const showsDetailToggle =
-    quietDetail !== null &&
-    (detailOpen || detailClamped || approvalDetailPreview(quietDetail) !== quietDetail)
+  const {
+    text: quietDetailText,
+    otherArguments: quietOtherArguments,
+    textRef: quietDetailRef,
+    otherArgumentsRef: quietOtherArgumentsRef,
+    open: quietDetailOpen,
+    setOpen: setQuietDetailOpen,
+    showsToggle: showsQuietDetailToggle
+  } = useNativeChatApprovalQuietDetail(
+    quiet ? (approval.detail ?? null) : null,
+    approval.toolName,
+    approval.description
+  )
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -116,6 +111,15 @@ export function NativeChatApprovalCard({
     approval.detail
   )
   useNativeChatPromptCardFocus(cardRef, shouldFocus && !stacked)
+  // The dock observes no box that grows with this capped content: a new countdown or detail asks it to re-fit.
+  useNativeChatDockRefit(cardRef, !stacked, [
+    countdown,
+    approval.description,
+    approval.decisionReason,
+    neededPath,
+    approval.subject,
+    approval.detail
+  ])
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
 
   return (
@@ -153,6 +157,8 @@ export function NativeChatApprovalCard({
                   escape()
                 }
               }}
+              // The chat's own approval keeps its title and choices visible as the dock fits a short pane.
+              data-native-chat-dock-clip={stacked ? undefined : ''}
               className={cn(
                 'flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 quiet
@@ -160,7 +166,10 @@ export function NativeChatApprovalCard({
                   : 'gap-2 border-input px-4 py-3 shadow-xs'
               )}
             >
-              <div className={cn('flex shrink-0 items-start', quiet ? 'min-h-6 gap-1.5' : 'gap-2')}>
+              <div
+                data-native-chat-dock-pinned={stacked ? undefined : ''}
+                className={cn('flex shrink-0 items-start', quiet ? 'min-h-6 gap-1.5' : 'gap-2')}
+              >
                 <ShieldQuestion
                   className={cn(
                     'shrink-0',
@@ -178,7 +187,7 @@ export function NativeChatApprovalCard({
                         : 'font-semibold text-foreground'
                     )}
                   >
-                    {title}
+                    {titleContent ?? title}
                   </p>
                   {worker ? (
                     <p
@@ -233,6 +242,8 @@ export function NativeChatApprovalCard({
                   ref={contentRef}
                   data-native-chat-approval-content="true"
                   tabIndex={0}
+                  // The dock fit must leave two lines of the request in view (or all of it, if shorter).
+                  data-native-chat-dock-floor-lines={stacked ? undefined : 2}
                   className={cn(
                     'min-h-0 max-h-72 shrink overflow-auto text-sm scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     // Quiet: under the title, as a folded row's lines sit under its own.
@@ -291,18 +302,31 @@ export function NativeChatApprovalCard({
                     </div>
                   ) : url !== null ? (
                     <NativeChatUrlTarget url={url} />
-                  ) : quietDetail !== null ? (
-                    <div
-                      ref={detailRef}
-                      data-native-chat-approval-detail="true"
-                      data-native-chat-code-content
-                      className={cn(
-                        'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
-                        !detailOpen && 'line-clamp-3'
-                      )}
-                    >
-                      {quietDetail}
-                    </div>
+                  ) : quietDetailText !== null ? (
+                    <>
+                      <div
+                        ref={quietDetailRef}
+                        data-native-chat-approval-detail="true"
+                        data-native-chat-code-content
+                        className={cn(
+                          'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
+                          !quietDetailOpen && 'line-clamp-3'
+                        )}
+                      >
+                        {quietDetailText}
+                      </div>
+                      {quietOtherArguments !== null ? (
+                        <div
+                          ref={quietOtherArgumentsRef}
+                          className={cn(
+                            'break-words font-mono text-chat-code',
+                            !quietDetailOpen && 'line-clamp-2'
+                          )}
+                        >
+                          {quietOtherArguments}
+                        </div>
+                      ) : null}
+                    </>
                   ) : approval.detail ? (
                     <NativeChatApprovalDetail
                       detail={approval.detail}
@@ -321,6 +345,7 @@ export function NativeChatApprovalCard({
               ) : null}
               <div
                 data-native-chat-approval-actions="true"
+                data-native-chat-dock-pinned={stacked ? undefined : ''}
                 className={cn('flex shrink-0 flex-wrap', quiet ? 'gap-1.5 pl-5' : 'gap-2')}
               >
                 {approval.options.map((opt, i) => {
@@ -375,16 +400,16 @@ export function NativeChatApprovalCard({
                     {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
                   </button>
                 ) : null}
-                {showsDetailToggle ? (
+                {showsQuietDetailToggle ? (
                   <button
                     type="button"
-                    aria-expanded={detailOpen}
-                    onClick={() => setDetailOpen(!detailOpen)}
+                    aria-expanded={quietDetailOpen}
+                    onClick={() => setQuietDetailOpen(!quietDetailOpen)}
                     className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown
-                      className={cn('size-3.5', detailOpen && 'rotate-180')}
+                      className={cn('size-3.5', quietDetailOpen && 'rotate-180')}
                       aria-hidden
                     />
                   </button>

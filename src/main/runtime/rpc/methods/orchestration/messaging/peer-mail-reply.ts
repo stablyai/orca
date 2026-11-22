@@ -16,6 +16,14 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import {
+  clientEnvironmentId,
+  clientEnvironmentParts
+} from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { listenerForClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import type { z } from 'zod'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -67,7 +75,7 @@ export async function replyOverPeerMail(args: {
         // Refuses a second answer to a bot request, before the original is marked read.
         ...botAnswerOf(db, original)
       })
-      db.markAsRead([original.id])
+      db.markAsRead([original.id], { kind: 'reply' })
     })
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
@@ -85,6 +93,45 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
+  const clientParts = clientEnvironmentParts(environmentId)
+  if (clientParts !== null) {
+    // Under the pairing the computer pulls with now; while it is offline, on this conversation,
+    // which it pulls when it reconnects under the same pairing.
+    const client = listenerForClientEnvironment(
+      runtime,
+      clientParts.deviceId,
+      clientParts.installationId
+    )
+    const current = client
+      ? db.openHomePeerMailConversation({
+          environmentId: clientEnvironmentId(client.deviceId, client.installationId),
+          peerFingerprint: client.fingerprint,
+          localParty: conversation.local_party ?? '',
+          localPaneKey: conversation.local_pane_key
+        })
+      : conversation
+    // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
+    queueClientItem(db, {
+      conversationId: current.conversation_id,
+      messageId: id,
+      kind: 'client_reply',
+      payload: {
+        senderLabel,
+        to: route.remote_party,
+        subject,
+        body: params.body,
+        threadId,
+        sender: peerMailSender(runtime, replier)
+      } satisfies z.infer<typeof ClientReplyPayload>
+    })
+    db.markAsRead([original.id], { kind: 'reply' })
+    return recordReceiptBeforeNudge(
+      args.recordMutationReceipt,
+      { message: { id, subject }, to: original.from_handle },
+      () => notifyPeerMailQueued(db.db),
+      { kind: 'messages', targets: [] }
+    )
+  }
   const server = await requirePeerMailServer(runtime, environmentId)
   // After a re-pair the server no longer knows the old conversation; continue it under the new pairing.
   const current = db.openHomePeerMailConversation({
@@ -93,7 +140,7 @@ export async function replyOverPeerMail(args: {
     localParty: conversation.local_party ?? '',
     localPaneKey: conversation.local_pane_key
   })
-  await deliverPeerMail(runtime, server, current, {
+  const held = await deliverPeerMail(runtime, server, current, {
     id,
     to: route.remote_party,
     senderLabel,
@@ -102,10 +149,15 @@ export async function replyOverPeerMail(args: {
     threadId,
     sender: peerMailSender(runtime, replier)
   })
-  db.markAsRead([original.id])
+  db.markAsRead([original.id], { kind: 'reply' })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
-    { message: { id, subject }, to: original.from_handle, server: server.name },
+    {
+      message: { id, subject },
+      to: original.from_handle,
+      server: server.name,
+      ...(held.length > 0 ? { warnings: held } : {})
+    },
     () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
     { kind: 'federation', environmentId: server.environmentId }
   )

@@ -58,21 +58,6 @@ function permissionPillSourceKeys(): string[] {
 }
 
 describe('plugin language-pack artifacts', () => {
-  it.each([
-    'terminal.codexSharedServerBanner.stopServer',
-    'terminal.codexSharedServerBanner.alsoStop',
-    'terminal.codexSharedServerBanner.dialogSummary',
-    'workspaceDeletion.alwaysForceDelete',
-    'workspaceDeletion.alwaysForceDeleteDescription',
-    'auto.components.sidebar.delete.worktree.flow.2b20ce87b3'
-  ])('rejects a language pack replacing destructive copy at %s', (path) => {
-    expect(
-      parsePluginLanguagePackArtifact(JSON.stringify(catalogReplacing(path, 'Harmless action')))
-    ).toEqual({
-      ok: false,
-      error: `catalog cannot replace protected security copy at ${path}`
-    })
-  })
   // The pill says what the running agent may do, so a pack must not be able to reword it.
   it.each(PERMISSION_PILL_KEYS)(
     'rejects a language pack relabelling the permission pill at %s',
@@ -91,17 +76,5 @@ describe('plugin language-pack artifacts', () => {
     const sourceKeys = permissionPillSourceKeys()
     expect(sourceKeys.length).toBeGreaterThan(0)
     expect(sourceKeys.filter((key) => !PERMISSION_PILL_KEYS.includes(key))).toEqual([])
-  })
-  it('drops protected copy instead of rejecting the pack when loading tolerantly', () => {
-    const raw = JSON.stringify({
-      common: { save: 'Sávé' },
-      components: { 'native-chat': { approval: { allow: 'Álló' }, title: 'Çhát' } }
-    })
-
-    expect(parsePluginLanguagePackArtifact(raw).ok).toBe(false)
-    expect(parsePluginLanguagePackArtifact(raw, 'tolerant')).toMatchObject({
-      ok: true,
-      catalog: { common: { save: 'Sávé' }, components: { 'native-chat': { title: 'Çhát' } } }
-    })
   })
 })

@@ -17,6 +17,12 @@ import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
+import { noteBotQuestionFailure } from './bot-question-notices'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import {
+  stampQuestionTakes,
+  type MailTaker
+} from '../../../../orchestration/db/messages/mail-taker'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
@@ -147,12 +153,9 @@ export async function settleBotRequestFailure(
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
-  await settleBotRequests(
-    runtime,
-    failure.sessionId,
-    why,
-    error ? redactFailure(error.text) : undefined
-  )
+  const reason = error ? redactFailure(error.text) : undefined
+  noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
+  await settleBotRequests(runtime, failure.sessionId, why, reason)
 }
 
 async function settleBotRequests(
@@ -167,7 +170,10 @@ async function settleBotRequests(
   }
   const db = runtime.getOrchestrationDb()
   const { turn } = await readBotTurn(runtime, db, sessionId)
-  const open = turn.requestIds.filter((id) => db.getBotRequestOutcome(id) === null)
+  // Questions are decided by the question reconciler (mailbox/questions), from who took them.
+  const open = turn.requestIds.filter(
+    (id) => db.getBotRequest(id)?.purpose === 'handoff' && db.getBotRequestOutcome(id) === null
+  )
   if (open.length === 0) {
     return
   }
@@ -201,17 +207,38 @@ export async function dropUnreadBotRequests(
 ): Promise<void> {
   try {
     const db = runtime.getOrchestrationDb()
-    const dropped = db
+    const unread = db
       .listUnreadBotRequests(botId)
+      .filter(({ message }) => !onlyTo || message.to_handle.endsWith(onlyTo))
+    // A question is dropped as a take: the reconciler tells its asker, and retries an asker it
+    // can't verify yet. One being handed to the chat now is taken unread; a handover that still
+    // reaches the chat reads it, and a later answer still lands.
+    for (const { request, message } of unread) {
+      if (request.purpose === 'question') {
+        runLifecycleWriteTransaction(db.db, 'drop_bot_question', () => {
+          const dropped: MailTaker = { kind: 'dropped', why }
+          if (db.getStructuredMailSendsForMessages([message.id]).length === 0) {
+            db.markAsRead([message.id], dropped)
+          } else {
+            stampQuestionTakes(db, [message.id], dropped)
+          }
+        })
+      }
+    }
+    const dropped = unread
+      .filter(({ request }) => request.purpose !== 'question')
       .map(({ message }) => message)
-      .filter((message) => !onlyTo || message.to_handle.endsWith(onlyTo))
     await ensureSenderRecords(runtime, dropped)
     for (const message of dropped) {
       // Read in the same write as its outcome and notice, so the drop is never half done.
-      tellSender(runtime, db, message, 'dropped', why, undefined, () => db.markAsRead([message.id]))
+      tellSender(runtime, db, message, 'dropped', why, undefined, () =>
+        db.markAsRead([message.id], { kind: 'dropped', why })
+      )
     }
   } catch (error) {
     // The change itself stands; only the senders go untold.
     console.warn('[bots] could not tell senders of dropped bot requests', error)
   }
+  // A paused or deleted bot's chat no longer takes mail: a question it read waits on nothing now.
+  runtime.questionReconciler?.decideAll()
 }

@@ -271,7 +271,3 @@ function withDiscoveryTimeout<T>(promise: Promise<T>, timeoutMs: number): Promis
     )
   })
 }
-
-export function resetNativeChatSkillDiscoveryCacheForTests(): void {
-  inFlightDiscovery.clear()
-}

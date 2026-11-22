@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import { net, type ClientRequest } from 'electron'
+import { net, type ClientRequest, type Session } from 'electron'
 
 const NULL_BODY_STATUSES = new Set([101, 204, 205, 304])
 
@@ -22,17 +22,24 @@ function webBody(response: Readable, request: ClientRequest): ReadableStream<Uin
   })
 }
 
-/** net.fetch rejects manual redirects; expose each hop so callers can validate its destination. */
+/** net.fetch rejects manual redirects; expose each hop so callers can validate its destination. `session` carries the request on that session's proxy route. */
 export function fetchWithElectronManualRedirects(
   url: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  session?: Session
 ): Promise<Response> {
   const { signal } = init
   if (signal?.aborted) {
     return Promise.reject(signal.reason)
   }
   return new Promise((resolve, reject) => {
-    const request = net.request({ url, method: 'GET', redirect: 'manual', credentials: 'omit' })
+    const request = net.request({
+      url,
+      method: 'GET',
+      redirect: 'manual',
+      credentials: 'omit',
+      ...(session ? { session } : {})
+    })
     const fail = (error: unknown): void => {
       request.abort()
       reject(error)

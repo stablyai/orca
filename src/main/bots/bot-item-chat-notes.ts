@@ -56,15 +56,17 @@ export function eventsOfOneWrite(
   )
 }
 
-/** Shows one bot write in the chat that made it; `links` names its new links. */
+/** Shows one bot write in the chat that made it, and returns its events; `links` names its new links. */
 export async function noteBotItemWrite(
   store: Pick<BotItemsRemote, 'events'>,
   sessionId: string,
   item: BotItemRecord,
   eventId: number,
   links: readonly BotItemLinkView[] | undefined
-): Promise<void> {
+): Promise<BotItemEventRecord[]> {
   const recent = await store.events(item.uid, Math.max(0, eventId - 8), 16)
-  const changes = eventsOfOneWrite(recent, eventId).map((event) => ({ event, item, links }))
+  const write = eventsOfOneWrite(recent, eventId)
+  const changes = write.map((event) => ({ event, item, links }))
   appendBotItemNote(sessionId, botItemNote(`w${eventId}`, 'bot', changes))
+  return write
 }

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -12,36 +11,32 @@ import {
   type WorkerPresenceRow
 } from '../../db/worker-presence/worker-presence-store'
 import {
+  approvalReportId,
   isDeliberateRest,
+  presenceReportId,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
+  type WorkerRestFact,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { awaitsAPerson, isWorkerGone, isWorkerStartRest } from './worker-turn-stop-wording'
 
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
 // Kept with an undecided rest; the report shows only the end of it.
 const STORED_OUTPUT_MAX_CHARS = 2_000
 
-export type WorkerRest = Pick<
-  WorkerTurnStop,
-  | 'from'
-  | 'lastOutput'
-  | 'awaitsReply'
-  | 'approval'
-  | 'turnStartedAt'
-  | 'mailTaken'
-  | 'requestError'
-  | 'startSurface'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' }
+export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
+  reason: Exclude<WorkerTurnStop['reason'], WorkerGone['reason']>
+}
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
   'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
-> & { reason: 'exited' | 'lost' }
+> & { reason: 'exited' | 'lost' | 'never-ready' }
 
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
@@ -121,7 +116,7 @@ export function observeWorker(
   }
   const { rest } = observation
   // A rest proves its turn ran, though a missed hook may have hidden the turn's start.
-  if (target.kind === 'local' && rest.reason !== 'start-unconfirmed') {
+  if (target.kind === 'local' && !isWorkerStartRest(rest.reason)) {
     confirmUnknownWorkerStart(db, dispatchId)
   }
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
@@ -129,7 +124,7 @@ export function observeWorker(
     db,
     target,
     nextWorkerPresence(current, {
-      presence: rest.reason === 'needs-input' ? 'prompt' : 'resting',
+      presence: awaitsAPerson(rest.reason) ? 'prompt' : 'resting',
       fence: observation.fence,
       report: storedReport(rest, observation)
     }),
@@ -270,8 +265,7 @@ function reconcileWorkerReport(
   // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
   // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
   if (
-    rest.reason !== 'exited' &&
-    rest.reason !== 'lost' &&
+    !isWorkerGone(rest.reason) &&
     (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
   ) {
     return keep()
@@ -291,27 +285,17 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
     return false
   }
+  // A background wait is one fact however often a prompt interrupts it.
   const id =
     'approval' in rest && rest.approval
       ? approvalReportId(dispatchId, rest.approval.approvalId)
-      : presenceReportId(dispatchId, row.generation)
+      : 'backgroundWait' in rest && rest.backgroundWait
+        ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
+        : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )
   return sent || keep()
-}
-
-/** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
-export function presenceReportId(dispatchId: string, generation: number): string {
-  return `msg_rest_${createHash('sha256')
-    .update(JSON.stringify([dispatchId, generation]))
-    .digest('hex')
-    .slice(0, 24)}`
-}
-
-/** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
-export function approvalReportId(dispatchId: string, approvalId: string): string {
-  return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 
 /** A build before the presence table may already have told the coordinator of this rest, by its own key.

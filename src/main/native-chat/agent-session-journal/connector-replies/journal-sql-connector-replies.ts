@@ -30,6 +30,24 @@ export class JournalSqlConnectorReplies {
     return result.rows
   }
 
+  /** One page of an account's filled, unsent rows after a delivery id (null: from the start). */
+  async readOwed(
+    account: string,
+    after: string | null,
+    limit: number
+  ): Promise<JournalConnectorReplyRow[]> {
+    const result = await this.db.readers.database({
+      kind: 'connector-replies-owed',
+      account,
+      after,
+      limit
+    })
+    if (result.kind !== 'connector-replies') {
+      throw new Error('journal reader returned no connector replies')
+    }
+    return result.rows
+  }
+
   /** Fills rows with their outcomes, the first fill winning; whether any changed. */
   async fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean> {
     if (this.db.readOnly || fills.length === 0) {
