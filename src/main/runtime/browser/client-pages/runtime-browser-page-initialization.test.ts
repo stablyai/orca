@@ -172,7 +172,7 @@ it('a fast imported row and plain recovery publish independently of held adoptio
 })
 
 it('sanitizes imported and committed canonical addresses before publishing or persisting them', async () => {
-  const raw = 'https://kagi.com/search?q=proof&token=synthetic-pr41490'
+  const raw = 'https://kagi.com/search?q=proof&token=YOUR_API_KEY_HERE'
   const h = rig(
     [],
     [
@@ -212,7 +212,7 @@ it('sanitizes imported and committed canonical addresses before publishing or pe
       'https://kagi.com/search?q=proof'
     )
     expect(observed.length).toBeGreaterThan(0)
-    expect(observed.every((url) => !url.includes('synthetic-pr41490'))).toBe(true)
+    expect(observed.every((url) => !url.includes('YOUR_API_KEY_HERE'))).toBe(true)
   } finally {
     h.host.release()
   }
