@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
-import { useLayoutEffect } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Translate } from '@/i18n/use-translate'
 import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { PaneTopBanner } from '../appearance/pane-top-banner/PaneTopWarningBanner'
@@ -21,7 +20,10 @@ function bannerAt(state: WorkerAutoCloseState, nowIso: string): React.JSX.Elemen
   return <PaneTopBanner {...props} />
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('worker auto-close banner live region', () => {
   it('mounts one empty status node inside a banner that has no role of its own', () => {
@@ -51,20 +53,16 @@ describe('worker auto-close banner live region', () => {
   })
 
   it('mounts an empty status node even when the worker has already finished', () => {
-    let statusAtMount: HTMLElement | undefined
-    let textAtMount: string | null | undefined
-    function FinishedBanner() {
-      useLayoutEffect(() => {
-        statusAtMount = screen.getByRole('status')
-        textAtMount = statusAtMount.textContent
-      }, [])
-      return bannerAt(FINISHED, '2026-11-17T12:01:59.000Z')
-    }
+    vi.useFakeTimers()
+    render(bannerAt(FINISHED, '2026-11-17T12:01:59.000Z'))
+    const status = screen.getByRole('status')
 
-    render(<FinishedBanner />)
+    expect(status.textContent).toBe('')
+    act(() => vi.advanceTimersToNextFrame())
+    expect(status.textContent).toBe('')
+    act(() => vi.runAllTimers())
 
-    expect(textAtMount).toBe('')
-    expect(screen.getByRole('status')).toBe(statusAtMount)
-    expect(statusAtMount?.textContent).toBe('Orchestration worker finished · Closes soon')
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
   })
 })

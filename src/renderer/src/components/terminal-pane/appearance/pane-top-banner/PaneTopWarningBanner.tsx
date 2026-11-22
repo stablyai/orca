@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TriangleAlert, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { Badge } from '@/components/ui/badge'
@@ -101,6 +101,31 @@ export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Eleme
   return <PaneTopBanner {...props} ref={ref} className="pane-top-banner" />
 }
 
+function BannerLiveRegion({ announcement }: { announcement: string }): React.JSX.Element {
+  const [ready, setReady] = useState(announcement === '')
+
+  useEffect(() => {
+    if (ready) {
+      return
+    }
+    // Chromium needs time to register the empty region before it can announce a change.
+    let timeout: number | undefined
+    const frame = requestAnimationFrame(() => {
+      timeout = window.setTimeout(() => setReady(true), 150)
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timeout)
+    }
+  }, [ready])
+
+  return (
+    <span role="status" className="sr-only">
+      {ready ? announcement : ''}
+    </span>
+  )
+}
+
 /** The pane-top banner's look without the terminal's height reservation, for panes that lay it out in flow. */
 export function PaneTopBanner({
   title,
@@ -120,13 +145,6 @@ export function PaneTopBanner({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const announcementRef = useRef<HTMLSpanElement>(null)
-  // Register the empty live region before announcing a worker that has already finished.
-  useEffect(() => {
-    if (announcementRef.current) {
-      announcementRef.current.textContent = announcement ?? ''
-    }
-  }, [announcement])
   useEffect(() => {
     onShown?.()
   }, [onShown])
@@ -144,9 +162,7 @@ export function PaneTopBanner({
         className
       )}
     >
-      {announcement === undefined ? null : (
-        <span ref={announcementRef} role="status" className="sr-only" />
-      )}
+      {announcement === undefined ? null : <BannerLiveRegion announcement={announcement} />}
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
