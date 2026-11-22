@@ -50,6 +50,8 @@ export function useNativeChatBackgroundUrl(fileName: string): string | null {
       })
     return () => {
       active = false
+      // The released lease may revoke this URL, so it must not outlive the lease.
+      setLoaded(null)
       release(fileName)
     }
   }, [fileName])

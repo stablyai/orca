@@ -164,7 +164,13 @@ export function AppearanceChatBackgroundControls({
               min={10}
               label={entries.backgroundVisibility.title}
               disabled={!previewUrl}
-              onCommit={(backgroundVisibility) => void onChange({ backgroundVisibility })}
+              onCommit={(backgroundVisibility) =>
+                writeNativeChatAppearance(
+                  (current) =>
+                    normalizeNativeChatAppearanceSettings({ ...current, backgroundVisibility }),
+                  updateSettingsOrThrow
+                )
+              }
             />
           }
         />
@@ -185,7 +191,8 @@ function ChatPercentSlider({
   min?: number
   label: string
   disabled?: boolean
-  onCommit: (value: number) => void
+  /** Resolves false when the value was not saved, so the thumb returns to the saved one. */
+  onCommit: (value: number) => Promise<boolean>
 }): React.JSX.Element {
   const [draft, setDraft] = useState({ saved: value, value })
   // Keep the thumb mounted so committed keyboard changes retain focus.
@@ -203,7 +210,13 @@ function ChatPercentSlider({
           value={[draft.value]}
           thumbLabels={[label]}
           onValueChange={([next]) => setDraft({ saved: value, value: next })}
-          onValueCommit={([next]) => onCommit(next)}
+          onValueCommit={([next]) =>
+            void onCommit(next).then((saved) => {
+              if (!saved) {
+                setDraft({ saved: value, value })
+              }
+            })
+          }
         />
       </div>
       <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">

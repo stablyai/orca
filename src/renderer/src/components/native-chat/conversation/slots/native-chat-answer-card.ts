@@ -21,13 +21,13 @@ export function nativeChatSlotTucksNextRow(
   )
 }
 
-/** The gap a row's own margins leave between it and the row below. */
+/** The gap a row's own margins leave between it and the row below. Negative when both margins
+ *  apply and the rows overlap: the card then follows that overlap rather than painting it twice. */
 function nativeChatRowGapUnits(tucksNext: boolean, nextJoinsActivityAbove: boolean): number {
-  return Math.max(
-    0,
+  return (
     ROW_GAP_UNITS -
-      (tucksNext ? TUCK_UNITS : 0) -
-      (nextJoinsActivityAbove ? ACTIVITY_JOIN_UNITS : 0)
+    (tucksNext ? TUCK_UNITS : 0) -
+    (nextJoinsActivityAbove ? ACTIVITY_JOIN_UNITS : 0)
   )
 }
 
@@ -45,8 +45,9 @@ function isAnswerRow(
 export type NativeChatAnswerCardEdges = {
   joinsAbove: boolean
   joinsBelow: boolean
-  /** `--spacing` units the card reaches past the row's top and bottom: none above a joined edge,
-   *  the whole gap below one, and otherwise an outset that stays clear of the neighbouring row. */
+  /** `--spacing` units the card reaches past the row's top and bottom (negative: stops short of
+   *  it): none above a joined edge, the whole gap below one, and otherwise an outset that stays
+   *  clear of the neighbouring row. */
   aboveUnits: number
   belowUnits: number
 }
@@ -79,9 +80,10 @@ function nativeChatAnswerCardEdges({
   })
 }
 
-/** Leaves at least one unit, or half of a tighter gap, between the card and a row outside it. */
+/** Leaves at least one unit, or half of a tighter gap, between the card and a row outside it;
+ *  over rows that overlap, the card stops where the neighbouring row begins. */
 function clearOutset(gapUnits: number): number {
-  return Math.max(0, Math.min(OUTSET_UNITS, gapUnits - 1, gapUnits / 2))
+  return gapUnits < 0 ? gapUnits : Math.max(0, Math.min(OUTSET_UNITS, gapUnits - 1, gapUnits / 2))
 }
 
 // Rows are memoized by prop identity, so equal edges must be the same object across renders.
