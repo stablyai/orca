@@ -16,6 +16,7 @@ import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  runtimeBrowserEngineIdentity,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
@@ -106,8 +107,8 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
-    // Only initialized identity stores can serve this process-wide, pre-ready mode.
-    if (isBrowserIdentityModeStoreInitialized()) {
+    // Only initialized identity stores can serve this process-wide, pre-ready mode; orcad serves its engine's.
+    if (isBrowserIdentityModeStoreInitialized() || runtimeBrowserEngineIdentity()) {
       capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
     // Only the daemon inside a distro can receive that distro's projects.

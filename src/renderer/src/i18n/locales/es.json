@@ -24506,7 +24506,19 @@
       "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
       "useChatDefaults": "Usar los valores predeterminados del chat",
       "agent": "Agente",
-      "folder": "Carpeta: {{path}}"
+      "folder": "Carpeta: {{path}}",
+      "name": "Nombre",
+      "validation": {
+        "addName": "Añade un nombre",
+        "botsUnavailable": "Bots no disponibles",
+        "computerOffline": "Sin conexión",
+        "findingAgents": "Buscando agentes…",
+        "identityTooLong": "Demasiado largo",
+        "noAgents": "Sin agentes",
+        "noAgentsAvailable": "No hay agentes",
+        "pictureLoading": "Cargando imagen…",
+        "updateOrca": "Actualiza Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "Cambiar de cuenta",

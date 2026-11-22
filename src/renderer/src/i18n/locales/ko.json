@@ -26844,7 +26844,19 @@
       "computerAccountHint": "Orca에 {{account}}(으)로 로그인한 상태에서 봇이 실행되는 위치입니다.",
       "useChatDefaults": "채팅 기본값 사용",
       "agent": "에이전트",
-      "folder": "폴더: {{path}}"
+      "folder": "폴더: {{path}}",
+      "name": "이름",
+      "validation": {
+        "addName": "이름을 입력하세요",
+        "botsUnavailable": "봇 사용 불가",
+        "computerOffline": "오프라인",
+        "findingAgents": "에이전트 찾는 중…",
+        "identityTooLong": "너무 깁니다",
+        "noAgents": "에이전트 없음",
+        "noAgentsAvailable": "쓸 수 있는 에이전트 없음",
+        "pictureLoading": "이미지를 불러오는 중…",
+        "updateOrca": "Orca 업데이트"
+      }
     },
     "googleSetup": {
       "otherAccount": "계정 전환",

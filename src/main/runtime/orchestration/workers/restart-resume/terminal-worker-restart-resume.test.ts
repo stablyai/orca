@@ -3,7 +3,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { TerminalWorkerRestartResume } from './terminal-worker-restart-resume'
 import { TerminalWorkerRestartOffers } from './terminal-worker-restart-offers'
 import { observeWorker, reconsiderRestAfterWait } from '../turn-stops/worker-presence-report'
-import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
+import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-dispatch'
 
 let db: OrchestrationDb | undefined
 afterEach(() => db?.close())
