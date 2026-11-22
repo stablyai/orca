@@ -190,7 +190,7 @@ export function AutomationRunDetailsPage({
         run.trigger === 'manual'
           ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
           : run.trigger === 'event'
-            ? sayAutomationRun(t)(automationRunEventSourceKey(run.event))
+            ? sayAutomationRun(t)(automationRunEventSourceKey(run))
             : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
     }
   ]

@@ -169,7 +169,7 @@ export function AutomationRunDetails(props: {
             run.trigger === 'manual'
               ? t('automations.mobile.runNow', 'Run now')
               : run.trigger === 'event'
-                ? sayAutomationRunEnglish(automationRunEventSourceKey(run.event))
+                ? sayAutomationRunEnglish(automationRunEventSourceKey(run))
                 : t('automations.mobile.schedule', 'Schedule')
           }
         />
