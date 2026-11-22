@@ -1,9 +1,10 @@
-import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { WorktreeLineageSource } from './worktree-lineage-range'
+import type { WorktreeOccurrence } from './lineage/worktree-occurrence-plan'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -62,8 +63,11 @@ export type WorktreeRow = {
   groupDepth: number
   isLastLineageChild: boolean
   lineageChildCount: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** Every workspace nested under this one, collapsed or not; host-qualified. */
+  lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
 }
@@ -76,13 +80,18 @@ export type ImportedWorktreesCardCandidate = {
 export type ImportedWorktreesCardRow = {
   type: 'imported-worktrees-card'
   key: string
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-  placement: 'repo-group' | 'pinned-fallback'
-  /** Set only when the row's project is checked out on more than one host. */
+  /** Set only when the row's project, or this line's host, needs naming among several hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
-}
+} & (
+  | { placement: 'repo-group'; repo: Repo; hiddenWorktrees: DetectedWorktree[] }
+  // Outside project grouping no header owns a project, so one line covers a host's projects.
+  | {
+      placement: 'all-projects'
+      hostId: ExecutionHostId
+      projects: ImportedWorktreesCardCandidate[]
+    }
+)
 
 export type NewExternalWorktreesInboxCandidate = {
   repo: Repo
@@ -107,12 +116,19 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  hostContextLabel?: string
+  /** Workspaces nested under this folder; set only when it has any. */
+  lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
+  lineageGroupKey?: string
+  lineageCollapsed?: boolean
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
@@ -129,4 +145,14 @@ export type Row =
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}
+
+/** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.
+ * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host. */
+export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
+  return (
+    row.repo !== undefined &&
+    row.hostRepos === undefined &&
+    (row.hostId !== undefined || row.count > 0)
+  )
 }

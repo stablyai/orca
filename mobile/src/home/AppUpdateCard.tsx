@@ -27,16 +27,12 @@ export function AppUpdateCard(props: {
         style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
         onPress={props.onPress}
       >
-        <View style={styles.icon}>
-          <ArrowUpFromLine size={20} strokeWidth={1.75} color={colors.textPrimary} />
-        </View>
-        <View style={styles.main}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {t('home.appUpdateCard.updateHint', 'Tap to update')}
-          </Text>
+        <ArrowUpFromLine size={20} color={colors.accentBlue} />
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        <View style={styles.updateButton}>
+          <Text style={styles.updateLabel}>{t('home.appUpdateCard.update', 'Update')}</Text>
         </View>
       </Pressable>
       <Pressable
@@ -50,7 +46,7 @@ export function AppUpdateCard(props: {
         style={({ pressed }) => [styles.dismissButton, pressed && styles.dismissPressed]}
         onPress={props.onDismiss}
       >
-        <X size={16} color={colors.textSecondary} />
+        <X size={17} color={colors.textMuted} />
       </Pressable>
     </View>
   )
@@ -60,10 +56,9 @@ const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.card,
+    marginTop: 26,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
     overflow: 'hidden'
   },
   cardMain: {
@@ -71,27 +66,25 @@ const styles = themedStyleSheet(() => ({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingVertical: 12
+    gap: spacing.md,
+    paddingLeft: spacing.lg,
+    paddingVertical: spacing.md
   },
   cardPressed: { backgroundColor: colors.bgRaised },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
+  title: { flex: 1, minWidth: 0, color: colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  updateButton: {
+    minHeight: 32,
     justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.control,
+    backgroundColor: colors.bgRaised
   },
-  main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
-  title: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  subtitle: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
+  updateLabel: { color: colors.accentBlue, fontSize: 15, fontWeight: '600' },
   dismissButton: {
     width: 40,
     height: 40,
     marginHorizontal: spacing.xs,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },

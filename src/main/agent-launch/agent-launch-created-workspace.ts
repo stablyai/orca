@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeMobileSessionTabsResult } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AgentLaunchExecution } from './agent-launch-execution'
 import type { AgentLaunchWorkspaceFactory } from './agent-launch-surface-factories'
 

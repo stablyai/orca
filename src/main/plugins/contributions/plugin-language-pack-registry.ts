@@ -7,24 +7,29 @@ import {
   pluginLanguagePackCoverage,
   translatableCatalogPaths
 } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
-import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
-  PLUGIN_LANGUAGE_PACK_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+  englishSourceLookup,
+  type EnglishSourceLookup
+} from '../../../shared/plugins/languages/plugin-translation-string-policy'
+import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_LANGUAGE_PACK_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 
 type LanguagePackContribution = PluginManifest['contributes']['languagePacks'][number]
 
-let englishPaths: Promise<ReadonlySet<string>> | null = null
+type EnglishSource = { translatablePaths: ReadonlySet<string>; lookup: EnglishSourceLookup }
+
+let englishSource: Promise<EnglishSource> | null = null
 
 // Why lazy: the English catalog is ~1 MB and only matters once a language pack loads.
-function translatableEnglishPaths(): Promise<ReadonlySet<string>> {
-  englishPaths ??= import('../../../renderer/src/i18n/locales/en.json').then((module) =>
-    translatableCatalogPaths(module.default)
-  )
-  return englishPaths
+function loadEnglishSource(): Promise<EnglishSource> {
+  englishSource ??= import('../../../renderer/src/i18n/locales/en.json').then((module) => ({
+    translatablePaths: translatableCatalogPaths(module.default),
+    lookup: englishSourceLookup(module.default)
+  }))
+  return englishSource
 }
 
 export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
@@ -41,7 +46,8 @@ export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
           contribution.path,
           PLUGIN_LANGUAGE_PACK_MAX_BYTES
         )
-        const parsed = parsePluginLanguagePackArtifact(text, 'tolerant')
+        const english = await loadEnglishSource()
+        const parsed = parsePluginLanguagePackArtifact(text, 'tolerant', english.lookup)
         if (!parsed.ok) {
           throw new Error(`language pack "${contribution.locale}" ${parsed.error}`)
         }
@@ -53,7 +59,7 @@ export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
           locale: contribution.locale,
           ...(contribution.displayName ? { displayName: contribution.displayName } : {}),
           catalog: parsed.catalog,
-          coverage: pluginLanguagePackCoverage(parsed.catalog, await translatableEnglishPaths())
+          coverage: pluginLanguagePackCoverage(parsed.catalog, english.translatablePaths)
         }
       }
     })

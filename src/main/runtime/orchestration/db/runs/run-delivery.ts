@@ -1,7 +1,9 @@
-import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../../types'
+import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageListTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { MailboxDeliveryBatch } from '../messages/role-mailbox-delivery'
+import type { MailTaker } from '../messages/mail-taker'
 
 export function requireCurrentConsumer(
   this: OrchestrationDb,
@@ -36,19 +38,34 @@ export function getOrCreateRunDelivery(
   })
 }
 
+export function takeRunDelivery(
+  this: OrchestrationDb,
+  params: {
+    runId: string
+    consumerGeneration: number
+    wakeTypes?: MessageType[]
+    recordTaken?: (batch: MailboxDeliveryBatch) => void
+    taker: MailTaker
+  }
+): MailboxDeliveryBatch | undefined {
+  return this.takeMailboxDelivery({ ...params, mailboxHandle: `run:${params.runId}` })
+}
+
 export function acknowledgeRunDelivery(
   this: OrchestrationDb,
   params: {
     runId: string
     consumerGeneration: number
     deliveryId: string
+    taker: MailTaker
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   return this.acknowledgeMailboxDelivery({
     runId: params.runId,
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
-    deliveryId: params.deliveryId
+    deliveryId: params.deliveryId,
+    taker: params.taker
   })
 }
 
@@ -119,6 +136,7 @@ export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string):
 export type RunDeliveryMethods = {
   requireCurrentConsumer: typeof requireCurrentConsumer
   getOrCreateRunDelivery: typeof getOrCreateRunDelivery
+  takeRunDelivery: typeof takeRunDelivery
   acknowledgeRunDelivery: typeof acknowledgeRunDelivery
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
@@ -129,6 +147,7 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     requireCurrentConsumer,
     getOrCreateRunDelivery,
+    takeRunDelivery,
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,

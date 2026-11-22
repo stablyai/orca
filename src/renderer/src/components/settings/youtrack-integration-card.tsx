@@ -5,15 +5,19 @@ import { Button } from '@/components/ui/button'
 import { YouTrackConnectDialog } from '@/components/youtrack/YouTrackConnectDialog'
 import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
-import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
-import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
-import { YOUTRACK_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
-import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  IntegrationCardDetails,
+  IntegrationCardShell
+} from '../integrations/presentation/integration-card-shell'
+import { useIntegrationSubordinateRowClass } from '../integrations/presentation/integration-card-presentation'
+import { YOUTRACK_INTEGRATION_SECTION_ID } from '../integrations/task-trackers/task-provider-integration-section-ids'
+import { UnsealedCredentialNotice } from '../provider-accounts/UnsealedCredentialNotice'
 
 type VerificationResult = { state: 'ok' } | { state: 'error'; error: string }
 
 export function YouTrackIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const status = useYouTrackStore((s) => s.status)
   const statusChecked = useYouTrackStore((s) => s.statusChecked)
   const checkStatus = useYouTrackStore((s) => s.checkStatus)
@@ -57,12 +61,12 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
       name="YouTrack"
       description={
         connected
-          ? translate('youtrack.integration.connectedAs', 'Connected as {{name}}', {
+          ? t('youtrack.integration.connectedAs', 'Connected as {{name}}', {
               name: status.viewer?.fullName ?? status.viewer?.login ?? ''
             })
           : checking
-            ? translate('youtrack.integration.checking', 'Checking YouTrack access.')
-            : translate(
+            ? t('youtrack.integration.checking', 'Checking YouTrack access.')
+            : t(
                 'youtrack.integration.notConnected',
                 'Add a self-hosted YouTrack to browse, update, and create issues.'
               )
@@ -71,8 +75,8 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={
         connected
-          ? translate('youtrack.integration.statusConnected', 'Connected')
-          : translate('youtrack.integration.statusNotConnected', 'Not connected')
+          ? t('youtrack.integration.statusConnected', 'Connected')
+          : t('youtrack.integration.statusNotConnected', 'Not connected')
       }
       actions={
         checking ? null : (
@@ -82,8 +86,8 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
             onClick={() => setDialogOpen(true)}
           >
             {connected
-              ? translate('youtrack.integration.reconnect', 'Reconnect')
-              : translate('youtrack.integration.add', 'Add YouTrack access')}
+              ? t('youtrack.integration.reconnect', 'Reconnect')
+              : t('youtrack.integration.add', 'Add YouTrack access')}
           </Button>
         )
       }
@@ -91,7 +95,7 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
       <IntegrationCardDetails>
         <UnsealedCredentialNotice
           protection={status.credentialProtection ?? null}
-          credentialName={translate('youtrack.integration.tokenName', 'Your YouTrack token')}
+          credentialName={t('youtrack.integration.tokenName', 'Your YouTrack token')}
         />
         {connected ? (
           <div className="space-y-2">
@@ -106,7 +110,7 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
               {testResult?.state === 'ok' ? (
                 <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                   <CheckCircle2 className="size-3.5" />
-                  {translate('youtrack.integration.verified', 'Verified')}
+                  {t('youtrack.integration.verified', 'Verified')}
                 </span>
               ) : null}
               {testResult?.state === 'error' ? (
@@ -125,8 +129,8 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
               >
                 {testing ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
                 {testing
-                  ? translate('youtrack.integration.testing', 'Testing...')
-                  : translate('youtrack.integration.test', 'Test')}
+                  ? t('youtrack.integration.testing', 'Testing...')
+                  : t('youtrack.integration.test', 'Test')}
               </Button>
               <button
                 type="button"
@@ -134,7 +138,7 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
                   setTestResult(null)
                   void disconnect()
                 }}
-                aria-label={translate('youtrack.integration.disconnect', 'Disconnect YouTrack')}
+                aria-label={t('youtrack.integration.disconnect', 'Disconnect YouTrack')}
                 className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
               >
                 <Unlink className="size-3.5" />
@@ -143,7 +147,7 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
             {status.allowInsecureTls ? (
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <ShieldOff className="size-3.5 shrink-0" />
-                {translate(
+                {t(
                   'youtrack.integration.insecureTls',
                   'Certificate verification is skipped for this host. Reconnect to turn it back on.'
                 )}
@@ -152,7 +156,7 @@ export function YouTrackIntegrationCard(): React.JSX.Element {
           </div>
         ) : checking ? null : (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'youtrack.integration.howTo',
               'Use your YouTrack address and a permanent token from Profile → Account Security.'
             )}

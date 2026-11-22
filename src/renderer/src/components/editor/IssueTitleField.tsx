@@ -1,9 +1,9 @@
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
-import { ImeTextarea } from '@/lib/ime-text-field'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Inline-editable issue title: Enter or blur saves, the text wraps instead of scrolling. */
 export function IssueTitleField({
@@ -19,6 +19,7 @@ export function IssueTitleField({
   saving: boolean
   className: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="relative">
       <ImeTextarea
@@ -33,7 +34,7 @@ export function IssueTitleField({
         }}
         disabled={saving}
         rows={1}
-        aria-label={translate('auto.components.LinearIssueTextEditor.04d73b72dc', 'Issue title')}
+        aria-label={t('auto.components.LinearIssueTextEditor.04d73b72dc', 'Issue title')}
         // CSS field sizing grows and rewraps titles without JS measurement.
         className={cn(
           'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
@@ -45,7 +46,7 @@ export function IssueTitleField({
         <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
           ↵
         </kbd>
-        <span>{translate('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
+        <span>{t('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
       </div>
       {saving ? (
         <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />

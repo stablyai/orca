@@ -11,7 +11,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { YouTrackFieldSchema } from '../../../../shared/youtrack-types'
 
 // Why a sentinel: cmdk needs a value per item, and option values are user data.
@@ -40,6 +41,7 @@ export function YouTrackOptionPicker({
   pending?: boolean
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
 
   const choose = (value: string): void => {
@@ -74,12 +76,10 @@ export function YouTrackOptionPicker({
       <PopoverContent className="w-60" align="start">
         <Command>
           {field.options.length > 8 ? (
-            <CommandInput autoFocus placeholder={translate('youtrack.fields.filter', 'Filter…')} />
+            <CommandInput autoFocus placeholder={t('youtrack.fields.filter', 'Filter…')} />
           ) : null}
           <CommandList className="max-h-64">
-            <CommandEmpty>
-              {translate('youtrack.fields.noOptions', 'No matching values.')}
-            </CommandEmpty>
+            <CommandEmpty>{t('youtrack.fields.noOptions', 'No matching values.')}</CommandEmpty>
             <CommandGroup>
               {!field.required ? (
                 <CommandItem
@@ -90,7 +90,7 @@ export function YouTrackOptionPicker({
                   }}
                 >
                   <span className="text-muted-foreground">
-                    {field.emptyText ?? translate('youtrack.fields.clear', 'Clear')}
+                    {field.emptyText ?? t('youtrack.fields.clear', 'Clear')}
                   </span>
                 </CommandItem>
               ) : null}
@@ -114,9 +114,9 @@ export function YouTrackOptionPicker({
   )
 }
 
-function placeholderFor(field: YouTrackFieldSchema): string {
+function placeholderFor(field: YouTrackFieldSchema, t: Translate = translate): string {
   if (field.kind === 'period') {
-    return translate('youtrack.fields.periodPlaceholder', 'e.g. 2d 4h')
+    return t('youtrack.fields.periodPlaceholder', 'e.g. 2d 4h')
   }
   return field.emptyText ?? ''
 }
@@ -139,6 +139,7 @@ export function YouTrackScalarInput({
   autoFocus?: boolean
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const inputType =
     field.kind === 'date'
       ? 'date'
@@ -163,7 +164,7 @@ export function YouTrackScalarInput({
         }
       }}
       onBlur={onCommit}
-      placeholder={placeholderFor(field)}
+      placeholder={placeholderFor(field, t)}
       autoFocus={autoFocus}
       disabled={disabled}
     />

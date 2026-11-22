@@ -1,16 +1,16 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
-import { mintPtySessionId } from '../../../daemon/pty-session-id'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
 import { getProvider } from '../provider/registry'
-import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
+import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -35,7 +35,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -49,7 +50,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       args.worktreeId,
       args.sessionId,
       localPtySpawnCwd(args),
-      args.wslPassiveRestore === true
+      args.wslPassiveRestore === true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -91,7 +93,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    resolveStartupCwd: (id, cwd, fallback) =>
+      ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
     ...(args.wslPassiveRestore === true
       ? {
           wslStartHold: {

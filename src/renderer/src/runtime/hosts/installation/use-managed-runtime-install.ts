@@ -1,0 +1,191 @@
+import {
+  useAppStateViewActive,
+  useAppViewExternalStore
+} from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useCallback, useEffect, useMemo } from 'react'
+import { useAppStore } from '@/store'
+import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import {
+  MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
+} from '../../../../../shared/agent-launch/installation/managed-runtime-install'
+import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import {
+  hostStructuredAgentsReadFailed,
+  loadHostStructuredAgents,
+  readHostStructuredAgentsForRuntime,
+  subscribeHostStructuredAgents
+} from '../../native-chat/agent-catalogs/host-structured-agents'
+import {
+  ensureLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilitiesOrUnknown,
+  subscribeLocalRuntimeCapabilitiesKnown
+} from '../capabilities/local-runtime-capabilities'
+import {
+  observeManagedRuntimeInstall,
+  readManagedRuntimeInstall,
+  subscribeManagedRuntimeInstalls,
+  wakeManagedRuntimeInstall,
+  type ManagedRuntimeInstallSnapshot,
+  type ManagedRuntimeInstallSubject
+} from './managed-runtime-install-status'
+import { useHostStructuredAgent } from '../../native-chat/agent-catalogs/use-host-structured-agent'
+
+export type ManagedRuntimeInstallObservation =
+  /** Orca provides no runtime for this agent on this host, or the host cannot install one. */
+  | { kind: 'inactive' }
+  /** A reachable host has not yet answered its capabilities or agent list. */
+  | { kind: 'pending' }
+  | {
+      kind: 'active'
+      subject: ManagedRuntimeInstallSubject
+      snapshot: ManagedRuntimeInstallSnapshot
+      /** The host can also remove the runtime it installed. */
+      removable: boolean
+    }
+
+// Installs and removals whose agent list was read again; shared by every observer of one.
+const reDetectedAfter = new Set<string>()
+
+const INACTIVE: ManagedRuntimeInstallObservation = { kind: 'inactive' }
+const PENDING: ManagedRuntimeInstallObservation = { kind: 'pending' }
+const READ_FAILED: ManagedRuntimeInstallSnapshot = { kind: 'readFailed' }
+
+/** Null while the local runtime has not reported its capabilities. */
+const localInstallCapable = (): boolean | null =>
+  readLocalRuntimeCapabilitiesOrUnknown()?.includes(MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY) ??
+  null
+const localRemoveCapable = (): boolean =>
+  readLocalRuntimeCapabilities().includes(MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY)
+
+/** The install state of the runtime Orca provides for `agent` on the target's host. Subscribes
+ *  only while `shown`, so a hidden chat holds no subscription. */
+export function useManagedRuntimeInstall(
+  target: RuntimeClientTarget,
+  agent: string,
+  shown: boolean
+): ManagedRuntimeInstallObservation {
+  const viewActive = useAppStateViewActive()
+  const record = useHostStructuredAgent(target, agent)
+  const managed = record?.managedRuntime === true
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const remote = useRuntimeHostStatusViewSelector(environmentId, (entry) =>
+    environmentId === null ? null : lastVerifiedRuntimeStatus(entry)
+  )
+  // The entry's own status clears on a lost contact; the verified one above outlives it.
+  const reachable = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => environmentId === null || Boolean(entry?.status)
+  )
+  const contactEpoch = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => entry?.hostContactEpoch ?? 0
+  )
+  const localCapable = useAppViewExternalStore(
+    subscribeLocalRuntimeCapabilitiesKnown,
+    localInstallCapable,
+    localInstallCapable
+  )
+  const localRemovable = useAppViewExternalStore(
+    subscribeLocalRuntimeCapabilitiesKnown,
+    localRemoveCapable,
+    localRemoveCapable
+  )
+  const removable =
+    environmentId === null
+      ? localRemovable
+      : remote?.capabilities?.includes(MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY) === true
+  const capable =
+    environmentId === null
+      ? localCapable
+      : remote && remote.capabilities?.includes(MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY) === true
+  const runtimeId = remote?.runtimeId ?? null
+  const executionHostId =
+    environmentId === null ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(environmentId)
+  const readList = useCallback(
+    (): 'loaded' | 'failed' | null =>
+      readHostStructuredAgentsForRuntime(executionHostId, runtimeId)
+        ? 'loaded'
+        : hostStructuredAgentsReadFailed(executionHostId, runtimeId)
+          ? 'failed'
+          : null,
+    [executionHostId, runtimeId]
+  )
+  const list = useAppViewExternalStore(subscribeHostStructuredAgents, readList, readList)
+  const subject = useMemo((): ManagedRuntimeInstallSubject | null => {
+    if (!capable || (environmentId !== null && runtimeId === null)) {
+      return null
+    }
+    const host: RuntimeClientTarget =
+      environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
+    return { target: host, runtimeId, agent }
+  }, [agent, capable, environmentId, runtimeId])
+  useEffect(
+    () =>
+      viewActive && subject && managed && shown ? observeManagedRuntimeInstall(subject) : undefined,
+    [subject, managed, shown, viewActive]
+  )
+  // The host answering again after an outage resubscribes at once, not after its backoff.
+  useEffect(() => {
+    if (viewActive && subject) {
+      wakeManagedRuntimeInstall(subject)
+    }
+  }, [subject, contactEpoch, viewActive])
+  const read = useCallback(() => (subject ? readManagedRuntimeInstall(subject) : null), [subject])
+  const snapshot = useAppViewExternalStore(subscribeManagedRuntimeInstalls, read, read)
+  const settled =
+    snapshot?.kind === 'known' && snapshot.state.operation?.phase === 'succeeded'
+      ? snapshot.state.operation.id
+      : null
+  // Orca's installed copy is an installed agent, so every agent list of that host is dropped and
+  // the surfaces showing one read it again; a surface opened later catches an unobserved settle.
+  useEffect(() => {
+    if (!settled || reDetectedAfter.has(settled)) {
+      return
+    }
+    reDetectedAfter.add(settled)
+    const store = useAppStore.getState()
+    // Readers outside a hook (Settings, the status bar) read the host's own list, so ask for it.
+    if (environmentId === null) {
+      store.clearLocalDetectedAgents()
+      void store.ensureNativeDetectedAgents().catch(() => {})
+    } else {
+      store.clearRuntimeDetectedAgents(environmentId)
+      void store.ensureRuntimeDetectedAgents(environmentId).catch(() => {})
+    }
+  }, [settled, environmentId])
+  const observation = useMemo((): ManagedRuntimeInstallObservation => {
+    if (capable === false || (list === 'loaded' && !managed)) {
+      return INACTIVE
+    }
+    if (subject && managed && snapshot) {
+      return { kind: 'active', subject, snapshot, removable }
+    }
+    // A failed list leaves the chat's composer and the host's refusal, and Settings says so.
+    if (subject && list === 'failed') {
+      return { kind: 'active', subject, snapshot: READ_FAILED, removable }
+    }
+    // Wait only on reachable hosts’ owed answers; unreachable hosts keep composer/refusal. Claude/Codex use bundled programs.
+    return reachable && !isAgentSessionHandleProvider(agent) ? PENDING : INACTIVE
+  }, [agent, capable, list, managed, reachable, removable, snapshot, subject])
+  const pending = observation.kind === 'pending'
+  const hostCapabilities = remote?.capabilities
+  // The slot waits on the host's answer, so make sure it was asked.
+  useEffect(() => {
+    if (viewActive && pending && list === null) {
+      void (
+        environmentId === null
+          ? ensureLocalRuntimeCapabilities()
+          : Promise.resolve(hostCapabilities)
+      ).then((capabilities) => loadHostStructuredAgents(executionHostId, capabilities, runtimeId))
+    }
+  }, [environmentId, executionHostId, hostCapabilities, list, pending, runtimeId, viewActive])
+  return observation
+}

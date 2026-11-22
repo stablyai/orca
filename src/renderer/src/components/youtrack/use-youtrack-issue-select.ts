@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { YouTrackIssue } from '../../../../shared/youtrack-types'
 import { isYouTrackLookupTextFor } from '../../../../shared/youtrack-issue-reference'
 import { buildYouTrackLinkedWorkItem } from './youtrack-workspace'

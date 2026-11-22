@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readCommandBody } from './command-body-input'
+import { readCommandBody } from './arguments/command-body-input'
 
 const OPTIONS = {
   maximumCharacters: 10,

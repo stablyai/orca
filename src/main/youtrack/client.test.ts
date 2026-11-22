@@ -10,10 +10,8 @@ vi.mock('../network/proxy-settings', () => ({
 }))
 vi.mock('./credential-store', () => ({
   clearSite: vi.fn(),
-  getCredentialError: vi.fn(() => null),
-  getSite: vi.fn(() => null),
-  getTokenProtection: vi.fn(() => null),
-  readToken: vi.fn(() => null),
+  readConnection: vi.fn(),
+  readConnectionStatus: vi.fn(),
   saveSite: mocks.saveSite
 }))
 

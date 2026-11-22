@@ -1,8 +1,8 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
   isClaudeLaunchCommand,
@@ -12,18 +12,18 @@ import {
 import {
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
-} from '../../../daemon/pty-session-id'
-import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
+} from '../../../daemon/sessions/pty-session-id'
+import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
-import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
-import { resolvePtySpawnHostEnv } from '../spawn-host-env'
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
+import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
+import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../host-env/spawn-pane-env'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   ensureJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY
-} from '../../../../shared/jcode-runtime-dir'
+} from '../../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -35,7 +35,8 @@ export async function prepareRuntimePtySpawn(
       args.sessionId,
       localPtySpawnCwd(args),
       // Main's background start must not stat a stopped distro's folder as a user act (E9).
-      args.wslUserAct !== true
+      args.wslUserAct !== true,
+      args.connectionId
     )
     if (admission) {
       await admission
@@ -73,10 +74,17 @@ export async function prepareRuntimePtySpawn(
     sessionId: ctx.sessionId,
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
-    projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    projectRuntimeSource: {
+      kind: 'store',
+      store: ctx.deps.store,
+      workspace: args.resolvedWorkspace,
+      connectionId: args.connectionId,
+      tabId: args.tabId
+    },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    resolveStartupCwd: (id, cwd, fallback) =>
+      ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
     // The same verdict as spawn-options' `wslBackgroundStart`, held before the cwd probe and any provider.
     ...(isRuntimeWslBackgroundStart(ctx)
       ? { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } }

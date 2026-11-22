@@ -1,26 +1,40 @@
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import { useClipboardWriter } from '../platform/clipboard'
-import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
-import { QuickCommandsSheet } from './QuickCommandsSheet'
-import { triggerSuccess, triggerError } from '../platform/haptics'
-import { ActionSheetModal } from '../components/ActionSheetModal'
-import { TextInputModal } from '../components/TextInputModal'
-import { MobileTerminalRenameModal } from './MobileTerminalRenameModal'
-import { ConfirmModal } from '../components/ConfirmModal'
-import { CustomKeyModal } from '../components/CustomKeyModal'
-import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { Copy, FileText, RefreshCw } from 'lucide-react-native'
+import { MobileSessionTerminalLayoutSheet } from '../terminal/session/pane-layout/MobileSessionTerminalLayoutSheet'
+import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
+import { triggerSuccess, triggerError } from '../platform/haptics/haptics'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
+import { TextInputModal } from '../components/sheets/TextInputModal'
+import { MobileTerminalRenameModal } from '../terminal/session/tab-actions/MobileTerminalRenameModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
+import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
-import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
-import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
-import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
-import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
+import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
+import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
+import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
+import { MobileSessionBotSheet } from './MobileSessionBotSheet'
+import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
+import {
+  MobileBrowserProfilePicker,
+  useMobileNewBrowserProfile
+} from './tabs/MobileBrowserProfilePicker'
+import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
+import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobile-windows-shell-choices'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
+  const terminalWorkerActions = useMobileAllowAutoCloseActions(
+    controller.client,
+    controller.actionTarget && { terminal: controller.actionTarget.handle }
+  )
   const {
     worktreeId,
     isFolderWorkspaceRoute,
@@ -36,8 +50,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowQuickCommands,
     setShowCreateBrowserModal,
     showCreateBrowserModal,
-    showHeaderMoreActions,
-    setShowHeaderMoreActions,
+    showTerminalLayout,
+    setShowTerminalLayout,
     actionTarget,
     setActionTarget,
     markdownActionTarget,
@@ -46,8 +60,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setFileActionTarget,
     browserActionTarget,
     setBrowserActionTarget,
-    agentSessionActionTarget,
-    setAgentSessionActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,
@@ -68,12 +80,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     toggleTabChatView,
     toggleDisplayMode,
     readFileTab,
-    leaveSession,
+    leaveSessionDroppingDrafts,
     discardMarkdownLocalContent,
     copyMarkdownPath,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
     handleManageShortcuts,
+    smartRailEnabled,
+    handleSmartRailChange,
     handleClearTerminal,
     handleCreateTerminal,
     launchQuickCommand,
@@ -85,25 +99,33 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
-    createTabAgentActions,
-    sendDiffNotesAgentActions,
-    handlePanelTap,
-    openAgentSessionHistory,
-    showAgentSessionHistoryAction,
-    showChecksAction
+    createTabAgentStatusRow,
+    createTabAgentOptions,
+    createTabAgentSurfaceChoice,
+    sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
+  // The host owns which shells it would start here, as desktop's menu does for its own projects.
+  const terminalShells = useMobileWindowsShellChoices({
+    client,
+    sheetOpen: showCreateTabDrawer,
+    worktreeId
+  })
+  const browserProfile = useMobileNewBrowserProfile(
+    client,
+    (showCreateTabDrawer && !isFloatingWorkspaceRoute && browserScreencastSupported === true) ||
+      browserActionTarget != null
+  )
   return (
     <>
-      <MobileSessionHeaderMoreActionsSheet
-        visible={showHeaderMoreActions}
-        showAgentSessionHistory={showAgentSessionHistoryAction}
-        showChecks={showChecksAction}
-        onOpenAgentSessionHistory={openAgentSessionHistory}
-        onOpenChecks={() => handlePanelTap('pr')}
-        onClose={() => setShowHeaderMoreActions(false)}
+      <MobileSessionBotSheet controller={controller} />
+      <MobileSessionTerminalLayoutSheet
+        controller={controller}
+        visible={showTerminalLayout}
+        onClose={() => setShowTerminalLayout(false)}
       />
+      <MobileSessionTextSizeSheet controller={controller} />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
@@ -117,61 +139,43 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         agentPromptMaxLength={controller.quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
-      <ActionSheetModal
+      <MobileNewHomeChatConfirm controller={controller} />
+      <MobileNewTabSheet
         visible={showCreateTabDrawer}
-        title={t('session.sheets.newTab', 'New Tab')}
-        actions={[
-          ...createTabAgentActions,
-          {
-            id: 'terminal',
-            label: t('session.sheets.terminal', 'Terminal'),
-            icon: SquareTerminal,
-            onPress: () => {
-              setShowCreateTabDrawer(false)
-              void handleCreateTerminal()
-            }
-          },
-          // Why: browser/markdown creation resolve a real worktree on the host
-          // (browser.tabCreate, files.createFile); the floating sentinel is
-          // terminal-only over RPC, so those options hide there.
-          ...(isFloatingWorkspaceRoute
-            ? []
-            : [
-                {
-                  id: 'browser',
-                  label: t('session.sheets.browser', 'Browser'),
-                  icon: Globe,
-                  closeBeforePress: true,
-                  onPress: () => {
-                    if (browserScreencastSupported !== true) {
-                      showToast(
-                        t(
-                          'session.sheets.browserUpdateRequired',
-                          'Desktop update required for mobile browser streaming'
-                        ),
-                        1600
-                      )
-                      return
-                    }
-                    setShowCreateBrowserModal(true)
-                  }
-                },
-                ...(onPairedHost
-                  ? [
-                      {
-                        id: 'markdownNote',
-                        label: t('session.sheets.markdownNote', 'Markdown Note'),
-                        icon: FileText,
-                        onPress: () => {
-                          setShowCreateTabDrawer(false)
-                          void handleCreateMarkdownNote()
-                        }
-                      }
-                    ]
-                  : [])
-              ])
-        ]}
+        workspaceName={worktreeName}
+        agentOptions={createTabAgentOptions}
+        surfaceChoice={createTabAgentSurfaceChoice}
+        agentStatusRow={createTabAgentStatusRow}
+        bot={controller.botNewTabActions}
+        // Why: browser/markdown creation resolve a real worktree on the host
+        // (browser.tabCreate, files.createFile); the floating sentinel is
+        // terminal-only over RPC, so those options hide there.
+        canCreateBrowser={!isFloatingWorkspaceRoute}
+        browserProfileLabel={browserProfile.newTabLabel}
+        onChooseBrowserProfile={() => browserProfile.setPickerOpen(true)}
+        canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
+        onCreateAgent={(agent, nativeChatDefault) =>
+          void handleCreateTerminal(agent, undefined, nativeChatDefault)
+        }
+        terminalShells={terminalShells}
+        onCreateTerminal={(shell) =>
+          void handleCreateTerminal(undefined, shell ? { shell } : undefined)
+        }
+        onCreateBrowser={() => {
+          if (browserScreencastSupported !== true) {
+            showToast(
+              t(
+                'session.sheets.browserStreamingUnavailable',
+                "This host can't stream browser tabs"
+              ),
+              1600
+            )
+            return
+          }
+          setShowCreateBrowserModal(true)
+        }}
+        onCreateMarkdownNote={() => void handleCreateMarkdownNote()}
       />
       <ActionSheetModal
         visible={pendingDiffNotesDelivery !== null}
@@ -220,7 +224,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
-          bulkCloseActions
+          bulkCloseActions,
+          workerActions: terminalWorkerActions
         })}
         onClose={() => setActionTarget(null)}
       />
@@ -283,21 +288,17 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onClose={() => setBrowserActionTarget(null)}
         onNavigate={handleBrowserNavigationCommand}
         onCloseTab={handleCloseSessionTab}
+        profileLabel={browserProfile.tabLabel(browserActionTarget?.browserProfileId)}
         bulkCloseActions={bulkCloseActions}
       />
-      <ActionSheetModal
-        visible={agentSessionActionTarget != null}
-        title={agentSessionActionTarget?.title || t('session.sheets.chat', 'Chat')}
-        actions={[
-          ...getMobileNativeChatCliForkActions({
-            controller,
-            tab: agentSessionActionTarget,
-            workspaceOnPairedHost: onPairedHost,
-            onDismiss: () => setAgentSessionActionTarget(null)
-          }),
-          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
-        ]}
-        onClose={() => setAgentSessionActionTarget(null)}
+      <MobileBrowserProfilePicker
+        choice={browserProfile}
+        // Back to the new-tab sheet, where the chosen profile now shows.
+        onAfterClose={() => setShowCreateTabDrawer(true)}
+      />
+      <MobileAgentSessionTabActionSheet
+        controller={controller}
+        workspaceOnPairedHost={onPairedHost}
       />
       <ActionSheetModal
         visible={leaveDrafts != null}
@@ -317,7 +318,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 .writeText(combined)
                 .then(() => {
                   setLeaveDrafts(null)
-                  leaveSession()
+                  leaveSessionDroppingDrafts(drafts)
                 })
                 .catch(() => {
                   triggerError()
@@ -331,7 +332,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             destructive: true,
             onPress: () => {
               setLeaveDrafts(null)
-              leaveSession()
+              leaveSessionDroppingDrafts(leaveDrafts ?? [])
             }
           }
         ]}
@@ -360,9 +361,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         submitLabel={t('common.open', 'Open')}
         allowEmpty
         selectTextOnFocus
-        keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+        // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
+        keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
-          void handleCreateBrowser(value).then((created) => {
+          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
             if (created) {
               setShowCreateBrowserModal(false)
             }
@@ -375,6 +377,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
         onManageShortcuts={handleManageShortcuts}
+        smartRail={{ enabled: smartRailEnabled, onChange: handleSmartRailChange }}
       />
       <MobileDictationSetupSheet
         visible={showDictationSetup}

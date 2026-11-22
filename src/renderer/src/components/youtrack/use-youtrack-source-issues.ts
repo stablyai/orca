@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { YouTrackIssue } from '../../../../shared/youtrack-types'
 import { useYouTrackIssueSuggestions } from './use-youtrack-issue-reference'
 import { useYouTrackVisible } from './use-youtrack-visible'
@@ -8,21 +9,15 @@ const SEARCH_LIMIT = 30
 const NO_ISSUES: YouTrackIssue[] = []
 
 /** Issues for the Create worktree source field: ID/URL suggestions, plus text search in the YouTrack tab. */
-export function useYouTrackSourceIssues({
-  value,
-  debouncedQuery,
-  suggest,
-  search
-}: {
-  value: string
-  debouncedQuery: string
-  suggest: boolean
-  search: boolean
-}): { issues: YouTrackIssue[]; loading: boolean } {
-  const suggestions = useYouTrackIssueSuggestions(value, suggest)
+export function useYouTrackSourceIssues(
+  value: string,
+  debouncedQuery: string,
+  mode: SmartNameMode
+) {
+  const suggestions = useYouTrackIssueSuggestions(value, mode === 'smart' || mode === 'youtrack')
   const connected = useYouTrackStore((s) => s.status.connected)
-  const visible = useYouTrackVisible()
-  const active = search && connected && visible
+  const available = useYouTrackVisible() && connected
+  const active = mode === 'youtrack' && available
   const query = debouncedQuery.trim()
   const [result, setResult] = useState<{ query: string; issues: YouTrackIssue[] } | null>(null)
 
@@ -54,5 +49,5 @@ export function useYouTrackSourceIssues({
     const seen = new Set(suggestions.map((issue) => issue.idReadable))
     return [...suggestions, ...searched.filter((issue) => !seen.has(issue.idReadable))]
   }, [searched, suggestions])
-  return { issues, loading: active && result?.query !== query }
+  return { issues, loading: active && result?.query !== query, available }
 }

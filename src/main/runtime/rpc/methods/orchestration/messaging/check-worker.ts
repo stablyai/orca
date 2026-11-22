@@ -1,36 +1,21 @@
-import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerMailboxCheckInput } from './check-worker-mailbox-input'
+import type { MessageRow, MessageType } from '../../../../orchestration/db/orchestration-records'
+import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { formatMessageBanner } from '../../../../orchestration/formatter'
-import { exposeMessages } from './mailbox-message-receipt'
-import { routeAllMailboxPages } from '../schemas'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
+import {
+  acknowledgedOnlyReceipt,
+  deliveryReceipt,
+  exposeMessages,
+  withReplyFollowUps
+} from './mailbox-message-receipt'
+import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
+import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { currentDispatchAssigneeRun } from './recipient-routing'
-import type { CheckParams } from '../schemas'
-import type { z } from 'zod'
 
-type CheckParamsInput = z.infer<typeof CheckParams>
-type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
-type RemoteAttachment = NonNullable<
-  ReturnType<OrchestrationDb['findActiveRemoteAttachmentForPane']>
->
-
-export async function checkWorkerMailbox(args: {
-  params: CheckParamsInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  handle: string
-  paneKey: string | undefined
-  typeFilter: MessageType[] | undefined
-  signal: AbortSignal | undefined
-  activeDispatch: ActiveDispatch | undefined
-  remoteAttachment: RemoteAttachment | undefined
-  wakeTypes?: MessageType[]
-  revalidateConsumer?: () => void
-  deferDelivery?: () => boolean
-  recordMutationReceipt?: (receipt: unknown) => void
-}) {
+export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   const {
     params,
     runtime,
@@ -67,16 +52,7 @@ export async function checkWorkerMailbox(args: {
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
-  const routeDirectSnapshot = async (
-    runId: string,
-    directHandle: string,
-    routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
-  ): Promise<void> => {
-    const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
-    if (throughSequence !== undefined) {
-      await routeAllMailboxPages(() => routePage(throughSequence), signal)
-    }
-  }
+  const routeDirectSnapshot = createDirectMailSnapshotRouter(db, signal)
   const revalidateWorkerMailbox = async (): Promise<void> => {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -180,7 +156,8 @@ export async function checkWorkerMailbox(args: {
           mailboxHandle: address,
           consumerGeneration: workerMailbox.generation,
           consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-          deliveryId: params.ack
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
         })
       : undefined
   } catch (error) {
@@ -190,20 +167,68 @@ export async function checkWorkerMailbox(args: {
     args.recordMutationReceipt?.(
       interruptedAcknowledgedCheck(deliveryRunId, acknowledged.delivery.id, 'outcome_unknown')
     )
+    if (args.acknowledgeOnly) {
+      return acknowledgedOnlyReceipt(mailboxIdentity, acknowledged.delivery.id)
+    }
   }
+  const formatted = (messages: MessageRow[]) =>
+    params.format || params.inject
+      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+      : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
-  const readDelivery = (wakeTypes?: MessageType[]) => {
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
+      mailbox: mailboxIdentity,
+      batch,
+      acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
+      format: params.format === true || params.inject === true
+    })
+    return batch?.finalResponse ? receipt : withReplyFollowUps(runtime, db, args.reader, receipt)
+  }
+  const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
     if (args.deferDelivery?.()) {
       return undefined
     }
+    const revalidate = () => {
+      args.revalidateCaller?.()
+      args.revalidateConsumer?.()
+      if (readCurrentGeneration() !== workerMailbox.generation) {
+        throw dispatchFenced()
+      }
+      if (activeDispatch) {
+        const current = db.getActiveDispatchForIdentity(handle, paneKey)
+        if (current?.id !== activeDispatch.id || !callerHoldsDispatchPane(current, paneKey)) {
+          throw dispatchFenced()
+        }
+      } else if (
+        !paneKey ||
+        db.findActiveRemoteAttachmentForPane(paneKey)?.dispatch_id !== workerMailbox.dispatchId ||
+        !db.isRemoteAttachmentProcessCurrent({
+          dispatchId: workerMailbox.dispatchId,
+          paneKey,
+          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+        })
+      ) {
+        throw dispatchFenced()
+      }
+      if (args.deferDelivery?.()) {
+        throw dispatchFenced()
+      }
+    }
     try {
-      return db.getOrCreateMailboxDelivery({
-        runId: deliveryRunId,
-        mailboxHandle: address,
-        consumerGeneration: workerMailbox.generation,
-        consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-        wakeTypes
+      return await args.reconciliation.takeRole({
+        mailbox: {
+          runId: deliveryRunId,
+          mailboxHandle: address,
+          consumerGeneration: workerMailbox.generation,
+          consumerSource: activeDispatch ? 'dispatch' : 'attachment',
+          wakeTypes
+        },
+        revalidate,
+        respond: result,
+        record: args.recordMutationReceipt,
+        wake
       })
     } catch (error) {
       throw asDispatchFence(error)
@@ -216,9 +241,7 @@ export async function checkWorkerMailbox(args: {
       messages: exposeMessages(messages),
       count: messages.length,
       acknowledged: acknowledged?.delivery.id ?? null,
-      ...(params.format || params.inject
-        ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
-        : {})
+      ...formatted(messages)
     }
   }
   if (params.peek) {
@@ -229,28 +252,13 @@ export async function checkWorkerMailbox(args: {
         messages: exposeMessages(messages),
         count: messages.length,
         acknowledged: acknowledged?.delivery.id ?? null,
-        ...(params.format || params.inject
-          ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
-          : {})
+        ...formatted(messages)
       }
     }
   } else {
-    const current = readDelivery(params.wait ? typeFilter : args.wakeTypes)
+    const current = await takeDelivery(params.wait ? typeFilter : args.wakeTypes)
     if (current || !params.wait) {
-      return {
-        ...mailboxIdentity,
-        deliveryId: current?.delivery.id ?? null,
-        messages: exposeMessages(current?.messages ?? []),
-        count: current?.messages.length ?? 0,
-        replayed: current?.replayed ?? false,
-        acknowledged: acknowledged?.delivery.id ?? null,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        ...(params.format || params.inject
-          ? { formatted: current?.messages.map(formatMessageBanner).join('\n\n') ?? '' }
-          : {})
-      }
+      return result(current)
     }
   }
   // Binding can happen during recovery, before run-create/run-use can cancel this wait.
@@ -268,10 +276,7 @@ export async function checkWorkerMailbox(args: {
   }
   if (waitResult === 'timed_out' || waitResult === 'cancelled') {
     return {
-      ...mailboxIdentity,
-      messages: [],
-      count: 0,
-      acknowledged: acknowledged?.delivery.id ?? null,
+      ...result(undefined),
       timedOut: waitResult === 'timed_out',
       cancelled: waitResult === 'cancelled',
       connectionLost: waitResult === 'cancelled' && signal?.aborted === true
@@ -284,21 +289,9 @@ export async function checkWorkerMailbox(args: {
       messages: exposeMessages(arrived),
       count: arrived.length,
       acknowledged: acknowledged?.delivery.id ?? null,
-      ...(params.format || params.inject
-        ? { formatted: arrived.map(formatMessageBanner).join('\n\n') }
-        : {})
+      ...formatted(arrived)
     }
   }
-  const arrived = readDelivery(typeFilter)
-  return {
-    ...mailboxIdentity,
-    deliveryId: arrived?.delivery.id ?? null,
-    messages: exposeMessages(arrived?.messages ?? []),
-    count: arrived?.messages.length ?? 0,
-    replayed: arrived?.replayed ?? false,
-    acknowledged: acknowledged?.delivery.id ?? null,
-    ...(params.format || params.inject
-      ? { formatted: arrived?.messages.map(formatMessageBanner).join('\n\n') ?? '' }
-      : {})
-  }
+  const batch = await takeDelivery(typeFilter, waitResult)
+  return result(batch)
 }

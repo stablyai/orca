@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   YouTrackFieldSchema,
   YouTrackIssue,
@@ -70,6 +70,7 @@ export function YouTrackCreateIssueDialog({
   onOpenChange: (open: boolean) => void
   onCreated: (issue: YouTrackIssue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const viewerLogin = useYouTrackStore((s) => s.status.viewer?.login ?? null)
   const [projects, setProjects] = useState<YouTrackProjectSummary[] | null>(null)
   const [projectId, setProjectId] = useState<string | null>(readLastProject)
@@ -150,9 +151,7 @@ export function YouTrackCreateIssueDialog({
     } catch {
       // Remembering the project is a convenience only.
     }
-    toast.success(
-      translate('youtrack.create.created', 'Created {{id}}', { id: result.issue.idReadable })
-    )
+    toast.success(t('youtrack.create.created', 'Created {{id}}', { id: result.issue.idReadable }))
     reset()
     onOpenChange(false)
     onCreated(result.issue)
@@ -162,9 +161,9 @@ export function YouTrackCreateIssueDialog({
     <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{translate('youtrack.create.title', 'New YouTrack issue')}</DialogTitle>
+          <DialogTitle>{t('youtrack.create.title', 'New YouTrack issue')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'youtrack.create.description',
               'Fields come from the selected project; required ones are marked with *.'
             )}
@@ -178,7 +177,7 @@ export function YouTrackCreateIssueDialog({
           }}
         >
           <div className="grid gap-1.5">
-            <Label>{translate('youtrack.create.project', 'Project')}</Label>
+            <Label>{t('youtrack.create.project', 'Project')}</Label>
             <Select
               value={projectId ?? undefined}
               onValueChange={(value) => {
@@ -192,7 +191,7 @@ export function YouTrackCreateIssueDialog({
             >
               <SelectTrigger>
                 <SelectValue
-                  placeholder={translate('youtrack.create.loadingProjects', 'Loading projects…')}
+                  placeholder={t('youtrack.create.loadingProjects', 'Loading projects…')}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -205,7 +204,7 @@ export function YouTrackCreateIssueDialog({
             </Select>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor={summaryId}>{translate('youtrack.create.summary', 'Summary *')}</Label>
+            <Label htmlFor={summaryId}>{t('youtrack.create.summary', 'Summary *')}</Label>
             <Input
               id={summaryId}
               value={summary}
@@ -215,7 +214,7 @@ export function YouTrackCreateIssueDialog({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={descriptionId}>
-              {translate('youtrack.create.descriptionLabel', 'Description (Markdown)')}
+              {t('youtrack.create.descriptionLabel', 'Description (Markdown)')}
             </Label>
             <textarea
               id={descriptionId}
@@ -255,7 +254,7 @@ export function YouTrackCreateIssueDialog({
           </div>
           {hiddenCount > 0 ? (
             <Button type="button" variant="link" size="sm" onClick={() => setShowAll(true)}>
-              {translate('youtrack.create.moreFields', 'More fields ({{count}})', {
+              {t('youtrack.create.moreFields', 'More fields ({{count}})', {
                 count: hiddenCount
               })}
             </Button>
@@ -267,18 +266,18 @@ export function YouTrackCreateIssueDialog({
           ) : null}
           {missing.length > 0 && summary.trim() ? (
             <p className="text-xs text-muted-foreground">
-              {translate('youtrack.create.missing', 'Required: {{fields}}', {
+              {t('youtrack.create.missing', 'Required: {{fields}}', {
                 fields: missing.map((field) => field.name).join(', ')
               })}
             </p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              {translate('youtrack.create.cancel', 'Cancel')}
+              {t('youtrack.create.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {translate('youtrack.create.submit', 'Create issue')}
+              {t('youtrack.create.submit', 'Create issue')}
             </Button>
           </DialogFooter>
         </form>

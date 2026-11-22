@@ -1,24 +1,27 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import { normalizeSetupSkippedContent } from './automation-setup-skipped-content'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunsPage,
   AutomationRunTrigger
-} from '../../../shared/automations-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+} from '../../../shared/automations/history/automation-run'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { runHasEvent, type AutomationRunEvent } from '../../../shared/automation-event-triggers'
 import {
   nextAutomationRunNumber,
   pruneAutomationRuns
-} from '../../../shared/automation-run-retention'
+} from '../../../shared/automations/history/automation-run-retention'
 import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
-} from '../../../shared/automation-run-cursor'
+} from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { foldOccurrence, touchAutomation } from './automation-run-occurrence-folding'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -35,18 +38,8 @@ export type AutomationRunOperations = {
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
 
-function touchAutomation(state: PersistedState, automationId: string, now: number): void {
-  if (!state.automations.some((entry) => entry.id === automationId)) {
-    return
-  }
-  state.automations = state.automations.map((entry) =>
-    entry.id === automationId ? { ...entry, lastRunAt: now, updatedAt: now } : entry
-  )
-}
-
-function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
-  const runs = state.automationRuns ?? []
-  return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
+function normalizedNewestFirst(runs: readonly AutomationRun[]): AutomationRun[] {
+  return runs
     .map((run) => ({
       ...run,
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
@@ -54,8 +47,31 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
     .sort(compareAutomationRunsNewestFirst)
 }
 
+function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
+  const runs = state.automationRuns ?? []
+  return normalizedNewestFirst(
+    automationId ? runs.filter((run) => run.automationId === automationId) : runs
+  )
+}
+
 export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   return sortedAutomationRuns(state, automationId)
+}
+
+/** Each named automation's runs, newest first, from one pass over the run history. */
+export function listAutomationRunsByAutomation(
+  state: PersistedState,
+  automationIds: readonly string[]
+): Map<string, AutomationRun[]> {
+  const wanted = new Set(automationIds)
+  if (wanted.size === 0) {
+    return new Map()
+  }
+  const grouped = Map.groupBy(
+    (state.automationRuns ?? []).filter((run) => wanted.has(run.automationId)),
+    (run) => run.automationId
+  )
+  return new Map([...grouped].map(([id, runs]) => [id, normalizedNewestFirst(runs)]))
 }
 
 export function listAutomationRunsPage(
@@ -71,10 +87,18 @@ export function createAutomationRun(
   operations: AutomationRunOperations,
   automation: Automation,
   scheduledFor: number,
-  trigger: AutomationRunTrigger = 'scheduled'
+  trigger: AutomationRunTrigger = 'scheduled',
+  event?: AutomationRunEvent,
+  // Chosen ahead when something must name the run before it exists.
+  id: string = randomUUID()
 ): AutomationRun {
+  // An event run is keyed by its source event; others by their occurrence.
   const existing = (operations.state.automationRuns ?? []).find(
-    (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    (run) =>
+      run.automationId === automation.id &&
+      (trigger === 'event'
+        ? run.trigger === 'event' && event !== undefined && runHasEvent(run, event.key)
+        : run.trigger !== 'event' && run.scheduledFor === scheduledFor)
   )
   if (existing) {
     return existing
@@ -85,7 +109,7 @@ export function createAutomationRun(
     (operations.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
   )
   const run: AutomationRun = {
-    id: randomUUID(),
+    id,
     automationId: automation.id,
     runNumber,
     runContext: automation.runContext ?? null,
@@ -96,7 +120,7 @@ export function createAutomationRun(
     trigger,
     workspaceId: automation.workspaceId,
     workspaceDisplayName: operations.getWorkspaceDisplayName(automation.workspaceId),
-    sessionKind: 'terminal',
+    sessionKind: automation.bot ? 'chat' : 'terminal',
     chatSessionId: null,
     terminalSessionId: null,
     terminalPaneKey: null,
@@ -107,7 +131,20 @@ export function createAutomationRun(
     error: null,
     startedAt: null,
     dispatchedAt: null,
-    createdAt: now
+    createdAt: now,
+    ...(event ? { event } : {}),
+    // Every event run names its source, even with no actor: a bot request it sends is marked as started by it.
+    ...(event
+      ? {
+          triggeredBy: {
+            source: event.source,
+            event: event.event,
+            ...(event.actor ? { actor: event.actor } : {}),
+            ...(event.actorId ? { actorId: event.actorId } : {}),
+            ...(event.place ? { place: event.place } : {})
+          }
+        }
+      : {})
   }
   operations.state.automationRuns = pruneAutomationRuns([
     ...(operations.state.automationRuns ?? []),
@@ -121,14 +158,15 @@ export function createAutomationRun(
   return run
 }
 
+/** With an event, folds only into an event row, which then carries that latest event. */
 export function recordRepeatedAutomationSkip(
   operations: AutomationRunOperations,
   automationId: string,
   error: string,
-  scheduledFor: number
+  scheduledFor: number,
+  event?: AutomationRunEvent
 ): AutomationRun | null {
-  const runs = operations.state.automationRuns ?? []
-  const latest = runs
+  const latest = (operations.state.automationRuns ?? [])
     .filter((run) => run.automationId === automationId)
     .reduce<AutomationRun | null>(
       (newest, run) => (!newest || run.createdAt > newest.createdAt ? run : newest),
@@ -136,27 +174,13 @@ export function recordRepeatedAutomationSkip(
     )
   if (
     !latest ||
-    latest.status !== 'skipped_unavailable' ||
-    latest.trigger !== 'scheduled' ||
+    (latest.status !== 'skipped_unavailable' && latest.status !== 'skipped_missed') ||
+    latest.trigger !== (event ? 'event' : 'scheduled') ||
     latest.error !== error
   ) {
     return null
   }
-  if ((latest.lastOccurrenceAt ?? latest.scheduledFor) === scheduledFor) {
-    return latest
-  }
-  const now = Date.now()
-  const updated: AutomationRun = {
-    ...latest,
-    occurrenceCount: (latest.occurrenceCount ?? 1) + 1,
-    lastOccurrenceAt: scheduledFor
-  }
-  // Replace the array to invalidate identity-keyed list projections.
-  operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
-  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
-  touchAutomation(operations.state, automationId, now)
-  operations.flush()
-  return updated
+  return foldOccurrence(operations, latest, scheduledFor, event)
 }
 
 /** Rewrites of the same error (e.g. usage writes) keep its code; a different error drops a stale one. */
@@ -198,6 +222,10 @@ export function updateAutomationRun(
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    sessionKind: result.sessionKind ?? current.sessionKind,
+    chatSessionId: Object.hasOwn(result, 'chatSessionId')
+      ? (result.chatSessionId ?? null)
+      : current.chatSessionId,
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??
@@ -223,7 +251,19 @@ export function updateAutomationRun(
     ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,
     dispatchedAt:
-      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
+    ...(result.handledInTurn ? { handledInTurn: true as const } : {}),
+    // Launch evidence is durable: the first recorded dispatch-start time survives later rewrites.
+    ...((current.launchedAt ?? result.launchedAt) !== undefined
+      ? { launchedAt: current.launchedAt ?? result.launchedAt }
+      : {}),
+    // Later updates (completion) keep the dispatch's note.
+    ...(result.setupSkippedReason === 'setup-changed'
+      ? {
+          setupSkippedReason: result.setupSkippedReason,
+          ...normalizeSetupSkippedContent(result.setupSkippedContent)
+        }
+      : {})
   }
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>

@@ -21,7 +21,7 @@ import {
 } from '../youtrack/issue-mutations'
 import { isRawRecord } from '../youtrack/raw-record'
 import { installYouTrackInsecureTlsFetch } from '../host/electron-youtrack-insecure-tls'
-import type { NetworkProxySettings } from '../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../shared/network/network-proxy'
 import { isYouTrackIssueId } from '../../shared/youtrack-issue-reference'
 import {
   YOUTRACK_BODY_MAX_CHARS,
@@ -99,8 +99,8 @@ export function registerYouTrackHandlers(
     }
   )
 
-  ipcMain.handle('youtrack:disconnect', () => {
-    disconnect()
+  ipcMain.handle('youtrack:disconnect', async () => {
+    await disconnect()
     resetYouTrackMetadataCaches()
   })
 

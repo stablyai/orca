@@ -5,6 +5,17 @@ export function isYouTrackIssueId(value: string): boolean {
   return ISSUE_ID_RE.test(value)
 }
 
+export function normalizeYouTrackIssueUrl(url: URL): { identifier: string; url: string } | null {
+  const route = /^(.*)\/issue\/([^/]+)(?:\/.*)?$/.exec(url.pathname)
+  if (!route || !isYouTrackIssueId(route[2])) {
+    return null
+  }
+  const identifier = route[2].toUpperCase()
+  const issue = new URL(url)
+  issue.pathname = `${route[1]}/issue/${identifier}`
+  return { identifier, url: issue.href }
+}
+
 /** Reads a YouTrack issue ID from a bare ID ("proj-81") or an issue URL on the connected instance. */
 export function parseYouTrackIssueReference(value: string, baseUrl: string | null): string | null {
   const trimmed = value.trim()

@@ -1,0 +1,223 @@
+import React from 'react'
+import { CalendarClock, CircleDot, Link2, SquareTerminal, StickyNote } from 'lucide-react'
+import { cn } from '@/lib/class-names'
+import { LinearIcon } from '@/components/icons/LinearIcon'
+import { MetaIconBadge } from './WorktreeCardMetadataControls'
+import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
+import { JiraIcon } from '@/components/icons/JiraIcon'
+import { YouTrackIcon } from '@/components/icons/YouTrackIcon'
+import type {
+  WorktreeCardMetaBadgesProps,
+  WorktreeCardMetaBadgesRootProps
+} from './worktree-card-meta-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { WorktreeReferenceStack } from '../review/WorktreeReferenceStack'
+import { BotAvatar } from '@/components/bots/BotAvatar'
+
+export function hasComment(comment: string | null): boolean {
+  return (comment ?? '').trim().length > 0
+}
+
+export function hasWorktreeCardDetails({
+  linkedItemCount = 0,
+  issue,
+  linearIssue,
+  jiraIssue,
+  review,
+  comment,
+  automationProvenance,
+  cliProvenance,
+  bot
+}: WorktreeCardMetaBadgesProps): boolean {
+  return Boolean(
+    linkedItemCount > 0 ||
+    issue ||
+    linearIssue ||
+    jiraIssue ||
+    review ||
+    hasComment(comment) ||
+    automationProvenance ||
+    cliProvenance ||
+    bot
+  )
+}
+
+export const WorktreeCardMetaBadges = React.forwardRef<
+  HTMLDivElement,
+  WorktreeCardMetaBadgesRootProps
+>(function WorktreeCardMetaBadges(
+  {
+    linkedItemCount = 0,
+    referenceItems,
+    referenceDetails,
+    issue,
+    linearIssue,
+    jiraIssue,
+    review,
+    comment,
+    automationProvenance,
+    cliProvenance,
+    bot,
+    className,
+    ...props
+  },
+  ref
+): React.JSX.Element | null {
+  const t = useTranslate()
+  if (
+    !hasWorktreeCardDetails({
+      linkedItemCount,
+      issue,
+      linearIssue,
+      jiraIssue,
+      review,
+      comment,
+      automationProvenance,
+      cliProvenance,
+      bot
+    })
+  ) {
+    return null
+  }
+
+  const reviewItems = referenceItems?.filter((item) => item.type !== 'issue') ?? []
+  const linearItems = referenceItems?.filter((item) => item.provider === 'linear') ?? []
+  const keyedIssueItems =
+    referenceItems?.filter((item) => item.provider === 'jira' || item.provider === 'youtrack') ?? []
+  const issueItems =
+    referenceItems?.filter(
+      (item) =>
+        item.type === 'issue' &&
+        item.provider !== 'linear' &&
+        item.provider !== 'jira' &&
+        item.provider !== 'youtrack'
+    ) ?? []
+
+  return (
+    // Radix asChild needs trigger props/ref forwarded to the DOM node for attachment-only hover.
+    <div
+      ref={ref}
+      {...props}
+      className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
+      aria-label={t('auto.components.sidebar.WorktreeCardMeta.3e65e11cc6', 'Workspace metadata')}
+    >
+      {linkedItemCount > 0 &&
+      !referenceItems?.length &&
+      !issue &&
+      !linearIssue &&
+      !jiraIssue &&
+      !review ? (
+        <MetaIconBadge
+          label={t('workspace.links.showLinked', 'Show {{count}} linked reviews and tasks', {
+            count: linkedItemCount,
+            defaultValue_one: 'Show {{count}} linked review or task'
+          })}
+        >
+          <Link2 />
+        </MetaIconBadge>
+      ) : null}
+      {hasComment(comment) && (
+        <MetaIconBadge
+          label={t('auto.components.sidebar.WorktreeCardMeta.fe075cb851', 'Workspace notes')}
+        >
+          <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {automationProvenance && (
+        <MetaIconBadge
+          label={t(
+            'auto.components.sidebar.WorktreeCardMeta.automationCreated',
+            'Created by automation'
+          )}
+        >
+          <CalendarClock className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {bot && (
+        <MetaIconBadge label={t('bots.workspaces.madeBy', 'Made by {{name}}', { name: bot.name })}>
+          <BotAvatar bot={bot} className="size-3.5 rounded-sm border-0 text-[9px]" />
+        </MetaIconBadge>
+      )}
+      {/* A bot's worker makes its workspaces through the CLI, so the bot is the origin worth showing. */}
+      {cliProvenance && !bot && (
+        <MetaIconBadge
+          label={t('auto.components.sidebar.WorktreeCardMeta.cliCreated', 'Created by Orca CLI')}
+        >
+          <SquareTerminal className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {issueItems.length ? (
+        <WorktreeReferenceStack items={issueItems} details={referenceDetails} />
+      ) : (
+        issue && (
+          <MetaIconBadge
+            label={t(
+              'auto.components.sidebar.WorktreeCardMeta.3f2649eeb8',
+              'Linked issue #{{value0}}',
+              { value0: issue.number }
+            )}
+          >
+            <CircleDot className="text-muted-foreground" />
+          </MetaIconBadge>
+        )
+      )}
+      {keyedIssueItems.length ? (
+        <WorktreeReferenceStack items={keyedIssueItems} details={referenceDetails} />
+      ) : (
+        jiraIssue && (
+          <MetaIconBadge
+            label={
+              jiraIssue.provider === 'youtrack'
+                ? t('youtrack.sidebar.linkedIssue', 'Linked YouTrack {{value0}}', {
+                    value0: jiraIssue.identifier
+                  })
+                : t(
+                    'auto.components.sidebar.WorktreeCardMeta.linkedJira',
+                    'Linked Jira {{value0}}',
+                    { value0: jiraIssue.identifier }
+                  )
+            }
+          >
+            {jiraIssue.provider === 'youtrack' ? (
+              <YouTrackIcon className="text-muted-foreground" />
+            ) : (
+              <JiraIcon className="text-muted-foreground" />
+            )}
+          </MetaIconBadge>
+        )
+      )}
+      {linearItems.length || reviewItems.length ? (
+        <span
+          className="inline-flex shrink-0 items-center gap-1.5"
+          data-workspace-reference-groups=""
+        >
+          <WorktreeReferenceStack items={linearItems} details={referenceDetails} />
+          <WorktreeReferenceStack items={reviewItems} details={referenceDetails} />
+        </span>
+      ) : (
+        linearIssue && (
+          <MetaIconBadge
+            label={t(
+              'auto.components.sidebar.WorktreeCardMeta.b105fd3057',
+              'Linked Linear {{value0}}',
+              { value0: linearIssue.identifier }
+            )}
+          >
+            <LinearIcon className="text-muted-foreground" />
+          </MetaIconBadge>
+        )
+      )}
+      {!reviewItems.length && review && (
+        <MetaIconBadge
+          label={t(
+            'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
+            'Linked {{value0}} #{{value1}}',
+            { value0: getReviewLabel(review), value1: review.number }
+          )}
+        >
+          <ReviewIcon review={review} />
+        </MetaIconBadge>
+      )}
+    </div>
+  )
+})

@@ -1,4 +1,4 @@
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
@@ -64,6 +64,7 @@ export function SourceControlPanelDialogs({
       baseRefDialogOpen={baseRefDialogOpen}
       onBaseRefDialogOpenChange={setBaseRefDialogOpen}
       baseRefRepoId={activeRepo.id}
+      baseRefHostId={model.scope?.executionHostId ?? undefined}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
         if (baseRefOwnedByWorktree && activeWorktreeId) {

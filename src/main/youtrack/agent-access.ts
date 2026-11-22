@@ -47,7 +47,7 @@ export async function resolveYouTrackIssueId(
   worktrees: CallerWorktreeLookup<Worktree>
 ): Promise<string> {
   if (target.id) {
-    const id = parseYouTrackIssueReference(target.id, getStatus().baseUrl)
+    const id = parseYouTrackIssueReference(target.id, (await getStatus()).baseUrl)
     if (!id) {
       throw new Error(`"${target.id}" is not a YouTrack issue ID or issue URL.`)
     }

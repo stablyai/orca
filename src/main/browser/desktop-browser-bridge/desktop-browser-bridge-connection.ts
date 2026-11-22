@@ -1,11 +1,19 @@
 // Forwarded commands and results share the host-bound runtime subscription.
 import {
+  BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
+  BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
+} from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import {
   DesktopBrowserBridgeEvent,
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
-} from '../../../shared/desktop-browser-bridge-protocol'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import {
+  formatMegabytes,
+  sendResultChunks
+} from '../client-hosts/commands/browser-host-command-result-staging'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 
 const RESULT_TIMEOUT_MS = 30_000
@@ -13,14 +21,16 @@ const RESULT_TIMEOUT_MS = 30_000
 const MAX_ERROR_CODE_LENGTH = 128
 const MAX_ERROR_MESSAGE_LENGTH = 4096
 
+type SendRequest = NonNullable<RemoteRuntimeTransportSubscription['sendRequest']>
+
 export type DesktopBrowserBridgeSubscribe = (callbacks: {
   onResponse(response: RuntimeRpcResponse<unknown>): void
   onError(error: Error): void
   onClose(): void
-}) => Promise<RemoteRuntimeSubscription>
+}) => Promise<RemoteRuntimeTransportSubscription>
 
 export class DesktopBrowserBridgeConnection {
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: RemoteRuntimeTransportSubscription | null = null
   private attachmentId: string | null = null
   private closed = false
   private readonly revoked = new AbortController()
@@ -46,7 +56,7 @@ export class DesktopBrowserBridgeConnection {
   }
 
   async start(): Promise<void> {
-    let subscription: RemoteRuntimeSubscription
+    let subscription: RemoteRuntimeTransportSubscription
     try {
       subscription = await this.options.subscribe({
         onResponse: (response) => this.handleResponse(response),
@@ -128,17 +138,14 @@ export class DesktopBrowserBridgeConnection {
     if (this.closed || this.attachmentId !== attachmentId || !sendRequest) {
       return
     }
-    const params: DesktopBrowserBridgeResultParams = outcome.ok
-      ? { attachmentId, requestId: request.requestId, ok: true, result: outcome.result }
-      : {
-          attachmentId,
-          requestId: request.requestId,
-          ok: false,
-          error: {
-            code: outcome.error.code.slice(0, MAX_ERROR_CODE_LENGTH),
-            message: outcome.error.message.slice(0, MAX_ERROR_MESSAGE_LENGTH)
-          }
-        }
+    // Only revocation stops the upload: orcad's own timer bounds it by refusing late chunks.
+    const params = await resultParams(
+      sendRequest,
+      attachmentId,
+      request,
+      outcome,
+      this.revoked.signal
+    )
     if (await this.sendResult(sendRequest, params)) {
       return
     }
@@ -157,7 +164,7 @@ export class DesktopBrowserBridgeConnection {
 
   /** False when result submission throws or the host refuses it. */
   private async sendResult(
-    sendRequest: NonNullable<RemoteRuntimeSubscription['sendRequest']>,
+    sendRequest: SendRequest,
     params: DesktopBrowserBridgeResultParams
   ): Promise<boolean> {
     try {
@@ -185,4 +192,73 @@ export class DesktopBrowserBridgeConnection {
     this.close()
     this.options.onLost(error)
   }
+}
+
+async function resultParams(
+  sendRequest: SendRequest,
+  attachmentId: string,
+  request: DesktopBrowserBridgeRequest,
+  outcome: DesktopBrowserBridgeOutcome,
+  signal: AbortSignal
+): Promise<DesktopBrowserBridgeResultParams> {
+  const identity = { attachmentId, requestId: request.requestId }
+  const failure = (
+    error: Extract<DesktopBrowserBridgeOutcome, { ok: false }>['error']
+  ): DesktopBrowserBridgeResultParams => ({
+    ...identity,
+    ok: false,
+    error: {
+      code: error.code.slice(0, MAX_ERROR_CODE_LENGTH),
+      message: error.message.slice(0, MAX_ERROR_MESSAGE_LENGTH),
+      ...(error.data === undefined ? {} : { data: error.data })
+    }
+  })
+  if (!outcome.ok) {
+    return failure(outcome.error)
+  }
+  // Hosts that can't take chunks get one frame, and an undeliverable error if it is too big.
+  const bytes =
+    request.stagedResults && outcome.result !== undefined
+      ? Buffer.from(JSON.stringify(outcome.result), 'utf8')
+      : null
+  if (!bytes || bytes.byteLength <= BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES) {
+    return { ...identity, ok: true, result: outcome.result }
+  }
+  if (bytes.byteLength > BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES) {
+    return failure({
+      code: 'browser_host_command_result_too_large',
+      message: `The result (${formatMegabytes(bytes.byteLength)}) is larger than the ${formatMegabytes(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)} the desktop can send to this host. Use --format jpeg, a selector, or a smaller viewport.`
+    })
+  }
+  try {
+    const sent = await sendResultChunks(bytes, signal, async (offset, contentBase64) => {
+      const response = await sendRequest(
+        'desktopBrowserBridge.resultChunk',
+        { ...identity, offset, contentBase64 },
+        RESULT_TIMEOUT_MS
+      )
+      if (!response.ok) {
+        throw new Error(`${response.error.code}: ${response.error.message}`)
+      }
+      if (!isAccepted(response.result)) {
+        throw new Error('the host is no longer waiting for this command')
+      }
+    })
+    if (!sent) {
+      return failure({ code: 'browser_aborted', message: 'The browser command was cancelled.' })
+    }
+  } catch (error) {
+    return failure({
+      code: 'desktop_browser_bridge_result_undeliverable',
+      message: `The desktop ran the command but could not send its result back: ${error instanceof Error ? error.message : String(error)}`
+    })
+  }
+  // Why null: the result key is required on the wire.
+  return { ...identity, ok: true, result: null, stagedResultBytes: bytes.byteLength }
+}
+
+function isAccepted(result: unknown): boolean {
+  return typeof result === 'object' && result !== null && 'accepted' in result
+    ? result.accepted === true
+    : false
 }

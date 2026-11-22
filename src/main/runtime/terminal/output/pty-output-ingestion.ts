@@ -1,25 +1,26 @@
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
-} from '../../runtime-terminal-state-records'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
+} from '../records/runtime-terminal-state-records'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
-import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
-import { observeTerminalCommandPaint } from '../../terminal-command-paint'
+import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
+import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { observeTerminalCommandPaint } from '../input/terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
   tailStateMatches
-} from '../../terminal-tail-state'
+} from './tail/terminal-tail-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
-} from '../../terminal-wait-tail-state'
-import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+} from '../wait/terminal-wait-tail-state'
+import { extractOscTitleScanTail } from '../../../../shared/agent-status/title/osc-title-scan-tail'
+import { recordPtyExplicitAgentStatus } from './pty-explicit-agent-status'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(
@@ -41,7 +42,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
-  protected abstract getLeavesForPty(ptyId: string): RuntimeLeafRecord[]
+  protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   protected abstract recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -130,13 +131,13 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
-      pty.connected = true
+      this.terminalIdentity.setPtyConnected(pty, true)
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       ptyNormalized = normalized
       pty.tailPendingAnsi = normalized.pendingAnsi
-      observeTerminalCommandPaint(pty, data, normalized.text)
+      observeTerminalCommandPaint(pty, data, normalized.text, at)
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
@@ -170,7 +171,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         paneKey: this.makeRuntimePaneKey(leaf),
         surfaceRecordedAtGraphSequence: this.graphSequence
       })
-      leaf.connected = true
+      this.terminalIdentity.updateLeafConnected(leaf, true)
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
       if (
@@ -264,21 +265,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
       // Background CLI PTYs may lack pane keys; retain first-party status on the always-addressable PTY record.
-      const latestAgentStatus = agentStatusChunk.payloads.at(-1)
-      if (latestAgentStatus) {
-        const ptyRecord = this.ptysById.get(ptyId)
-        if (ptyRecord) {
-          ptyRecord.lastExplicitAgentStatus = {
-            state: latestAgentStatus.state,
-            updatedAt: Date.now(),
-            sessionBoundary: latestAgentStatus.sessionBoundary,
-            ...(latestAgentStatus.state === 'done' &&
-            agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
-              ? { programAtRest: true }
-              : {})
-          }
-        }
-      }
+      recordPtyExplicitAgentStatus(this.ptysById.get(ptyId), agentStatusChunk)
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput,
         programActivity: agentStatusChunk.programActivity

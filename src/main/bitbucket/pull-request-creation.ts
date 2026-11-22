@@ -1,10 +1,13 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
-import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
+import type {
+  CreateHostedReviewInput,
+  CreateHostedReviewResult
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../shared/hosted-review-refs'
+} from '../../shared/source-control/hosted-review/hosted-review-refs'
 import {
   HostedReviewApiRequestError,
   requestHostedReviewJson
@@ -22,8 +25,8 @@ import { getHostedReviewLocalGitOptions } from '../source-control/hosted-review-
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
 // Sidebar eligibility must avoid keychain prompts; creation validates the actual credential.
-export function isBitbucketReviewCreationAuthenticated(): boolean {
-  return hasAuth(getEnvAuthConfig()) || hasStoredBitbucketCredential()
+export async function isBitbucketReviewCreationAuthenticated(): Promise<boolean> {
+  return hasAuth(getEnvAuthConfig()) || (await hasStoredBitbucketCredential())
 }
 
 function encodedRepoPath(repo: BitbucketRepoRef): string {
@@ -127,7 +130,7 @@ export async function createBitbucketPullRequest(
   // The Bitbucket REST calls run on this client; only the git reads under them are routed.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
-  const config = resolveBitbucketAuthConfig()
+  const config = await resolveBitbucketAuthConfig()
   if (!hasAuth(config)) {
     return {
       ok: false,

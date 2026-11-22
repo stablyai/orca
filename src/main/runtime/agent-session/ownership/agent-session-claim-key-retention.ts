@@ -1,6 +1,6 @@
 // Keep retired-key state transitions here and transaction ownership in the store.
 
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 
 /** Retired claim keys stay verifiable this long so a rotation cannot strand a running agent. */
 export const AGENT_SESSION_CLAIM_KEY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000

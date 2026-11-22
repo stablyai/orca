@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { YouTrackConnectDialog } from '@/components/youtrack/YouTrackConnectDialog'
 import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
-import { translate } from '@/i18n/i18n'
-import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
-import { TaskSourceStepRow } from './TaskSourceStepRow'
+import { useTranslate } from '@/i18n/use-translate'
+import { TaskSourceShowInTasksStep } from './tasks/TaskSourceShowInTasksStep'
+import { TaskSourceStepRow } from './tasks/TaskSourceStepRow'
 
 export function YouTrackSetupSteps(props: {
   connected: boolean
@@ -14,6 +14,7 @@ export function YouTrackSetupSteps(props: {
   onToggleVisible: () => void
   onOpenIntegrations: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [dialogOpen, setDialogOpen] = useState(false)
   const baseUrl = useYouTrackStore((s) => s.status.baseUrl)
   const allowInsecureTls = useYouTrackStore((s) => s.status.allowInsecureTls === true)
@@ -24,19 +25,19 @@ export function YouTrackSetupSteps(props: {
         <TaskSourceStepRow
           index={1}
           state={props.checking ? 'in-progress' : props.connected ? 'done' : 'pending'}
-          title={translate('youtrack.settings.connectTitle', 'Connect YouTrack')}
+          title={t('youtrack.settings.connectTitle', 'Connect YouTrack')}
           description={
             props.connected && baseUrl
               ? allowInsecureTls
-                ? translate(
+                ? t(
                     'youtrack.settings.connectedToInsecure',
                     'Connected to {{url}} (certificate verification skipped)',
                     { url: baseUrl }
                   )
-                : translate('youtrack.settings.connectedTo', 'Connected to {{url}}', {
+                : t('youtrack.settings.connectedTo', 'Connected to {{url}}', {
                     url: baseUrl
                   })
-              : translate(
+              : t(
                   'youtrack.settings.connectDescription',
                   'Add your self-hosted YouTrack address and a permanent token.'
                 )
@@ -44,11 +45,11 @@ export function YouTrackSetupSteps(props: {
           action={
             props.connected ? (
               <Button type="button" size="sm" variant="outline" onClick={props.onOpenIntegrations}>
-                {translate('youtrack.settings.manage', 'Manage')}
+                {t('youtrack.settings.manage', 'Manage')}
               </Button>
             ) : (
               <Button type="button" size="sm" onClick={() => setDialogOpen(true)}>
-                {translate('youtrack.settings.add', 'Add YouTrack access')}
+                {t('youtrack.settings.add', 'Add YouTrack access')}
               </Button>
             )
           }

@@ -1,23 +1,20 @@
-import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watching/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
-import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
-import {
-  subscribeNativeChatTranscript,
-  readNativeChatTranscriptTail,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
-} from '../native-chat/transcript-watch'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
+} from '../../shared/native-chat/native-chat-types'
 
-export { clearNativeChatTranscriptCache }
+import { subscribeNativeChatTranscript } from '../native-chat/transcript-watch'
+import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from '../native-chat/transcript-watching/transcript-watch-contract'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { openNativeChatTranscript } from '../native-chat/transcript-discovery/native-chat-open-wake'
 
 export type NativeChatReadSessionArgs = {
   agent: AgentType
@@ -26,21 +23,27 @@ export type NativeChatReadSessionArgs = {
   limit?: number
   /** Hook-authoritative path when session IDs no longer identify transcript filenames. */
   transcriptPath?: string
+  /** The user opened or paged this chat: may start its stopped WSL distro (E9). Absent never does. */
+  wakeWslDistro?: boolean
+  /** Provider row cursor for an older page; absent reads the newest window. */
+  beforeOffset?: number
 }
 
-// Bound parsing and rendering to the recent window; pagination raises the limit.
+const isTranscriptCursor = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 
-async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
+async function readSession(args: NativeChatReadSessionArgs) {
   const { agent, sessionId } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  // Showing or paging a chat's history is a user act on its WSL distro.
-  const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath)
+  const wake = args.wakeWslDistro === true
+  const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath, wake)
   await waking
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
     transcriptPath,
     limit,
+    beforeOffset: isTranscriptCursor(args.beforeOffset) ? args.beforeOffset : undefined,
     sourceOrder: true
   })
 }
@@ -53,6 +56,8 @@ export type NativeChatSubscribeArgs = {
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
   limit?: number
+  /** The user opened this chat: may start its stopped WSL distro (E9). Absent never does. */
+  wakeWslDistro?: boolean
 }
 
 export type NativeChatAppendedPayload = {
@@ -186,8 +191,8 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   const canPublish = (): boolean =>
     !sender.isDestroyed() && !rendererSignal.aborted && !pending.controller.signal.aborted
 
-  // Opening a chat is a user act on its WSL distro; the watch that follows stays background.
-  const opened = openNativeChatTranscript(sessionId, transcriptPath)
+  // Only the user's open may start the distro; the watch that follows stays background.
+  const opened = openNativeChatTranscript(sessionId, transcriptPath, args.wakeWslDistro === true)
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
@@ -300,18 +305,6 @@ export function clearNativeChatSubscriptions(): void {
     teardownAllForSender(senderId)
   }
   pendingSubscriptions.clear()
-}
-
-export function _getNativeChatSenderCleanupCountForTest(): number {
-  return senderLifetimes.size
-}
-
-export function _getNativeChatPendingSubscriptionCountForTest(): number {
-  let count = 0
-  for (const bySubId of pendingSubscriptions.values()) {
-    count += bySubId.size
-  }
-  return count
 }
 
 export function registerNativeChatHandlers(): void {

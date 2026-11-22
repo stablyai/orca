@@ -1,10 +1,10 @@
-import type { ListProjectViewsArgs } from '../../../shared/github/project-request-types'
-import type { ListProjectViewsResult } from '../../../shared/github/project-result-types'
+import type { ListProjectViewsArgs } from '../../../shared/github/projects/project-request-types'
+import type { ListProjectViewsResult } from '../../../shared/github/projects/project-result-types'
 import type {
   GitHubProjectViewLayout,
   GitHubProjectViewSummary
-} from '../../../shared/github/project-types'
-import { assertPositiveInt, assertSlug } from './internals'
+} from '../../../shared/github/projects/project-types'
+import { assertPositiveInt, assertSlug } from './project-argument-validation'
 import { fetchProjectViewsPage } from './project-view-config'
 
 export async function listProjectViews(

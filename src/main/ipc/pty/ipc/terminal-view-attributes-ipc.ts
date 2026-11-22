@@ -4,9 +4,9 @@ import {
   seedTerminalViewerColors,
   setTerminalViewAttributes,
   setTerminalViewerColorsListener
-} from '../../../runtime/terminal-view-attribute-store'
-import { validateTerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+} from '../../../runtime/terminal/view/terminal-view-attribute-store'
+import { validateTerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { publishColorQueryReplyColors } from '../provider/registry'
 import type { PtyIpcSession } from '../session'
 

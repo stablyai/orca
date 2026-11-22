@@ -1,16 +1,19 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
-} from '@/lib/worktree-activation'
+} from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import { getLinkedWorkItemWorkspaceName } from '../../../../shared/workspace-name'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { getLinkedWorkItemWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { YouTrackIssue } from '../../../../shared/youtrack-types'
 

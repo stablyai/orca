@@ -1,23 +1,27 @@
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import { acquire, release, classifyGhError, type LocalGitExecOptions } from '../../gh-utils'
 import {
-  resolveGitHubApiRepository,
-  resolveGitHubApiRepositoryCandidates,
-  resolveIssueGitHubApiRepositorySource,
-  type GitHubApiRepository
-} from '../../github-api-repository'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+  withGitHubRepoExecution,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyGhError } from '../../api/gh-error-classification'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+
+import { resolveIssueGitHubApiRepositorySource } from '../../repositories/github-api-repository'
+import { resolveGitHubWorkItemLinkRepository } from '../../repositories/github-work-item-link-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import {
   getIssueDetailsViaGraphQL,
   type CollapsedIssueDetails
-} from '../../issue-work-item-details'
+} from '../../issues/issue-work-item-details'
 import {
   fetchIssueWorkItem,
-  fetchWorkItemPreview,
   fetchPullRequestWorkItem,
   fetchPullRequestWorkItemFromCandidates
 } from './work-item-fetch'
+import { fetchWorkItemPreview } from './work-item-preview'
+
 export async function getWorkItem(
   repoPath: string,
   number: number,
@@ -50,95 +54,105 @@ export async function getWorkItemWithRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
-  includeIssueDetails = false
+  {
+    includeIssueDetails = false,
+    includeChecksSummary
+  }: {
+    includeIssueDetails?: boolean
+    includeChecksSummary?: boolean
+  } = {}
 ): Promise<WorkItemRepositoryLookup> {
-  await acquire()
-  try {
-    // Number-based issue lookup must honor the same selected source as its list.
-    if (type === 'issue') {
-      const { source } = await resolveIssueGitHubApiRepositorySource(
-        repoPath,
-        preference,
-        connectionId,
-        localGitOptions
-      )
-      // Explicit origin cannot fall back to ambient gh repository discovery.
-      if (!source && preference === 'origin') {
-        return { item: null, repository: null }
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    await acquire()
+    try {
+      // Number-based issue lookup must honor the same selected source as its list.
+      if (type === 'issue') {
+        const { source } = await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+        // Explicit origin cannot fall back to ambient gh repository discovery.
+        if (!source && preference === 'origin') {
+          return { item: null, repository: null }
+        }
+        const issueDetails =
+          includeIssueDetails && source
+            ? await getIssueDetailsViaGraphQL(
+                repoPath,
+                number,
+                source,
+                connectionId,
+                localGitOptions,
+                true
+              )
+            : undefined
+        return {
+          item:
+            issueDetails?.item ??
+            (await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)),
+          repository: source,
+          ...(includeIssueDetails ? { issueDetails } : {})
+        }
       }
-      const issueDetails =
-        includeIssueDetails && source
-          ? await getIssueDetailsViaGraphQL(
-              repoPath,
-              number,
-              source,
-              connectionId,
-              localGitOptions,
-              true
-            )
-          : undefined
-      return {
-        item:
-          issueDetails?.item ??
-          (await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)),
-        repository: source,
-        ...(includeIssueDetails ? { issueDetails } : {})
+      if (type === 'pr') {
+        return {
+          item: await fetchPullRequestWorkItemFromCandidates(
+            repoPath,
+            number,
+            connectionId,
+            localGitOptions,
+            preference,
+            { includeChecksSummary }
+          ),
+          repository: null
+        }
       }
-    }
-    if (type === 'pr') {
+
+      try {
+        const { source } = await resolveIssueGitHubApiRepositorySource(
+          repoPath,
+          preference,
+          connectionId,
+          localGitOptions
+        )
+        if (source || preference !== 'origin') {
+          const issue = await fetchIssueWorkItem(
+            repoPath,
+            source,
+            number,
+            connectionId,
+            localGitOptions
+          )
+          if (issue) {
+            return { item: issue, repository: source }
+          }
+        }
+      } catch (err) {
+        // Only genuine issue 404s permit trying a same-number PR; preserve transient failures.
+        const stderr = err instanceof Error ? err.message : String(err)
+        if (classifyGhError(stderr).type !== 'not_found') {
+          throw err
+        }
+      }
       return {
         item: await fetchPullRequestWorkItemFromCandidates(
           repoPath,
           number,
           connectionId,
           localGitOptions,
-          preference
+          preference,
+          { includeChecksSummary }
         ),
         repository: null
       }
+    } catch {
+      return { item: null, repository: null }
+    } finally {
+      release()
     }
-
-    try {
-      const { source } = await resolveIssueGitHubApiRepositorySource(
-        repoPath,
-        preference,
-        connectionId,
-        localGitOptions
-      )
-      if (source || preference !== 'origin') {
-        const issue = await fetchIssueWorkItem(
-          repoPath,
-          source,
-          number,
-          connectionId,
-          localGitOptions
-        )
-        if (issue) {
-          return { item: issue, repository: source }
-        }
-      }
-    } catch (err) {
-      // Only genuine issue 404s permit trying a same-number PR; preserve transient failures.
-      const stderr = err instanceof Error ? err.message : String(err)
-      if (classifyGhError(stderr).type !== 'not_found') {
-        throw err
-      }
-    }
-    return {
-      item: await fetchPullRequestWorkItemFromCandidates(
-        repoPath,
-        number,
-        connectionId,
-        localGitOptions,
-        preference
-      ),
-      repository: null
-    }
-  } catch {
-    return { item: null, repository: null }
-  } finally {
-    release()
-  }
+  })
 }
 
 export async function getWorkItemByOwnerRepo(
@@ -150,57 +164,103 @@ export async function getWorkItemByOwnerRepo(
   localGitOptions: LocalGitExecOptions = {},
   options: { preview?: boolean } = {}
 ): Promise<MainWorkItem | null> {
-  const requestedHost = ownerRepo.host?.trim().toLowerCase()
-  const requestedRepository = requestedHost
-    ? { ...ownerRepo, host: requestedHost }
-    : await resolveGitHubApiRepository(repoPath, ownerRepo, connectionId, localGitOptions)
-  if (!requestedRepository) {
-    return null
-  }
-  const { candidates } = await resolveGitHubApiRepositoryCandidates(
+  const { item } = await getWorkItemWithExactRepository(
     repoPath,
+    ownerRepo,
+    number,
+    type,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    options
   )
-  const requestedKey = githubRepoIdentityKey(requestedRepository)
-  const matchedRepository = candidates.find(
-    (candidate) => githubRepoIdentityKey(candidate) === requestedKey
-  )
-  // Pasted hosts must match configured remotes before receiving credentials.
-  if (!matchedRepository) {
-    return null
-  }
-  await acquire()
-  try {
-    if (options.preview) {
-      return await fetchWorkItemPreview(
-        repoPath,
-        matchedRepository,
-        number,
-        type,
-        connectionId,
-        localGitOptions
-      )
-    }
-    if (type === 'issue') {
-      return await fetchIssueWorkItem(
-        repoPath,
-        matchedRepository,
-        number,
-        connectionId,
-        localGitOptions
-      )
-    }
-    return await fetchPullRequestWorkItem(
+  return item
+}
+
+export async function getWorkItemWithExactRepository(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  options: {
+    preview?: boolean
+    issueDetails?: { fresh: boolean }
+    includeChecksSummary?: boolean
+  } = {}
+): Promise<WorkItemRepositoryLookup> {
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const matchedRepository = await resolveGitHubWorkItemLinkRepository(
       repoPath,
-      matchedRepository,
-      number,
+      ownerRepo,
+      { allowSameHost: options.preview },
       connectionId,
       localGitOptions
     )
-  } catch {
-    return null
-  } finally {
-    release()
-  }
+    if (!matchedRepository) {
+      return { item: null, repository: null }
+    }
+    await acquire()
+    try {
+      if (options.preview) {
+        return {
+          item: await fetchWorkItemPreview(
+            repoPath,
+            matchedRepository,
+            number,
+            type,
+            connectionId,
+            localGitOptions
+          ),
+          repository: matchedRepository
+        }
+      }
+      if (type === 'issue') {
+        const issueDetails = options.issueDetails
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              number,
+              matchedRepository,
+              connectionId,
+              localGitOptions,
+              true,
+              options.issueDetails.fresh
+            )
+          : undefined
+        return {
+          item:
+            issueDetails?.item ??
+            (await fetchIssueWorkItem(
+              repoPath,
+              matchedRepository,
+              number,
+              connectionId,
+              localGitOptions
+            )),
+          repository: matchedRepository,
+          issueDetails
+        }
+      }
+      return {
+        item: await fetchPullRequestWorkItem(
+          repoPath,
+          matchedRepository,
+          number,
+          connectionId,
+          localGitOptions,
+          options
+        ),
+        repository: matchedRepository
+      }
+    } catch (err) {
+      // Only the failure class is logged: stderr and the command line name the repository.
+      const stderr = extractExecError(err).stderr || (err instanceof Error ? err.message : '')
+      console.warn(
+        `getWorkItemByOwnerRepo ${options.preview ? 'preview' : type} lookup failed: ${classifyGhError(stderr).type}`
+      )
+      return { item: null, repository: null }
+    } finally {
+      release()
+    }
+  })
 }

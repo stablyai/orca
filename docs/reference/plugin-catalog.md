@@ -55,14 +55,15 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"editor"` \| `"worker"`)[] | no | 1.4.245 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
 | `name` | string | no | 1.4.245 | The manifest's `name`, so Orca can suggest the plugin before downloading it. Example: `"Gleam"` |
 | `license` | string | no | 1.4.245 | SPDX license expression. Example: `"MIT"` |
-| `repository` | string | no | 1.4.245 | Source repository page, https only. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `repository` | string | no | 1.4.245 | Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `sourceUnavailable` | `true` | no | 1.4.246 | Set when the release's `repository` is gone and `source` serves an archived copy, so Orca links `source` instead. Example: `true` |
 | `homepage` | string | no | 1.4.245 | Project homepage, https only. Example: `"https://example.com/gleam"` |
 | `updatedAt` | string | no | 1.4.245 | When this release was published, as an ISO 8601 date or date-time. Example: `"2026-10-20"` |
 | `changelog` | string | no | 1.4.245 | What changed in this release, as plain text. At most 2000 characters. Example: `"Adds highlighting for use expressions."` |
 | `images` | [CatalogImages](#catalogimages) | no | 1.4.245 | Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges. |
 | `themePreview` | [CatalogThemePreview](#catalogthemepreview)[] | no | 1.4.245 | Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors. |
 | `contributes` | [CatalogContribution](#catalogcontribution)[] | no | 1.4.245 | What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise. |
-| `capabilities` | (`"workspace:read"` \| `"agent:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
+| `capabilities` | (`"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"workspace:create"` \| `"automation:read"` \| `"automation:write"` \| `"history:read"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
 | `fileTypes` | string[] | no | 1.4.245 | Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer. |
 | `editorFileTypes` | string[] | no | 1.4.245 | The `fileTypes` this release opens in a custom editor. Orca suggests the plugin for such a file even when it already opens it as text. |
 
@@ -107,7 +108,7 @@ One thing the release adds to Orca.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
+| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
 | `name` | string | yes | 1.4.245 | What the item is called in Orca. Example: `"Dusk"` |
 | `detail` | string | no | 1.4.245 | Extra context, such as file extensions. |
 
@@ -124,6 +125,13 @@ One thing the release adds to Orca.
 - **Reserved names install only from Orca's official catalog.** The publishers `stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca` (any case), and ids starting `orca-`, are refused from any other catalog, a Git URL or a local folder. A catalog that lists one is refused whole. `pnpm validate:plugin` rejects these publishers except `stablyai`.
 - **Trust comes from the catalog's address.** Orca labels a plugin with where it came from: the Official mark for Orca's catalog, otherwise the catalog's name and the owner in its Git URL (`github.com/acme`, `gitlab.com/acme/tools`), never the manifest's text. Development folders show `Dev · unverified`, Git URL installs `Unverified`.
 - **An install stays with its catalog.** Orca records the catalog each plugin was installed from and updates it only from there. When another catalog lists the same id, the plugin page says so, and switching means removing the plugin and installing it again.
+
+## Categories
+
+Orca's plugin browser folds related `categories` slugs into one filter and shows an unknown slug as its own. Pick the slug for what the plugin adds:
+
+- **Languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.
+- **Translations:** `language-packs`, `localization`, `i18n`, `translations`. Language packs that show Orca's interface in another language.
 
 ## One repository can hold many plugins
 
@@ -145,12 +153,12 @@ orca://plugins/<publisher>.<id>?catalog=<official | community | catalog Git URL>
 
 - `catalog` defaults to `official`. `community` is Orca's community catalog. Any other value must be an HTTPS or SSH Git URL of at most 512 characters, read at its `main` branch, without a password or token. Orca asks **Add catalog …?** before fetching a catalog the user hasn't added, and that includes `community`.
 - Reserved publishers (above) are accepted only with the official catalog. A link longer than 2048 characters, with another query parameter, or with an id that isn't `<publisher>.<id>` shows a short error and does nothing else. Repeats of the same link within a few seconds are ignored.
-- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://onorca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
+- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://orca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
 
 For a README:
 
 ```md
-[Open in Orca](https://onorca.dev/plugins/acme.gleam-syntax?catalog=community)
+[Open in Orca](https://orca.dev/plugins/acme.gleam-syntax?catalog=community)
 ```
 
 ## Clients before format 2

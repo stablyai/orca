@@ -1,15 +1,20 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../../shared/terminal-links'
-import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../../shared/terminal/links/terminal-links'
+import { useAppStore } from '@/store/index'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+} from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import '../../../../../shared/orca-profiles/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import {
   getBrowserDisplayTitle,
   getNotebookPathFromBrowserUrl,
@@ -21,8 +26,8 @@ import type {
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -78,7 +83,9 @@ export function navigateBrowserPageToUrl({
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
-    webview.src = targetUrl
+    issueBrowserGuestNavigation(webview, () => {
+      webview.src = targetUrl
+    })
     if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
       focusWebviewNow()
     }

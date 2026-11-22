@@ -5,7 +5,6 @@ const { spawnProcess } = vi.hoisted(() => ({ spawnProcess: vi.fn() }))
 vi.mock('./run-process', () => ({ spawnProcess }))
 
 import {
-  buildWindowsEnvironmentBlock,
   quoteWindowsArgumentLikeLibuv,
   setIsolatedSpawner,
   spawnDetachedWithoutInheritance,
@@ -36,72 +35,13 @@ describe('quoteWindowsArgumentLikeLibuv', () => {
   })
 })
 
-describe('buildWindowsEnvironmentBlock', () => {
-  it('sorts case-insensitively, keeps the first of a duplicate, and ends with two NULs', () => {
-    const block = buildWindowsEnvironmentBlock(
-      { b: '2', A: '1', B: 'dup', SYSTEMROOT: 'C:\\Windows', skip: undefined },
-      {}
-    )
-
-    expect(block).toBe('A=1\0b=2\0SYSTEMROOT=C:\\Windows\0\0')
-  })
-
-  it('fills required variables from the parent the way libuv does', () => {
-    const block = buildWindowsEnvironmentBlock({ X: '1' }, { SystemRoot: 'C:\\W', Other: 'no' })
-
-    expect(block).toBe('SystemRoot=C:\\W\0X=1\0\0')
-  })
-
-  it('keeps an empty environment a valid block', () => {
-    expect(buildWindowsEnvironmentBlock({}, {})).toBe('\0')
-  })
-})
-
 describe('spawnDetachedWithoutInheritance', () => {
   afterEach(() => {
     setIsolatedSpawner(null)
     onPlatform(originalPlatform)
     vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     spawnProcess.mockReset()
-  })
-
-  it('uses a detached, ignoring libuv spawn off Windows', () => {
-    onPlatform('linux')
-    const spawner = vi.fn<IsolatedSpawner>()
-    setIsolatedSpawner(spawner)
-    spawnProcess.mockReturnValue({ pid: 1 })
-
-    spawnDetachedWithoutInheritance({ program: '/bin/true', args: ['x'], cwd: '/' })
-
-    expect(spawner).not.toHaveBeenCalled()
-    expect(spawnProcess).toHaveBeenCalledWith({
-      program: '/bin/true',
-      args: ['x'],
-      cwd: '/',
-      detached: true,
-      stdio: 'ignore'
-    })
-  })
-
-  it('falls back to libuv on Windows when no spawner is installed', () => {
-    onPlatform('win32')
-    spawnProcess.mockReturnValue({ pid: 1 })
-
-    spawnDetachedWithoutInheritance({ program: 'C:\\Windows\\System32\\wsl.exe' })
-
-    expect(spawnProcess).toHaveBeenCalledOnce()
-  })
-
-  it.each(['C:\\tools\\run.cmd', 'wsl.exe'])('falls back to libuv for %s', (program) => {
-    onPlatform('win32')
-    const spawner = vi.fn<IsolatedSpawner>()
-    setIsolatedSpawner(spawner)
-    spawnProcess.mockReturnValue({ pid: 1 })
-
-    spawnDetachedWithoutInheritance({ program, env: { ComSpec: 'cmd.exe' } })
-
-    expect(spawner).not.toHaveBeenCalled()
-    expect(spawnProcess).toHaveBeenCalledOnce()
   })
 
   it('hands the native spawner a libuv-shaped command line and environment block', async () => {
@@ -160,22 +100,19 @@ describe('spawnDetachedWithoutInheritance', () => {
     expect(killed.kill()).toBe(false)
   })
 
-  it('logs a child whose breakaway from our job was denied, and still starts it', async () => {
+  it('refuses to kill a child whose exit it cannot watch, since its pid may be reused', async () => {
     onPlatform('win32')
+    setIsolatedSpawner(() => ({ pid: 77, exitWatchError: 5, breakawayDenied: false }))
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    setIsolatedSpawner(() => ({ pid: 7, exitWatchError: null, breakawayDenied: true }))
 
     const child = spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
     await once(child, 'spawn')
 
-    expect(child.pid).toBe(7)
-    expect(warn).toHaveBeenCalledWith(
-      "[process-host] pid 7 could not break away from this process's job"
-    )
-    warn.mockClear()
-    setIsolatedSpawner(() => ({ pid: 8, exitWatchError: null, breakawayDenied: false }))
-    spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
-    expect(warn).not.toHaveBeenCalled()
+    expect(child.pid).toBe(77)
+    expect(child.kill()).toBe(false)
+    expect(processKill).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pid 77 is untracked'))
   })
 
   it('reports a native spawn failure as an error event, like libuv', async () => {

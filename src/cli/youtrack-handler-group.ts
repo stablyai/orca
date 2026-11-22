@@ -1,4 +1,4 @@
-import type { HandlerGroup } from './handler-group-manifest'
+import type { HandlerGroup } from './dispatch/handler-group-manifest'
 
 export const YOUTRACK_HANDLER_GROUP: HandlerGroup = {
   name: 'youtrack',
@@ -10,5 +10,5 @@ export const YOUTRACK_HANDLER_GROUP: HandlerGroup = {
     'youtrack field set',
     'youtrack create'
   ],
-  load: async () => (await import('./handlers/youtrack.js')).YOUTRACK_HANDLERS
+  load: async () => (await import('./workspaces/youtrack.js')).YOUTRACK_HANDLERS
 }

@@ -6,12 +6,12 @@ import {
   RefreshCw,
   Send
 } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import { cn } from '@/lib/utils'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type {
   YouTrackComment,
   YouTrackIssue,
@@ -88,13 +88,14 @@ export function YouTrackLinksSection({
   issue: YouTrackIssue
   onOpenIssue: (idReadable: string) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (issue.links.length === 0) {
     return null
   }
   return (
     <section className="border-b border-border/40 px-4 py-4">
       <div className="mb-2 text-[13px] font-medium text-foreground">
-        {translate('youtrack.detail.links', 'Links')}
+        {t('youtrack.detail.links', 'Links')}
       </div>
       <div className="grid gap-2">
         {issue.links.map((group) => (
@@ -120,12 +121,14 @@ export function YouTrackCommentsSection({
   error: string | null
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <section className="px-4 py-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-medium text-foreground">
-            {translate('youtrack.detail.comments', 'Comments')}
+            {t('youtrack.detail.comments', 'Comments')}
           </span>
           {comments.length > 0 ? (
             <span className="text-[12px] text-muted-foreground">{comments.length}</span>
@@ -138,7 +141,7 @@ export function YouTrackCommentsSection({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate('youtrack.detail.retry', 'Retry')}
+            {t('youtrack.detail.retry', 'Retry')}
           </Button>
         ) : null}
       </div>
@@ -152,7 +155,7 @@ export function YouTrackCommentsSection({
         </div>
       ) : comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {translate('youtrack.detail.noComments', 'No comments yet.')}
+          {t('youtrack.detail.noComments', 'No comments yet.')}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -160,11 +163,10 @@ export function YouTrackCommentsSection({
             <div key={comment.id} className="rounded-md border border-border/50 bg-muted/20">
               <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
                 <span className="truncate text-[13px] font-semibold text-foreground">
-                  {comment.author?.fullName ??
-                    translate('youtrack.detail.unknownAuthor', 'Unknown')}
+                  {comment.author?.fullName ?? t('youtrack.detail.unknownAuthor', 'Unknown')}
                 </span>
                 <span className="shrink-0 text-[12px] text-muted-foreground">
-                  {formatUiRelativeTimeFromDate(comment.createdAt)}
+                  {formatUiRelativeTimeFromDate(comment.createdAt, undefined, intlLocale)}
                 </span>
               </div>
               <div className="px-3 py-2">
@@ -189,6 +191,7 @@ export function YouTrackCommentComposer({
   submitting: boolean
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex-none border-t border-border/50 bg-background px-3 py-3">
       <div className="flex gap-2">
@@ -204,7 +207,7 @@ export function YouTrackCommentComposer({
               onSubmit()
             }
           }}
-          placeholder={translate('youtrack.detail.commentPlaceholder', 'Add a comment (Markdown)…')}
+          placeholder={t('youtrack.detail.commentPlaceholder', 'Add a comment (Markdown)…')}
           rows={2}
           disabled={submitting}
           className="min-h-10 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -215,7 +218,7 @@ export function YouTrackCommentComposer({
           ) : (
             <Send className="size-4" />
           )}
-          {translate('youtrack.detail.comment', 'Comment')}
+          {t('youtrack.detail.comment', 'Comment')}
         </Button>
       </div>
     </div>

@@ -3,10 +3,12 @@ import { toast } from 'sonner'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
+import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
+import { usePluginInstallTrust } from './use-plugin-install-trust'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'
@@ -53,13 +55,16 @@ const downloadFailed = (): string =>
 export function usePluginInstallAction({
   fetchPreview,
   onInstalled,
-  isFromInstallLink
+  isFromInstallLink,
+  applyThemes = applyPluginThemesNow
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
-  /** Reloads the list; opens review on the page for any plugin still waiting for it. */
-  onInstalled: (pluginKey: string) => Promise<void>
+  /** Reloads installed content; true means this surface already handled success feedback. */
+  onInstalled: (pluginKey: string) => Promise<void | boolean>
   /** Whether this install is on the page an install link opened; only labels telemetry. */
   isFromInstallLink?: (pluginKey: string) => boolean
+  /** Shows an installed theme plugin at once; true when it did. Defaults to all of its themes. */
+  applyThemes?: (pluginKey: string) => Promise<boolean>
 }): {
   phaseOf: (pluginKey: string) => PluginInstallPhase | null
   install: (
@@ -71,6 +76,7 @@ export function usePluginInstallAction({
 } {
   const [phases, setPhases] = useState<Readonly<Record<string, PluginInstallPhase>>>({})
   const mountedRef = useRef(true)
+  const confirmTrust = usePluginInstallTrust()
 
   useEffect(() => {
     mountedRef.current = true
@@ -112,6 +118,9 @@ export function usePluginInstallAction({
         return
       }
       const { preview } = read
+      if (!mountedRef.current) {
+        return
+      }
       // Why: preview reads the current catalog; never install a release other than the one shown.
       if (!previewMatchesListing(preview, listing)) {
         setPhase(pluginKey, {
@@ -120,7 +129,19 @@ export function usePluginInstallAction({
         })
         return
       }
+      // Why here: the card, the page and every link-opened page install through this one gate.
+      const trustPrompt = catalogInstallTrustPrompt(listing, preview)
+      if (trustPrompt) {
+        setPhase(pluginKey, null)
+        const confirmed = await confirmTrust(trustPrompt)
+        if (!confirmed || !mountedRef.current) {
+          return
+        }
+        setPhase(pluginKey, { kind: 'installing' })
+      }
       const execution = listing.release?.execution ?? pluginExecutionProfile(preview.manifest)
+      // Why: an installed copy came from another repository; what replaces it waits for review.
+      const moved = preview.repositoryMoved === true
       try {
         const result = await window.api.plugins.installMarketplacePlugin({
           marketplaceSourceId: preview.marketplaceSourceId,
@@ -129,7 +150,7 @@ export function usePluginInstallAction({
           resolvedCommit: preview.resolvedCommit,
           ...(isFromInstallLink?.(pluginKey) ? { fromInstallLink: true as const } : {}),
           // Why the fingerprint: main turns on only the exact bytes this preview showed.
-          ...(execution === 'data'
+          ...(execution === 'data' && !moved
             ? { enableIfData: true as const, expectedFingerprint: preview.consentFingerprint }
             : {})
         })
@@ -140,6 +161,7 @@ export function usePluginInstallAction({
         // reviewed on the page after install rather than approved unseen.
         if (
           approve &&
+          !moved &&
           execution !== 'data' &&
           preview.manifest.contributes.vmRecipes.length === 0
         ) {
@@ -154,12 +176,32 @@ export function usePluginInstallAction({
               console.warn('[plugins] approval after install was refused:', cause)
             })
         }
-        await onInstalled(pluginKey)
+        const handled = await onInstalled(pluginKey)
         setPhase(pluginKey, null)
+        if (moved) {
+          toast.warning(
+            translate(
+              'auto.components.settings.PluginUpdateReviewToast.movedTitle',
+              '{{value0}} {{value1}} comes from a different repository',
+              { value0: preview.manifest.name, value1: preview.manifest.version }
+            ),
+            {
+              duration: PLUGIN_ACTION_TOAST_DURATION_MS,
+              description: translate(
+                'auto.components.settings.PluginUpdateReviewToast.movedInstalled',
+                'It stays off until you review it.'
+              )
+            }
+          )
+          return
+        }
+        if (handled) {
+          return
+        }
         const { themes, iconThemes, terminalThemes } = preview.manifest.contributes
         const themed = themes.length + iconThemes.length + terminalThemes.length > 0
         // Why: a click to install a theme should show it at once; its toast offers Switch back.
-        if (themed && (await applyPluginThemesNow(pluginKey).catch(() => false))) {
+        if (themed && (await applyThemes(pluginKey).catch(() => false))) {
           return
         }
         // Why: only a plugin that is on by now has anything to try; recipes still wait for review.
@@ -187,7 +229,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
+    [applyThemes, confirmTrust, dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(

@@ -1,5 +1,7 @@
+// @protected-copy scope=file
 import { translate } from '@/i18n/i18n'
-import type { UpdateStatus } from '../../../../../shared/update-status-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 
 export function isUpdateCardVisible({
   status,
@@ -24,11 +26,11 @@ export function isUpdateCardVisible({
   if (status.state === 'not-available' && (!isUserInitiated || autoDismissed)) {
     return false
   }
-  if (status.state === 'idle') {
+  if (status.state === 'idle' || (status.state === 'available' && status.automaticDownload)) {
     return false
   }
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    if (status.state === 'available') {
       return false
     }
   }
@@ -38,30 +40,24 @@ export function isUpdateCardVisible({
   )
 }
 
-export function getUpdateCardAriaLabel(status: UpdateStatus): string {
+export function getUpdateCardAriaLabel(status: UpdateStatus, t: Translate = translate): string {
   switch (status.state) {
     case 'idle':
-      return translate('auto.components.UpdateCard.aria.statusIdle', 'Update status')
+      return t('auto.components.UpdateCard.aria.statusIdle', 'Update status')
     case 'checking':
-      return translate('auto.components.UpdateCard.aria.statusChecking', 'Checking for updates')
+      return t('auto.components.UpdateCard.aria.statusChecking', 'Checking for updates')
     case 'not-available':
-      return translate(
-        'auto.components.UpdateCard.aria.statusLatest',
-        "You're on the latest version"
-      )
+      return t('auto.components.UpdateCard.aria.statusLatest', "You're on the latest version")
     case 'available':
-      return translate('auto.components.UpdateCard.aria.statusAvailable', 'Update available')
+      return t('auto.components.UpdateCard.aria.statusAvailable', 'Update available')
     case 'downloading':
-      return translate('auto.components.UpdateCard.aria.statusDownloading', 'Downloading update')
+      return t('auto.components.UpdateCard.aria.statusDownloading', 'Downloading update')
     case 'downloaded':
-      return translate(
-        'auto.components.UpdateCard.aria.statusDownloaded',
-        'Update ready to install'
-      )
+      return t('auto.components.UpdateCard.aria.statusDownloaded', 'Update ready to install')
     case 'error':
       return status.installBlock
-        ? translate('updates.installBlock.waitingLabel', 'Update waiting')
-        : translate('auto.components.UpdateCard.aria.statusError', 'Update error')
+        ? t('updates.installBlock.waitingLabel', 'Update waiting')
+        : t('auto.components.UpdateCard.aria.statusError', 'Update error')
   }
 }
 

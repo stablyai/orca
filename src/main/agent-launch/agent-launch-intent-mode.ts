@@ -1,10 +1,12 @@
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
-import { workspaceKindForLaunchTarget } from '../../shared/workspace-launch-kind'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { workspaceKindForLaunchTarget } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings,
   DEFAULT_LAUNCH_VOCABULARY,
-  type AgentLaunchModeReceipt,
   type AgentLaunchModeVocabulary
 } from './agent-launch-mode'
 
@@ -28,9 +30,7 @@ export function decideAgentLaunchIntentMode(execution: {
         : {}),
       ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
     },
-    settings: execution.terminalOnly
-      ? undefined
-      : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
+    settings: execution.terminalOnly ? undefined : readAgentLaunchModeSettings(runtime, intent),
     ...(execution.terminalOnly ? { terminalOnly: true } : {}),
     ...(intent.surface ? { surface: intent.surface } : {}),
     vocabulary: execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY

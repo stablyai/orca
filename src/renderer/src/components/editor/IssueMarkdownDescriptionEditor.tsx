@@ -5,23 +5,25 @@ import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown-image-context'
-import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown/images/rich-markdown-image-context'
+import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/rich-markdown/raw-source/raw-markdown-html'
 import {
   createRichMarkdownEditorCodec,
   type RichMarkdownEditorCodec
-} from '@/components/editor/rich-markdown-source-transport'
+} from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { IssueMarkdownToolbar } from '@/components/editor/IssueMarkdownToolbar'
-import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { cn } from '@/lib/utils'
+import { RichMarkdownTableControls } from '@/components/editor/rich-markdown/tables/RichMarkdownTableControls'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
-} from '@/components/editor/rich-markdown-spellcheck'
+} from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type IssueMarkdownDescriptionEditorProps = {
   value: string
@@ -55,31 +57,30 @@ export function IssueMarkdownDescriptionEditor({
   disabled,
   submitShortcutLabel
 }: IssueMarkdownDescriptionEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
-  // Serializing reformats untouched markdown (`* a` → `- a`), so only a real edit may be saved.
-  const editedRef = useRef(false)
   const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
   // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
-  const codec = useMemo(() => {
-    void language
-    return createRichMarkdownEditorCodec()
-  }, [language])
-  const issueMarkdownExtensions = useMemo(() => {
-    // Language keys editor recreation because Tiptap freezes translated extension options.
-    void language
-    return createIssueMarkdownExtensions(codec)
-  }, [codec, language])
+  const codec = useMemo(
+    () => recomputeOn([language], () => createRichMarkdownEditorCodec()),
+    [language]
+  )
+  // Language keys editor recreation because Tiptap freezes translated extension options.
+  const linearIssueMarkdownExtensions = useMemo(
+    () => recomputeOn([language], () => createIssueMarkdownExtensions(codec)),
+    [codec, language]
+  )
 
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions: issueMarkdownExtensions,
+      extensions: linearIssueMarkdownExtensions,
       content: encodeRawMarkdownHtmlForRichEditor(value, codec),
       contentType: 'markdown',
       editable: !disabled,
@@ -87,7 +88,7 @@ export function IssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': translate(
+          'aria-label': t(
             'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
             'Issue description'
           )
@@ -106,17 +107,12 @@ export function IssueMarkdownDescriptionEditor({
       },
       onBlur: ({ editor: nextEditor }) => {
         window.api.ui.setMarkdownEditorFocused(false)
-        if (!editedRef.current) {
-          return
-        }
-        editedRef.current = false
         const nextValue = nextEditor.getMarkdown()
         lastEditorMarkdownRef.current = nextValue
         onChange(nextValue)
         onSave(nextValue)
       },
       onUpdate: ({ editor: nextEditor }) => {
-        editedRef.current = true
         const nextValue = nextEditor.getMarkdown()
         lastEditorMarkdownRef.current = nextValue
         onChange(nextValue)
@@ -151,12 +147,11 @@ export function IssueMarkdownDescriptionEditor({
       return
     }
 
-    // Follow the provider’s value on issue changes and optimistic rollback.
+    // Follow Linear’s value on issue changes and optimistic rollback.
     editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false
     })
-    editedRef.current = false
     lastEditorMarkdownRef.current = value
   }, [codec, editor, value])
 
@@ -183,12 +178,12 @@ export function IssueMarkdownDescriptionEditor({
         <span className="flex items-center gap-1">
           <span>{submitShortcutLabel}</span>
           <span>
-            {translate('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
+            {t('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
           </span>
         </span>
         <span className="text-muted-foreground/35">·</span>
         <span>
-          {translate('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
+          {t('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
         </span>
       </div>
       {disabled ? (

@@ -5,8 +5,8 @@ import type {
   LinearSliceGet,
   LinearSliceSet
 } from './linear-slice-contract'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearListCustomViewProjects } from '@/runtime/runtime-linear-project-client'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
+import { linearListCustomViewProjects } from '@/runtime/linear/runtime-linear-project-client'
 import {
   collectionWithWorkspaceError,
   emptyLinearCollection,
@@ -55,7 +55,7 @@ export function createLinearCustomViewProjectActions(
         inflight &&
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
+        !options?.force
       ) {
         return inflight.promise
       }
@@ -125,7 +125,6 @@ export function createLinearCustomViewProjectActions(
 
       entry = {
         promise,
-        force: Boolean(options?.force),
         generation: requestCacheGeneration,
         contextKey,
         mutationGeneration: requestMutationGeneration

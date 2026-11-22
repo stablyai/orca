@@ -1,12 +1,8 @@
-import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
-import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
-import { track } from '../../telemetry/client'
-import {
-  isTurnEndDisposition,
-  normalizeAgentStatusPayload
-} from '../../../shared/agent-status-types'
-import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
-import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { normalizeHostTurnRevision } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
+import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import { trackEmptyPaneKeyHook } from './server-transport-rules'
+import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import { restoreShedStatusFields } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -16,16 +12,15 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed,
   resolveLegacyCompactTrigger
-} from '../../../shared/claude-compact-completion'
-import { launchTokenHash } from '../../../shared/agent-hook-spool'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-compact-completion'
+import { launchTokenHash } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
-import { RelaySessionGenerations } from './server-relay-sessions'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
   olderPeerAgentStatusLegacyMode
-} from '../../../shared/agent-status-legacy-adapter'
+} from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
@@ -34,8 +29,6 @@ import {
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
-  private readonly relaySessions = new RelaySessionGenerations()
-
   /** Call as each relay link starts, before its first envelope. */
   beginRemoteRelaySession(connectionId: string): void {
     this.relaySessions.begin(connectionId)
@@ -69,7 +62,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
-      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      trackEmptyPaneKeyHook(envelope, this.attributionDiagnostics)
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
@@ -112,6 +105,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       source,
       providerPromptId,
       grokPromptBoundary,
+      opensTurn,
+      hostTurnEnd,
       compactTrigger,
       worktreeId,
       promptInteractionKey,
@@ -175,6 +170,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
+      opensTurn,
       launchToken: envelope.launchToken,
       retainedLaunchTokenHash: envelope.launchToken?.trim()
         ? undefined
@@ -258,6 +254,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     const event: IncomingAgentHookEvent = {
       paneKey,
       agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...this.relaySessions.rootProof(trimmedConnectionId, physicalPaneKey, envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
@@ -272,6 +269,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       providerPromptId,
       grokPromptBoundary,
+      opensTurn,
       compactTrigger,
       toolUseId,
       ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
@@ -281,10 +279,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
-      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
-      ...(isTurnEndDisposition(envelope.turnEndDisposition)
-        ? { turnEndDisposition: envelope.turnEndDisposition }
-        : {}),
+      ...hostTurnEnd,
       claudeRunningNonAgentTask:
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask

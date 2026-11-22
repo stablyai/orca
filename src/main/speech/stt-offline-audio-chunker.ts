@@ -1,4 +1,4 @@
-// Bound ONNX allocations: Chromium kills the app on a single allocation >=2GiB (#7925).
+// Parakeet has no long-form mode, and bounded chunks keep the decode left for stop short.
 export const OFFLINE_DECODE_CHUNK_SECONDS = 30
 
 // Split near quiet tail pauses to avoid mid-word cuts; ~100ms windows exclude short intra-word closures.
@@ -16,6 +16,11 @@ export class OfflineAudioChunker {
     this.chunkSampleLimit = Math.max(1, Math.round(OFFLINE_DECODE_CHUNK_SECONDS * sampleRate))
     this.splitSearchSamples = Math.round(SPLIT_SEARCH_SECONDS * sampleRate)
     this.energyWindowSamples = Math.max(1, Math.round(SPLIT_ENERGY_WINDOW_SECONDS * sampleRate))
+  }
+
+  /** Samples pushed but not yet returned. */
+  get heldSamples(): number {
+    return this.bufferedSamples
   }
 
   /** Return complete bounded chunks as samples arrive. */
@@ -82,4 +87,39 @@ export class OfflineAudioChunker {
     // Consume at least one sample or push() loops forever.
     return Math.max(1, bestIndex)
   }
+}
+
+// Without the detector, audio is still cut at the decode bound, just not at pauses.
+export type AudioSegmenter = {
+  readonly heldSamples: number
+  readonly phraseOpen?: boolean
+  push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
+  flush(): Float32Array[] | Promise<Float32Array[]>
+}
+
+export function boundedChunks(sampleRate: number): AudioSegmenter {
+  const chunker = new OfflineAudioChunker(sampleRate)
+  return {
+    get heldSamples() {
+      return chunker.heldSamples
+    },
+    push: (samples) => chunker.push(samples),
+    flush: () => {
+      const rest = chunker.flush()
+      return rest ? [rest] : []
+    }
+  }
+}
+
+export function joinAudio(parts: Float32Array[]): Float32Array {
+  if (parts.length === 1) {
+    return parts[0]
+  }
+  const joined = new Float32Array(parts.reduce((total, part) => total + part.length, 0))
+  let offset = 0
+  for (const part of parts) {
+    joined.set(part, offset)
+    offset += part.length
+  }
+  return joined
 }

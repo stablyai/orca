@@ -1,14 +1,15 @@
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
-import { localProvider } from '../provider/registry'
+import { getProviderForPty, hasPtyProviderForInspection, localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
   resumeLocalAutomaticWork
-} from '../../../daemon/daemon-automatic-work-resume'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../daemon/providers/lifecycle/daemon-automatic-work-resume'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { requestRepaintFromRuntimeController } from './pty-repaint-request'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
@@ -29,6 +30,7 @@ import {
   hasPtyFromRuntimeController,
   getPtyAvailabilityFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
+  supportsForegroundObservationFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
@@ -76,13 +78,28 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
+    supportsForegroundObservation: (ptyId) =>
+      supportsForegroundObservationFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
+    // Why local only: the daemon that outlives main is this host's.
+    setLaunchNote: (ptyId, change) => {
+      if (hasPtyProviderForInspection(ptyId)) {
+        getProviderForPty(ptyId).setLaunchNote?.(ptyId, change)
+      }
+    },
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),
     hasChildProcesses: (ptyId) => hasChildProcessesFromRuntimeController(ptyId),
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),
     resetInputModes: (ptyId) => resetInputModesFromRuntimeController(deps, ptyId),
+    reportFocusLost: async (ptyId) => {
+      try {
+        await getProviderForPty(ptyId).reportFocusLost?.(ptyId)
+      } catch {
+        /* best effort: an older daemon rejects the request */
+      }
+    },
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
     getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
@@ -102,6 +119,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     waitForRendererSerializer: (ptyId, afterGeneration, timeoutMs, signal) =>
       waitForRendererSerializerFromRuntimeController(ptyId, afterGeneration, timeoutMs, signal),
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
-    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
+    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows),
+    requestRepaint: (ptyId) => requestRepaintFromRuntimeController(deps, ptyId)
   })
 }

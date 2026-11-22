@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
+import {
+  pluginFieldDoc,
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE
+} from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CHANGELOG_MAX_LENGTH = 2_000
 
@@ -48,9 +52,22 @@ export const pluginCatalogReleaseDetailFields = {
     .optional()
     .catch(undefined)
     .meta(
-      pluginFieldDoc('Source repository page, https only.', NEXT, [
-        'https://github.com/acme/orca-gleam-syntax'
-      ])
+      pluginFieldDoc(
+        "Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher.",
+        NEXT,
+        ['https://github.com/acme/orca-gleam-syntax']
+      )
+    ),
+  sourceUnavailable: z
+    .literal(true)
+    .optional()
+    .catch(undefined)
+    .meta(
+      pluginFieldDoc(
+        "Set when the release's `repository` is gone and `source` serves an archived copy, so Orca links `source` instead.",
+        PLUGIN_DERIVED_PUBLISHER_SINCE,
+        [true]
+      )
     ),
   homepage: httpsUrlSchema
     .optional()

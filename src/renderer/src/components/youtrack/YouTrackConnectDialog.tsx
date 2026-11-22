@@ -12,9 +12,12 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { TASK_PROVIDERS, normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
+import {
+  TASK_PROVIDERS,
+  normalizeVisibleTaskProviders
+} from '../../../../shared/work-items/task-providers'
 import { useYouTrackStore } from './youtrack-store'
 
 /** Connecting is the opt-in for the hidden-by-default YouTrack provider. */
@@ -67,6 +70,7 @@ export function YouTrackConnectDialog({
   /** Settings renders above the app shell; dialogs opened there must layer higher. */
   aboveSettings?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const connect = useYouTrackStore((s) => s.connect)
   const savedBaseUrl = useYouTrackStore((s) => s.status.baseUrl)
   const [baseUrl, setBaseUrl] = useState(savedBaseUrl ?? '')
@@ -135,9 +139,9 @@ export function YouTrackConnectDialog({
         className={aboveSettings ? 'z-[120] sm:max-w-md' : 'sm:max-w-md'}
       >
         <DialogHeader>
-          <DialogTitle>{translate('youtrack.connect.title', 'Connect YouTrack')}</DialogTitle>
+          <DialogTitle>{t('youtrack.connect.title', 'Connect YouTrack')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'youtrack.connect.description',
               'Use your YouTrack address and a permanent token to browse and update issues.'
             )}
@@ -151,23 +155,18 @@ export function YouTrackConnectDialog({
           }}
         >
           <div className="grid gap-1.5">
-            <Label htmlFor={baseUrlId}>
-              {translate('youtrack.connect.baseUrl', 'YouTrack URL')}
-            </Label>
+            <Label htmlFor={baseUrlId}>{t('youtrack.connect.baseUrl', 'YouTrack URL')}</Label>
             <Input
               id={baseUrlId}
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder={translate(
-                'youtrack.connect.baseUrlPlaceholder',
-                'https://youtrack.example.com'
-              )}
+              placeholder={t('youtrack.connect.baseUrlPlaceholder', 'https://youtrack.example.com')}
               autoFocus
               disabled={submitting}
             />
             {sendsTokenInClearText(baseUrl) ? (
               <p className="text-xs text-destructive">
-                {translate(
+                {t(
                   'youtrack.connect.httpWarning',
                   'This address uses http://, so your token would be sent unencrypted. Use https:// if your YouTrack supports it.'
                 )}
@@ -175,22 +174,17 @@ export function YouTrackConnectDialog({
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor={tokenId}>
-              {translate('youtrack.connect.token', 'Permanent token')}
-            </Label>
+            <Label htmlFor={tokenId}>{t('youtrack.connect.token', 'Permanent token')}</Label>
             <Input
               id={tokenId}
               type="password"
               value={token}
               onChange={(event) => setToken(event.target.value)}
-              placeholder={translate('youtrack.connect.tokenPlaceholder', 'perm:…')}
+              placeholder={t('youtrack.connect.tokenPlaceholder', 'perm:…')}
               disabled={submitting}
             />
             <p className="text-xs text-muted-foreground">
-              {translate(
-                'youtrack.connect.tokenHint',
-                'Create one under Profile → Account Security'
-              )}
+              {t('youtrack.connect.tokenHint', 'Create one under Profile → Account Security')}
               {tokenSettingsUrl ? (
                 <>
                   {' · '}
@@ -201,7 +195,7 @@ export function YouTrackConnectDialog({
                     className="h-auto p-0 text-xs align-baseline"
                     onClick={() => void window.api.shell.openUrl(tokenSettingsUrl)}
                   >
-                    {translate('youtrack.connect.openTokenSettings', 'open in YouTrack')}
+                    {t('youtrack.connect.openTokenSettings', 'open in YouTrack')}
                   </Button>
                 </>
               ) : null}
@@ -219,10 +213,10 @@ export function YouTrackConnectDialog({
             />
             <div className="grid gap-0.5">
               <Label htmlFor={insecureTlsId}>
-                {translate('youtrack.connect.insecureTls', 'Skip certificate verification')}
+                {t('youtrack.connect.insecureTls', 'Skip certificate verification')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'youtrack.connect.insecureTlsHint',
                   'For self-signed or internal-CA certificates. Applies only to this YouTrack host; use it only on networks you trust.'
                 )}
@@ -236,18 +230,18 @@ export function YouTrackConnectDialog({
           ) : null}
           <p className="flex items-start gap-2 text-xs text-muted-foreground">
             <Lock className="mt-0.5 size-3 shrink-0" />
-            {translate(
+            {t(
               'youtrack.connect.storageNote',
               'Your token is stored locally and encrypted when the OS keychain is available.'
             )}
           </p>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
-              {translate('youtrack.connect.cancel', 'Cancel')}
+              {t('youtrack.connect.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {translate('youtrack.connect.submit', 'Connect')}
+              {t('youtrack.connect.submit', 'Connect')}
             </Button>
           </DialogFooter>
         </form>

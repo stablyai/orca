@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace/status/workspace-statuses'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId

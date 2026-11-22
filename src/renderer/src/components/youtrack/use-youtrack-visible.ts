@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
+import { normalizeVisibleTaskProviders } from '../../../../shared/work-items/task-providers'
 
 /** False when YouTrack is hidden in Settings → Tasks; YouTrack surfaces outside Settings stay quiet then. */
 export function useYouTrackVisible(): boolean {

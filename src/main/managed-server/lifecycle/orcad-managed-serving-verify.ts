@@ -1,4 +1,4 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import { verifyManagedTunnelServing } from './orcad-managed-tunnel'
 
@@ -8,6 +8,6 @@ export function verifyOrcadManagedServing(
   selector: string
 ): Promise<OrcadManagedServing> {
   return Promise.resolve()
-    .then(() => verifyManagedTunnelServing(resolveEnvironment(userDataPath, selector)))
+    .then(async () => verifyManagedTunnelServing(await resolveEnvironment(userDataPath, selector)))
     .catch((error: unknown) => ({ state: 'unverifiable', detail: String(error) }))
 }

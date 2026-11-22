@@ -1,7 +1,7 @@
 import {
   decodeTerminalStreamText,
   type TerminalStreamFrame
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
 import type {
   TerminalInputSequenceLedger,

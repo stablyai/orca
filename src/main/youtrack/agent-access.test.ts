@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({
-  getStatus: vi.fn(() => ({ baseUrl: 'https://yt.corp' })),
+  getStatus: vi.fn(async () => ({ baseUrl: 'https://yt.corp' })),
   getIssue: vi.fn(),
   getComments: vi.fn(),
   getStateOptions: vi.fn(),

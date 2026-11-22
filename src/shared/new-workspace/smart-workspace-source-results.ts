@@ -1,13 +1,14 @@
-import type { GitHubWorkItem } from '../github/work-item-types'
-import type { GitLabWorkItem } from '../gitlab-types'
+import type { GitHubWorkItem } from '../github/work-items/work-item-types'
+import type { GitLabWorkItem } from '../gitlab/gitlab-types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { YouTrackIssue } from '../youtrack-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
-import type { BaseRefSearchResult } from '../repo-types'
+import type { BaseRefSearchResult } from '../repository/repo-types'
+import { branchRefLabel, branchRefLabels } from '../git/refs/branch-ref-label'
 import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
-import type { GitHubIssueOrPRLink } from '../github/links'
+import type { GitHubIssueOrPRLink } from '../github/repositories/links'
 import {
   buildSmartWorkspaceUrlSourceRows,
   type SmartWorkspaceGitLabUrlIntent,
@@ -28,7 +29,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
-  | { kind: 'branch'; value: string; refName: string; localBranchName: string }
+  | { kind: 'branch'; value: string; refName: string; localBranchName: string; label?: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
   | { kind: 'youtrack'; value: string; issue: YouTrackIssue }
@@ -263,12 +264,10 @@ export function buildSmartWorkspaceSourceRows({
     return urlSourceRows
   }
   const trimmed = value.trim()
-  const nextRows: SmartWorkspaceSourceRow[] = []
-  // Why: only a full ID or issue URL outranks "use as name"; prefix suggestions follow it.
+  // Why: in Smart mode, exact IDs and URLs outrank "use as name"; prefix suggestions follow it.
   const [exactYouTrack, prefixYouTrack] = partitionYouTrackRows(youtrackIssues, trimmed)
-  if (mode === 'smart') {
-    nextRows.push(...exactYouTrack)
-  }
+  const nextRows: SmartWorkspaceSourceRow[] =
+    mode === 'smart' || mode === 'youtrack' ? exactYouTrack : []
   if (trimmed && mode === 'smart') {
     // Why: stable cmdk value — embedding the query remounted the row every keystroke.
     nextRows.push({ kind: 'use-name', value: 'use-name', name: trimmed }, ...prefixYouTrack)
@@ -291,16 +290,20 @@ export function buildSmartWorkspaceSourceRows({
   const shouldShowBranches = mode === 'branches' || (mode === 'smart' && trimmed.length > 0)
   if (shouldShowBranches) {
     const branchExactMatch = branches.some(
-      (branch) => branch.refName === trimmed || branch.localBranchName === trimmed
+      (branch) => branchRefLabel(branch.refName) === trimmed || branch.localBranchName === trimmed
     )
     if (trimmed && mode === 'branches' && !branchExactMatch) {
       nextRows.push({ kind: 'create-branch', value: 'create-branch', name: trimmed })
     }
+    const labels = branchRefLabels(branches.map((branch) => branch.refName))
     nextRows.push(
       ...branches.map((branch) => ({
         kind: 'branch' as const,
         value: `branch-${branch.refName}`,
         refName: branch.refName,
+        ...(labels.get(branch.refName) !== branchRefLabel(branch.refName)
+          ? { label: labels.get(branch.refName) }
+          : {}),
         localBranchName: branch.localBranchName
       }))
     )
@@ -319,7 +322,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
   }
   if (mode === 'youtrack') {
-    nextRows.push(...exactYouTrack, ...prefixYouTrack)
+    nextRows.push(...prefixYouTrack)
   }
   return nextRows.slice(0, resultLimit + 1)
 }

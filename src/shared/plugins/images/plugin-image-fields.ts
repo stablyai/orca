@@ -9,7 +9,7 @@ import {
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
-export type PluginImageKind = 'icon' | 'cover' | 'screenshot'
+export type PluginImageKind = 'icon' | 'cover' | 'screenshot' | 'theme-background'
 
 type PluginImageRule = {
   formats: readonly PluginImageFormat[]
@@ -34,6 +34,13 @@ export const PLUGIN_IMAGE_RULES: Record<PluginImageKind, PluginImageRule> = {
     maxBytes: 1536 * 1024,
     minWidth: 1280,
     minHeight: 800
+  },
+  // Why the cap: the image is one static layer under the whole window, decoded once per theme.
+  'theme-background': {
+    formats: ['png', 'jpeg', 'webp'],
+    maxBytes: 2048 * 1024,
+    minWidth: 640,
+    minHeight: 360
   }
 }
 export const PLUGIN_SCREENSHOT_LIMIT = 6
@@ -131,6 +138,7 @@ export const pluginManifestImageFields = {
 }
 
 export const PLUGIN_ICON_RULE_TEXT = imageRuleText('icon')
+export const PLUGIN_THEME_BACKGROUND_RULE_TEXT = imageRuleText('theme-background')
 
 /** A catalog image: a file in the catalog repository at the vouched catalog commit, pinned by
  *  hash, so a listing shows it before any plugin is downloaded and nothing is hotlinked. */

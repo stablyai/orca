@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type {
   YouTrackComment,
@@ -38,6 +38,7 @@ function StatePicker({
   issue: YouTrackIssue
   onChanged: (issue: YouTrackIssue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<YouTrackStateOption[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -75,7 +76,7 @@ function StatePicker({
     }
     onChanged(result.issue)
     toast.success(
-      translate('youtrack.detail.stateChanged', '{{id}} → {{state}}', {
+      t('youtrack.detail.stateChanged', '{{id}} → {{state}}', {
         id: issue.idReadable,
         state: result.issue.state?.name ?? option.label
       })
@@ -89,13 +90,13 @@ function StatePicker({
           type="button"
           disabled={saving || !issue.stateFieldName}
           className="inline-flex items-center gap-1 rounded-full transition hover:opacity-80 disabled:opacity-50"
-          aria-label={translate('youtrack.detail.changeState', 'Change state')}
+          aria-label={t('youtrack.detail.changeState', 'Change state')}
         >
           {issue.state ? (
             <YouTrackStatePill state={issue.state} />
           ) : (
             <span className="text-[11px] text-muted-foreground">
-              {translate('youtrack.detail.noState', 'No state')}
+              {t('youtrack.detail.noState', 'No state')}
             </span>
           )}
           {saving ? (
@@ -112,7 +113,7 @@ function StatePicker({
           </div>
         ) : options && options.length === 0 ? (
           <DropdownMenuLabel>
-            {translate('youtrack.detail.noTransitions', 'No available state changes.')}
+            {t('youtrack.detail.noTransitions', 'No available state changes.')}
           </DropdownMenuLabel>
         ) : (
           options?.map((option) => (
@@ -125,7 +126,7 @@ function StatePicker({
               <span className="truncate">{option.label}</span>
               {option.isResolved ? (
                 <DropdownMenuShortcut>
-                  {translate('youtrack.detail.resolvedState', 'resolves')}
+                  {t('youtrack.detail.resolvedState', 'resolves')}
                 </DropdownMenuShortcut>
               ) : null}
             </DropdownMenuItem>
@@ -143,6 +144,8 @@ export function YouTrackIssueSheet({
   issueId: string | null
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const listIssue = useYouTrackStore((s) =>
     issueId ? (s.issues.find((issue) => issue.idReadable === issueId) ?? null) : null
   )
@@ -253,12 +256,12 @@ export function YouTrackIssueSheet({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {displayed?.summary ?? translate('youtrack.detail.title', 'YouTrack issue')}
+            {displayed?.summary ?? t('youtrack.detail.title', 'YouTrack issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'youtrack.detail.description',
               'Preview, update, and start work from the selected issue.'
             )}
@@ -277,7 +280,9 @@ export function YouTrackIssueSheet({
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                     <span className="font-mono">{displayed.idReadable}</span>
                     <span>{displayed.project.name || displayed.project.shortName}</span>
-                    <span>{formatUiRelativeTimeFromDate(displayed.updatedAt)}</span>
+                    <span>
+                      {formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}
+                    </span>
                     {detailLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
                   </div>
                   <div className="mt-1 -ml-1">
@@ -295,8 +300,8 @@ export function YouTrackIssueSheet({
                   size="sm"
                 >
                   {hasLinkedWorkspace
-                    ? translate('youtrack.detail.openWorkspace', 'Open workspace')
-                    : translate('youtrack.detail.startWorkspace', 'Start workspace')}
+                    ? t('youtrack.detail.openWorkspace', 'Open workspace')
+                    : t('youtrack.detail.startWorkspace', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
                 <Tooltip>
@@ -306,13 +311,13 @@ export function YouTrackIssueSheet({
                       size="icon-sm"
                       className="shrink-0"
                       onClick={() => void window.api.shell.openUrl(displayed.url)}
-                      aria-label={translate('youtrack.list.openInYouTrack', 'Open in YouTrack')}
+                      aria-label={t('youtrack.list.openInYouTrack', 'Open in YouTrack')}
                     >
                       <ExternalLink className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('youtrack.list.openInYouTrack', 'Open in YouTrack')}
+                    {t('youtrack.list.openInYouTrack', 'Open in YouTrack')}
                   </TooltipContent>
                 </Tooltip>
                 <Button
@@ -320,7 +325,7 @@ export function YouTrackIssueSheet({
                   size="icon-sm"
                   className="shrink-0"
                   onClick={onClose}
-                  aria-label={translate('youtrack.detail.close', 'Close')}
+                  aria-label={t('youtrack.detail.close', 'Close')}
                 >
                   <X className="size-4" />
                 </Button>
@@ -335,8 +340,7 @@ export function YouTrackIssueSheet({
               />
               <YouTrackBlockedBadge count={displayed.unresolvedBlockerCount} />
               <span className="text-[11px] text-muted-foreground">
-                {displayed.assignee?.fullName ??
-                  translate('youtrack.list.unassigned', 'Unassigned')}
+                {displayed.assignee?.fullName ?? t('youtrack.list.unassigned', 'Unassigned')}
               </span>
               {displayed.priority ? (
                 <span className="text-[11px] text-muted-foreground">{displayed.priority}</span>

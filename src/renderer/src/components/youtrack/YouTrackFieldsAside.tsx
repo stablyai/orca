@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   YouTrackFieldSchema,
   YouTrackIssue,
@@ -31,6 +31,7 @@ export function YouTrackFieldsAside({
   issue: YouTrackIssue
   onIssueChanged: (issue: YouTrackIssue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { fields: schema, error } = useYouTrackProjectFields(issue.project.id || null)
   const [pendingField, setPendingField] = useState<string | null>(null)
   const valuesByName = new Map<string, YouTrackFieldValue>(
@@ -69,11 +70,11 @@ export function YouTrackFieldsAside({
     <aside className="min-h-0 overflow-y-auto border-t border-border/50 bg-muted/20 px-3 py-3 scrollbar-sleek xl:border-l xl:border-t-0">
       <dl className="grid gap-1.5">
         <StaticRow
-          name={translate('youtrack.detail.project', 'Project')}
+          name={t('youtrack.detail.project', 'Project')}
           value={issue.project.name || issue.project.shortName}
         />
         <StaticRow
-          name={translate('youtrack.detail.reporter', 'Reporter')}
+          name={t('youtrack.detail.reporter', 'Reporter')}
           value={issue.reporter?.fullName ?? null}
         />
         {editable.map((field) => {
@@ -116,7 +117,7 @@ export function YouTrackFieldsAside({
         {issue.tags.length > 0 ? (
           <div className="min-w-0">
             <dt className="text-[11px] text-muted-foreground">
-              {translate('youtrack.detail.tags', 'Tags')}
+              {t('youtrack.detail.tags', 'Tags')}
             </dt>
             <dd className="mt-1 flex flex-wrap gap-1">
               {issue.tags.map((tag) => (

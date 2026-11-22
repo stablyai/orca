@@ -1,13 +1,11 @@
 import { BrowserError } from '../browser-error'
-import { browserSessionRegistry } from '../browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { session, type Cookies } from 'electron'
-import type { GoogleCookieClearResult } from '../../../shared/browser-google-cookie-clear'
-import { withCookieMutationLock } from './browser-cookie-import-clear'
-import {
-  cookieRemovalUrl,
-  isNonTransplantableCookieDomain,
-  normalizeCookieDomain
-} from './browser-cookie-import-policy'
+import type { GoogleCookieClearResult } from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
+import { cookieRemovalUrl } from './storage/cookie-removal-url'
+import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
+import { normalizeCookieDomain } from './policy/cookie-domain'
 
 export async function clearGoogleCookies(
   target: { cookies: Pick<Cookies, 'get' | 'remove'> },

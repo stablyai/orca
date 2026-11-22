@@ -1,6 +1,6 @@
 import { CircleCheck, Download, ExternalLink, FolderOpen, OctagonX, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   formatBrowserDownloadProgress,
   type BrowserDownloadState
@@ -17,6 +17,7 @@ export function BrowserPageDownloadList({
   onShowDownloadedFile: (download: BrowserDownloadState) => void
   onDismissDownload: (downloadId: string) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (visibleDownloads.length === 0) {
     return null
   }
@@ -29,21 +30,15 @@ export function BrowserPageDownloadList({
           const statusLabel =
             download.status === 'downloading'
               ? download.progressState === 'interrupted'
-                ? translate(
-                    'auto.components.browser.pane.BrowserPane.39c04fed61',
-                    'Downloading paused'
-                  )
+                ? t('auto.components.browser.pane.BrowserPane.39c04fed61', 'Downloading paused')
                 : (progressLabel ??
-                  translate('auto.components.browser.pane.BrowserPane.759f32af29', 'Downloading'))
+                  t('auto.components.browser.pane.BrowserPane.759f32af29', 'Downloading'))
               : download.status === 'completed'
-                ? translate('auto.components.browser.pane.BrowserPane.5c3d530a68', 'Downloaded')
+                ? t('auto.components.browser.pane.BrowserPane.5c3d530a68', 'Downloaded')
                 : download.status === 'canceled'
-                  ? translate('auto.components.browser.pane.BrowserPane.4bb7424d6b', 'Canceled')
+                  ? t('auto.components.browser.pane.BrowserPane.4bb7424d6b', 'Canceled')
                   : (download.error ??
-                    translate(
-                      'auto.components.browser.pane.BrowserPane.6e776f9ef9',
-                      'Download failed'
-                    ))
+                    t('auto.components.browser.pane.BrowserPane.6e776f9ef9', 'Download failed'))
           return (
             <div
               key={download.downloadId}
@@ -70,7 +65,7 @@ export function BrowserPageDownloadList({
                   }
                 >
                   {download.status === 'downloading'
-                    ? translate(
+                    ? t(
                         'auto.components.browser.pane.BrowserPane.4300f38145',
                         'Downloading from {{value0}}{{value1}}',
                         {
@@ -92,7 +87,7 @@ export function BrowserPageDownloadList({
                     })
                   }}
                 >
-                  {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+                  {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
                 </Button>
               ) : download.status === 'completed' ? (
                 <>
@@ -105,7 +100,7 @@ export function BrowserPageDownloadList({
                     }}
                   >
                     <ExternalLink className="size-3" />
-                    {translate('auto.components.browser.pane.BrowserPane.756bfc25c9', 'Open')}
+                    {t('auto.components.browser.pane.BrowserPane.756bfc25c9', 'Open')}
                   </Button>
                   <Button
                     size="xs"
@@ -116,17 +111,14 @@ export function BrowserPageDownloadList({
                     }}
                   >
                     <FolderOpen className="size-3" />
-                    {translate('auto.components.browser.pane.BrowserPane.09a9489aa5', 'Show')}
+                    {t('auto.components.browser.pane.BrowserPane.09a9489aa5', 'Show')}
                   </Button>
                   <Button
                     size="icon-xs"
                     variant="ghost"
                     className="h-6 w-6 shrink-0"
                     onClick={() => onDismissDownload(download.downloadId)}
-                    aria-label={translate(
-                      'auto.components.browser.pane.BrowserPane.2fdca7df09',
-                      'Dismiss'
-                    )}
+                    aria-label={t('auto.components.browser.pane.BrowserPane.2fdca7df09', 'Dismiss')}
                   >
                     <X className="size-3.5" />
                   </Button>
@@ -137,10 +129,7 @@ export function BrowserPageDownloadList({
                   variant="ghost"
                   className="h-6 w-6 shrink-0"
                   onClick={() => onDismissDownload(download.downloadId)}
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.2fdca7df09',
-                    'Dismiss'
-                  )}
+                  aria-label={t('auto.components.browser.pane.BrowserPane.2fdca7df09', 'Dismiss')}
                 >
                   <X className="size-3.5" />
                 </Button>

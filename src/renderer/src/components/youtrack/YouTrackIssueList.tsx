@@ -1,9 +1,9 @@
 import { ArrowRight, ExternalLink, OctagonAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { YouTrackIssue, YouTrackState } from '../../../../shared/youtrack-types'
 
 export function YouTrackStatePill({
@@ -37,6 +37,7 @@ export function YouTrackStatePill({
 }
 
 export function YouTrackBlockedBadge({ count }: { count: number }): React.JSX.Element | null {
+  const t = useTranslate()
   if (count <= 0) {
     return null
   }
@@ -49,7 +50,7 @@ export function YouTrackBlockedBadge({ count }: { count: number }): React.JSX.El
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('youtrack.list.blockedBy', 'Blocked by {{count}} unresolved issue(s)', {
+        {t('youtrack.list.blockedBy', 'Blocked by {{count}} unresolved issue(s)', {
           count
         })}
       </TooltipContent>
@@ -68,6 +69,8 @@ function YouTrackIssueRow({
   onOpenIssue: (issue: YouTrackIssue) => void
   onStartWorkspace: (issue: YouTrackIssue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div
       role="button"
@@ -111,13 +114,13 @@ function YouTrackIssueRow({
       </div>
 
       <div className="hidden min-w-0 truncate text-[12px] text-muted-foreground md:block">
-        {issue.assignee?.fullName ?? translate('youtrack.list.unassigned', 'Unassigned')}
+        {issue.assignee?.fullName ?? t('youtrack.list.unassigned', 'Unassigned')}
       </div>
 
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="hidden min-w-0 truncate text-[12px] text-muted-foreground md:block">
-            {formatUiRelativeTimeFromDate(issue.updatedAt)}
+            {formatUiRelativeTimeFromDate(issue.updatedAt, undefined, intlLocale)}
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
@@ -135,19 +138,15 @@ function YouTrackIssueRow({
                 event.stopPropagation()
                 onStartWorkspace(issue)
               }}
-              aria-label={translate(
-                'youtrack.list.startWorkspaceFor',
-                'Start workspace from {{id}}',
-                {
-                  id: issue.idReadable
-                }
-              )}
+              aria-label={t('youtrack.list.startWorkspaceFor', 'Start workspace from {{id}}', {
+                id: issue.idReadable
+              })}
             >
               <ArrowRight className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('youtrack.list.startWorkspace', 'Start workspace')}
+            {t('youtrack.list.startWorkspace', 'Start workspace')}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -159,7 +158,7 @@ function YouTrackIssueRow({
                 event.stopPropagation()
                 void window.api.shell.openUrl(issue.url)
               }}
-              aria-label={translate('youtrack.list.openInYouTrackFor', 'Open {{id}} in YouTrack', {
+              aria-label={t('youtrack.list.openInYouTrackFor', 'Open {{id}} in YouTrack', {
                 id: issue.idReadable
               })}
             >
@@ -167,7 +166,7 @@ function YouTrackIssueRow({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('youtrack.list.openInYouTrack', 'Open in YouTrack')}
+            {t('youtrack.list.openInYouTrack', 'Open in YouTrack')}
           </TooltipContent>
         </Tooltip>
       </div>

@@ -12,14 +12,7 @@ import type {
   YouTrackStateOption,
   YouTrackStateOptionsResult
 } from '../../shared/youtrack-types'
-import {
-  clearSite,
-  getCredentialError,
-  getSite,
-  getTokenProtection,
-  readToken,
-  saveSite
-} from './credential-store'
+import { clearSite, readConnection, readConnectionStatus, saveSite } from './credential-store'
 import {
   COMMENT_FIELDS,
   DETAIL_ISSUE_FIELDS,
@@ -50,12 +43,12 @@ export function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-export function getCredentials(): YouTrackCredentials {
-  const site = getSite()
-  const token = site ? readToken() : null
-  if (!site || !token) {
+export async function getCredentials(): Promise<YouTrackCredentials> {
+  const connection = await readConnection()
+  if (!connection) {
     throw new Error('YouTrack is not connected.')
   }
+  const { site, token } = connection
   return { baseUrl: site.baseUrl, token, allowInsecureTls: site.allowInsecureTls === true }
 }
 
@@ -63,16 +56,15 @@ export function issuePath(idReadable: string): string {
   return `/api/issues/${encodeURIComponent(idReadable)}`
 }
 
-export function getStatus(): YouTrackConnectionStatus {
-  const site = getSite()
-  const credentialError = getCredentialError()
+export async function getStatus(): Promise<YouTrackConnectionStatus> {
+  const { site, credentialError, credentialProtection } = await readConnectionStatus()
   return {
     connected: site !== null,
     baseUrl: site?.baseUrl ?? null,
     viewer: site?.viewer ?? null,
     allowInsecureTls: site?.allowInsecureTls === true,
     ...(credentialError ? { credentialError } : {}),
-    credentialProtection: site ? getTokenProtection() : null
+    credentialProtection
   }
 }
 
@@ -97,7 +89,7 @@ export async function connect(args: YouTrackConnectArgs): Promise<YouTrackConnec
       )
       const viewer = toYouTrackUser(raw, baseUrl)
       if (viewer?.login) {
-        saveSite(
+        await saveSite(
           { version: 1, baseUrl, viewer, ...(allowInsecureTls ? { allowInsecureTls } : {}) },
           token
         )
@@ -116,7 +108,7 @@ export async function connect(args: YouTrackConnectArgs): Promise<YouTrackConnec
 /** Re-verifies the saved token; only runs on an explicit user action. */
 export async function testConnection(): Promise<YouTrackConnectResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const viewer = toYouTrackUser(
       await youtrackRequest(credentials, `/api/users/me?fields=${VIEWER_FIELDS}`),
       credentials.baseUrl
@@ -129,8 +121,8 @@ export async function testConnection(): Promise<YouTrackConnectResult> {
   }
 }
 
-export function disconnect(): void {
-  clearSite()
+export function disconnect(): Promise<void> {
+  return clearSite()
 }
 
 export function buildIssueQuery(args: YouTrackListIssuesArgs): string {
@@ -141,7 +133,7 @@ export function buildIssueQuery(args: YouTrackListIssuesArgs): string {
 
 export async function listIssues(args: YouTrackListIssuesArgs): Promise<YouTrackListIssuesResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const limit = Math.min(Math.max(1, args.limit ?? 50), 200)
     const params = new URLSearchParams({
       query: buildIssueQuery(args),
@@ -160,7 +152,7 @@ export async function listIssues(args: YouTrackListIssuesArgs): Promise<YouTrack
 
 export async function getIssue(idReadable: string): Promise<YouTrackIssueResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const raw = await youtrackRequest(
       credentials,
       `${issuePath(idReadable)}?fields=${encodeURIComponent(DETAIL_ISSUE_FIELDS)}`
@@ -174,7 +166,7 @@ export async function getIssue(idReadable: string): Promise<YouTrackIssueResult>
 
 export async function getComments(idReadable: string): Promise<YouTrackCommentsResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const raw = await youtrackRequest(
       credentials,
       `${issuePath(idReadable)}/comments?fields=${encodeURIComponent(COMMENT_FIELDS)}&$top=200`
@@ -193,7 +185,7 @@ export async function addComment(
   text: string
 ): Promise<YouTrackAddCommentResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const raw = await youtrackRequest(
       credentials,
       `${issuePath(idReadable)}/comments?fields=${encodeURIComponent(COMMENT_FIELDS)}`,
@@ -249,7 +241,7 @@ function readValueOptions(field: RawRecord): YouTrackStateOption[] {
 
 export async function getStateOptions(idReadable: string): Promise<YouTrackStateOptionsResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const field = readStateField(
       await youtrackRequest(
         credentials,
@@ -273,7 +265,7 @@ export async function getStateOptions(idReadable: string): Promise<YouTrackState
 
 export async function setState(args: YouTrackSetStateArgs): Promise<YouTrackIssueResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const current = await getIssue(args.idReadable)
     if (!current.ok) {
       return current

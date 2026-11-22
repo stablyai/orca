@@ -5,8 +5,8 @@ import { IssueTitleField } from '@/components/editor/IssueTitleField'
 import { createIssueTextDraftState, resolveIssueTextDraftState } from '../issue-text-draft-state'
 import { getIssueTextSavePlan, type IssueTextField } from '../issue-text-save-plan'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
-import { translate } from '@/i18n/i18n'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { useTranslate } from '@/i18n/use-translate'
 import type { YouTrackIssue } from '../../../../shared/youtrack-types'
 
 function toTextSource(issue: YouTrackIssue): { id: string; title: string; description?: string } {
@@ -23,6 +23,7 @@ export function YouTrackIssueTextEditor({
   field: IssueTextField
   onIssueChanged: (issue: YouTrackIssue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const source = toTextSource(issue)
   const [draftState, setDraftState] = useState(() => createIssueTextDraftState(source))
   const [saving, setSaving] = useState(false)
@@ -46,7 +47,7 @@ export function YouTrackIssueTextEditor({
     })
     if (plan.kind === 'empty-title') {
       setDraft({ title: issue.summary })
-      toast.error(translate('youtrack.detail.summaryRequired', 'Summary is required'))
+      toast.error(t('youtrack.detail.summaryRequired', 'Summary is required'))
       return
     }
     if (plan.kind === 'unchanged' || !api || saving) {

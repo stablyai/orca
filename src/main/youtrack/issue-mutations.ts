@@ -41,7 +41,7 @@ async function getWorkTime(credentials: YouTrackCredentials): Promise<WorkTime> 
 
 export async function listProjects(force = false): Promise<YouTrackProjectsResult> {
   try {
-    return { ok: true, projects: await fetchProjects(getCredentials(), force) }
+    return { ok: true, projects: await fetchProjects(await getCredentials(), force) }
   } catch (error) {
     return { ok: false, error: errorMessage(error, 'Failed to load YouTrack projects.') }
   }
@@ -52,7 +52,7 @@ export async function getProjectFields(
   force = false
 ): Promise<YouTrackProjectFieldsResult> {
   try {
-    return { ok: true, fields: await fetchProjectFields(getCredentials(), projectId, force) }
+    return { ok: true, fields: await fetchProjectFields(await getCredentials(), projectId, force) }
   } catch (error) {
     return { ok: false, error: errorMessage(error, 'Failed to load project fields.') }
   }
@@ -60,7 +60,7 @@ export async function getProjectFields(
 
 export async function updateField(args: YouTrackUpdateFieldArgs): Promise<YouTrackIssueResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const schema = (await fetchProjectFields(credentials, args.projectId)).find(
       (field) => field.name === args.field.name
     )
@@ -84,7 +84,7 @@ export async function updateField(args: YouTrackUpdateFieldArgs): Promise<YouTra
 export async function updateIssueText(args: YouTrackUpdateTextArgs): Promise<YouTrackIssueResult> {
   const { idReadable, ...text } = args
   try {
-    await youtrackRequest(getCredentials(), `${issuePath(idReadable)}?fields=id`, {
+    await youtrackRequest(await getCredentials(), `${issuePath(idReadable)}?fields=id`, {
       method: 'POST',
       body: JSON.stringify(text)
     })
@@ -102,7 +102,7 @@ export async function updateIssueText(args: YouTrackUpdateTextArgs): Promise<You
 
 export async function createIssue(args: YouTrackCreateIssueArgs): Promise<YouTrackIssueResult> {
   try {
-    const credentials = getCredentials()
+    const credentials = await getCredentials()
     const schemas = await fetchProjectFields(credentials, args.projectId)
     const time = await getWorkTime(credentials)
     const customFields: Record<string, unknown>[] = []

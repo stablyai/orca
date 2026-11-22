@@ -1,0 +1,371 @@
+/**
+ * C7/E9: persist WSL hosts and connect them. A stopped distro boots only for an explicit
+ * Add/Connect, or when the user switches to one of its workspaces. After a confirmed stop the host is
+ * parked: polls and visible work keep it down until the user acts or the distro runs again.
+ */
+import type { WslHostConnectRequest } from './wsl-host-connect-request'
+import { focusReachability } from './wsl-host-focus-reachability'
+import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import type {
+  WslHostAddResult,
+  WslHostDistro,
+  WslHostServerStop,
+  WslHostStatus
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
+import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
+import {
+  saveWslHostConnection,
+  readWslHostRecordsQuietly,
+  toWslHostStatus
+} from './wsl-host-connection-record'
+import { sameWslDistro, wslHostRunRefusal } from './wsl-host-add-admission'
+import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
+import { registerWslHost } from './wsl-host-registration'
+import { connectWslHostForUser } from './wsl-host-user-connect'
+import { WslHostStatusBoard } from './wsl-host-status-board'
+import { withWslHostIds } from './wsl-host-records'
+import { wslHolderKeepPolicy } from './wsl-orphan-holder-release'
+import { readdPendingWslHost, removeWslHostServer } from './wsl-host-removal'
+import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
+
+export class WslHostService {
+  private connector: WslHostConnector | null = null
+  private readonly board = new WslHostStatusBoard((status) => this.deps.publish(status))
+  private readonly adding = new Map<string, Promise<WslHostAddResult>>()
+  private visible = new Set<string>()
+  private readonly parked = new Set<string>()
+  private readonly removing = new Set<string>()
+  private readonly readyGenerations = new Map<string, number>()
+  // Invalidate in-flight Adds when disabled so they cannot later publish ready hosts.
+  private disableGeneration = 0
+  private readonly connectionChanges = new Map<string, object>()
+
+  constructor(private readonly deps: WslHostServiceDependencies) {}
+
+  /** Two-phase so the connector's `onChange` can call back into this service. */
+  attach(connector: WslHostConnector): void {
+    this.connector = connector
+  }
+
+  private get wsl(): WslHostConnector {
+    if (!this.connector) {
+      throw new Error('WSL hosts are not available on this computer.')
+    }
+    return this.connector
+  }
+
+  /** C5's `onChange`: persist what moved, then tell the UI. */
+  async handleConnectionChange(
+    distro: string,
+    connection: WslOrcadConnection | null,
+    status: WslOrcadConnectionStatus
+  ): Promise<void> {
+    const key = wslDistroHolderKey(distro)
+    const change = {}
+    this.connectionChanges.set(key, change)
+    if (status.state === 'ready') {
+      this.readyGenerations.set(key, (this.readyGenerations.get(key) ?? 0) + 1)
+    }
+    const current = () => this.connectionChanges.get(key) === change
+    const record = await this.recordForDistro(distro)
+    if (!record || !current()) {
+      // An Add's connect has no host yet; its dialog alone hears what the connect waits for.
+      return this.deps.publishAddProgress?.(distro, status)
+    }
+    await saveWslHostConnection(this.deps, record, { get: () => connection })
+    if (!current()) {
+      return
+    }
+    if (status.state === 'distro-stopped') {
+      this.parked.add(record.environmentId)
+    } else if (status.state === 'ready') {
+      this.parked.delete(record.environmentId)
+    }
+    this.setStatus(record, status, connection)
+    if (status.state === 'ready' && connection) {
+      this.deps.ready(record.environmentId, record.distro)
+    }
+  }
+
+  getStatuses(): WslHostStatus[] {
+    return this.board.list()
+  }
+
+  /** Hears every change to what `getStatuses` returns. */
+  onStatusesChanged(listener: () => void): () => void {
+    return this.board.onChanged(listener)
+  }
+
+  async listDistros(): Promise<WslHostDistro[]> {
+    return withWslHostIds(await this.wsl.listDistros(), await this.records())
+  }
+
+  async add(args: { distro: string; startIfStopped?: boolean }): Promise<WslHostAddResult> {
+    const key = wslDistroHolderKey(args.distro)
+    const pending = this.adding.get(key)
+    if (pending) {
+      return pending
+    }
+    const operation = Promise.resolve()
+      .then(async () => {
+        const unfinishedRemoval = await this.recordForDistro(args.distro)
+        if (unfinishedRemoval?.pendingStop) {
+          const { environmentId } = unfinishedRemoval
+          return readdPendingWslHost(args, {
+            listDistros: () => this.wsl.listDistros(),
+            keep: () => this.connect(environmentId, { withdrawPendingRemoval: true }),
+            environmentId
+          })
+        }
+        return registerWslHost(
+          {
+            deps: this.deps,
+            wsl: () => this.wsl,
+            disableGeneration: () => this.disableGeneration,
+            recordForDistro: async (distro) => await this.recordForDistro(distro),
+            recordForEnvironment: async (environmentId) =>
+              await this.recordForEnvironment(environmentId),
+            setReady: (record, connection) =>
+              this.setStatus(record, { state: 'ready', census: null }, connection)
+          },
+          args
+        )
+      })
+      .finally(() => {
+        if (this.adding.get(key) === operation) {
+          this.adding.delete(key)
+        }
+      })
+    this.adding.set(key, operation)
+    return operation
+  }
+
+  async remove(environmentId: string): Promise<WslHostServerStop> {
+    const record = await this.recordForEnvironment(environmentId)
+    if (!record) {
+      throw new Error('This server is not a WSL host.')
+    }
+    // Block reconnect from visible work, liveness and calls before stopping; a failed removal
+    // must leave the host usable and allow another attempt.
+    this.removing.add(environmentId)
+    const removal = await removeWslHostServer(
+      this.deps.userDataPath(),
+      this.connector,
+      record
+    ).finally(() => this.removing.delete(environmentId))
+    if (!removal.removed) {
+      this.setStatus((await this.recordForEnvironment(environmentId)) ?? record, {
+        state: 'closed'
+      })
+      return removal.serverStop
+    }
+    this.visible.delete(environmentId)
+    this.parked.delete(environmentId)
+    this.connectionChanges.delete(wslDistroHolderKey(record.distro))
+    this.board.delete(environmentId)
+    await this.deps.removed(environmentId)
+    return removal.serverStop
+  }
+
+  /**
+   * The setting governs new work only (Stage 1): turning it off refuses an add still in flight,
+   * but saved hosts keep serving their projects, as in serve-only. Turning it on boots nothing.
+   */
+  async enabledChanged(enabled: boolean): Promise<void> {
+    if (!enabled) {
+      this.disableGeneration += 1
+    }
+  }
+
+  /**
+   * The user asked for this host: may boot its distro. An intent retries or forces an update, or
+   * restarts the server as a WSL host. Only the user's own Connect or Add withdraws an unfinished
+   * Remove; any other caller is refused.
+   */
+  async connect(
+    environmentId: string,
+    { withdrawPendingRemoval = false, ...options }: WslHostConnectRequest = {}
+  ): Promise<void> {
+    const record = await this.recordForEnvironment(environmentId)
+    if (!record) {
+      throw new Error('This server is not a WSL host.')
+    }
+    const port = {
+      deps: this.deps,
+      connector: this.wsl,
+      removing: this.removing,
+      parked: this.parked
+    }
+    await connectWslHostForUser(port, record, { ...options, withdrawPendingRemoval })
+  }
+
+  /** A runtime call (a poll, a fetch) never boots a distro (E9); see ensureWslHostForRuntimeCall. */
+  async ensureForRuntimeCall(
+    environmentId: string,
+    isVisible: () => boolean = () => this.visible.has(environmentId)
+  ): Promise<void> {
+    const record = await this.recordForEnvironment(environmentId)
+    await ensureWslHostForRuntimeCall(environmentId, {
+      record,
+      connector: this.connector,
+      deps: this.deps,
+      removing: this.removing,
+      parked: this.parked,
+      isVisible,
+      readyGeneration: () =>
+        (record && this.readyGenerations.get(wslDistroHolderKey(record.distro))) || 0,
+      retireConnectionChange: (distro) => this.connectionChanges.delete(wslDistroHolderKey(distro)),
+      publishStopped: (record) =>
+        this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
+      publishReady: (record, connection) =>
+        this.setStatus(record, { state: 'ready', census: null }, connection),
+      retry: () => this.ensureForRuntimeCall(environmentId)
+    })
+  }
+
+  /**
+   * A workspace on this host became active: the user switched to it, or a launch restored it. That
+   * is navigation, never a start (E9): it re-checks a park and connects only to a running distro; a
+   * stopped one is published stopped, so its panes show Start. Start and a new terminal boot it.
+   */
+  async focusHost(environmentId: string | null): Promise<void> {
+    const record = environmentId ? await this.recordForEnvironment(environmentId) : null
+    if (!record || !this.mayWake(record)) {
+      return
+    }
+    this.parked.delete(record.environmentId)
+    // The focused workspace's work is visible even before the window re-reports it.
+    this.ensureForRuntimeCall(record.environmentId, () => true).catch(() => {
+      // Refused (stopped, settling, unconfirmed): the published status tells the panes.
+    })
+  }
+
+  /** E9: an enabled automation came due with the host off; boots the distro once, lifting a park. */
+  async wakeForAutomation(environmentId: string): Promise<void> {
+    const record = await this.recordForEnvironment(environmentId)
+    if (record && this.mayWake(record)) {
+      await this.wake(record)
+    }
+  }
+
+  /** A host whose Remove is pending is never woken, by focus or by a due automation. */
+  private mayWake(record: WslHostDeploymentRecord): boolean {
+    return (
+      !record.pendingStop &&
+      Boolean(this.connector) &&
+      this.canRun() &&
+      !this.removing.has(record.environmentId)
+    )
+  }
+
+  /** A focus entry or a due automation: lifts a park and may boot the distro. */
+  private async wake(record: WslHostDeploymentRecord): Promise<void> {
+    this.parked.delete(record.environmentId)
+    // No bridge in this process yet means nothing answers; skip the WSL round trip (#33110).
+    if (this.connector && (await focusReachability(this.connector, record)) !== 'available') {
+      await this.connector.connect(record.distro)
+    }
+  }
+
+  /** Whether the host's server answers through this process now; never starts a stopped distro. */
+  async isConnected(environmentId: string): Promise<boolean> {
+    const record = await this.recordForEnvironment(environmentId)
+    return record && this.connector
+      ? (await this.connector.reachability(record.distro, environmentId)) === 'available'
+      : false
+  }
+
+  /** Re-saves the live connection's pairing and ports, which the deployment link overlays onto. */
+  readonly resaveConnection = async (environmentId: string): Promise<void> =>
+    await saveWslHostConnection(
+      this.deps,
+      await this.recordForEnvironment(environmentId),
+      this.connector
+    )
+
+  /** Whether anything may still be started for this distro (spawn guard). */
+  async isKnownDistro(distro: string): Promise<boolean> {
+    return (
+      this.adding.has(wslDistroHolderKey(distro)) || (await this.recordForDistro(distro)) !== null
+    )
+  }
+
+  /** Hosts with open work across windows; this never connects anything by itself. */
+  setVisibleWork(environmentIds: readonly string[]): void {
+    this.visible = new Set(environmentIds.filter((id) => !this.removing.has(id)))
+  }
+
+  async hasUserVisibleWork(distro: string): Promise<boolean> {
+    const record = await this.recordForDistro(distro)
+    // Liveness needs visible demand, an enabled gate and no removal in progress.
+    const id = record?.environmentId
+    return id && !record.pendingStop
+      ? this.canRun() && this.visible.has(id) && !this.removing.has(id)
+      : false
+  }
+
+  /**
+   * Startup: keep the holders a previous run left for its hosts, without booting anything. A
+   * holder for a distro that is no longer a host (a failed add or remove), or any holder while
+   * hosts are off, would keep its distro running forever, so it is released.
+   */
+  async start(): Promise<void> {
+    if (!this.connector) {
+      return
+    }
+    // An unfinished Remove shows as such from launch; nothing reconnects it.
+    const pending = (await this.records()).filter((record) => record.pendingStop)
+    pending.forEach((record) => this.setStatus(record, { state: 'closed' }))
+    await this.connector.adoptHolders(
+      wslHolderKeepPolicy({
+        userDataPath: this.deps.userDataPath(),
+        keepHostHolders: this.canRun(),
+        isAdding: (distro) => this.adding.has(wslDistroHolderKey(distro))
+      })
+    )
+  }
+
+  /** What the UI shows before offering any WSL host action. */
+  hasServerFiles(): boolean {
+    return this.deps.hasServerFiles()
+  }
+
+  private canRun(): boolean {
+    return wslHostRunRefusal(this.deps) === null
+  }
+
+  async dispose(): Promise<void> {
+    this.connectionChanges.clear()
+    await this.connector?.dispose()
+  }
+
+  private setStatus(
+    record: WslHostDeploymentRecord,
+    status: WslOrcadConnectionStatus,
+    connection: WslOrcadConnection | null = null
+  ): void {
+    if (status.state === 'distro-stopped') {
+      this.connectionChanges.delete(wslDistroHolderKey(record.distro))
+    }
+    if (status.state === 'ready') {
+      const key = wslDistroHolderKey(record.distro)
+      this.readyGenerations.set(key, (this.readyGenerations.get(key) ?? 0) + 1)
+    }
+    this.board.set(toWslHostStatus(record, status, connection))
+  }
+
+  private async records(): Promise<WslHostDeploymentRecord[]> {
+    return await readWslHostRecordsQuietly(this.deps.userDataPath())
+  }
+
+  private async recordForDistro(distro: string): Promise<WslHostDeploymentRecord | null> {
+    return (await this.records()).find((record) => sameWslDistro(record.distro, distro)) ?? null
+  }
+
+  /** The registered WSL host behind an environment; null for any other environment. */
+  async recordForEnvironment(environmentId: string): Promise<WslHostDeploymentRecord | null> {
+    return (await this.records()).find((record) => record.environmentId === environmentId) ?? null
+  }
+}

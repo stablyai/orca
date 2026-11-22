@@ -1,14 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import { inCredentialFileOrder, stageCredentialFile } from '../credentials/credential-file-io'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken,
+  writeCredentialFileAtomic,
   writeEncryptedCredential
-} from '../integration-credential-file'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+} from '../credentials/integration-credential-file'
+import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 import type { YouTrackUser } from '../../shared/youtrack-types'
 import { isRawRecord } from './raw-record'
 
@@ -19,8 +21,6 @@ export type YouTrackSiteFile = {
   allowInsecureTls?: boolean
 }
 
-let cachedSite: YouTrackSiteFile | null | undefined
-let cachedToken: string | null = null
 let credentialError: string | null = null
 
 function getOrcaDir(): string {
@@ -33,13 +33,6 @@ function getSitePath(): string {
 
 function getTokenPath(): string {
   return join(getOrcaDir(), 'youtrack-token.enc')
-}
-
-function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
 }
 
 function normalizeSiteFile(value: unknown): YouTrackSiteFile | null {
@@ -70,70 +63,79 @@ function normalizeSiteFile(value: unknown): YouTrackSiteFile | null {
   }
 }
 
-export function getSite(): YouTrackSiteFile | null {
-  if (cachedSite !== undefined) {
-    return cachedSite
-  }
+async function readSite(): Promise<YouTrackSiteFile | null> {
   try {
-    cachedSite = existsSync(getSitePath())
-      ? normalizeSiteFile(JSON.parse(readFileSync(getSitePath(), 'utf-8')))
-      : null
+    return normalizeSiteFile(JSON.parse(await readFile(getSitePath(), 'utf8')))
   } catch {
-    cachedSite = null
-  }
-  // Why: a site without a token is a half-finished connect; treat it as disconnected.
-  if (cachedSite && !credentialFileHasContent(getTokenPath())) {
-    cachedSite = null
-  }
-  return cachedSite
-}
-
-export function readToken(): string | null {
-  if (cachedToken) {
-    return cachedToken
-  }
-  if (!existsSync(getTokenPath())) {
     return null
   }
-  try {
-    cachedToken = readStoredCredentialToken('YouTrack', readFileSync(getTokenPath()))
-    credentialError = null
-    return cachedToken
-  } catch (error) {
-    if (error instanceof CredentialDecryptionError) {
-      credentialError = error.message
+}
+
+function readTokenBytes(): Promise<Buffer | null> {
+  return readFile(getTokenPath()).catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  })
+}
+
+export function readConnection(): Promise<{ site: YouTrackSiteFile; token: string } | null> {
+  return inCredentialFileOrder(getSitePath(), async () => {
+    const site = await readSite()
+    const raw = site ? await readTokenBytes() : null
+    if (!site || !raw) {
+      return null
+    }
+    try {
+      const token = readStoredCredentialToken('YouTrack', raw)
+      credentialError = null
+      return token ? { site, token } : null
+    } catch (error) {
+      if (error instanceof CredentialDecryptionError) {
+        credentialError = error.message
+      }
       throw error
     }
-    return null
-  }
+  })
 }
 
-export function getCredentialError(): string | null {
-  return credentialError
-}
-
-export function getTokenProtection(): SecretAtRestProtection | null {
-  return readCredentialFileProtection(getTokenPath())
-}
-
-export function saveSite(site: YouTrackSiteFile, token: string): void {
-  ensureOrcaDir()
-  writeEncryptedCredential('YouTrack', getTokenPath(), token)
-  writeFileSync(getSitePath(), JSON.stringify(site, null, 2), { encoding: 'utf-8', mode: 0o600 })
-  cachedSite = site
-  cachedToken = token
-  credentialError = null
-}
-
-export function clearSite(): void {
-  cachedSite = null
-  cachedToken = null
-  credentialError = null
-  for (const path of [getTokenPath(), getSitePath()]) {
-    try {
-      unlinkSync(path)
-    } catch {
-      // Already gone.
+export function readConnectionStatus(): Promise<{
+  site: YouTrackSiteFile | null
+  credentialError: string | null
+  credentialProtection: SecretAtRestProtection | null
+}> {
+  return inCredentialFileOrder(getSitePath(), async () => {
+    const site = (await credentialFileHasContent(getTokenPath())) ? await readSite() : null
+    return {
+      site,
+      credentialError,
+      credentialProtection: site ? await readCredentialFileProtection(getTokenPath()) : null
     }
-  }
+  })
+}
+
+export function saveSite(site: YouTrackSiteFile, token: string): Promise<void> {
+  return inCredentialFileOrder(getSitePath(), async () => {
+    await mkdir(getOrcaDir(), { recursive: true, mode: 0o700 })
+    const previousToken = await readTokenBytes()
+    await writeEncryptedCredential('YouTrack', getTokenPath(), token)
+    try {
+      await stageCredentialFile(getSitePath(), JSON.stringify(site, null, 2), { syncFile: true })
+    } catch (error) {
+      await (previousToken
+        ? writeCredentialFileAtomic(getTokenPath(), previousToken)
+        : rm(getTokenPath(), { force: true }))
+      throw error
+    }
+    credentialError = null
+  })
+}
+
+export function clearSite(): Promise<void> {
+  return inCredentialFileOrder(getSitePath(), async () => {
+    await rm(getTokenPath(), { force: true })
+    await rm(getSitePath(), { force: true })
+    credentialError = null
+  })
 }

@@ -1,0 +1,294 @@
+[
+  {
+    "type": "user",
+    "uuid": "8411e758-8907-436a-8a4c-7a01f42984ad",
+    "parentUuid": "507d71ac-fdf3-44e7-ad88-c57735849dd9",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:17:14.727Z",
+    "isSidechain": false,
+    "origin": {
+      "kind": "task-notification",
+      "producer": "session-task",
+      "runId": "0mw1feznm-03b887b1"
+    },
+    "message": {
+      "role": "user",
+      "content": "<task-notification>\n<task-id>bobbnxies</task-id>\n<tool-use-id>toolu_01XkAUQnwQm75zCmVi4ogwpJ</tool-use-id>\n<output-file>/private/tmp/claude-501/-Users-m4air-orca-qa-claude-chat-render-1103-project/81552947-5912-49d0-88c7-4d70d448e93b/tasks/bobbnxies.output</output-file>\n<status>completed</status>\n<summary>Background command \"Wait 30 seconds in the background\" completed (exit code 0)</summary>\n</task-notification>"
+    },
+    "turnOrigin": "task_notification",
+    "turnPosition": {
+      "promptIndex": 0,
+      "turnIndex": 5
+    },
+    "promptSource": "system"
+  },
+  {
+    "type": "assistant",
+    "uuid": "3d22fda3-dd5b-4e27-a4e7-81b616c3ab42",
+    "parentUuid": "8411e758-8907-436a-8a4c-7a01f42984ad",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:17:16.348Z",
+    "isSidechain": false,
+    "message": {
+      "model": "claude-opus-5-5",
+      "id": "msg_011Cgh1GvVL3Yq63nSKvSczU",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01XJdyNeqcGHcoz11jWqJR3x",
+          "name": "Bash",
+          "input": {
+            "command": "echo QA_HOLD_f3",
+            "description": "Print the hold marker"
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 387,
+        "cache_read_input_tokens": 19000,
+        "output_tokens": 85,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 387
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "diagnostics": null,
+      "context_management": null
+    },
+    "apiBlockIndex": 0
+  },
+  {
+    "type": "user",
+    "uuid": "dc9a63ea-93cc-4f46-9898-3abf6d4e3c2c",
+    "parentUuid": "3d22fda3-dd5b-4e27-a4e7-81b616c3ab42",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:20:47.511Z",
+    "isSidechain": false,
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "content": "[Tool call interrupted: the session ended before this call's result was recorded, so its outcome is unknown. Check whether it took effect before relying on it or running it again.]",
+          "is_error": true,
+          "tool_use_id": "toolu_01XJdyNeqcGHcoz11jWqJR3x"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "uuid": "9f59f2e7-5724-42fa-8d4e-e250c80decca",
+    "parentUuid": "dc9a63ea-93cc-4f46-9898-3abf6d4e3c2c",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:20:47.511Z",
+    "isSidechain": false,
+    "isApiErrorMessage": false,
+    "message": {
+      "diagnostics": null,
+      "id": "806f8832-9051-4c0d-bba2-24c4f957b106",
+      "container": null,
+      "model": "<synthetic>",
+      "role": "assistant",
+      "stop_details": null,
+      "stop_reason": "stop_sequence",
+      "stop_sequence": "",
+      "type": "message",
+      "usage": {
+        "output_tokens_details": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": null,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": null,
+        "iterations": null,
+        "speed": null,
+        "fallback_credit": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "No response requested."
+        }
+      ],
+      "context_management": null
+    }
+  },
+  {
+    "type": "user",
+    "uuid": "e4f96990-4837-4674-b0b9-6bb3265dbfaa",
+    "parentUuid": "9f59f2e7-5724-42fa-8d4e-e250c80decca",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:20:47.578Z",
+    "isSidechain": false,
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Run this Bash command: echo QA_HOLD_DELAY_q . Then reply DONE."
+        }
+      ]
+    },
+    "turnOrigin": "sdk",
+    "turnPosition": {
+      "promptIndex": 0,
+      "turnIndex": 6
+    },
+    "promptSource": "sdk"
+  },
+  {
+    "type": "assistant",
+    "uuid": "49ff141e-f3ca-43c4-8473-f6d4f6845923",
+    "parentUuid": "e4f96990-4837-4674-b0b9-6bb3265dbfaa",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:20:50.310Z",
+    "isSidechain": false,
+    "message": {
+      "model": "claude-opus-5-5",
+      "id": "msg_011Cgh1YcoeMNmKLAdtVXKP7",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01EZLMkxCmt9Jctp7ijQG63W",
+          "name": "Bash",
+          "input": {
+            "command": "echo QA_HOLD_DELAY_q",
+            "description": "Print the delay marker"
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 193,
+        "cache_read_input_tokens": 19387,
+        "output_tokens": 89,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 193
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "diagnostics": null,
+      "context_management": null
+    },
+    "apiBlockIndex": 0
+  },
+  {
+    "type": "user",
+    "uuid": "4a4ee40b-4ba0-4e8d-9df4-0555d7456022",
+    "parentUuid": "49ff141e-f3ca-43c4-8473-f6d4f6845923",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:21:23.810Z",
+    "isSidechain": false,
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "content": "[Tool call interrupted: the session ended before this call's result was recorded, so its outcome is unknown. Check whether it took effect before relying on it or running it again.]",
+          "is_error": true,
+          "tool_use_id": "toolu_01EZLMkxCmt9Jctp7ijQG63W"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "uuid": "1a1ad65a-d8f7-46b5-9ca0-e8b1ef4be8e1",
+    "parentUuid": "4a4ee40b-4ba0-4e8d-9df4-0555d7456022",
+    "sessionId": "81552947-5912-49d0-88c7-4d70d448e93b",
+    "timestamp": "2026-11-04T01:21:23.810Z",
+    "isSidechain": false,
+    "isApiErrorMessage": false,
+    "message": {
+      "diagnostics": null,
+      "id": "15cf63cd-0660-44f8-8ad2-bd7a2bd7ce9e",
+      "container": null,
+      "model": "<synthetic>",
+      "role": "assistant",
+      "stop_details": null,
+      "stop_reason": "stop_sequence",
+      "stop_sequence": "",
+      "type": "message",
+      "usage": {
+        "output_tokens_details": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": null,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": null,
+        "iterations": null,
+        "speed": null,
+        "fallback_credit": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "No response requested."
+        }
+      ],
+      "context_management": null
+    }
+  }
+]

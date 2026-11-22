@@ -1,5 +1,5 @@
 import { session, type Session } from 'electron'
-import type { NetworkProxySettings } from '../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../shared/network/network-proxy'
 import { applyProxySettingsToSession } from '../network/proxy-settings'
 import { setYouTrackInsecureTlsFetch } from '../youtrack/youtrack-request'
 
