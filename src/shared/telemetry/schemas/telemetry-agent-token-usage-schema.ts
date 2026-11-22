@@ -19,7 +19,7 @@ export const agentTokenUsageSchema = agentTokenCountsSchema
   })
   .strict()
 
-/** Token growth one provider showed across the scans of one UTC day; the day also lets consumers drop a retried row. */
+/** Token growth one provider showed in the scans of one UTC day. Rows for the same day add up; a crash between send and save can repeat one. */
 export const agentTokenUsageDailySchema = agentTokenCountsSchema
   .extend({
     provider: agentTokenUsageSchema.shape.provider,

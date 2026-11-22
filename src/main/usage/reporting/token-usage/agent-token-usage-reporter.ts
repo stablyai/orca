@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { z } from 'zod'
 import {
   agentTokenCountsSchema,
@@ -139,35 +139,60 @@ export class AgentTokenUsageReporter {
   }
 
   private async load(): Promise<{ state: State; fresh: boolean }> {
-    const content = await readIfExists(this.file)
-    if (content !== null) {
-      const parsed = stateSchema.parse(JSON.parse(content))
-      return { state: { baselines: new Map(parsed.baselines), days: parsed.days }, fresh: false }
+    const [current, legacy] = await Promise.all([
+      readIfExists(this.file),
+      readIfExists(this.legacyFile)
+    ])
+    const legacyBaselines = legacy ? this.parseLegacy(legacy.content) : null
+    const parsed = current ? stateSchema.safeParse(parseJson(current.content)) : null
+    if (parsed?.success) {
+      const state = { baselines: new Map(parsed.data.baselines), days: parsed.data.days }
+      // An older build ran since our last save and already reported its growth.
+      if (legacy && legacyBaselines && current && legacy.mtimeMs > current.mtimeMs) {
+        for (const [id, counts] of legacyBaselines) {
+          state.baselines.set(id, maxCounts(state.baselines.get(id), counts))
+        }
+      }
+      return { state, fresh: false }
     }
-    const legacy = await readIfExists(this.legacyFile)
-    if (legacy === null) {
+    // Unreadable state restarts from today rather than stopping reports for good.
+    if (current || !legacyBaselines) {
       return { state: { baselines: new Map(), days: [] }, fresh: true }
     }
-    const parsed = legacyStateSchema.parse(JSON.parse(legacy))
-    if (parsed.snapshots.some((snapshot) => snapshot.provider !== this.provider)) {
-      throw new Error('Invalid agent token usage state')
+    return { state: { baselines: legacyBaselines, days: [] }, fresh: false }
+  }
+
+  private parseLegacy(content: string): Map<string, AgentTokenCounts> | null {
+    const parsed = legacyStateSchema.safeParse(parseJson(content))
+    if (!parsed.success || parsed.data.snapshots.some((s) => s.provider !== this.provider)) {
+      return null
     }
-    const baselines = new Map(
-      parsed.snapshots.map((snapshot) => [snapshot.analytics_session_id, countsOf(snapshot)])
-    )
-    return { state: { baselines, days: [] }, fresh: false }
+    return new Map(parsed.data.snapshots.map((s) => [s.analytics_session_id, countsOf(s)]))
   }
 }
 
-async function readIfExists(file: string): Promise<string | null> {
+async function readIfExists(file: string): Promise<{ content: string; mtimeMs: number } | null> {
   try {
-    return await readFile(file, 'utf8')
+    const [content, info] = await Promise.all([readFile(file, 'utf8'), stat(file)])
+    return { content, mtimeMs: info.mtimeMs }
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       return null
     }
     throw error
   }
+}
+
+function parseJson(content: string): unknown {
+  try {
+    return JSON.parse(content)
+  } catch {
+    return undefined
+  }
+}
+
+function maxCounts(a: AgentTokenCounts | undefined, b: AgentTokenCounts): AgentTokenCounts {
+  return a ? countsOf(Object.fromEntries(COUNT_KEYS.map((k) => [k, Math.max(a[k], b[k])]))) : b
 }
 
 function countsOf(source: Partial<AgentTokenCounts>): AgentTokenCounts {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -81,5 +81,54 @@ describe('AgentTokenUsageReporter', () => {
     at('2026-11-21T00:05:00Z')
     await reporter.report([{ providerSessionId: 'a', ...tokens(1000) }])
     expect(sent).toEqual([])
+  })
+
+  it('does not re-count growth an older build already reported after a downgrade', async () => {
+    const { reporter, sent, file, legacyFile } = await setup()
+    await reporter.report([{ providerSessionId: 'a', ...tokens(100) }])
+    await reporter.flush()
+    await writeFile(
+      legacyFile,
+      JSON.stringify({
+        schemaVersion: 1,
+        snapshots: [
+          { ...tokens(400), provider: 'claude', analytics_session_id: SESSION_ID, revision: 2 }
+        ]
+      })
+    )
+    await utimes(file, new Date(1_000), new Date(1_000))
+    const { AgentTokenUsageReporter: Reporter } = await import('./agent-token-usage-reporter')
+    const upgraded = new Reporter(
+      file,
+      legacyFile,
+      'claude',
+      async (ids) => ids.map(() => SESSION_ID),
+      {
+        isEnabled: async () => true,
+        capture: async (row) => {
+          sent.push(row)
+          return true
+        }
+      },
+      () => new Date('2026-11-20T12:00:00Z')
+    )
+    await upgraded.report([{ providerSessionId: 'a', ...tokens(450) }])
+    const next = new Reporter(
+      file,
+      legacyFile,
+      'claude',
+      async (ids) => ids.map(() => SESSION_ID),
+      {
+        isEnabled: async () => true,
+        capture: async (row) => {
+          sent.push(row)
+          return true
+        }
+      },
+      () => new Date('2026-11-21T00:05:00Z')
+    )
+    await upgraded.flush()
+    await next.report([{ providerSessionId: 'a', ...tokens(450) }])
+    expect(sent).toEqual([{ ...tokens(50), provider: 'claude', usage_day: '2026-11-20' }])
   })
 })
