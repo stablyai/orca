@@ -1,7 +1,11 @@
 // A bot commenting, closing and linking its own items (comments go on closed items too, and from the
 // bot that made one with `--for`; the rest only on open ones), any agent linking its own work to any
 // open item, and Orca linking a worker started for an item.
-import type { BotItemActor, BotItemCommentImage } from '../../shared/bots/bot-items'
+import {
+  isOpenBotItemStatus,
+  type BotItemActor,
+  type BotItemCommentImage
+} from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import { assertBotItemAttach } from './bot-items-tables'
@@ -95,7 +99,7 @@ export class BotItemsWrites extends BotItemsEdits {
 
   /** A worker started for an item (`worker-start --item`): linked once, and when the item's own agent
    *  started it, Planned or Needs you moves to In progress; anyone else's worker never moves it. A
-   *  closed item keeps its status. `starter`: the starting agent and chat, whose write it is, as
+   *  closed item takes no link (a retry keeps its first start's item). `starter`: the starting agent and chat, whose write it is, as
    *  `item link` would be; Orca's own catch-up when that chat is unknown. */
   linkStartedWorker(
     uid: string,
@@ -105,7 +109,11 @@ export class BotItemsWrites extends BotItemsEdits {
   ): number | null {
     return this.transaction(() => {
       const item = this.get(uid)
-      if (!item || this.links(uid).some((l) => l.kind === 'dispatch' && l.ref === dispatchId)) {
+      if (
+        !item ||
+        !isOpenBotItemStatus(item.status) ||
+        this.links(uid).some((l) => l.kind === 'dispatch' && l.ref === dispatchId)
+      ) {
         return null
       }
       const { botId, chatId } = starter

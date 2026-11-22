@@ -6,8 +6,10 @@ import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotItemLinkInput } from './bot-items-input'
 import {
   lineageLiveSession,
-  readAgentSessionRecordStore
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { isBotOwnChat } from './bot-own-chat'
 
 const ORIGIN_PREFIX = 'bot-item:'
 
@@ -66,13 +68,16 @@ export function dispatchStarter(
   return creator && live ? { sessionId: live.sessionId, chatId: chatRoot(creator) } : null
 }
 
-/** The agent whose chat started a Dispatch: the one whose home its starting session ran in. */
+/** The agent whose own chat started a Dispatch; a worker running in its home folder is not it. */
 export function dispatchStarterBotId(
   db: OrchestrationDb,
   dispatchId: string,
-  bots: readonly Bot[]
+  bots: readonly Bot[],
+  records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): string | null {
   const creator = db.getDispatchContextById(dispatchId)?.creator_orca_session_id
-  const record = creator ? readAgentSessionRecordStore()?.getRecord(creator) : null
-  return botOfHomeWorkspace(bots, record?.location.workspaceId)?.id ?? null
+  const record = creator ? records?.getRecord(creator) : null
+  return record && records && isBotOwnChat(record, db, records)
+    ? (botOfHomeWorkspace(bots, record.location.workspaceId)?.id ?? null)
+    : null
 }

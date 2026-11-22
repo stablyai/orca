@@ -29361,6 +29361,7 @@
         "reopened": "reopened this",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
+        "anotherAgent": "Another agent",
         "workerStarted": "Worker started:",
         "you": "You",
         "snoozed": "snoozed this until {{when}}",
@@ -29414,7 +29415,8 @@
           "linkedMany": "{{chat}} linked {{count}} links to {{items}}",
           "linked": "{{chat}} linked {{link}} to {{items}}"
         },
-        "anotherChat": "Another chat"
+        "anotherChat": "Another chat",
+        "anotherAgent": "Another agent"
       },
       "chatFallback": "Chat",
       "comment": {

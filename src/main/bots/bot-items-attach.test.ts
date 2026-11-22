@@ -65,6 +65,41 @@ describe('attaching work to another agent’s item', () => {
     expect(store.get(uid)).toMatchObject({ status: 'needs_you', questionEvent: question })
   })
 
+  it('moves a Planned item only for its own agent’s worker, and never for an unknown starter', () => {
+    const { store } = itemNeedingYou()
+    const planned = (title: string) =>
+      store.add(
+        {
+          ownerBotId: OWNER.botId,
+          chatId: OWNER.chatId,
+          source: { kind: 'home', title: null },
+          title,
+          status: 'planned',
+          links: []
+        },
+        OWNER
+      ).uid
+    const helped = planned('Helped')
+    const unknown = planned('Unknown')
+    store.linkStartedWorker(helped, 'ctx_helper', HELPER)
+    store.linkStartedWorker(unknown, 'ctx_lost', { botId: null, chatId: null })
+    expect(store.get(helped)?.status).toBe('planned')
+    expect(store.get(unknown)?.status).toBe('planned')
+    expect(store.links(unknown).map((link) => link.ref)).toEqual(['ctx_lost'])
+  })
+
+  it('links nothing to a closed item', () => {
+    const { store, uid } = itemNeedingYou()
+    store.close(uid, 'done', undefined, OWNER)
+    expect(() =>
+      store.link(uid, [{ kind: 'url', ref: 'https://example.com/run' }], HELPER)
+    ).toThrow(/is closed/)
+    // A retry of a worker started while it was open keeps the first start's item.
+    expect(store.linkStartedWorker(uid, 'ctx_retry', HELPER)).toBeNull()
+    expect(store.linkStartedWorker(uid, 'ctx_owner_retry', OWNER)).toBeNull()
+    expect(store.links(uid)).toEqual([])
+  })
+
   it('keeps every other write the owner’s', () => {
     const { store, uid } = itemNeedingYou()
     const writes = [
