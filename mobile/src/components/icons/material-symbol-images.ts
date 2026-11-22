@@ -29,9 +29,14 @@ export function useMaterialSymbolImages(
   const [, setRevision] = useState(0)
   // The key stands in for the array, which callers rebuild every render.
   const key = symbols.join('|')
+  const missingAtRender = symbols.some((symbol) => !loaded.has(symbol))
   useEffect(() => {
     const missing = symbols.filter((symbol) => !loaded.has(symbol))
     if (missing.length === 0) {
+      // A shared load can settle between render and this effect; render again to pick it up.
+      if (missingAtRender) {
+        setRevision((revision) => revision + 1)
+      }
       return
     }
     let stale = false
@@ -43,6 +48,6 @@ export function useMaterialSymbolImages(
     return () => {
       stale = true
     }
-  }, [key])
+  }, [key, missingAtRender])
   return loaded
 }
