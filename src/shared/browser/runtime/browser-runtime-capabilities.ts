@@ -45,7 +45,7 @@ export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-re
 // Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
 export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const
 
-// Older headless hosts refuse browser.tabSetProfile with no window, so streamed panes hide ⋯ › Profile without this.
+// Headless hosts that rebuild a page in place for browser.tabSetProfile; streamed panes show ⋯ › Profile only with this.
 export const BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY =
   'browser.tab-profile-switch.v1' as const
 

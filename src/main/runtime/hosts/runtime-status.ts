@@ -126,9 +126,12 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
         BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
         BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
-        BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY,
         BROWSER_GRAB_RUNTIME_CAPABILITY
       )
+    }
+    // Only an offscreen page swap keeps its viewers' streams; a window's webview remount does not yet.
+    if (hasOffscreen) {
+      capabilities.push(BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY)
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())
