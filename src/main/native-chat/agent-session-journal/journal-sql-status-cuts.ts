@@ -21,6 +21,15 @@ import {
   type HostUsageLimitCut
 } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 
+/** A refused send its queued card took back is not a request; only user rows need the lookup. */
+function returnedToCard(state: JournalSqlStatusContext, item: JournalStatusItem['item']): boolean {
+  if (item.body.kind !== 'message' || item.body.role !== 'user') {
+    return false
+  }
+  const send = state.inputForItem(item.itemId)
+  return send !== undefined && agentJournalSubmissionReturnedToCard(send)
+}
+
 /** Merge only the two request-boundary families; command exclusions use current point lookups. */
 function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
   if (
@@ -46,12 +55,9 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
       turn && (!user || compareJournalStatusPositions(turn.position, user.position) >= 0)
     const candidate: JournalStatusItem = useTurn ? turn! : user!
     const item = candidate.item
-    if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
+    if (!isStructuredAgentSessionNonRequestRow(item, commands) && !returnedToCard(state, item)) {
       if (item.body.kind === 'message' && item.body.role === 'user') {
-        const send = state.inputForItem(item.itemId)
-        if (!send || !agentJournalSubmissionReturnedToCard(send)) {
-          return null
-        }
+        return null
       }
       const lifecycle = readAgentJournalTurn(item.body)
       if (lifecycle) {
@@ -163,7 +169,8 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
       if (
         compareJournalStatusPositions(candidate.position, currentPosition) >= 0 ||
         openerKeys.has(candidate.item.itemId) ||
-        isStructuredAgentSessionNonRequestRow(candidate.item, commands)
+        isStructuredAgentSessionNonRequestRow(candidate.item, commands) ||
+        returnedToCard(state, candidate.item)
       ) {
         continue
       }
