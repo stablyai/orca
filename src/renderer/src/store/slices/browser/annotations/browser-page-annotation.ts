@@ -43,6 +43,25 @@ export function retainBrowserAnnotationMarkerIds(
   return nextByPageId
 }
 
+/** A close drops the notes it submitted; notes added while its frame was in flight stay keyed by page. */
+export function dropSubmittedBrowserPageAnnotations(
+  nextAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>,
+  nextMarkerIdsByPageId: Record<string, string[]>,
+  pageId: string,
+  submittedNoteIds: ReadonlySet<string> | null
+): Record<string, string[]> {
+  const kept = submittedNoteIds
+    ? (nextAnnotationsByPageId[pageId] ?? []).filter((note) => !submittedNoteIds.has(note.id))
+    : []
+  if (kept.length > 0) {
+    nextAnnotationsByPageId[pageId] = kept
+    return retainBrowserAnnotationMarkerIds(nextMarkerIdsByPageId, pageId, kept)
+  }
+  delete nextAnnotationsByPageId[pageId]
+  delete nextMarkerIdsByPageId[pageId]
+  return nextMarkerIdsByPageId
+}
+
 /** Closing a browser tab discards the notes its pages hold unsent. */
 export function hasUnsentBrowserNotes(
   state: {

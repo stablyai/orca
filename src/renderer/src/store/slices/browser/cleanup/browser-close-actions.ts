@@ -17,12 +17,15 @@ import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../../tabs/tabs-empty-workspace'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import { dropSubmittedBrowserPageAnnotations } from '../annotations/browser-page-annotation'
 import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,
   type DrawnBrowserTab
 } from '../tabs/browser-tab-close-through-layout-owner'
+
+const NO_SUBMITTED_NOTE_IDS: ReadonlySet<string> = new Set()
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -63,13 +66,17 @@ export function createBrowserCloseActions(
           const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
           delete nextBrowserPagesByWorkspace[tabId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
-          const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
+          let nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
           const nextBrowserCertificateFailuresByPageId = {
             ...s.browserCertificateFailuresByPageId
           }
           for (const page of closedPages) {
-            delete nextBrowserAnnotationsByPageId[page.id]
-            delete nextBrowserAnnotationMarkerIdsByPageId[page.id]
+            nextBrowserAnnotationMarkerIdsByPageId = dropSubmittedBrowserPageAnnotations(
+              nextBrowserAnnotationsByPageId,
+              nextBrowserAnnotationMarkerIdsByPageId,
+              page.id,
+              drawn ? (drawn.annotationIdsByPageId[page.id] ?? NO_SUBMITTED_NOTE_IDS) : null
+            )
             delete nextBrowserCertificateFailuresByPageId[page.id]
           }
           docPageIdsToRelease = closedPages

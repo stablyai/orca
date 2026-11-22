@@ -21,6 +21,8 @@ export type DrawnBrowserTab = {
   record: BrowserWorkspace
   pages: BrowserPage[]
   handles: Record<string, RemoteBrowserPageHandle>
+  /** Note ids per page when the close was sent; notes added while the frame was in flight survive its cleanup. */
+  annotationIdsByPageId: Record<string, ReadonlySet<string>>
   /** Where it sat, for the reopen list; the frame has moved the rest on. */
   position: RecentlyClosedTabPosition | undefined
 }
@@ -69,6 +71,12 @@ export function closeBrowserTabThroughLayoutOwner(
       pages.flatMap((page) => {
         const handle = state.remoteBrowserPageHandlesByPageId[page.id]
         return handle ? [[page.id, handle] as const] : []
+      })
+    ),
+    annotationIdsByPageId: Object.fromEntries(
+      pages.flatMap((page) => {
+        const notes = state.browserAnnotationsByPageId[page.id]
+        return notes?.length ? [[page.id, new Set(notes.map((note) => note.id))] as const] : []
       })
     ),
     position: getRecentlyClosedTabPosition(state, entry.worktreeId, browserTabId)

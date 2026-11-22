@@ -17,6 +17,7 @@ import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remo
 import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import { dropSubmittedBrowserPageAnnotations } from '../annotations/browser-page-annotation'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 
 export function createBrowserPageCreateActions(
@@ -121,6 +122,9 @@ export function createBrowserPageCreateActions(
     },
 
     closeBrowserPage: (pageId) => {
+      const submittedNoteIds = new Set(
+        (get().browserAnnotationsByPageId[pageId] ?? []).map((note) => note.id)
+      )
       const closeHere = (): void => {
         let closedWorkspaceIdForLabel: string | null = null
         let docPageIdToRelease: string | null = null
@@ -161,9 +165,12 @@ export function createBrowserPageCreateActions(
           )
           delete nextRemoteBrowserPageHandlesByPageId[pageId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
-          const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
-          delete nextBrowserAnnotationsByPageId[pageId]
-          delete nextBrowserAnnotationMarkerIdsByPageId[pageId]
+          const nextBrowserAnnotationMarkerIdsByPageId = dropSubmittedBrowserPageAnnotations(
+            nextBrowserAnnotationsByPageId,
+            { ...s.browserAnnotationMarkerIdsByPageId },
+            pageId,
+            submittedNoteIds
+          )
           const nextBrowserCertificateFailuresByPageId = {
             ...s.browserCertificateFailuresByPageId
           }
