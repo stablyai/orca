@@ -104,6 +104,7 @@ async function fixture(largeCatalog = false) {
   return { firstBytes, firstCommit, publish, read, repository, service, source, store }
 }
 
+// Git writes and compresses 65 MiB of fixture artwork, which is slower on shared runners.
 it('retains the late-alphabet cover and icon in a catalog over 64 MiB of artwork', async () => {
   const f = await fixture(true)
   const snapshot = await f.store.readSnapshot(f.source.id)
