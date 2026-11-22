@@ -92,12 +92,21 @@ describe('a worker start whose agent is not ready in time', () => {
 
   async function start(): Promise<{ state: unknown; dispatchId: string; next: unknown }> {
     const task = h.db.createTask({ spec: 'slow start', runId: h.activeRunId })
-    const receipt = (await h.call('orchestration.workerStart', {
+    const receipt: unknown = await h.call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
       agent: 'claude'
-    })) as { state?: unknown; dispatchId?: unknown; next?: unknown }
-    return { state: receipt.state, dispatchId: String(receipt.dispatchId), next: receipt.next }
+    })
+    if (
+      !receipt ||
+      typeof receipt !== 'object' ||
+      !('state' in receipt) ||
+      !('dispatchId' in receipt)
+    ) {
+      throw new Error('worker-start returned no receipt')
+    }
+    const next = 'next' in receipt ? receipt.next : undefined
+    return { state: receipt.state, dispatchId: String(receipt.dispatchId), next }
   }
 
   function deferred(): { promise: Promise<RuntimeTerminalWait>; resolve: () => void } {
