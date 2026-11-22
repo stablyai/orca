@@ -62,7 +62,6 @@ export async function runPluginGit(
   const name = args[findGitSubcommandIndex(args)] ?? ''
   const command = /^[a-z]+(?:-[a-z]+)*$/.test(name) ? name : 'command'
   const started = performance.now()
-  console.debug('[plugins:git] start', command)
   try {
     const { stdout } = await gitExecFileAsync(args, {
       cwd,
@@ -208,7 +207,7 @@ export async function readRetainedPluginGitCommit<T>(
   const hooks = join(input.directory, 'no-hooks')
   const config = pluginGitConfigArgs(hooks)
   let reusable = false
-  const exists = await lstat(repository).then(
+  const exists = await lstat(join(repository, '.git')).then(
     (entry) => entry.isDirectory(),
     () => false
   )
@@ -227,13 +226,34 @@ export async function readRetainedPluginGitCommit<T>(
       reusable = false
     }
   }
+  await mkdir(input.directory, { recursive: true })
+  const ref = input.ref.trim()
+  if (PLUGIN_COMMIT_PATTERN.test(ref) && !SHA1_COMMIT_PATTERN.test(ref)) {
+    throw new Error('SHA-256 plugin repositories are not supported')
+  }
+  const exactCommit = SHA1_COMMIT_PATTERN.test(ref)
+  if (!exactCommit) {
+    await runPluginGit([...config, 'check-ref-format', '--branch', ref], input.directory)
+  }
   if (!reusable) {
     await rm(input.directory, { recursive: true, force: true })
     await mkdir(hooks, { recursive: true })
-    await mkdir(repository)
-    await runPluginGit([...config, 'init', '--bare', '--quiet', '--template='], repository)
-    await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
-    await runPluginGit([...config, 'config', '--unset-all', 'remote.origin.fetch'], repository)
+    if (exactCommit) {
+      await mkdir(repository)
+      await runPluginGit([...config, 'init', '--quiet', '--template='], repository)
+      await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
+    } else {
+      await runBoundedDownload(
+        [...config, ...pluginGitCloneArgs(input.url, ref, repository)],
+        input.directory,
+        repository,
+        input.maxDownloadBytes
+      )
+    }
+    await runPluginGit(
+      [...config, 'config', '--unset-all', 'remote.origin.fetch'],
+      repository
+    ).catch(() => undefined)
   }
   if (reusable && input.publishedCommit) {
     await runPluginGit(
@@ -250,20 +270,18 @@ export async function readRetainedPluginGitCommit<T>(
       await runPluginGit([...config, '-c', 'pack.threads=2', 'gc', '--prune=now'], repository)
     }
   }
-  const ref = input.ref.trim()
-  if (PLUGIN_COMMIT_PATTERN.test(ref) && !SHA1_COMMIT_PATTERN.test(ref)) {
-    throw new Error('SHA-256 plugin repositories are not supported')
+  if (reusable || exactCommit) {
+    await runBoundedDownload(
+      [...config, '--git-dir', join(repository, '.git'), ...pluginGitFetchCommitArgs(ref)],
+      repository,
+      repository,
+      input.maxDownloadBytes
+    )
   }
-  if (!SHA1_COMMIT_PATTERN.test(ref)) {
-    await runPluginGit([...config, 'check-ref-format', '--branch', ref], repository)
-  }
-  await runBoundedDownload(
-    [...config, '--git-dir', repository, ...pluginGitFetchCommitArgs(ref)],
-    repository,
-    repository,
-    input.maxDownloadBytes
+  const commit = await runPluginGit(
+    ['rev-parse', '--verify', `${reusable || exactCommit ? 'FETCH_HEAD' : 'HEAD'}^{commit}`],
+    repository
   )
-  const commit = await runPluginGit(['rev-parse', '--verify', 'FETCH_HEAD^{commit}'], repository)
   if (!SHA1_COMMIT_PATTERN.test(commit)) {
     throw new Error('Git resolved an invalid catalog commit identity')
   }
@@ -271,6 +289,16 @@ export async function readRetainedPluginGitCommit<T>(
     throw new Error('Git fetched a different commit than requested')
   }
   await runPluginGit([...config, 'update-ref', 'refs/orca/fetched', commit], repository)
+  await runPluginGit([...config, 'update-ref', '--no-deref', 'HEAD', commit], repository)
+  if (!reusable) {
+    const refs = await runPluginGit(
+      ['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/', 'refs/tags/'],
+      repository
+    )
+    for (const name of refs.split('\n').filter(Boolean)) {
+      await runPluginGit([...config, 'update-ref', '-d', name], repository)
+    }
+  }
   return { commit, value: await read(repository, commit) }
 }
 

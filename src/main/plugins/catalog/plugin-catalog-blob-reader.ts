@@ -1,3 +1,4 @@
+import { offlineGitEnv } from '../../git/command-runner/git-environment/git-process-env'
 import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-fields'
 import { pluginRelativePathSchema } from '../../../shared/plugins/manifest/plugin-manifest-fields'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
@@ -175,7 +176,7 @@ export async function readCatalogImageBlobs(
     memo: createCatalogBufferMemo(),
     readOptions: {
       timeout: 10_000,
-      env: { ...process.env, GIT_ALLOW_PROTOCOL: '', GIT_NO_LAZY_FETCH: '1' }
+      env: offlineGitEnv()
     }
   }
   await loadCatalogFiles(repository, commit, requests, state)

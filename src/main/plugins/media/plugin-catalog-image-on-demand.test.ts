@@ -180,6 +180,7 @@ describe('on-demand catalog image protocol', () => {
     release.resolve(new Map([[fixture.image.path, fixture.bytes]]))
     const responses = await Promise.all([first, second])
     expect(responses.map((response) => response.status)).toEqual([200, 200])
+    await fixture.resolver.ensureCached(fixture.image.sha256)
     expect(fixture.readImages).toHaveBeenCalledTimes(1)
     expect(await readFile(join(fixture.root, 'images', fixture.image.sha256))).toEqual(
       fixture.bytes

@@ -44,9 +44,24 @@ export class PluginCatalogImageOnDemand {
     if (existing) {
       return existing
     }
-    const task = new Promise<void>((finish) => this.pending.push({ hash, finish, locations: [] }))
+    const task = this.options.cache
+      .get(hash)
+      .catch(() => null)
+      .then((cached) => {
+        if (cached) {
+          return
+        }
+        return new Promise<void>((finish) => {
+          this.pending.push({ hash, finish, locations: [] })
+          this.schedule()
+        })
+      })
+      .finally(() => {
+        if (this.inFlight.get(hash) === task) {
+          this.inFlight.delete(hash)
+        }
+      })
     this.inFlight.set(hash, task)
-    this.schedule()
     return task
   }
 
@@ -161,7 +176,6 @@ export class PluginCatalogImageOnDemand {
         if (!accepted.has(job.hash)) {
           this.failures.set(job.hash, Date.now() + FAILURE_RETRY_MS)
         }
-        this.inFlight.delete(job.hash)
         job.finish()
       }
       this.reading = false
