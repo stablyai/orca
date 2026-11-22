@@ -35,6 +35,7 @@ import {
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
 } from './layout/right-sidebar-titlebar-drag-regions'
 import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-activity-items'
+import { shouldFocusVaultSearchOnRoute } from './activity-bar/activity-bar-tab-focus'
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
 import { useWindowWidth } from './layout/use-window-width'
 import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
@@ -54,6 +55,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const routeFocusesVaultSearch = useAppStore((s) => s.rightSidebarRouteFocusesVaultSearch)
   const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
   const lastRouteRequestId = useRef(routeRequestId)
   const [focusVaultSearch, setFocusVaultSearch] = useState(false)
@@ -97,11 +99,14 @@ function RightSidebarInner(): React.JSX.Element {
     }
     lastRouteRequestId.current = routeRequestId
     setFocusVaultSearch(
-      rightSidebarOpen &&
-        !creatingWorktree &&
-        rightSidebarTab === 'vault' &&
-        effectiveTab === 'vault' &&
-        !settingsFocusRequested
+      shouldFocusVaultSearchOnRoute({
+        open: rightSidebarOpen,
+        creatingWorktree,
+        tab: rightSidebarTab,
+        effectiveTab,
+        settingsFocusRequested,
+        routeFocusesVaultSearch
+      })
     )
   }, [
     routeRequestId,
@@ -109,7 +114,8 @@ function RightSidebarInner(): React.JSX.Element {
     rightSidebarTab,
     effectiveTab,
     creatingWorktree,
-    settingsFocusRequested
+    settingsFocusRequested,
+    routeFocusesVaultSearch
   ])
 
   useEffect(() => {

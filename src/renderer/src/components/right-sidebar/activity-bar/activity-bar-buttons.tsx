@@ -15,6 +15,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
+
+// A mouse press must not move the caret out of the terminal. Keyboard Tab still reaches the button.
+const keepTerminalFocusOnPress = (event: React.MouseEvent): void => event.preventDefault()
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -206,6 +210,8 @@ export function ActivityBarButton({
             )
       )}
       onClick={onClick}
+      onMouseDown={keepTerminalFocusOnPress}
+      {...{ [KEEPS_FOCUS_ATTRIBUTE]: '' }}
       data-workspace-board-dismiss=""
       data-activity-plugin-key={item.pluginKey}
       aria-label={activityItemAriaLabel(item, effectiveStatus, t)}

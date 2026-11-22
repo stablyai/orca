@@ -99,7 +99,8 @@ export function useRightSidebarTabRouting({
     if (tab === 'bot-connectors' && effectiveTab === 'bot-connectors') {
       openBotConnectorPage(null)
     }
-    setRightSidebarTab(tab)
+    // The tab click itself must not pull the caret into Agents search. Shortcuts omit this option.
+    setRightSidebarTab(tab, { focusVaultSearch: false })
   }
 
   return { effectiveTab, selectActivityTab }
