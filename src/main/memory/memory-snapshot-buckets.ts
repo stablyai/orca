@@ -18,6 +18,7 @@ const HISTORY_STALE_MS = 10 * 60 * 1000
 
 type HistoryRing = {
   samples: number[]
+  matchedSamples?: number
   touchedAt: number
 }
 
@@ -51,6 +52,20 @@ export function seedMemoryHistory(key: string, fromKey: string, now: number): vo
     samples: [...(historyByKey.get(fromKey)?.samples ?? [])],
     touchedAt: now
   })
+}
+
+/** Drops `key` once a full series in a row matched the series it was split from; `matched` is this sample's. */
+export function retireConvergedMemoryHistory(key: string, matched: boolean): boolean {
+  const ring = historyByKey.get(key)
+  if (!ring) {
+    return false
+  }
+  ring.matchedSamples = matched ? (ring.matchedSamples ?? 0) + 1 : 0
+  if (ring.matchedSamples < HISTORY_CAPACITY) {
+    return false
+  }
+  historyByKey.delete(key)
+  return true
 }
 
 /** Keeps a series that took no sample this sweep from being swept as stale. */

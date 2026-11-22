@@ -77,11 +77,20 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
   const terminalUsage = new Map(
     parts.terminalSeries.map(({ worktreeId, usage }) => [worktreeId, usage])
   )
+  let worktrees: WorktreeMemory[] | undefined
+  snapshot.worktrees.forEach((wt, i) => {
+    const row = wt.sessions.length > 0 ? pairedRow(wt, parts, terminalUsage) : undefined
+    if (row !== wt) {
+      // Copied only from the first row that differs; a host without chats sends its array as is.
+      worktrees ??= snapshot.worktrees.slice(0, i)
+    }
+    if (worktrees && row) {
+      worktrees.push(row)
+    }
+  })
   const reply: MemorySnapshot = {
     ...base,
-    worktrees: snapshot.worktrees
-      .filter((wt) => wt.sessions.length > 0)
-      .map((wt) => pairedRow(wt, parts, terminalUsage)),
+    worktrees: worktrees ?? snapshot.worktrees,
     ...parts.totals
   }
   replyBySnapshot.set(snapshot, reply)

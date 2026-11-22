@@ -1,6 +1,7 @@
 import {
   hasMemoryHistory,
   pushMemoryHistorySample,
+  retireConvergedMemoryHistory,
   seedMemoryHistory,
   sweepStaleMemoryHistory,
   terminalOnlyHistoryKey,
@@ -33,9 +34,13 @@ export function recordWorkspaceMemorySeries(
       if (bucket.sessions.length > 0) {
         const usage = terminalUsage.get(bucket.worktreeId) ?? bucket
         pushMemoryHistorySample(terminalKey, usage.memory, now)
-        terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
+        // With no chats both series take the same sample, so after a full series they are equal.
+        if (!retireConvergedMemoryHistory(terminalKey, !bucket.chats)) {
+          terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
+        }
       } else {
         touchMemoryHistory(terminalKey, now)
+        retireConvergedMemoryHistory(terminalKey, false)
       }
     }
     pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
