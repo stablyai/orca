@@ -255,15 +255,13 @@ function BotItemGroup({
   )
   const section = useRef<HTMLElement | null>(null)
   const unfold = useLatestHandler(() => setOpen(true))
-  const { backItem, backFocused } = useBotItemGroupBack({
-    id,
+  const { backItem, backFocused, backRowRef } = useBotItemGroupBack({
     items,
     focusUid,
     focusIndex,
     shown,
     open,
-    unfold,
-    section
+    unfold
   })
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
@@ -370,6 +368,7 @@ function BotItemGroup({
       {open && needsYou ? (
         <div className="flex flex-col gap-0.5">
           <BotNeedsYouSection
+            backRow={backItem ? { uid: backItem.uid, ref: backRowRef } : null}
             bot={owner.needBot}
             asks={asks}
             items={items}

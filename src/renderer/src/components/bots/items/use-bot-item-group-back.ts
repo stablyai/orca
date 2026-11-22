@@ -1,22 +1,18 @@
 // Back from an item, in the one group that held its row when the list mounted: the row is found by uid
 // (an update can move it first) near where it was among the shown rows, unfolding the group, and focused once.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import type { BotItemGroupId } from '../../../../../shared/bots/bot-item-groups'
 import { focusBotItemBackRow } from './bot-item-row-tab-stops'
 import { NEAR_ROWS } from './bot-item-row-picks'
 
 export function useBotItemGroupBack({
-  id,
   items,
   focusUid,
   focusIndex,
   shown,
   open,
-  unfold,
-  section
+  unfold
 }: {
-  id: BotItemGroupId
   items: readonly BotItem[]
   focusUid: string | null | undefined
   /** Where the row was in this group as the list mounted; -1 when it was in another. */
@@ -24,8 +20,11 @@ export function useBotItemGroupBack({
   shown: number
   open: boolean
   unfold: () => void
-  section: React.RefObject<HTMLElement | null>
-}): { backItem: BotItem | undefined; backFocused: () => void } {
+}): {
+  backItem: BotItem | undefined
+  backFocused: () => void
+  backRowRef: (node: HTMLElement | null) => void
+} {
   const [backDone, setBackDone] = useState(focusIndex < 0)
   // Looked for near where it was (an update moves a row a few places at most), so it costs the same at
   // any list size; one moved further, or past the rows shown, counts as gone.
@@ -43,22 +42,20 @@ export function useBotItemGroupBack({
     setBackDone(true)
   }
   const backFocused = useCallback(() => setBackDone(true), [])
-  const needsYouBackDone = useRef(false)
-  // Needs you's rows are all mounted, so its row is focused here; other groups' windows focus it as drawn.
+  // Needs you mounts all its rows: its row focuses as it mounts. Other groups' windows focus it as drawn.
+  const backRowRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (node) {
+        focusBotItemBackRow(node)
+        backFocused()
+      }
+    },
+    [backFocused]
+  )
   useEffect(() => {
-    if (!backItem || needsYouBackDone.current) {
-      return
-    }
-    if (!open) {
+    if (backItem && !open) {
       unfold()
-    } else if (id === 'needs_you') {
-      needsYouBackDone.current = true
-      focusBotItemBackRow(
-        section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)
-      )
-      // Focused: nothing is looked for after this.
-      backFocused()
     }
-  }, [backItem, open, unfold, id, section, backFocused])
-  return { backItem, backFocused }
+  }, [backItem, open, unfold])
+  return { backItem, backFocused, backRowRef }
 }

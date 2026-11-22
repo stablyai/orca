@@ -4,7 +4,7 @@
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
 // is offline (asked once either comes back); a failed read is tried again on Back from an item or when
 // the panel reopens.
-import { createContext, useEffect, useState } from 'react'
+import { createContext, createElement, useContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
   readLiveBotHostIds,
@@ -41,6 +41,19 @@ export type BotGroupFacePicture = {
 
 /** A face sits in a row folded out of view (Needs you keeps folded rows mounted). */
 export const BotItemFaceFolded = createContext(false)
+
+/** Tells a group panel's faces in `children` whether their row is folded; elsewhere nothing reads it. */
+export function BotItemFaceFoldScope({
+  folded,
+  children
+}: {
+  folded: boolean
+  children: React.ReactNode
+}): React.ReactNode {
+  return useContext(BotGroupFacePicturesContext) === null
+    ? children
+    : createElement(BotItemFaceFolded.Provider, { value: folded }, children)
+}
 
 export type BotGroupFacePictures = {
   faceOf: (bot: BotRef, version: string) => BotGroupFacePicture
