@@ -11,6 +11,7 @@ export const UI_LANGUAGE_PORTUGUESE = 'pt'
 export const UI_LANGUAGE_RUSSIAN = 'ru'
 export const UI_LANGUAGE_TURKISH = 'tr'
 export const UI_LANGUAGE_GERMAN = 'de'
+export const UI_LANGUAGE_GALICIAN = 'gl'
 
 export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_SYSTEM
@@ -25,6 +26,7 @@ export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_RUSSIAN
   | typeof UI_LANGUAGE_TURKISH
   | typeof UI_LANGUAGE_GERMAN
+  | typeof UI_LANGUAGE_GALICIAN
 
 export type PluginUiLanguage = `plugin:${string}`
 export type UiLanguage = BuiltInUiLanguage | PluginUiLanguage
@@ -42,7 +44,8 @@ export const UI_LANGUAGE_NATIVE_NAMES: Record<BuiltInUiLanguage, string> = {
   [UI_LANGUAGE_PORTUGUESE]: 'Português (Brasil)',
   [UI_LANGUAGE_RUSSIAN]: 'Русский',
   [UI_LANGUAGE_TURKISH]: 'Türkçe',
-  [UI_LANGUAGE_GERMAN]: 'Deutsch'
+  [UI_LANGUAGE_GERMAN]: 'Deutsch',
+  [UI_LANGUAGE_GALICIAN]: 'Galego'
 }
 
 const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
@@ -57,7 +60,8 @@ const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
   UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_TURKISH,
-  UI_LANGUAGE_GERMAN
+  UI_LANGUAGE_GERMAN,
+  UI_LANGUAGE_GALICIAN
 ])
 
 const PLUGIN_UI_LANGUAGE_RE =

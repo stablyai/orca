@@ -8,7 +8,8 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['에이전트'],
       ja: ['エージェント'],
       zh: ['代理', '智能体'],
-      es: ['Agente', 'agente', 'Agentes', 'agentes']
+      es: ['Agente', 'agente', 'Agentes', 'agentes'],
+      gl: ['Axente', 'axente', 'Axentes', 'axentes']
     }
   },
   {
@@ -24,6 +25,14 @@ const GENERIC_TERM_FAMILIES = [
         'confirmaciones',
         'Confirmar',
         'confirmar'
+      ],
+      gl: [
+        'Confirmación',
+        'confirmación',
+        'Confirmacións',
+        'confirmacións',
+        'Confirmar',
+        'confirmar'
       ]
     }
   },
@@ -33,7 +42,8 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['계속하다', '계속'],
       ja: ['続ける', '続行'],
       zh: ['继续'],
-      es: ['Continuar', 'continuar']
+      es: ['Continuar', 'continuar'],
+      gl: ['Continuar', 'continuar']
     }
   },
   {
@@ -42,7 +52,8 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['저장소', '레포'],
       ja: ['リポジトリ', 'リポ'],
       zh: ['存储库', '仓库'],
-      es: ['Repositorio', 'repositorio', 'Repositorios', 'repositorios']
+      es: ['Repositorio', 'repositorio', 'Repositorios', 'repositorios'],
+      gl: ['Repositorio', 'repositorio', 'Repositorios', 'repositorios']
     }
   },
   {
@@ -51,7 +62,8 @@ const GENERIC_TERM_FAMILIES = [
       ko: ['터미널'],
       ja: ['ターミナル'],
       zh: ['终端'],
-      es: ['Terminales', 'terminales']
+      es: ['Terminales', 'terminales'],
+      gl: ['Terminal', 'terminal', 'Terminais', 'terminais']
     }
   }
 ]
