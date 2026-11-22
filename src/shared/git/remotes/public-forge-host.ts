@@ -9,6 +9,7 @@ type PublicForgeProvider =
   | 'cnb'
   | 'atomgit'
   | 'gitee'
+  | 'gitcode'
 
 /** Ownership only: callers retain their original endpoint and persisted host identity. */
 export function getPublicForgeProviderForHost(host: string): PublicForgeProvider | null {
@@ -36,6 +37,9 @@ export function getPublicForgeProviderForHost(host: string): PublicForgeProvider
   }
   if (hostname === 'atomgit.com') {
     return 'atomgit'
+  }
+  if (hostname === 'gitcode.com') {
+    return 'gitcode'
   }
   return hostname === 'gitee.com' ? 'gitee' : null
 }
