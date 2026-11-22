@@ -8,11 +8,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
 import { createResourceMergeCache } from './workspace-attribution/resource-chat-row-groups'
-import {
-  resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost,
-  stampedRuntimeHostId
-} from './workspace-attribution/resource-workspace-host'
+import { stampedRuntimeHostId } from './workspace-attribution/resource-workspace-host'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
@@ -175,31 +171,14 @@ export function useResourceUsageDerivedModel({
     if (!open || !resourceSnapshot) {
       return null
     }
-    const hostCtx = {
-      worktreeById,
-      ambiguousWorktreeIds,
-      repoConnectionIdById,
-      repoRuntimeHostIdById
-    }
-    // The merge leaves out local samples for workspaces a paired machine hosts; so does this sum.
-    return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
-      const repoId =
-        resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
-      // Chats show unless the record is stamped with a paired host, or beside terminals shown here.
-      return (
-        (worktree.sessions.length > 0 &&
-          !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId) ||
-        !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
-      )
-    })
-  }, [
-    open,
-    resourceSnapshot,
-    worktreeById,
-    ambiguousWorktreeIds,
-    repoConnectionIdById,
-    repoRuntimeHostIdById
-  ])
+    const hostCtx = { worktreeById, ambiguousWorktreeIds }
+    // The merge shows a local chat in its workspace row unless the record is stamped with a paired
+    // host; such chats stay here, shared.
+    return sharedAgentProcessUsage(
+      resourceSnapshot,
+      (worktree) => !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+    )
+  }, [open, resourceSnapshot, worktreeById, ambiguousWorktreeIds])
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {

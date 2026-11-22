@@ -28,6 +28,7 @@ import {
   selectUnboundDaemonSessions
 } from '../workspace-attribution/resource-session-bindings'
 import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
+import { focusResourceManagerTrigger } from '../popover/resource-usage-status-trigger'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
@@ -145,7 +146,12 @@ export function useResourceUsageActions({
       // Close first: an open panel keeps focus, so the chat's composer couldn't take it.
       chatOpenedRef.current = true
       setOpen(false)
-      openResourceChat(worktreeId, agentSessionId, runtimeHostId)
+      void openResourceChat(worktreeId, agentSessionId, runtimeHostId).then(() => {
+        // A failed open leaves nothing focused once the row unmounts; the trigger takes it back.
+        if (!document.activeElement || document.activeElement === document.body) {
+          focusResourceManagerTrigger()
+        }
+      })
     },
     [setOpen]
   )

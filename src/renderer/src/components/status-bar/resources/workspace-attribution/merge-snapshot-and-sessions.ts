@@ -15,7 +15,8 @@ import type { PtyListedSession as DaemonSession } from '../../../../../../shared
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost
+  resolveResourceWorkspaceHost,
+  stampedRuntimeHostId
 } from './resource-workspace-host'
 import {
   daemonSessionLiveTitleTabId,
@@ -51,6 +52,15 @@ function chatPartOf(wt: WorktreeMemory): WorktreeMemory {
     memory: chats.reduce((sum, chat) => sum + chat.memory, 0),
     history: [],
     sessions: []
+  }
+}
+/** A workspace sample's terminals alone, for when its chats are not shown in its row. */
+function terminalPartOf(wt: WorktreeMemory): WorktreeMemory {
+  const { privateMemory: _privateMemory, chats: _chats, ...rest } = wt
+  return {
+    ...rest,
+    cpu: wt.sessions.reduce((sum, session) => sum + session.cpu, 0),
+    memory: wt.sessions.reduce((sum, session) => sum + session.memory, 0)
   }
 }
 const LOCAL_SAMPLE = 'local'
@@ -134,7 +144,11 @@ export function mergeSnapshotAndSessions(
     const placement = localSamplePlacement(ctx, wt, false)
     if (placement) {
       shownLocally.add(placement.worktreeId)
-      ingestSampledWorktree(wt, placement)
+      // Chats under a paired-stamped id stay shared, with or without terminals beside them.
+      ingestSampledWorktree(
+        wt.chats?.length && stampedRuntimeHostId(ctx, wt.worktreeId) ? terminalPartOf(wt) : wt,
+        placement
+      )
     } else if (wt.chats?.length) {
       // Its terminals follow a paired repo host, but its chats run here.
       const chats = chatPartOf(wt)

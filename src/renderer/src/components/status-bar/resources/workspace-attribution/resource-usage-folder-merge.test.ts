@@ -203,7 +203,7 @@ describe('folder Resource Manager rows', () => {
     ])
   })
 
-  it("keeps this machine's chat after its last terminal closes when a same-id record is stamped with a paired machine", () => {
+  it('never gives a chat a row under a same-id record stamped with a paired machine, with or without terminals', () => {
     const chat = { agentSessionId: 'chat-6', agent: 'claude', name: null, cpu: 1, memory: 128 }
     const worktree: Worktree = {
       ...workspace,
@@ -211,23 +211,26 @@ describe('folder Resource Manager rows', () => {
       repoId: 'repo-1',
       hostId: 'runtime:peer'
     }
-    const chatOnly: WorktreeMemory = {
+    const sample: WorktreeMemory = {
       ...oldRow,
       worktreeId: worktree.id,
       repoId: 'repo-1',
-      sessions: [],
+      cpu: 3,
+      memory: 2048 + 128,
       chats: [chat]
     }
-    const repos = mergeSnapshotAndSessions(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
-      { worktrees: [chatOnly] } as MemorySnapshot,
-      [],
-      context({ worktreeById: new Map([[worktree.id, worktree]]) })
-    )
+    const merge = (wt: WorktreeMemory) =>
+      mergeSnapshotAndSessions(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+        { worktrees: [wt] } as MemorySnapshot,
+        [],
+        context({ worktreeById: new Map([[worktree.id, worktree]]) })
+      ).flatMap((repo) => repo.worktrees)
 
-    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
-      expect.objectContaining({ worktreeId: 'repo-1::/shared', chats: [chat] })
-    ])
+    const [withTerminal] = merge(sample)
+    expect(withTerminal).toMatchObject({ worktreeId: 'repo-1::/shared', cpu: 2, memory: 2048 })
+    expect(withTerminal.chats).toBeUndefined()
+    expect(merge({ ...sample, sessions: [] })).toEqual([])
   })
 
   it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {

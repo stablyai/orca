@@ -59,10 +59,10 @@ export function openResourceChat(
   agentSessionId: string,
   /** The paired host that sampled the row; without one, this machine sampled it. A same-id twin never takes the open. */
   runtimeHostId?: string
-): void {
+): Promise<unknown> {
   const host = parseExecutionHostId(runtimeHostId)
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
-  void activateAiVaultStructuredSession(
+  return activateAiVaultStructuredSession(
     { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
     undefined,
     host?.kind === 'runtime'

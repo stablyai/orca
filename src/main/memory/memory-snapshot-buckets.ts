@@ -142,9 +142,15 @@ export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup
   const names = new Map<string, string | undefined>()
   return (repoId) => {
     if (store.getRepos) {
-      byId ??= new Map(
-        store.getRepos().map((repo) => [repo.id, repo.displayName?.trim() || undefined])
-      )
+      if (!byId) {
+        byId = new Map()
+        // A repo id registered on several hosts keeps its first row's name, as getRepo does.
+        for (const repo of store.getRepos()) {
+          if (!byId.has(repo.id)) {
+            byId.set(repo.id, repo.displayName?.trim() || undefined)
+          }
+        }
+      }
       return byId.get(repoId)
     }
     if (!names.has(repoId)) {
