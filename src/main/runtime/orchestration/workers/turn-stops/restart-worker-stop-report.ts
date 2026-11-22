@@ -25,6 +25,8 @@ export type RestartWorkerStopReportDeps = {
   reportRestingPane: (paneKey: string) => Promise<void>
   /** A start whose turn was never seen begin, or that the restart cut, reported once. */
   reportUnconfirmedStart: (dispatchId: string) => Promise<void>
+  /** Re-arms the notice of a recorded background wait from its turn end; others are left alone. */
+  armBackgroundWait?: (dispatchId: string) => void
   /** A terminal worker resuming after the restart reports for itself once it runs again. */
   resuming?: (dispatchId: string) => boolean
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
@@ -231,6 +233,7 @@ export async function reportWorkerStopsAcrossRestart(
     if (deps.resuming?.(dispatchId)) {
       continue
     }
+    deps.armBackgroundWait?.(dispatchId)
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
     if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
       visit(dispatchId, () => void reconsiderWorkerRest(db, dispatchId, deps.reportDeps))

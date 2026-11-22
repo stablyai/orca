@@ -17,6 +17,7 @@ import {
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
+  type WorkerRestFact,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
@@ -28,19 +29,9 @@ const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACH
 // Kept with an undecided rest; the report shows only the end of it.
 const STORED_OUTPUT_MAX_CHARS = 2_000
 
-export type WorkerRest = Pick<
-  WorkerTurnStop,
-  | 'from'
-  | 'lastOutput'
-  | 'awaitsReply'
-  | 'approval'
-  | 'turnStartedAt'
-  | 'mailTaken'
-  | 'requestError'
-  | 'startSurface'
-  | 'startEvidence'
-  | 'blockedStart'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' | 'start-blocked' }
+export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
+  reason: Exclude<WorkerTurnStop['reason'], WorkerGone['reason']>
+}
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
@@ -294,10 +285,13 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
     return false
   }
+  // A background wait is one fact however often a prompt interrupts it.
   const id =
     'approval' in rest && rest.approval
       ? approvalReportId(dispatchId, rest.approval.approvalId)
-      : presenceReportId(dispatchId, row.generation)
+      : 'backgroundWait' in rest && rest.backgroundWait
+        ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
+        : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )

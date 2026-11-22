@@ -176,6 +176,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   async closeTab(browserPageId: string): Promise<void> {
     this.freedPages.delete(browserPageId)
+    // A popup one of these pages opened is listed as a tab but is a window; close it as window.close() would.
+    if (
+      !this.windowsByPageId.has(browserPageId) &&
+      (await this.browserManager.closePopupPage(browserPageId))
+    ) {
+      return
+    }
     await this.releasePage(browserPageId, 'page-closed')
   }
 
