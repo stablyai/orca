@@ -1,5 +1,5 @@
-import { reconcileSleepingMail, refreshSleepingMailScope } from './sleeping-mail-owner-mailboxes'
-import { SleepingMailCrewWatch } from './sleeping-mail-crew-watch'
+import * as inboxes from './sleeping-mail-owner-mailboxes'
+import { retryOnHostConnect, SleepingMailCrewWatch } from './sleeping-mail-crew-watch'
 import { MailWakeAttempts } from './mail-wake-attempts'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
@@ -121,7 +121,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
 
   private readonly sleepingMailCrewWatch = new SleepingMailCrewWatch(
     () => this.crewChanges,
-    (scope) => this.publishSleepingMail(scope)
+    (scope) => this.publishSleepingMail(scope),
+    () => this.sleptMailboxWake.trackedMailboxes()
   )
 
   protected watchSleepingMail(): void {
@@ -132,13 +133,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     for (const host of this.store?.getWorkspaceSessionHostIds?.() ?? ['local']) {
       this.refreshSleepingRecords(host)
     }
-    this.onClientEvent(
-      (event) => {
-        if (event.type === 'sshStateChanged' && event.state.status === 'connected') {
-          this.retrySleptMailboxWakes()
-        }
-      },
-      { consumesTerminalSideEffects: false }
+    retryOnHostConnect(
+      (listener) => this.onClientEvent(listener, { consumesTerminalSideEffects: false }),
+      () => this.retrySleptMailboxWakes(undefined, false)
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
@@ -193,8 +190,13 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     }
   }
 
-  private readonly sleptDirectMailbox = (pane: string) =>
-    this.sleepingMailRecord(pane)?.terminalHandle
+  private readonly sleptPaneInboxes = (pane: string) =>
+    inboxes.sleepingPaneInboxes(
+      this._orchestrationDb,
+      pane,
+      this.sleepingMailRecord(pane)?.terminalHandle,
+      this.mailWakeAttempts.get(pane) !== undefined
+    )
 
   protected sleepingMailRecord(paneKey: string): SleptMailRecord | null {
     return this.mailWakeAttempts.get(paneKey) ?? this.sleepingRecords.get(paneKey) ?? null
@@ -208,13 +210,15 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.watchSleepingMail()
     if (this.owesAnySleepingMail()) {
       this.sleptMailboxWake.request(mailbox, reservedTypes)
+      this.publishHeldWorktrees()
     }
   }
 
-  retrySleptMailboxWakes(paneKey?: string): void {
+  /** `resendHeld` re-announces the held set to a window that may have missed it. */
+  retrySleptMailboxWakes(paneKey?: string, resendHeld = paneKey === undefined): void {
     this.watchSleepingMail()
     this.sleptMailboxWake.retryFailed()
-    if (paneKey === undefined) {
+    if (resendHeld) {
       this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
@@ -229,16 +233,16 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     panes: new Set<string>()
   }
 
-  private owesAnySleepingMail(): boolean {
+  private sleepingMailPanes(): Set<string> {
+    return new Set([...this.sleepingRecords.keys(), ...this.mailWakeAttempts.panes()])
+  }
+
+  protected owesAnySleepingMail(): boolean {
     return (
       this.sleepingRecords.size > 0 ||
       this.mailWakeAttempts.size > 0 ||
       this.sleptMailboxWake.hasTrackedMail
     )
-  }
-
-  private sleepingMailPanes(): Set<string> {
-    return new Set([...this.sleepingRecords.keys(), ...this.mailWakeAttempts.panes()])
   }
 
   /** Coalesces what changed into one pass: named mailboxes and panes, or every sleeping pane. */
@@ -284,10 +288,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         if (!this.owesAnySleepingMail()) {
           return
         }
-        const [wake, direct] = [this.sleptMailboxWake, this.sleptDirectMailbox]
+        const [wake, direct] = [this.sleptMailboxWake, this.sleptPaneInboxes]
         const affected = full
-          ? reconcileSleepingMail(wake, db, this.sleepingMailPanes(), direct)
-          : refreshSleepingMailScope(wake, db, mailboxes, panes, direct)
+          ? inboxes.reconcileSleepingMail(wake, this.sleepingMailPanes(), direct, mailboxes)
+          : inboxes.refreshSleepingMailScope(wake, mailboxes, panes, direct)
         for (const pane of affected) {
           const attempt = this.mailWakeAttempts.get(pane)
           if (

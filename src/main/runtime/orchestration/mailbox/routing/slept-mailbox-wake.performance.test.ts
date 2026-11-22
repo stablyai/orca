@@ -5,9 +5,7 @@ import { partialRuntimeStore } from '../../../construction/test-context/runtime-
 import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import { scopedCrewChange } from '../../crew/crew-changes'
-import { countDiscoveryRows } from './sleeping-mail-discovery-work.test-fixture'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { reconcileSleepingMail } from './sleeping-mail-owner-mailboxes'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 
 const sleeper = (index: number, worktreeId: string): SleepingAgentSessionRecord => ({
@@ -38,9 +36,11 @@ it.each([100, 1_000])(
           coordinatorPaneKey: record.paneKey
         })
         db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
+        return `run:${run.id}`
       }
+      const mailboxes: string[] = []
       for (let index = 0; index < held; index += 1) {
-        owe(sleeper(index, `folder:${index}`))
+        mailboxes.push(owe(sleeper(index, `folder:${index}`)))
       }
       const delivery = new SleptMailboxWake({
         db: () => db,
@@ -49,21 +49,21 @@ it.each([100, 1_000])(
         prepare: async () => {},
         wake: async () => false
       })
-      reconcileSleepingMail(delivery, db, records.keys(), () => undefined)
+      for (const mailbox of mailboxes) {
+        delivery.refresh(mailbox)
+      }
       expect(delivery.heldWorktrees()).toHaveLength(held)
       const version = delivery.heldVersion
 
       const joining = sleeper(held, 'folder:0')
-      owe(joining)
-      reconcileSleepingMail(delivery, db, [joining.paneKey], () => undefined)
+      delivery.refresh(owe(joining))
       expect(delivery.heldVersion).toBe(version)
       records.delete(joining.paneKey)
       delivery.refreshPane(joining.paneKey)
       expect(delivery.heldVersion).toBe(version)
 
       const first = sleeper(held + 1, 'folder:new')
-      owe(first)
-      reconcileSleepingMail(delivery, db, [first.paneKey], () => undefined)
+      delivery.refresh(owe(first))
       expect(delivery.heldVersion).toBe(version + 1)
       expect(delivery.heldWorktrees()).toHaveLength(held + 1)
     } finally {
@@ -78,7 +78,7 @@ afterEach(() => {
 })
 
 it.each([100, 1_000])(
-  'orchestration changes that name no sleeper seek no sleeper owner range (%i sleepers)',
+  'orchestration changes that name no sleeper read only what they name (%i sleepers)',
   async (count) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
     const db = new OrchestrationDb(':memory:')
@@ -112,16 +112,19 @@ it.each([100, 1_000])(
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.retrySleptMailboxWakes()
       await vi.advanceTimersByTimeAsync(2_000)
-      const work = countDiscoveryRows(db)
+      const reads = [
+        vi.spyOn(db, 'getRun'),
+        vi.spyOn(db, 'getDispatchContextById'),
+        vi.spyOn(db, 'getRemoteDispatchAttachment')
+      ]
 
       db.crewChanges.notify(scopedCrewChange(['topology'], { dispatchIds: new Set(['unowned']) }))
       await vi.advanceTimersByTimeAsync(2_000)
       db.crewChanges.notify(new Set(['traffic']))
       await vi.advanceTimersByTimeAsync(2_000)
 
-      expect(work.owners).toEqual([])
-      expect(work.probes).toEqual([])
-      work.stop()
+      // Only the named Dispatch is read, whatever the number of sleepers.
+      expect(reads.map((read) => read.mock.calls.length)).toEqual([0, 1, 1])
     } finally {
       runtime.setNotifier(null)
       db.close()

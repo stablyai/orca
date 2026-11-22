@@ -76,6 +76,13 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
+  it("keeps naming the stopped process's identity, so a finished worker's output stays readable", async () => {
+    const { db, runtime, handle } = await sleptPane()
+
+    expect(runtime.getTerminalProcessIncarnation(handle)).toBe(`${PTY_ID}:mailbox-incarnation`)
+    db.close()
+  })
+
   it('ends an exit wait as exited when the slept pane is closed', async () => {
     const { db, runtime, handle } = await sleptPane()
     const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })

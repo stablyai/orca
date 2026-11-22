@@ -66,6 +66,15 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     return false
   }
 
+  /** The process Agent Sleep stopped under a parked handle: it still names the work the handle did,
+   *  so a finished worker's output stays readable while its pane sleeps. */
+  protected sleptHandleStoppedIncarnation(handle: string): string | null {
+    const record = this.handles.get(handle)
+    const parked = record && this.sleptLeafHandles.get(this.getLeafKey(record.tabId, record.leafId))
+    const pty = parked?.handle === handle ? this.ptysById.get(parked.ptyId) : undefined
+    return pty?.incarnationId ? `${pty.ptyId}:${pty.incarnationId}` : null
+  }
+
   /** Closed panes take their slept names with them; a reloading graph may be partial, so it prunes nothing. */
   protected pruneSleptLeafHandles(): void {
     for (const leafKey of this.graphStatus === 'reloading' ? [] : this.sleptLeafHandles.keys()) {

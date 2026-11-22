@@ -21,7 +21,8 @@ function runBatchedMessageMutation(
   if (ids.length === 0) {
     return
   }
-  const readMailboxes = consuming && db.mailReadListener ? unreadMailboxesOf(db, ids) : []
+  const readMailboxes =
+    consuming && db.mailReadListener && db.mailReadWanted() ? unreadMailboxesOf(db, ids) : []
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {

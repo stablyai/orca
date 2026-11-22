@@ -287,7 +287,9 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
 })
 
 it('releases a restart-orphaned launch or an unlaunched claim and wakes the pane for its mail', async () => {
+  // After a restart, main's restored-mail repoint redelivers waiting mail, which wakes the sleeper.
   for (const launched of [true, false]) {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
     const db = new OrchestrationDb(':memory:')
     const slept = { ...record, worktreeId: 'repo::/workspace' }
     db.claimMailWake(slept, 'claim', 100)
@@ -323,6 +325,7 @@ it('releases a restart-orphaned launch or an unlaunched claim and wakes the pane
       runtime.setNotifier(mailNotifier(resume))
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(2_500)
       await settled()
       await settled()
       // Neither the never-launched claim nor a launch whose process is gone holds the mail.
@@ -332,6 +335,7 @@ it('releases a restart-orphaned launch or an unlaunched claim and wakes the pane
       // The refused relaunch leaves no claim behind, so a later edge can try again.
       expect(db.listMailWakeAttempts()).toEqual([])
     } finally {
+      vi.useRealTimers()
       runtime.setNotifier(null)
       db.close()
     }
@@ -339,6 +343,8 @@ it('releases a restart-orphaned launch or an unlaunched claim and wakes the pane
 })
 
 it('clears the original workspace hold and custody when another terminal replies to its last mail', async () => {
+  // After a restart, main's restored-mail repoint redelivers waiting mail, which wakes the sleeper.
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
   const db = new OrchestrationDb(':memory:')
   let session: WorkspaceSessionState = {
     ...getDefaultWorkspaceSession(),
@@ -402,6 +408,7 @@ it('clears the original workspace hold and custody when another terminal replies
     })
     runtime.setOrchestrationDb(db)
     runtime.retrySleptMailboxWakes()
+    await vi.advanceTimersByTimeAsync(2_500)
     await settled()
     expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({
       kind: 'asleep',
@@ -427,12 +434,15 @@ it('clears the original workspace hold and custody when another terminal replies
     expect(db.listMailWakeAttempts()).toEqual([])
     expect(bell).toHaveBeenLastCalledWith([])
   } finally {
+    vi.useRealTimers()
     runtime.setNotifier(null)
     db.close()
   }
 })
 
 it('wakes a Run coordinator that slept after its pane moved to another tab', async () => {
+  // After a restart, main's restored-mail repoint redelivers waiting mail, which wakes the sleeper.
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
   const db = new OrchestrationDb(':memory:')
   const moved = { ...record, worktreeId: 'repo::/workspace' }
   const session: WorkspaceSessionState = {
@@ -458,6 +468,7 @@ it('wakes a Run coordinator that slept after its pane moved to another tab', asy
     runtime.setNotifier(mailNotifier(resume))
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.retrySleptMailboxWakes()
+    await vi.advanceTimersByTimeAsync(2_500)
     await settled()
     await settled()
     expect(resume.mock.calls.map((call) => call.slice(0, 2))).toContainEqual([
@@ -465,6 +476,7 @@ it('wakes a Run coordinator that slept after its pane moved to another tab', asy
       paneKey
     ])
   } finally {
+    vi.useRealTimers()
     runtime.setNotifier(null)
     db.close()
   }

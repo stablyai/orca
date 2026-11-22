@@ -100,15 +100,17 @@ it('moves a sleeping hold with a real owner transfer and drops it on removal', a
   db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject: 'owed' })
   const { runtime, write, bell } = fixture(db, { [pane]: sleeper })
   try {
-    await settled()
-    expect(bell).toHaveBeenLastCalledWith(['folder:projection'])
+    // Mail waiting at startup reaches the sleeper through the restored-mail repoint.
+    await vi.waitFor(() => expect(bell).toHaveBeenLastCalledWith(['folder:projection']), {
+      timeout: 3_000
+    })
     write({
       [pane]: sleeper,
       [otherPane]: { ...sleeper, paneKey: otherPane, worktreeId: 'folder:new' }
     })
     await settled()
     db.bindRun({ runId: run.id, coordinatorHandle: 'term_new', coordinatorPaneKey: otherPane })
-    // An unnamed ownership change re-derives every sleeper within the shared one-second pass.
+    // An unnamed ownership change re-checks the mailboxes already owed to sleepers.
     await vi.waitFor(() => expect(bell).toHaveBeenLastCalledWith(['folder:new']), {
       timeout: 2_000
     })
@@ -135,7 +137,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
   })
   const observe = (records: Record<string, SleepingAgentSessionRecord>) => {
     index.refresh('local', records, (pane) => delivery.refreshPane(pane))
-    reconcileSleepingMail(delivery, db, index.records.keys(), () => undefined)
+    reconcileSleepingMail(delivery, index.records.keys(), () => [])
     for (const key of index.records.keys()) {
       for (const mailbox of delivery.mailboxesForPane(key)) {
         delivery.request(mailbox)
@@ -170,7 +172,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
     db.markAsRead([message.id], { kind: 'orca' })
-    reconcileSleepingMail(delivery, db, index.records.keys(), () => undefined)
+    reconcileSleepingMail(delivery, index.records.keys(), () => [])
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)
     observe({})
@@ -183,10 +185,12 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
     observe({ [pane]: { ...automatic, capturedAt: 2 } })
+    // The restored-mail repoint redelivers mail that arrived before the pane slept.
+    delivery.request(`run:${run.id}`)
     await settled()
     expect(wake).toHaveBeenCalledTimes(2)
     db.markAsRead([next.id], { kind: 'orca' })
-    reconcileSleepingMail(delivery, db, index.records.keys(), () => undefined)
+    reconcileSleepingMail(delivery, index.records.keys(), () => [])
     observe({})
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)
