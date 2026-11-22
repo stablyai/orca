@@ -1,6 +1,6 @@
 // The draft keeps each picked bot as the token the host reads; the plain-text field shows it as
 // `@Name` and edits it as one unit, as the desktop's pill does.
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   botMentionLabel,
   botMentionsAt
@@ -66,27 +66,42 @@ export function shownOffset(display: BotMentionDisplay, offset: number): number 
 
 type Selection = { start: number; end: number }
 
-/** The field's side of `value`: what it shows, and its edits and selection in the draft's terms. */
+/** The field's side of `value`: what it shows, its caret, and its edits and selection in the
+ *  draft's terms. */
 export function useBotMentionField(value: string) {
   const display = useMemo(() => botMentionDisplay(value), [value])
-  // Where the last selection started, so an edit next to a picked bot lands on its side of it.
-  const selectionStart = useRef(0)
+  const [cursor, setCursor] = useState(0)
+  // Drives the caret only right after an insert; a permanently controlled `selection` breaks
+  // manual caret placement in React Native.
+  const [pending, setPending] = useState<Selection | null>(null)
+  // The field's last selection in the draft, which says where its next edit is.
+  const selection = useRef<Selection>({ start: value.length, end: value.length })
+  const place = useCallback((at: number) => {
+    setCursor(at)
+    setPending({ start: at, end: at })
+    selection.current = { start: at, end: at }
+  }, [])
   return {
     display,
-    edit: (shown: string) => draftAfterFieldEdit(value, display, shown, selectionStart.current),
-    /** Takes the field's selection; returns where its end is in the draft. */
-    select: (selection: Selection): number => {
-      selectionStart.current = draftOffset(display, selection.start)
-      return draftOffset(display, selection.end)
+    cursor,
+    place,
+    edit: (shown: string) => draftAfterFieldEdit(value, display, shown, selection.current),
+    pendingSelection: pending && {
+      start: shownOffset(display, pending.start),
+      end: shownOffset(display, pending.end)
     },
+    onSelectionChange: (shown: Selection): void => {
+      selection.current = {
+        start: draftOffset(display, shown.start),
+        end: draftOffset(display, shown.end)
+      }
+      setCursor(selection.current.end)
+      setPending(null)
+    },
+    resetCursor: () => setCursor(0),
     /** The field's selection as a place in the draft, for dictation. */
     anchor: (event: TextInputSelectionChangeEvent): MobileDictationAnchor =>
-      draftAnchor(display, value, readMobileDictationAnchor(event, display.text)),
-    shown: (selection: Selection | null): Selection | null =>
-      selection && {
-        start: shownOffset(display, selection.start),
-        end: shownOffset(display, selection.end)
-      }
+      draftAnchor(display, value, readMobileDictationAnchor(event, display.text))
   }
 }
 
@@ -118,43 +133,72 @@ export function shownDictationPreview<Preview extends { before: string; after: s
   )
 }
 
-/** The draft after the field's text became `shown`; `caret` is set when the field's own caret
- *  would be wrong because the draft shows other than what was typed. */
+/** The draft after the field's text became `shown`, from the selection it had (draft offsets);
+ *  `caret` is set when the field's own caret would be wrong, as the draft shows other than typed. */
 export function draftAfterFieldEdit(
   source: string,
   display: BotMentionDisplay,
   shown: string,
-  selectionStart: number
+  selection: Selection
 ): { draft: string; caret: number | null } {
   if (display.spans.length === 0) {
     return { draft: shown, caret: null }
   }
-  const edit = draftAfterShownEdit(source, display, shown, shownOffset(display, selectionStart))
+  const edit = draftAfterShownEdit(source, display, shown, {
+    start: shownOffset(display, selection.start),
+    end: shownOffset(display, selection.end)
+  })
   return botMentionDisplay(edit.draft).text === shown ? { ...edit, caret: null } : edit
 }
 
-/** The draft after the field's text went from `display.text` to `next`, the edit starting no later
- *  than `caret`: typing inside a token goes after it, and an edit over any of it removes it whole. */
+/** Which part of `prev` became which part of `next`: what the selection says when the texts agree
+ *  with it (typing, a backspace, a forward delete), else the shortest difference. */
+function editedRange(prev: string, next: string, { start, end }: Selection) {
+  const grew = next.length - prev.length
+  const tail = (to: number) => next.length - (prev.length - to)
+  const fits = ([from, to]: readonly [number, number]) =>
+    from >= 0 &&
+    from <= to &&
+    to <= prev.length &&
+    tail(to) >= from &&
+    prev.slice(0, from) === next.slice(0, from) &&
+    prev.slice(to) === next.slice(tail(to))
+  const said: (readonly [number, number])[] =
+    start !== end
+      ? [[start, end]]
+      : grew > 0
+        ? [[start, start]]
+        : [
+            [start + grew, start],
+            [start, start - grew]
+          ]
+  const found = said.find(fits)
+  if (found) {
+    return { from: found[0], to: found[1] }
+  }
+  const shortest = Math.min(prev.length, next.length)
+  let from = 0
+  while (from < shortest && prev[from] === next[from]) {
+    from += 1
+  }
+  let same = 0
+  while (same < shortest - from && prev[prev.length - 1 - same] === next[next.length - 1 - same]) {
+    same += 1
+  }
+  return { from, to: prev.length - same }
+}
+
+/** The draft after the field's text went from `display.text` to `next`: typing inside a token goes
+ *  after it, and an edit over any of it removes it whole. */
 export function draftAfterShownEdit(
   source: string,
   display: BotMentionDisplay,
   next: string,
-  caret: number
+  selection: Selection
 ): { draft: string; caret: number } {
   const prev = display.text
-  const shortest = Math.min(prev.length, next.length)
-  let start = 0
-  while (start < shortest && prev[start] === next[start]) {
-    start += 1
-  }
-  start = Math.min(start, caret)
-  let same = 0
-  while (same < shortest - start && prev[prev.length - 1 - same] === next[next.length - 1 - same]) {
-    same += 1
-  }
-  const inserted = next.slice(start, next.length - same)
-  let from = start
-  let to = prev.length - same
+  let { from, to } = editedRange(prev, next, selection)
+  const inserted = next.slice(from, next.length - (prev.length - to))
   for (const span of display.spans) {
     if (from === to) {
       if (span.shownStart < from && from < span.shownEnd) {

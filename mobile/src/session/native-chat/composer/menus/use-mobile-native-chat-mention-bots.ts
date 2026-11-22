@@ -1,5 +1,5 @@
 // `@` in a chat lists the chat's host's bots, as the desktop's does, and one level down a bot's chats.
-import { useCallback, useContext, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY
@@ -36,8 +36,6 @@ export type MentionBots = {
   bots: readonly MentionBot[]
   /** The host takes a picked chat, so each bot's row offers its chats. */
   chatPicks: boolean
-  /** Reads the host's bots once if no screen has yet. */
-  ensure: () => void
   chats: (botId: string) => MentionBotChats | undefined
   readChats: (botId: string) => void
 }
@@ -51,6 +49,7 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   const chatPicks = useRouteCapability(BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY)
   const entry = useHostBotsEntry(listsBots ? (host?.hostKey ?? null) : null)
   const [reads, setReads] = useState<ReadonlyMap<string, MentionBotChats>>(new Map())
+  const latest = useRef(new Map<string, number>())
   const client = host?.client ?? null
   const hostKey = host?.hostKey ?? null
   const selfId = identity?.botId ?? null
@@ -72,19 +71,27 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
     return [...own, ...listed.filter((bot) => !bot.own)]
   }, [entry, selfId, chatPicks])
 
-  const ensure = useCallback(() => {
-    if (listsBots && !entry && client && hostKey) {
+  // `@` lists what the shared store holds; a chat opened before any screen read the host's bots reads them once.
+  const listed = entry !== null
+  useEffect(() => {
+    if (listsBots && !listed && client && hostKey) {
       void readHostBots(client, hostKey)
     }
-  }, [listsBots, entry, client, hostKey])
+  }, [listsBots, listed, client, hostKey])
 
   const readChats = useCallback(
     (botId: string) => {
       if (!client) {
         return
       }
-      const settle = (read: MentionBotChats) =>
-        setReads((current) => new Map(current).set(botId, read))
+      // Only the latest read of a bot's chats lands; an older reply never replaces it.
+      const asked = (latest.current.get(botId) ?? 0) + 1
+      latest.current.set(botId, asked)
+      const settle = (read: MentionBotChats) => {
+        if (latest.current.get(botId) === asked) {
+          setReads((current) => new Map(current).set(botId, read))
+        }
+      }
       settle({ status: 'loading' })
       void botChatsRead
         .request(client, { botId, ...(callerSessionId ? { callerSessionId } : {}) })
@@ -104,9 +111,9 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   return useMemo(
     () =>
       listsBots
-        ? { bots, chatPicks, ensure, chats: (botId: string) => reads.get(botId), readChats }
+        ? { bots, chatPicks, chats: (botId: string) => reads.get(botId), readChats }
         : undefined,
-    [listsBots, bots, chatPicks, ensure, reads, readChats]
+    [listsBots, bots, chatPicks, reads, readChats]
   )
 }
 

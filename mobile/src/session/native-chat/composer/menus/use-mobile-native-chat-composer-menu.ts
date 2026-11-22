@@ -1,5 +1,5 @@
 import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,
   deriveComposerAutocomplete,
@@ -36,7 +36,6 @@ import { useBotMentionField } from './mobile-native-chat-bot-mention-display'
 import { useMobileNativeChatMentionBotMenu } from './use-mobile-native-chat-mention-bot-menu'
 import type { MentionBots } from './use-mobile-native-chat-mention-bots'
 
-type Selection = { start: number; end: number }
 const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
 /** Opening the menu from the + sheet narrows it to what that row named. */
 type MenuKind = 'skill' | 'command'
@@ -78,11 +77,8 @@ export function useMobileNativeChatComposerMenu(input: {
 }) {
   const { value, onChangeText, agent, structuredCatalog, filePaths, roomMentions, skillDiscovery } =
     input
-  const [cursor, setCursor] = useState(0)
-  // Drives the caret only right after an insert; a permanently controlled `selection` breaks
-  // manual caret placement in React Native.
-  const [pendingSelection, setPendingSelection] = useState<Selection | null>(null)
   const field = useBotMentionField(value)
+  const { cursor, place: placeCaret } = field
   const [menuKind, setMenuKind] = useState<MenuKind | null>(null)
 
   const reported = structuredCatalog?.reported
@@ -135,6 +131,7 @@ export function useMobileNativeChatComposerMenu(input: {
     }
   }
 
+  const botMenu = useMobileNativeChatMentionBotMenu(input.mentionBots)
   // Triggers read only the text before the caret, so edits after it rebuild nothing.
   const beforeCaret = value.slice(0, cursor)
   const autocomplete = useMemo(
@@ -148,11 +145,13 @@ export function useMobileNativeChatComposerMenu(input: {
         catalog.discovery,
         null,
         catalog.sessionSkills,
-        commandAvailable
+        commandAvailable,
+        botMenu.nameMatches
       ),
-    [beforeCaret, catalog, commandAvailable, input.skillsOnly]
+    [beforeCaret, catalog, commandAvailable, input.skillsOnly, botMenu.nameMatches]
   )
-  const botMenu = useMobileNativeChatMentionBotMenu(input.mentionBots, autocomplete)
+  const mention = autocomplete.mode === 'mention' ? autocomplete : null
+  botMenu.follow(mention)
   const rows = useMemo<ComposerMenuRow[]>(() => {
     if (autocomplete.mode === 'mention' && roomMentions) {
       const members = new Map(roomMentions.map((mention) => [mention.name, mention]))
@@ -166,7 +165,7 @@ export function useMobileNativeChatComposerMenu(input: {
         }))
     }
     if (autocomplete.mode === 'mention') {
-      return botMenu.listed(filePaths)
+      return botMenu.listed(autocomplete, filePaths)
     }
     if (autocomplete.mode !== 'slash') {
       return []
@@ -207,11 +206,6 @@ export function useMobileNativeChatComposerMenu(input: {
     return () => onSlashMenuDemand?.(false)
   }, [onSlashMenuDemand, slashOpen])
 
-  const placeCaret = useCallback((at: number): void => {
-    setCursor(at)
-    setPendingSelection({ start: at, end: at })
-  }, [])
-
   const pick = (row: ComposerMenuRow): void => {
     if (autocomplete.mode === 'none') {
       return
@@ -244,9 +238,9 @@ export function useMobileNativeChatComposerMenu(input: {
     // Restore page field focus after a menu tap so typing continues at the inserted pick.
     input.focusField()
     if (isMentionBotRow(row)) {
-      const botToken = botMenu.pick(row)
+      const botToken = botMenu.pick(row, mention)
       if (botToken !== null) {
-        const next = applyMentionSuggestion(value, cursor, '', botToken)
+        const next = applyMentionSuggestion(value, cursor, '', botToken, botMenu.nameMatches)
         setDraft(next.draft)
         placeCaret(next.caret)
       }
@@ -315,16 +309,15 @@ export function useMobileNativeChatComposerMenu(input: {
     pick,
     openSlashMenu,
     openFileMenu,
-    openBotChats: botMenu.openChats,
-    /** The draft as the field shows it: each picked bot as `@Name`. */
+    openBotChats: (row: Extract<ComposerMenuRow, { kind: 'bot' }>) => {
+      botMenu.openChats(row, mention)
+      input.focusField()
+    },
     display: field.display,
-    pendingSelection: field.shown(pendingSelection),
+    pendingSelection: field.pendingSelection,
     dictationAnchor: field.anchor,
     placeCaret,
-    onSelectionChange: (selection: Selection): void => {
-      setCursor(field.select(selection))
-      setPendingSelection(null)
-    },
-    resetCursor: () => setCursor(0)
+    onSelectionChange: field.onSelectionChange,
+    resetCursor: field.resetCursor
   }
 }
