@@ -73,7 +73,11 @@ export function MobileBotGoogleConnect(props: {
     }
     setBusy(true)
     void googleBotSet
-      .request(client, { botId: bot.id, on: true }, { failWhenDisconnected: true })
+      .request(
+        client,
+        { botId: bot.id, on: true, confirmedAskers: botOtherAskers(bot) },
+        { failWhenDisconnected: true }
+      )
       .then((reply) => googleBotSet.interpret(reply))
       .then(props.onOn, fail)
       .finally(() => setBusy(false))

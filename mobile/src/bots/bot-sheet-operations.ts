@@ -123,6 +123,11 @@ export function memberRemoval(member: BotMember) {
   }
 }
 
+/** The deltas that remove these people, so a member revoked elsewhere is never restored by a stale roster. */
+export function memberRemovals(members: readonly BotMember[]) {
+  return members.map((member) => memberRemoval(member).removeMember)
+}
+
 /** Keep only me: one removal each, on the host, so a concurrent edit is kept and an older host
  *  takes it. Resolves to the names of whoever couldn't be removed. */
 export async function removeEveryoneWhoCanAsk(

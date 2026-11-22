@@ -1,5 +1,6 @@
 // One Linear workspace's page in Connectors: the desktop's BotLinearCard with the workspace's part of
 // LinearAccountSettings. How to ask, who the host is linked as and its default bot, Who can ask, Remove.
+import { memberRemovals } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
 import { Ellipsis, Plus } from 'lucide-react-native'
@@ -143,10 +144,12 @@ export function MobileBotLinearPage(props: {
               linearWorkspaces: botLinearWorkspaces(bot).filter(
                 (entry) => entry.workspaceId !== workspace.workspaceId
               ),
-              members: bot.members.filter(
-                (member) =>
-                  botMemberSource(member) !== 'linear' ||
-                  member.workspaceId !== workspace.workspaceId
+              removeMembers: memberRemovals(
+                bot.members.filter(
+                  (member) =>
+                    botMemberSource(member) === 'linear' &&
+                    member.workspaceId === workspace.workspaceId
+                )
               )
             })
             .then((saved) => {

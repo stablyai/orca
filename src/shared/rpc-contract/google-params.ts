@@ -50,5 +50,7 @@ export const GoogleDisconnectParams = z.object({
 export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
-  on: z.boolean()
+  on: z.boolean(),
+  /** The askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
+  confirmedAskers: z.array(z.string()).max(1000).optional()
 })

@@ -1,6 +1,7 @@
 // One GitHub org's page in Connectors (or GitHub as a whole until it is linked and installed): the
 // desktop's BotGitHubCard with GitHubAccountSettings' default bot. Adding repositories opens GitHub's
 // install page in the phone's browser, and the host notices the change itself.
+import { memberRemovals } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
 import { ArrowUpRight, BookMarked, Ellipsis, Plus, Unlink } from 'lucide-react-native'
@@ -23,7 +24,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -107,7 +108,7 @@ export function MobileBotGitHubPage(props: {
   const addRepositories = () => {
     if (state && installs) {
       setFollowing(installs)
-      openExternalLink(state.installUrl)
+      openConnectorLink(state.installUrl, GITHUB_LINK_HOSTS)
     }
   }
 
@@ -170,15 +171,19 @@ export function MobileBotGitHubPage(props: {
               installation && left.length > 0
                 ? {
                     github: { removedInstallationIds: removed },
-                    members: bot.members.filter(
-                      (member) =>
-                        botMemberSource(member) !== 'github' ||
-                        member.workspaceId !== installation.installationId
+                    removeMembers: memberRemovals(
+                      bot.members.filter(
+                        (member) =>
+                          botMemberSource(member) === 'github' &&
+                          member.workspaceId === installation.installationId
+                      )
                     )
                   }
                 : {
                     github: null,
-                    members: bot.members.filter((member) => botMemberSource(member) !== 'github')
+                    removeMembers: memberRemovals(
+                      bot.members.filter((member) => botMemberSource(member) === 'github')
+                    )
                   }
             )
             .then((saved) => {
