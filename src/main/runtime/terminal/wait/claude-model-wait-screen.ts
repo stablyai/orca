@@ -9,13 +9,20 @@ const TOOL_RUNNING_RE = /⎿\s+Running…/u
 // Claude's own words for a request that has not answered: a stalled stream, or a retried error.
 const MODEL_STATUS_RE = /Waiting for API response|retrying|API error/i
 
-/** The screen without what moves when no reply does. */
+// The spinner's count of tokens received: the only sign of a tool call's input streaming, which
+// Claude does not draw ("✻ Zigzagging… (10m 8s · ↓ 1.2k tokens)").
+const RECEIVED_TOKENS_RE = /↓\s*([\d.,]+k?)\s*tokens/u
+
+/** The screen without what moves when no reply does; the spinner keeps only its received tokens. */
 export function claudeReplyScreen(lines: readonly string[]): string {
   return lines
-    .filter(
-      (line) => !SPINNER_LINE_RE.test(line) && !FOOTER_RE.test(line) && !TOOL_RUNNING_RE.test(line)
-    )
-    .map((line) => line.trimEnd())
+    .flatMap((line) => {
+      if (SPINNER_LINE_RE.test(line)) {
+        const tokens = RECEIVED_TOKENS_RE.exec(line)?.[1]
+        return tokens ? [`↓ ${tokens}`] : []
+      }
+      return FOOTER_RE.test(line) || TOOL_RUNNING_RE.test(line) ? [] : [line.trimEnd()]
+    })
     .join('\n')
 }
 
