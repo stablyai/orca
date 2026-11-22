@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createBotMemoryHistory } from './bot-memory-history'
-import { checkTidyUpOps, memorySnapshot } from './bot-memory-ops'
+import { checkTidyUpOps, memorySnapshot, TIDY_UP_KEEP_SKIP } from './bot-memory-ops'
 import { createBotMemoryRecord } from './bot-memory-record'
 import { salvageCandidateTest } from './bot-memory-salvage'
 import { statusMigrationPlan } from './bot-memory-status-migration'
@@ -26,6 +26,25 @@ describe('a status line that reads as the owner deciding', () => {
     const ops = [{ op: 'retire', line: ref, reason: 'stale' }]
     expect(checkTidyUpOps(MEMORY, ops).skipped).toEqual([])
     expect(checkTidyUpOps(MEMORY, ops, isDecision).skipped).toHaveLength(1)
+  })
+
+  it('skips a demote range as kept when the decisions alone empty it, and moves the rest', () => {
+    const snapshot = memorySnapshot(MEMORY)
+    const range = (from: number, to: number) => [
+      { op: 'demote', range: [snapshot[from].ref, snapshot[to].ref], topic: 'x' }
+    ]
+    expect(checkTidyUpOps(MEMORY, range(0, 0), isDecision).skipped).toEqual([
+      `demote 1: ${TIDY_UP_KEEP_SKIP}`
+    ])
+    const mixed = checkTidyUpOps(MEMORY, range(0, 1), isDecision)
+    expect(mixed.skipped).toEqual([])
+    expect(mixed.plan.topics.get('x')).toEqual([STATUS])
+    const rule = ['# Memory', '- 2026-10-04 Owner rule: always open PRs ready', ''].join('\n')
+    const ruleRef = memorySnapshot(rule)[0].ref
+    expect(
+      checkTidyUpOps(rule, [{ op: 'demote', range: [ruleRef, ruleRef], topic: 'x' }], isDecision)
+        .skipped
+    ).toEqual(['demote 1: moves nothing'])
   })
 
   it('stays through a pilot Tidy-up end to end', async () => {
