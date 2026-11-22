@@ -37,7 +37,7 @@ export function RightSidebarTopActivityBar({
   topActivityStripRef: (node: HTMLDivElement | null) => void
   topActivityLayout: TopActivityBarLayout<ActivityBarItem>
   effectiveTab: ActiveRightSidebarTab
-  onSelectTab: (tab: ActiveRightSidebarTab) => void
+  onSelectTab: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
   checksStatus: CheckStatus | null
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
@@ -50,7 +50,7 @@ export function RightSidebarTopActivityBar({
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => onSelectTab(item.id)}
+      onClick={(fromKeyboard) => onSelectTab(item.id, fromKeyboard)}
       layout="top"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
       compact={topActivityLayout.compactIds.has(item.id)}
@@ -58,7 +58,7 @@ export function RightSidebarTopActivityBar({
   ))
   return (
     <ContextMenu>
-      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+      <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
         {!hasDesktopWindowChrome && (
           <TooltipProvider>
             <ContextMenuTrigger

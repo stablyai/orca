@@ -25,9 +25,9 @@ export class RuntimeBrowserTabClose {
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
       | 'resolveWorkspaceSelector'
-      | 'getAvailableAuthoritativeWindow'
+      | 'getAvailableAuthoritativeWindowId'
       | 'getOffscreenBrowserBackend'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
     >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
@@ -108,8 +108,8 @@ export class RuntimeBrowserTabClose {
       return { closed: true }
     }
 
-    const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
-    const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
+    const authoritativeWindowId = this.host.getAvailableAuthoritativeWindowId()
+    const offscreen = authoritativeWindowId !== null ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
       // An implicit close needs a real active page or would falsely report success.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
@@ -140,7 +140,11 @@ export class RuntimeBrowserTabClose {
       return { closed: true }
     }
 
-    if (!authoritativeWindow && tabId && !bridge.getRegisteredTabs(worktreeId).has(tabId)) {
+    if (
+      authoritativeWindowId === null &&
+      tabId &&
+      !bridge.getRegisteredTabs(worktreeId).has(tabId)
+    ) {
       if (this.targets.retireGhostBrowserSessionRow(worktreeId, tabId)) {
         return { closed: true }
       }
@@ -148,8 +152,8 @@ export class RuntimeBrowserTabClose {
       throw new BrowserError('browser_tab_not_found', `Browser page ${tabId} was not found${scope}`)
     }
 
-    const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
-    await closeBrowserTabInRenderer(win, tabId, worktreeId)
+    const windowId = authoritativeWindowId ?? this.host.getAuthoritativeWindowId()
+    await closeBrowserTabInRenderer(windowId, tabId, worktreeId)
     if (tabId) {
       closeBrowserMemoryPage(tabId)
     }

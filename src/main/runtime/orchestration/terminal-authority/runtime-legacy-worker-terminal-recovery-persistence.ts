@@ -2,10 +2,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import {
-  reportWorkerTurnStop,
-  type WorkerTurnStopReportDeps
-} from '../workers/turn-stops/worker-turn-stop-report'
+import type { WorkerTurnStopReportDeps } from '../workers/turn-stops/worker-turn-stop-report'
+import { observeWorker } from '../workers/turn-stops/worker-presence-report'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
@@ -147,15 +145,20 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
           .lastOutput(candidate.ptyId)
           .catch(() => undefined)
           .then((lastOutput) =>
-            reportWorkerTurnStop(
+            observeWorker(
               db,
               { kind: 'local', dispatch: before },
               {
-                from: candidate.terminalHandle,
-                reason: 'lost',
-                cause: 'its terminal was gone when Orca restarted',
-                lastOutput,
-                settled
+                presence: 'gone',
+                fence: candidate.terminalHandle,
+                legacyStopKey: 'gone',
+                gone: {
+                  from: candidate.terminalHandle,
+                  reason: 'lost',
+                  cause: 'its terminal was gone when Orca restarted',
+                  lastOutput
+                },
+                settle: () => settled
               },
               lostWorkers.reportDeps
             )

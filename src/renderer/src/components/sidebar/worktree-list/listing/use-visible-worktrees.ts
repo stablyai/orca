@@ -3,6 +3,8 @@ import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hi
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
@@ -37,19 +39,16 @@ const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 function createSidebarPairedDeviceIdsSelector(enabled: boolean) {
   let inputs: readonly unknown[] = []
   let result = EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT
-  return (state: AppState): ReadonlyMap<string, string> => {
+  return (state: AppState, statuses: RuntimeStatuses): ReadonlyMap<string, string> => {
     if (!enabled) {
       return EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT
     }
-    const nextInputs = [state.runtimeEnvironments, state.runtimeStatusByEnvironmentId]
+    const nextInputs = [state.runtimeEnvironments, statuses]
     if (shallow(inputs, nextInputs)) {
       return result
     }
     inputs = nextInputs
-    const next = getPairedDeviceIdsByEnvironment(
-      state.runtimeEnvironments,
-      state.runtimeStatusByEnvironmentId
-    )
+    const next = getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
     if (!shallow(result, next)) {
       result = next
     }
@@ -91,8 +90,8 @@ export function useVisibleSidebarWorktrees(args: {
     () => createSidebarPairedDeviceIdsSelector(hideWorkspacesFromOtherDevices),
     [hideWorkspacesFromOtherDevices]
   )
-  const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const pairedDeviceIdsByEnvironment = useAppStoreWithHostStatuses(selectPairedDevices)
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>

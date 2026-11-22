@@ -14,6 +14,10 @@ import {
 import type { AgentLaunchProfileSettings } from './tui-agent-launch-defaults'
 import { YOLO_TUI_AGENT_ARGS } from '../permissions/tui-agent-permissions'
 import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../permissions/agent-chat-permission-support'
+import {
   hasTypedAgentPermission,
   resolveAgentPermission
 } from '../permissions/tui-agent-permission-choice'
@@ -156,6 +160,12 @@ export function projectAgentLaunchInputViews(
       terminal.model ??= entry.value
     }
   }
+  const chatModes = agentChatPermissionModes(agent)
+  const askedPermission = chat.permissionMode
+  if (chatModes && askedPermission !== undefined) {
+    // A terminal-only choice (Cursor's --auto-review) would make the host refuse the chat.
+    chat.permissionMode = savedChatPermissionMode(chatModes, askedPermission)
+  }
   const profile = projectAgentLaunchProfile(
     agent,
     { agentPermissionDefault: 'own' },
@@ -187,6 +197,7 @@ export function projectAgentLaunchInputViews(
       : {}),
     ...(Object.keys(sessionOptions).length ? { sessionOptions } : {}),
     ...(terminalChoices !== choices ||
+    chat.permissionMode !== askedPermission ||
     (input.agentArgs !== undefined && result.recognized.length) ||
     (terminal.model === undefined && profile.launch.appliedValues.model !== undefined)
       ? { chatSessionOptions: values(chat) }

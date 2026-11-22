@@ -51,11 +51,6 @@ export function forgetMergedMRCommitMembership(
   membershipMemo.discardWhere((key) => key.startsWith(prefix))
 }
 
-export function resetMergedMRCommitMembershipForTest(): void {
-  membershipMemo.clear()
-  viewers.clear()
-}
-
 function revisionKey(headSha: unknown, diffRefs: unknown): (string | null)[] | null {
   const head = oid(headSha)
   if (!head) {

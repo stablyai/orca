@@ -1,5 +1,5 @@
 import { emulatorDevicePreference } from '../../emulator/emulator-opening-preference'
-import type { BrowserWindow } from 'electron'
+import { getRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { EmulatorError } from '../../emulator/emulator-errors'
 import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
@@ -29,7 +29,7 @@ export type RuntimeEmulatorCommandHost = {
   getEmulatorBridge(): EmulatorBridge | null
   resolveEmulatorWorkspaceId(selector: string): Promise<string>
   resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
-  getAuthoritativeWindow(): BrowserWindow
+  getAuthoritativeWindowId(): number
   getSettings(): EmulatorHostSettings
   updateEmulatorSettings?(updates: Pick<GlobalSettings, 'mobileEmulatorRecentDevices'>): void
 }
@@ -302,7 +302,11 @@ export class RuntimeEmulatorCommands {
   // Shutdown may already have destroyed the window; send best-effort.
   private sendToRenderer(channel: string, payload: unknown): void {
     try {
-      this.host.getAuthoritativeWindow().webContents.send(channel, payload)
+      getRuntimeDesktopSurface().sendToWindow(
+        this.host.getAuthoritativeWindowId(),
+        channel,
+        payload
+      )
     } catch {}
   }
 

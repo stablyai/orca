@@ -37,7 +37,7 @@ export function useRemoteBrowserPageStream({
   applyTabInfo,
   clearStreamFrame,
   closeMissingRemotePage,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   setPaneNotice,
   setPaneBusy,
   setFrameUrl,
@@ -61,7 +61,7 @@ export function useRemoteBrowserPageStream({
   applyTabInfo: (tab: BrowserTabInfo) => void
   clearStreamFrame: () => void
   closeMissingRemotePage: (remotePageId?: string | null) => void
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
   setFrameUrl: (url: string | null) => void
@@ -293,7 +293,7 @@ export function useRemoteBrowserPageStream({
   useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,
     browserPageId,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     isActive,
     lifecycle,
     reopenNonce,

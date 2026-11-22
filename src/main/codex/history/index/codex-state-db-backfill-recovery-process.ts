@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { EventEmitter } from 'node:events'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
@@ -37,7 +38,7 @@ export function spawnCodexBackfillRecoveryProcess(
   const wslHome = process.platform === 'win32' ? parseWslUncPath(codexHomePath) : null
   if (wslHome) {
     const child = spawnProcess(
-      'wsl.exe',
+      windowsSystem32Binary('wsl.exe'),
       buildWslCodexAppServerArgs(
         wslHome.distro,
         wslHome.linuxPath,

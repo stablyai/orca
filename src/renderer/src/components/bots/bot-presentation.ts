@@ -1,6 +1,17 @@
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
+import {
+  agentSessionRefusalFailure,
+  readAgentSessionErrorRefusal
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { agentSessionStartRefusalParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
+import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { useAppStore } from '@/store'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
 export function botAgentLabel(agent: TerminalAgent): string {
@@ -16,6 +27,14 @@ export function botFolderDisplay(folder: string, windows = IS_WINDOWS): string {
   return windows ? `%USERPROFILE%\\.orca\\bots\\${folder}` : `~/.orca/bots/${folder}`
 }
 
+/** A bot chat its agent refused, as native chat words it. Its host calls itself this computer, so
+ *  `hostName` names the runtime the bot runs on as this reader does. */
+export function botRefusalText(refusal: AgentSessionRefusalReference, hostName?: string): string {
+  return agentSessionWriteNoticeText(
+    agentSessionStartRefusalParts(agentSessionRefusalFailure(refusal), hostName ? { hostName } : {})
+  )
+}
+
 export function botErrorMessage(error: unknown): string {
   // Runtime errors carry the controller's code as their message.
   if (error instanceof Error && error.message === 'bot_name_taken') {
@@ -25,6 +44,20 @@ export function botErrorMessage(error: unknown): string {
     return translate(
       'bots.errors.avatarInvalid',
       'That picture could not be used. Pick a PNG or JPG image.'
+    )
+  }
+  if (error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL) {
+    return translate(
+      'bots.errors.unsavedDrafts',
+      'Its folder has unsaved editor changes. Save or close them, then delete again.'
+    )
+  }
+  const refusal = readAgentSessionErrorRefusal(error)
+  if (refusal) {
+    const host = error instanceof RuntimeRpcCallError ? error.target : undefined
+    return botRefusalText(
+      refusal,
+      host && structuredAgentSessionTargetPlace(useAppStore.getState(), host, translate)
     )
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')

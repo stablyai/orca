@@ -13,7 +13,8 @@ import {
   botGroupOperationAdmitted,
   createBotGroupJournalIndexer,
   type indexBotGroupJournal,
-  type BotGroupTurn
+  type BotGroupTurn,
+  withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
@@ -129,8 +130,12 @@ export function MobileBotGroupTurn({
   const working = clock?.state === 'running' && !turn.revoked
   const source = useMemo(() => ({ client, sessionId: turn.sessionId }), [client, turn.sessionId])
   const rawMessages = useMemo(
-    () => transcript.messages(items).filter((message) => message.role !== 'user'),
-    [items]
+    () =>
+      withBotGroupTurnAnswer(
+        transcript.messages(items).filter((message) => message.role !== 'user'),
+        { operationId: turn.operationId, answer: turn.answer }
+      ),
+    [items, turn.operationId, turn.answer]
   )
   const fullContent = useMobileNativeChatMessageDetail(rawMessages, source)
   const messages = useMemo(
@@ -153,13 +158,15 @@ export function MobileBotGroupTurn({
   const identity = useMemo(
     () => ({
       name: turn.botName,
-      avatar: mobileBotAvatarSource(
-        { name: turn.botName, avatar: turn.avatar, avatarColor: turn.avatarColor },
-        undefined
-      ),
+      avatar: mobileBotAvatarSource({
+        id: turn.botId,
+        name: turn.botName,
+        avatar: turn.avatar,
+        avatarColor: turn.avatarColor
+      }),
       showName: true
     }),
-    [turn.botName, turn.avatar, turn.avatarColor]
+    [turn.botId, turn.botName, turn.avatar, turn.avatarColor]
   )
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
