@@ -102,7 +102,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   ): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
-    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle) : null
+    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle, previousPtyId) : null
     if (sleptPtyId) {
       return ptyId === null || ptyId === sleptPtyId
         ? true
@@ -111,13 +111,19 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     return previousPtyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
 
-  /** The disconnected process Agent Sleep stopped that this pane's handle still names. */
-  private sleptBoundPtyId(leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId'>, handle: string) {
+  /** The disconnected process Agent Sleep stopped that this pane's handle still names. A handle
+   *  stays on a stopped process under a processless pane only because it slept, so the resume's own
+   *  status row, which can supersede the sleep's before the graph shows the resume, keeps it slept. */
+  private sleptBoundPtyId(
+    leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId'>,
+    handle: string,
+    leafPtyId: string | null
+  ) {
     const ptyId = this.handles.get(handle)?.ptyId
     return ptyId &&
       isTerminalLeafId(leaf.leafId) &&
       this.ptysById.get(ptyId)?.connected !== true &&
-      this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), ptyId)
+      (leafPtyId === null || this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), ptyId))
       ? ptyId
       : null
   }
@@ -147,7 +153,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
-    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle) : null
+    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle, leaf.ptyId) : null
     if (handle && sleptPtyId && (leaf.ptyId === null || leaf.ptyId === sleptPtyId)) {
       return handle
     }
