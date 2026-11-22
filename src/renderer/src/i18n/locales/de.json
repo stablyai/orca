@@ -21810,7 +21810,8 @@
         "agentNotSupported": "Agent nicht unterstützt"
       },
       "consentTranscriptIndex": "Die Suche berücksichtigt Sitzungsdetails und Nachrichtenvorschauen. Um vollständige Unterhaltungen zu durchsuchen, die Volltextsuche aktivieren (indexiert lokale Transkripte, ohne Schwärzung). Gekoppelte Geräte können sie ebenfalls durchsuchen.",
-      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen."
+      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen.",
+      "titleMatchesOnly": "Keine Volltexttreffer. Angezeigt werden Sitzungen, deren Titel oder Details passen."
     }
   },
   "sessionHistory": {

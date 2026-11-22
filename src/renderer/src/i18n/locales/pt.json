@@ -969,7 +969,8 @@
         "agentNotSupported": "agente não compatível"
       },
       "consentTranscriptIndex": "A busca considera os detalhes das sessões e as prévias das mensagens. Para pesquisar conversas completas, ative a busca em texto completo (indexa as transcrições locais, sem ocultar conteúdo). Dispositivos pareados também podem pesquisá-las.",
-      "noMatchesToShow": "Nenhuma sessão correspondente para mostrar."
+      "noMatchesToShow": "Nenhuma sessão correspondente para mostrar.",
+      "titleMatchesOnly": "Nenhuma correspondência no texto completo. Mostrando sessões cujo título ou detalhes correspondem."
     }
   },
   "menu": {

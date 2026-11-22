@@ -22182,7 +22182,8 @@
         "agentNotSupported": "agent non pris en charge"
       },
       "consentTranscriptIndex": "La recherche porte sur les détails des sessions et les aperçus des messages. Pour rechercher dans les conversations complètes, activez la recherche en texte intégral (indexe les transcriptions locales, sans masquage). Les appareils appairés peuvent aussi y effectuer des recherches.",
-      "noMatchesToShow": "Aucune session correspondante à afficher."
+      "noMatchesToShow": "Aucune session correspondante à afficher.",
+      "titleMatchesOnly": "Aucune correspondance en texte intégral. Affichage des sessions dont le titre ou les détails correspondent."
     }
   },
   "sessionHistory": {
