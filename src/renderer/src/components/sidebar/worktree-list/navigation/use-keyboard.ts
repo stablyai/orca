@@ -1,5 +1,5 @@
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -8,7 +8,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type { LastActiveCycleWorkspace, SidebarWorkspacePreview } from './worktree-keyboard-cycle'
+import type { LastActiveCycleWorkspace } from './worktree-keyboard-cycle'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -19,13 +19,9 @@ import { textInputOwnsComposition } from '../../../../../../shared/keybindings/t
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 import {
   activateAndRevealCycledRow,
-  readCurrentSidebarWorkspaceId,
   readGlobalSidebarCycleOptions
 } from './cycled-workspace-activation'
-
-const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
-const PREVIEW_COMMIT_MIN_MS = 50
-const PREVIEW_COMMIT_MAX_MS = 200
+import { useSidebarWorkspacePreview } from './use-sidebar-workspace-preview'
 
 export { withKeyboardPreview } from './worktree-keyboard-cycle'
 
@@ -73,45 +69,21 @@ export function useWorktreeListKeyboardNavigation(args: {
     }
   }, [activeWorktreeId, activeWorkspaceExecutionHostId])
 
-  // Held arrows move only the sidebar highlight; the workspace under it switches once the repeat stops.
-  // fromWorktreeId: another input switching workspaces mid-hold invalidates the preview, so it never pulls the user back.
-  const previewRef = useRef<SidebarWorkspacePreview | null>(null)
-  const [keyboardPreview, setKeyboardPreview] = useState<
-    (LastActiveCycleWorkspace & { fromWorktreeId: string | null }) | null
-  >(null)
-  const previewCommitTimerRef = useRef<number | null>(null)
-  const lastRepeatAtRef = useRef<number | null>(null)
-  const clearPreviewCommitTimer = useCallback(() => {
-    if (previewCommitTimerRef.current !== null) {
-      window.clearTimeout(previewCommitTimerRef.current)
-      previewCommitTimerRef.current = null
-    }
-  }, [])
-  const dropPreview = useCallback(() => {
-    clearPreviewCommitTimer()
-    lastRepeatAtRef.current = null
-    if (previewRef.current !== null) {
-      previewRef.current = null
-      setKeyboardPreview(null)
-    }
-  }, [clearPreviewCommitTimer])
+  const {
+    hasPendingPreview,
+    readActivePreviewRow,
+    startPreview,
+    dropPreview,
+    commitPreview,
+    keyboardPreview
+  } = useSidebarWorkspacePreview({ activeWorktreeId, activeWorkspaceExecutionHostId })
   const { handleDeleteKeyDown, handleContainerKeyUp, resetDeleteGesture } =
     useSidebarWorkspaceDeleteKeyboard({ keybindings, resolveDeleteIntent, dropPreview })
-  const commitPreview = useCallback(() => {
-    const preview = previewRef.current
-    dropPreview()
-    if (preview && preview.fromWorktreeId === readCurrentSidebarWorkspaceId()) {
-      activateAndRevealCycledRow(preview.row)
-    }
-  }, [dropPreview])
-  useEffect(() => clearPreviewCommitTimer, [clearPreviewCommitTimer])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down', isRepeat: boolean, selectInList = false) => {
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
-      const previewState = previewRef.current
-      const preview =
-        previewState && previewState.fromWorktreeId === activeWorktreeId ? previewState.row : null
+      const preview = readActivePreviewRow()
       const focused = selectInList ? focusedWorktree : null
       // Cycle actual rendered rows so collapse, pins, hosts, Bots and folder workspaces stay aligned with the screen.
       const nextRow = resolveCycledWorkspaceRow({
@@ -139,27 +111,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
       const executionHostId = getWorktreeExecutionHostId(nextWorktree, nextRow.repo)
       if (isRepeat) {
-        previewRef.current = { row: nextRow, fromWorktreeId: activeWorktreeId }
-        setKeyboardPreview({
-          worktreeId: nextWorktree.id,
-          executionHostId,
-          fromWorktreeId: activeWorktreeId
-        })
-        const now = performance.now()
-        const repeatIntervalMs =
-          lastRepeatAtRef.current === null ? null : now - lastRepeatAtRef.current
-        lastRepeatAtRef.current = now
-        clearPreviewCommitTimer()
-        // Commit once repeats stop; macOS drops keyup while Cmd is held, so a missed repeat is the stop signal.
-        previewCommitTimerRef.current = window.setTimeout(
-          commitPreview,
-          repeatIntervalMs === null
-            ? PREVIEW_COMMIT_FIRST_REPEAT_MS
-            : Math.min(
-                PREVIEW_COMMIT_MAX_MS,
-                Math.max(PREVIEW_COMMIT_MIN_MS, repeatIntervalMs * 1.5)
-              )
-        )
+        startPreview(nextRow, executionHostId)
         if (nextRow.section !== 'bots') {
           useAppStore.getState().revealWorktreeInSidebar(nextWorktree.id, {
             behavior: 'auto',
@@ -180,8 +132,8 @@ export function useWorktreeListKeyboardNavigation(args: {
       onKeyboardSelect,
       focusedWorktree,
       focusedWorkspaceExecutionHostId,
-      clearPreviewCommitTimer,
-      commitPreview,
+      readActivePreviewRow,
+      startPreview,
       dropPreview
     ]
   )
@@ -223,7 +175,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     }
 
     const handleKeyUp = () => {
-      if (previewRef.current !== null) {
+      if (hasPendingPreview()) {
         commitPreview()
       }
     }
@@ -261,6 +213,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     activeModal,
     commitPreview,
     dropPreview,
+    hasPendingPreview,
     keybindings,
     markDirectScrollInput,
     navigateWorktree,
@@ -292,7 +245,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down', e.repeat, true)
         e.preventDefault()
       } else if (e.key === 'Enter') {
-        if (previewRef.current !== null) {
+        if (hasPendingPreview()) {
           commitPreview()
         }
         focusActiveWorkspaceSurfaceFromSidebar(e.currentTarget)
@@ -305,6 +258,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       activeModal,
       commitPreview,
       handleDeleteKeyDown,
+      hasPendingPreview,
       resetDeleteGesture,
       markDirectScrollInput,
       navigateWorktree
@@ -315,6 +269,6 @@ export function useWorktreeListKeyboardNavigation(args: {
     handleContainerKeyDown,
     handleContainerKeyUp,
     handleContainerBlur: resetDeleteGesture,
-    keyboardPreview: keyboardPreview?.fromWorktreeId === activeWorktreeId ? keyboardPreview : null
+    keyboardPreview
   }
 }

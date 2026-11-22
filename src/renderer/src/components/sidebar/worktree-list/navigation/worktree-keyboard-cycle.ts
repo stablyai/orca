@@ -87,11 +87,30 @@ export function resolveCycleAnchorWorktreeId(args: {
   return null
 }
 
-export type SidebarWorkspacePreview = { row: RenderedWorkspaceRow; fromWorktreeId: string | null }
+export type SidebarWorkspaceOrigin = {
+  fromWorktreeId: string | null
+  fromExecutionHostId: ExecutionHostId | null
+}
+
+export type SidebarWorkspacePreview = SidebarWorkspaceOrigin & { row: RenderedWorkspaceRow }
 
 export type LastActiveCycleWorkspace = {
   worktreeId: string
   executionHostId: ExecutionHostId | null
+}
+
+export type SidebarKeyboardPreview = LastActiveCycleWorkspace & SidebarWorkspaceOrigin
+
+export function matchesSidebarWorkspaceOrigin<T extends SidebarWorkspaceOrigin>(
+  origin: T | null | undefined,
+  worktreeId: string | null,
+  executionHostId: ExecutionHostId | null
+): origin is T {
+  return (
+    !!origin &&
+    origin.fromWorktreeId === worktreeId &&
+    origin.fromExecutionHostId === executionHostId
+  )
 }
 
 export function resolveCycleAnchorExecutionHostId(args: {

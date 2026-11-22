@@ -32,9 +32,51 @@ function showRoomTab(workspace: string, tabId: string): void {
   state.setActiveTabType('agent-session', workspace)
 }
 
+type OpenBotGroupOptions = {
+  shouldActivate?: () => boolean
+  onActivated?: () => void
+}
+
+type BotGroupNavigationSnapshot = Pick<
+  AppState,
+  | 'activeView'
+  | 'activeWorkspaceKey'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'activeTabId'
+  | 'worktreeNavHistory'
+  | 'worktreeNavHistoryIndex'
+>
+
+let openBotGroupRoomEpoch = 0
+
+function readNavigationSnapshot(state: AppState): BotGroupNavigationSnapshot {
+  return {
+    activeView: state.activeView,
+    activeWorkspaceKey: state.activeWorkspaceKey,
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+    activeTabId: state.activeTabId,
+    worktreeNavHistory: state.worktreeNavHistory,
+    worktreeNavHistoryIndex: state.worktreeNavHistoryIndex
+  }
+}
+
+function navigationSnapshotMatches(a: BotGroupNavigationSnapshot, b: AppState): boolean {
+  return (
+    a.activeView === b.activeView &&
+    a.activeWorkspaceKey === b.activeWorkspaceKey &&
+    a.activeWorktreeId === b.activeWorktreeId &&
+    a.activeWorkspaceExecutionHostId === b.activeWorkspaceExecutionHostId &&
+    a.activeTabId === b.activeTabId &&
+    a.worktreeNavHistory === b.worktreeNavHistory &&
+    a.worktreeNavHistoryIndex === b.worktreeNavHistoryIndex
+  )
+}
+
 /** Opens the group's home and focuses its room tab there, adding the tab the first time. */
-export function openBotGroup(group: BotGroup): Promise<void> {
-  return openBotGroupRoom(group, group.id, group.name)
+export function openBotGroup(group: BotGroup, options?: OpenBotGroupOptions): Promise<void> {
+  return openBotGroupRoom(group, group.id, group.name, options)
 }
 
 /** A new thread in the group, opened in its own room tab beside the others. */
@@ -52,11 +94,21 @@ export async function startBotGroupThread(group: BotGroup): Promise<void> {
 export async function openBotGroupRoom(
   group: BotGroup,
   roomId: string,
-  label: string
+  label: string,
+  options?: OpenBotGroupOptions
 ): Promise<void> {
+  const epoch = ++openBotGroupRoomEpoch
+  const navSnapshot = readNavigationSnapshot(useAppStore.getState())
   await useAppStore
     .getState()
     .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(group)) })
+  if (
+    epoch !== openBotGroupRoomEpoch ||
+    options?.shouldActivate?.() === false ||
+    !navigationSnapshotMatches(navSnapshot, useAppStore.getState())
+  ) {
+    return
+  }
   // Group homes are not sidebar rows, so there is nothing to reveal.
   const opened = activateAndRevealFolderWorkspace(group.folderWorkspaceId, {
     executionHostId: group.hostId,
@@ -79,6 +131,7 @@ export async function openBotGroupRoom(
   const existing = roomTab(state, group, roomId)
   if (existing) {
     showRoomTab(workspace, existing.id)
+    options?.onActivated?.()
     return
   }
   const drawHere = (tabId?: string): string =>
@@ -102,10 +155,12 @@ export async function openBotGroupRoom(
       drawHere: () => drawHere(tabId)
     })
     if (sent) {
+      options?.onActivated?.()
       return
     }
   }
   showRoomTab(workspace, drawHere())
+  options?.onActivated?.()
 }
 
 /** The room in front, the group's or a thread's, for the sidebar's current row. */

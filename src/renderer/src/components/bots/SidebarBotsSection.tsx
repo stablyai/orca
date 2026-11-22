@@ -170,7 +170,7 @@ export function SidebarBotsSection({
   })
   const listShown = !collapsed && entries.length > 0
   useLayoutEffect(() => {
-    setBotSidebarCycleEntries(listShown && !searchOpen ? entries : [])
+    setBotSidebarCycleEntries(listShown ? entries : [], { paused: searchOpen })
   }, [entries, listShown, searchOpen])
   useLayoutEffect(() => () => setBotSidebarCycleEntries([]), [])
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)

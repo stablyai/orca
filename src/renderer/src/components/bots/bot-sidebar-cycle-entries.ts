@@ -1,4 +1,3 @@
-import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { botLineLanes } from '../../../../shared/bots/bot-line-lanes'
 import type { BotSidebarEntry } from '../../../../shared/bots/bot-sidebar-entries'
@@ -21,13 +20,18 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { RenderedWorkspaceRow } from '@/components/sidebar/worktree-list/navigation/worktree-sidebar-row-preference'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 
-type Entry = BotSidebarEntry<Bot, BotGroup, FolderWorkspace>
+type Entry = BotSidebarEntry<{ hostId: ExecutionHostId }, BotGroup, FolderWorkspace>
 
 let visibleEntries: readonly Entry[] = []
+let cyclePaused = false
 const workersByEntryKey = new Map<string, readonly Worktree[]>()
 
-export function setBotSidebarCycleEntries(entries: readonly Entry[]): void {
+export function setBotSidebarCycleEntries(
+  entries: readonly Entry[],
+  options?: { paused?: boolean }
+): void {
   visibleEntries = entries
+  cyclePaused = options?.paused ?? false
   const liveKeys = new Set(entries.map((entry) => entry.id))
   for (const key of workersByEntryKey.keys()) {
     if (!liveKeys.has(key)) {
@@ -115,7 +119,7 @@ export function readBotSidebarCycleRows(
   collapsedGroups: ReadonlySet<string>,
   repoMap: ReadonlyMap<string, Repo>
 ): RenderedWorkspaceRow[] {
-  if (visibleEntries.length === 0) {
+  if (cyclePaused || visibleEntries.length === 0) {
     return []
   }
   return buildBotSidebarCycleRows({

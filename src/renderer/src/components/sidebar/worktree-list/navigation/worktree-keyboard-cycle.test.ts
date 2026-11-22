@@ -14,7 +14,10 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildBotSidebarCycleRows,
-  collectVisibleBotWorkerWorktrees
+  collectVisibleBotWorkerWorktrees,
+  readBotSidebarCycleRows,
+  setBotSidebarCycleEntries,
+  setBotSidebarCycleWorkers
 } from '@/components/bots/bot-sidebar-cycle-entries'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 
@@ -315,5 +318,30 @@ describe('worktree keyboard cycling across Bots and Projects', () => {
       direction: 'down'
     })
     expect(next?.worktree.id).toBe(projectWt.id)
+  })
+
+  it('restores bot worker stops when Bots search opens and closes without remounting rows', () => {
+    const collapsed = new Set<string>()
+    try {
+      setBotSidebarCycleEntries([botEntry])
+      setBotSidebarCycleWorkers(botEntry.id, [botWorker])
+      expect(readBotSidebarCycleRows(collapsed, repoMap).map((row) => row.worktree.id)).toEqual([
+        folderWorkspaceKey(botHome.id),
+        botWorker.id
+      ])
+
+      // Opening search pauses Bots cycling without clearing mounted rows' worker registrations.
+      setBotSidebarCycleEntries([botEntry], { paused: true })
+      expect(readBotSidebarCycleRows(collapsed, repoMap)).toEqual([])
+
+      // Closing search restores both home and worker stops.
+      setBotSidebarCycleEntries([botEntry], { paused: false })
+      expect(readBotSidebarCycleRows(collapsed, repoMap).map((row) => row.worktree.id)).toEqual([
+        folderWorkspaceKey(botHome.id),
+        botWorker.id
+      ])
+    } finally {
+      setBotSidebarCycleEntries([])
+    }
   })
 })
