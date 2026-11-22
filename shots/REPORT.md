@@ -1,4 +1,67 @@
-# Sticky workers dock: UX-I2 and C2 fixes (M4 Air)
+# Sticky workers dock: failed-only header icon, and C3 Q1 (M4 Air)
+
+- Branch: AmethystLiang/sticky-workers-design (stablyai/orca). No PR yet.
+- Old head: 351f0c995d53 → **new head: 93ecfb829ac2**. Fast-forward push, with no rebase and no force.
+- New commits:
+  - `1ab85f7809f`: the UX fix. The folded header shows the failed icon when nothing waits on you, and the lead row's state label stays whole at 320 px.
+  - `93ecfb829ac`: the C3 Q1 fix. The dock now wakes when a structured worker's session status changes.
+
+All shots come from seeded component fixtures (`pnpm fixtures:shot`, headless). No real Orca instance, desktop, account or user data was used.
+
+## UX fix: urgency in the folded header
+
+- **Required fix.** The folded header's icon now follows this precedence: needs-you, then failed, then neutral.
+  - Needs-you > 0: the amber "?" (`CircleHelp`, `text-chat-warning`), as before.
+  - Needs-you = 0 and failed > 0: the red "!" (`CircleAlert`, `text-destructive`). This is the same icon and token as a Failed row.
+  - Otherwise: the neutral robot.
+- The icon reads the same failed count as the header's count text. Both come from one `workerDockSummary` over `countIdentities`, so the icon always agrees with "N failed". The count text is unchanged.
+- The change only renders from counts that already exist. It adds no reads, subscriptions or state, so performance is unchanged.
+- Test: `NativeChatBackgroundTasksStatus.test.tsx` › "marks the folded header needs-you over failed over neutral". It covers three cases: failed only gives the failed icon, failed plus needs-you gives the amber icon, and running gives neither. With the header change reverted it **fails** with `expected { urgent: false, failed: false } to deeply equal { urgent: false, failed: true }`.
+- **Optional item, done.** In the lead row, the time column now fits its text instead of holding a fixed 44 px. At 320 px the state label shows "Waiting on you" in full, where it used to show "Waiting …". The time still lines up with the right edge of the rows below it. Compact rows keep the fixed column.
+
+### Shots (`shots/fixture/`, new fixtures `failedOnly*`: one failed worker, nothing waiting, as in the live run)
+
+| width | light | dark |
+|---|---|---|
+| 720 | `native-chat__tools__tasks__dock__NativeChatWorkerDock--failedOnlyFolded.light.png` | `…--failedOnlyFolded.dark.png` |
+| 390 | `…--failedOnlyNarrowFolded.light.png` | `…--failedOnlyNarrowFolded.dark.png` |
+| 320 | `…--failedOnlySmallFolded.light.png` | `…--failedOnlySmallFolded.dark.png` |
+| 320, open (lead row label) | `…--botHomeChatSmallOpen.light.png` (updated) | `…--botHomeChatSmallOpen.dark.png` (updated) |
+
+The existing `botHomeChat*Folded` shots (needs-you plus failed) still show the amber "?". The re-shots matched, so they are not re-committed.
+
+## C3 Q1: structured worker pane keys
+
+**Answer: the keys differ, and they always did for structured workers.** As a result, a structured worker's running/idle changes never woke the dock (present since C2). Fixed with the smallest change.
+
+Trace:
+- **`assignee_pane_key`.** `dispatch-methods.ts` stores `dispatchAuthority.paneKey`. For a structured handle, `terminal-orchestration-authority.ts` `getOrchestrationDispatchAuthority` returns `structured.identity.paneKey`, which is `mintStructuredWorkerPaneKey(sessionId)`. That key is `makePaneKey(structuredAgentSessionTabId(sessionId), randomUUID())`: a random leaf, deliberately never the derived key (`persistedStructuredWorkerPaneKeyIsValid` refuses a derived one).
+- **Status row key.** `server-ingest-structured.ts` writes structured status rows at `structuredAgentSessionPaneKey(tabId, sessionId)`. `subscribeAgentStatusRowChanges` (`agent-hook-runtime-deps.ts`) calls listeners with that row's `paneKey`.
+- **The gap.** `refreshWorkerDockActivity` already read a structured worker's status at the derived key, through `createSessionWorkerLivenessReader`: "A session's status row lives at its derived pane key, not the worker's minted one". But it only put `assignee_pane_key` into the subscription's `panes` set. So `workerDockActivitySource.subscribe` dropped every change at the derived key on `panes.has`.
+- **Fix** (`worker-dock-activity.ts`, one line). The liveness reader's per-pane callback adds each pane it reads to `panes`. The subscription now watches the pane the dock actually reads. That is the derived key of the session running now, which is the `/clear` successor after a clear. It adds no extra reads.
+
+Test: `worker-dock-source.test.ts` › "wakes the dock when a structured worker's session status changes at its derived pane".
+- It starts a ready structured worker with a real minted handle, pane key and incarnation, and asserts the minted and derived keys differ.
+- It runs the real `workerDockActivitySource` and `subscribeWorkerDock` against a structured host record. The status goes working → done at the derived key, and the test asserts the dock emits `idle`.
+- Result: **passes** with the fix. With the fix removed it **fails** with `expected 'running' to be 'idle'`: the first read shows running, but the change never wakes the dock.
+- Residual: a ready worker whose session is unverifiable at refresh time adds no derived key, because its status is not read. It shows "unavailable" until the next dock refresh, which is the behaviour before this change.
+
+## Gates (head 93ecfb829ac2)
+
+| Gate | Result |
+|---|---|
+| Focused tests: `src/main/runtime/orchestration/dock/`, `src/renderer/src/components/native-chat/tools/tasks/` | PASS, 7 files, 28 tests |
+| `pnpm tc:node`, `pnpm tc:web` | PASS |
+| oxfmt and oxlint on the changed files | PASS |
+| `pnpm check:changed --base=351f0c995d5` | **PASS, 40/40** (foreground) |
+
+The untracked local `shots/` folder was moved out of the work tree during the gate. It holds evidence staging, not branch code.
+
+---
+
+# Previous round
+
+## Sticky workers dock: UX-I2 and C2 fixes (M4 Air)
 
 - Branch: AmethystLiang/sticky-workers-design (stablyai/orca). No PR yet.
 - Old head: 9e12bb2fea08 → **new head: 351f0c995d53**, pushed with `--force-with-lease`.
