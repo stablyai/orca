@@ -243,9 +243,8 @@ export function BotItemQuestionStep({
               send: (
                 <Button
                   type="button"
-                  variant="link"
-                  size="inlineText"
-                  className="text-[13px] leading-[19px] font-normal text-foreground underline underline-offset-2 focus-visible:ring-2"
+                  variant="link-underlined"
+                  size="inlineInherit"
                   onClick={steps.sendHeld}
                 />
               )
