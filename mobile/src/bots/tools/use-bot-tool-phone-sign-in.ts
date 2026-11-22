@@ -180,7 +180,7 @@ export function useBotToolPhoneSignIn(args: {
           settle(gen, view)
           if (view.state === 'waiting') {
             if (!openConnectorLink(view.authorizationUrl)) {
-              void botToolSignInCancel.request(client, { flowId: view.flowId }).catch(() => {})
+              cancel()
               setError(t('bots.errors.generic', 'Something went wrong. Try again.'))
               return
             }
@@ -206,7 +206,7 @@ export function useBotToolPhoneSignIn(args: {
     void begin
       .catch((caught: unknown) => gen === generation.current && setError(messageOf(caught)))
       .finally(() => gen === generation.current && setStarting(false))
-  }, [client, botId, name, owned, hostName, t, leave, settle, follow])
+  }, [client, botId, name, owned, hostName, t, leave, cancel, settle, follow])
 
   const watchHeld = useCallback(
     async (gen: number) => {
