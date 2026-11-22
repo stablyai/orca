@@ -273,7 +273,7 @@ export function BrowserPagePane({
     browserTabId: browserTab.id,
     workspaceId,
     chromeShortcutScope,
-    markupIsActive: false,
+    markupIsActive: markup.isActive,
     toolsDisabled: isBlankTab || Boolean(browserTab.loadError),
     startGrabIntent: toolSwitch.toggleTool,
     handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
