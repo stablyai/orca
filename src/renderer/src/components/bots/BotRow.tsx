@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
 import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { openBotHome, updateBot } from '@/lib/bot-catalog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
@@ -224,6 +225,7 @@ function BotRowFoldToggle({
   working: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const statusId = useId()
   const { folded, counts } = fold
   const live = folded ? botFoldLiveStatus(counts) : null
   // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
@@ -248,6 +250,7 @@ function BotRowFoldToggle({
         'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
       )}
       aria-label={label}
+      aria-describedby={mark === 'working' ? statusId : undefined}
       aria-expanded={!folded}
       onClick={(event) => {
         event.stopPropagation()
@@ -257,6 +260,11 @@ function BotRowFoldToggle({
     >
       {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
           ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {mark === 'working' ? (
+        <span id={statusId} className="sr-only">
+          {getWorktreeStatusLabel(mark)}
+        </span>
+      ) : null}
       {mark ? (
         <span className="flex items-center">
           <StatusIndicator status={mark} showTooltip={false} />

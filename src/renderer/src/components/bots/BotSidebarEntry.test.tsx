@@ -303,14 +303,10 @@ describe('BotSidebarEntry', () => {
     renderEntry()
 
     const fold = screen.getByRole('button', { name: 'Fold Scout' })
-    expect(fold.textContent).toBe('')
     fireEvent.click(fold)
     expect(lines()).toEqual([])
-    // Folded, it shows only its most urgent workspace's status, not a count of every one.
-    const toggle = screen.getByRole('button', { name: 'Unfold Scout' })
-    expect(toggle.textContent).toBe('')
 
-    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
     expect(lines()).toHaveLength(5)
   })
 
@@ -493,6 +489,19 @@ describe('BotSidebarEntry', () => {
       screen.getByText('Scout').compareDocumentPosition(spinners[0]) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('exposes the working indicator on the fold button to screen readers', () => {
+    seed({ run: 'working' })
+    useAppStore.setState({
+      collapsedGroups: new Set([getLineageGroupKey(folderWorkspaceKey(home.id))])
+    })
+    mocks.homeStatus = 'working'
+    renderEntry()
+
+    expect(
+      screen.queryByRole('button', { name: 'Unfold Scout', description: 'Working' })
+    ).not.toBeNull()
   })
 
   it('lists nothing under a bot whose server is down, and gives it no fold', () => {
