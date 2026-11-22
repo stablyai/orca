@@ -4,12 +4,21 @@ import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WslMoveRowRef } from '../../../../../../shared/wsl-move/wsl-move-driver-types'
 import { showSkippedBatchFoldersToast } from '../completion/add-repo-skipped-folders-toast'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 
+/** What a paused add added; `imported` lists every repo a nested import added, `repo` included. */
+export type PausedLocalPathAdd = { repo: Repo; imported?: readonly WslMoveRowRef[] }
+
 export type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
-  | { status: 'cancelled' | 'paused' | 'skipped' | 'failed' }
+  | {
+      status: 'paused'
+      /** Set when the add waits on "Open as Folder" or nested review: the project it added, or null. */
+      projectAdded?: Promise<PausedLocalPathAdd | null>
+    }
+  | { status: 'cancelled' | 'skipped' | 'failed' }
 
 export type LocalPathAddMode = 'single' | 'batch'
 

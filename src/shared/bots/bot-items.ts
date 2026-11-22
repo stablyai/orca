@@ -43,6 +43,7 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   links: 50,
   listPage: 50,
+  /** Also the most items one list read names by uid. */
   listPageMax: 100,
   eventsPage: 50
 } as const
@@ -148,7 +149,10 @@ export const BOT_ITEM_EVENT_KINDS = [
 ] as const
 export type BotItemEventKind = (typeof BOT_ITEM_EVENT_KINDS)[number]
 
-/** An image on an owner's comment: a committed chat attachment on the bot's host, named and sized there. */
+/** Files besides images on one comment, as `bot reply --file` takes. */
+export const BOT_ITEM_COMMENT_FILE_MAX_COUNT = 10
+
+/** An image on a comment: a committed chat attachment on the bot's host, named and sized there. */
 export type BotItemCommentImage = { path: string; name: string; bytes: number }
 
 /** A `commented` event's images, dropping any entry a newer or damaged record shaped otherwise. */
@@ -164,6 +168,24 @@ export function botItemCommentImages(data: Record<string, unknown>): BotItemComm
         'bytes' in image &&
         typeof image.bytes === 'number'
           ? [{ path: image.path, name: image.name, bytes: image.bytes }]
+          : []
+      )
+    : []
+}
+
+/** A skill the owner picked in a comment, by the file on the bot's host its agent loads it from. */
+export type BotItemCommentSkill = { name: string; path: string }
+
+export function botItemCommentSkills(data: Record<string, unknown>): BotItemCommentSkill[] {
+  return Array.isArray(data.skills)
+    ? data.skills.flatMap((skill: unknown) =>
+        typeof skill === 'object' &&
+        skill !== null &&
+        'name' in skill &&
+        typeof skill.name === 'string' &&
+        'path' in skill &&
+        typeof skill.path === 'string'
+          ? [{ name: skill.name, path: skill.path }]
           : []
       )
     : []

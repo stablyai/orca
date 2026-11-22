@@ -20,8 +20,11 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
 import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
-import { useBotItemsShownList, type BotItemsShownList } from './items/use-bot-items-shown-list'
-import type { BotItemsClosedPage } from './items/use-bot-items-closed-pages'
+import {
+  useBotItemsShownList,
+  type BotItemsClosedPage,
+  type BotItemsShownList
+} from './items/use-bot-items-shown-list'
 import type { BotItemWalkList } from './items/use-bot-item-walk'
 
 /** One member as the group panel reads it. */
@@ -87,8 +90,13 @@ const MemberReader = memo(function MemberReader({
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
-  const { closedTotal, loadMoreClosed, closedEnded } = list
-  const { read: chatListRead, failed: chatFailed, retry: chatRetry } = list.chatRead
+  const { closedTotal, loadMoreClosed, closedEnded, closedEndAt } = list
+  const {
+    read: chatListRead,
+    failed: chatFailed,
+    retry: chatRetry,
+    readMore: chatReadMore
+  } = list.chatRead
   useEffect(() => {
     report(bot.id, {
       bot,
@@ -97,14 +105,20 @@ const MemberReader = memo(function MemberReader({
       seenEventId,
       list: {
         read: listRead,
-        chatRead: { read: chatListRead, failed: chatFailed, retry: chatRetry },
+        chatRead: {
+          read: chatListRead,
+          failed: chatFailed,
+          retry: chatRetry,
+          readMore: chatReadMore
+        },
         items: listItems,
         shown,
         groups,
         staleDays,
         closedTotal,
         loadMoreClosed,
-        closedEnded
+        closedEnded,
+        closedEndAt
       },
       needs,
       stoppedForSignIn,
@@ -123,6 +137,7 @@ const MemberReader = memo(function MemberReader({
     chatListRead,
     chatFailed,
     chatRetry,
+    chatReadMore,
     listItems,
     shown,
     groups,
@@ -130,6 +145,7 @@ const MemberReader = memo(function MemberReader({
     closedTotal,
     loadMoreClosed,
     closedEnded,
+    closedEndAt,
     needs,
     stoppedForSignIn,
     needsYou,
@@ -152,11 +168,27 @@ export function botGroupNeedsYouOutside(counts: {
   return counts.scoped && counts.loaded ? Math.max(0, counts.whole - counts.shown) : 0
 }
 
+// Each read's seen marks by bot id, built the first time a list asks (so not while an item is open).
+const seenIndexes = new WeakMap<readonly MemberRead[], Map<string, string | null>>()
+function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
+  let index = seenIndexes.get(reads)
+  if (!index) {
+    index = new Map(reads.map((read) => [read.bot.id, read.seenEventId]))
+    seenIndexes.set(reads, index)
+  }
+  return index
+}
+
 /** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
-function memberClosed(read: MemberRead): { closed: BotItem[]; more: boolean } {
+function memberClosed(read: MemberRead): {
+  closed: BotItem[]
+  more: boolean
+  endAt: number | null
+} {
   return {
     closed: read.list.shown.filter((item) => item.status === 'done' || item.status === 'canceled'),
-    more: !read.list.closedEnded
+    more: !read.list.closedEnded,
+    endAt: read.list.closedEndAt ?? null
   }
 }
 
@@ -224,6 +256,11 @@ export function useBotGroupItems(
     () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
   )
+  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range.
+  const seenOf = useCallback(
+    (item: BotItem): string => seenIndexOf(shownReads).get(item.owner.botId) ?? '',
+    [shownReads]
+  )
   const ready =
     shownReads.length === members.filter((bot) => filter.botIds?.includes(bot.id) ?? true).length &&
     shownReads.every((read) => read.list.read !== null && read.seenEventId !== null)
@@ -258,7 +295,7 @@ export function useBotGroupItems(
             return closed
           }
           const page = await read.list.loadMoreClosed()
-          return { closed: [...closed.closed, ...page.items], more: page.more }
+          return { closed: [...closed.closed, ...page.items], more: page.more, endAt: null }
         })
       )
       for (const item of members.flatMap((member) => member.closed)) {
@@ -344,8 +381,7 @@ export function useBotGroupItems(
       const owner = pagedOwners.current.get(uid)
       return botByUid.get(uid) ?? (owner ? (botById.get(owner) ?? null) : null)
     },
-    seenOf: (item) =>
-      shownReads.find((read) => read.bot.id === item.owner.botId)?.seenEventId ?? '',
+    seenOf,
     // Only a list of some chats leaves asks out; the whole-bot count minus what it shows.
     outside: botGroupNeedsYouOutside({
       scoped: filter.chatIds !== null,

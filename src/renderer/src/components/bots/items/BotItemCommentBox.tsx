@@ -1,7 +1,8 @@
-// The item view's comment box: chat's prompt editor and attachment pieces in one growing row (attach,
-// text, mic, send); while the agent's question waits, "Replying to" names it. Enter sends, Shift+Enter adds a line;
-// images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other files as `@path`
-// pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
+// The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, mic,
+// send), the text on its own row above them from its second line; while the agent's question waits,
+// "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
+// adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
+// files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
 import {
   useCallback,
   useImperativeHandle,
@@ -23,11 +24,8 @@ import { NativeChatComposerNotices } from '../../native-chat/composer/controls/N
 import { useNativeChatComposerNotice } from '../../native-chat/composer/controls/use-native-chat-composer-notice'
 import { NativeChatPromptEditor } from '../../native-chat/composer/editor/NativeChatPromptEditor'
 import { useNativeChatComposerKeyDown } from '../../native-chat/composer/editor/use-native-chat-composer-keydown'
-import { NativeChatMentionMenu } from '../../native-chat/composer/pickers/NativeChatAutocompleteMenus'
-import { useNativeChatPickerState } from '../../native-chat/composer/pickers/use-native-chat-picker-state'
-import { useNativeChatComposerMentions } from '../../native-chat/native-chat-composer-room'
-import type { ComposerAutocomplete } from '../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
-import type { SlashCommandSuggestion } from '../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import { NativeChatComposerMenus } from '../../native-chat/composer/pickers/NativeChatComposerMenus'
+import { NativeChatComposerRoomProvider } from '../../native-chat/NativeChatComposerRoomProvider'
 import type { NativeChatComposerInput } from '../../native-chat/composer/editor/native-chat-composer-input'
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
@@ -57,6 +55,9 @@ import {
   type BotItemWaitingQuestion
 } from './BotItemReplyingTo'
 import { cn } from '@/lib/class-names'
+import { useBotItemCommentStacked } from './use-bot-item-comment-stacked'
+import { BotItemCommentRoom, useBotItemCommentPickers } from './bot-item-comment-pickers'
+import type { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -68,18 +69,26 @@ export type BotItemCommentBoxHandle = {
   focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
-  /** Put `text` in the box in place of its words, to add to before sending. */
-  fill: (text: string) => void
+  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
+   *  of its own, with "Replying to" hidden. */
+  fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
 
 const NO_TARGET = () => null
-const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
-const NO_PICK = () => {}
-const CLOSED: ComposerAutocomplete = { mode: 'none' }
 
-export function BotItemCommentBox({
+type BotItemCommentBoxProps = Parameters<typeof BotItemCommentField>[0]
+
+export function BotItemCommentBox(props: BotItemCommentBoxProps): React.JSX.Element {
+  return (
+    <BotItemCommentRoom bot={props.bot}>
+      <BotItemCommentField {...props} />
+    </BotItemCommentRoom>
+  )
+}
+
+function BotItemCommentField({
   bot,
   item,
   attachTo,
@@ -87,18 +96,22 @@ export function BotItemCommentBox({
   hidden = false,
   nav,
   question,
+  onShowQuestion,
   ref
 }: {
   bot: Bot
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  /** Takes the comment as the box empties: it shows and goes to the host from there. */
-  onSend: (text: string, paths: readonly string[]) => void
+  /** Takes the comment as the box empties, with the waiting line "Replying to" names (null once
+   *  hidden): it shows and goes to the host from there. */
+  onSend: ReturnType<typeof useBotItemQuestionSteps>['fromBox']
   /** Not on screen: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
   question?: BotItemWaitingQuestion | null
+  /** Brings the comment that asks the question into view, by its event id. */
+  onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
@@ -116,34 +129,19 @@ export function BotItemCommentBox({
   const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
-  // Chat's picker and `@` list: workspace files from the bot's folder. A comment runs no commands,
-  // so only the `@` menu opens.
-  const picker = useNativeChatPickerState({
-    agent: bot.agent,
-    terminalTabId: scopeKey,
-    draftScopeKey: scopeKey,
+  const { picker, mentions, commentSkills } = useBotItemCommentPickers({
+    bot,
+    scopeKey,
+    worktreeId: attachTo?.worktreeId,
     draft,
     caret,
-    agentCommands: NO_COMMANDS,
-    recalledFromHistory: false,
-    disabled: false,
+    notices,
+    setNotice,
     isComposing: ime.isComposing,
-    textareaRef: input,
+    input,
     setDraft,
     setCaret,
     setActiveSuggestion
-  })
-  const mentionPicker = useMemo(
-    () => ({
-      autocomplete: picker.autocomplete.mode === 'mention' ? picker.autocomplete : CLOSED,
-      completeMention: picker.completeMention
-    }),
-    [picker.autocomplete, picker.completeMention]
-  )
-  const mentions = useNativeChatComposerMentions(undefined, draft, mentionPicker, {
-    terminalTabId: scopeKey,
-    structuredWorktreeId: attachTo?.worktreeId,
-    caret
   })
 
   const attachments = useNativeChatComposerAttachments({
@@ -226,7 +224,9 @@ export function BotItemCommentBox({
     shown.current = draft
   }, [draft, ime])
 
-  const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
+  const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
+  // Replying to a question, the text has its own row and room for an answer from the start.
+  const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
   const caretToEnd = (): void => {
     const node = input.current
     node?.focus()
@@ -240,7 +240,10 @@ export function BotItemCommentBox({
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
-    fill: (text) => {
+    fill: (text, plain) => {
+      if (plain) {
+        reply.hide()
+      }
       setDraft(`${text} `)
       if (input.current) {
         input.current.value = `${text} `
@@ -254,7 +257,7 @@ export function BotItemCommentBox({
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
   const empty = !draft.trim() && images.length === 0
   const send = (): void => {
-    if (empty || pending) {
+    if (empty || pending || mentions.sendHeld) {
       return
     }
     if (!admitNativeChatPastedText(scopeKey, draft, setNotice)) {
@@ -268,11 +271,15 @@ export function BotItemCommentBox({
       sent.map((image) => image.id)
     ).trim()
     const paths = sent.map((image) => image.path)
+    const skills = commentSkills(text, submitted.document)
+    if (!skills) {
+      return
+    }
     if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths)
+    onSend(text, paths, reply.quote?.id ?? null, skills)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -281,7 +288,7 @@ export function BotItemCommentBox({
   })
   const editorSelect = useLatestHandler(events.onTextareaSelect)
   const editorPaste = useLatestHandler(handlePaste)
-  // Chat's keys: the `@` list's arrows and picks, Enter sends, Shift+Enter adds a line.
+  // Chat's keys: the `@` and `/` lists' arrows and picks, Enter sends, Shift+Enter adds a line.
   const keyDown = useNativeChatComposerKeyDown({
     autocomplete: mentions.autocomplete,
     mentionFiles: mentions.mentionFiles,
@@ -291,8 +298,8 @@ export function BotItemCommentBox({
     draft,
     hasAttachments: images.length > 0,
     isComposing: ime.isComposing,
-    completePickerItem: NO_PICK,
-    dispatchPickerCommand: NO_PICK,
+    completePickerItem: picker.completeItem,
+    dispatchPickerCommand: picker.completeItem,
     dismissPicker: picker.dismiss,
     interrupt: undefined,
     send: () => send(),
@@ -301,7 +308,7 @@ export function BotItemCommentBox({
     setCaret
   })
   const editorKeyDown = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
-    // An empty box leaves Escape to the item pane, which goes back; with text or an `@` list it stays.
+    // An empty box leaves Escape to the item pane, which goes back; with text or a list open it stays.
     if (event.key === 'Escape' && empty && mentions.autocomplete.mode === 'none') {
       return
     }
@@ -328,7 +335,6 @@ export function BotItemCommentBox({
     }
   })
   const focusAtEnd = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const node = input.current
     const target = event.target
     const control =
       target instanceof Element
@@ -337,97 +343,98 @@ export function BotItemCommentBox({
           )
         : null
     if (
-      !node ||
+      !input.current ||
       // Only controls inside the card keep the click; the item pane around it is focusable too.
       (control && event.currentTarget.contains(control)) ||
       window.getSelection()?.toString()
     ) {
       return
     }
-    node.focus()
-    node.setSelectionRange(node.value.length, node.value.length)
+    caretToEnd()
   }
   return (
     // Click-to-focus for the padding; the editor itself stays the keyboard target.
-    // The chat composer's surface, in one row: attach, the text, then mic and send at its foot.
-    <div
-      ref={box}
-      data-native-chat-composer-scope={scopeKey}
-      onClick={focusAtEnd}
-      className={cn(
-        'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs',
-        reply.glowing && 'native-chat-composer-glow'
-      )}
-    >
-      {mentions.autocomplete.mode === 'mention' ? (
-        <NativeChatMentionMenu
+    // The chat composer's surface: attach, the text, then mic and send at its foot.
+    <NativeChatComposerRoomProvider mentions={mentions}>
+      <div
+        ref={box}
+        data-native-chat-composer-scope={scopeKey}
+        onClick={focusAtEnd}
+        className={cn(
+          'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs',
+          reply.glowing && 'native-chat-composer-glow'
+        )}
+      >
+        <NativeChatComposerMenus
+          autocomplete={mentions.autocomplete}
           mention={mentions.listed}
           activeIndex={mentions.activeIndex ?? activeSuggestion}
           listboxId={picker.listboxId}
-          onChoose={mentions.chooseMention}
+          onChooseItem={picker.completeItem}
+          onRetrySkills={picker.retrySkills}
+          onChooseMention={mentions.chooseMention}
         />
-      ) : null}
-      <NativeChatComposerNotices notices={notices} className="mb-1.5" />
-      {reply.quote ? <BotItemReplyingTo question={reply.quote.line} onHide={reply.hide} /> : null}
-      {images.length > 0 ? (
-        // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
-        <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto px-1 pb-0.5 pr-2 pt-2">
-          {images.map((attachment, index) => (
-            <NativeChatImageAttachmentPreview
-              key={attachment.id}
-              attachment={attachment}
-              hostEnvironmentId={attachTo?.runtimeEnvironmentId ?? undefined}
-              number={index + 1}
-              onRemove={attachments.removeImageAttachment}
+        <NativeChatComposerNotices notices={mentions.notices} className="mb-1.5" />
+        <BotItemReplyingTo mark={reply} />
+        {images.length > 0 ? (
+          // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
+          <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto px-1 pb-0.5 pr-2 pt-2">
+            {images.map((attachment, index) => (
+              <NativeChatImageAttachmentPreview
+                key={attachment.id}
+                attachment={attachment}
+                hostEnvironmentId={attachTo?.runtimeEnvironmentId ?? undefined}
+                number={index + 1}
+                onRemove={attachments.removeImageAttachment}
+              />
+            ))}
+          </div>
+        ) : null}
+        <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
+          {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
+          <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
+            <NativeChatPromptEditor
+              key={scopeKey}
+              scopeKey={scopeKey}
+              imageRow={imageRow}
+              inputRef={input}
+              isComposing={ime.isComposing}
+              initialValue={draft}
+              disabled={false}
+              aria-label={t('bots.items.comment.label', 'Comment')}
+              aria-expanded={mentions.autocomplete.mode !== 'none'}
+              aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
+              placeholder={reply.placeholder}
+              onChange={editorChange}
+              onSelect={editorSelect}
+              onPasteCapture={editorPaste}
+              onKeyDownCapture={editorKeyDown}
+              onCompositionStart={editorCompositionStart}
+              onCompositionEnd={editorCompositionEnd}
+              onBlur={editorBlur}
+              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
             />
-          ))}
+          </div>
+          {nav}
+          <span className="ml-auto flex shrink-0">
+            <NativeChatDictationButton
+              disabled={dictation.dictationDisabled}
+              isDictating={dictation.isDictating}
+              isHoldMode={dictation.isDictationHoldMode}
+              onToggle={dictation.toggleDictation}
+              onHoldStart={dictation.startHoldDictation}
+              onHoldEnd={dictation.stopHoldDictation}
+            />
+          </span>
+          <NativeChatComposerPrimaryButton
+            aria-label={t('bots.items.comment.submit', 'Comment')}
+            disabled={empty || pending || mentions.sendHeld}
+            onClick={send}
+          >
+            <ArrowUp className="size-4" />
+          </NativeChatComposerPrimaryButton>
         </div>
-      ) : null}
-      <div className={cn('flex items-end gap-0.5', nav ? BOT_ITEM_TOOL_ROW_TOUCH_FIT : null)}>
-        {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-        <div className="min-w-0 flex-1">
-          <NativeChatPromptEditor
-            key={scopeKey}
-            scopeKey={scopeKey}
-            imageRow={imageRow}
-            inputRef={input}
-            isComposing={ime.isComposing}
-            initialValue={draft}
-            disabled={false}
-            aria-label={t('bots.items.comment.label', 'Comment')}
-            aria-expanded={mentions.autocomplete.mode !== 'none'}
-            aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
-            placeholder={reply.placeholder}
-            onChange={editorChange}
-            onSelect={editorSelect}
-            onPasteCapture={editorPaste}
-            onKeyDownCapture={editorKeyDown}
-            onCompositionStart={editorCompositionStart}
-            onCompositionEnd={editorCompositionEnd}
-            onBlur={editorBlur}
-            // One row, growing to six lines (less in a short pane: `cqh`), then it scrolls.
-            className="scrollbar-sleek block max-h-[min(132px,25cqh)] min-h-8 overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate"
-          />
-        </div>
-        {nav}
-        <span className="flex shrink-0">
-          <NativeChatDictationButton
-            disabled={dictation.dictationDisabled}
-            isDictating={dictation.isDictating}
-            isHoldMode={dictation.isDictationHoldMode}
-            onToggle={dictation.toggleDictation}
-            onHoldStart={dictation.startHoldDictation}
-            onHoldEnd={dictation.stopHoldDictation}
-          />
-        </span>
-        <NativeChatComposerPrimaryButton
-          aria-label={t('bots.items.comment.submit', 'Comment')}
-          disabled={empty || pending}
-          onClick={send}
-        >
-          <ArrowUp className="size-4" />
-        </NativeChatComposerPrimaryButton>
       </div>
-    </div>
+    </NativeChatComposerRoomProvider>
   )
 }

@@ -33,7 +33,9 @@ import {
 } from '../../../google/google-setup-runs'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { googleSetupKeyRefusedLine } from '../../../google/google-setup-key-download'
+import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
 import { postConnectorOffer } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 
@@ -49,7 +51,7 @@ export function googleSetupStartLine(from: string): string {
 
 /** The run's bot, named by its run's token, and who is asking. A bot reaches only its own; anything a
  *  CLI sends counts as a bot, since an agent can leave its token off. */
-function whose(
+export function whose(
   params: { botToken?: string; callerSessionId?: string; botId?: string },
   context: RpcContext
 ): { botId: string; actor: GoogleSetupActor } {
@@ -144,7 +146,7 @@ function keyMissing(run: GoogleSetupRun, google: Awaited<ReturnType<typeof hostG
 }
 
 /** The run with where it's stuck and the owner's buttons, from this host's Google and the bot's turn. */
-async function withBlocker(context: RpcContext, botId: string, run: GoogleSetupRun | null) {
+export async function withBlocker(context: RpcContext, botId: string, run: GoogleSetupRun | null) {
   const google = await hostGoogle()
   const chat = chatOf(context.runtime, botId)
   const blocker = googleSetupBlocker({
@@ -234,7 +236,7 @@ async function routeBotStart(
   }
   const ask = googleBotAsk(state, {
     from: 'start',
-    headless: context.runtime.servesWithoutWindow(),
+    headless: noWindowAnswersGoogleCards(context.runtime),
     botName: bot.name
   })
   if (ask.kind === 'card') {
@@ -246,7 +248,7 @@ async function routeBotStart(
     if (!sessionId) {
       throw new InvalidArgumentError("Run this from a bot's chat.")
     }
-    await postConnectorOffer(sessionId, bot, { botId, source: 'google' })
+    await postConnectorOffer(sessionId, bot, { botId, source: 'google' }, context.runtime)
   }
   return { routed: ask.kind === 'card' ? 'offer' : ask.kind, message: ask.message }
 }
@@ -288,6 +290,7 @@ export const GOOGLE_SETUP_METHODS = [
           throw error
         }
       }
+      requireSetupPageInAgentWorkspace(context.runtime, botId, params.change)
       const { prev, run } = applied(botId, actor, params.change)
       writeGoogleSetupCards(chatOf(context.runtime, botId), prev, run)
       return withBlocker(context, botId, run)

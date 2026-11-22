@@ -16,7 +16,8 @@ const FOUND: AntigravityChatAuthDetection = {
   googleSignIn: { personal: false, business: false },
   apiKey: { available: true, source: 'environment' },
   adc: { available: true, project: 'acme-dev' },
-  liveChats: 0
+  liveChats: 0,
+  agyVersion: '1.5.13'
 }
 const NOTHING: AntigravityChatAuthDetection = {
   ...FOUND,
@@ -30,6 +31,9 @@ const auth = (
 ): NativeChatAntigravityAuth => ({
   host: { kind: 'local' },
   backend,
+  managedVersion: '1.5.0',
+  orcasAgy: false,
+  programPending: false,
   detection,
   keyAndAdc: true,
   switching: null,

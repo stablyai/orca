@@ -156,7 +156,8 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
           mailboxHandle: address,
           consumerGeneration: workerMailbox.generation,
           consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-          deliveryId: params.ack
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
         })
       : undefined
   } catch (error) {

@@ -38,8 +38,9 @@ export function fixture() {
     paneForHandle: (handle) => handles.get(handle) ?? null,
     livePaneForHandle: (handle) => handles.get(handle) ?? null,
     processForHandle: (handle) => (handles.has(handle) ? `process:${handle}` : null),
-    name: (_identity, dispatchId) =>
-      (dispatchId && workerIdentity(db, dispatchId)?.title) || 'Duplicate name'
+    name: (_identity, assignment) =>
+      (assignment && (assignment.taskTitle || workerIdentity(db, assignment.dispatchId)?.title)) ||
+      'Duplicate name'
   }
   const run = db.createRun({
     objective: 'Crew',

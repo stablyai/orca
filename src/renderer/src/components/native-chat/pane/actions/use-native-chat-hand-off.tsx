@@ -7,8 +7,8 @@ import { useAppStore } from '@/store/index'
 import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session/context/agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import { buildAgentSessionContinuationPrompt } from '../../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
@@ -136,7 +136,8 @@ export function useNativeChatHandOff({
       sourceKind: 'chat' as const,
       sourceAgent: pane.agent,
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
-      sourceWorkingDirectory: directory.worktreePath,
+      // The folder the chat runs in, which its transcript's relative paths name.
+      sourceWorkingDirectory: directory.pathBase ?? directory.worktreePath,
       transcriptPath,
       capturedText: saved ? (context.capturedText ?? '') : buildAgentSessionHandoffContext(messages)
     }

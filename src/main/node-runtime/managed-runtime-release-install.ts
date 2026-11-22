@@ -87,11 +87,12 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
   // A single-file release is renamed into place, so it never needs room for two copies.
-  const needed = !('members' in pin)
-    ? pin.archiveBytes * (1 + UNPACKED_RATIO)
-    : pin.format === 'file'
+  const needed =
+    pin.format === 'file'
       ? pin.archiveBytes
-      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+      : !('members' in pin)
+        ? pin.archiveBytes * (1 + UNPACKED_RATIO)
+        : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -129,10 +130,10 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await (!('members' in pin)
-      ? extractWholeArchive(archive, release, label, signal)
-      : pin.format === 'file'
-        ? placeOnlyMember(archive, release, pin.members)
+    await (pin.format === 'file'
+      ? placeOnlyFile(archive, release, 'members' in pin ? pin.members : pin.executables)
+      : !('members' in pin)
+        ? extractWholeArchive(archive, release, label, signal)
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
     // Before the check, so a command prepare unpacks is checked like a downloaded one.
@@ -151,15 +152,15 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-async function placeOnlyMember(
+async function placeOnlyFile(
   archive: string,
   release: string,
-  members: readonly ManagedRuntimeMember[]
+  files: readonly (ManagedRuntimeMember | string)[]
 ): Promise<void> {
-  const [member, ...rest] = members
-  const segments = member?.path.split('/') ?? []
-  if (!member || rest.length > 0 || segments.some((s) => !s || s === '.' || s === '..')) {
-    throw new Error(`A single-file release needs exactly one member, not ${members.length}.`)
+  const [file, ...rest] = files
+  const segments = (typeof file === 'string' ? file : file?.path)?.split('/') ?? []
+  if (!file || rest.length > 0 || segments.some((s) => !s || s === '.' || s === '..')) {
+    throw new Error(`A single-file release needs exactly one member, not ${files.length}.`)
   }
   const path = join(release, ...segments)
   await mkdir(dirname(path), { recursive: true })

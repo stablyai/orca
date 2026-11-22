@@ -57,7 +57,7 @@ export async function getIssue(
       mediaRequest = collectIssueMediaRequest(issue, mediaFormat)
     } catch (error) {
       if (isAuthError(error)) {
-        await clearToken(entry.site.id)
+        await clearToken(entry)
         if (shouldSurfaceSiteFailure(siteId, entries.length)) {
           throw error
         }

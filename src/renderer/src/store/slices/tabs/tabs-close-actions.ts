@@ -73,7 +73,16 @@ export function createTabsCloseActions(
       const dedupedGroupOrder = dedupeTabOrder(groupOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
-      if (tab.contentType === 'agent-session') {
+      const retainedChatView =
+        opts?.preserveAgentSession &&
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (other) =>
+            other.id !== tab.id &&
+            other.contentType === 'agent-session' &&
+            other.entityId === tab.entityId &&
+            other.executionHostId === tab.executionHostId
+        )
+      if (tab.contentType === 'agent-session' && !retainedChatView) {
         const provisional =
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)

@@ -94,3 +94,30 @@ export function findTaskPageJiraIssue(
   }
   return newest
 }
+
+export function resolveTaskPageJiraIssues(
+  issues: JiraIssue[],
+  jiraIssueCache: JiraIssueCache,
+  jiraSearchCache: JiraSearchCache,
+  options: Pick<TaskPageJiraIssueLookupOptions, 'sourceContext'> = {}
+): JiraIssue[] {
+  return issues.map((issue) => {
+    const cached = findTaskPageJiraIssue(jiraIssueCache, jiraSearchCache, issue.key, {
+      ...options,
+      siteId: issue.siteId
+    })
+    if (!cached) {
+      return issue
+    }
+    return pickNewerJiraIssue(issue, cached)
+  })
+}
+
+// Why: a refreshed row must win over an older cached copy wherever it is shown, list or detail.
+export function pickNewerJiraIssue(fetched: JiraIssue, cached: JiraIssue): JiraIssue {
+  const fetchedTime = Date.parse(fetched.updatedAt)
+  const cachedTime = Date.parse(cached.updatedAt)
+  return !Number.isNaN(fetchedTime) && (Number.isNaN(cachedTime) || fetchedTime > cachedTime)
+    ? fetched
+    : cached
+}

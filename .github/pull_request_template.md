@@ -32,6 +32,19 @@ Fixes #
 - [ ] Automated tests added/updated, or explained why not below
 - [ ] Every added test fails without this change and avoids the [test anti-patterns](https://github.com/stablyai/orca/blob/main/docs/agents-md-refs/test-antipatterns.md)
 
+## Performance
+
+<!-- Required. Does this change make anything run more often, do more work, or use more memory? Consider:
+- Hot paths: startup, rendering, typing, terminal output, IPC, polling
+- Disk reads and writes, git and other subprocesses
+- Scale: many chats, projects, worktrees or files, and very large ones
+- How you measured it, or how you reasoned about it
+- The trade-off, if any, and why it is worth it
+If you find a real performance problem, fix it in this PR rather than only describing it.
+Most PRs need one line: finish the sentence below, e.g. "None, because this only runs when the settings page opens." -->
+
+None, because
+
 ## Risk
 
 <!-- What could this break, and for whom? Name the riskiest part of the change and what users would see if it went wrong. Call out anything that crosses a boundary: saved data or settings, older paired phones or SSH servers, other platforms, agents, or performance. Say how to back it out: a plain revert, or what a revert would not undo. -->

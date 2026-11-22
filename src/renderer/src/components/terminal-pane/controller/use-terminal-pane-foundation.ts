@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../../store/index'
+import { useAppStoreWithHostStatuses } from '../../../store/slices/runtime-status/views/use-runtime-status-view'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -16,7 +17,7 @@ import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalD
 import type { TerminalLinkActionRequest } from '../links/terminal-link-action-request'
 import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
 import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'
@@ -74,7 +75,10 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     sshReconnectTargetId,
     sshReconnectTargetLabel,
     sshReconnectTargetRemoved
-  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
+  } = useAppStoreWithHostStatuses(
+    (store, statuses) => selectTerminalPaneHostState(store, statuses, worktreeId),
+    shallow
+  )
   const sshReconnectOwnsTerminalErrors = Boolean(
     sshReconnectTargetId && sshReconnectStatus && sshReconnectStatus !== 'connected'
   )

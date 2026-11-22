@@ -30,14 +30,13 @@ import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
-    const key = normalizeRuntimePathForComparison(home)
-    return (
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
-      this.getManagedHostAccountHomesForSessionDiscovery().some(
-        (candidate) => normalizeRuntimePathForComparison(candidate) === key
-      )
-    )
+  protected readonly accountHistoryPasses = new CodexAccountHistoryPasses({
+    sharedHomes: () =>
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+        ? this.getManagedHostAccountHomesForSessionDiscovery()
+        : null,
+    wslHomeCount: () =>
+      this.store.getSettings().codexManagedAccounts.filter(this.getWslManagedHomePath, this).length
   })
   private readonly wslAccountHistory = new WslCodexAccountHistoryLaunches()
 
@@ -163,9 +162,10 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
 
   /** Brings every trusted host account's history into the store without waiting for its launch. */
   protected prepareAllAccountHistoryInBackground(): void {
-    for (const home of this.getManagedHostAccountHomesForSessionDiscovery()) {
-      void this.prepareAccountHistory(home)
-    }
+    this.accountHistoryPasses.runAll(
+      this.getManagedHostAccountHomesForSessionDiscovery(),
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+    )
   }
 
   /**

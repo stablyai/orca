@@ -15,6 +15,8 @@ export type NativeChatRoomMention = {
   key?: string
   /** The bot it is, where its chats can be opened from its row. */
   id?: string
+  /** Stable identity for "recently mentioned", so a rename keeps its place. */
+  recentKey?: string
   icon: React.ReactNode
   /** A second line, such as what a bot is for; `@` matches it too. */
   detail?: string
@@ -89,8 +91,6 @@ export type NativeChatComposerProps = {
   onSubmitted?: () => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
-  /** Reads the hosted TUI's current rendered screen when chat is entered. */
-  readTerminalScreen?: () => string | null
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */

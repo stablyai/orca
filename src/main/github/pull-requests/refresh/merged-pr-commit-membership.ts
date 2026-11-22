@@ -16,10 +16,6 @@ const COMMIT_PULLS_MAX_PAGES = 5
 export type MergedPRHeadRelationship = MergedPRCommitMembership | 'associated'
 const membershipMemo = new MergedReviewMembershipMemo<MergedPRHeadRelationship>()
 
-export function resetMergedPRCommitMembershipCacheForTest(): void {
-  membershipMemo.clear()
-}
-
 /** Force-push history proves association only; it cannot prove those changes landed. */
 export async function getMergedPRHeadRelationship(args: {
   ownerRepo: OwnerRepo

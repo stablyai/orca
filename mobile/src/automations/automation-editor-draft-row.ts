@@ -3,7 +3,6 @@ import {
   durableDraftRow,
   durableDraftRowKey,
   pageDraftRowBackend,
-  resetDurableDraftRowsForTests,
   type DurableDraftRow
 } from '../drafts/durable-draft-rows'
 import type { AutomationDraft } from './automation-draft'
@@ -136,9 +135,4 @@ export function discardAutomationEditorDraft(key: string): void {
 
 export function dropAutomationEditorDraft(executionHost?: string, automationId?: string): void {
   discardAutomationEditorDraft(automationEditorDraftKey(executionHost, automationId))
-}
-
-export function resetAutomationEditorDraftsForTests(): void {
-  slots.clear()
-  resetDurableDraftRowsForTests()
 }

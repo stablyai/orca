@@ -5,6 +5,8 @@ import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { AgentSessionRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 
+export type CrewNamingAssignment = { dispatchId: string; taskTitle: string }
+
 export type CrewReadDependencies = {
   db: OrchestrationDb | null
   retainedDbExists: boolean
@@ -15,7 +17,7 @@ export type CrewReadDependencies = {
   paneForHandle: (handle: string) => string | null
   name: (
     party: AgentMessageSender['party'],
-    dispatchId: string | undefined,
+    assignment: CrewNamingAssignment | undefined,
     records: AgentSessionRecordReader | null
   ) => string | null
   callerPaneForHandle?: (handle: string) => string | null
