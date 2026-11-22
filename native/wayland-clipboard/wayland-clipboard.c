@@ -23,6 +23,7 @@ static struct {
     struct wl_display *(*connect)(const char *);
     void (*disconnect)(struct wl_display *);
     int (*roundtrip)(struct wl_display *);
+    int (*dispatch)(struct wl_display *);
     int (*get_fd)(struct wl_display *);
     int (*prepare_read)(struct wl_display *);
     void (*cancel_read)(struct wl_display *);
@@ -150,6 +151,7 @@ static int load_wayland(void) {
     LOAD(connect, "wl_display_connect");
     LOAD(disconnect, "wl_display_disconnect");
     LOAD(roundtrip, "wl_display_roundtrip");
+    LOAD(dispatch, "wl_display_dispatch");
     LOAD(get_fd, "wl_display_get_fd");
     LOAD(prepare_read, "wl_display_prepare_read");
     LOAD(cancel_read, "wl_display_cancel_read");
@@ -166,11 +168,115 @@ static int load_wayland(void) {
     return 0;
 }
 
+static struct wl_proxy *get_registry(struct wl_display *display) {
+    union wl_argument new_id[] = { { .n = 0 } };
+    return api.construct((struct wl_proxy *)display, 1, new_id, api.registry_interface, 1);
+}
+
 static struct wl_proxy *bind(struct wl_proxy *registry, uint32_t name,
-                             const struct wl_interface *interface) {
+                             const struct wl_interface *interface, uint32_t version) {
     union wl_argument args[] = { { .u = name }, { .s = interface->name },
-                                { .u = 1 }, { .n = 0 } };
-    return api.construct(registry, 0, args, interface, 1);
+                                { .u = version }, { .n = 0 } };
+    return api.construct(registry, 0, args, interface, version);
+}
+
+struct idle_watch {
+    uint32_t seat, manager;
+    bool unavailable;
+};
+
+static void idle_registry_global(void *data, struct wl_registry *registry, uint32_t name,
+                                 const char *interface, uint32_t version) {
+    (void)registry;
+    struct idle_watch *watch = data;
+    if (strcmp(interface, "wl_seat") == 0) {
+        // There is no way to identify Orca's seat on a multi-seat socket.
+        if (watch->seat) watch->unavailable = true;
+        watch->seat = name;
+    } else if (!watch->manager && version >= 2 && strcmp(interface, "ext_idle_notifier_v1") == 0) {
+        watch->manager = name;
+    }
+}
+
+static void idle_registry_removed(void *data, struct wl_registry *registry, uint32_t name) {
+    (void)registry;
+    struct idle_watch *watch = data;
+    if (name == watch->seat || name == watch->manager) watch->unavailable = true;
+}
+
+static void report_idle_event(struct idle_watch *watch, const char *event) {
+    if (puts(event) == EOF || fflush(stdout) == EOF) watch->unavailable = true;
+}
+
+static void idled(void *data, struct wl_proxy *notification) {
+    (void)notification;
+    report_idle_event(data, "idled");
+}
+
+static void resumed(void *data, struct wl_proxy *notification) {
+    (void)notification;
+    report_idle_event(data, "resumed");
+}
+
+static int serve_idle_watch(struct wl_display *display, const struct idle_watch *watch) {
+    for (;;) {
+        if (api.dispatch_pending(display) < 0 || watch->unavailable) return 70;
+        // The app owns the stdin pipe. Losing it also stops the watcher after an app crash.
+        struct pollfd fds[] = { { api.get_fd(display), POLLIN, 0 }, { STDIN_FILENO, 0, 0 } };
+        int ready = poll(fds, 2, -1);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready < 0 || (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))) return 70;
+        if (fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) return 0;
+        if (api.dispatch(display) < 0) return 70;
+    }
+}
+
+static int watch_idle(uint32_t timeout) {
+    alarm(5);
+    struct wl_display *display = api.connect(NULL);
+    if (!display) return 69;
+    struct wl_proxy *registry = get_registry(display);
+    if (!registry) return 70;
+    struct idle_watch watch = { 0 };
+    static void (*registry_listener[])(void) = {
+        (void (*)(void))idle_registry_global, (void (*)(void))idle_registry_removed
+    };
+    api.listen(registry, registry_listener, &watch);
+    if (api.roundtrip(display) < 0) return 70;
+    if (!watch.seat || !watch.manager || watch.unavailable) return 78;
+
+    // ext-idle-notify v2 measures input even when an app inhibits display sleep.
+    static const struct wl_message notification_methods[] = { { "destroy", "", NULL } };
+    static const struct wl_message notification_events[] = {
+        { "idled", "", NULL }, { "resumed", "", NULL }
+    };
+    static const struct wl_interface notification_interface = {
+        "ext_idle_notification_v1", 2, 1, notification_methods, 2, notification_events
+    };
+    const struct wl_interface *request_types[] = { &notification_interface, NULL, api.seat_interface };
+    const struct wl_message notifier_methods[] = {
+        { "destroy", "", NULL },
+        { "get_idle_notification", "nuo", request_types },
+        { "get_input_idle_notification", "2nuo", request_types }
+    };
+    const struct wl_interface notifier_interface = {
+        "ext_idle_notifier_v1", 2, 3, notifier_methods, 0, NULL
+    };
+    struct wl_proxy *seat = bind(registry, watch.seat, api.seat_interface, 1);
+    struct wl_proxy *notifier = bind(registry, watch.manager, &notifier_interface, 2);
+    if (!seat || !notifier) return 70;
+    static void (*seat_listener[])(void) = { (void (*)(void))seat_capabilities };
+    api.listen(seat, seat_listener, NULL);
+    union wl_argument args[] = { { .n = 0 }, { .u = timeout }, { .o = (struct wl_object *)seat } };
+    struct wl_proxy *notification = api.construct(notifier, 2, args, &notification_interface, 2);
+    if (!notification) return 70;
+    static void (*listener[])(void) = { (void (*)(void))idled, (void (*)(void))resumed };
+    api.listen(notification, listener, &watch);
+    if (api.roundtrip(display) < 0) return 70;
+    alarm(0);
+    const int result = serve_idle_watch(display, &watch);
+    api.disconnect(display);
+    return result;
 }
 
 static void configure_protocol(void) {
@@ -265,6 +371,12 @@ static int serve(struct wl_display *display) {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "--watch-idle") == 0) {
+        char *end;
+        const unsigned long long timeout = strtoull(argv[2], &end, 10);
+        if (argv[2][0] < '0' || argv[2][0] > '9' || *end || timeout > UINT32_MAX) return 64;
+        return load_wayland() < 0 ? 69 : watch_idle((uint32_t)timeout);
+    }
     bool probe = argc == 2 && strcmp(argv[1], "--probe") == 0;
     if (argc != 1 && !probe) return 64;
     for (int i = 0; i < MAX_TRANSFERS; i++) transfers[i].fd = -1;
@@ -273,8 +385,7 @@ int main(int argc, char **argv) {
     struct wl_display *display = api.connect(NULL);
     if (!display) return 69;
     union wl_argument new_id[] = { { .n = 0 } };
-    struct wl_proxy *registry = api.construct((struct wl_proxy *)display, 1, new_id,
-                                               api.registry_interface, 1);
+    struct wl_proxy *registry = get_registry(display);
     if (!registry) return 70;
     static void (*registry_listener[])(void) = {
         (void (*)(void))registry_global, (void (*)(void))registry_removed
@@ -289,9 +400,9 @@ int main(int argc, char **argv) {
     }
     if (probe) return 0;
     configure_protocol();
-    struct wl_proxy *seat = bind(registry, seat_name, api.seat_interface);
+    struct wl_proxy *seat = bind(registry, seat_name, api.seat_interface, 1);
     struct wl_proxy *manager = bind(registry, ext_manager_name ? ext_manager_name : wlr_manager_name,
-                                     &manager_interface);
+                                     &manager_interface, 1);
     if (!seat || !manager) return 70;
     static void (*seat_listener[])(void) = { (void (*)(void))seat_capabilities };
     api.listen(seat, seat_listener, NULL);
