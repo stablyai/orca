@@ -84,6 +84,19 @@ describe('ForegroundExitWatches', () => {
     expect(recycled.noteInspection('pane', source, 'codex', 300, 'start-a')).toBe(false)
   })
 
+  it('arms nothing and sends no notice when the host cannot confirm a pid', () => {
+    // Windows without process creation times: the pane keeps its slow re-check instead.
+    const unconfirmable = new ForegroundExitWatches(
+      (ptyId) => notices.push(ptyId),
+      async () => true,
+      () => false
+    )
+    const source = { isAlive: true, foregroundAgent: () => null }
+    expect(unconfirmable.noteInspection('pane', source, 'codex', 300)).toBe(false)
+    expect(watched.size).toBe(0)
+    expect(notices).toEqual([])
+  })
+
   it('does not lean on an earlier watch when a failed capture cannot tell the agent from a replacement', () => {
     const source = { isAlive: true, foregroundAgent: () => null }
     expect(watches.noteInspection('pane', source, 'codex', 10, 'start-a')).toBe(true)

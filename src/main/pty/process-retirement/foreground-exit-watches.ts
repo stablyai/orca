@@ -42,7 +42,8 @@ export class ForegroundExitWatches {
     private readonly isSameAgent?: (
       pid: number,
       expected: ForegroundAgentIdentity
-    ) => Promise<boolean>
+    ) => Promise<boolean>,
+    private readonly canConfirmIdentity?: () => boolean
   ) {}
 
   /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it.
@@ -99,6 +100,9 @@ export class ForegroundExitWatches {
     const watches = this.watches.get(ptyId) ?? new Map<number, ProcessExitWatch>()
     if (watches.has(pid)) {
       return true
+    }
+    if (this.canConfirmIdentity?.() === false) {
+      return false
     }
     const watch = watchProcessExit(pid, () => this.report(ptyId, pid))
     if (watch === 'gone') {
