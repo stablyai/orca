@@ -6,6 +6,13 @@ const MANAGER_PATH = '/org/freedesktop/login1'
 const SESSION = `${LOGIN}.Session`
 const PROPERTIES = 'org.freedesktop.DBus.Properties'
 
+// Orca owns the stdin writer, and only gdbus holds stdout after setup.
+const LOGIND_MONITOR_SCRIPT = `trap 'kill %1 2>/dev/null || :; wait' EXIT
+trap 'exit' HUP INT TERM
+gdbus monitor --system --dest "$1" </dev/null &
+exec 1>&-
+IFS= read -r _ || :`
+
 async function callLogind(
   path: string,
   method: string,
@@ -86,10 +93,10 @@ function monitorSession(
   let child: ReturnType<typeof spawnProcess>
   try {
     child = spawnProcess({
-      program: 'gdbus',
-      args: ['monitor', '--system', '--dest', LOGIN],
+      program: '/bin/sh',
+      args: ['-c', LOGIND_MONITOR_SCRIPT, 'orca-logind-monitor', LOGIN],
       env: { ...process.env, LC_ALL: 'C' },
-      stdio: ['ignore', 'pipe', 'ignore']
+      stdio: ['pipe', 'pipe', 'ignore']
     })
   } catch {
     return
@@ -99,7 +106,7 @@ function monitorSession(
   const lines = createInterface({ input: child.stdout! })
   const stop = (): void => {
     lines.close()
-    child.kill()
+    child.stdin?.destroy()
   }
   const unavailable = (): void => {
     if (!signal.aborted) {
@@ -110,7 +117,13 @@ function monitorSession(
   signal.addEventListener('abort', stop, { once: true })
   child.once('error', unavailable)
   child.once('close', unavailable)
+  child.stdin?.on('error', unavailable)
+  lines.once('close', unavailable)
   lines.on('error', unavailable)
+  if (signal.aborted) {
+    stop()
+    return
+  }
 
   let revision = 0
   const readLockedHint = async (): Promise<void> => {
