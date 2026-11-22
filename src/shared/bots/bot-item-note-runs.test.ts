@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import type { BotItemNoteEntry } from './bot-item-note'
-import { botItemNoteJoins, foldBotItemNotes } from './bot-item-note-runs'
+import { foldBotItemNotes } from './bot-item-note-runs'
+import { nativeChatActivityRowJoins } from '../native-chat/transcript/events/native-chat-activity-rows'
 import { botItemNoteLines, botItemNoteRunLine } from './bot-item-note-lines'
 
 function move(id: string, uid: string, to: 'working' | 'done' | 'needs_you'): NativeChatMessage {
@@ -345,7 +346,7 @@ describe('item rows that touch', () => {
       bot('t1', made('a3')),
       note('owner', 't1', commented('a3', 'planned'))
     ]
-    const joins = botItemNoteJoins(
+    const joins = nativeChatActivityRowJoins(
       rows.map((row) => row.message),
       (index) => index === 6
     )
@@ -359,12 +360,32 @@ describe('item rows that touch', () => {
     })
   })
 
+  it('joins a worker’s update to item lines, and your move but not your comment after it', () => {
+    const update: NativeChatMessage = {
+      id: 'update',
+      role: 'user',
+      timestamp: 1,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Pushed the fix.' }],
+      from: { kind: 'agent', senders: [], orchestration: null }
+    }
+    const rows = [
+      update,
+      bot('t1', made('a1')).message,
+      note('owner', 't1', moved('a1', 'planned', 'working'), commented('a1', 'working')).message,
+      bot('t1', made('a2')).message
+    ]
+    const joins = nativeChatActivityRowJoins(rows, () => false)
+
+    expect(Object.fromEntries(joins)).toEqual({ 0: 'below', 1: 'both', 2: 'above' })
+  })
+
   it('keeps a note apart from the next when a turn diff draws under it', () => {
     const rows = [bot('t1', made('a1')), bot('t2', made('a2')), bot('t3', made('a3'))]
-    const joins = botItemNoteJoins(
+    const joins = nativeChatActivityRowJoins(
       rows.map((row) => row.message),
       () => false,
-      (index) => index === 0
+      (index) => ({ below: index === 0 })
     )
 
     expect(Object.fromEntries(joins)).toEqual({ 1: 'below', 2: 'above' })

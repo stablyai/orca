@@ -1,10 +1,12 @@
-// The transcript's one spacing rule for one-line activity rows (item lines, worker updates, Started
-// rows): two that meet sit 4 px apart, wherever a slot or turn boundary falls between them. Anything
+// Where the desktop window draws activity rows close (`nativeChatActivityEdges` says which rows are
+// ones): two that meet sit 4 px apart, wherever a slot or turn boundary falls between them. Anything
 // else (a bubble, the agent's words, a turn's bar, diff or PR card) keeps the full row gap. A slot
 // that meets the activity row above is born pulled up into the row gap, so its estimate is right
 // from the first draw.
-import { botItemNoteIsQuiet } from '../../../../../../shared/bots/bot-item-note-lines'
-import type { BotItemNoteView } from '../../../../../../shared/bots/bot-item-note'
+import {
+  nativeChatActivityEdges,
+  type NativeChatActivityEdges
+} from '../../../../../../shared/native-chat/transcript/events/native-chat-activity-rows'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
   type NativeChatRowTypography
@@ -15,20 +17,10 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 /** The space between two activity rows that meet, as `gap-1` draws it. */
 export const NATIVE_CHAT_ACTIVITY_ROW_GAP_PX = 4
 
-type ActivityEdges = { top: boolean; bottom: boolean }
-
-const NO_EDGES: ActivityEdges = { top: false, bottom: false }
-
-/** A note's quiet lines draw first; the owner's comments draw after them, as messages. */
-function noteEdges(note: BotItemNoteView): ActivityEdges {
-  if (botItemNoteIsQuiet(note)) {
-    return { top: true, bottom: true }
-  }
-  return { top: note.entries.some((entry) => entry.event === 'status'), bottom: false }
-}
+const NO_EDGES: NativeChatActivityEdges = { top: false, bottom: false }
 
 /** Whether the slot's first and last drawn things are one-line activity rows. */
-function activityEdges(slot: NativeChatTranscriptSlot | undefined): ActivityEdges {
+function activityEdges(slot: NativeChatTranscriptSlot | undefined): NativeChatActivityEdges {
   if (
     slot?.kind !== 'message' ||
     !slot.drawsMessage ||
@@ -38,17 +30,11 @@ function activityEdges(slot: NativeChatTranscriptSlot | undefined): ActivityEdge
   ) {
     return NO_EDGES
   }
-  const { message } = slot
-  const notes = slot.itemNotes ?? (message.botItemNote ? [message] : [])
-  const edges: ActivityEdges =
-    notes.length > 0
-      ? {
-          top: noteEdges(notes[0]!.botItemNote!).top,
-          bottom: noteEdges(notes.at(-1)!.botItemNote!).bottom
-        }
-      : message.from !== undefined && (message.role === 'user' || message.agentStart === true)
-        ? { top: true, bottom: true }
-        : NO_EDGES
+  const members = slot.itemNotes ?? [slot.message]
+  const edges = {
+    top: nativeChatActivityEdges(members[0]!).top,
+    bottom: nativeChatActivityEdges(members.at(-1)!).bottom
+  }
   const bar = slot.status !== undefined
   return {
     top: edges.top && !(bar && slot.statusAbove),
