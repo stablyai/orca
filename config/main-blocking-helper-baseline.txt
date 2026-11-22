@@ -622,7 +622,6 @@
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.ts
 1 src/main/ipc/filesystem/watchers/wsl-watcher-spawn.ts
-3 src/main/ipc/hooks/register-worktree-hook-check-handler.ts
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
 1 src/main/ipc/linear/register-handlers.ts
 7 src/main/ipc/notebook.ts
@@ -684,7 +683,7 @@
 1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
-3 src/main/ipc/worktrees.ts
+2 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
@@ -856,13 +855,14 @@
 11 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
 19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
 30 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
+1 src/main/orca-profiles/cloud-console/cloud-console-link.ts # click-time console link reads the profile index once
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
 2 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
 9 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
 21 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
-7 src/main/orca-profiles/orca-account-service.ts
+8 src/main/orca-profiles/orca-account-service.ts # +1 openConsole: click-time console link reads the profile index once
 1 src/main/orca-profiles/profile-account-user-id.ts
 21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
@@ -1222,7 +1222,7 @@
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
 1 src/main/runtime/repositories/runtime-project-host-setup-controller.ts
 2 src/main/runtime/repositories/runtime-repository-clone-controller.ts
-6 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
+3 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
 2 src/main/runtime/repositories/runtime-repository-issue-command.ts
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts

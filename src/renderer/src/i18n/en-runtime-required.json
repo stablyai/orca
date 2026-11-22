@@ -1623,6 +1623,15 @@
         "outside_other": "{{count}} more outside this group"
       },
       "mentionedCount": "{{count}} mentioned",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "remoteStopped": "Stopped here",
+      "remoteUnknown": "Delivery unknown",
       "unavailableBot": "Unavailable bot"
     },
     "hover": {

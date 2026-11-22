@@ -99,7 +99,8 @@ export function agentPickerEntryOptions(
     if (option.id !== 'effort') {
       return [option]
     }
-    if (!live.efforts.length) {
+    const levels = surface === 'chat' ? structuredModelEfforts(live) : live.efforts
+    if (!levels.length) {
       return !composer && live.effortsKnown === false ? [option] : []
     }
     return [
@@ -107,7 +108,7 @@ export function agentPickerEntryOptions(
         ...option,
         kind: {
           type: 'select' as const,
-          choices: surface === 'chat' ? structuredModelEfforts(live) : live.efforts,
+          choices: levels,
           defaultValue: live.defaultEffort ?? ''
         }
       }
