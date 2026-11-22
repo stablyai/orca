@@ -431,3 +431,41 @@ it('clears the original workspace hold and custody when another terminal replies
     db.close()
   }
 })
+
+it('wakes a Run coordinator that slept after its pane moved to another tab', async () => {
+  const db = new OrchestrationDb(':memory:')
+  const moved = { ...record, worktreeId: 'repo::/workspace' }
+  const session: WorkspaceSessionState = {
+    ...getDefaultWorkspaceSession(),
+    sleepingAgentSessionsByPaneKey: { [paneKey]: moved }
+  }
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      onWorkspaceSessionWritten: () => () => {}
+    })
+  )
+  const resume = vi.fn(async () => true)
+  try {
+    const run = db.createRun({
+      objective: 'Coordinate before the move',
+      coordinatorHandle: 'term_moved',
+      coordinatorPaneKey: 'old-tab:11111111-1111-4111-8111-111111111111'
+    })
+    db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'done' })
+    runtime.setOrchestrationDb(db)
+    runtime.setNotifier(mailNotifier(resume))
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.retrySleptMailboxWakes()
+    await settled()
+    await settled()
+    expect(resume.mock.calls.map((call) => call.slice(0, 2))).toContainEqual([
+      'repo::/workspace',
+      paneKey
+    ])
+  } finally {
+    runtime.setNotifier(null)
+    db.close()
+  }
+})

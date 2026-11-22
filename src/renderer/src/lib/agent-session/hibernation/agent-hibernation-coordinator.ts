@@ -47,8 +47,12 @@ type AgentHibernationCoordinatorState = {
   confirmationState: AgentHibernationConfirmationState
   tickInFlight: boolean
   shuttingDownCandidateIds: Set<string>
+  /** Candidates main refused while their mail waits, asked again after a doubling delay. */
+  refusedCandidates: Map<string, { retryAt: number; delayMs: number }>
   now: () => number
 }
+
+const MAX_REFUSED_RETRY_MS = 16 * 60_000
 
 const coordinator: AgentHibernationCoordinatorState = {
   interval: null,
@@ -56,6 +60,7 @@ const coordinator: AgentHibernationCoordinatorState = {
   confirmationState: {},
   tickInFlight: false,
   shuttingDownCandidateIds: new Set(),
+  refusedCandidates: new Map(),
   now: () => Date.now()
 }
 
@@ -130,7 +135,11 @@ async function hibernatePaneIfStillEligible(
   confirmedCandidate: AgentHibernationCandidate
 ): Promise<void> {
   const { id, worktreeId } = confirmedCandidate
-  if (coordinator.shuttingDownCandidateIds.has(id)) {
+  const refused = coordinator.refusedCandidates.get(id)
+  if (
+    coordinator.shuttingDownCandidateIds.has(id) ||
+    (refused && coordinator.now() < refused.retryAt)
+  ) {
     return
   }
   // Only the pane’s owner can authorize teardown; global sweeps cause C×W runtime listings for C candidates.
@@ -157,9 +166,15 @@ async function hibernatePaneIfStillEligible(
           : {})
       })
     )
+    coordinator.refusedCandidates.delete(id)
   } catch (err) {
-    // Main refuses while orchestration mail or a Dispatch is in flight; the next tick asks again.
+    // Main refuses while orchestration mail or a Dispatch is in flight; ask again later, less often.
     if (String(err).includes('orchestration_busy')) {
+      const delayMs = Math.min(
+        (refused?.delayMs ?? AGENT_HIBERNATION_TICK_MS) * 2,
+        MAX_REFUSED_RETRY_MS
+      )
+      coordinator.refusedCandidates.set(id, { retryAt: coordinator.now() + delayMs, delayMs })
       return
     }
     console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
@@ -174,10 +189,14 @@ export async function runAgentHibernationTick(): Promise<void> {
   }
   coordinator.tickInFlight = true
   try {
-    const plan = confirmAgentHibernationCandidates(
-      coordinator.confirmationState,
-      await currentCandidates(coordinator.now())
-    )
+    const candidates = await currentCandidates(coordinator.now())
+    const ids = new Set(candidates.map((candidate) => candidate.id))
+    for (const id of coordinator.refusedCandidates.keys()) {
+      if (!ids.has(id)) {
+        coordinator.refusedCandidates.delete(id)
+      }
+    }
+    const plan = confirmAgentHibernationCandidates(coordinator.confirmationState, candidates)
     coordinator.confirmationState = plan.confirmationState
     // Drain sequentially to bound liveness/stop RPCs, keep tickInFlight through completion, and revalidate each candidate against a fresh plan.
     for (const candidate of plan.candidates) {
@@ -220,6 +239,7 @@ export function stopAgentHibernationCoordinator(): void {
   coordinator.unsubscribeVisibility?.()
   coordinator.unsubscribeVisibility = null
   coordinator.confirmationState = {}
+  coordinator.refusedCandidates.clear()
 }
 
 export function resetAgentHibernationCoordinatorForTests(): void {

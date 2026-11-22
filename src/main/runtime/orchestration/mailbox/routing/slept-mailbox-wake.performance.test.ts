@@ -1,5 +1,11 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
+import { OrcaRuntimeService } from '../../../orca-runtime'
+import { partialRuntimeStore } from '../../../construction/test-context/runtime-store-partial-fixture'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
+import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
+import { scopedCrewChange } from '../../crew/crew-changes'
+import { countDiscoveryRows } from './sleeping-mail-discovery-work.test-fixture'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { reconcileSleepingMail } from './sleeping-mail-owner-mailboxes'
 import { SleptMailboxWake } from './slept-mailbox-wake'
@@ -61,6 +67,61 @@ it.each([100, 1_000])(
       expect(delivery.heldVersion).toBe(version + 1)
       expect(delivery.heldWorktrees()).toHaveLength(held + 1)
     } finally {
+      db.close()
+    }
+  }
+)
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+it.each([100, 1_000])(
+  'a change scoped to Dispatches no sleeper owns seeks no sleeper owner range (%i sleepers)',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
+    for (let index = 0; index < count; index += 1) {
+      const record = { ...sleeper(index, `folder:${index}`), restoreOnTabOpenOnly: false }
+      sleepingAgentSessionsByPaneKey[record.paneKey] = record
+      db.createRun({
+        objective: 'old',
+        coordinatorHandle: null,
+        coordinatorPaneKey: record.paneKey
+      })
+    }
+    const session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    const resumeSleepingAgents = async () => true
+    const members: Partial<RuntimeNotifier> = { resumeSleepingAgents }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass under test calls only resumeSleepingAgents; every other member is a no-op.
+    const notifier = new Proxy(members, {
+      get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
+    }) as RuntimeNotifier
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(2_000)
+      const work = countDiscoveryRows(db)
+
+      db.crewChanges.notify(scopedCrewChange(['topology'], { dispatchIds: new Set(['unowned']) }))
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      expect(work.owners).toEqual([])
+      expect(work.probes).toEqual([])
+      work.stop()
+    } finally {
+      runtime.setNotifier(null)
       db.close()
     }
   }

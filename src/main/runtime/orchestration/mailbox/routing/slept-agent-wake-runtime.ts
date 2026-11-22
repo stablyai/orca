@@ -26,15 +26,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     handle: string
   ): { paneKey: string; worktreeId: string } | null {
     const record = this.handles.get(handle)
-    const leaf = record && this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!record || !leaf || this.sleptLeafHandle(leaf) !== handle) {
-      return null
-    }
-    const paneKey = makePaneKey(record.tabId, record.leafId)
-    this.watchSleepingMail()
-    return mailWakeObligation(this.sleepingMailRecord(paneKey)) === 'manual'
-      ? null
-      : { paneKey, worktreeId: record.worktreeId }
+    return record && this.sleptAgentHandle(handle)
+      ? { paneKey: makePaneKey(record.tabId, record.leafId), worktreeId: record.worktreeId }
+      : null
   }
 
   /** The handle of the slept agent in this pane, which takes input as an idle agent does; null when

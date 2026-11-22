@@ -8,6 +8,7 @@ import {
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { mailWakeObligation } from '../orchestration/mailbox/routing/mail-wake-obligation'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -16,6 +17,7 @@ import type {
 /** An Agent-slept pane keeps its handle while it has no process, so its resume answers to the same name. */
 export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdmitWindowPublisher {
   protected abstract sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null
+  protected abstract watchSleepingMail(): void
   /** Per slept leaf, its handle and the process it named; kept across graph reloads so the pane keeps its name. */
   protected readonly sleptLeafHandles = new Map<string, { handle: string; ptyId: string }>()
 
@@ -229,8 +231,20 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       : undefined
   }
 
+  /** The slept handle when its pane answers as an idle agent; the user's own Workspace Sleep keeps
+   *  the name for its resume but leaves the pane disconnected. */
+  private sleptAgentLeafHandle(leaf: RuntimeLeafRecord): string | null {
+    const handle = this.sleptLeafHandle(leaf)
+    if (!handle) {
+      return null
+    }
+    this.watchSleepingMail()
+    const record = this.sleepingMailRecord(makePaneKey(leaf.tabId, leaf.leafId))
+    return mailWakeObligation(record) === 'manual' ? null : handle
+  }
+
   protected isSleptAgentLeaf(leaf: RuntimeLeafRecord): boolean {
-    return this.sleptLeafHandle(leaf) !== null
+    return this.sleptAgentLeafHandle(leaf) !== null
   }
 
   /** The handle a spawn into this slept pane takes, so its process exports the pane's old name. */
@@ -246,7 +260,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   ): { pty: RuntimePtyWorktreeRecord | null; leaf: RuntimeLeafRecord } | null {
     const record = this.handles.get(handle)
     const leaf = record ? this.leaves.get(this.getLeafKey(record.tabId, record.leafId)) : undefined
-    if (!record || !leaf || this.sleptLeafHandle(leaf) !== handle) {
+    if (!record || !leaf || this.sleptAgentLeafHandle(leaf) !== handle) {
       return null
     }
     const ptyId =

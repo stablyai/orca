@@ -1,5 +1,6 @@
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { mailWakeObligation } from './mail-wake-obligation'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
 function sameEnv(a: Record<string, string> | undefined, b: Record<string, string> | undefined) {
   const left = a ?? {}
@@ -50,9 +51,29 @@ function sameWake(a: SleepingAgentSessionRecord, b: SleepingAgentSessionRecord):
 
 export class SleepingMailRecordIndex {
   readonly records = new Map<string, SleepingAgentSessionRecord>()
+  /** A pane moved to another tab keeps its leaf id, so a Run or Dispatch's older key still finds it. */
+  private readonly panesByLeaf = new Map<string, string>()
   /** Obligated panes per host, with the record each was indexed under. */
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
   private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
+
+  /** The sleeping pane a recorded owner key names now: itself, or the pane its leaf moved to. */
+  currentPane(paneKey: string): string {
+    const leafId = this.records.has(paneKey) ? undefined : parsePaneKey(paneKey)?.leafId
+    return (leafId && this.panesByLeaf.get(leafId)) || paneKey
+  }
+
+  private indexLeaf(pane: string, present: boolean): void {
+    const leafId = parsePaneKey(pane)?.leafId
+    if (!leafId) {
+      return
+    }
+    if (present) {
+      this.panesByLeaf.set(leafId, pane)
+    } else if (this.panesByLeaf.get(leafId) === pane) {
+      this.panesByLeaf.delete(leafId)
+    }
+  }
 
   affectedHosts(host: string | null, current: readonly string[]): Iterable<string> {
     return host === null ? new Set([...current, ...this.hosts.keys()]) : [host]
@@ -82,6 +103,7 @@ export class SleepingMailRecordIndex {
       const before = previous.get(pane)
       next.set(pane, record)
       this.records.set(pane, record)
+      this.indexLeaf(pane, true)
       if (!before || !sameWake(before, record)) {
         maintained.add(pane)
       }
@@ -89,6 +111,7 @@ export class SleepingMailRecordIndex {
     for (const pane of previous.keys()) {
       if (!next.has(pane)) {
         this.records.delete(pane)
+        this.indexLeaf(pane, false)
         maintained.add(pane)
       }
     }

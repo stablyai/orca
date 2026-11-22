@@ -1,4 +1,5 @@
 import { reconcileSleepingMail, refreshSleepingMailScope } from './sleeping-mail-owner-mailboxes'
+import { sleepingMailChangeScope } from './sleeping-mail-change-scope'
 import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
 import { MailWakeAttempts } from './mail-wake-attempts'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
@@ -16,6 +17,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     db: () => this._orchestrationDb,
     record: (paneKey) => this.sleepingMailRecord(paneKey),
     handlePane: (mailbox) => this.sleptAgentPaneForHandle(mailbox)?.paneKey ?? null,
+    currentPane: (recorded) => this.sleepingRecordIndex.currentPane(recorded),
     waiters: (mailbox) => this.messageWaiters.get(mailbox),
     prepare: async (record) => {
       if (this.graphStatus !== 'ready') {
@@ -135,12 +137,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       { consumesTerminalSideEffects: false }
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
-    // A change that names its mailboxes refreshes only those; an unnamed one re-derives every sleeper.
     const changed = (facets: CrewInvalidation) => {
       if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
-        this.publishSleepingMail(
-          facets.trafficAddresses ? { mailboxes: facets.trafficAddresses } : undefined
-        )
+        this.publishSleepingMail(sleepingMailChangeScope(facets))
       }
     }
     this.crewChanges.subscribe(changed)

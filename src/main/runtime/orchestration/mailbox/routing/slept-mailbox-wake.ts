@@ -1,4 +1,4 @@
-import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
+import { mailboxOwnerPane } from './mailbox-owner-pane'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -6,27 +6,6 @@ import {
   selectOrchestrationPointerSequence,
   type OrchestrationMessageWaiter
 } from '../terminal-pointer/mailbox-pointer-eligibility'
-
-export function mailboxOwnerPane(db: OrchestrationDb, mailbox: string): string | null {
-  if (mailbox.startsWith('run:')) {
-    return db.getRun(mailbox.slice(4))?.coordinator_pane_key ?? null
-  }
-  if (mailbox.startsWith('dispatch:')) {
-    const id = mailbox.slice(9)
-    const dispatch = db.getDispatchContextById(id)
-    if (dispatch) {
-      return dispatch.status === 'pending' || dispatch.status === 'dispatched'
-        ? dispatch.assignee_pane_key
-        : null
-    }
-    const attachment = db.getRemoteDispatchAttachment(id)
-    return attachment &&
-      POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES.some((state) => state === attachment.state)
-      ? attachment.pane_key
-      : null
-  }
-  return null
-}
 
 type WakeDeps = {
   db: () => OrchestrationDb | null
@@ -36,6 +15,8 @@ type WakeDeps = {
   wake: (record: SleptMailRecord) => Promise<boolean>
   /** The slept pane a terminal handle's own mailbox reaches; Run and Dispatch mailboxes resolve from the db. */
   handlePane?: (mailbox: string) => string | null
+  /** The sleeping pane a Run or Dispatch's recorded owner key names now, after a pane move. */
+  currentPane?: (recorded: string) => string
 }
 
 /** Durable mail derives the obligation; only a proven wake suppresses the same unconsumed batch. */
@@ -59,7 +40,10 @@ export class SleptMailboxWake {
   constructor(private readonly deps: WakeDeps) {}
 
   private ownerPane(db: OrchestrationDb, mailbox: string): string | null {
-    return mailboxOwnerPane(db, mailbox) ?? this.deps.handlePane?.(mailbox) ?? null
+    const pane = mailboxOwnerPane(db, mailbox)
+    return pane
+      ? (this.deps.currentPane?.(pane) ?? pane)
+      : (this.deps.handlePane?.(mailbox) ?? null)
   }
 
   failedToWake(record: SleptMailRecord): boolean {
