@@ -58,6 +58,8 @@ type Watch = {
   plain: Set<string>
   lastRetry?: string
   retried: boolean
+  /** Bumped by a journal reset: a read begun before it describes the replaced journal. */
+  generation: number
   cancelTimer: () => void
   unsubscribe: () => void
 }
@@ -101,6 +103,7 @@ export class ChatWorkerModelWait {
       paused: new Set(),
       plain: new Set(),
       retried: false,
+      generation: 0,
       cancelTimer: () => {},
       unsubscribe: () => {}
     }
@@ -117,7 +120,8 @@ export class ChatWorkerModelWait {
     }
   }
 
-  private end(sessionId: string): void {
+  /** The chat's work is settled: its watch ends whatever edge comes next. */
+  end(sessionId: string): void {
     const watch = this.watches.get(sessionId)
     if (watch) {
       this.watches.delete(sessionId)
@@ -128,20 +132,23 @@ export class ChatWorkerModelWait {
 
   private changed(sessionId: string, watch: Watch, itemIds: readonly string[] | null): void {
     if (!itemIds) {
+      watch.generation += 1
       watch.paused.clear()
       watch.plain.clear()
       watch.activityAt = this.now()
       return
     }
+    const { generation } = watch
     for (const itemId of itemIds) {
       if (watch.plain.has(itemId)) {
         watch.activityAt = this.now()
+        watch.lastRetry = undefined
         continue
       }
       void this.journal
         .item(sessionId, itemId)
         .then((item) => {
-          if (item && this.watches.get(sessionId) === watch) {
+          if (item && this.watches.get(sessionId) === watch && watch.generation === generation) {
             this.classify(sessionId, watch, item)
           }
         })
@@ -155,17 +162,16 @@ export class ChatWorkerModelWait {
     const { body, itemId } = item
     if (body.kind === 'status' && body.failure?.kind === 'providerRetrying') {
       watch.lastRetry = body.text
-      if (!watch.retried) {
-        watch.retried = true
-        this.report(sessionId, {
-          kind: 'retrying',
-          stretchKey: watch.turnKey,
-          lastSeen: body.text
-        })
-      }
+      // Until it is in mail: the same id makes a second try after a failed write no duplicate.
+      watch.retried ||= this.report(sessionId, {
+        kind: 'retrying',
+        stretchKey: watch.turnKey,
+        lastSeen: body.text
+      })
       return
     }
     watch.activityAt = this.now()
+    watch.lastRetry = undefined
     // A queued follow-up runs as a new provider turn under the same working status.
     if (body.kind === 'turn' && body.state === 'running' && body.turnId !== watch.turnId) {
       if (watch.turnId !== undefined) {
@@ -216,17 +222,23 @@ export class ChatWorkerModelWait {
     this.arm(sessionId, watch, WORKER_MODEL_WAIT_MS)
   }
 
-  private report(sessionId: string, notice: Omit<WorkerModelWaitNotice, 'from'>): void {
+  /** True once every open worker Dispatch on the chat has the notice in mail, or needs none. */
+  private report(sessionId: string, notice: Omit<WorkerModelWaitNotice, 'from'>): boolean {
     try {
       const db = this.deps.getDb()
       if (!db) {
-        return
+        return false
       }
+      let sent = true
       for (const { dispatch, from } of chatWorkerDispatches(sessionId, db)) {
-        reportWorkerModelWait(db, { kind: 'local', dispatch }, { ...notice, from }, this.deps)
+        sent =
+          reportWorkerModelWait(db, { kind: 'local', dispatch }, { ...notice, from }, this.deps) &&
+          sent
       }
+      return sent
     } catch (error) {
       console.warn('[orchestration] chat model-wait report failed', sessionId, error)
+      return false
     }
   }
 }

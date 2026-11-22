@@ -6,8 +6,9 @@
 const SPINNER_LINE_RE = /^\s*[\u00B7\u2722\u2733\u2736\u273B\u273D*\u2726]\s+\S/u
 const FOOTER_RE = /esc to interrupt|shift\+tab to cycle/i
 const TOOL_RUNNING_RE = /\u23BF\s+Running\u2026/u
-// A retry's countdown, should a Claude draw it below its spinner: it ticks while nothing arrives.
-const RETRY_COUNTDOWN_RE = /retrying in \d+|attempt \d+\/\d+/i
+// A retry's countdown, should a Claude draw it as a status row below its spinner: it ticks while
+// nothing arrives. Only such a row: a reply may use the same words.
+const RETRY_COUNTDOWN_RE = /^\s*\u23BF\s.*(?:retrying in \d+|attempt \d+\/\d+)/iu
 // Claude's own words for a request that has not answered: a stalled stream, or a retried error.
 const MODEL_STATUS_RE = /Waiting for API response|retrying|API error/i
 

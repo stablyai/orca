@@ -69,22 +69,22 @@ export function reportWorkerModelWait(
       return true
     }
     const { dispatch } = target
-    return (
-      escalateWorkerFailure(
-        db,
-        dispatch,
-        {
-          id,
-          from: notice.from,
-          mailbox: () => dispatchReportMailbox(db, dispatch),
-          describe: (task) => ({ subject, body: describeModelWait(notice, task) }),
-          payload: { taskId: dispatch.task_id, ...payload },
-          // A retry often clears on its own; a long wait may need the coordinator.
-          ...(notice.kind === 'retrying' ? { notice: true as const } : {})
-        },
-        notify
-      ) !== null
+    const sent = escalateWorkerFailure(
+      db,
+      dispatch,
+      {
+        id,
+        from: notice.from,
+        mailbox: () => dispatchReportMailbox(db, dispatch),
+        describe: (task) => ({ subject, body: describeModelWait(notice, task) }),
+        payload: { taskId: dispatch.task_id, ...payload },
+        // A retry often clears on its own; a long wait may need the coordinator.
+        ...(notice.kind === 'retrying' ? { notice: true as const } : {})
+      },
+      notify
     )
+    // Already in mail from an earlier try is sent too.
+    return sent !== null || db.getMessageById(id) !== undefined
   } catch (error) {
     console.warn(
       '[orchestration] failed to report a worker waiting on its model',

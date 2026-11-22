@@ -34,7 +34,11 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
       return true
     }
     // A hook during the look (a tool call that just arrived) restarted the stopwatch.
-    if ((wait.toolMaybeOpen && claudeToolRunsOnScreen(after)) || !wait.stillWaiting()) {
+    if (!wait.stillWaiting()) {
+      return true
+    }
+    if (wait.toolMaybeOpen && claudeToolRunsOnScreen(after)) {
+      wait.toolSeenRunning()
       return true
     }
     // Re-read: the Dispatch may have settled while the screen was read.

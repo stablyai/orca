@@ -37,6 +37,12 @@ describe("terminal Claude's screen while it waits on the model", () => {
     expect(claudeReplyScreen(before)).not.toBe(claudeReplyScreen(after))
   })
 
+  it('keeps reply text that uses the words of a retry', () => {
+    const before = ['⏺ attempt 1/3: A', ...chrome('✳ Kneading… (40s)')]
+    const after = ['⏺ attempt 1/3: AB', ...chrome('✳ Kneading… (44s)')]
+    expect(claudeReplyScreen(before)).not.toBe(claudeReplyScreen(after))
+  })
+
   it("reads a tool call's input streaming, which Claude does not draw, by its received tokens", () => {
     const tip = '  ⎿  Tip: Use /btw to ask a side question without interrupting Claude'
     const before = ['  60.', ...chrome('· Zigzagging… (10m 8s · ↓ 1.2k tokens)'), tip]

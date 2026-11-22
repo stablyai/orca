@@ -166,6 +166,19 @@ describe('a chat worker waiting on its model', () => {
     db.close()
   })
 
+  it('names no earlier retry once a reply came after it', async () => {
+    const { db, watch, write, mail } = rig()
+    watch.observe(SESSION, 'working')
+    await write('retry-1', retry(1))
+    await write('reply-1', reply('back'))
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const waiting = mail().find((message) => message.subject === 'Worker is waiting on the model')
+    expect(waiting?.body).toEqual(expect.stringContaining('waiting on the model'))
+    expect(waiting?.body).not.toContain('Last seen')
+    watch.dispose()
+    db.close()
+  })
+
   it('stops at the turn end', async () => {
     const { db, watch, mail } = rig()
     watch.observe(SESSION, 'working')

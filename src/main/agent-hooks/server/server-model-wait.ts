@@ -14,6 +14,8 @@ export type TerminalModelWait = {
   toolMaybeOpen: boolean
   /** False once a hook moved the stopwatch, or the turn ended, after this look began. */
   stillWaiting: () => boolean
+  /** The screen shows a tool running: model time can only start after it. */
+  toolSeenRunning: () => void
 }
 
 export const TERMINAL_MODEL_WAIT_MS = 10 * 60_000
@@ -43,10 +45,19 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     isReplay = false
   ): NormalizedLocalHook {
     const normalized = super.normalizeLocalHookPayload(source, body, isReplay)
-    if (source === 'claude' && !isReplay && normalized.event?.hookEventName) {
-      this.observeModelWaitHook(normalized.event, normalized.event.hookEventName)
+    const { event } = normalized
+    if (source !== 'claude' || isReplay || !event?.hookEventName) {
+      return normalized
     }
-    return normalized
+    const name = event.hookEventName
+    // Only a hook the pane's status took: a nested CLI's refused Stop must not end the lead's turn.
+    return {
+      ...normalized,
+      onAccepted: () => {
+        normalized.onAccepted?.()
+        this.observeModelWaitHook(event, name)
+      }
+    }
   }
 
   private observeModelWaitHook(event: AgentHookEventPayload, name: string): void {
@@ -123,7 +134,10 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
           since,
           turnKey: wait.turnKey,
           toolMaybeOpen: wait.tools.size > 0,
-          stillWaiting: () => this.modelWaits.get(paneKey) === wait && wait.since === since
+          stillWaiting: () => this.modelWaits.get(paneKey) === wait && wait.since === since,
+          toolSeenRunning: () => {
+            wait.since = Date.now()
+          }
         }).catch(() => false)
       : false
     if (this.modelWaits.get(paneKey) !== wait) {

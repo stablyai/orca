@@ -253,6 +253,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
+    this.chatWorkerModelWaitWatch?.end(sessionId)
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
