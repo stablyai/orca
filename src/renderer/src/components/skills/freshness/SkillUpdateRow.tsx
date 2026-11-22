@@ -41,16 +41,29 @@ function ChoiceLine({
         </span>
       ) : null}
       {replace && location.replaceable ? (
-        <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
-          <Checkbox
-            checked={replace.isReplaced(location.path)}
-            onCheckedChange={(checked) => replace.onReplaceChange(location.path, checked === true)}
-          />
-          {t(
-            'auto.components.skills.SkillUpdateRow.replaceWithOrca',
-            "Replace with Orca's copy (keeps a backup)"
-          )}
-        </label>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox
+              checked={replace.isReplaced(location.path)}
+              onCheckedChange={(checked) =>
+                replace.onReplaceChange(location.path, checked === true)
+              }
+            />
+            {t(
+              'auto.components.skills.SkillUpdateRow.replaceWithOrca',
+              "Replace with Orca's copy (keeps a backup)"
+            )}
+          </label>
+          {/* Why folder-only: Replace moves the object at this path, so a link's target files stay put. */}
+          {location.observedKind === 'folder' ? (
+            <span className="pl-5.5 text-xs text-muted-foreground">
+              {t(
+                'auto.components.skills.SkillUpdateRow.replaceMovesFolder',
+                'Replacing moves the whole folder, including any extra files, to a backup.'
+              )}
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
