@@ -177,7 +177,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
                 params,
                 undefined,
                 queuedImages.queuedImageHistoryReader(ctx),
-                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx),
+                // Phones never ask for live text, so their history stays saved rows, as before.
+                ctx.clientKind !== 'mobile'
               ),
               ctx
             ),

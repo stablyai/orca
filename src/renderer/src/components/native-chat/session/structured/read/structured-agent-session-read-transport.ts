@@ -26,12 +26,18 @@ function environmentSubscribeAsks(environmentId: string): {
   promptSuggestions: Promise<boolean>
   liveTextViewer: Promise<boolean>
 } {
-  const supported = runtimeEnvironmentSupportsCapabilities(environmentId, [
-    AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
-    AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
-    AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
-    AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY
-  ]).catch(() => [false, false, false, false])
+  const supported = runtimeEnvironmentSupportsCapabilities(
+    environmentId,
+    [
+      AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+      AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
+      AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
+      AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY
+    ],
+    undefined,
+    // A host from before live text keeps its cached answer: reopening chats doesn't re-ask it.
+    [AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY]
+  ).catch(() => [false, false, false, false])
   return {
     textAppend: supported.then(([textAppend, toolOutputAppend]) =>
       agentSessionTextAppendRequest({ textAppend, toolOutputAppend })

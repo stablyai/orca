@@ -98,6 +98,11 @@ export function nativeChatRevealStepFrames(
       pending.delete(id)
     }
   }
+  // Set as each step's cost arrives, so the very next step already waits for it.
+  const respace = (): void => {
+    const share = redrawsWhole ? wholeRedrawShare : busyShare
+    spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / share))
+  }
   return {
     now: () => performance.now(),
     stepCost: (ms) => {
@@ -109,17 +114,17 @@ export function nativeChatRevealStepFrames(
       redrawsWhole ||=
         stepCosts.length === STEP_COST_SAMPLES &&
         medianStepCost(stepCosts) > NATIVE_CHAT_WHOLE_REDRAW_STEP_MS
+      respace()
     },
     redrawsWhole: () => redrawsWhole,
     drawWhole: () => {
       redrawsWhole = true
+      respace()
     },
     request: (step) => {
       const id = ++nextId
       const fire = (at: number): void => {
         cancel(id)
-        const share = redrawsWhole ? wholeRedrawShare : busyShare
-        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / share))
         steppedAt = at
         step()
       }

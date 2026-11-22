@@ -71,7 +71,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     request: AgentSessionHistoryRequest,
     scope?: AgentSessionHistoryScope,
     reader?: HistoryReader,
-    replaceNormalizedHistory = true
+    replaceNormalizedHistory = true,
+    /** A desktop reader: its page carries the newer live text its stream may already show. */
+    withLiveText = false
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const { result, queue: captured } = await captureRequestFrame(journal, () =>
@@ -97,17 +99,19 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const hostNow = this.deps.now?.() ?? Date.now()
     const hooks = this.subscribers.frameHooks(request.sessionId, journal)
     // A fresh view never shows less than the stream already did.
-    const items = withSubscriberLiveText(
-      result.page.items,
-      (itemIds) =>
-        hooks.readLiveText?.(request.sessionId, {
-          appends: true,
-          takes: (id) => itemIds.has(id)
-        }) ?? [],
-      (reader ?? CLIENT_HISTORY_READER).form,
-      undefined,
-      [result.page.submissions, result.page.removedItemIds]
-    )
+    const items = !withLiveText
+      ? result.page.items
+      : withSubscriberLiveText(
+          result.page.items,
+          (itemIds) =>
+            hooks.readLiveText?.(request.sessionId, {
+              appends: true,
+              takes: (id) => itemIds.has(id)
+            }) ?? [],
+          (reader ?? CLIENT_HISTORY_READER).form,
+          undefined,
+          [result.page.submissions, result.page.removedItemIds]
+        )
     return {
       ...result,
       page: {

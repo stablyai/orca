@@ -35,24 +35,31 @@ function stepTimes(
   clockFrames = nativeChatRevealStepFrames(60, 1 / 16)
 ): number[] {
   const steps: number[] = []
+  let rendering = false
   const step = (): void => {
     steps.push(clock)
-    clockFrames.request(step)
-    // The step's render runs after its frame callback, so the next frame starts late.
-    clock += render
-    clockFrames.stepCost?.(render)
+    rendering = true
   }
   clockFrames.request(step)
   // Timers run on the same clock as the renders that move it.
   let timersAt = clock
   for (let frame = 0; frame < frames; frame++) {
     const at = Math.max(clock, clock + frameGaps(frame))
+    clock = at
     vi.advanceTimersByTime(at - timersAt)
     timersAt = at
-    clock = at
     const due = [...callbacks.values()]
     callbacks.clear()
     due.forEach((callback) => callback(at))
+    // As on screen: the step renders, reports its cost, then asks for the next step.
+    if (rendering) {
+      rendering = false
+      clock += render
+      vi.advanceTimersByTime(render)
+      timersAt = clock
+      clockFrames.stepCost?.(render)
+      clockFrames.request(step)
+    }
   }
   return steps
 }
@@ -85,6 +92,15 @@ it('keeps a plain reply moving through one unrelated slow frame', () => {
 it('still spaces its steps out when each step is slow to draw', () => {
   const gaps = spacings(stepTimes(() => 1000 / 60, 600, 200))
   expect(Math.max(...gaps)).toBeGreaterThan(1000)
+})
+
+it('waits out a slow step before the very next one', () => {
+  const frames = nativeChatRevealStepFrames(60, 1 / 10)
+  frames.stepCost?.(5)
+  frames.stepCost?.(80)
+  const steps = stepTimes(() => 1000 / 60, 120, 80, frames)
+  // The median is already 80 ms, so the first gap is about 800 ms, not 60.
+  expect(steps[1]! - steps[0]!).toBeGreaterThanOrEqual(800 - 1000 / 120 - 0.01)
 })
 
 describe('a reply redrawn whole each step', () => {
