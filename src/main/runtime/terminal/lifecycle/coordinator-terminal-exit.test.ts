@@ -5,11 +5,13 @@ import { getQuestionTaker } from '../../orchestration/db/messages/mail-taker'
 import { dropReaderlessRunQuestions } from '../../orchestration/db/questions/readerless-run-questions'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
 
 const LEAF = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const PANE = `tab_c:${LEAF}`
 const OTHER_LEAF = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const SIBLING_LEAF = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
 describe("a Run whose coordinator's terminal ended", () => {
   let db: OrchestrationDb
@@ -81,9 +83,17 @@ describe("a Run whose coordinator's terminal ended", () => {
   })
 
   /** Closes slept tab_s from the window; `moved` also keeps its leaf in another tab, as a move does. */
-  async function closeSleptTab(moved: boolean): Promise<string> {
+  async function closeSleptTab(
+    moved: boolean,
+    sleptTerminal = false,
+    onlyPane = false
+  ): Promise<string> {
     const leaf = { type: 'leaf' as const, leafId: OTHER_LEAF }
-    const layout = { root: leaf, activeLeafId: OTHER_LEAF, expandedLeafId: null }
+    const sibling = { type: 'leaf' as const, leafId: SIBLING_LEAF }
+    const root = onlyPane
+      ? { type: 'split' as const, direction: 'vertical' as const, first: leaf, second: sibling }
+      : leaf
+    const layout = { root, activeLeafId: OTHER_LEAF, expandedLeafId: null }
     let session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -114,18 +124,31 @@ describe("a Run whose coordinator's terminal ended", () => {
     const window = new OrcaRuntimeService(store as never)
     window.setOrchestrationDb(db)
     db.bindRun({ runId, coordinatorHandle: null, coordinatorPaneKey: `tab_s:${OTHER_LEAF}` })
+    if (sleptTerminal) {
+      // Slept in place: its record and pane stay, disconnected, and the sleep keeps its Runs.
+      window.registerPty('pty-s', 'wt', null, { tabId: 'tab_s', leafId: OTHER_LEAF })
+      window.intentionalPtyStops.mark('pty-s', 'reversible', null)
+      await window.onPtyExit('pty-s', 0)
+    }
     const open = ask()
+    expect(getQuestionTaker(db, open)).toBeNull()
     await window.closeTerminalSurfaceFromRenderer({
       worktreeId: 'wt',
-      target: { kind: 'tab', tabId: 'tab_s' },
+      target: onlyPane
+        ? { kind: 'pane', tabId: 'tab_s', leafId: OTHER_LEAF }
+        : { kind: 'tab', tabId: 'tab_s' },
       reason: 'user'
     })
-    expect(session.terminalLayoutsByTabId.tab_s).toBeUndefined()
+    expect(collectLeafIds(session.terminalLayoutsByTabId.tab_s?.root)).not.toContain(OTHER_LEAF)
     return open
   }
 
   it('retires a slept coordinator tab closed without waking, which ends no terminal', async () => {
     expect(getQuestionTaker(db, await closeSleptTab(false))).toBe('dropped:no-reader')
+  })
+
+  it('retires a split pane closed while its terminal sleeps there', async () => {
+    expect(getQuestionTaker(db, await closeSleptTab(false, true, true))).toBe('dropped:no-reader')
   })
 
   it('keeps a Run whose pane moved to another tab before its old tab closed', async () => {

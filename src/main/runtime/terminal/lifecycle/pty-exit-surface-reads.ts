@@ -11,7 +11,7 @@ export abstract class RuntimePtyExitSurfaceReads extends OrcaRuntimeWithOnClient
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
   /** Another process, or a later incarnation of this one, already runs in the pane; with no
-   *  `ptyId`, any process does. */
+   *  `ptyId`, any connected process does. */
   protected paneHasSuccessorProcess(
     paneKey: string,
     ptyId: string | null,
@@ -19,6 +19,10 @@ export abstract class RuntimePtyExitSurfaceReads extends OrcaRuntimeWithOnClient
   ): boolean {
     try {
       const current = this.resolveTerminalPane(paneKey)
+      if (ptyId === null) {
+        // A slept or host-lost terminal stays recorded in its pane, disconnected: no reader.
+        return Boolean(current.ptyId && current.connected !== false)
+      }
       return Boolean(
         current.ptyId &&
         (current.ptyId !== ptyId ||
