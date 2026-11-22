@@ -298,7 +298,7 @@ export function useNativeChatContextMenu({
             target={target}
             onQuote={(text) => {
               flushSync(() => setState((prev) => ({ ...prev, open: false })))
-              composerRef.current?.appendText(formatNativeChatQuote(text))
+              composerRef.current?.insertQuote(formatNativeChatQuote(text))
             }}
             rewind={rewind}
           />

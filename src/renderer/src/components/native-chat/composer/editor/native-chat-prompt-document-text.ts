@@ -11,6 +11,7 @@ import {
   botMentionToken,
   splitBotMentions
 } from '../../../../../../shared/bots/bot-mention-context'
+import { withQuoteChipsParsed } from './native-chat-quote-reparse'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
@@ -91,34 +92,58 @@ export function restorePromptBotMentions(document: JSONContent): JSONContent {
   return changed ? { ...document, content } : document
 }
 
-/** All text-to-document paths must reconstruct image chips, bot mentions and pending-paste pills. */
-/** The editor's opening content: an adopted draft's document with bot pills restored, else its text. */
+export const QUOTE_NODE = 'nativeChatQuote'
+// A line that Markdown reads as a blockquote line.
+export const QUOTE_LINE = /^ {0,3}>/
+
+function promptLineContent(line: string): JSONContent[] {
+  return splitImageReferences(line).flatMap((part) =>
+    typeof part === 'string'
+      ? part
+          .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
+          .flatMap((piece, index): JSONContent[] =>
+            piece === ''
+              ? []
+              : index % 2 === 1
+                ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
+                : botMentionContent(piece)
+          )
+      : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
+  )
+}
+
+/** The editor's opening content: an adopted draft's document with bot pills and quote chips restored, else its text. */
 export function openingPromptContent(document: JSONContent | undefined, text: string): JSONContent {
   return document
-    ? restorePromptBotMentions(promptParagraphLines(document))
+    ? withQuoteChipsParsed(restorePromptBotMentions(promptParagraphLines(document)))
     : promptTextContent(text)
 }
 
-export function promptTextContent(text: string): JSONContent {
-  return {
-    type: 'doc',
-    content: text.split('\n').map((line) => ({
-      type: 'paragraph',
-      content: splitImageReferences(line).flatMap((part) =>
-        typeof part === 'string'
-          ? part
-              .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
-              .flatMap((piece, index): JSONContent[] =>
-                piece === ''
-                  ? []
-                  : index % 2 === 1
-                    ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
-                    : botMentionContent(piece)
-              )
-          : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
-      )
-    }))
+/**
+ * All text-to-document paths must reconstruct image chips, bot mentions and pending-paste pills.
+ * Quoted lines, a blank line and one more line become a quote chip, as "Add to chat" writes them.
+ * The chip's text ends in that blank line; the next line goes on the chip's line, after it.
+ * `literal` text (a paste) keeps its quoted lines as text.
+ */
+export function promptTextContent(text: string, options?: { literal?: boolean }): JSONContent {
+  const lines = text.split('\n')
+  const content: JSONContent[] = []
+  let chips: JSONContent[] = []
+  for (let index = 0; index < lines.length; index++) {
+    let end = index
+    while (!options?.literal && end < lines.length && QUOTE_LINE.test(lines[end])) {
+      end++
+    }
+    if (end > index && lines[end] === '' && end + 1 < lines.length) {
+      const token = `${lines.slice(index, end).join('\n')}\n\n`
+      chips.push({ type: QUOTE_NODE, attrs: { token } })
+      index = end
+    } else {
+      content.push({ type: 'paragraph', content: [...chips, ...promptLineContent(lines[index])] })
+      chips = []
+    }
   }
+  return { type: 'doc', content }
 }
 
 /** Drafts saved before Shift+Enter split paragraphs hold hard breaks; initial editor content skips the hard-break plugin, which only sees transactions. */
@@ -210,20 +235,25 @@ export function withoutImageReferenceNodes(
     : document
 }
 
-/** Applies an appended text change without replacing existing picked nodes. */
+/**
+ * Applies an appended text change without replacing existing picked nodes.
+ * `literal` (a paste) keeps quoted lines as text, also in a draft that has no document yet.
+ */
 export function appendPromptDocumentText(
   document: JSONContent | undefined,
   before: string,
-  after: string
+  after: string,
+  options?: { literal?: boolean }
 ): JSONContent | undefined {
-  if (!document || before === after) {
+  const base = document ?? (options?.literal ? promptTextContent(before) : undefined)
+  if (!base || before === after) {
     return document
   }
   const kept = before.trimEnd()
   if (kept === '') {
-    return promptTextContent(after)
+    return promptTextContent(after, options)
   }
-  const blocks = [...(document.content ?? [])]
+  const blocks = [...(base.content ?? [])]
   while (blocks.length > 0) {
     const block = blocks.pop()
     const content = [...(block?.content ?? [])]
@@ -239,23 +269,28 @@ export function appendPromptDocumentText(
           content[content.length - 1] = { ...node, text }
           break
         }
+      } else if (node?.type === QUOTE_NODE) {
+        // Trimmed as `kept` is, so the document text stays the draft text.
+        const token = String(node.attrs?.token ?? '').trimEnd()
+        content[content.length - 1] = { ...node, attrs: { ...node.attrs, token } }
+        break
       } else {
         break
       }
     }
     if (content.length > 0 && block) {
-      const [first, ...rest] = promptTextContent(after.slice(kept.length)).content ?? []
-      return {
-        ...document,
-        content: [
-          ...blocks,
-          { ...block, content: [...content, ...(first?.content ?? [])] },
-          ...rest
-        ]
-      }
+      const [first, ...rest] = promptTextContent(after.slice(kept.length), options).content ?? []
+      const joined = [
+        ...blocks,
+        { ...block, content: [...content, ...(first?.content ?? [])] },
+        ...rest
+      ]
+      const document = { ...base, content: joined }
+      // A paste stays literal; other text joins the quote runs it touches, as the sent text does.
+      return options?.literal ? document : withQuoteChipsParsed(document)
     }
   }
-  return promptTextContent(after)
+  return promptTextContent(after, options)
 }
 
 /** Slice serialized prompt offsets while retaining selected nodes inside the range. */

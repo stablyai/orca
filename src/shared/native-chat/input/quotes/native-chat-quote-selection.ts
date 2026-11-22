@@ -96,3 +96,12 @@ export function appendNativeChatQuote(draft: string, quote: string): string {
   const kept = draft.trimEnd()
   return kept === '' ? quote : `${kept}\n\n${quote}`
 }
+
+/** The text of a quote that `formatNativeChatQuote` wrote, without its `>` marks. */
+export function quotedText(quote: string): string {
+  return quote
+    .trim()
+    .split('\n')
+    .map((line) => line.replace(/^ {0,3}> ?/, ''))
+    .join('\n')
+}

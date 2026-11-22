@@ -90,3 +90,11 @@
     }
   }
 }
+
+/* A quote chip line is a line of its own, as in the composer: no paragraph gap above or below it. */
+.native-chat-markdown > :has(+ [data-native-chat-quote-line]) {
+  margin-bottom: 0;
+}
+.native-chat-markdown > [data-native-chat-quote-line] + * {
+  margin-top: 0;
+}
