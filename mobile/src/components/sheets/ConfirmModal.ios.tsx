@@ -1,14 +1,15 @@
-import { useEffect, useRef } from 'react'
-import { Alert, type AlertButton } from 'react-native'
+import { Alert, Button, Host, Text } from '@expo/ui/swift-ui'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConfirmModalProps } from './ConfirmContent'
 import { DrawnConfirmModal } from './DrawnConfirmModal'
+import { NATIVE_ALERT_HOST_STYLE, NativeAlertAnchor } from './native-alert-anchor'
+import { useNativeAlertOpening } from './native-alert-opening'
 
 export { ConfirmContent } from './ConfirmContent'
 export type { ConfirmModalProps }
 
-/** A UIKit alert, raised each time `visible` turns on; `media` or `details` keep the drawn sheet. */
+/** A SwiftUI alert that follows `visible`; `media` or `details` keep the drawn sheet. */
 export function ConfirmModal(props: ConfirmModalProps) {
   if (props.media || props.details) {
     return <DrawnConfirmModal {...props} />
@@ -19,46 +20,42 @@ export function ConfirmModal(props: ConfirmModalProps) {
 function ConfirmAlert(props: ConfirmModalProps) {
   const t = useMobileTranslation()
   const scheme = useMobileColorScheme()
-  const latest = useRef({ props, t, scheme })
-  useEffect(() => {
-    latest.current = { props, t, scheme }
-  })
-
-  // Only the rising edge presents, and each button answers the opening it shows.
-  useEffect(() => {
-    if (!props.visible) {
-      return
-    }
-    const { props: shown, t: translate, scheme: style } = latest.current
-    let active = true
-    const answer = (press: (() => void) | undefined) => () => {
-      if (!active) {
-        return
-      }
-      active = false
+  const { opening, answer } = useNativeAlertOpening(props.visible, props)
+  if (!opening) {
+    return null
+  }
+  const { id, props: shown } = opening
+  const respond = (press: (() => void) | undefined) => () =>
+    answer(id, () => {
       press?.()
       shown.onCancel()
-    }
-    const buttons: AlertButton[] = []
-    if (shown.cancelLabel !== null) {
-      buttons.push({
-        text: shown.cancelLabel ?? translate('common.cancel', 'Cancel'),
-        style: 'cancel',
-        onPress: answer(shown.onCancelPress)
-      })
-    }
-    buttons.push({
-      text: shown.confirmLabel ?? translate('common.confirm', 'Confirm'),
-      style: shown.destructive ? 'destructive' : 'default',
-      isPreferred: !shown.destructive && buttons.length > 0,
-      onPress: answer(shown.onConfirm)
     })
-    Alert.alert(shown.title, shown.message, buttons, { userInterfaceStyle: style })
-    // A UIKit alert can't be withdrawn, so a press after the caller closed it is dropped.
-    return () => {
-      active = false
-    }
-  }, [props.visible])
-
-  return null
+  return (
+    <Host colorScheme={scheme} style={NATIVE_ALERT_HOST_STYLE} pointerEvents="none">
+      <Alert key={id} title={shown.title} isPresented={props.visible}>
+        <Alert.Trigger>
+          <NativeAlertAnchor />
+        </Alert.Trigger>
+        <Alert.Actions>
+          {shown.cancelLabel !== null ? (
+            <Button
+              role="cancel"
+              label={shown.cancelLabel ?? t('common.cancel', 'Cancel')}
+              onPress={respond(shown.onCancelPress)}
+            />
+          ) : null}
+          <Button
+            role={shown.destructive ? 'destructive' : 'default'}
+            label={shown.confirmLabel ?? t('common.confirm', 'Confirm')}
+            onPress={respond(shown.onConfirm)}
+          />
+        </Alert.Actions>
+        {shown.message ? (
+          <Alert.Message>
+            <Text>{shown.message}</Text>
+          </Alert.Message>
+        ) : null}
+      </Alert>
+    </Host>
+  )
 }

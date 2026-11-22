@@ -1,88 +1,110 @@
-import { useEffect, useRef } from 'react'
-import { Alert } from 'react-native'
+import { useRef } from 'react'
+import type { KeyboardTypeOptions } from 'react-native'
+import { Alert, Button, Host, Text, TextField, useNativeState } from '@expo/ui/swift-ui'
+import { keyboardType as keyboardTypeModifier } from '@expo/ui/swift-ui/modifiers'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { NATIVE_ALERT_HOST_STYLE, NativeAlertAnchor } from './native-alert-anchor'
+import { useNativeAlertOpening } from './native-alert-opening'
 import type { TextInputModalProps } from './TextInputSheetContent'
 
 export { TextInputSheetContent } from './TextInputSheetContent'
 export type { TextInputModalProps }
 
-/** A UIKit alert with a text field, raised each time `visible` turns on. */
+/** A SwiftUI alert with a text field that follows `visible`. */
 export function TextInputModal(props: TextInputModalProps) {
-  const t = useMobileTranslation()
   const scheme = useMobileColorScheme()
-  const latest = useRef({ props, t, scheme })
-  useEffect(() => {
-    latest.current = { props, t, scheme }
-  })
-
-  const opening = useRef<{ active: boolean } | null>(null)
-
-  // Only the rising edge presents, and each button answers the opening it shows.
-  useEffect(() => {
-    if (!props.visible) {
-      // A UIKit alert can't be withdrawn, so a press after the caller closed it is dropped.
-      const withdrawn = opening.current
-      opening.current = null
-      if (withdrawn?.active) {
-        withdrawn.active = false
-        latest.current.props.onAfterClose?.()
-      }
-      return
-    }
-    const { props: shown, t: translate, scheme: style } = latest.current
-    const current = { active: true }
-    opening.current = current
-    const answer = (respond: () => void) => {
-      if (!current.active) {
-        return
-      }
-      current.active = false
-      respond()
-      shown.onAfterClose?.()
-    }
-    Alert.prompt(
-      shown.title,
-      shown.message,
-      [
-        {
-          text: shown.cancelLabel ?? translate('common.cancel', 'Cancel'),
-          style: 'cancel',
-          onPress: () => answer(shown.onCancel)
-        },
-        {
-          text: shown.submitLabel ?? translate('common.save', 'Save'),
-          isPreferred: true,
-          onPress: (text) =>
-            answer(() => {
-              const value = (text ?? '').trim()
-              // The alert can't hold Save off while the field is empty, so an empty Save backs out.
-              if (value || shown.allowEmpty) {
-                shown.onSubmit(value)
-              } else {
-                shown.onCancel()
-              }
-            })
-        }
-      ],
-      PROMPT_TYPE,
-      shown.defaultValue ?? '',
-      shown.keyboardType,
-      { userInterfaceStyle: style }
-    )
-  }, [props.visible])
-
-  useEffect(
-    () => () => {
-      if (opening.current) {
-        opening.current.active = false
-      }
-    },
-    []
+  // A withdrawn prompt still settles its owner, e.g. a link prompt waiting on onAfterClose.
+  const { opening, answer } = useNativeAlertOpening(props.visible, props, (shown) =>
+    shown.onAfterClose?.()
   )
-
-  return null
+  if (!opening) {
+    return null
+  }
+  return (
+    <Host colorScheme={scheme} style={NATIVE_ALERT_HOST_STYLE} pointerEvents="none">
+      <PromptAlert
+        key={opening.id}
+        shown={opening.props}
+        presented={props.visible}
+        answer={(respond) =>
+          answer(opening.id, () => {
+            respond()
+            opening.props.onAfterClose?.()
+          })
+        }
+      />
+    </Host>
+  )
 }
 
-// Alert.prompt's field kind, not copy.
-const PROMPT_TYPE = 'plain-text'
+function PromptAlert({
+  shown,
+  presented,
+  answer
+}: {
+  shown: TextInputModalProps
+  presented: boolean
+  answer: (respond: () => void) => void
+}) {
+  const t = useMobileTranslation()
+  const field = useNativeState(shown.defaultValue ?? '')
+  const text = useRef(shown.defaultValue ?? '')
+  const submit = () => {
+    const value = text.current.trim()
+    // The alert can't hold Save off while the field is empty, so an empty Save backs out.
+    if (value || shown.allowEmpty) {
+      shown.onSubmit(value)
+    } else {
+      shown.onCancel()
+    }
+  }
+  return (
+    <Alert title={shown.title} isPresented={presented}>
+      <Alert.Trigger>
+        <NativeAlertAnchor />
+      </Alert.Trigger>
+      <Alert.Actions>
+        <TextField
+          text={field}
+          placeholder={shown.placeholder}
+          autoFocus
+          onTextChange={(value) => {
+            text.current = value
+          }}
+          modifiers={[keyboardTypeModifier(swiftKeyboardType(shown.keyboardType))]}
+        />
+        <Button
+          role="cancel"
+          label={shown.cancelLabel ?? t('common.cancel', 'Cancel')}
+          onPress={() => answer(shown.onCancel)}
+        />
+        <Button
+          label={shown.submitLabel ?? t('common.save', 'Save')}
+          onPress={() => answer(submit)}
+        />
+      </Alert.Actions>
+      {shown.message ? (
+        <Alert.Message>
+          <Text>{shown.message}</Text>
+        </Alert.Message>
+      ) : null}
+    </Alert>
+  )
+}
+
+type SwiftKeyboardType = Parameters<typeof keyboardTypeModifier>[0]
+
+const SWIFT_KEYBOARD_TYPES: Partial<Record<KeyboardTypeOptions, SwiftKeyboardType>> = {
+  'email-address': 'email-address',
+  numeric: 'numeric',
+  'number-pad': 'numeric',
+  'decimal-pad': 'decimal-pad',
+  'phone-pad': 'phone-pad',
+  url: 'url',
+  'web-search': 'web-search'
+}
+
+function swiftKeyboardType(type: KeyboardTypeOptions | undefined): SwiftKeyboardType {
+  return (type && SWIFT_KEYBOARD_TYPES[type]) ?? 'default'
+}
