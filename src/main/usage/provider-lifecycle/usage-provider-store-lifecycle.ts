@@ -301,6 +301,7 @@ export abstract class UsageProviderStoreLifecycle<
       if (!this.tokenReporter) {
         const { dir, name } = parse(this.config.resolveCacheFile())
         this.tokenReporter = new AgentTokenUsageReporter(
+          join(dir, `${name}-token-usage-daily.json`),
           join(dir, `${name}-token-usage.json`),
           config.provider,
           (ids) => this.getAnalyticsSessionIds(ids),

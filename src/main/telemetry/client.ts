@@ -144,7 +144,12 @@ export function track<N extends events.EventName>(name: N, props: events.EventPr
   }
 
   const now = Date.now()
-  const sampleRate = telemetryEventSampleRate(name, props, now)
+  const sampleRate = telemetryEventSampleRate(
+    name,
+    props,
+    now,
+    (client) => storeRef?.getSettings().telemetry?.chatMessageSentDays?.[client]
+  )
   // Reject late IPC while the client flushes.
   if (
     shuttingDown ||
@@ -223,7 +228,7 @@ export function track<N extends events.EventName>(name: N, props: events.EventPr
         : {}
 
   enqueueCapture(name, { ...result.props, ...mainOwnedProps })
-  noteTelemetryEventQueued(name, result.props, now)
+  noteTelemetryEventQueued(name, result.props, now, storeRef)
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
     try {

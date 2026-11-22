@@ -12,7 +12,7 @@ import type { AgentTokenSession } from './agent-token-usage'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 // Unsent days stay bounded when capture keeps failing.
-const MAX_PENDING_DAYS = 14
+const MAX_PENDING_DAYS = 90
 const COUNT_KEYS = [
   'input_tokens',
   'output_tokens',
@@ -23,17 +23,17 @@ const COUNT_KEYS = [
 const dayTotalsSchema = agentTokenCountsSchema.extend({ day: z.string().regex(DAY) }).strict()
 type DayTotals = z.infer<typeof dayTotalsSchema>
 
-const stateSchema = z.discriminatedUnion('schemaVersion', [
-  // Per-session snapshots from before daily totals; read once as baselines.
-  z.object({ schemaVersion: z.literal(1), snapshots: z.array(agentTokenUsageSchema) }).strict(),
-  z
-    .object({
-      schemaVersion: z.literal(2),
-      baselines: z.array(z.tuple([z.string(), agentTokenCountsSchema])),
-      days: z.array(dayTotalsSchema)
-    })
-    .strict()
-])
+const stateSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    baselines: z.array(z.tuple([z.string(), agentTokenCountsSchema])),
+    days: z.array(dayTotalsSchema)
+  })
+  .strict()
+// Per-session snapshots an earlier build wrote; read once as baselines and left for that build.
+const legacyStateSchema = z
+  .object({ schemaVersion: z.literal(1), snapshots: z.array(agentTokenUsageSchema) })
+  .strict()
 
 type State = { baselines: Map<string, AgentTokenCounts>; days: DayTotals[] }
 
@@ -47,6 +47,7 @@ export class AgentTokenUsageReporter {
 
   constructor(
     private readonly file: string,
+    private readonly legacyFile: string,
     private readonly provider: AgentTokenUsage['provider'],
     private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>,
     private readonly telemetry: UsageTelemetryHost,
@@ -128,29 +129,34 @@ export class AgentTokenUsageReporter {
   }
 
   private async load(): Promise<{ state: State; fresh: boolean }> {
-    let content: string
-    try {
-      content = await readFile(this.file, 'utf8')
-    } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        return { state: { baselines: new Map(), days: [] }, fresh: true }
-      }
-      throw error
+    const content = await readIfExists(this.file)
+    if (content !== null) {
+      const parsed = stateSchema.parse(JSON.parse(content))
+      return { state: { baselines: new Map(parsed.baselines), days: parsed.days }, fresh: false }
     }
-    const parsed = stateSchema.parse(JSON.parse(content))
-    if (parsed.schemaVersion === 1) {
-      if (parsed.snapshots.some((snapshot) => snapshot.provider !== this.provider)) {
-        throw new Error('Invalid agent token usage state')
-      }
-      const baselines = new Map(
-        parsed.snapshots.map((snapshot) => [snapshot.analytics_session_id, countsOf(snapshot)])
-      )
-      return { state: { baselines, days: [] }, fresh: false }
+    const legacy = await readIfExists(this.legacyFile)
+    if (legacy === null) {
+      return { state: { baselines: new Map(), days: [] }, fresh: true }
     }
-    return {
-      state: { baselines: new Map(parsed.baselines), days: parsed.days },
-      fresh: false
+    const parsed = legacyStateSchema.parse(JSON.parse(legacy))
+    if (parsed.snapshots.some((snapshot) => snapshot.provider !== this.provider)) {
+      throw new Error('Invalid agent token usage state')
     }
+    const baselines = new Map(
+      parsed.snapshots.map((snapshot) => [snapshot.analytics_session_id, countsOf(snapshot)])
+    )
+    return { state: { baselines, days: [] }, fresh: false }
+  }
+}
+
+async function readIfExists(file: string): Promise<string | null> {
+  try {
+    return await readFile(file, 'utf8')
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
   }
 }
 

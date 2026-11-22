@@ -22,14 +22,16 @@ afterEach(async () => {
 
 async function setup(initialState?: unknown) {
   dir = await mkdtemp(join(tmpdir(), 'token-usage-'))
-  const file = join(dir, 'state.json')
+  const file = join(dir, 'daily.json')
+  const legacyFile = join(dir, 'legacy.json')
   if (initialState) {
-    await writeFile(file, JSON.stringify(initialState))
+    await writeFile(legacyFile, JSON.stringify(initialState))
   }
   const sent: AgentTokenUsageDaily[] = []
   let now = new Date('2026-11-20T10:00:00Z')
   const reporter = new AgentTokenUsageReporter(
     file,
+    legacyFile,
     'claude',
     async (ids) => ids.map(() => SESSION_ID),
     {
@@ -43,6 +45,7 @@ async function setup(initialState?: unknown) {
   )
   return {
     file,
+    legacyFile,
     sent,
     reporter,
     at: (iso: string) => {
@@ -53,7 +56,7 @@ async function setup(initialState?: unknown) {
 
 describe('AgentTokenUsageReporter', () => {
   it('sends only growth after the v1 snapshot, once per finished UTC day', async () => {
-    const { reporter, sent, at, file } = await setup({
+    const { reporter, sent, at, file, legacyFile } = await setup({
       schemaVersion: 1,
       snapshots: [
         { ...tokens(100), provider: 'claude', analytics_session_id: SESSION_ID, revision: 3 }
@@ -68,6 +71,8 @@ describe('AgentTokenUsageReporter', () => {
     expect(sent).toEqual([{ ...tokens(50), provider: 'claude', usage_day: '2026-11-20' }])
     await reporter.flush()
     expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ schemaVersion: 2, days: [] })
+    // An older build keeps reading its own untouched file after a downgrade.
+    expect(JSON.parse(await readFile(legacyFile, 'utf8'))).toMatchObject({ schemaVersion: 1 })
   })
 
   it('never reports history found by the first scan', async () => {
