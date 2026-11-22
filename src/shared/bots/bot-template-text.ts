@@ -1,41 +1,118 @@
-// Built-in template words as the template pages show them, in the UI language. Keys hash the English,
-// so a catalog edit shows its new English until it is translated again, never a stale translation.
-// Bots made from a template keep the English: these are display words only.
-import type { BotProposal } from './bot-proposal'
-import { botTemplate, type BotTemplateSkill } from './bot-templates'
-import { botTemplateEventParts, freeBotName } from './bot-template-view'
-import { englishTextHash } from '../text/english-text-hash'
+// Built-in template words as the template pages show them, in the UI language, under named keys
+// (`bots.templates.<id>.<field>`). Bots made from a template keep the English: display words only.
+import { BOT_TEMPLATES, type BotTemplate, type BotTemplateSkill } from './bot-templates'
+import { BOT_TEMPLATE_SKILL_LINES, botTemplateEventParts } from './bot-template-view'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
-export function botTemplateText(english: string, t: Translate): string {
-  // Why the inline template: catalog checks keep keys whose `t(` call names this prefix.
-  return english ? t(`bots.templateText.t${englishTextHash(english)}`, english) : english
-}
+type BotTemplateField =
+  | 'name'
+  | 'line'
+  | 'firstChat'
+  | 'watches'
+  | 'does'
+  | 'reports'
+  | 'needsSetup'
+  | 'example1'
+  | 'example2'
+type BotTemplateSchedule = BotTemplate['schedules'][number]
+type BotTemplateEvent = BotTemplate['events'][number]
 
-/** A template's proposed name as New bot shows it: in the UI language and free among `taken`; any
- *  other name as typed. Left as shown, the bot is made under the English name, which names its
- *  folder, its Linear and GitHub handle and its SOUL.md, and then takes this one. */
-/** The template's own name, or that name with the number that keeps it free ("Support triage 2"). */
-function isTemplateDefaultName(name: string, templateName: string): boolean {
-  return (
-    name === templateName ||
-    (name.startsWith(`${templateName} `) && /^\d+$/.test(name.slice(templateName.length + 1)))
+const scheduleKey = (schedule: BotTemplateSchedule, part: 'when' | 'what'): string =>
+  `schedules.${schedule.id}.${part}`
+const eventKey = (event: BotTemplateEvent, part: 'trigger' | 'action'): string =>
+  `events.${event.id}.${part}`
+
+/** Each English template word with its key under `bots.templates.<id>.`. */
+export function botTemplateTextKeys(template: BotTemplate): [key: string, english: string][] {
+  const fields: [string, string | undefined][] = [
+    ['name', template.name],
+    ['line', template.line],
+    ['firstChat', template.firstChat],
+    ['watches', template.watches],
+    ['does', template.does],
+    ['reports', template.reports],
+    ['needsSetup', template.needsSetup],
+    ['example1', template.example[0]],
+    ['example2', template.example[1]],
+    ...template.schedules.flatMap((schedule): [string, string][] => [
+      [scheduleKey(schedule, 'when'), schedule.when],
+      [scheduleKey(schedule, 'what'), schedule.what]
+    ]),
+    ...template.events.flatMap((event): [string, string | undefined][] => {
+      const parts = botTemplateEventParts(event.name)
+      return [
+        [eventKey(event, 'trigger'), parts.trigger],
+        [eventKey(event, 'action'), parts.action ?? undefined]
+      ]
+    })
+  ]
+  return fields.flatMap(([field, english]): [string, string][] =>
+    english ? [[`${template.id}.${field}`, english]] : []
   )
 }
 
-export function botTemplateShownName(
-  proposal: Pick<BotProposal, 'name' | 'templateId'> | null | undefined,
-  name: string,
-  taken: readonly string[],
+const shown = (template: BotTemplate, field: string, english: string, t: Translate): string =>
+  t(`bots.templates.${template.id}.${field}`, english)
+
+/** One of a template's own words in the UI language. */
+export function botTemplateWord(
+  template: BotTemplate,
+  field: BotTemplateField,
   t: Translate
 ): string {
-  const template = botTemplate(proposal?.templateId)
-  if (!template || name !== proposal?.name || !isTemplateDefaultName(name, template.name)) {
-    return name
+  const english =
+    field === 'example1'
+      ? template.example[0]
+      : field === 'example2'
+        ? template.example[1]
+        : (template[field] ?? '')
+  return english ? shown(template, field, english, t) : english
+}
+
+export function botTemplateScheduleWords(
+  template: BotTemplate,
+  schedule: BotTemplateSchedule,
+  t: Translate
+): { when: string; what: string } {
+  return {
+    when: shown(template, scheduleKey(schedule, 'when'), schedule.when, t),
+    what: shown(template, scheduleKey(schedule, 'what'), schedule.what, t)
   }
-  const translated = botTemplateText(template.name, t)
-  return translated === template.name ? name : freeBotName(translated, taken)
+}
+
+/** A template event's trigger and action, each translated after the English split. */
+export function botTemplateEventWords(
+  template: BotTemplate,
+  event: BotTemplateEvent,
+  t: Translate
+): { trigger: string; action: string | null } {
+  const parts = botTemplateEventParts(event.name)
+  return {
+    trigger: shown(template, eventKey(event, 'trigger'), parts.trigger, t),
+    action:
+      parts.action === null ? null : shown(template, eventKey(event, 'action'), parts.action, t)
+  }
+}
+
+// Why by English: offer cards, SOUL.md descriptions and New bot's fields hold only the words; text
+// that matches no template word stays as written. Words two templates share read as the first's.
+const KEY_BY_ENGLISH = new Map<string, string>()
+for (const [key, english] of BOT_TEMPLATES.flatMap(botTemplateTextKeys)) {
+  if (!KEY_BY_ENGLISH.has(english)) {
+    KEY_BY_ENGLISH.set(english, key)
+  }
+}
+
+/** A built-in template's words, found by their English, in the UI language. */
+export function botTemplateText(english: string, t: Translate): string {
+  const key = KEY_BY_ENGLISH.get(english)
+  return key ? t(`bots.templates.${key}`, english) : english
+}
+
+/** What a template skill teaches, as the template pages list it. */
+export function botTemplateSkillLine(skill: BotTemplateSkill, t: Translate): string {
+  return t(`bots.templateSkills.lines.${skill}`, BOT_TEMPLATE_SKILL_LINES[skill])
 }
 
 /** A template skill as the pages list it: a translated name keeps its folder name beside it; English
@@ -75,17 +152,5 @@ function translatedSkillName(skill: BotTemplateSkill, t: Translate): string {
       return t('bots.templateSkills.incidentTimeline', 'incident-timeline')
     case 'workspace-hygiene':
       return t('bots.templateSkills.workspaceHygiene', 'workspace-hygiene')
-  }
-}
-
-/** A template event's trigger and action, each translated after the English split. */
-export function botTemplateEventWords(
-  name: string,
-  t: Translate
-): { trigger: string; action: string | null } {
-  const parts = botTemplateEventParts(name)
-  return {
-    trigger: botTemplateText(parts.trigger, t),
-    action: parts.action === null ? null : botTemplateText(parts.action, t)
   }
 }

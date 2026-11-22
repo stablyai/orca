@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotTemplate } from '../../../../../shared/bots/bot-templates'
-import { botTemplateText } from '../../../../../shared/bots/bot-template-text'
+import { botTemplateWord } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateNeedsSetupBadge } from './BotTemplateDetail'
 import { BotTemplateMascot } from './BotTemplateMascot'
 
@@ -20,7 +20,7 @@ export function BotTemplateRow({
   rowRef?: (element: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const name = botTemplateText(template.name, t)
+  const name = botTemplateWord(template, 'name', t)
   return (
     <div
       ref={rowRef}
@@ -42,7 +42,7 @@ export function BotTemplateRow({
           {template.needsSetup ? <BotTemplateNeedsSetupBadge /> : null}
         </span>
         <p className="truncate text-xs leading-5 text-muted-foreground">
-          {botTemplateText(template.line, t)}
+          {botTemplateWord(template, 'line', t)}
         </p>
       </div>
       <Button

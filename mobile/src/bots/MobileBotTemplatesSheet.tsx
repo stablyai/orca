@@ -27,7 +27,7 @@ import {
   botTemplateMatches,
   freeBotName
 } from '../../../src/shared/bots/bot-template-view'
-import { botTemplateText } from '../../../src/shared/bots/bot-template-text'
+import { botTemplateText, botTemplateWord } from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
@@ -69,7 +69,7 @@ export function MobileBotTemplatesSheet(props: {
     props.onPick({
       proposal: templateProposal(template, { name: freeBotName(template.name, props.botNames) }),
       origin: t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-        template: botTemplateText(template.name, t)
+        template: botTemplateWord(template, 'name', t)
       })
     })
   }
@@ -126,8 +126,8 @@ export function MobileBotTemplatesSheet(props: {
                       size={AVATAR_SIZE}
                     />
                   }
-                  title={botTemplateText(template.name, t)}
-                  subtitle={botTemplateText(template.line, t)}
+                  title={botTemplateWord(template, 'name', t)}
+                  subtitle={botTemplateWord(template, 'line', t)}
                   navigates
                   onPress={() => {
                     // The search field stays mounted under the page, so its keyboard would cover the detail.

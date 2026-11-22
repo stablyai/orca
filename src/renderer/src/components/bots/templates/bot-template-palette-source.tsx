@@ -7,7 +7,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import { BOT_TEMPLATES } from '../../../../../shared/bots/bot-templates'
-import { botTemplateText } from '../../../../../shared/bots/bot-template-text'
+import { botTemplateWord } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateMascot } from './BotTemplateMascot'
 import { openBotTemplates } from './bot-templates-open'
 
@@ -27,8 +27,8 @@ export function useBotTemplatePaletteSource({
     }
     return BOT_TEMPLATES.flatMap((template, order): PaletteExtraResult[] => {
       const id = `bot-template:${template.id}`
-      const name = botTemplateText(template.name, t)
-      const line = botTemplateText(template.line, t)
+      const name = botTemplateWord(template, 'name', t)
+      const line = botTemplateWord(template, 'line', t)
       const match = matchPaletteExtraFields(
         id,
         [

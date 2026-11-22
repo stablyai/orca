@@ -5730,7 +5730,398 @@
         "ops": "Ops",
         "personal": "Personal assistant"
       },
-      "allCategories": "All"
+      "allCategories": "All",
+      "pr-review": {
+        "name": "Pull request review",
+        "line": "Reviews pull requests you’re asked to review and lists risky changes.",
+        "firstChat": "Asks which repos to cover, then reviews the open pull requests waiting on your review and posts its findings here, with file and line. It doesn’t comment on GitHub until you say it can.",
+        "watches": "Pull requests waiting on your review, in the repos you pick",
+        "does": "Reviews each one and lists risky changes and missing tests, with file and line.",
+        "reports": "Here, when a review is requested",
+        "example1": "#4121: the retry counter is never reset, so a second outage stops retries.",
+        "example2": "No test covers the new timeout path.",
+        "events": {
+          "review-requested": {
+            "trigger": "When you’re asked to review a pull request",
+            "action": "Review it and post here"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "Bug investigation",
+        "line": "Reproduces a reported bug and finds where it starts.",
+        "firstChat": "Give it a bug report or an issue link. It starts an agent in a new workspace that writes down how to reproduce it, then reports the cause. It writes a fix only after you agree.",
+        "watches": "Bug reports you hand it, and Linear issues assigned to you",
+        "does": "Reproduces the bug in a new workspace, finds where it starts, and proposes a fix.",
+        "reports": "Here, when it has a repro and a cause",
+        "example1": "Reproduced ORC-640 on Windows: paste drops the last line when it has no newline.",
+        "example2": "Cause: the paste end marker goes out before the final chunk. Start a fix?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "When a Linear issue is assigned to you",
+            "action": "Investigate it"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "Dependency updates",
+        "line": "Checks for outdated and vulnerable packages and proposes upgrades.",
+        "firstChat": "Lists outdated and vulnerable packages in a repo you pick, most urgent first. After you agree, an agent opens one pull request per group.",
+        "watches": "Packages in the repos you pick",
+        "does": "Lists advisories and outdated packages, most urgent first; upgrades one group per pull request once agreed.",
+        "reports": "Here, Mondays at 9 AM",
+        "example1": "1 advisory: http-client 6.19 has a high-severity fix in 6.21.",
+        "example2": "4 minor upgrades can go in one pull request.",
+        "schedules": {
+          "weekly-check": {
+            "when": "Mondays at 9 AM",
+            "what": "New advisories and major versions"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "Unreviewed agent work",
+        "line": "A daily list of finished agent work nobody has looked at yet.",
+        "firstChat": "Lists workspaces whose agent finished with changes you haven’t reviewed or turned into a pull request. Orca already tells you when an agent is waiting on you; this covers what’s done.",
+        "watches": "Your Orca workspaces",
+        "does": "Lists workspaces whose agent finished with changes nobody reviewed or opened a pull request for.",
+        "reports": "Here, weekdays at 9 AM",
+        "example1": "mobile-pairing finished yesterday with a 340-line diff, no pull request.",
+        "example2": "2 more finished this week.",
+        "schedules": {
+          "daily-list": {
+            "when": "Weekdays at 9 AM",
+            "what": "Finished work waiting for review"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "Workspace cleanup",
+        "line": "Finds finished or abandoned workspaces and offers to remove them.",
+        "firstChat": "Lists workspaces whose pull request merged or that haven’t changed in two weeks, with any uncommitted changes. It removes only the ones you pick.",
+        "watches": "Your Orca workspaces and their pull requests",
+        "does": "Lists workspaces that are done or abandoned, with uncommitted changes; removes only the ones you pick.",
+        "reports": "Here, Fridays at 4 PM",
+        "example1": "6 workspaces are done: their pull requests merged this week.",
+        "example2": "2 folders haven’t changed since Oct 20.",
+        "schedules": {
+          "weekly-list": {
+            "when": "Fridays at 4 PM",
+            "what": "Workspaces ready to remove"
+          }
+        }
+      },
+      "security-check": {
+        "name": "Security check",
+        "line": "Looks at merged changes for leaked secrets and risky code.",
+        "firstChat": "Reviews last week’s merged pull requests in a repo you pick and lists anything that needs a second look, with file and line.",
+        "watches": "Merged pull requests in the repos you pick",
+        "does": "Checks them for leaked secrets, injection, missing auth and unsafe defaults.",
+        "reports": "Here, Mondays at 9 AM and when a pull request merges",
+        "example1": "#4133 logs the full request headers, including the auth token.",
+        "example2": "Nothing else this week.",
+        "schedules": {
+          "weekly-review": {
+            "when": "Mondays at 9 AM",
+            "what": "The week’s merged changes"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "When a pull request merges",
+            "action": "Check it"
+          }
+        }
+      },
+      "release": {
+        "name": "Release readiness",
+        "line": "Tracks what’s blocking the next release.",
+        "firstChat": "Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.",
+        "watches": "Pull requests, checks and workspaces",
+        "does": "Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.",
+        "reports": "Here, weekday mornings",
+        "example1": "1.5 is blocked by one failing check: typecheck on #4121.",
+        "example2": "Two pull requests still need a review: #4108, #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "Weekdays at 9 AM",
+            "what": "Readiness list"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "Release notes",
+        "line": "Drafts the next release’s notes from merged pull requests.",
+        "firstChat": "Finds the last release tag and drafts notes in three groups: new, fixed, changed. You edit them here.",
+        "watches": "Pull requests merged since the last release",
+        "does": "Drafts release notes for users in three groups: new, fixed, changed.",
+        "reports": "Here, when you ask",
+        "example1": "Draft for 1.5: 4 new, 9 fixed, 2 changed.",
+        "example2": "Biggest change: bots can share skills."
+      },
+      "ci-failures": {
+        "name": "CI failures",
+        "line": "Explains failed checks and keeps a list of flaky ones.",
+        "firstChat": "Reads the last two weeks of check runs and lists the flaky ones, then explains each failing check on your open pull requests. It starts a fix only after you agree.",
+        "watches": "Check runs in the repos you pick",
+        "does": "Tells flaky checks from real failures, explains each failure, and keeps a list of flaky checks.",
+        "reports": "Here, Mondays at 9 AM and when a check fails",
+        "needsSetup": "GitHub can’t filter failures by branch yet, so the bot looks at every failure in the repo and skips the ones that don’t matter. Each one costs a turn.",
+        "example1": "#4130 typecheck: a renamed export, two call sites missed. Fix is one commit.",
+        "example2": "Flakiest this week: terminal-resize test, 4 of 30 runs.",
+        "schedules": {
+          "flaky-list": {
+            "when": "Mondays at 9 AM",
+            "what": "Flaky checks"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "When a check fails",
+            "action": "Say whether it’s flaky or real"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "Deploy watch",
+        "line": "Posts what changed in each deploy and flags failed ones.",
+        "firstChat": "Gives you an automation address for your deploy tool to call, then summarizes each deploy from the pull requests it shipped.",
+        "watches": "Calls from your deploy tool",
+        "does": "Summarizes each deploy from the pull requests it shipped, and flags failed ones.",
+        "reports": "Here, after each deploy",
+        "needsSetup": "No deploy-tool connector: you add the automation’s address to your deploy tool by hand.",
+        "example1": "Production deploy 14:02: 5 pull requests, including the relay retry fix.",
+        "example2": "Staging deploy failed at migrate: column already exists.",
+        "events": {
+          "deploy-called": {
+            "trigger": "When your deploy tool calls",
+            "action": "Summarize the deploy"
+          }
+        }
+      },
+      "support": {
+        "name": "Support triage",
+        "line": "Keeps a list of questions nobody has answered.",
+        "firstChat": "Lists unanswered questions in the Slack channels you pick, with links, and notes which already have an issue.",
+        "watches": "Slack channels you pick",
+        "does": "Lists unanswered questions with links, and notes which already have a Linear issue.",
+        "reports": "Here, every 2 hours on weekdays",
+        "example1": "3 new questions in #help since 11 AM. Oldest: SSH remote keeps disconnecting, 2 hours.",
+        "example2": "“Can I export a bot?” already has SUP-212.",
+        "schedules": {
+          "unanswered": {
+            "when": "Weekdays, every 2 hours from 9 AM to 5 PM",
+            "what": "Unanswered questions"
+          }
+        }
+      },
+      "feedback": {
+        "name": "Feedback digest",
+        "line": "Turns feedback into a weekly list of themes.",
+        "firstChat": "Groups the last month of feedback in the channels you pick into themes, with counts and quotes.",
+        "watches": "Slack feedback channels",
+        "does": "Groups feedback into themes with quotes and counts, and links existing Linear issues.",
+        "reports": "Here, Mondays at 9 AM",
+        "example1": "Top theme: pasting in the Windows terminal, 7 people, linked ORC-640.",
+        "example2": "New this week: 3 people asked to export a bot.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "Mondays at 9 AM",
+            "what": "Themes of the week"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "Bug report intake",
+        "line": "Turns bug reports in Slack into tracked issues with repro steps.",
+        "firstChat": "Reads the channel you pick and drafts an issue for each new bug report. It files them only after you approve.",
+        "watches": "The Slack channel where bugs are reported",
+        "does": "Drafts a Linear issue with repro steps for each bug report; files it once approved.",
+        "reports": "Here, when a bug is reported",
+        "example1": "Drafted: “Terminal freezes after sleep on macOS 27”, steps from the thread.",
+        "example2": "Possible duplicate of ORC-702.",
+        "events": {
+          "bug-posted": {
+            "trigger": "When someone posts in your bugs channel",
+            "action": "Draft an issue"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "GitHub issue triage",
+        "line": "Labels new issues, finds duplicates and asks for missing details.",
+        "firstChat": "Goes through the last week of new issues in a repo you pick and proposes labels and duplicates here.",
+        "watches": "New issues in the repos you pick",
+        "does": "Proposes labels and duplicates, and lists missing details, for each new issue.",
+        "reports": "Here, when an issue is opened",
+        "example1": "#2210: bug, windows, duplicate of #2188.",
+        "example2": "#2214 has no version or steps. Ask for them?",
+        "events": {
+          "issue-opened": {
+            "trigger": "When an issue is opened",
+            "action": "Propose labels and duplicates"
+          }
+        }
+      },
+      "briefing": {
+        "name": "Project briefing",
+        "line": "A weekly brief on the projects you pick.",
+        "firstChat": "Writes what changed, what’s blocked and what needs a decision for the projects you pick.",
+        "watches": "Linear projects and GitHub repos",
+        "does": "Writes what changed, what’s blocked and what needs a decision.",
+        "reports": "Here, Fridays at 3 PM",
+        "example1": "Mobile v2: 6 issues closed, 2 waiting on design.",
+        "example2": "Needs a decision: ORC-902, push permission copy.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "Fridays at 3 PM",
+            "what": "The brief"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "Docs upkeep",
+        "line": "Flags docs that no longer match merged code.",
+        "firstChat": "Reads last week’s merged pull requests and lists docs pages that now say something wrong.",
+        "watches": "Merged pull requests and the docs in the repos you pick",
+        "does": "Lists docs pages that no longer match what merged, with the line that is now wrong.",
+        "reports": "Here, Wednesdays at 10 AM",
+        "example1": "docs/remote.md still says SSH needs a restart; #4108 removed that.",
+        "example2": "1 more page mentions the old setting name.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "Wednesdays at 10 AM",
+            "what": "Docs to update"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "Spec drafting",
+        "line": "Turns a discussion into a short spec you can share.",
+        "firstChat": "Give it a Slack thread or a doc. It drafts a one-page spec and asks about anything left open.",
+        "watches": "Slack threads and docs you hand it",
+        "does": "Drafts a one-page spec: problem, decision, scope, open questions.",
+        "reports": "Here, when you ask",
+        "example1": "Draft: “Bot sharing v2”. 3 decisions, 2 open questions.",
+        "example2": "Saved to your Drive as a doc."
+      },
+      "backlog-cleanup": {
+        "name": "Backlog cleanup",
+        "line": "Finds stale, duplicate and unowned issues.",
+        "firstChat": "Lists issues untouched for 60 days, likely duplicates and issues with no owner, for a team you pick.",
+        "watches": "Linear issues for the team you pick",
+        "does": "Lists stale issues, likely duplicates and issues with no owner.",
+        "reports": "Here, on the 1st of each month",
+        "example1": "14 issues untouched since August.",
+        "example2": "ORC-511 and ORC-688 look like the same bug.",
+        "schedules": {
+          "monthly-list": {
+            "when": "1st of each month at 9 AM",
+            "what": "Cleanup list"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "Incident notes",
+        "line": "Keeps a timeline in an incident channel and drafts the write-up.",
+        "firstChat": "Follows the incident channel you pick and its threads, keeps a timestamped timeline, and drafts a blameless write-up when it’s over.",
+        "watches": "The incident channel you pick, and its threads",
+        "does": "Keeps a timestamped timeline, then drafts a blameless write-up.",
+        "reports": "Here, during and after an incident",
+        "example1": "14:02 alert fired; 14:09 rollback started; 14:21 errors back to normal.",
+        "example2": "Write-up draft ready.",
+        "events": {
+          "incident-posted": {
+            "trigger": "When someone posts in an incident channel",
+            "action": "Add it to the timeline"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "On-call handoff",
+        "line": "A weekly summary of alerts, incidents and open follow-ups.",
+        "firstChat": "Reads your alert channel and incident issues from the past week and writes the handoff.",
+        "watches": "Your alert channel and incident issues",
+        "does": "Summarizes the week’s alerts and incidents, and lists open follow-ups.",
+        "reports": "Here, Fridays at 4 PM",
+        "needsSetup": "No paging-tool connector: it reads alerts only where they’re posted in Slack.",
+        "example1": "12 alerts, 2 incidents. Disk alert on cell-3 fired 5 times.",
+        "example2": "3 follow-ups still open.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "Fridays at 4 PM",
+            "what": "Handoff"
+          }
+        }
+      },
+      "followup": {
+        "name": "Replies you owe",
+        "line": "Reminds you of replies you still owe.",
+        "firstChat": "Finds questions to you with no reply, and things you said you’d do, in Slack threads and issue comments.",
+        "watches": "Slack threads and Linear comments",
+        "does": "Finds questions to you with no reply, and things you said you’d do.",
+        "reports": "Here, daily at 4 PM",
+        "example1": "You told a teammate “I’ll check tomorrow” in #design, 2 days ago.",
+        "example2": "ORC-881 has a question for you from yesterday.",
+        "schedules": {
+          "daily-owed": {
+            "when": "Daily at 4 PM",
+            "what": "What you still owe"
+          }
+        }
+      },
+      "standup": {
+        "name": "Daily standup notes",
+        "line": "What you and your agents did yesterday, and what’s next.",
+        "firstChat": "Writes yesterday’s notes from your workspaces, merged pull requests and moved issues. You copy them where your team reads them.",
+        "watches": "Your workspaces, pull requests and issues",
+        "does": "Writes yesterday’s notes and today’s plan.",
+        "reports": "Here, weekdays at 9 AM",
+        "example1": "Yesterday: merged #4121, relay retry. Agents finished 2 workspaces.",
+        "example2": "Today: ORC-702, review #4130.",
+        "schedules": {
+          "daily-notes": {
+            "when": "Weekdays at 9 AM",
+            "what": "Standup notes"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "Email digest",
+        "line": "Twice a day, the emails that need a reply from you.",
+        "firstChat": "Reads today’s inbox and lists emails that need your reply, newest first. It never sends email.",
+        "watches": "Your inbox",
+        "does": "Lists emails that need a reply from you, newest first. Never sends email.",
+        "reports": "Here, weekdays at 9 AM and 2 PM",
+        "example1": "2 need a reply: the security review date, and an invoice question.",
+        "example2": "14 newsletters skipped.",
+        "schedules": {
+          "morning": {
+            "when": "Weekdays at 9 AM",
+            "what": "Emails that need you"
+          },
+          "afternoon": {
+            "when": "Weekdays at 2 PM",
+            "what": "Emails that need you"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "Meeting prep",
+        "line": "Before each meeting, the issues, pull requests and docs it’s about.",
+        "firstChat": "Looks at today’s calendar and writes a short prep note for each meeting.",
+        "watches": "Your calendar",
+        "does": "Before each meeting, lists the issues, pull requests and docs it is about.",
+        "reports": "Here, before each meeting",
+        "example1": "Mobile sync at 11: ORC-902 needs a decision; #4130 is waiting on you.",
+        "example2": "Doc: “Push permission copy”.",
+        "events": {
+          "meeting-soon": {
+            "trigger": "15 minutes before a meeting",
+            "action": "Prep note"
+          }
+        }
+      }
     },
     "tidyUp": {
       "nowRunning": "Already tidying.",
@@ -6098,253 +6489,6 @@
       "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands",
       "mentionChatsLoadFailed": "Couldn't load chats"
     },
-    "templateText": {
-      "tf149ea31": "Pull request review",
-      "tb48b6e72": "Reviews pull requests you’re asked to review and lists risky changes.",
-      "t5a53bad0": "Asks which repos to cover, then reviews the open pull requests waiting on your review and posts its findings here, with file and line. It doesn’t comment on GitHub until you say it can.",
-      "t52defc6d": "#4121: the retry counter is never reset, so a second outage stops retries.",
-      "t61fbc1ff": "No test covers the new timeout path.",
-      "tabb36df6": "When you’re asked to review a pull request",
-      "tb2a3361f": "Review it and post here",
-      "t6364b2e7": "Bug investigation",
-      "ta5dbda5f": "Reproduces a reported bug and finds where it starts.",
-      "tf49b58ae": "Give it a bug report or an issue link. It starts an agent in a new workspace that writes down how to reproduce it, then reports the cause. It writes a fix only after you agree.",
-      "t3a5431fd": "Reproduced ORC-640 on Windows: paste drops the last line when it has no newline.",
-      "td6d544e7": "Cause: the paste end marker goes out before the final chunk. Start a fix?",
-      "t32870326": "When a Linear issue is assigned to you",
-      "ta968b1c1": "Investigate it",
-      "t900ac18a": "Dependency updates",
-      "t48188716": "Checks for outdated and vulnerable packages and proposes upgrades.",
-      "t08ca6184": "Lists outdated and vulnerable packages in a repo you pick, most urgent first. After you agree, an agent opens one pull request per group.",
-      "ta7410423": "1 advisory: http-client 6.19 has a high-severity fix in 6.21.",
-      "t46138ad4": "4 minor upgrades can go in one pull request.",
-      "t6f2e2696": "Mondays at 9 AM",
-      "t410863ed": "New advisories and major versions",
-      "tba723acb": "Unreviewed agent work",
-      "tcaf14d38": "A daily list of finished agent work nobody has looked at yet.",
-      "te1160bdf": "Lists workspaces whose agent finished with changes you haven’t reviewed or turned into a pull request. Orca already tells you when an agent is waiting on you; this covers what’s done.",
-      "t9292e7b9": "mobile-pairing finished yesterday with a 340-line diff, no pull request.",
-      "t4e7e082a": "2 more finished this week.",
-      "t3b310c0a": "Weekdays at 9 AM",
-      "te55b14c8": "Finished work waiting for review",
-      "tec7777ba": "Workspace cleanup",
-      "t5aa20555": "Finds finished or abandoned workspaces and offers to remove them.",
-      "t16567e3d": "Lists workspaces whose pull request merged or that haven’t changed in two weeks, with any uncommitted changes. It removes only the ones you pick.",
-      "te562953c": "6 workspaces are done: their pull requests merged this week.",
-      "t8fe4c33d": "2 folders haven’t changed since Oct 20.",
-      "tf0d7e5ef": "Fridays at 4 PM",
-      "t4674012b": "Workspaces ready to remove",
-      "t12ffab43": "Security check",
-      "td7b2e1cf": "Looks at merged changes for leaked secrets and risky code.",
-      "t3e8c3ed0": "Reviews last week’s merged pull requests in a repo you pick and lists anything that needs a second look, with file and line.",
-      "t04a80a20": "#4133 logs the full request headers, including the auth token.",
-      "t881fd65b": "Nothing else this week.",
-      "t834c6e39": "The week’s merged changes",
-      "t1e32c161": "When a pull request merges",
-      "t0fbb9a90": "Check it",
-      "t630cc96a": "Incident notes",
-      "t0489950f": "Keeps a timeline in an incident channel and drafts the write-up.",
-      "t6963d528": "Follows the incident channel you pick and its threads, keeps a timestamped timeline, and drafts a blameless write-up when it’s over.",
-      "tf87d0fa5": "14:02 alert fired; 14:09 rollback started; 14:21 errors back to normal.",
-      "ta07e23fc": "Write-up draft ready.",
-      "t8e746011": "When someone posts in an incident channel",
-      "tbdb75f80": "Add it to the timeline",
-      "t2c6fbd95": "On-call handoff",
-      "t817e5d81": "A weekly summary of alerts, incidents and open follow-ups.",
-      "tef2f0746": "Reads your alert channel and incident issues from the past week and writes the handoff.",
-      "td3a5c12a": "No paging-tool connector: it reads alerts only where they’re posted in Slack.",
-      "t2f653a0d": "12 alerts, 2 incidents. Disk alert on cell-3 fired 5 times.",
-      "t20ba4c44": "3 follow-ups still open.",
-      "t3eefb825": "Handoff",
-      "t459979ed": "Replies you owe",
-      "t1f3516c3": "Reminds you of replies you still owe.",
-      "ta1401466": "Finds questions to you with no reply, and things you said you’d do, in Slack threads and issue comments.",
-      "t02941cd0": "You told a teammate “I’ll check tomorrow” in #design, 2 days ago.",
-      "t28810982": "ORC-881 has a question for you from yesterday.",
-      "t686c8d9a": "Daily at 4 PM",
-      "t9a726eaf": "What you still owe",
-      "t7cb32fe6": "Daily standup notes",
-      "t3befdb8b": "What you and your agents did yesterday, and what’s next.",
-      "t5085161c": "Writes yesterday’s notes from your workspaces, merged pull requests and moved issues. You copy them where your team reads them.",
-      "t75de9277": "Yesterday: merged #4121, relay retry. Agents finished 2 workspaces.",
-      "t3a9f8e99": "Today: ORC-702, review #4130.",
-      "tdc50cde7": "Standup notes",
-      "tef4cf2dd": "Email digest",
-      "tac029ebd": "Twice a day, the emails that need a reply from you.",
-      "tdfbb3626": "Reads today’s inbox and lists emails that need your reply, newest first. It never sends email.",
-      "t80f35150": "2 need a reply: the security review date, and an invoice question.",
-      "t9124ae8e": "14 newsletters skipped.",
-      "tcd396e10": "Emails that need you",
-      "t5e7de95c": "Weekdays at 2 PM",
-      "t44ce6f75": "Meeting prep",
-      "te79e2450": "Before each meeting, the issues, pull requests and docs it’s about.",
-      "tf2b3b5ed": "Looks at today’s calendar and writes a short prep note for each meeting.",
-      "t8e77c0e8": "Mobile sync at 11: ORC-902 needs a decision; #4130 is waiting on you.",
-      "te5c0557e": "Doc: “Push permission copy”.",
-      "tb3b0458f": "15 minutes before a meeting",
-      "tc5cb7582": "Prep note",
-      "t5f6b20ae": "Project briefing",
-      "t88da7ac5": "A weekly brief on the projects you pick.",
-      "te6393a4c": "Writes what changed, what’s blocked and what needs a decision for the projects you pick.",
-      "t565a24c9": "Mobile v2: 6 issues closed, 2 waiting on design.",
-      "tf8546bb7": "Needs a decision: ORC-902, push permission copy.",
-      "ta80e7258": "Fridays at 3 PM",
-      "t6a906d54": "The brief",
-      "t81387e5a": "Docs upkeep",
-      "tbdc00136": "Flags docs that no longer match merged code.",
-      "tca336043": "Reads last week’s merged pull requests and lists docs pages that now say something wrong.",
-      "tbf5033fd": "docs/remote.md still says SSH needs a restart; #4108 removed that.",
-      "t5fb59e62": "1 more page mentions the old setting name.",
-      "t3d27d488": "Wednesdays at 10 AM",
-      "t9e760c50": "Docs to update",
-      "t18b2cc97": "Spec drafting",
-      "t37c0d1fe": "Turns a discussion into a short spec you can share.",
-      "t81115a0c": "Give it a Slack thread or a doc. It drafts a one-page spec and asks about anything left open.",
-      "t2884652f": "Draft: “Bot sharing v2”. 3 decisions, 2 open questions.",
-      "tcc79e991": "Saved to your Drive as a doc.",
-      "t63cd3964": "Backlog cleanup",
-      "t31189364": "Finds stale, duplicate and unowned issues.",
-      "ta1a58531": "Lists issues untouched for 60 days, likely duplicates and issues with no owner, for a team you pick.",
-      "t5759ba0c": "14 issues untouched since August.",
-      "tde26cdd6": "ORC-511 and ORC-688 look like the same bug.",
-      "tb9599abb": "1st of each month at 9 AM",
-      "t1a0ac7d5": "Cleanup list",
-      "t40e125a6": "Release readiness",
-      "t6b2778c5": "Tracks what’s blocking the next release.",
-      "t20dc3305": "Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.",
-      "tccf9eaaa": "1.5 is blocked by one failing check: typecheck on #4121.",
-      "t1861eebe": "Two pull requests still need a review: #4108, #4130.",
-      "t0e2b0c89": "Readiness list",
-      "tc52ab62f": "Release notes",
-      "tfffcf4ea": "Drafts the next release’s notes from merged pull requests.",
-      "t1f2f42f5": "Finds the last release tag and drafts notes in three groups: new, fixed, changed. You edit them here.",
-      "t925d2484": "Draft for 1.5: 4 new, 9 fixed, 2 changed.",
-      "t22c50c93": "Biggest change: bots can share skills.",
-      "t6c31a4b0": "CI failures",
-      "tbb8b730a": "Explains failed checks and keeps a list of flaky ones.",
-      "t9eff2488": "Reads the last two weeks of check runs and lists the flaky ones, then explains each failing check on your open pull requests. It starts a fix only after you agree.",
-      "t580ed269": "GitHub can’t filter failures by branch yet, so the bot looks at every failure in the repo and skips the ones that don’t matter. Each one costs a turn.",
-      "t8995cfa6": "#4130 typecheck: a renamed export, two call sites missed. Fix is one commit.",
-      "tb675a44b": "Flakiest this week: terminal-resize test, 4 of 30 runs.",
-      "tb6c58bdb": "Flaky checks",
-      "t5d6404a7": "When a check fails",
-      "t2b7e2794": "Say whether it’s flaky or real",
-      "t1d2b5ec1": "Deploy watch",
-      "ta02911d5": "Posts what changed in each deploy and flags failed ones.",
-      "t094b48e3": "Gives you an automation address for your deploy tool to call, then summarizes each deploy from the pull requests it shipped.",
-      "ta158b366": "No deploy-tool connector: you add the automation’s address to your deploy tool by hand.",
-      "ta266b3b6": "Production deploy 14:02: 5 pull requests, including the relay retry fix.",
-      "tde3a26dc": "Staging deploy failed at migrate: column already exists.",
-      "tfc72fdaa": "When your deploy tool calls",
-      "t1c1176a4": "Summarize the deploy",
-      "tff5f03d0": "Support triage",
-      "t17aaf486": "Keeps a list of questions nobody has answered.",
-      "ta3efdaeb": "Lists unanswered questions in the Slack channels you pick, with links, and notes which already have an issue.",
-      "tc4e9f562": "3 new questions in #help since 11 AM. Oldest: SSH remote keeps disconnecting, 2 hours.",
-      "t8dd95fc6": "“Can I export a bot?” already has SUP-212.",
-      "tf4ec3836": "Weekdays, every 2 hours from 9 AM to 5 PM",
-      "ta9136cf0": "Unanswered questions",
-      "t4b9fbd16": "Feedback digest",
-      "t57fb509b": "Turns feedback into a weekly list of themes.",
-      "t1dfb1670": "Groups the last month of feedback in the channels you pick into themes, with counts and quotes.",
-      "td67293b8": "Top theme: pasting in the Windows terminal, 7 people, linked ORC-640.",
-      "t1375698e": "New this week: 3 people asked to export a bot.",
-      "ta47d3bbd": "Themes of the week",
-      "t1fdb9863": "Bug report intake",
-      "tda3a602e": "Turns bug reports in Slack into tracked issues with repro steps.",
-      "t69523e0d": "Reads the channel you pick and drafts an issue for each new bug report. It files them only after you approve.",
-      "ta5b03b4e": "Drafted: “Terminal freezes after sleep on macOS 27”, steps from the thread.",
-      "t2f477faa": "Possible duplicate of ORC-702.",
-      "t4d39a234": "When someone posts in your bugs channel",
-      "t70d2a25c": "Draft an issue",
-      "tbc5be533": "GitHub issue triage",
-      "tcded234c": "Labels new issues, finds duplicates and asks for missing details.",
-      "t463e155c": "Goes through the last week of new issues in a repo you pick and proposes labels and duplicates here.",
-      "t9772a726": "#2210: bug, windows, duplicate of #2188.",
-      "t3ad06a13": "#2214 has no version or steps. Ask for them?",
-      "t3e77a22e": "When an issue is opened",
-      "t90c44629": "Propose labels and duplicates",
-      "t4fa21eed": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
-      "ta75bb532": "Write down the exact steps that show the bug before looking for its cause.",
-      "t7a7b8925": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
-      "t994c8131": "What blocks a release and how to list it: checks, reviews, open blockers.",
-      "ta7e5dec2": "Notes for users: new, fixed, changed; leave out refactors and code names.",
-      "t4d1489f2": "Upgrade one group at a time, read the changelog, run the tests, one pull request each.",
-      "tf1f247e6": "Secrets, injection, auth checks and unsafe defaults to look for in a change.",
-      "tf40326f4": "Label, find duplicates, ask for missing repro details in one comment.",
-      "t1f4c6035": "Group feedback into themes with counts and short quotes; link existing issues.",
-      "t2032074f": "Changed, blocked, needs a decision: a brief in under ten lines.",
-      "t01c444c3": "A one-page spec: problem, decision, scope, open questions.",
-      "tf1cc0d2b": "Keep a timestamped timeline, then draft a blameless write-up.",
-      "t06eb5f05": "When a workspace is done or abandoned, and what to check before removing it.",
-      "t74b4e16c": "Pull requests waiting on your review, in the repos you pick",
-      "t184c26c3": "Reviews each one and lists risky changes and missing tests, with file and line.",
-      "td05f7484": "Here, when a review is requested",
-      "t24fc7f91": "Bug reports you hand it, and Linear issues assigned to you",
-      "t14af95d2": "Reproduces the bug in a new workspace, finds where it starts, and proposes a fix.",
-      "te9483ace": "Here, when it has a repro and a cause",
-      "tfe66a50f": "Packages in the repos you pick",
-      "t4cbd58b2": "Lists advisories and outdated packages, most urgent first; upgrades one group per pull request once agreed.",
-      "tbf712a30": "Here, Mondays at 9 AM",
-      "t5a2b3b8b": "Your Orca workspaces",
-      "td09aaca2": "Lists workspaces whose agent finished with changes nobody reviewed or opened a pull request for.",
-      "t482524a8": "Here, weekdays at 9 AM",
-      "t18501769": "Your Orca workspaces and their pull requests",
-      "tc77dab60": "Lists workspaces that are done or abandoned, with uncommitted changes; removes only the ones you pick.",
-      "tfdf3bf09": "Here, Fridays at 4 PM",
-      "t65bcaf6d": "Merged pull requests in the repos you pick",
-      "t1f1e34dc": "Checks them for leaked secrets, injection, missing auth and unsafe defaults.",
-      "t3bcc9e3b": "Here, Mondays at 9 AM and when a pull request merges",
-      "tce0bd0d7": "The incident channel you pick, and its threads",
-      "t73fb0cb9": "Keeps a timestamped timeline, then drafts a blameless write-up.",
-      "tb839f732": "Here, during and after an incident",
-      "t04b7cb64": "Your alert channel and incident issues",
-      "t2dfb0b39": "Summarizes the week’s alerts and incidents, and lists open follow-ups.",
-      "t2d295326": "Slack threads and Linear comments",
-      "t5267e2e4": "Finds questions to you with no reply, and things you said you’d do.",
-      "t70ae1d98": "Here, daily at 4 PM",
-      "td98262ca": "Your workspaces, pull requests and issues",
-      "t1dff62ff": "Writes yesterday’s notes and today’s plan.",
-      "t57cd422e": "Your inbox",
-      "t28135469": "Lists emails that need a reply from you, newest first. Never sends email.",
-      "ted594472": "Here, weekdays at 9 AM and 2 PM",
-      "td11933c0": "Your calendar",
-      "t8f8badd3": "Before each meeting, lists the issues, pull requests and docs it is about.",
-      "tcba21ee4": "Here, before each meeting",
-      "te28d7fc3": "Linear projects and GitHub repos",
-      "tae4b0c5a": "Writes what changed, what’s blocked and what needs a decision.",
-      "tedb5ad96": "Here, Fridays at 3 PM",
-      "tbc4fa6a8": "Merged pull requests and the docs in the repos you pick",
-      "t9587dcd4": "Lists docs pages that no longer match what merged, with the line that is now wrong.",
-      "taf86590e": "Here, Wednesdays at 10 AM",
-      "t6169c507": "Slack threads and docs you hand it",
-      "tbb32d4f9": "Drafts a one-page spec: problem, decision, scope, open questions.",
-      "tfeec79a9": "Here, when you ask",
-      "t59e615f3": "Linear issues for the team you pick",
-      "tdf0dfb6a": "Lists stale issues, likely duplicates and issues with no owner.",
-      "tf8bcd871": "Here, on the 1st of each month",
-      "t60c282de": "Pull requests, checks and workspaces",
-      "t321180c0": "Here, weekday mornings",
-      "t80cd4ca2": "Pull requests merged since the last release",
-      "tcbcdd3a3": "Drafts release notes for users in three groups: new, fixed, changed.",
-      "te98d1920": "Check runs in the repos you pick",
-      "ta96a2b06": "Tells flaky checks from real failures, explains each failure, and keeps a list of flaky checks.",
-      "t9093e7c1": "Here, Mondays at 9 AM and when a check fails",
-      "te3d76a96": "Calls from your deploy tool",
-      "tfdd05e3b": "Summarizes each deploy from the pull requests it shipped, and flags failed ones.",
-      "t909f52db": "Here, after each deploy",
-      "t6b43d463": "Slack channels you pick",
-      "tc6b522ce": "Lists unanswered questions with links, and notes which already have a Linear issue.",
-      "t7d43fb63": "Here, every 2 hours on weekdays",
-      "tfd321156": "Slack feedback channels",
-      "tcd3680f8": "Groups feedback into themes with quotes and counts, and links existing Linear issues.",
-      "t8e7efcec": "The Slack channel where bugs are reported",
-      "t2e5a7cae": "Drafts a Linear issue with repro steps for each bug report; files it once approved.",
-      "t82318ddd": "Here, when a bug is reported",
-      "tcc522e10": "New issues in the repos you pick",
-      "tb3e482f5": "Proposes labels and duplicates, and lists missing details, for each new issue.",
-      "tb4812494": "Here, when an issue is opened"
-    },
     "access": {
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
@@ -6458,7 +6602,22 @@
       "statusBrief": "status-brief",
       "specFormat": "spec-format",
       "incidentTimeline": "incident-timeline",
-      "workspaceHygiene": "workspace-hygiene"
+      "workspaceHygiene": "workspace-hygiene",
+      "lines": {
+        "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
+        "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
+        "ci-failure-triage": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
+        "release-readiness": "What blocks a release and how to list it: checks, reviews, open blockers.",
+        "release-notes-style": "Notes for users: new, fixed, changed; leave out refactors and code names.",
+        "dependency-upgrade": "Upgrade one group at a time, read the changelog, run the tests, one pull request each.",
+        "security-checklist": "Secrets, injection, auth checks and unsafe defaults to look for in a change.",
+        "issue-triage": "Label, find duplicates, ask for missing repro details in one comment.",
+        "feedback-themes": "Group feedback into themes with counts and short quotes; link existing issues.",
+        "status-brief": "Changed, blocked, needs a decision: a brief in under ten lines.",
+        "spec-format": "A one-page spec: problem, decision, scope, open questions.",
+        "incident-timeline": "Keep a timestamped timeline, then draft a blameless write-up.",
+        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it."
+      }
     },
     "waits": {
       "cancel": "Cancel",

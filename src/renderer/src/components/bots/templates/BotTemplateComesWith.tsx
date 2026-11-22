@@ -7,11 +7,11 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotAppBrandLogo, hasBotAppBrand } from '../apps/BotAppBrandLogo'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../../../shared/bots/bot-templates'
-import { BOT_TEMPLATE_SKILL_LINES } from '../../../../../shared/bots/bot-template-view'
 import {
   botTemplateEventWords,
-  botTemplateSkillName,
-  botTemplateText
+  botTemplateScheduleWords,
+  botTemplateSkillLine,
+  botTemplateSkillName
 } from '../../../../../shared/bots/bot-template-text'
 
 export function BotTemplateComesWithHeading(): React.JSX.Element {
@@ -84,21 +84,24 @@ export function BotTemplateComesWith({ template }: { template: BotTemplate }): R
             mono={name === skill}
             icon={<BookOpen className="size-4" />}
             title={name}
-            line={botTemplateText(BOT_TEMPLATE_SKILL_LINES[skill], t)}
+            line={botTemplateSkillLine(skill, t)}
           />
         )
       })}
-      {template.schedules.map((schedule) => (
-        <Row
-          key={schedule.id}
-          icon={<Clock className="size-4" />}
-          title={botTemplateText(schedule.when, t)}
-          line={botTemplateText(schedule.what, t)}
-          state={muted(t('bots.templates.stateOff', 'Off'))}
-        />
-      ))}
+      {template.schedules.map((schedule) => {
+        const words = botTemplateScheduleWords(template, schedule, t)
+        return (
+          <Row
+            key={schedule.id}
+            icon={<Clock className="size-4" />}
+            title={words.when}
+            line={words.what}
+            state={muted(t('bots.templates.stateOff', 'Off'))}
+          />
+        )
+      })}
       {template.events.map((event) => {
-        const parts = botTemplateEventWords(event.name, t)
+        const parts = botTemplateEventWords(template, event, t)
         return (
           <Row
             key={event.id}

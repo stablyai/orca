@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotTemplate } from '../../../../../shared/bots/bot-templates'
-import { botTemplateText } from '../../../../../shared/bots/bot-template-text'
+import { botTemplateWord } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateComesWith, BotTemplateComesWithHeading } from './BotTemplateComesWith'
 import { BotTemplateMascot } from './BotTemplateMascot'
 import { botTemplateCategoryLabel } from './bot-template-labels'
@@ -28,7 +28,7 @@ export function BotTemplateDetail({
 }): React.JSX.Element {
   const t = useTranslate()
   const [scrolled, setScrolled] = useState(false)
-  const name = botTemplateText(template.name, t)
+  const name = botTemplateWord(template, 'name', t)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
@@ -58,7 +58,7 @@ export function BotTemplateDetail({
             </p>
           </div>
         </div>
-        <p className="text-sm text-foreground">{botTemplateText(template.line, t)}</p>
+        <p className="text-sm text-foreground">{botTemplateWord(template, 'line', t)}</p>
         <Button type="button" onClick={onUse}>
           {t('bots.templates.useTemplate', 'Use template…')}
         </Button>
@@ -75,20 +75,20 @@ export function BotTemplateDetail({
             <span className="font-medium text-foreground">{name}</span>
             {t('bots.templates.inItsChat', 'in its chat')}
           </p>
-          {template.example.map((line) => (
-            <p key={line} className="mt-1.5 text-sm text-foreground">
-              {botTemplateText(line, t)}
+          {(['example1', 'example2'] as const).map((field) => (
+            <p key={field} className="mt-1.5 text-sm text-foreground">
+              {botTemplateWord(template, field, t)}
             </p>
           ))}
         </div>
         <section>
           <h3 className={SECTION_TITLE}>{t('bots.templates.firstChat', 'What it does first')}</h3>
-          <p className="text-sm text-foreground">{botTemplateText(template.firstChat, t)}</p>
+          <p className="text-sm text-foreground">{botTemplateWord(template, 'firstChat', t)}</p>
         </section>
         {template.needsSetup ? (
           <section className="rounded-md border border-border bg-muted/40 p-3">
             <h3 className={SECTION_TITLE}>{t('bots.templates.needsSetup', 'Needs setup')}</h3>
-            <p className="text-sm text-foreground">{botTemplateText(template.needsSetup, t)}</p>
+            <p className="text-sm text-foreground">{botTemplateWord(template, 'needsSetup', t)}</p>
           </section>
         ) : null}
         <section>

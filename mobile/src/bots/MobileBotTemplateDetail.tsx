@@ -8,11 +8,12 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../src/shared/bots/bot-templates'
-import { BOT_TEMPLATE_SKILL_LINES } from '../../../src/shared/bots/bot-template-view'
 import {
   botTemplateEventWords,
+  botTemplateScheduleWords,
+  botTemplateSkillLine,
   botTemplateSkillName,
-  botTemplateText
+  botTemplateWord
 } from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
@@ -29,7 +30,7 @@ export function MobileBotTemplateDetail(props: {
   return (
     <View style={styles.page}>
       <SheetHeader
-        title={botTemplateText(template.name, t)}
+        title={botTemplateWord(template, 'name', t)}
         subtitle={t('bots.templates.byOrca', '{{category}} · by Orca', {
           category: label(template.category)
         })}
@@ -42,7 +43,7 @@ export function MobileBotTemplateDetail(props: {
         <View style={styles.picture}>
           <MobileBotAvatar avatar={{ kind: 'mascot', id: template.mascot }} size={56} />
         </View>
-        <Text style={[styles.body, styles.line]}>{botTemplateText(template.line, t)}</Text>
+        <Text style={[styles.body, styles.line]}>{botTemplateWord(template, 'line', t)}</Text>
         <View style={styles.use}>
           <SheetPrimaryButton
             label={t('bots.templates.useTemplate', 'Use template…')}
@@ -50,19 +51,19 @@ export function MobileBotTemplateDetail(props: {
           />
         </View>
         <View style={styles.example}>
-          {template.example.map((line) => (
-            <Text key={line} style={styles.body}>
-              {botTemplateText(line, t)}
+          {(['example1', 'example2'] as const).map((field) => (
+            <Text key={field} style={styles.body}>
+              {botTemplateWord(template, field, t)}
             </Text>
           ))}
         </View>
         <SectionHeader title={t('bots.templates.firstChat', 'What it does first')} />
-        <Text style={[styles.body, styles.inset]}>{botTemplateText(template.firstChat, t)}</Text>
+        <Text style={[styles.body, styles.inset]}>{botTemplateWord(template, 'firstChat', t)}</Text>
         {template.needsSetup ? (
           <>
             <SectionHeader title={t('bots.templates.needsSetup', 'Needs setup')} />
             <Text style={[styles.body, styles.inset]}>
-              {botTemplateText(template.needsSetup, t)}
+              {botTemplateWord(template, 'needsSetup', t)}
             </Text>
           </>
         ) : null}
@@ -72,22 +73,25 @@ export function MobileBotTemplateDetail(props: {
             <ListRow
               key={`skill:${skill}`}
               title={botTemplateSkillName(skill, t)}
-              subtitle={botTemplateText(BOT_TEMPLATE_SKILL_LINES[skill], t)}
+              subtitle={botTemplateSkillLine(skill, t)}
               subtitleLines={0}
             />
           ))}
-          {template.schedules.map((schedule) => (
-            <ListRow
-              key={`schedule:${schedule.id}`}
-              title={botTemplateText(schedule.when, t)}
-              wrapTitle
-              subtitle={botTemplateText(schedule.what, t)}
-              subtitleLines={0}
-              value={t('bots.templates.stateOff', 'Off')}
-            />
-          ))}
+          {template.schedules.map((schedule) => {
+            const words = botTemplateScheduleWords(template, schedule, t)
+            return (
+              <ListRow
+                key={`schedule:${schedule.id}`}
+                title={words.when}
+                wrapTitle
+                subtitle={words.what}
+                subtitleLines={0}
+                value={t('bots.templates.stateOff', 'Off')}
+              />
+            )
+          })}
           {template.events.map((event) => {
-            const parts = botTemplateEventWords(event.name, t)
+            const parts = botTemplateEventWords(template, event, t)
             return (
               <ListRow
                 key={`event:${event.id}`}
