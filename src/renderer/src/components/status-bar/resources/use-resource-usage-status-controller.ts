@@ -246,6 +246,7 @@ export function useResourceUsageStatusController() {
     sessions,
     resourceSessionBindings,
     workspaceSessionReady,
+    sessionsRereading,
     killConfirm,
     setKillConfirm,
     setKilling,

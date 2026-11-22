@@ -1,11 +1,15 @@
 // Every host's group list as a hook, apart from bot-group-catalog so tab bars can read it without the store.
 import { useSyncExternalStore } from 'react'
 import type { BotGroup } from '../../../shared/bots/bot-group'
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { onBotsChanged } from './bots-changed-window-event'
 import { botHostTarget, forEachBotHost } from './bot-hosts'
 import {
+  hasListedLocalBotGroups,
   publishBotGroups,
   readBotGroups,
   subscribeToBotGroupChanges
@@ -30,6 +34,25 @@ export async function refreshBotHostGroups(hostId: ExecutionHostId): Promise<voi
 /** Re-reads every listed host's groups. */
 export async function refreshBotGroups(): Promise<void> {
   await forEachBotHost(({ hostId }) => refreshBotHostGroups(hostId).catch(console.error))
+}
+
+let localListing: Promise<void> | null = null
+/** Settles once this machine's groups are listed, or the listing fails; callers in the meantime share it. */
+export function whenLocalBotGroupsListed(): Promise<void> {
+  if (hasListedLocalBotGroups()) {
+    return Promise.resolve()
+  }
+  localListing ??= (async () => {
+    // A newer read can supersede ours without it publishing, so read again until a list is published.
+    for (let attempt = 0; attempt < 2 && !hasListedLocalBotGroups(); attempt++) {
+      await refreshBotHostGroups(LOCAL_EXECUTION_HOST_ID)
+    }
+  })()
+    .catch(console.error)
+    .finally(() => {
+      localListing = null
+    })
+  return localListing
 }
 
 let stopListening: (() => void) | null = null

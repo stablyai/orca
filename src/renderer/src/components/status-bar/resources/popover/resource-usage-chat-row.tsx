@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
@@ -24,9 +24,12 @@ export const ChatRows = React.memo(function ChatRows({
   unplaced?: true
   onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
-  const open = unplaced
-    ? undefined
-    : (agentSessionId: string): void => onOpenChat(worktreeId, agentSessionId, runtimeHostId)
+  // Stable, so a chat whose values didn't change skips its render when another chat's do.
+  const openChat = useCallback(
+    (agentSessionId: string): void => onOpenChat(worktreeId, agentSessionId, runtimeHostId),
+    [onOpenChat, worktreeId, runtimeHostId]
+  )
+  const open = unplaced ? undefined : openChat
   return (
     <>
       {chats.map((chat) => (
@@ -37,7 +40,7 @@ export const ChatRows = React.memo(function ChatRows({
 })
 
 /** A chat agent and the processes running under it; it stops from the chat, so the row has no kill action. */
-function ChatRow({
+const ChatRow = React.memo(function ChatRow({
   chat,
   onOpen
 }: {
@@ -88,7 +91,7 @@ function ChatRow({
       </TooltipContent>
     </Tooltip>
   )
-}
+})
 
 /** Agent processes no single chat owns, such as a server several chats share. */
 export function SharedAgentProcessesRow({

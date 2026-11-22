@@ -70,6 +70,24 @@ export function sameChats(
   )
 }
 
+/** The fresh chat list, reusing each earlier entry that renders the same, and the earlier list when all do. */
+export function reuseChats(
+  before: readonly ChatAgentMemory[] | undefined,
+  after: readonly ChatAgentMemory[]
+): readonly ChatAgentMemory[] {
+  if (!before) {
+    return after
+  }
+  if (sameChats(before, after)) {
+    return before
+  }
+  const earlier = new Map(before.map((chat) => [chat.agentSessionId, chat]))
+  return after.map((chat) => {
+    const prior = earlier.get(chat.agentSessionId)
+    return prior && sameChats([prior], [chat]) ? prior : chat
+  })
+}
+
 /** Whether a fresh sample of a workspace renders exactly as its earlier row did. */
 function rendersSame(row: UnifiedWorktreeRow, wt: WorktreeMemory): boolean {
   return (
@@ -119,7 +137,7 @@ export function buildChatRowGroups(
           history: wt.history,
           hasLocalSamples: true,
           sessions: [],
-          chats: wt.chats,
+          chats: wt.chats && reuseChats(earlier?.chats, wt.chats),
           browsers: []
         }
     let entry = byRepo.get(row.repoId)

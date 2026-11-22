@@ -28,9 +28,7 @@ import {
   selectUnboundDaemonSessions
 } from '../workspace-attribution/resource-session-bindings'
 import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
-import { focusResourceManagerTrigger } from '../popover/resource-usage-status-trigger'
-import { selectFrontTab } from '../../../../store/slices/tabs/active-tab-selection'
-import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import { settleChatOpenFocus } from './resource-chat-open-focus'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
@@ -47,6 +45,7 @@ export function useResourceUsageActions({
   sessions,
   resourceSessionBindings,
   workspaceSessionReady,
+  sessionsRereading,
   killConfirm,
   setKillConfirm,
   setKilling,
@@ -67,6 +66,8 @@ export function useResourceUsageActions({
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   workspaceSessionReady: boolean
+  /** The terminal list is being read again because it was outdated; its ownership evidence can't skip a confirm. */
+  sessionsRereading: boolean
   killConfirm: UnifiedSessionRow | null
   setKillConfirm: Dispatch<SetStateAction<UnifiedSessionRow | null>>
   setKilling: Dispatch<SetStateAction<boolean>>
@@ -148,19 +149,9 @@ export function useResourceUsageActions({
       // Close first: an open panel keeps focus, so the chat's composer couldn't take it.
       chatOpenedRef.current = true
       setOpen(false)
-      void openResourceChat(worktreeId, agentSessionId, runtimeHostId).then(() => {
-        if (document.activeElement && document.activeElement !== document.body) {
-          return
-        }
-        // Reselecting an already-shown room or chat moves no focus; its composer takes it. A failed
-        // open leaves no chat in front, so the trigger takes focus back.
-        const tab = selectFrontTab(useAppStore.getState())
-        if (tab && (tab.contentType === 'room' || tab.contentType === 'agent-session')) {
-          requestNativeChatComposerFocus(tab.id)
-        } else {
-          focusResourceManagerTrigger()
-        }
-      })
+      void openResourceChat(worktreeId, agentSessionId, runtimeHostId).then(() =>
+        settleChatOpenFocus(worktreeId, agentSessionId)
+      )
     },
     [setOpen]
   )
@@ -196,7 +187,7 @@ export function useResourceUsageActions({
       if (session.readOnly) {
         return
       }
-      if (!requiresKillConfirmation(session)) {
+      if (!sessionsRereading && !requiresKillConfirmation(session)) {
         setActionError(null)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
@@ -217,11 +208,11 @@ export function useResourceUsageActions({
       }
       setKillConfirm(session)
     },
-    [refreshSessions, removeSession, setKillConfirm]
+    [refreshSessions, removeSession, setKillConfirm, sessionsRereading]
   )
 
   const handleKillOrphans = useCallback(async () => {
-    if (!workspaceSessionReady) {
+    if (!workspaceSessionReady || sessionsRereading) {
       return
     }
     // Use the badge’s exact orphan selector so bulk cleanup cannot destroy sessions excluded from its count.
@@ -241,7 +232,14 @@ export function useResourceUsageActions({
       )
     }
     void refreshSessions()
-  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions, removeSessions])
+  }, [
+    sessions,
+    resourceSessionBindings,
+    workspaceSessionReady,
+    sessionsRereading,
+    refreshSessions,
+    removeSessions
+  ])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {

@@ -2,14 +2,11 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { toast } from 'sonner'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { BotGroupRoomUnavailableError } from '@/lib/bot-group-catalog'
-import { hasListedLocalBotGroups } from '@/lib/bot-group-catalog-snapshot'
-import { refreshBotHostGroups } from '@/lib/bot-group-list'
+import { whenLocalBotGroupsListed } from '@/lib/bot-group-list'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 
 type TabLookup = Record<string, { id: string }[]>
 
@@ -67,9 +64,9 @@ export function openResourceChat(
 ): Promise<unknown> {
   const host = parseExecutionHostId(runtimeHostId)
   // A group member's chat opens its room, so the group list must be read before the open looks for it.
-  const groupsListed = hasListedLocalBotGroups()
-    ? Promise.resolve()
-    : refreshBotHostGroups(LOCAL_EXECUTION_HOST_ID).catch(console.error)
+  const groupsListed = isBotGroupMemberSession(agentSessionId)
+    ? whenLocalBotGroupsListed()
+    : Promise.resolve()
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
   return groupsListed
     .then(() =>

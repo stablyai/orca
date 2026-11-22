@@ -81,7 +81,17 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
     parts.terminalSeries.map(({ worktreeId, usage }) => [worktreeId, usage])
   )
   let worktrees: WorktreeMemory[] | undefined
-  if (parts.rowsDiffer) {
+  if (!parts.rowsDiffer) {
+    worktrees = undefined
+  } else if (!parts.hasChatOnlyRows && parts.terminalSeries.length === 0) {
+    // Only restored pane keys differ, so only their workspaces' rows are rebuilt.
+    worktrees = snapshot.worktrees.slice()
+    for (const [index, wt] of snapshot.worktrees.entries()) {
+      if (parts.restoredSessionIds.has(wt.worktreeId)) {
+        worktrees[index] = pairedRow(wt, parts, terminalUsage)
+      }
+    }
+  } else {
     snapshot.worktrees.forEach((wt, i) => {
       const row =
         parts.hasChatOnlyRows && wt.sessions.length === 0

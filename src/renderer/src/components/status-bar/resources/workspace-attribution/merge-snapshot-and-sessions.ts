@@ -34,7 +34,7 @@ import {
   buildChatRowGroups,
   chatRowGroupsFor,
   priorChatRowGroups,
-  sameChats,
+  reuseChats,
   type ResourceMergeCache,
   type SampleChatRows
 } from './resource-chat-row-groups'
@@ -131,10 +131,7 @@ export function mergeSnapshotAndSessions(
     }
     let chats: readonly ChatAgentMemory[] | undefined = wt.chats
     if (chats) {
-      const prior = priorMixedChats?.get(wt.worktreeId)
-      if (prior && sameChats(prior, chats)) {
-        chats = prior
-      }
+      chats = reuseChats(priorMixedChats?.get(wt.worktreeId), chats)
       ;(mixedChats ??= new Map()).set(wt.worktreeId, chats)
     }
     ingestSampledWorktree(wt, placement, chats)

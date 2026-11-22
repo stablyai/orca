@@ -215,15 +215,20 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       restored.add(session.sessionId)
       restoredSessionIds.set(bucket.worktreeId, restored)
     }
-    const sessionPrivate = clampMemoryMetric(session.privateMemory)
     bucket.cpu += session.cpu
     bucket.memory += session.memory
-    bucket.privateMemory += sessionPrivate
+    bucket.privateMemory += clampMemoryMetric(session.privateMemory)
     bucket.sessions.push(session)
-    terminals.cpu += session.cpu
-    terminals.memory += session.memory
-    terminals.privateMemory += sessionPrivate
   }
+  // Before chats are added, the buckets hold terminals alone.
+  for (const bucket of worktreeBuckets.values()) {
+    terminals.cpu += bucket.cpu
+    terminals.memory += bucket.memory
+    terminals.privateMemory += bucket.privateMemory
+  }
+  terminals.cpu += orphan.cpu
+  terminals.memory += orphan.memory
+  terminals.privateMemory += orphan.privateMemory
 
   const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
   // Terminal-only usage of workspaces that also have chats, as paired clients have always seen it.
