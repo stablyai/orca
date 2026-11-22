@@ -43,22 +43,23 @@ const skip = skipForMissingInputs('artifact', runtime ? [] : ['a Node orcad slot
 const roots: string[] = []
 
 afterEach(async () => {
+  // Each test owns only its roots: one that fails to clean up is reported once, not by every later test.
+  const owned = roots.splice(0)
   const failures: unknown[] = []
   // Stop every profile before removing any project root it may still use.
-  for (const root of roots) {
+  for (const root of owned) {
     try {
       await killProfileDaemons(root)
     } catch (error) {
-      failures.push(error)
+      failures.push(withDaemonLogTail(root, error))
     }
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Profile daemon shutdown incomplete')
   }
-  for (const root of roots.slice()) {
+  for (const root of owned) {
     try {
       await removeTestRoot(root)
-      roots.splice(roots.indexOf(root), 1)
     } catch (error) {
       failures.push(error)
     }
@@ -67,6 +68,16 @@ afterEach(async () => {
     throw new AggregateError(failures, 'Test root removal incomplete')
   }
 })
+
+/** The daemon's own log says where a daemon that will not exit is stuck; reading it is best effort. */
+function withDaemonLogTail(root: string, error: unknown): unknown {
+  try {
+    const tail = boundedText(readFileSync(join(root, 'logs', 'daemon.log'), 'utf8'))
+    return new Error(`daemon.log tail:\n${tail}`, { cause: error })
+  } catch {
+    return error
+  }
+}
 
 /** Clear Vitest markers so daemon-entry starts its server. */
 function serveEnv(userData: string): NodeJS.ProcessEnv {
