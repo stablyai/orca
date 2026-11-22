@@ -65,6 +65,11 @@ it('keeps focus on the card when it replaces a focused composer holding a draft'
   expect(document.activeElement?.tagName).toBe('TEXTAREA')
   render(<Card />)
   expect(document.activeElement).toBe(card())
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+  act(() => {
+    card().dispatchEvent(tab)
+  })
+  expect(document.activeElement).toBe(allow())
 })
 
 it('describes the default answer with the request it approves', () => {

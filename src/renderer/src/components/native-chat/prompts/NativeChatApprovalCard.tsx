@@ -18,7 +18,10 @@ import {
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
-import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import {
+  PROMPT_CARD_FOCUS_TARGET_SELECTOR,
+  useNativeChatPromptCardFocus
+} from './use-native-chat-prompt-card-focus'
 import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
@@ -153,6 +156,18 @@ export function NativeChatApprovalCard({
               aria-label={title}
               tabIndex={-1}
               onKeyDown={(event) => {
+                // Held on the card past a draft, the first Tab reaches the default, not Cancel.
+                const answer =
+                  event.key === 'Tab' && !event.shiftKey && event.target === event.currentTarget
+                    ? event.currentTarget.querySelector<HTMLElement>(
+                        PROMPT_CARD_FOCUS_TARGET_SELECTOR
+                      )
+                    : null
+                if (answer) {
+                  event.preventDefault()
+                  answer.focus()
+                  return
+                }
                 if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
                   event.preventDefault()
                   event.stopPropagation()

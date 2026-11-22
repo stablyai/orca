@@ -3,7 +3,7 @@ import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native
 import { replacesComposerMidDraft } from './native-chat-prompt-card-draft-handoff'
 
 const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
-const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
+export const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
   '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
 
 function focusPromptCard(card: HTMLElement): void {
