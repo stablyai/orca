@@ -33,7 +33,7 @@ describe('Relay-owned LAN and Tailscale candidates', () => {
       dependencies({ openDirect, openTailnetDirect })
     )
     await supervisor.start()
-    supervisor.learnTailnetEndpoint(tailnetEndpoint)
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
     await vi.advanceTimersByTimeAsync(65_000)
 
     expect(logical.getActivePath()).toBe('lan')
@@ -53,12 +53,115 @@ describe('Relay-owned LAN and Tailscale candidates', () => {
       dependencies({ openDirect, openTailnetDirect })
     )
     await supervisor.start()
-    supervisor.learnTailnetEndpoint(tailnetEndpoint)
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
     await vi.advanceTimersByTimeAsync(65_000)
 
     expect(openTailnetDirect).toHaveBeenCalledWith(tailnetEndpoint)
     expect(logical.getActivePath()).toBe('tailscale')
     expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
+  it('promotes learned LAN even when the original QR address was Tailscale', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const openDirect = vi.fn(() => new FakeSession('connected'))
+    const openLanDirect = vi.fn(() => new FakeSession('connected'))
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({
+        directPath: 'tailscale',
+        directProbeTimeoutMs: 12_000,
+        openDirect,
+        openLanDirect
+      })
+    )
+    await supervisor.start()
+    supervisor.learnEndpoint('lan', 'ws://192.168.50.131:6768/')
+    await vi.advanceTimersByTimeAsync(7_000)
+
+    expect(logical.getActivePath()).toBe('lan')
+    expect(openLanDirect).toHaveBeenCalledWith('ws://192.168.50.131:6768/')
+    supervisor.stop()
+  })
+
+  it('returns from a healthy Tailscale primary to newly discovered LAN', async () => {
+    const logical = new FakeLogicalClient('connected', 'tailscale')
+    const openLanDirect = vi.fn(() => new FakeSession('connected'))
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({
+        directPath: 'tailscale',
+        directProbeTimeoutMs: 12_000,
+        openLanDirect
+      })
+    )
+    await supervisor.start()
+    supervisor.learnEndpoint('lan', 'ws://192.168.50.131:6768/')
+    await vi.advanceTimersByTimeAsync(7_000)
+
+    expect(logical.getActivePath()).toBe('lan')
+    expect(openLanDirect).toHaveBeenCalledWith('ws://192.168.50.131:6768/')
+    supervisor.stop()
+  })
+
+  it('learns an updated LAN address after LAN pairing without promoting the stale primary', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const oldPrimary = vi.fn(() => new FakeSession('connected'))
+    const newLan = vi.fn(() => new FakeSession('connected'))
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({ openDirect: oldPrimary, openLanDirect: newLan })
+    )
+    await supervisor.start()
+    supervisor.learnEndpoint('lan', 'ws://192.168.50.135:6768/')
+    await vi.advanceTimersByTimeAsync(7_000)
+    expect(logical.getActivePath()).toBe('lan')
+    expect(newLan).toHaveBeenCalledWith('ws://192.168.50.135:6768/')
+    expect(oldPrimary).not.toHaveBeenCalled()
+    supervisor.stop()
+  })
+
+  it('completes pending LAN observation after a Tailscale-first cold connection', async () => {
+    const logical = new FakeLogicalClient('connecting', 'tailscale')
+    const newLan = vi.fn(() => new FakeSession('connected'))
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({ directPath: 'tailscale', openLanDirect: newLan })
+    )
+    await supervisor.start()
+    supervisor.learnEndpoint('lan', 'ws://192.168.50.131:6768/')
+    logical.publishState('connected')
+    await vi.advanceTimersByTimeAsync(7_000)
+    expect(logical.getActivePath()).toBe('lan')
+    expect(newLan).toHaveBeenCalledWith('ws://192.168.50.131:6768/')
+    supervisor.stop()
+  })
+
+  it('gives the learned Tailscale route a head start over Relay on reconnecting', async () => {
+    const logical = new FakeLogicalClient('connected', 'lan')
+    const relayDial = vi.fn(() => new FakeRelaySession('connected'))
+    const tailnetDial = vi.fn(() => new FakeSession('connected'))
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({ openRelay: relayDial, openTailnetDirect: tailnetDial })
+    )
+    await supervisor.start()
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
+    logical.publishState('reconnecting')
+    await vi.advanceTimersByTimeAsync(2_300)
+
+    expect(logical.getActivePath()).toBe('tailscale')
+    expect(relayDial).not.toHaveBeenCalled()
     supervisor.stop()
   })
 
@@ -73,7 +176,7 @@ describe('Relay-owned LAN and Tailscale candidates', () => {
       dependencies({ openDirect, openTailnetDirect })
     )
     await supervisor.start()
-    supervisor.learnTailnetEndpoint(tailnetEndpoint)
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
     await vi.advanceTimersByTimeAsync(30_000)
 
     expect(openDirect).toHaveBeenCalled()
@@ -95,7 +198,7 @@ describe('Relay-owned LAN and Tailscale candidates', () => {
       dependencies({ openRelay, openTailnetDirect })
     )
     await supervisor.start()
-    supervisor.learnTailnetEndpoint(tailnetEndpoint)
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
     logical.publishState('reconnecting')
     logical.publishState('connecting')
     await vi.advanceTimersByTimeAsync(2_200)
@@ -117,7 +220,7 @@ describe('Relay-owned LAN and Tailscale candidates', () => {
       dependencies({ openRelay, openTailnetDirect })
     )
     await supervisor.start()
-    supervisor.learnTailnetEndpoint(tailnetEndpoint)
+    supervisor.learnEndpoint('tailscale', tailnetEndpoint)
     logical.publishState('reconnecting')
     logical.publishState('connecting')
     await vi.advanceTimersByTimeAsync(4_000)

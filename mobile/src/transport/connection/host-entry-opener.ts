@@ -2,13 +2,17 @@ import { attachPushRegistration } from '../../notifications/push-registration'
 import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { startRuntimeStatusProbe } from './runtime-status-probe'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
+import { isSameDirectEndpoint } from './direct-endpoint-comparison'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
 } from '../../diagnostics/connection/persisted-connection-log-store'
 import { loadHosts } from '../../host-catalog/host-store'
 import { createTailnetEndpointPersister } from '../../host-catalog/host-tailnet-endpoint-persister'
-import { recordHostTailnetEndpoint } from '../../host-catalog/host-tailnet-endpoint-store'
+import {
+  recordHostLanEndpoint,
+  recordHostTailnetEndpoint
+} from '../../host-catalog/host-tailnet-endpoint-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
@@ -141,6 +145,13 @@ export async function openHostClientEntry(
         }
       }
     )
+    const recordLanEndpoint = createTailnetEndpointPersister(host.lanEndpoint, async (endpoint) => {
+      await recordHostLanEndpoint(hostId, host.endpoint, endpoint)
+      const primed = state.primedHosts.get(hostId)
+      if (primed && primed.endpoint === host.endpoint) {
+        state.primedHosts.set(hostId, { ...primed, lanEndpoint: endpoint })
+      }
+    })
     const syncDescriptorProbe = (next: ConnectionState): void => {
       if (next === 'connected') {
         stopDescriptorProbe ??= startRuntimeStatusProbe(client, (status) => {
@@ -149,6 +160,10 @@ export async function openHostClientEntry(
             if (status.tailnetEndpoint && directPathForEndpoint(host.endpoint) !== 'tailscale') {
               client.learnTailnetEndpoint?.(status.tailnetEndpoint)
               recordTailnetEndpoint(status.tailnetEndpoint)
+            }
+            if (status.lanEndpoint && !isSameDirectEndpoint(status.lanEndpoint, host.endpoint)) {
+              client.learnLanEndpoint?.(status.lanEndpoint)
+              recordLanEndpoint(status.lanEndpoint)
             }
           }
         })

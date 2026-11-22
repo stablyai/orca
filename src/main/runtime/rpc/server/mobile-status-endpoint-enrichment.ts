@@ -1,13 +1,16 @@
 import type { RpcRequest } from '../core'
 import type { RpcTransport } from '../transport'
-import { discoverAuthenticatedMobileTailnetEndpoint } from './pairing/network/mobile-tailnet-fallback'
+import {
+  discoverAuthenticatedMobileDirectEndpoints,
+  type AuthenticatedMobileDirectEndpoints
+} from './pairing/network/mobile-tailnet-fallback'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Add paired-device-only metadata after a successful status.get, without changing the main RPC contract.
 export function enrichAuthenticatedMobileStatusReply(
   response: string,
   scope: DeviceScope,
-  tailnetEndpoint?: string
+  endpoints: AuthenticatedMobileDirectEndpoints = {}
 ): string {
   try {
     const parsed: unknown = JSON.parse(response)
@@ -24,7 +27,8 @@ export function enrichAuthenticatedMobileStatusReply(
     }
     Object.assign(parsed.result, {
       deviceScope: scope,
-      ...(tailnetEndpoint ? { tailnetEndpoint } : {})
+      ...(endpoints.lanEndpoint ? { lanEndpoint: endpoints.lanEndpoint } : {}),
+      ...(endpoints.tailnetEndpoint ? { tailnetEndpoint: endpoints.tailnetEndpoint } : {})
     })
     return JSON.stringify(parsed)
   } catch {
@@ -33,7 +37,7 @@ export function enrichAuthenticatedMobileStatusReply(
 }
 
 // Do not enumerate host interfaces for liveness probes, unauthenticated devices, or routed status.
-function mayAdvertiseMobileTailnetEndpoint(
+function mayAdvertiseMobileDirectEndpoints(
   request: RpcRequest,
   scope: DeviceScope,
   authenticated: boolean
@@ -50,14 +54,14 @@ function mayAdvertiseMobileTailnetEndpoint(
   return !(params && typeof params === 'object' && 'probe' in params && params.probe === true)
 }
 
-export async function discoverMobileStatusTailnetEndpoint(
+export async function discoverMobileStatusDirectEndpoints(
   request: RpcRequest,
   scope: DeviceScope,
   authenticated: boolean,
   boundHost: string | null,
   transports: readonly RpcTransport[]
-): Promise<string | undefined> {
-  return mayAdvertiseMobileTailnetEndpoint(request, scope, authenticated)
-    ? discoverAuthenticatedMobileTailnetEndpoint(boundHost, transports)
-    : undefined
+): Promise<AuthenticatedMobileDirectEndpoints> {
+  return mayAdvertiseMobileDirectEndpoints(request, scope, authenticated)
+    ? discoverAuthenticatedMobileDirectEndpoints(boundHost, transports)
+    : {}
 }

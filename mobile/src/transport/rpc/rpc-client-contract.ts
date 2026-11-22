@@ -41,6 +41,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   probeLivenessNow?: () => void
   // A paired Mac can publish a verified extra direct route over the current session.
   learnTailnetEndpoint?: (endpoint: string) => void
+  learnLanEndpoint?: (endpoint: string) => void
   // Settle every pending request before returning; only the physical sender knows which reached the wire.
   // Reject written requests with markRpcDeliveryUnknown: the host may already have executed them.
   close: () => void

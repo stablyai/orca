@@ -11,7 +11,7 @@ import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
 import {
   enrichAuthenticatedMobileStatusReply,
-  discoverMobileStatusTailnetEndpoint
+  discoverMobileStatusDirectEndpoints
 } from './mobile-status-endpoint-enrichment'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
@@ -216,7 +216,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
       this.buildError(id, code, message)
     )
-    const tailnetEndpoint = await discoverMobileStatusTailnetEndpoint(
+    const directEndpoints = await discoverMobileStatusDirectEndpoints(
       request,
       device.scope,
       authenticatedSocket !== undefined,
@@ -227,7 +227,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       request.method === 'status.get'
         ? (response: string): void =>
             boundedReply(
-              enrichAuthenticatedMobileStatusReply(response, device.scope, tailnetEndpoint)
+              enrichAuthenticatedMobileStatusReply(response, device.scope, directEndpoints)
             )
         : boundedReply
 

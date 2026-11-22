@@ -78,13 +78,15 @@ export class DirectReturnProbe {
 
   // A dial begun on the previous network can only time out, so drop it uncounted and probe now.
   arrive(): void {
-    if (this.stopped || !this.hooks.canSchedule()) {
+    if (this.stopped) {
       return
     }
     this.hooks.hysteresis.recordNetworkArrival()
     this.activeProbe?.abort()
     this.clear()
-    this.schedule(this.hooks.hysteresis.arrivalWaitMs(this.deps.now()))
+    if (this.hooks.canSchedule()) {
+      this.schedule(this.hooks.hysteresis.arrivalWaitMs(this.deps.now()))
+    }
   }
 
   clear(): void {
@@ -92,6 +94,11 @@ export class DirectReturnProbe {
       this.deps.clearTimer(this.timer)
       this.timer = null
     }
+  }
+
+  pause(): void {
+    this.clear()
+    this.activeProbe?.abort()
   }
 
   stop(): void {
@@ -153,7 +160,10 @@ export class DirectReturnProbe {
           candidate.client,
           candidate.path,
           () =>
-            this.stopped || !this.hooks.canSchedule() || this.hooks.activePath?.() !== startingPath
+            this.stopped ||
+            controller.signal.aborted ||
+            !this.hooks.canSchedule() ||
+            this.hooks.activePath?.() !== startingPath
         )
       } catch (error) {
         if (this.stopped) {

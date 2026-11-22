@@ -1,4 +1,8 @@
 import { openAuthenticatedDirectEndpoint } from '../relay/mobile-direct-endpoint-probe'
+import { DirectReturnProbe } from '../relay/mobile-direct-return-probe'
+import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
+import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
+import type { ForegroundNudgeReason } from './connection-state'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
@@ -18,11 +22,42 @@ export class MobileDirectTailnetFallback {
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private lastProbeStartedAt = Number.NEGATIVE_INFINITY
   private unsubscribe: (() => void) | null = null
+  private lastLanReturnNudgeAt = Number.NEGATIVE_INFINITY
+  private readonly lanReturnProbe: DirectReturnProbe | null
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
-    private readonly openDirect: (path: 'lan' | 'tailscale') => RpcClient
-  ) {}
+    private readonly openDirect: (path: 'lan' | 'tailscale') => RpcClient,
+    enableHealthyLanReturn = false
+  ) {
+    this.lanReturnProbe = enableHealthyLanReturn
+      ? new DirectReturnProbe(
+          {
+            now: Date.now,
+            setTimer: defaultScheduleTimer,
+            clearTimer: defaultCancelTimer,
+            openDirect: () => this.openDirect('lan'),
+            directPath: 'lan',
+            directProbeTimeoutMs: 4_000
+          },
+          {
+            hysteresis: new MobileEndpointHysteresis(Date.now()),
+            activePath: () => this.logical.getActivePath(),
+            canSchedule: () =>
+              !this.stopped &&
+              this.foreground &&
+              this.logical.getState() === 'connected' &&
+              this.logical.getActivePath() === 'tailscale',
+            canAttempt: () => true,
+            beginOperation: () => {},
+            migrate: (client, path, abort) =>
+              this.logical.migrateTo(client, path, undefined, abort),
+            onDirectMigrated: async () => {},
+            afterProbe: () => {}
+          }
+        )
+      : null
+  }
 
   start(): void {
     this.unsubscribe = this.logical.onStateChange((state) => {
@@ -42,34 +77,59 @@ export class MobileDirectTailnetFallback {
     // Already reconnecting at start (cold open off the LAN): the primary has had its chance, so probe now.
     if (this.logical.getState() === 'reconnecting') {
       this.tryFallback()
+    } else {
+      this.tryLanReturn()
     }
   }
 
   setForeground(foreground: boolean): void {
+    const wasForeground = this.foreground
     this.foreground = foreground
     if (!foreground) {
       this.cancelProbe()
       this.clearRetry()
       this.clearGrace()
+      this.lanReturnProbe?.pause()
     } else if (this.logical.getState() === 'reconnecting') {
       this.clearRetry()
       this.tryFallback()
+    } else if (!wasForeground) {
+      this.tryLanReturn()
     }
   }
 
-  nudge(): void {
-    if (
-      this.logical.getState() === 'connected' ||
-      Date.now() - this.lastProbeStartedAt < MIN_NUDGE_GAP_MS
-    ) {
+  nudge(reason?: ForegroundNudgeReason): void {
+    if (this.logical.getState() === 'connected') {
+      if (reason) {
+        this.tryLanReturn()
+      }
+      return
+    }
+    if (Date.now() - this.lastProbeStartedAt < MIN_NUDGE_GAP_MS) {
       return
     }
     this.clearRetry()
     this.tryFallback()
   }
 
+  private tryLanReturn(): void {
+    if (
+      !this.lanReturnProbe ||
+      this.stopped ||
+      !this.foreground ||
+      this.logical.getState() !== 'connected' ||
+      this.logical.getActivePath() !== 'tailscale' ||
+      Date.now() - this.lastLanReturnNudgeAt < MIN_NUDGE_GAP_MS
+    ) {
+      return
+    }
+    this.lastLanReturnNudgeAt = Date.now()
+    this.lanReturnProbe.arrive()
+  }
+
   stop(): void {
     this.stopped = true
+    this.lanReturnProbe?.stop()
     this.cancelProbe()
     this.clearRetry()
     this.clearGrace()

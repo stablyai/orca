@@ -28,9 +28,9 @@ function physical(initial: ConnectionState) {
   }
 }
 
-function logical(initial: ConnectionState) {
+function logical(initial: ConnectionState, initialPath: 'lan' | 'tailscale' = 'lan') {
   let state = initial
-  let path: 'lan' | 'tailscale' = 'lan'
+  let path: 'lan' | 'tailscale' = initialPath
   let generation = 1
   const listeners = new Set<(state: ConnectionState) => void>()
   const migrateTo = vi.fn(async (candidate: RpcClient, nextPath: 'lan' | 'tailscale') => {
@@ -79,6 +79,20 @@ async function withFakeTimers(run: () => Promise<void>): Promise<void> {
 }
 
 describe('mobile authenticated tailnet fallback', () => {
+  it('returns from a healthy Tailscale-only pairing to a learned LAN on a foreground network check', () =>
+    withFakeTimers(async () => {
+      const host = logical('connected', 'tailscale')
+      const open = vi.fn(() => physical('connected').client)
+      const fallback = new MobileDirectTailnetFallback(host.client, open, true)
+      fallback.start()
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      expect(open).toHaveBeenCalledWith('lan')
+      expect(host.client.getActivePath()).toBe('lan')
+      expect(host.migrateTo).toHaveBeenCalledTimes(1)
+      fallback.stop()
+    }))
+
   it('opens no backup when the primary recovers within the grace period', () =>
     withFakeTimers(async () => {
       const host = logical('connected')

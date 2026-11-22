@@ -308,7 +308,7 @@ export async function updateHostNameAndEndpoint(
     let updated: StoredHostProfile = {
       ...hosts[index]!,
       ...(updates.endpoint !== undefined
-        ? { endpoint: updates.endpoint, tailnetEndpoint: undefined }
+        ? { endpoint: updates.endpoint, tailnetEndpoint: undefined, lanEndpoint: undefined }
         : {})
     }
     if (updates.personalName !== undefined) {
