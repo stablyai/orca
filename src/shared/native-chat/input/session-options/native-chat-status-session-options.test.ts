@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
 import {
@@ -8,14 +8,14 @@ import {
 
 const claude = getAgentSessionOptionCatalog('claude')!
 
-function chip(scopeKey: string) {
+function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () => {}) {
   const memory: NativeChatStatusReportMemory = new Map()
   const surface = createNativeChatPtySessionOptions({
     agent: 'claude',
     scopeKey,
     mode: 'live',
     modelLabel: 'Model',
-    dispatchCommand: async () => {}
+    dispatchCommand
   })!
   const report = (model: string, effort: string, sessionId = 'session-a') => {
     const reported = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
@@ -82,5 +82,20 @@ it('shows the live effort on a model picked in the chip once the session confirm
   report('claude-opus-5-5', 'max')
   await surface.setOption('model', 'sonnet')
   report('claude-sonnet-5-5', 'max')
+  expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
+})
+
+it('keeps an effort the session reports while a chip model pick is still being sent', async () => {
+  let sent: (() => void) | undefined
+  const { surface, report, shown } = chip(
+    'status-report-mid-dispatch',
+    () => new Promise<void>((resolve) => (sent = resolve))
+  )
+  report('claude-opus-5-5', 'high')
+  const pick = surface.setOption('model', 'sonnet')
+  await vi.waitFor(() => expect(sent).toBeDefined())
+  report('claude-sonnet-5-5', 'max')
+  sent!()
+  await pick
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
 })
