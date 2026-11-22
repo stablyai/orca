@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { measureTabTitle } from './right-sidebar-tab-title-width'
 import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
@@ -219,6 +220,7 @@ function RightSidebarInner(): React.JSX.Element {
           type="button"
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
+          {...keepPaneFocusPressProps}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <SidebarToggleIcon side="right" size={16} />

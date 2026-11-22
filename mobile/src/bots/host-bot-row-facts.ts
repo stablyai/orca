@@ -17,7 +17,10 @@ import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-wor
 export type MobileBotAvatarSource =
   /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
   | { kind: 'mascot'; id: BotMascotId; color?: string }
+  /** A picture in hand, such as one just picked. */
   | { kind: 'image'; uri: string }
+  /** A bot's uploaded picture, drawn once read; until then, `text`. */
+  | { kind: 'upload'; botId: string; avatar: string; text: string }
   | { kind: 'text'; text: string }
 
 /** What a bot's row draws over its home folder's row. */
@@ -79,10 +82,10 @@ export type MobileBotChatLineFacts = {
   note?: BotSidebarLineNote
 }
 
-/** An upload shows once its bytes are read; until then, like a missing picture, the emoji or initial. */
+/** The bot's mascot, its upload, or its emoji or initial, as the desktop draws it. */
 export function mobileBotAvatarSource(
-  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'>,
-  uploadUri: string | undefined
+  /** No id: a draft, whose upload no host can answer yet. */
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'> & { id?: string }
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
   if (parsed?.kind === 'mascot') {
@@ -90,8 +93,8 @@ export function mobileBotAvatarSource(
       ? { kind: 'mascot', id: parsed.id, color: bot.avatarColor }
       : { kind: 'mascot', id: parsed.id }
   }
-  if (parsed?.kind === 'upload' && uploadUri) {
-    return { kind: 'image', uri: uploadUri }
+  if (parsed?.kind === 'upload' && bot.avatar && bot.id) {
+    return { kind: 'upload', botId: bot.id, avatar: bot.avatar, text: botFallback(bot) }
   }
   return { kind: 'text', text: botFallback(bot) }
 }

@@ -258,10 +258,6 @@ export function parkUntilHostMirrorHandleLands(
   startStoreSubscription()
 }
 
-export function countParkedHostMirrorHandleGapPanesForTests(): number {
-  return waitersByPane.size
-}
-
 /** Teardown clears verdicts but preserves bounded recovery waiters, as clearHostSessionMirrorHydration does; re-pair replaces evidence without canceling owed replay. */
 export function clearHostMirrorHandleGapVerdictsForEnvironment(environmentId: string): void {
   const prefix = `${environmentId}\0`
@@ -272,18 +268,4 @@ export function clearHostMirrorHandleGapVerdictsForEnvironment(environmentId: st
   }
   // The landed-handle drain may have been the only thing holding the subscription open.
   stopStoreSubscriptionIfIdle()
-}
-
-export function countHostMirrorHandleGapVerdictsForTests(): number {
-  return expiredGenerationByPane.size
-}
-
-export function resetHostMirrorHandleGapWaitsForTests(): void {
-  for (const waiter of waitersByPane.values()) {
-    clearTimeout(waiter.deadline)
-  }
-  waitersByPane.clear()
-  expiredGenerationByPane.clear()
-  unsubscribeStore?.()
-  unsubscribeStore = null
 }

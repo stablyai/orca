@@ -56,7 +56,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -217,7 +216,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
-      readTerminalScreen,
       paneKey,
       structuredTransport
     })

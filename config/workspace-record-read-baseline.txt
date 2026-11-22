@@ -55,7 +55,7 @@
 2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer
 1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-meta.ts # P5b-2 must clear: feeds an existing row-type cast
 3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer
-13 src/renderer/src/store/slices/worktrees/listing/fetched-worktree-merge.ts # store writer
+11 src/renderer/src/store/slices/worktrees/listing/fetched-worktree-merge.ts # store writer
 6 src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts # store writer
 4 src/renderer/src/store/slices/worktrees/metadata/hosted-review-link-mutation.ts # store writer
 8 src/renderer/src/store/slices/worktrees/metadata/update-worktrees-meta.ts # store writer
