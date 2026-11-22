@@ -1,6 +1,13 @@
-import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-type PaneRows = Pick<OrcaRuntimeService, 'getAgentStatusRowsForPane'>
+type PaneRows = {
+  getAgentStatusRowsForPane: (
+    paneKey: string
+  ) => readonly Pick<
+    AgentStatusIpcPayload,
+    'providerSession' | 'providerSessionOnly' | 'restoredUnconfirmed'
+  >[]
+}
 
 /** The conversations this pane's live agent reported: never a launch-only or restored-from-disk row,
  *  which outlive the process that wrote them. */

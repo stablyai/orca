@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
 import { paneConversation, paneLiveSessions } from './pane-runs-conversation'
 
-type Row = ReturnType<Parameters<typeof paneLiveSessions>[0]['getAgentStatusRowsForPane']>[number]
+type Pane = Parameters<typeof paneLiveSessions>[0]
 
-function pane(rows: Partial<Row>[]): Parameters<typeof paneLiveSessions>[0] {
-  return { getAgentStatusRowsForPane: () => rows as Row[] }
+function pane(rows: ReturnType<Pane['getAgentStatusRowsForPane']>): Pane {
+  return { getAgentStatusRowsForPane: () => rows }
 }
 
 it('names only conversations a live agent reported, not rows its lost process left behind', () => {
