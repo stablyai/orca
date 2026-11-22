@@ -32,6 +32,7 @@ import {
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
+import { closeReplacedBotChat } from './bot-chat-replacement'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
@@ -357,6 +358,6 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
       await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
     },
     showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
-    closeChat: (sessionId) => closeBotSession(runtime, sessionId)
+    closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId)
   })
 }

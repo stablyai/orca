@@ -18,8 +18,8 @@ import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { noteBotQuestionFailure } from './bot-question-notices'
-import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { retireCoordinatorChatRuns } from '../../../../orchestration/db/runs/retired-chat-runs'
 import {
   stampQuestionTakes,
   type MailTaker
@@ -226,15 +226,9 @@ export async function dropUnreadBotRequests(
         })
       }
     }
-    if ((why === 'new-chat' || why === 'chat-deleted') && onlyTo && isOrcaSessionId(onlyTo)) {
-      // The old Chat is retired: its Runs no longer name it, so their open asks are told now and a
-      // later ask finds no coordinator and is told at once. A bot's live thread chats keep theirs.
-      runLifecycleWriteTransaction(db.db, 'retire_bot_chat_runs', () => {
-        db.unbindOtherRunsForCoordinator(
-          { orcaSessionId: onlyTo, paneKey: null, terminalHandle: null },
-          ''
-        )
-      })
+    if (why === 'chat-deleted' && onlyTo) {
+      // A replaced Chat's Runs are retired where it is closed (bot-chat-replacement.ts).
+      retireCoordinatorChatRuns(db, onlyTo)
     }
     const dropped = unread
       .filter(({ request }) => request.purpose !== 'question')

@@ -1254,7 +1254,7 @@
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
-2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, and one when a /new or chat delete retires a Chat's Runs, around orchestration DB writes that were already synchronous
+1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
 2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-reply.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
