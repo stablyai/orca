@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { sameAcceptedStatusRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -81,7 +82,11 @@ export function isSpaceWindowState(value: unknown): value is SpaceWindowStateUpd
 }
 
 export function spaceWindowStateChanged(a: AppState, b: AppState): boolean {
-  const before = Object.values(pickSpaceWindowState(a))
-  const after = Object.values(pickSpaceWindowState(b))
-  return before.some((value, index) => value !== after[index])
+  const { agentStatusByPaneKey: beforeStatus, ...before } = pickSpaceWindowState(a)
+  const { agentStatusByPaneKey: afterStatus, ...after } = pickSpaceWindowState(b)
+  const values = Object.values(after)
+  return (
+    !sameAcceptedStatusRevision(beforeStatus, afterStatus, 'storageActivityRevision') ||
+    Object.values(before).some((value, index) => value !== values[index])
+  )
 }

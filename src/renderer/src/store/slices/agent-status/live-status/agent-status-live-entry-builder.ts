@@ -25,6 +25,7 @@ import {
   localAgentConversationAcceptance,
   conversationSessionStartedAt
 } from '../conversation/agent-conversation-acceptance'
+import { agentPaneProviderSessionsCompatible } from '../conversation/agent-pane-conversation'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
@@ -49,18 +50,20 @@ export function buildAgentStatusLiveEntry(
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
   const { history, lastCompletedAssistantMessage, stateObservedAt } =
     resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
+  const sameTerminalOwner =
+    existing &&
+    sameAgentStatusTerminalOwner(
+      { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+      {
+        connectionId:
+          (routing?.connectionId === undefined ? existing.connectionId : routing.connectionId) ??
+          null,
+        worktreeId: routing?.worktreeId ?? existing.worktreeId
+      }
+    )
   const identity = resolveAgentStatusIdentity({
     existing:
-      existing &&
-      sameAgentStatusTerminalOwner(
-        { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
-        {
-          connectionId:
-            (routing?.connectionId === undefined ? existing.connectionId : routing.connectionId) ??
-            null,
-          worktreeId: routing?.worktreeId ?? existing.worktreeId
-        }
-      )
+      existing && sameTerminalOwner
         ? { ...existing, agentPresence: metadata?.paneOwner }
         : undefined,
     incoming: payload.agentType,
@@ -171,6 +174,21 @@ export function buildAgentStatusLiveEntry(
       : keepsExistingId
         ? existing?.orcaSessionId
         : undefined
+  const inheritsModel =
+    existing &&
+    sameTerminalOwner &&
+    existing.agentType === identity.agentType &&
+    !conversation.reset &&
+    (!existing.providerSession ||
+      !metadata?.providerSession ||
+      agentPaneProviderSessionsCompatible(
+        identity.agentType,
+        existing.providerSession,
+        metadata.providerSession
+      )) &&
+    (!existing.orcaSessionId || !orcaSessionId || existing.orcaSessionId === orcaSessionId) &&
+    (!existing.terminalHandle || existing.terminalHandle === statusTerminalHandle) &&
+    (!existing.tabId || existing.tabId === statusTabId)
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -186,8 +204,7 @@ export function buildAgentStatusLiveEntry(
     ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     ...turnEnd,
     agentType: identity.agentType,
-    model:
-      payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
+    model: payload.model ?? (inheritsModel ? existing.model : undefined),
     ...(payload.modelSwitchCommand ? { modelSwitchCommand: payload.modelSwitchCommand } : {}),
     paneKey,
     terminalHandle: statusTerminalHandle,

@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../../shared/plugins/contributions/plugin-event-contribution'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../shared/collections/structural-value-equality'
 import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../../shared/plugins/events/plugin-events'
@@ -106,7 +107,7 @@ export function bindPluginRuntime(
 }
 
 async function listWorkspaceTerminals(
-  delegate: PluginRuntimeDelegate,
+  delegate: Pick<PluginRuntimeDelegate, 'listTerminals'>,
   worktreeId: string
 ): Promise<PluginWorkspaceTerminal[]> {
   const { terminals } = await delegate.listTerminals(
@@ -129,9 +130,13 @@ async function listWorkspaceTerminals(
  * workspace, and are dropped once the last listener goes away.
  */
 export function createPluginAgentStatusForwarder(
-  delegate: PluginRuntimeDelegate,
+  delegate: Pick<PluginRuntimeDelegate, 'listTerminals'>,
   events: PluginEvents
-): (payload: PluginAgentStatusChangedPayload, terminalHandle?: string) => void {
+): (
+  payload: PluginAgentStatusChangedPayload,
+  terminalHandle?: string,
+  previous?: PluginAgentStatusChangedPayload | null
+) => void {
   type Pending = { payload: PluginAgentStatusChangedPayload; terminalHandle?: string }
   const pending: Pending[] = []
   let draining = false
@@ -173,9 +178,16 @@ export function createPluginAgentStatusForwarder(
       draining = false
     }
   }
-  return (payload, terminalHandle) => {
+  return (payload, terminalHandle, previous) => {
     if (!events.wantsEvent('agent.status.changed')) {
       return
+    }
+    if (previous) {
+      const { receivedAt: _receivedAt, ...facts } = payload
+      const { receivedAt: _previousReceivedAt, ...previousFacts } = previous
+      if (equal(facts, previousFacts)) {
+        return
+      }
     }
     pending.push({ payload, terminalHandle })
     if (!draining) {

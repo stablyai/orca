@@ -1,7 +1,8 @@
 import type { BranchContext } from './worktree-agent-branch-context'
-import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { shallow } from 'zustand/shallow'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { useAppStore } from '@/store/index'
 import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -78,8 +79,9 @@ function WorktreeCardAgentsBody({
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
+  const [selectActivity] = useState(() => selectStatusByRevision('activityDetailsRevision'))
   const inputs = useAppStoreWithHostStatuses(
-    (s, statuses) => selectSendTargetInputs(s, statuses, worktreeId),
+    (s, statuses) => selectSendTargetInputs(s, statuses, worktreeId, selectActivity),
     shallow
   )
   const targets = useMemo(

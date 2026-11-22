@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { useAppStore } from '../../../../store/index'
 import { getIndexedRepoMap } from '../../../../store/repos/repository-catalog-index'
@@ -26,7 +27,8 @@ export function useWorkspaceSpaceManagerBindings() {
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
-  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  const [selectStorageActivity] = useState(() => selectStatusByRevision('storageActivityRevision'))
+  const agentStatusByPaneKey = useAppStore(selectStorageActivity)
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)

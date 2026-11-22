@@ -106,8 +106,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       state: this.state,
       env: this.env,
       isListening: () => this.server?.listening === true,
-      applyEvent: (event, source, env, version) =>
-        this.applyEvent(event, source, env, version, { checkPresence: false })
+      applyEvent: (event, source, env, version, modelOnly) =>
+        this.applyEvent(event, source, env, version, { checkPresence: false, modelOnly })
     })
   }
 
@@ -164,7 +164,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       },
       setPort: (port) => {
         this.port = port
-        this.retryScheduler.activateClaudeHelperObservations()
+        this.retryScheduler.activateListening(this.lastEnvelopeMetaByPaneKey)
       },
       onFallback: () => {
         this.portFallbackApplied = true
@@ -306,8 +306,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
         isCanonicalPane: (paneKey) => this.isCanonicalPane(paneKey),
         isPaneSurfaceRetired: this.isPaneSurfaceRetired,
         clearPaneState: (paneKey) => this.clearPaneState(paneKey),
-        clearAssistantMessageRetry: (paneKey) =>
-          this.retryScheduler.clearAssistantMessageRetry(paneKey),
+        retryScheduler: this.retryScheduler,
         forward: this.forward,
         checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey)
       },

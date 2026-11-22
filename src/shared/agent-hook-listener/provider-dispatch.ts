@@ -1,3 +1,4 @@
+import type { AntigravityTranscriptOrigin } from './providers/antigravity/antigravity-hook-identity'
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
@@ -58,6 +59,8 @@ export function normalizeProviderEvent(input: {
   hookPayload: Record<string, unknown>
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
+  antigravityOrigin?: AntigravityTranscriptOrigin
+  replayReceivedAt?: number
   previousOpenCodeMainAgent?: AgentMainAgentStatus
   /** A new Claude prompt_id opened the turn on this event. */
   opensTurn?: boolean
@@ -123,7 +126,15 @@ export function normalizeProviderEvent(input: {
           ) ||
           ''
       }
-      payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeAntigravityEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        input.antigravityOrigin ?? 'unknown',
+        input.replayReceivedAt
+      )
       break
     case 'amp':
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayload)

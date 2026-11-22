@@ -19,6 +19,7 @@ import {
 import {
   type WorktreeStatus,
   applyAgentPaneActivityFlags,
+  createAgentPaneActivityFlags,
   type AgentPaneActivityFlags
 } from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 import type {
@@ -42,8 +43,9 @@ export type TerminalTabActivityFlags = AgentPaneActivityFlags & {
 }
 
 type FlagsCache = {
-  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | undefined
+  agentStatusByPaneKey: AcceptedAgentStatuses | undefined
   agentStatusEpoch: number | undefined
+  activityRevision: number | undefined
   flagsByTabId: Map<string, TerminalTabActivityFlags>
 }
 
@@ -51,13 +53,16 @@ type FlagsCache = {
 let flagsCache: FlagsCache | null = null
 
 export function getTerminalTabActivityFlags(
-  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | undefined,
+  agentStatusByPaneKey: AcceptedAgentStatuses | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {
   // Invalidate on freshness epoch as well as map identity; stale boundaries advance without replacing hook rows.
   if (
     flagsCache &&
-    flagsCache.agentStatusByPaneKey === agentStatusByPaneKey &&
+    (flagsCache.agentStatusByPaneKey === agentStatusByPaneKey ||
+      (flagsCache.agentStatusByPaneKey &&
+        agentStatusByPaneKey?.sharesOwner(flagsCache.agentStatusByPaneKey))) &&
+    flagsCache.activityRevision === agentStatusByPaneKey?.activityRevision &&
     flagsCache.agentStatusEpoch === agentStatusEpoch
   ) {
     return flagsCache.flagsByTabId
@@ -65,7 +70,7 @@ export function getTerminalTabActivityFlags(
 
   const flagsByTabId = new Map<string, TerminalTabActivityFlags>()
   const now = Date.now()
-  for (const [paneKey, entry] of Array.from(agentStatusByPaneKey?.entries() ?? [])) {
+  for (const [paneKey, entry] of agentStatusByPaneKey?.entries() ?? []) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
     if (!identity) {
       continue
@@ -90,7 +95,12 @@ export function getTerminalTabActivityFlags(
     recordPaneProgramProgress(flags, entry)
   }
 
-  flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
+  flagsCache = {
+    agentStatusByPaneKey,
+    agentStatusEpoch,
+    activityRevision: agentStatusByPaneKey?.activityRevision,
+    flagsByTabId
+  }
   return flagsByTabId
 }
 
@@ -101,13 +111,7 @@ function getOrCreateTerminalTabActivityFlags(
   let flags = flagsByTabId.get(tabId)
   if (!flags) {
     flags = {
-      hasPermission: false,
-      hasLiveWorking: false,
-      hasLiveMonitoring: false,
-      hasFailed: false,
-      hasInterrupted: false,
-      hasUnconfirmed: false,
-      hasLiveDone: false,
+      ...createAgentPaneActivityFlags(),
       paneIds: new Set(),
       stalePaneIds: new Set(),
       programProgress: {}

@@ -10,6 +10,27 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusRowMutation extends AgentHookServerStatusApplication {
+  protected applyAntigravityModel(
+    original: EnrichedAgentHookEventPayload,
+    model: string
+  ): EnrichedAgentHookEventPayload | undefined {
+    if (original.paneSleep || this.state.lastStatusByPaneKey.get(original.paneKey) !== original) {
+      return undefined
+    }
+    if (original.payload.model === model) {
+      return original
+    }
+    const next = { ...original, payload: { ...original.payload, model } }
+    if (!this.writeLegacyStatusRow(next)) {
+      return undefined
+    }
+    // The catalog and transition subscribers do not consume model metadata.
+    this.commitStatusRowMutation(original, next, false)
+    this.scheduleStatusPersist()
+    this.publishAgentStatusMetadata(next)
+    return next
+  }
+
   protected preserveAcceptedTurn(
     previous: EnrichedAgentHookEventPayload | undefined,
     incoming: AgentHookEventPayload,

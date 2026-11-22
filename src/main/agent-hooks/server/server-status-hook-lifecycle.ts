@@ -53,6 +53,11 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHooksEnabled = enabled
     if (enabled && this.server) {
+      for (const [paneKey, work] of this.state.antigravityChildWorkByPaneKey) {
+        if (work.rootModel) {
+          this.rearmIgnoredHook('antigravity', { paneKey })
+        }
+      }
       void this.initializeStatusHookOwner().catch((error: unknown) => {
         console.error('[agent-hooks] status initialization failed', error)
       })

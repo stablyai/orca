@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store/index'
+import { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { sameAcceptedStatusRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import {
   getWorktreeIdsWithLiveAgent,
@@ -39,7 +41,14 @@ export function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): Readonly
   const agentStatusNow = getAgentStatusEpochNow(state.agentStatusEpoch ?? 0)
   if (
     liveAgentGeneration &&
-    liveAgentGeneration.agentStatusByPaneKey === state.agentStatusByPaneKey &&
+    (liveAgentGeneration.agentStatusByPaneKey === state.agentStatusByPaneKey ||
+      (liveAgentGeneration.agentStatusByPaneKey instanceof AcceptedAgentStatuses &&
+        state.agentStatusByPaneKey instanceof AcceptedAgentStatuses &&
+        sameAcceptedStatusRevision(
+          liveAgentGeneration.agentStatusByPaneKey,
+          state.agentStatusByPaneKey,
+          'activityDetailsRevision'
+        ))) &&
     liveAgentGeneration.tabsByWorktree === state.tabsByWorktree &&
     liveAgentGeneration.agentStatusNow === agentStatusNow
   ) {

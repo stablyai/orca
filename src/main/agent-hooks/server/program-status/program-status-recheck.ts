@@ -1,6 +1,7 @@
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 import { markAntigravityDoneRetried } from './hook-precedence'
+import type { AgentStatusObservation } from '../../../../shared/agent-status/contracts/agent-status-observation'
 import type { PaneTimers } from './pane-timers'
 
 /** Re-offer a yielding OSC 7501 report after delayMs, only against the hook observation it yielded to. */
@@ -9,6 +10,7 @@ export function deferProgramStatusRecheck<E extends { paneKey: string; tabId?: s
   rows: ReadonlyMap<string, AgentHookEventPayload>
   paneKey: string
   yieldedTo: number | undefined
+  observation: AgentStatusObservation | undefined
   delayMs: number | undefined
   event: E
   reoffer: (event: E) => void
@@ -24,7 +26,8 @@ export function deferProgramStatusRecheck<E extends { paneKey: string; tabId?: s
       row &&
       row.providerSessionOnly !== true &&
       'receivedAt' in row &&
-      row.receivedAt === yieldedTo
+      row.receivedAt === yieldedTo &&
+      (!input.observation || ('observation' in row && row.observation === input.observation))
     ) {
       const tabId = parsePaneKey(currentPaneKey)?.tabId ?? event.tabId
       input.reoffer(markAntigravityDoneRetried({ ...event, paneKey: currentPaneKey, tabId }))

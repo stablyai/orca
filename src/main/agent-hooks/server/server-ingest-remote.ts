@@ -26,9 +26,9 @@ import {
   normalizeRemoteEnvelopeFields,
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
-import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
+import { AgentHookServerRemoteStatusPatches } from './server-remote-status-patches'
 
-export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
+export abstract class AgentHookServerIngestRemote extends AgentHookServerRemoteStatusPatches {
   /** Call as each relay link starts, before its first envelope. */
   beginRemoteRelaySession(connectionId: string): void {
     this.relaySessions.begin(connectionId)
@@ -100,6 +100,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    const fields = normalizeRemoteEnvelopeFields(envelope)
     const {
       hookEventName,
       source,
@@ -116,20 +117,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       teammateName,
       toolAgentType,
       providerSession
-    } = normalizeRemoteEnvelopeFields(envelope)
+    } = fields
     if (envelope.statusUnavailable === true && envelope.payload === null) {
-      const previous = this.state.lastStatusByPaneKey.get(paneKey)
-      if (
-        (source === 'opencode' || source === 'opencode2') &&
-        previous?.connectionId === trimmedConnectionId &&
-        trimmedConnectionId !== null &&
-        previous.worktreeId === worktreeId &&
-        previous.source === source &&
-        previous.launchToken === envelope.launchToken &&
-        this.getAgentStatusDisposition(paneKey) !== 'suppress'
-      ) {
-        this.clearPaneState(paneKey, { statusUnavailable: true })
-      }
+      this.applyRelayStatusUnavailable(paneKey, trimmedConnectionId, fields, envelope.launchToken)
       return
     }
     const age = envelope.evidenceAgeMs
@@ -180,6 +170,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
           })
     })
     if (statusDisposition === 'suppress') {
+      return
+    }
+    if (envelope.modelOnly === true) {
+      if (statusDisposition !== 'restart') {
+        this.applyRelayedModel(paneKey, trimmedConnectionId, envelope, fields, validatedPayload)
+      }
       return
     }
     const restartedAuthority =

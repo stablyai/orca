@@ -1,4 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -64,6 +65,13 @@ export function PaletteLiveStatusProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const now = useNow(30_000, active)
+  const selectActivity = useMemo(
+    () =>
+      active
+        ? selectStatusByRevision('activityDetailsRevision')
+        : () => EMPTY_LIVE_INPUTS.agentStatusByPaneKey,
+    [active]
+  )
   const {
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
@@ -78,7 +86,7 @@ export function PaletteLiveStatusProvider({
     useShallow((s) =>
       active
         ? {
-            agentStatusByPaneKey: s.agentStatusByPaneKey,
+            agentStatusByPaneKey: selectActivity(s),
             runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
             ptyIdsByTabId: s.ptyIdsByTabId,
             terminalLayoutsByTabId: s.terminalLayoutsByTabId,

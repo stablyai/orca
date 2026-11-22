@@ -109,6 +109,7 @@ export type AgentHookRelayEnvelope = {
   version?: string
   /** Pre-normalized by the relay; ingestRemote validates again at the SSH trust boundary. */
   evidenceAgeMs?: number
+  modelOnly?: true
   payload: ParsedAgentStatusPayload
 }
 

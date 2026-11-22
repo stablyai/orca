@@ -114,7 +114,8 @@ export async function prefetchCodexHookRolloutReadsWithin(
   state: HookListenerState,
   body: unknown
 ): Promise<PrefetchedRolloutReads> {
-  const reads = createPrefetchedRolloutReads()
+  const controller = new AbortController()
+  const reads = createPrefetchedRolloutReads(controller.signal)
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, HOOK_PREFETCH_MAX_MS)
     timer.unref?.()
@@ -125,6 +126,7 @@ export async function prefetchCodexHookRolloutReadsWithin(
     prefetchCodexHookRolloutReads(state, body, reads).then(done, done)
   })
   reads.closed = true
+  controller.abort()
   return reads
 }
 

@@ -193,6 +193,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         rows: this.state.lastStatusByPaneKey,
         paneKey,
         yieldedTo: previous?.receivedAt,
+        observation: previous?.observation,
         delayMs,
         event,
         reoffer: (retried) => this.ingestTerminalStatus(retried)
@@ -262,8 +263,16 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
         : undefined)
+    const preservedModel =
+      !newRun &&
+      !payload.sessionBoundary &&
+      payload.state === 'done' &&
+      preservedProviderSession &&
+      previous?.payload.agentType === 'antigravity'
+        ? previous.payload.model
+        : undefined
     // Terminal observations cannot establish prompt-sent telemetry.
-    this.applyNormalizedStatus(
+    const applied = this.applyNormalizedStatus(
       {
         paneKey,
         tabId,
@@ -271,7 +280,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
-        payload: preservedMainAgent ? { ...payload, mainAgent: preservedMainAgent } : payload
+        payload:
+          preservedMainAgent || (preservedModel && !payload.model)
+            ? { ...payload, mainAgent: preservedMainAgent, model: payload.model ?? preservedModel }
+            : payload
       },
       undefined,
       event.origin ?? 'osc',
@@ -280,5 +292,19 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
+    if (applied === previous || previous?.payload.agentType !== 'antigravity' || !applied) {
+      return
+    }
+    if (
+      payload.sessionBoundary === true ||
+      applied.payload.state === 'done' ||
+      applied.payload.agentType !== 'antigravity'
+    ) {
+      this.clearTranscriptPoll(paneKey)
+      const work = this.state.antigravityChildWorkByPaneKey.get(paneKey)
+      if (work) {
+        delete work.rootModel
+      }
+    }
   }
 }

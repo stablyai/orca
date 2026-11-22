@@ -185,7 +185,7 @@ function readInputs(): ActivityThreadInputs {
   currentState = state
   currentNames = names
   currentScope = scope
-  const selected = selectAllAgentPaneThreadStoreData(state)
+  const selected = selectAllAgentPaneThreadStoreData(state, previous?.storeData)
   const next: ActivityThreadInputs = {
     storeData: previous && shallow(previous.storeData, selected) ? previous.storeData : selected,
     agentStatusEpoch: state.agentStatusEpoch,
