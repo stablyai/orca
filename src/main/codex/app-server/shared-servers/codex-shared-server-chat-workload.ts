@@ -30,7 +30,7 @@ export async function stopCodexSharedChatWorkload(input: {
   }
   if (input.sweep === null) {
     // Stop means Codex stopped everything it tracks: the turn, and a re-list showing none of the
-    // chat's terminals left. What a finished command left running ends with the server's job.
+    // chat's terminals left. The server's job ends most of what a finished command left running.
     return terminalsGone === true
   }
   // Codex's own list misses a command that detached from it, and older Codex can't list at all.

@@ -244,7 +244,7 @@ export function ExperimentalPane({
                   <p className="text-xs text-muted-foreground">
                     {t(
                       'auto.components.settings.ExperimentalPane.sharedCodexServers.windowsStop',
-                      'On Windows, Stop means Codex stopped everything it tracks for that chat. A process a finished command left running ends when its shared server closes.'
+                      'On Windows, Stop means Codex stopped everything it tracks for that chat.'
                     )}
                   </p>
                 ) : null}

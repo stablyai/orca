@@ -23,7 +23,8 @@ export function windowsSharedServersAvailable(): boolean {
 }
 
 /** One kill-on-close job per shared Windows server. Job membership survives a parent's exit, so a
- *  process a finished command left running stays a member, and the server's close ends it. */
+ *  process a finished command left running stays a member and the server's close ends it. Children
+ *  of a packaged (Microsoft Store) shell leave every job, so those it can't reach. */
 export class CodexSharedServerWindowsJob {
   private ended = false
 
