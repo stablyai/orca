@@ -1,7 +1,14 @@
 // `--on 'webhook.call where="<path> <op> [values]" contains=… pick=<path>,… subject-from=<path> subject=…'`.
 import type { AutomationWebhookTrigger } from '../../shared/automation-event-triggers'
+import { gitlabEventRuleOf } from '../../shared/automation-gitlab-triggers'
 import { WEBHOOK_WHERE_OPS, type WebhookWhere } from '../../shared/connector-webhook-contract'
 import { RuntimeClientError } from '../runtime/connection/types'
+import {
+  describeGitLabTrigger,
+  formatGitLabTrigger,
+  GITLAB_TRIGGER_OPTIONS,
+  parseGitLabTrigger
+} from '../gitlab/gitlab-event-trigger-spec'
 
 const KEYS = ['where', 'contains', 'pick', 'subject-from', 'subject'] as const
 type Key = (typeof KEYS)[number]
@@ -28,11 +35,15 @@ function whereOf(spec: string, raw: string): WebhookWhere {
   return { path, op, values }
 }
 
-/** The webhook rule an --on asks for; the host makes the hook and fills in its id and rev. */
+/** The webhook rule an --on asks for, a GitLab event's included; the host makes the hook and fills in its id and rev. */
 export function parseWebhookTrigger(
   spec: string,
-  filters: readonly (readonly [key: string, value: string, ...written: string[]])[]
+  filters: readonly (readonly [key: string, value: string, ...written: string[]])[],
+  head = 'webhook.call'
 ): AutomationWebhookTrigger {
+  if (head !== 'webhook.call') {
+    return parseGitLabTrigger(spec, head, filters)
+  }
   const where: WebhookWhere[] = []
   const once = new Map<Exclude<Key, 'where'>, string>()
   for (const [key, value] of filters) {
@@ -77,6 +88,10 @@ function whereText({ path, op, values }: WebhookWhere): string {
 
 /** The rule as an --on value; parsing it gives the same filters back. */
 export function formatWebhookTrigger(trigger: AutomationWebhookTrigger): string {
+  const gitlab = gitlabEventRuleOf(trigger)
+  if (gitlab) {
+    return formatGitLabTrigger(gitlab)
+  }
   return [
     'webhook.call',
     ...(trigger.where ?? []).map((clause) => `where=${quoteValue(whereText(clause))}`),
@@ -89,6 +104,10 @@ export function formatWebhookTrigger(trigger: AutomationWebhookTrigger): string 
 
 /** "its webhook is called, where body.action = opened, containing "deploy"". */
 export function describeWebhookTrigger(trigger: AutomationWebhookTrigger): string {
+  const gitlab = gitlabEventRuleOf(trigger)
+  if (gitlab) {
+    return describeGitLabTrigger(gitlab)
+  }
   return [
     'its webhook is called',
     ...(trigger.where ?? []).map((clause) => `where ${whereText(clause)}`),
@@ -97,7 +116,10 @@ export function describeWebhookTrigger(trigger: AutomationWebhookTrigger): strin
   ].join(', ')
 }
 
+// GitLab events ride on the automation's own webhook, so they are offered with it.
 export const WEBHOOK_TRIGGER_OPTIONS = [
+  GITLAB_TRIGGER_OPTIONS,
+  '',
   'webhook:',
   "  webhook.call  when the automation's webhook URL is called. The automation gets its own URL; anyone with it can start a run.",
   '  where="<path> <op> <value>"  only when the call matches; repeatable, all must match. Paths start at body or headers (body.action, headers.x-github-event, body.items[0].id); op is =, !=, in (comma-separated values), contains, exists or !exists',

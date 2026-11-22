@@ -1,0 +1,139 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  gitlabWebhookFilters,
+  type GitLabEventRule
+} from '../../../shared/automation-gitlab-triggers'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import { GitLabEventHooks, GitLabEventHookStore } from './gitlab-event-hooks'
+import type { GitLabProjectHook } from './gitlab-project-hooks'
+
+const HOOK = 'wh_AAAAAAAAAAAAAAAA'
+
+function automationFor(rule: GitLabEventRule): Automation {
+  const trigger = {
+    id: `wh-${HOOK}`,
+    source: 'webhook',
+    event: 'call',
+    rev: 1,
+    ...gitlabWebhookFilters(rule)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields the upkeep reads.
+  return {
+    id: 'a-1',
+    name: 'Mentions',
+    enabled: true,
+    bot: { botId: 'bot-1' },
+    on: [trigger]
+  } as unknown as Automation
+}
+
+function setUp(rule: GitLabEventRule) {
+  const automations = [automationFor(rule)]
+  let keyGeneration = 1
+  const hooks = new Map<string, GitLabProjectHook>()
+  let nextId = 100
+  const gitlab = {
+    create: vi.fn(async (_host: string | undefined, project: string, hook: GitLabProjectHook) => {
+      hooks.set(project, hook)
+      return nextId++
+    }),
+    update: vi.fn(
+      async (_host: string | undefined, project: string, _id: number, hook: GitLabProjectHook) => {
+        hooks.set(project, hook)
+      }
+    ),
+    remove: vi.fn(async (_host: string | undefined, project: string) => {
+      hooks.delete(project)
+    })
+  }
+  const host = {
+    automations: () => automations,
+    keyGeneration: async () => keyGeneration,
+    url: async () => `https://hooks.example/hooks/${HOOK}/key-${keyGeneration}`,
+    setSecret: vi.fn(async (_hookId: string, _secret: string) => undefined),
+    tell: vi.fn()
+  }
+  const store = new GitLabEventHookStore(
+    join(mkdtempSync(join(tmpdir(), 'gitlab-events-')), 'hooks.json')
+  )
+  return {
+    upkeep: new GitLabEventHooks(host, gitlab, store),
+    gitlab,
+    host,
+    hooks,
+    automations,
+    rotate: () => {
+      keyGeneration += 1
+    }
+  }
+}
+
+const mentions: GitLabEventRule = {
+  event: 'comment',
+  projects: ['acme/api', 'acme/web'],
+  contains: '@scout'
+}
+
+describe('GitLabEventHooks', () => {
+  it('signs a webhook on each project with the secret the Orca hook takes, once', async () => {
+    const { upkeep, gitlab, host, hooks } = setUp(mentions)
+    await upkeep.reconcile()
+    await upkeep.reconcile()
+
+    expect(gitlab.create).toHaveBeenCalledTimes(2)
+    expect(host.setSecret).toHaveBeenCalledTimes(1)
+    const secret = host.setSecret.mock.calls[0][1]
+    expect(secret).toMatch(/^whsec_[A-Za-z0-9+/]{43}=$/)
+    expect([...hooks.values()].map((hook) => [hook.url, hook.signingToken, hook.flag])).toEqual([
+      [`https://hooks.example/hooks/${HOOK}/key-1`, secret, 'note_events'],
+      [`https://hooks.example/hooks/${HOOK}/key-1`, secret, 'note_events']
+    ])
+  })
+
+  it('points every webhook at the new URL with a new secret after the key rotates', async () => {
+    const { upkeep, gitlab, host, hooks, rotate } = setUp(mentions)
+    await upkeep.reconcile()
+    rotate()
+    await upkeep.reconcile()
+
+    expect(gitlab.create).toHaveBeenCalledTimes(2)
+    expect(gitlab.update).toHaveBeenCalledTimes(2)
+    const secret = host.setSecret.mock.calls[1][1]
+    expect(secret).not.toBe(host.setSecret.mock.calls[0][1])
+    expect(hooks.get('acme/web')).toMatchObject({
+      url: `https://hooks.example/hooks/${HOOK}/key-2`,
+      signingToken: secret
+    })
+  })
+
+  it('removes the webhooks once the rule is gone', async () => {
+    const { upkeep, gitlab, hooks, automations } = setUp(mentions)
+    await upkeep.reconcile()
+    automations.length = 0
+    await upkeep.reconcile()
+
+    expect(gitlab.remove).toHaveBeenCalledTimes(2)
+    expect(hooks.size).toBe(0)
+  })
+
+  it('keeps a webhook GitLab already made when the next project is refused, and tells the bot once', async () => {
+    const { upkeep, gitlab, host } = setUp(mentions)
+    gitlab.create
+      .mockImplementationOnce(async () => 100)
+      .mockRejectedValueOnce(new Error('GitLab refused a webhook on acme/web'))
+    await upkeep.reconcile()
+    gitlab.create.mockRejectedValueOnce(new Error('GitLab refused a webhook on acme/web'))
+    await upkeep.reconcile()
+
+    expect(host.setSecret).not.toHaveBeenCalled()
+    expect(gitlab.update).toHaveBeenCalledWith(undefined, 'acme/api', 100, expect.anything())
+    expect(host.tell).toHaveBeenCalledTimes(1)
+    expect(host.tell).toHaveBeenCalledWith(
+      'bot-1',
+      '“Mentions”: GitLab refused a webhook on acme/web'
+    )
+  })
+})

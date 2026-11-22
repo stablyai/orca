@@ -144,8 +144,8 @@ export function parseAutomationEventTrigger(spec: string): AutomationEventTrigge
   if (!head || head[3] === undefined) {
     throw invalid(`--on needs an event such as slack.mentioned, not "${spec}".`)
   }
-  if (head[3] === 'webhook.call') {
-    return parseWebhookTrigger(spec, entriesOf(spec, rest))
+  if (head[3] === 'webhook.call' || head[3].startsWith('gitlab.')) {
+    return parseWebhookTrigger(spec, entriesOf(spec, rest), head[3])
   }
   if (head[3] === 'gmail.new_email' || head[3] === 'calendar.starting_soon') {
     return parseGoogleTrigger(spec, head[3], entriesOf(spec, rest))
