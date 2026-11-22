@@ -97,6 +97,6 @@ export const heldSendFocused = defineFixture({
   render: () => <Held count={2} />,
   interact: (frame) => {
     const buttons = [...frame.querySelectorAll<HTMLButtonElement>('button')]
-    buttons.at(-1)?.focus({ focusVisible: true } as FocusOptions)
+    buttons.at(-1)?.focus({ focusVisible: true })
   }
 })
