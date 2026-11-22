@@ -268,7 +268,7 @@ describe('quote chips in the composer', () => {
     expect(chips(editor)).toBe(0)
   })
 
-  // Other text, such as a saved automation's note, still goes after the draft.
+  // Other text, such as a saved automation's note, goes after the draft.
   it('appends text after the draft and a blank line, wherever the caret is', () => {
     const { input } = setup('top\nend')
     act(() => input.setSelectionRange(1, 1))

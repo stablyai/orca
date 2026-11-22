@@ -47,8 +47,8 @@ export function nativeChatPromptPillKey(
   const side = key === 'Backspace' || key === 'ArrowLeft' ? 'before' : 'after'
   const pill = pillBeside(state, side)
   if (!pill) {
-    // At the end, after a pill, the browser moves the caret past the pill and ProseMirror moves it
-    // back: the caret stays.
+    // At the end, after a pill, the browser moves the caret past the pill, and ProseMirror moves it
+    // back. Stop the key: the caret stays.
     const { $from } = state.selection
     return (
       key === 'ArrowRight' &&
