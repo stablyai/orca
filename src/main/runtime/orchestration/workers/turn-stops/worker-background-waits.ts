@@ -1,11 +1,9 @@
-import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import {
-  structuredAgentSessionIdOfTab,
-  structuredAgentSessionStatusPaneKey
-} from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
+import { rowsShowWait } from './worker-background-wait-rows'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   readWorkerPresence,
@@ -27,10 +25,6 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
-}
-
-type StatusRows = {
-  getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
 }
 
 const SEND_RETRIES = 3
@@ -105,14 +99,6 @@ export class WorkerBackgroundWaits {
     this.timers.set(dispatchId, { dueAt: Date.now() + SEND_RETRY_MS, cancel: timer.cancel })
   }
 
-  dispose(): void {
-    for (const timer of this.timers.values()) {
-      timer.cancel()
-    }
-    this.timers.clear()
-    this.waitingSince.clear()
-  }
-
   private observePane(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
     const wait = row ? agentBackgroundWait(row) : null
@@ -137,7 +123,7 @@ export class WorkerBackgroundWaits {
             rest: {
               from: worker.from,
               reason: 'background-wait',
-              backgroundWait: { ...wait, paneKey },
+              backgroundWait: { ...wait, paneKey, ...(row?.structuredHost ? { chat: true } : {}) },
               lastOutput: row?.lastAssistantMessage,
               turnStartedAt: row?.turnStartedAt
             }
@@ -153,9 +139,41 @@ export class WorkerBackgroundWaits {
       return
     }
     this.waitingSince.delete(paneKey)
-    // A chat whose tasks ended without waking it is idle now: its held finish was never reported.
+    // A chat whose tasks ended without waking it is idle now: its held finish is reported after the
+    // quiet period a finish gets, unless the wake turn starts by then.
     if (row?.structuredHost && row.state === 'done') {
+      this.deps.setTimer(() => this.reportChatFinish(paneKey, since), AGENT_DONE_QUIET_MS)
+      return
+    }
+    // Its lead took a turn again (a finished task woke it, or mail did): the wait is over. A rest,
+    // a prompt or an exit is the other edges' own news.
+    if (row?.state === 'working' && row.mainAgent?.state !== 'done') {
       for (const worker of this.workersOf(paneKey, row)) {
+        observeWorker(worker.db, worker.target, { presence: 'working' }, this.deps)
+        const dispatchId = workerTurnStopDispatchId(worker.target)
+        this.timers.get(dispatchId)?.cancel()
+        this.timers.delete(dispatchId)
+      }
+    }
+  }
+
+  /** Still idle on the same turn end, and not failed or cut: the held turn finished. */
+  private reportChatFinish(paneKey: string, since: number): void {
+    try {
+      const row = this.deps.readHookRow(paneKey)
+      const lead = row?.mainAgent
+      if (
+        row?.state !== 'done' ||
+        lead?.stateStartedAt !== since ||
+        (lead.outcome !== undefined && lead.outcome !== 'success')
+      ) {
+        return
+      }
+      for (const worker of this.workersOf(paneKey, row)) {
+        const dispatch = worker.target.kind === 'local' ? worker.target.dispatch : null
+        if (dispatch && worker.db.getWorkerDispatch(dispatch.id)?.state === 'starting') {
+          continue
+        }
         observeWorker(
           worker.db,
           worker.target,
@@ -163,22 +181,18 @@ export class WorkerBackgroundWaits {
             presence: 'at-rest',
             fence: `background-ended:${since}`,
             legacyStopKey: `${paneKey}:background-ended:${since}`,
-            rest: { from: worker.from, reason: 'finished', lastOutput: row.lastAssistantMessage }
+            rest: {
+              from: worker.from,
+              reason: 'finished',
+              lastOutput: row.lastAssistantMessage,
+              turnStartedAt: row.turnStartedAt
+            }
           },
           this.deps
         )
       }
-      return
-    }
-    // Its lead took a turn again (a finished task woke it, or mail did): the wait is over. A rest,
-    // a prompt or an exit is the other edges' own news.
-    if (row && row.mainAgent?.state !== 'done' && row.state !== 'done') {
-      for (const worker of this.workersOf(paneKey, row)) {
-        observeWorker(worker.db, worker.target, { presence: 'working' }, this.deps)
-        const dispatchId = workerTurnStopDispatchId(worker.target)
-        this.timers.get(dispatchId)?.cancel()
-        this.timers.delete(dispatchId)
-      }
+    } catch (error) {
+      console.warn('[orchestration] reporting a chat background finish failed', error)
     }
   }
 
@@ -193,7 +207,7 @@ export class WorkerBackgroundWaits {
     }
     try {
       const row = recorded.paneKey ? this.deps.readHookRow(recorded.paneKey) : null
-      if (!rowsShowWait(row ? [row] : [], recorded.since)) {
+      if (!rowsShowWait(row ? [row] : [], recorded)) {
         settleWorkerRestUnreported(db, dispatchId)
         return
       }
@@ -231,7 +245,7 @@ export class WorkerBackgroundWaits {
 function recordedWait(
   db: OrchestrationDb,
   dispatchId: string
-): { since: number; paneKey?: string } | null {
+): { since: number; paneKey?: string; chat?: true } | null {
   const row = readWorkerPresence(db, dispatchId)
   if (!row?.report || row.presence !== 'resting') {
     return null
@@ -243,41 +257,12 @@ function recordedWait(
     return typeof wait?.since === 'number'
       ? {
           since: wait.since,
-          ...(typeof wait.paneKey === 'string' ? { paneKey: wait.paneKey } : {})
+          ...(typeof wait.paneKey === 'string' ? { paneKey: wait.paneKey } : {}),
+          ...(wait.chat === true ? { chat: true as const } : {})
         }
       : null
   } catch {
     // An unreadable rest is decided by the presence report itself.
     return null
-  }
-}
-
-/** A chat whose turn its own background tasks hold open, by its status row. */
-export function chatWaitsOnBackground(rows: StatusRows, sessionId: string): boolean {
-  return rows
-    .getStatusSnapshotForPane(structuredAgentSessionStatusPaneKey(sessionId))
-    .some((row) => agentBackgroundWait(row) !== null)
-}
-
-/** No row yet (a pane not restored) proves nothing; a row that names another turn ends the wait. */
-function rowsShowWait(rows: readonly AgentStatusIpcPayload[], since: number): boolean {
-  return rows.length === 0 || rows.some((row) => agentBackgroundWait(row)?.since === since)
-}
-
-/** Whether a recorded wait's pane still shows it, by this host's status rows. */
-export function backgroundWaitShown(
-  rows: StatusRows,
-  wait: { since: number; paneKey?: string }
-): boolean {
-  return !wait.paneKey || rowsShowWait(rows.getStatusSnapshotForPane(wait.paneKey), wait.since)
-}
-
-/** The report deps that read background waits from this host's status rows. */
-export function backgroundWaitReportDeps(
-  rows: StatusRows = agentHookServer
-): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground' | 'backgroundWaitShown'> {
-  return {
-    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId),
-    backgroundWaitShown: (wait) => backgroundWaitShown(rows, wait)
   }
 }

@@ -10,7 +10,7 @@ import {
 /** The lead agent ended its turn while background tasks it started still run: when, and what they run. */
 export type AgentBackgroundWait = { since: number; commands: string[] }
 
-/** Exact from the row: the lead's turn is over (not cancelled), and only its named background tasks keep
+/** Exact from the row: the lead's turn is over (not cancelled or failed), and only its named background tasks keep
  *  the row working. A session cron alone names no task, so it is no wait. */
 export function agentBackgroundWait(
   row: Pick<AgentStatusPayload, 'state' | 'workingMode' | 'mainAgent' | 'backgroundCommands'>
@@ -21,6 +21,7 @@ export function agentBackgroundWait(
     row.workingMode !== 'monitoring' ||
     lead?.state !== 'done' ||
     lead.outcome === 'cancellation' ||
+    lead.outcome === 'failure' ||
     !row.backgroundCommands?.length
   ) {
     return null

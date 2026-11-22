@@ -58,7 +58,7 @@ export type WorkerTurnStop = {
   requestError?: WorkerRequestError
   /** For `background-wait`: when the turn ended, what its background tasks run, and the pane whose
    *  row showed it (absent on a paired server's relayed copy). */
-  backgroundWait?: AgentBackgroundWait & { paneKey?: string }
+  backgroundWait?: AgentBackgroundWait & { paneKey?: string; chat?: true }
 }
 
 /** What the report of a rest, as opposed to a worker gone, carries. */

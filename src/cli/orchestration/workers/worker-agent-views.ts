@@ -200,7 +200,7 @@ function knownActivity(projection: WorkerProjection | null | undefined): string 
   const wait = projection?.stage.backgroundWait
   if (wait) {
     const [command, ...more] = wait.commands
-    return `waiting on its background task${command ? ` \`${command}\`` : ''}${more.length ? ` (and ${more.length} more)` : ''} since ${new Date(wait.since).toISOString()}`
+    return `waiting on its background task${command ? ` \`${command}\`` : ''}${more.length ? ` (and ${more.length} more)` : ''}${sinceIso(wait.since)}`
   }
   if (projection?.liveness.verdict !== 'live' || projection.stage.activity === 'unknown') {
     return undefined
@@ -213,4 +213,10 @@ function lastActivity(projection: WorkerProjection | null | undefined): string |
   return knownActivity(projection) && typeof at === 'number'
     ? formatPrCommentRelativeTime(new Date(at).toISOString(), Date.now())
     : undefined
+}
+
+/** A relayed copy may carry a time no date can hold. */
+function sinceIso(since: number): string {
+  const date = new Date(since)
+  return Number.isFinite(date.getTime()) ? ` since ${date.toISOString()}` : ''
 }

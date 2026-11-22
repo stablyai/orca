@@ -7,6 +7,7 @@ import '../../db/attempt-outcome-projection'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { WorkerBackgroundWaits } from './worker-background-waits'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 
 const PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_worker'
@@ -137,16 +138,13 @@ describe('a worker waiting on its own background task', () => {
     })
     restarted.arm(db, dispatchId)
     // A prompt mid-wait, then the same wait again: one fact still.
-    row = { ...heldRow(TURN_END), state: 'waiting', workingMode: undefined }
-    restarted.observe({
-      kind: 'moved',
-      paneKey: PANE,
-      workspace: { worktreeId: 'repo::/w', sshHostId: null },
-      from: 'working',
-      to: 'needs-you',
-      at: 3,
-      transition: null
-    })
+    row = {
+      ...heldRow(TURN_END),
+      state: 'waiting',
+      workingMode: undefined,
+      mainAgent: { state: 'waiting', stateStartedAt: TURN_END + MINUTE }
+    }
+    // The prompt's own edge records it first; the row moving to the prompt does not end it as working.
     observeWorker(
       db,
       { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
@@ -158,8 +156,18 @@ describe('a worker waiting on its own background task', () => {
       },
       { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
     )
+    restarted.observe({
+      kind: 'moved',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/w', sshHostId: null },
+      from: 'working',
+      to: 'needs-you',
+      at: 3,
+      transition: null
+    })
+    expect(readWorkerPresence(db, dispatchId)?.presence).toBe('prompt')
     row = heldRow(TURN_END)
-    restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
+    restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 5 })
     advanceTo(TURN_END + 120 * MINUTE)
     reconsiderWorkerRest(db, dispatchId, {
       getDb: () => db,
