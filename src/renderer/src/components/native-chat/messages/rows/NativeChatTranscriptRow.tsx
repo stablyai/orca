@@ -193,7 +193,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : itemNotes ? (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           {itemNotes.map((note) => (
             <MessageRow
               key={note.id}
