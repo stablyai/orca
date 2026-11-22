@@ -24,7 +24,22 @@ type SessionRowProps = {
   onKill: (session: UnifiedSessionRow) => void
 }
 
-/** Only a label named by a live pane title watches titles, so a title change re-renders just that text. */
+type RuntimePaneTitles = ReturnType<typeof useAppStore.getState>['runtimePaneTitlesByTabId']
+const RuntimePaneTitlesContext = React.createContext<RuntimePaneTitles>({})
+
+/** One store selection for every live-titled label; only those labels read it. */
+export function RuntimePaneTitlesProvider({
+  children
+}: {
+  children: React.ReactNode
+}): React.JSX.Element {
+  const titles = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  return (
+    <RuntimePaneTitlesContext.Provider value={titles}>{children}</RuntimePaneTitlesContext.Provider>
+  )
+}
+
+/** A label named by a live pane title; a title change re-renders just these labels. */
 function LiveTitleLabel({
   tabId,
   fallback
@@ -32,8 +47,7 @@ function LiveTitleLabel({
   tabId: string
   fallback: string
 }): React.JSX.Element {
-  // Select the tab's title map, not a derived string, so unrelated store writes do no scan.
-  const liveTitle = firstRuntimePaneTitle(useAppStore((s) => s.runtimePaneTitlesByTabId[tabId]))
+  const liveTitle = firstRuntimePaneTitle(React.useContext(RuntimePaneTitlesContext)[tabId])
   return <>{liveTitle || fallback}</>
 }
 

@@ -1,19 +1,20 @@
 import {
+  chatInclusiveHistoryKey,
+  deleteMemoryHistory,
   hasMemoryHistory,
   pushMemoryHistorySample,
-  retireConvergedMemoryHistory,
   seedMemoryHistory,
   sweepStaleMemoryHistory,
-  terminalOnlyHistoryKey,
   type WorktreeMemoryBucket
 } from './memory-snapshot-buckets'
 
 type Usage = { cpu: number; memory: number; privateMemory: number }
 
 /**
- * Records one sample of each workspace's history. The plain series is what this machine shows (chats
- * included). From a workspace's first chat it also keeps a terminal-only series for paired machines:
- * a copy of the plain one, which held terminals alone until then. Returns those workspaces' terminal usage.
+ * Records one sample of each workspace's history. The plain series is terminals only, taken while a
+ * workspace has terminals, as it always was, so paired machines get the history they always had. A
+ * workspace with chats also keeps a chat-inclusive series for this machine's row, continuing the plain
+ * one and dropped when its chats end. Returns the workspaces with both, with their terminal-only usage.
  */
 export function recordWorkspaceMemorySeries(
   buckets: readonly WorktreeMemoryBucket[],
@@ -22,24 +23,22 @@ export function recordWorkspaceMemorySeries(
 ): { worktreeId: string; usage: Usage }[] {
   const terminalSeries: { worktreeId: string; usage: Usage }[] = []
   for (const bucket of buckets) {
-    const terminalKey = terminalOnlyHistoryKey(bucket.worktreeId)
-    const hasTerminals = bucket.sessions.length > 0
-    let separate = hasMemoryHistory(terminalKey)
-    if (hasTerminals && bucket.chats && !separate) {
-      // The plain series held terminals alone until its first chat, so it seeds the terminal-only one.
-      seedMemoryHistory(terminalKey, bucket.worktreeId, now)
-      separate = true
+    const chatKey = chatInclusiveHistoryKey(bucket.worktreeId)
+    if (!bucket.chats) {
+      deleteMemoryHistory(chatKey)
+    } else if (!hasMemoryHistory(chatKey)) {
+      seedMemoryHistory(chatKey, bucket.worktreeId, now)
     }
-    // A chat-only sample takes no terminal sample, so the terminal series expires as it would without chats.
-    if (separate && hasTerminals) {
+    if (bucket.sessions.length > 0) {
       const usage = terminalUsage.get(bucket.worktreeId) ?? bucket
-      pushMemoryHistorySample(terminalKey, usage.memory, now)
-      // With no chats both series take the same sample, so after a full series they are equal.
-      if (!retireConvergedMemoryHistory(terminalKey, !bucket.chats)) {
+      pushMemoryHistorySample(bucket.worktreeId, usage.memory, now)
+      if (bucket.chats) {
         terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
       }
     }
-    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now, Boolean(bucket.chats))
+    if (bucket.chats) {
+      pushMemoryHistorySample(chatKey, bucket.memory, now)
+    }
   }
   sweepStaleMemoryHistory(now)
   return terminalSeries

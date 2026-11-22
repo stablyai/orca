@@ -15,8 +15,7 @@ import type { PtyListedSession as DaemonSession } from '../../../../../../shared
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost,
-  stampedRuntimeHostId
+  resolveResourceWorkspaceHost
 } from './resource-workspace-host'
 import {
   daemonSessionLiveTitleTabId,
@@ -52,16 +51,6 @@ function chatPartOf(wt: WorktreeMemory): WorktreeMemory {
     memory: chats.reduce((sum, chat) => sum + chat.memory, 0),
     history: [],
     sessions: []
-  }
-}
-/** A workspace sample's terminals alone, for when its chats get their own row. */
-function terminalPartOf(wt: WorktreeMemory): WorktreeMemory {
-  const { privateMemory: _privateMemory, chats: _chats, ...rest } = wt
-  return {
-    ...rest,
-    cpu: wt.sessions.reduce((sum, session) => sum + session.cpu, 0),
-    memory: wt.sessions.reduce((sum, session) => sum + session.memory, 0),
-    history: wt.terminalHistory ?? []
   }
 }
 const LOCAL_SAMPLE = 'local'
@@ -143,18 +132,11 @@ export function mergeSnapshotAndSessions(
       terminalSamples?.push(wt)
     }
     const placement = localSamplePlacement(ctx, wt, false)
-    const hasChats = Boolean(wt.chats?.length)
-    // Under a paired-stamped id, this machine's chats get their own host-qualified row, and its
-    // terminal row graphs terminal samples alone while chats share the sampled history.
-    const stamped = placement !== null && stampedRuntimeHostId(ctx, wt.worktreeId) !== null
     if (placement) {
       shownLocally.add(placement.worktreeId)
-      ingestSampledWorktree(
-        stamped && (hasChats || wt.terminalHistory) ? terminalPartOf(wt) : wt,
-        placement
-      )
-    }
-    if (hasChats && (!placement || stamped)) {
+      ingestSampledWorktree(wt, placement)
+    } else if (wt.chats?.length) {
+      // Its terminals follow a paired repo host, but its chats run here.
       const chats = chatPartOf(wt)
       const chatPlacement = localSamplePlacement(ctx, chats, true)
       if (chatPlacement) {

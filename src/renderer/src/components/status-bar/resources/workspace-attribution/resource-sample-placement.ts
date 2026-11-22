@@ -40,8 +40,9 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
 
 /**
  * Null for a workspace a paired machine hosts, so its load is never attributed here. Terminals follow
- * the workspace's host, as before. Chats always run here: under an id whose record is stamped with a
- * paired host they get a host-qualified row, so they never take that checkout's workspace actions.
+ * the workspace's host, as before. Chats always run here: alone under an id whose record is stamped
+ * with a paired host, they get a host-qualified row, so they never take that checkout's actions.
+ * A chat under a duplicated id can't be opened, since the window can't tell which twin holds it.
  */
 export function localSamplePlacement(
   ctx: MergeContext,
@@ -50,7 +51,6 @@ export function localSamplePlacement(
 ): SamplePlacement | null {
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
-  const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
   if (chatOnly && stampedRuntimeHostId(ctx, wt.worktreeId)) {
     return {
       worktreeId: `${LOCAL_EXECUTION_HOST_ID}|${wt.worktreeId}`,
@@ -61,6 +61,7 @@ export function localSamplePlacement(
       unplaced: true
     }
   }
+  const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
   if (!chatOnly && runtimeHostId) {
     return null
   }
@@ -69,7 +70,8 @@ export function localSamplePlacement(
     worktreeName: worktree?.displayName?.trim() || wt.worktreeName,
     repoId,
     repoName: (worktree && ctx.repoDisplayNameById.get(repoId)) || wt.repoName,
-    isRemote
+    isRemote,
+    ...(ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ? { unplaced: true as const } : {})
   }
 }
 

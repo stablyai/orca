@@ -15,7 +15,6 @@ const snapshot = {
       cpu: 3,
       memory: 600,
       history: [600],
-      terminalHistory: [100],
       sessions: [{ sessionId: 's1', paneKey: 'tab:1', pid: 7, cpu: 1, memory: 100 }],
       chats: [chat]
     },
@@ -41,6 +40,7 @@ describe('the memory snapshot a paired machine receives', () => {
   it('carries terminals only, with terminal totals, history and no restored pane keys', () => {
     recordPairedReplyParts(snapshot, {
       rowsDiffer: true,
+      readTerminalHistory: () => [100],
       terminalSeries: [
         { worktreeId: 'repo::/mixed', usage: { cpu: 1, memory: 100, privateMemory: 0 } }
       ],

@@ -25,7 +25,7 @@ import {
   pushAppMemoryHistory,
   readAppMemoryHistory,
   readMemoryHistory,
-  terminalOnlyHistoryKey,
+  chatInclusiveHistoryKey,
   createProjectGroupNameLookup,
   createRepoNameLookup,
   resolveWorktreeMemoryNames,
@@ -248,14 +248,10 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   pushAppMemoryHistory(appBuckets.memory, now)
   const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now)
 
-  const splitIds = new Set(terminalSeries.map(({ worktreeId }) => worktreeId))
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
     ...optionalCommitField(hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(b.worktreeId),
-    ...(splitIds.has(b.worktreeId)
-      ? { terminalHistory: readMemoryHistory(terminalOnlyHistoryKey(b.worktreeId)) }
-      : {})
+    history: readMemoryHistory(b.chats ? chatInclusiveHistoryKey(b.worktreeId) : b.worktreeId)
   }))
   const agentProcesses = usageOf(agents, hasPrivateMemory)
 
@@ -277,6 +273,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     rowsDiffer: hasChatOnlyRows || terminalSeries.length > 0 || restoredSessionIds.size > 0,
     terminalSeries,
     hasPrivateMemory,
+    readTerminalHistory: readMemoryHistory,
     restoredSessionIds,
     totals: {
       ...snapshotCommitFields(

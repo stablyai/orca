@@ -18,29 +18,16 @@ const HISTORY_STALE_MS = 10 * 60 * 1000
 
 type HistoryRing = {
   samples: number[]
-  matchedSamples?: number
-  // Samples taken since the last one that included chats; the ring holds chat samples while this is below its length.
-  samplesSinceChat?: number
   touchedAt: number
 }
 
 const historyByKey = new Map<string, HistoryRing>()
 
-export function pushMemoryHistorySample(
-  key: string,
-  memoryBytes: number,
-  now: number,
-  includesChats = false
-): void {
+export function pushMemoryHistorySample(key: string, memoryBytes: number, now: number): void {
   let ring = historyByKey.get(key)
   if (!ring) {
     ring = { samples: [], touchedAt: now }
     historyByKey.set(key, ring)
-  }
-  if (includesChats) {
-    ring.samplesSinceChat = 0
-  } else if (ring.samplesSinceChat !== undefined) {
-    ring.samplesSinceChat += 1
   }
   ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
@@ -49,38 +36,25 @@ export function pushMemoryHistorySample(
   ring.touchedAt = now
 }
 
-/** A workspace's terminal-only series, kept once it has had chats; the plain key includes them. */
-export function terminalOnlyHistoryKey(worktreeId: string): string {
-  return `${worktreeId}\u0000terminals`
+/** A workspace's series with its chats included, kept while it has chats; the plain key is terminals only. */
+export function chatInclusiveHistoryKey(worktreeId: string): string {
+  return `${worktreeId}\u0000chats`
 }
 
 export function hasMemoryHistory(key: string): boolean {
   return historyByKey.has(key)
 }
 
-/** Starts `key` as a copy of `fromKey`'s series while that holds no chat samples, so it continues it; otherwise empty. */
+/** Starts `key` as a copy of `fromKey`'s series, so a new series continues the old one. */
 export function seedMemoryHistory(key: string, fromKey: string, now: number): void {
-  const from = historyByKey.get(fromKey)
-  const holdsChats =
-    from?.samplesSinceChat !== undefined && from.samplesSinceChat < from.samples.length
   historyByKey.set(key, {
-    samples: from && !holdsChats ? [...from.samples] : [],
+    samples: [...(historyByKey.get(fromKey)?.samples ?? [])],
     touchedAt: now
   })
 }
 
-/** Drops `key` once a full series in a row matched the series it was split from; `matched` is this sample's. */
-export function retireConvergedMemoryHistory(key: string, matched: boolean): boolean {
-  const ring = historyByKey.get(key)
-  if (!ring) {
-    return false
-  }
-  ring.matchedSamples = matched ? (ring.matchedSamples ?? 0) + 1 : 0
-  if (ring.matchedSamples < HISTORY_CAPACITY) {
-    return false
-  }
+export function deleteMemoryHistory(key: string): void {
   historyByKey.delete(key)
-  return true
 }
 
 export function readMemoryHistory(key: string): number[] {
@@ -143,27 +117,28 @@ export function createProjectGroupNameLookup(store: MemorySnapshotStore): Projec
 /** Repo display names read once per repo per snapshot; the store's repo lookup scans the catalog. */
 export type RepoNameLookup = (repoId: string) => string | undefined
 
+// getRepo scans the catalog, so a sample spanning more projects than this indexes it once instead.
+const REPO_LOOKUPS_BEFORE_INDEX = 4
+
 export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup {
-  // getRepo scans the catalog, so a sample spanning many projects indexes it once instead.
-  let byId: Map<string, string | undefined> | undefined
   const names = new Map<string, string | undefined>()
+  let byId: Map<string, string | undefined> | undefined
   return (repoId) => {
-    if (store.getRepos) {
-      if (!byId) {
-        byId = new Map()
-        // A repo id registered on several hosts keeps its first row's name, as getRepo does.
-        for (const repo of store.getRepos()) {
-          if (!byId.has(repo.id)) {
-            byId.set(repo.id, repo.displayName?.trim() || undefined)
-          }
+    if (names.has(repoId)) {
+      return names.get(repoId)
+    }
+    if (!byId && store.getRepos && names.size >= REPO_LOOKUPS_BEFORE_INDEX) {
+      byId = new Map()
+      // A repo id registered on several hosts keeps its first row's name, as getRepo does.
+      for (const repo of store.getRepos()) {
+        if (!byId.has(repo.id)) {
+          byId.set(repo.id, repo.displayName?.trim() || undefined)
         }
       }
-      return byId.get(repoId)
     }
-    if (!names.has(repoId)) {
-      names.set(repoId, store.getRepo(repoId)?.displayName?.trim() || undefined)
-    }
-    return names.get(repoId)
+    const name = byId ? byId.get(repoId) : store.getRepo(repoId)?.displayName?.trim() || undefined
+    names.set(repoId, name)
+    return name
   }
 }
 

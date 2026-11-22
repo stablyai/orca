@@ -9,7 +9,7 @@ import type {
   UnifiedWorktreeRow
 } from '../workspace-attribution/resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS } from './resource-usage-metrics'
-import { WorktreeRow } from './resource-usage-session-rows'
+import { RuntimePaneTitlesProvider, WorktreeRow } from './resource-usage-session-rows'
 
 export type SortOption = 'memory' | 'cpu' | 'name'
 
@@ -170,11 +170,15 @@ export function ResourceTree({
   }
 
   if (sortedRepos.length === 1) {
-    return <ProjectRows group={sortedRepos[0]} {...rowProps} />
+    return (
+      <RuntimePaneTitlesProvider>
+        <ProjectRows group={sortedRepos[0]} {...rowProps} />
+      </RuntimePaneTitlesProvider>
+    )
   }
 
   return (
-    <>
+    <RuntimePaneTitlesProvider>
       {sortedRepos.map((group) => {
         const repoCollapsed = collapsedRepos.has(group.repoId)
         return (
@@ -231,6 +235,6 @@ export function ResourceTree({
           </div>
         )
       })}
-    </>
+    </RuntimePaneTitlesProvider>
   )
 }

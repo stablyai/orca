@@ -203,7 +203,7 @@ describe('folder Resource Manager rows', () => {
     ])
   })
 
-  it("shows this machine's chats under a same-id record stamped with a paired machine in a host-qualified row", () => {
+  it("shows this machine's lone chats under a same-id record stamped with a paired machine in a read-only, host-qualified row", () => {
     const chat = { agentSessionId: 'chat-6', agent: 'claude', name: null, cpu: 1, memory: 128 }
     const worktree: Worktree = {
       ...workspace,
@@ -211,41 +211,30 @@ describe('folder Resource Manager rows', () => {
       repoId: 'repo-1',
       hostId: 'runtime:peer'
     }
-    const sample: WorktreeMemory = {
+    const chatOnly: WorktreeMemory = {
       ...oldRow,
       worktreeId: worktree.id,
       repoId: 'repo-1',
-      cpu: 3,
-      memory: 2048 + 128,
-      terminalHistory: [512, 1024],
+      cpu: 1,
+      memory: 128,
+      sessions: [],
       chats: [chat]
     }
-    const merge = (wt: WorktreeMemory) =>
-      mergeSnapshotAndSessions(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
-        { worktrees: [wt] } as MemorySnapshot,
-        [],
-        context({ worktreeById: new Map([[worktree.id, worktree]]) })
-      ).flatMap((repo) => repo.worktrees)
-    const chatRow = expect.objectContaining({
-      worktreeId: 'local|repo-1::/shared',
-      memory: 128,
-      chats: [chat],
-      unplaced: true
-    })
+    const repos = mergeSnapshotAndSessions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+      { worktrees: [chatOnly] } as MemorySnapshot,
+      [],
+      context({ worktreeById: new Map([[worktree.id, worktree]]) })
+    )
 
-    expect(merge(sample)).toEqual([
+    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
       expect.objectContaining({
-        worktreeId: 'repo-1::/shared',
-        memory: 2048,
-        history: [512, 1024]
-      }),
-      chatRow
+        worktreeId: 'local|repo-1::/shared',
+        memory: 128,
+        chats: [chat],
+        unplaced: true
+      })
     ])
-    expect(merge(sample)[0].chats).toBeUndefined()
-    expect(
-      merge({ ...sample, sessions: [], terminalHistory: undefined, cpu: 1, memory: 128 })
-    ).toEqual([chatRow])
   })
 
   it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {
