@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -29,14 +30,14 @@ function generation(_model: string) {
 }
 
 function post(
-  bridge: { baseUrl: string },
+  bridge: { baseUrl: string; headers: Record<string, string> },
   model: string,
   body = generation(model),
   signal?: AbortSignal
 ) {
   return fetch(`${bridge.baseUrl}/v1beta/models/${model}:streamGenerateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...bridge.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     ...(signal ? { signal } : {})
   })
@@ -72,6 +73,35 @@ it('delivers native text and function calls and retries transient transport erro
     expect(calls[0].tools[0].function.name).toBe('lookup')
   } finally {
     await bridge.close()
+    await bridge.close()
+  }
+})
+
+it('prefers exact and longest model matches over shorter prefix aliases', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-model-alias-'))
+  roots.push(root)
+  const profile = validateExternalAcpProfile({
+    nativeCommand: join(root, 'native-server'),
+    nativeHome: join(root, 'profile-home'),
+    gatewayBaseUrl: 'https://gateway.example.test/v1',
+    modelIds: ['gpt-5', 'gpt-5-mini'],
+    defaultModel: 'gpt-5-mini'
+  })
+  const calls: { model: string }[] = []
+  const bridge = await startExternalGatewayBridge(profile, {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async (_url, init) => {
+      calls.push(JSON.parse(init.body))
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}\n\n',
+        { status: 200 }
+      )
+    }
+  })
+  try {
+    await post(bridge, 'gpt-5-mini')
+    expect(calls[0].model).toBe('gpt-5-mini')
+  } finally {
     await bridge.close()
   }
 })
@@ -193,6 +223,176 @@ it('retries a timed out upstream once before returning a bounded failure', async
   }
 })
 
+it('aborts upstream work when the complete request consumer disconnects', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-response-disconnect-'))
+  roots.push(root)
+  let started = false
+  let aborted = 0
+  const fetchImpl = vi.fn((_url, init) => {
+    started = true
+    return new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        aborted += 1
+        reject(new Error('response consumer disconnected'))
+      })
+    })
+  })
+  const bridge = await startExternalGatewayBridge(
+    { ...fixture(root), timeoutMs: 60_000 },
+    {
+      getToken: async () => 'fixture-token',
+      fetchImpl
+    }
+  )
+  try {
+    const request = httpRequest(`${bridge.baseUrl}/v1beta/models/pi:streamGenerateContent`, {
+      method: 'POST',
+      headers: bridge.headers
+    })
+    request.on('error', () => {})
+    request.end(JSON.stringify(generation('pi')))
+    await vi.waitFor(() => expect(started).toBe(true))
+    request.destroy()
+    await vi.waitFor(() => expect(aborted).toBe(1))
+    await bridge.close()
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  } finally {
+    await bridge.close()
+  }
+})
+
+it('requires the per-launch loopback credential before reading or forwarding a request', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-loopback-auth-'))
+  roots.push(root)
+  const fetchImpl = vi.fn(
+    async () =>
+      new Response(
+        'data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}\n\n',
+        { status: 200 }
+      )
+  )
+  const bridge = await startExternalGatewayBridge(fixture(root), {
+    getToken: async () => 'fixture-token',
+    fetchImpl
+  })
+  try {
+    const rejected = await fetch(`${bridge.baseUrl}/v1beta/models/pi:streamGenerateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(generation('pi'))
+    })
+    expect(rejected.status).toBe(401)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  } finally {
+    await bridge.close()
+  }
+})
+
+it('forwards an upstream text event before the generation completes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-incremental-'))
+  roots.push(root)
+  const encoder = new TextEncoder()
+  let releaseGeneration = () => {}
+  const secondEvent = new Promise<void>((resolve) => {
+    releaseGeneration = resolve
+  })
+  const bridge = await startExternalGatewayBridge(fixture(root), {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          async start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"choices":[{"delta":{"content":"first"}}]}\r\n\r\n')
+            )
+            await secondEvent
+            controller.enqueue(
+              encoder.encode(
+                'data: {"choices":[{"delta":{"content":"second"},"finish_reason":"stop"}]}\r\n\r\ndata: [DONE]\r\n\r\n'
+              )
+            )
+            controller.close()
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+  })
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  try {
+    const response = await post(bridge, 'pi')
+    reader = response.body!.getReader()
+    const fallback = setTimeout(releaseGeneration, 1000)
+    const first = await reader.read()
+    clearTimeout(fallback)
+    const firstText = new TextDecoder().decode(first.value)
+    expect(firstText).toContain('first')
+    expect(firstText).not.toContain('second')
+    releaseGeneration()
+    let remaining = ''
+    for (;;) {
+      const next = await reader.read()
+      if (next.done) {
+        break
+      }
+      remaining += new TextDecoder().decode(next.value)
+    }
+    expect(remaining).toContain('second')
+  } finally {
+    releaseGeneration()
+    await reader?.cancel().catch(() => {})
+    await bridge.close()
+  }
+})
+
+it('returns a stream-level safe error after a converted event has started', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-late-stream-error-'))
+  roots.push(root)
+  const encoder = new TextEncoder()
+  const bridge = await startExternalGatewayBridge(fixture(root), {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"choices":[{"delta":{"content":"prefix"}}]}\n\n')
+            )
+            controller.enqueue(encoder.encode('data: {not-json}\n\n'))
+            controller.close()
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+  })
+  try {
+    const response = await post(bridge, 'pi')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    const body = await response.text()
+    expect(body).toContain('prefix')
+    expect(body).toContain('"code":502')
+    expect(body).not.toContain('{not-json}')
+  } finally {
+    await bridge.close()
+  }
+})
+
+it('rejects an unterminated oversized upstream event without retaining it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-event-limit-'))
+  roots.push(root)
+  const bridge = await startExternalGatewayBridge(fixture(root), {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async () => new Response(`data: ${'x'.repeat(1_048_577)}`, { status: 200 })
+  })
+  try {
+    const response = await post(bridge, 'pi')
+    expect(response.status).toBe(502)
+    expect(await response.text()).not.toContain('xxxx')
+  } finally {
+    await bridge.close()
+  }
+})
+
 it('fails malformed requests and reports cancellation without keeping retry work alive', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-external-http-cancel-'))
   roots.push(root)
@@ -205,6 +405,7 @@ it('fails malformed requests and reports cancellation without keeping retry work
     `${(await stopped).baseUrl}/v1beta/models/pi:streamGenerateContent`,
     {
       method: 'POST',
+      headers: (await stopped).headers,
       body: '{bad json'
     }
   )

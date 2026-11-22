@@ -73,6 +73,12 @@ it('accepts only absolute per-profile homes and literal external gateway configu
   expect(() =>
     validateExternalAcpProfile({ ...modelFields(root), defaultModel: 'another model' })
   ).toThrow()
+  for (const defaultModel of [123, true, null, ['model-alpha-high']]) {
+    expect(() => validateExternalAcpProfile({ ...modelFields(root), defaultModel })).toThrow()
+  }
+  expect(
+    validateExternalAcpProfile({ ...modelFields(root), defaultModel: undefined }).defaultModel
+  ).toBe('model-alpha')
 })
 
 it('fails profile reads when the native command is missing and never executes it', async () => {

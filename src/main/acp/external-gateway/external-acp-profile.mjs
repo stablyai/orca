@@ -81,7 +81,10 @@ export function validateExternalAcpProfile(value) {
   if (!validModelList(modelIds)) {
     throw invalidProfile()
   }
-  if (value.defaultModel !== undefined && !MODEL_ID.test(value.defaultModel)) {
+  if (
+    value.defaultModel !== undefined &&
+    (typeof value.defaultModel !== 'string' || !MODEL_ID.test(value.defaultModel))
+  ) {
     throw invalidProfile()
   }
   if (value.credentialCommand !== undefined) {

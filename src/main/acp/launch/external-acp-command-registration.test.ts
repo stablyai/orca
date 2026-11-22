@@ -1,7 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { antigravityChatRoute } from '../../antigravity/antigravity-chat-route'
 import { invokeAntigravityAcpLaunch } from './external-acp-launch-test-support'
@@ -63,4 +63,22 @@ it('keeps an explicit external command off the signed-in host backend', async ()
       ANTIGRAVITY_LAUNCH_SPEC
     )
   ).resolves.toEqual({ agy: false, installs: 'server' })
+})
+
+it('preserves spaces in the registered executable on POSIX and Windows', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-acp-command-space-'))
+  roots.push(root)
+  const executable = join(root, 'node with space.exe')
+  await writeFile(executable, '', { mode: 0o700 })
+  const spec = ANTIGRAVITY_LAUNCH_SPEC
+  const accountHome = await spec.account.resolve({ launchEnv: {}, stateDirectory: root })
+  for (const platform of ['linux', 'win32'] as const) {
+    const mockedPlatform = vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    const registered = await invokeAntigravityAcpLaunch(spec, accountHome, root, {
+      agentCmdOverrides: { antigravity: `"${executable}" external-gateway.mjs` }
+    })
+    expect(registered.command).toBe(executable)
+    expect(registered.prefixArgs).toEqual(['external-gateway.mjs'])
+    mockedPlatform.mockRestore()
+  }
 })

@@ -64,6 +64,7 @@ export async function startExternalAcpLauncher(profile, options = {}) {
   let connection
   let closed = false
   let closePromise = null
+  let lines
   const clientRequests = new Map()
   const requestKey = (id) => `${typeof id}:${String(id)}`
   const askClient = (id, method, params, signal) =>
@@ -134,6 +135,11 @@ export async function startExternalAcpLauncher(profile, options = {}) {
   const close = () => {
     closePromise ??= (async () => {
       closed = true
+      lines?.close()
+      input.destroy()
+      if (!output.writableEnded) {
+        output.end()
+      }
       for (const request of clientRequests.values()) {
         request.cancel()
       }
@@ -161,7 +167,7 @@ export async function startExternalAcpLauncher(profile, options = {}) {
             _meta: {
               gateway: {
                 baseUrl: bridge.baseUrl,
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { ...bridge.headers, Authorization: `Bearer ${token}` }
               }
             }
           })
@@ -185,7 +191,7 @@ export async function startExternalAcpLauncher(profile, options = {}) {
       })
     }
   }
-  const lines = createInterface({ input, crlfDelay: Infinity })
+  lines = createInterface({ input, crlfDelay: Infinity })
   lines.on('line', (line) => {
     if (line.length > 1_048_576) {
       send({
@@ -203,6 +209,14 @@ export async function startExternalAcpLauncher(profile, options = {}) {
         jsonrpc: '2.0',
         id: null,
         error: { code: -32700, message: 'External ACP frame is not JSON' }
+      })
+      return
+    }
+    if (frame === null || typeof frame !== 'object' || Array.isArray(frame)) {
+      send({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'External ACP frame is not an object' }
       })
       return
     }
@@ -246,6 +260,11 @@ export async function startExternalAcpLauncher(profile, options = {}) {
 
 export async function runExternalAcpLauncher(profile) {
   const launcher = await startExternalAcpLauncher(profile)
+  launcher.connection.onExit((_error, { expected }) => {
+    void launcher.close().finally(() => {
+      process.exitCode = expected ? 0 : 1
+    })
+  })
   process.once('SIGINT', () => void launcher.close().finally(() => process.exit(0)))
   process.once('SIGTERM', () => void launcher.close().finally(() => process.exit(0)))
 }

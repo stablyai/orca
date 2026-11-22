@@ -96,6 +96,10 @@ it('forwards initialize, gateway auth, model selection, notifications, cancellat
     methodId: 'gateway',
     _meta: { gateway: { headers: { Authorization: 'Bearer fixture-token' } } }
   })
+  expect(auth?.params).toHaveProperty(
+    ['_meta', 'gateway', 'headers', 'x-orca-acp-loopback-auth'],
+    expect.any(String)
+  )
   expect(native!.launch.env).toMatchObject({
     AGY_LLM_GATEWAY_MODELS: 'model-alpha,pi',
     AGY_ACP_DEFAULT_MODEL: 'model-alpha-high'
@@ -135,6 +139,10 @@ it('closes a failed start before creating a native session', async () => {
   roots.push(root)
   await expect(
     startExternalAcpLauncher(profile(root), {
+      tokenOverride: 'fixture-token',
+      getToken: async () => {
+        throw new Error('credential helper should not run')
+      },
       createConnection: () => {
         throw new Error('startup refused')
       }
@@ -199,4 +207,42 @@ it('closes the native child when per-profile initialization fails', async () => 
     })
   ).rejects.toThrow()
   expect(native!.exited).toBe(true)
+})
+
+it('closes the outer transport when the native process exits', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-launcher-native-exit-'))
+  roots.push(root)
+  const input = new PassThrough()
+  const output = new PassThrough()
+  let native: FakeAcpChild
+  await startExternalAcpLauncher(profile(root), {
+    input,
+    output,
+    tokenOverride: 'fixture-token',
+    createConnection: (launch, connectionOptions) => {
+      native = new FakeAcpChild(launch, connectionOptions)
+      return native
+    }
+  })
+  native!.exit()
+  expect(output.writableEnded).toBe(true)
+  expect(input.destroyed).toBe(true)
+})
+
+it('returns an invalid-request error for null and non-object frames', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-launcher-frame-guard-'))
+  roots.push(root)
+  const input = new PassThrough()
+  const output = new PassThrough()
+  await startExternalAcpLauncher(profile(root), {
+    input,
+    output,
+    tokenOverride: 'fixture-token',
+    createConnection: (launch, connectionOptions) => new FakeAcpChild(launch, connectionOptions)
+  })
+  output.setEncoding('utf8')
+  const answer = new Promise<string>((resolve) => output.once('data', resolve))
+  input.write('null\n')
+  expect(JSON.parse(await answer)).toMatchObject({ id: null, error: { code: -32600 } })
+  input.destroy()
 })

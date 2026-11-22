@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import {
   genAiEventsFromOpenAiSse,
   genAiSseFromOpenAiChunks,
@@ -13,6 +14,18 @@ export class GatewayProtocolError extends Error {
     super(message)
     this.status = status
   }
+}
+
+const LOOPBACK_AUTH_HEADER = 'x-orca-acp-loopback-auth'
+
+function authorizedLoopback(request, credential) {
+  const supplied = request.headers[LOOPBACK_AUTH_HEADER]
+  if (typeof supplied !== 'string') {
+    return false
+  }
+  const actual = Buffer.from(supplied)
+  const expected = Buffer.from(credential)
+  return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
 
 function redact(message, token) {
@@ -44,10 +57,16 @@ function generationModel(path, profile) {
     return null
   }
   const id = decodeURIComponent(match[2])
-  if (!profile.modelIds.some((model) => id === model || id.startsWith(`${model}-`))) {
+  if (profile.modelIds.includes(id)) {
+    return id
+  }
+  const [alias] = profile.modelIds
+    .filter((model) => id.startsWith(`${model}-`))
+    .sort((left, right) => right.length - left.length)
+  if (!alias) {
     throw new GatewayProtocolError(404, 'External ACP model is not in the registered profile')
   }
-  return profile.modelIds.find((model) => id === model || id.startsWith(`${model}-`))
+  return alias
 }
 
 function toolChoice(input) {
@@ -129,6 +148,84 @@ async function readBody(request) {
   }
 }
 
+const MAX_SSE_EVENT_BYTES = 1_048_576
+
+async function* openAiEventStream(upstream) {
+  if (!upstream.body) {
+    throw new GatewayProtocolError(502, 'External ACP upstream returned no body')
+  }
+  const reader = upstream.body.getReader()
+  const decoder = new TextDecoder()
+  let pending = ''
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      pending += decoder.decode(value, { stream: true })
+      for (;;) {
+        const boundary = /\r?\n\r?\n/.exec(pending)
+        if (!boundary) {
+          break
+        }
+        const length = boundary.index + boundary[0].length
+        const raw = pending.slice(0, length)
+        pending = pending.slice(length)
+        yield* genAiEventsFromOpenAiSse(raw)
+      }
+      if (Buffer.byteLength(pending) > MAX_SSE_EVENT_BYTES) {
+        throw new GatewayProtocolError(502, 'External ACP upstream event is too large')
+      }
+    }
+    pending += decoder.decode()
+    if (pending.trim()) {
+      yield* genAiEventsFromOpenAiSse(pending)
+    }
+  } catch (error) {
+    if (error instanceof GatewayProtocolError) {
+      throw error
+    }
+    throw new GatewayProtocolError(502, 'External ACP upstream returned invalid event data')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+async function writeGenAiChunk(response, chunk) {
+  if (response.destroyed || response.writableEnded) {
+    return false
+  }
+  if (!response.headersSent) {
+    response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' })
+  }
+  if (response.write(genAiSseFromOpenAiChunks([chunk]))) {
+    return true
+  }
+  return new Promise((resolve) => {
+    const finish = () => {
+      response.removeListener('drain', finish)
+      response.removeListener('close', finish)
+      response.removeListener('error', finish)
+      response.removeListener('finish', finish)
+      resolve(!response.destroyed)
+    }
+    response.once('drain', finish)
+    response.once('close', finish)
+    response.once('error', finish)
+    response.once('finish', finish)
+  })
+}
+
+function streamError(response, status, message) {
+  if (response.destroyed || response.writableEnded) {
+    return
+  }
+  response.end(
+    `data: ${JSON.stringify({ error: { code: status, message, status: 'UNKNOWN' } })}\r\n\r\n`
+  )
+}
+
 function write(response, status, value) {
   response.writeHead(status, { 'content-type': 'application/json' })
   response.end(JSON.stringify(value))
@@ -137,6 +234,7 @@ function write(response, status, value) {
 export async function startExternalGatewayBridge(profile, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
   const token = await (options.getToken?.() ?? mintGatewayCredential(profile))
+  const loopbackCredential = options.loopbackTokenOverride ?? randomBytes(32).toString('base64url')
   if (typeof token !== 'string' || !token.trim()) {
     throw new Error('No gateway credential is available from the per-profile handoff')
   }
@@ -146,10 +244,20 @@ export async function startExternalGatewayBridge(profile, options = {}) {
     if (closed) {
       return
     }
+    if (!authorizedLoopback(request, loopbackCredential)) {
+      write(response, 401, { error: 'External ACP loopback authentication failed' })
+      return
+    }
     const controller = new AbortController()
     requestControllers.add(controller)
     const finish = () => requestControllers.delete(controller)
+    let completed = false
     request.on('aborted', () => controller.abort())
+    response.on('close', () => {
+      if (!completed) {
+        controller.abort()
+      }
+    })
     try {
       if (request.method !== 'POST' || request.url === undefined) {
         throw new GatewayProtocolError(404, 'External ACP endpoint is not found')
@@ -158,42 +266,46 @@ export async function startExternalGatewayBridge(profile, options = {}) {
       generationModel(path, profile)
       const input = { path, body: await readBody(request) }
       const upstream = await fetchOpenAi(profile, token, input, controller.signal, fetchImpl)
-      const raw = await upstream.text()
       if (!upstream.ok) {
         const status = upstream.status
+        await upstream.body?.cancel().catch(() => undefined)
         write(response, status, { error: `External ACP upstream returned HTTP ${status}` })
         return
       }
-      let events
-      try {
-        events = genAiEventsFromOpenAiSse(raw)
-      } catch {
-        throw new GatewayProtocolError(502, 'External ACP upstream returned invalid event data')
-      }
       const converter = new OpenAiStreamToGenAi()
-      const chunks = []
-      for (const event of events) {
+      let chunks = 0
+      for await (const event of openAiEventStream(upstream)) {
         if (event === null || typeof event !== 'object' || Array.isArray(event)) {
           throw new GatewayProtocolError(502, 'External ACP upstream returned an invalid response')
         }
-        chunks.push(...converter.accept(event))
+        for (const chunk of converter.accept(event)) {
+          if (!(await writeGenAiChunk(response, chunk))) {
+            return
+          }
+          chunks += 1
+        }
       }
-      if (chunks.length === 0) {
+      if (chunks === 0) {
         throw new GatewayProtocolError(502, 'External ACP upstream returned no usable content')
       }
-      response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' })
-      response.end(genAiSseFromOpenAiChunks(chunks))
+      if (!response.destroyed && !response.writableEnded) {
+        response.end()
+      }
     } catch (error) {
       const status = error instanceof GatewayProtocolError ? error.status : 504
-      write(response, status, {
-        error:
-          error instanceof Error && !(error instanceof GatewayProtocolError)
-            ? controller.signal.aborted
-              ? 'External ACP turn was canceled'
-              : 'External ACP upstream did not complete'
-            : redact(error instanceof Error ? error.message : error, token)
-      })
+      const message =
+        error instanceof Error && !(error instanceof GatewayProtocolError)
+          ? controller.signal.aborted
+            ? 'External ACP turn was canceled'
+            : 'External ACP upstream did not complete'
+          : redact(error instanceof Error ? error.message : error, token)
+      if (response.headersSent) {
+        streamError(response, status, message)
+      } else {
+        write(response, status, { error: message })
+      }
     } finally {
+      completed = true
       finish()
     }
   })
@@ -208,6 +320,7 @@ export async function startExternalGatewayBridge(profile, options = {}) {
   }
   return {
     baseUrl: `http://127.0.0.1:${address.port}${profile.gatewayBaseUrl}`,
+    headers: { [LOOPBACK_AUTH_HEADER]: loopbackCredential },
     abortPending: () => {
       for (const controller of requestControllers) {
         controller.abort()
