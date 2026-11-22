@@ -250,10 +250,17 @@ export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: b
 // It never writes the host's region either.
 // ownControl: this ask may move a host whose old cell holds only the host's own control
 // (director/edge.json moveOwnControl, edgeMoveOwnControlAsk); see EdgeAssignments.heldUnits.
-export type EdgeMoveOptions = { keepOnly?: boolean; ownControl?: boolean }
+// staleOnReserveCells: reserve-mode cells (moveOwnControl 'drain-stale', a qualifying ask). A row
+// on one of them whose counters no lease backs moves with them zeroed.
+export type EdgeMoveOptions = {
+  keepOnly?: boolean
+  ownControl?: boolean
+  staleOnReserveCells?: ReadonlySet<string>
+}
 
-// The host's own control unit a move takes off its old cell (EdgeAssignments.heldUnits).
-type OwnControl = { cellId: string; assignmentEpoch: number; activityId: string; units: number }
+// What a move takes off the host's old cell (EdgeAssignments.heldUnits): its own control unit and
+// lease, or (activityId null, units 0) only stale unleased counters on a reserve-mode cell.
+type OwnControl = { cellId: string; assignmentEpoch: number; activityId: string | null; units: number }
 
 // How an ask's cohort is judged (EdgeAssignments.judgeCohort).
 // - ask: by the region the ask names (none: RELAY_DEFAULT_REGION), as without cohortRegion.
@@ -631,7 +638,7 @@ export class EdgeAssignments {
           event: 'orca_relay_edge_moved',
           fromCellId: text(row, 'cell_id'),
           assignmentEpoch: pushed,
-          ...(own ? { ownControl: true } : {})
+          ...(own ? (own.activityId === null ? { staleUnits: true } : { ownControl: true }) : {})
         })
       )
       return this.answer(identity, pushed, leaseExpiresAt)
@@ -864,7 +871,7 @@ export class EdgeAssignments {
           fromCellId: text(row, 'cell_id'),
           assignmentEpoch: pushed,
           ...(viaFrontDoor ? { frontDoor: true } : {}),
-          ...(own ? { ownControl: true } : {})
+          ...(own ? (own.activityId === null ? { staleUnits: true } : { ownControl: true }) : {})
         })
       )
       return this.answer(identity, pushed, leaseExpiresAt, chosen)
@@ -887,10 +894,11 @@ export class EdgeAssignments {
     const units = requestUnits(row)
     if (units === 0) { return undefined }
     const ownControlOnly = units === 1 && integer(row, 'reserved_controls') === 1
-    if (!ownControlOnly || options.ownControl !== true) {
+    const cellId = text(row, 'cell_id')
+    const staleCandidate = options.staleOnReserveCells?.has(cellId) === true
+    if (!staleCandidate && (!ownControlOnly || options.ownControl !== true)) {
       throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row))
     }
-    const cellId = text(row, 'cell_id')
     let leases: SqlRow[]
     try {
       // After the assignment row, as every lease writer locks them (assignment, leases, cell).
@@ -908,6 +916,15 @@ export class EdgeAssignments {
       }
       throw error
     }
+    if (staleCandidate && leases.length === 0) {
+      // No lease anywhere backs the counters, and the cell admits from memory: nothing live on the
+      // old cell is counted, so the move takes the host as if the row held no units.
+      await this.deferIfMigrating(transaction, identity)
+      return { cellId, assignmentEpoch: integer(row, 'assignment_epoch'), activityId: null, units: 0 }
+    }
+    if (!ownControlOnly || options.ownControl !== true) {
+      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row))
+    }
     const lease = leases[0]
     if (
       leases.length !== 1 ||
@@ -918,6 +935,17 @@ export class EdgeAssignments {
     ) {
       throw new EdgeMoveDeferredError('units_held')
     }
+    await this.deferIfMigrating(transaction, identity)
+    return {
+      cellId,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      activityId: text(lease, 'activity_id'),
+      units: 1
+    }
+  }
+
+  // An open migration or region rehome owns the host's units: the move waits for it.
+  private async deferIfMigrating(transaction: RelayDatabase, identity: Identity): Promise<void> {
     const open = await transaction.query(
       `SELECT 1 AS held FROM relay_assignment_migrations
        WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL
@@ -927,12 +955,6 @@ export class EdgeAssignments {
       [identity.userId, identity.relayHostId, identity.userId, identity.relayHostId]
     )
     if (open.length > 0) { throw new EdgeMoveDeferredError('units_held') }
-    return {
-      cellId,
-      assignmentEpoch: integer(row, 'assignment_epoch'),
-      activityId: text(lease, 'activity_id'),
-      units: 1
-    }
   }
 
   // The move's row write. With the host's own control (heldUnits) the edge row starts with no units
@@ -957,7 +979,7 @@ export class EdgeAssignments {
        WHERE user_id = ? AND relay_host_id = ?`,
       [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
     )
-    if (!own) { return }
+    if (!own || own.activityId === null) { return }
     await transaction.query(
       `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
       [identity.userId, identity.relayHostId, own.activityId]
