@@ -2,6 +2,10 @@ import type { AppState } from '../../../types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../../../../shared/worktree/id'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/collections/structural-value-equality'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { isCurrentDetectedWorktreeRefresh } from './detected-worktree-refresh-admission'
 import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
 import {
@@ -60,7 +64,7 @@ export function worktreeCatalogConfirmsAbsence(
   const { repoId } = parsed
   const authority =
     state.worktreeCatalogAuthorityByRepoHost[worktreeCatalogVersionKey(repoId, hostId)]
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]
   if (
     !authority ||
     !detected ||
@@ -77,7 +81,7 @@ export function worktreeCatalogConfirmsAbsence(
     return false
   }
   const options = worktreeHostMatchOptions(state, repoId, hostId)
-  return ![detected.worktrees, state.worktreesByRepo[repoId] ?? []].some((rows) =>
+  return ![detected.worktrees, selectWorktreesByRepo(state)[repoId] ?? []].some((rows) =>
     rows.some(
       (worktree) =>
         worktreeIdsEqual(worktree.id, worktreeId) && worktreeMatchesHost(worktree, hostId, options)

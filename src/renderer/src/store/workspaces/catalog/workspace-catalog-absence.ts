@@ -4,6 +4,7 @@ import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspace
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { isHostCatalogIdentityCurrent } from '../../host-catalog/host-catalog-fence'
 import { worktreeCatalogConfirmsAbsence } from '../../slices/worktrees/listing/worktree-catalog-absence'
+import { selectFolderWorkspaces } from './workspace-record-fields'
 import {
   getRuntimeTargetHostId,
   ipcOrRuntimeTargetForHostId
@@ -24,7 +25,7 @@ export function workspaceCatalogConfirmsAbsence(
   return Boolean(
     catalog &&
     isHostCatalogIdentityCurrent(state, catalog) &&
-    !state.folderWorkspaces.some(
+    !selectFolderWorkspaces(state).some(
       (folder) =>
         folder.id === scope.folderWorkspaceId &&
         getFolderWorkspaceHostId(folder, state.projectGroups) === hostId
