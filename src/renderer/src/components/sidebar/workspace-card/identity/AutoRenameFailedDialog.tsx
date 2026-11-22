@@ -164,7 +164,9 @@ export function AutoRenameFailedDialog({
     // Close without clearing the error, so the card keeps it for Try again after the fix.
     onOpenChange(false)
     const { settings, repos } = useAppStore.getState()
-    openNamingSettings(branchNamingSettingsTarget({ worktreeId, settings, repos }))
+    openNamingSettings(
+      branchNamingSettingsTarget({ worktreeId, executionHostId, settings, repos })
+    )
   }
   // aria-disabled, not disabled: a natively disabled button drops focus to the body, and the focus
   // hand-back after a result only runs while focus is still inside the dialog.
