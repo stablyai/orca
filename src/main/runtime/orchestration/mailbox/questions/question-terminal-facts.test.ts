@@ -13,7 +13,6 @@ describe("a terminal taker's pending wake", () => {
   let db: OrchestrationDb
   let takesInput: boolean
 
-  let paneKeys: string[]
   const reads: QuestionPartyReads = {
     liveSession: (root) => root,
     chatRunning: async () => false,
@@ -21,7 +20,7 @@ describe("a terminal taker's pending wake", () => {
     chatHandingOver: () => false,
     terminal: (handle) =>
       handle === HANDLE
-        ? { ptyId: 'pty-1', paneKeys, asking: false, takesInput, working: false }
+        ? { ptyId: 'pty-1', paneKeys: [], asking: false, takesInput, working: false }
         : null,
     terminalHandingOver: () => false
   }
@@ -29,7 +28,6 @@ describe("a terminal taker's pending wake", () => {
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
     takesInput = true
-    paneKeys = []
   })
   afterEach(() => db.close())
 
@@ -71,54 +69,6 @@ describe("a terminal taker's pending wake", () => {
     const id = takenQuestion()
     db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'status', body: 'b' })
     takesInput = false
-    expect(await told()).toEqual([id])
-  })
-
-  it("doesn't count a Run's mail left in its old coordinator's mailbox, which routing moves elsewhere", async () => {
-    const id = takenQuestion()
-    const run = db.createRun({
-      objective: 'o',
-      coordinatorHandle: 'term_other',
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: null
-    })
-    // Stored before this terminal became the Run's alias, so it still sits in its own mailbox.
-    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b', runId: run.id })
-    db.rememberRunCoordinatorHandle(run.id, HANDLE)
-    expect(await told()).toEqual([id])
-  })
-
-  it('holds the question for a Run it coordinates, whose rows in its own mailbox are routed to it and typed', async () => {
-    takenQuestion()
-    paneKeys = ['tab-1:11111111-1111-4111-8111-111111111111']
-    const run = db.createRun({
-      objective: 'o',
-      coordinatorHandle: HANDLE,
-      coordinatorPaneKey: paneKeys[0],
-      coordinatorOrcaSessionId: null
-    })
-    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b' })
-    db.db.prepare('UPDATE messages SET run_id = ? WHERE subject = ?').run(run.id, 'r')
-    expect(await told()).toEqual([])
-  })
-
-  it("doesn't count another Run's rows in a coordinator's own mailbox, which go to that Run's owner", async () => {
-    const id = takenQuestion()
-    paneKeys = ['tab-1:11111111-1111-4111-8111-111111111111']
-    db.createRun({
-      objective: 'bound',
-      coordinatorHandle: HANDLE,
-      coordinatorPaneKey: paneKeys[0],
-      coordinatorOrcaSessionId: null
-    })
-    const other = db.createRun({
-      objective: 'other',
-      coordinatorHandle: 'term_other',
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: null
-    })
-    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b', runId: other.id })
-    db.rememberRunCoordinatorHandle(other.id, HANDLE)
     expect(await told()).toEqual([id])
   })
 })

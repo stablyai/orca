@@ -39,27 +39,15 @@ export type QuestionNoticeWriter = (notice: QuestionNotice) => 'told' | 'unverif
 const NEVER_RUNS = /^(shell|reply|orca|dropped:.*)$/
 
 function wakePending(db: OrchestrationDb, facts: QuestionPartyFacts, party: string): boolean {
-  const mailboxes = facts.mailboxes(party)
-  const ownMailbox = party.startsWith('terminal:') ? party.slice('terminal:'.length) : null
-  // As terminal delivery: a Run's rows in a terminal's own mailbox reach it only through a Run bound
-  // to it, which routes them into its mailbox; another Run's rows go to that Run's owner.
-  const boundRunRows = (handle: string) =>
-    mailboxes.some(
-      (mailbox) =>
-        mailbox.startsWith('run:') &&
-        db.hasUndeliveredDirectMessageForRun(mailbox.slice('run:'.length), handle)
-    )
-  return mailboxes.some(
+  return facts.mailboxes(party).some(
     (mailboxHandle) =>
       facts.handingOver(party, mailboxHandle) ||
       selectOrchestrationPointerBatch({
         db,
         mailboxHandle,
         waiters: undefined,
-        reservedTypes: new Set(['heartbeat']),
-        excludeRunOwnedDirect: mailboxHandle === ownMailbox
-      }).messages.length > 0 ||
-      (mailboxHandle === ownMailbox && boundRunRows(mailboxHandle))
+        reservedTypes: new Set(['heartbeat'])
+      }).messages.length > 0
   )
 }
 
