@@ -23936,7 +23936,19 @@
       "computerAccountHint": "Wo der Bot läuft, bei Orca angemeldet als {{account}}.",
       "useChatDefaults": "Chat-Standardeinstellungen verwenden",
       "agent": "Agent",
-      "folder": "Ordner: {{path}}"
+      "folder": "Ordner: {{path}}",
+      "name": "Name",
+      "validation": {
+        "addName": "Name eingeben",
+        "botsUnavailable": "Bots nicht verfügbar",
+        "computerOffline": "Offline",
+        "findingAgents": "Agents werden gesucht…",
+        "identityTooLong": "Zu lang",
+        "noAgents": "Keine Agents",
+        "noAgentsAvailable": "Keine Agents verfügbar",
+        "pictureLoading": "Bild wird geladen…",
+        "updateOrca": "Orca aktualisieren"
+      }
     },
     "apps": {
       "paste": {

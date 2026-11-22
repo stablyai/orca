@@ -26131,7 +26131,18 @@
       "purposePlaceholder": "它是谁，负责什么",
       "uploadPasteOrDrop": "或上传、粘贴或拖放你自己的图片",
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
-      "changePicture": "更换图片"
+      "changePicture": "更换图片",
+      "validation": {
+        "addName": "添加名称",
+        "botsUnavailable": "无法运行机器人",
+        "computerOffline": "离线",
+        "findingAgents": "正在查找代理…",
+        "identityTooLong": "内容过长",
+        "noAgents": "无代理",
+        "noAgentsAvailable": "没有可用的代理",
+        "pictureLoading": "正在加载图片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",

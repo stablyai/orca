@@ -25044,7 +25044,19 @@
       "noChatAgents": "Nenhum agente de chat disponível neste computador.",
       "pictureColor": "Cor de fundo",
       "pictureColorCustom": "Cor personalizada",
-      "useChatDefaults": "Usar os padrões do chat"
+      "useChatDefaults": "Usar os padrões do chat",
+      "name": "Nome",
+      "validation": {
+        "addName": "Adicione um nome",
+        "botsUnavailable": "Bots indisponíveis",
+        "computerOffline": "Offline",
+        "findingAgents": "Procurando agentes…",
+        "identityTooLong": "Muito longo",
+        "noAgents": "Sem agentes",
+        "noAgentsAvailable": "Agentes indisponíveis",
+        "pictureLoading": "Carregando imagem…",
+        "updateOrca": "Atualize o Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "Trocar de conta",

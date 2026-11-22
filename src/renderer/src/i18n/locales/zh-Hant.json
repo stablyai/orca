@@ -23599,7 +23599,19 @@
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身份登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
       "agent": "代理程式",
-      "folder": "資料夾：{{path}}"
+      "folder": "資料夾：{{path}}",
+      "name": "名稱",
+      "validation": {
+        "addName": "新增名稱",
+        "botsUnavailable": "無法執行機器人",
+        "computerOffline": "離線",
+        "findingAgents": "正在尋找代理程式…",
+        "identityTooLong": "內容過長",
+        "noAgents": "無代理程式",
+        "noAgentsAvailable": "沒有可用的代理程式",
+        "pictureLoading": "正在載入圖片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "apps": {
       "paste": {

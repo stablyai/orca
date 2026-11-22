@@ -24703,7 +24703,19 @@
       "noChatAgents": "На этом компьютере нет доступных агентов для чата.",
       "pictureColor": "Цвет фона",
       "pictureColorCustom": "Свой цвет",
-      "useChatDefaults": "Использовать настройки чата по умолчанию"
+      "useChatDefaults": "Использовать настройки чата по умолчанию",
+      "name": "Имя",
+      "validation": {
+        "addName": "Добавьте имя",
+        "botsUnavailable": "Боты недоступны",
+        "computerOffline": "Не в сети",
+        "findingAgents": "Поиск агентов…",
+        "identityTooLong": "Слишком длинно",
+        "noAgents": "Нет агентов",
+        "noAgentsAvailable": "Нет доступных агентов",
+        "pictureLoading": "Загрузка изображения…",
+        "updateOrca": "Обновите Orca"
+      }
     },
     "apps": {
       "paste": {
