@@ -76,6 +76,8 @@ export function useMobileHomeData() {
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
+  // Unlike hostCatalogLoaded, false until a read succeeds, so a failed read never looks like no desktops.
+  const [hostCatalogRead, setHostCatalogRead] = useState(false)
   const onboardingCheckedRef = useRef(false)
   // Drives the agent clock and Home's reads; Home stays mounted under other screens.
   const [homeFocused, setHomeFocused] = useState(false)
@@ -204,6 +206,7 @@ export function useMobileHomeData() {
           if (!catalog) {
             return
           }
+          setHostCatalogRead(true)
           // An unchanged list keeps its identity, so focusing Home again redraws nothing.
           setHostCatalog((previous) => replaceEqualDeep(previous, catalog))
           if (catalog.length === 0 || onboardingCheckedRef.current) {
@@ -311,6 +314,7 @@ export function useMobileHomeData() {
     connectedHosts,
     hostCatalog,
     hostCatalogLoaded,
+    hostCatalogRead,
     hostConnections,
     hostsConnecting,
     needsYouByHost,

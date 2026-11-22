@@ -41,7 +41,7 @@ import { useOpenBotHome } from '../bots/use-open-bot-home'
 import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
 import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
-import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
+import { MobileHomeUsageTab, type UsageRefreshRequest } from './tabs/MobileHomeUsageTab'
 import { UsageWidgetSync } from './usage-widget/UsageWidgetSync'
 
 // The floating button's height plus its gap above the tab bar.
@@ -81,21 +81,25 @@ export function MobileHomeScreen() {
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
   }, [])
 
-  // The usage widget opens ?tab=usage; it can't fetch, so landing there refreshes. Clearing the
-  // param lets the same tap work again.
+  // The usage widget opens ?tab=usage&host=<desktop it shows>; it can't fetch, so landing there
+  // refreshes that desktop. Clearing the params lets the same tap work again.
   const { router, setHostCatalog } = data
-  const link = useLocalSearchParams<{ tab?: string }>()
-  const [usageRefreshRequest, setUsageRefreshRequest] = useState(0)
+  const link = useLocalSearchParams<{ tab?: string; host?: string }>()
+  const [usageRefreshRequest, setUsageRefreshRequest] = useState<UsageRefreshRequest>({
+    id: 0,
+    hostId: null
+  })
   useEffect(() => {
     if (!isHomeTabId(link.tab)) {
       return
     }
     selectTab(link.tab)
     if (link.tab === 'usage') {
-      setUsageRefreshRequest((request) => request + 1)
+      const hostId = typeof link.host === 'string' ? link.host : null
+      setUsageRefreshRequest((request) => ({ id: request.id + 1, hostId }))
     }
-    router.setParams({ tab: undefined })
-  }, [link.tab, router, selectTab])
+    router.setParams({ tab: undefined, host: undefined })
+  }, [link.tab, link.host, router, selectTab])
 
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
@@ -228,7 +232,7 @@ export function MobileHomeScreen() {
     <GestureHandlerRootView style={styles.fill}>
       <UsageWidgetSync
         hosts={data.sortedHostCatalog}
-        hostsLoaded={data.hostCatalogLoaded}
+        hostsLoaded={data.hostCatalogRead}
         accountsByHost={data.accountsByHost}
       />
       <SafeAreaView style={styles.container} edges={['top']}>

@@ -102,17 +102,27 @@ export function UsageWidgetSync({ hosts, hostsLoaded, accountsByHost }: UsageWid
   const latest = useRef<UsageWidgetSummary | null>(null)
   const lastKey = useRef<string | null>(null)
 
+  // A failed read is not an empty summary: writing one would drop the offline desktops' numbers, so
+  // the widget keeps what it shows and the next Home update reads again.
+  const reading = useRef(false)
   useEffect(() => {
+    if (restored || reading.current) {
+      return
+    }
+    reading.current = true
     AsyncStorage.getItem(SUMMARY_KEY)
       .then((raw) => {
         latest.current = parseUsageWidgetSummary(raw)
+        setRestored(true)
       })
       .catch(() => undefined)
-      .finally(() => setRestored(true))
-  }, [])
+      .finally(() => {
+        reading.current = false
+      })
+  }, [restored, hosts, accountsByHost])
 
   useEffect(() => {
-    // An unloaded desktop list would read as "all unpaired" and wipe the widget.
+    // A desktop list not yet read, or whose read failed, would read as "all unpaired" and wipe the widget.
     if (!hostsLoaded || !restored) {
       return
     }
@@ -141,7 +151,10 @@ export function UsageWidgetSync({ hosts, hostsLoaded, accountsByHost }: UsageWid
         now,
         display,
         icons,
-        url: Linking.createURL('/', { queryParams: { tab: 'usage' } }),
+        linkFor: (hostId) =>
+          Linking.createURL('/', {
+            queryParams: { tab: 'usage', ...(hostId ? { host: hostId } : {}) }
+          }),
         t
       })
       const desktopOptions = [

@@ -50,7 +50,7 @@ function UsageWidgetLayout(
     </VStack>
   )
   const blank = [containerBackground({ type: 'material', material: 'regular' }, 'widget')]
-  if (props?.v !== 3) {
+  if (props?.v !== 4) {
     return note(props?.labels?.empty, blank)
   }
   // A damaged save of the right version still must not show an error in place of the widget.
@@ -68,13 +68,16 @@ function UsageWidgetLayout(
     const small = family === 'systemSmall'
     const large = family === 'systemLarge'
     const configuration: UsageWidgetConfiguration = environment.configuration ?? {}
-    const root = [containerBackground(palette.background, 'widget'), widgetURL(props.url)]
-
     // Automatic, or a desktop since unpaired: the one updated most recently.
     const host = props.hosts.find((entry) => entry.id === configuration.desktop) ?? props.hosts[0]
     if (!host) {
-      return note(labels.empty, root)
+      return note(labels.empty, [
+        containerBackground(palette.background, 'widget'),
+        widgetURL(props.url)
+      ])
     }
+    // Tapping opens the Usage tab on the desktop shown here.
+    const root = [containerBackground(palette.background, 'widget'), widgetURL(host.url)]
 
     const choice = configuration.window ?? 'automatic'
     const windows: ('session' | 'weekly' | 'either')[] =
@@ -88,16 +91,27 @@ function UsageWidgetLayout(
 
     const limit = small ? 2 : large ? 6 : 3
     // "Choose" uses the rows in order, each agent once; "none" and agents no longer reported are skipped.
-    const picked =
-      configuration.agentMode === 'custom'
-        ? (configuration.agents ?? []).flatMap((id, index, rows) =>
-            rows.indexOf(id) === index ? host.agents.filter((agent) => agent.id === id) : []
-          )
-        : []
+    const custom = configuration.agentMode === 'custom'
+    const rows = configuration.agents ?? []
+    const picked = custom
+      ? rows.flatMap((id, index) =>
+          rows.indexOf(id) === index ? host.agents.filter((agent) => agent.id === id) : []
+        )
+      : []
+    // Rows all set to "none" leave the widget empty rather than falling back.
+    const cleared = custom && rows.length > 0 && rows.every((id) => id === 'none')
     // Otherwise the most used that fit, in the app's order so the layout doesn't reshuffle.
     const top = [...host.agents].sort((left, right) => right.peak - left.peak).slice(0, limit)
-    const agents =
-      picked.length > 0 ? picked.slice(0, limit) : host.agents.filter((a) => top.includes(a))
+    const agents = cleared
+      ? []
+      : picked.length > 0
+        ? picked.slice(0, limit)
+        : host.agents.filter((a) => top.includes(a))
+    // Dated and dimmed by the newest of the agents shown, not the desktop's newest.
+    const newest = agents.reduce<UsageWidgetAgent | null>(
+      (best, agent) => (best && best.updatedAt >= agent.updatedAt ? best : agent),
+      null
+    )
 
     const meterOf = (agent: UsageWidgetAgent, kind: 'session' | 'weekly' | 'either') =>
       kind === 'either' ? (agent.session ?? agent.weekly) : agent[kind]
@@ -116,7 +130,7 @@ function UsageWidgetLayout(
         {text}
       </Text>
     )
-    const updated = (
+    const updated = newest?.updated ? (
       <Text
         modifiers={[
           font({ textStyle: 'caption2' }),
@@ -125,9 +139,9 @@ function UsageWidgetLayout(
           fixedSize({ horizontal: true, vertical: false })
         ]}
       >
-        {host.updated}
+        {newest.updated}
       </Text>
-    )
+    ) : null
     const value = (meter: UsageWidgetMeter | undefined, textStyle: 'caption' | 'subheadline') => (
       <Text
         modifiers={[
@@ -284,7 +298,7 @@ function UsageWidgetLayout(
       <VStack
         alignment="leading"
         spacing={small ? 6 : 8}
-        modifiers={[...root, fill, opacity(host.stale ? 0.45 : 1)]}
+        modifiers={[...root, fill, opacity(newest?.stale ? 0.45 : 1)]}
       >
         <HStack spacing={6}>
           <Text

@@ -42,6 +42,9 @@ import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-acco
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
 
 /** Usage: agent account quota on one desktop, after the totals across all of them. */
+/** The usage widget's tap: which desktop it showed, if any. */
+export type UsageRefreshRequest = { id: number; hostId: string | null }
+
 export function MobileHomeUsageTab(props: {
   hosts: readonly HostProfile[]
   connectedHosts: readonly HostProfile[]
@@ -49,8 +52,8 @@ export function MobileHomeUsageTab(props: {
   accountsByHost: Record<string, AccountsSnapshot>
   stats: HomeStatsSummary | null
   bottomInset: number
-  /** Bumped when the usage widget opens this tab; refreshes once the shown desktop is connected. */
-  refreshRequest: number
+  /** Bumped when the usage widget opens this tab: shows its desktop, then refreshes once connected. */
+  refreshRequest: UsageRefreshRequest
   onOpenAccounts: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -79,11 +82,24 @@ export function MobileHomeUsageTab(props: {
 
   const handledRefreshRequest = useRef(0)
   useEffect(() => {
-    if (props.refreshRequest > handledRefreshRequest.current && connected && client) {
-      handledRefreshRequest.current = props.refreshRequest
+    const request = props.refreshRequest
+    if (request.id <= handledRefreshRequest.current) {
+      return
+    }
+    // The widget's desktop first, when it is still paired; the refresh waits for it to connect.
+    if (
+      request.hostId &&
+      host?.id !== request.hostId &&
+      props.hosts.some((candidate) => candidate.id === request.hostId)
+    ) {
+      pick(request.hostId)
+      return
+    }
+    if (connected && client) {
+      handledRefreshRequest.current = request.id
       void refresh()
     }
-  }, [props.refreshRequest, connected, client, refresh])
+  }, [props.refreshRequest, props.hosts, host, pick, connected, client, refresh])
 
   return (
     <View style={styles.screen}>

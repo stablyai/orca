@@ -33,7 +33,7 @@ describe('buildUsageWidgetTimeline', () => {
       now: 2000,
       display: 'used',
       icons: {},
-      url: 'orca:///?tab=usage',
+      linkFor: () => 'orca:///?tab=usage',
       t: (_key, fallback) => fallback
     })
 
