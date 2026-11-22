@@ -48,13 +48,14 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     opts: PtyProviderBufferSnapshotOptions,
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
-    const liveModeTracker = new TerminalKittyKeyboardModeTracker()
-    let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
-    if (!liveModeTrackers) {
-      liveModeTrackers = new Set()
-      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
+    let liveModeScan = this.providerModeSnapshotScansByPtyId.get(ptyId)
+    if (!liveModeScan) {
+      liveModeScan = { tracker: new TerminalKittyKeyboardModeTracker(), pendingCaptures: 0 }
+      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeScan)
     }
-    liveModeTrackers.add(liveModeTracker)
+    liveModeScan.pendingCaptures++
+    const liveModeTracker = liveModeScan.tracker
+    const captureStart = liveModeTracker.scanPosition
     try {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
@@ -71,15 +72,16 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         snapshotModeTracker.scanReplay(snapshot.data)
       }
       const observedSnapshotMode = snapshotModeTracker.hasObservedAlternateScreenSwitch
+      const observedLiveMode = liveModeTracker.hasObservedAlternateScreenSwitchSince(captureStart)
       let effectiveAlternateScreen: boolean | undefined
-      if (observedSnapshotMode || liveModeTracker.hasObservedAlternateScreenSwitch) {
+      if (observedSnapshotMode || observedLiveMode) {
         const modeTracker = new TerminalKittyKeyboardModeTracker()
         if (observedSnapshotMode) {
           modeTracker.scan(snapshotModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
         // Why: stream bytes received after the request began can be newer
         // than snapshot metadata, so an observed live transition wins.
-        if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+        if (observedLiveMode) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
@@ -93,17 +95,17 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           ? { alternateScreen: effectiveAlternateScreen }
           : {})
       })
-      if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+      if (observedLiveMode) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
       }
       return reconciledSnapshot
     } catch {
       return null
     } finally {
-      liveModeTrackers.delete(liveModeTracker)
+      liveModeScan.pendingCaptures--
       if (
-        liveModeTrackers.size === 0 &&
-        this.providerModeSnapshotScansByPtyId.get(ptyId) === liveModeTrackers
+        liveModeScan.pendingCaptures === 0 &&
+        this.providerModeSnapshotScansByPtyId.get(ptyId) === liveModeScan
       ) {
         this.providerModeSnapshotScansByPtyId.delete(ptyId)
       }

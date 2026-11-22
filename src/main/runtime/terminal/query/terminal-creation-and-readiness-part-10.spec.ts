@@ -84,6 +84,40 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('applies a split live screen switch only to captures that saw its start', async () => {
+    const projection = Promise.withResolvers<PtyProviderBufferSnapshot>()
+    const requested = Promise.withResolvers<void>()
+    const ansiFrame: PtyProviderBufferSnapshot = {
+      data: 'Retained shell',
+      cols: 80,
+      rows: 24,
+      seq: 1000,
+      source: 'headless',
+      alternateScreen: false
+    }
+    const { runtime, handle } = await createProviderSnapshotRuntime(async (_ptyId, opts) => {
+      requested.resolve()
+      return opts?.visibleProjection ? projection.promise : ansiFrame
+    }, true)
+
+    const visible = runtime.readTerminal(handle, { screen: true })
+    await requested.promise
+    runtime.onPtyData('pty-1', '\x1b[?1049', 101)
+    const replay = runtime.serializeAuthoritativeTerminalBuffer('pty-1', { scrollbackRows: 0 })
+    runtime.onPtyData('pty-1', 'hLive alternate screen', 102)
+
+    await expect(replay).resolves.toMatchObject({ data: 'Retained shell', alternateScreen: false })
+    projection.resolve({
+      ...ansiFrame,
+      data: '',
+      visibleProjection: { lines: ['Retained shell'] }
+    })
+    await expect(visible).resolves.toMatchObject({
+      source: 'screen',
+      tail: ['Live alternate screen']
+    })
+  })
+
   it('rejects a provider visible frame after live non-mode-switch output advances', async () => {
     let resolveSnapshot!: (snapshot: PtyProviderBufferSnapshot) => void
     const serializeProviderBuffer = vi.fn(

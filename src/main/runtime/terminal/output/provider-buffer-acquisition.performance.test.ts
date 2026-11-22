@@ -1,4 +1,4 @@
-// Perf contract (#46516): delayed screen reads and overlapping replays duplicated provider requests.
+// Perf contract (#46516): overlapping screen reads and replays duplicated requests or live mode scans.
 import { afterEach, expect, it, vi } from 'vitest'
 import type { HelloResponse } from '../../../daemon/protocol/daemon-hello-protocol'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
@@ -11,6 +11,7 @@ import type {
   PtyProviderBufferSnapshot,
   PtyProviderBufferSnapshotOptions
 } from '../../../providers/pty/provider-contract'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 const ANSI_FRAME: PtyProviderBufferSnapshot = {
@@ -117,6 +118,53 @@ it('joins a pending ANSI replay with scrollback on a provider that supports proj
   await expect(replay).resolves.toMatchObject({ scrollbackAnsi: 'Previous output\r\n' })
   expect(getBufferSnapshot).toHaveBeenCalledExactlyOnceWith(ptyId, { scrollbackRows: 50 })
 })
+
+it.each([
+  [100, 200],
+  [1000, 2000]
+])(
+  'scans two live chunks once per PTY across %i overlapping screen and replay pairs',
+  async (count, scans) => {
+    vi.useFakeTimers()
+    const screenFrame = Promise.withResolvers<PtyProviderBufferSnapshot>()
+    const replayFrame = Promise.withResolvers<PtyProviderBufferSnapshot>()
+    const getBufferSnapshot = vi.fn((_ptyId: string, opts?: PtyProviderBufferSnapshotOptions) =>
+      opts?.visibleProjection ? screenFrame.promise : replayFrame.promise
+    )
+    const { runtime, terminals } = startTerminals(
+      count,
+      { visibleProjectionSnapshots: true },
+      getBufferSnapshot
+    )
+
+    const reads = terminals.map(({ handle }) => runtime.readTerminal(handle, { screen: true }))
+    await vi.advanceTimersByTimeAsync(0)
+    const replays = terminals.map(({ ptyId }) =>
+      runtime.serializeAuthoritativeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+    )
+    expect(getBufferSnapshot).toHaveBeenCalledTimes(scans)
+
+    const scan = vi.spyOn(TerminalKittyKeyboardModeTracker.prototype, 'scan')
+    try {
+      for (const { ptyId } of terminals) {
+        runtime.onPtyData(ptyId, '\x1b[', 1)
+        runtime.onPtyData(ptyId, '31mLive output', 2)
+      }
+      expect(scan).toHaveBeenCalledTimes(scans)
+    } finally {
+      scan.mockRestore()
+    }
+
+    screenFrame.resolve({ ...PROJECTED_FRAME, seq: 1000 })
+    replayFrame.resolve({ ...ANSI_FRAME, seq: 1000 })
+    for (const screen of await Promise.all(reads)) {
+      expect(screen).toMatchObject({ source: 'screen', tail: ['Projected screen'] })
+    }
+    for (const replay of await Promise.all(replays)) {
+      expect(replay).toMatchObject({ data: '\x1b[?1049hLegacy screen' })
+    }
+  }
+)
 
 it.each([
   [2, 2],
