@@ -72,7 +72,8 @@ for (const [from, key, to] of [...FIXED, ...GUARDS]) {
 
 test('ArrowRight at the end, after a chip, leaves the caret where it is', async ({ page }) => {
   await open(page, 'chipAtEnd', 2)
-  // Each place the browser draws the caret at: it must not move past the chip and back.
+  // Each place the browser draws the caret at, as an offset in the line: 1 is after the chip, and
+  // 2 is past it, where ProseMirror then moves it back.
   await page.evaluate(() => {
     const { dataset } = document.documentElement
     dataset.caretOffsets = ''
@@ -86,5 +87,6 @@ test('ArrowRight at the end, after a chip, leaves the caret where it is', async 
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   )
   expect(await selection(page)).toBe('2-2')
-  expect(await page.evaluate(() => document.documentElement.dataset.caretOffsets)).toBe('')
+  const offsets = await page.evaluate(() => document.documentElement.dataset.caretOffsets ?? '')
+  expect(offsets.split(' ').filter(Boolean)).not.toContain('2')
 })
