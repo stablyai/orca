@@ -255,7 +255,8 @@ export function ProviderPanel({
   headerAction?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const windowSections = p ? getWindowSections(p, t) : []
+  const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
+  const windowSections = p && !signInRequired ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -289,7 +290,10 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         {embedded ? null : (
@@ -302,7 +306,7 @@ export function ProviderPanel({
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
             message={getProviderUsageErrorMessage(p, t)}
-            detail={isCodexUsageSignInRequired(p) ? (p.error ?? undefined) : undefined}
+            detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />
         </div>
@@ -385,13 +389,7 @@ export function ProviderPanel({
 
       {p.error ? (
         <ErrorMessage
-          {...(isCodexUsageSignInRequired(p)
-            ? {
-                label: getProviderUsageStatusLabel(p, t),
-                message: getProviderUsageErrorMessage(p, t),
-                detail: p.error
-              }
-            : { message: p.error })}
+          message={p.error}
           stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
           inverted={inverted}
         />

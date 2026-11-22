@@ -18,12 +18,13 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /sign in with chatgpt/i,
   /token data is not available/i,
   /auth (?:is missing|tokens are missing|does not expose)/i,
-  // The usage backend rejects a revoked or expired ChatGPT login with these codes; no retry recovers it.
-  /\btoken_(?:revoked|expired|invalidated)\b/i,
-  /invalidated oauth token/i,
-  /backend-api\/wham\/usage failed: 401\b/i,
   // API-key-only homes lack ChatGPT tokens, so account/rateLimits/read cannot recover through a fallback read.
   /chatgpt authentication required/i
+]
+const CODEX_USAGE_AUTH_REJECTION_PATTERNS = [
+  /\btoken_(?:revoked|expired|invalidated)\b/i,
+  /invalidated oauth token/i,
+  /backend-api\/wham\/usage failed: 401\b/i
 ]
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')
 
@@ -39,13 +40,20 @@ export function isCodexAuthError(error: string | null | undefined): boolean {
 export function isCodexUsageSignInRequired(limits: {
   provider: string
   error: string | null
-  usageMetadata?: { failureKind?: string }
+  usageMetadata?: { failureKind?: string; unverifiableOwner?: boolean }
 }): boolean {
-  // A structured kind (network, a proven API-key home) outranks auth wording in the message.
+  const { error, usageMetadata } = limits
+  if (
+    limits.provider !== 'codex' ||
+    !error ||
+    usageMetadata?.failureKind ||
+    usageMetadata?.unverifiableOwner
+  ) {
+    return false
+  }
   return (
-    limits.provider === 'codex' &&
-    !limits.usageMetadata?.failureKind &&
-    isCodexAuthError(limits.error)
+    isCodexAuthError(error) ||
+    CODEX_USAGE_AUTH_REJECTION_PATTERNS.some((pattern) => pattern.test(error))
   )
 }
 

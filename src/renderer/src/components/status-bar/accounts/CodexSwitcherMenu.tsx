@@ -64,17 +64,20 @@ export function CodexSwitcherMenu({
   } = useCodexSwitcherController(codex, ownerUsage)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
-  // `codex` is the selected group's active login; a revoked one needs the same account signed in again.
   const activeSignInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
       ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
       : null
+    const limits = inactiveUsage?.rateLimits
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
     const showSignInAction =
       !hasActiveRuntimeEnvironment &&
       target.id !== null &&
-      (target.active ? activeSignInRequired : isUnavailableInactiveUsage(inactiveUsage?.rateLimits))
+      (target.active
+        ? activeSignInRequired
+        : isUnavailableInactiveUsage(limits) ||
+          (limits?.status === 'error' && isCodexUsageSignInRequired(limits)))
     return { target, inactiveUsage, showSignInAction }
   })
   // The active row stays in place; only inactive rows move under "Usage unavailable".
@@ -96,11 +99,9 @@ export function CodexSwitcherMenu({
         event.preventDefault()
         if (!target.active) {
           void handleSelectAccount(target.id, target.runtimeTarget)
-        } else if (showSignInAction && target.id !== null) {
-          void handleSignInAccount(target.id, target.runtimeTarget)
         }
       }}
-      disabled={isBusy || (target.active && !showSignInAction)}
+      disabled={isBusy || target.active}
       action={
         showSignInAction ? (
           <InlineUsageSignInAction
@@ -151,7 +152,7 @@ export function CodexSwitcherMenu({
           : undefined
       }
       panelFooter={
-        resetCreditCount !== null ? (
+        !activeSignInRequired && resetCreditCount !== null ? (
           <CodexResetCredits
             resetCreditCount={resetCreditCount}
             resetCreditExpiry={resetCreditExpiry}
