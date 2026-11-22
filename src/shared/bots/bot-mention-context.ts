@@ -8,7 +8,8 @@ import {
   botSendTarget,
   type BotRosterServer
 } from '../bot-roster'
-import type { BotChatUnreachable } from './bot-chat-row'
+import type { BotChatRow, BotChatUnreachable } from './bot-chat-row'
+import { isBotGroupMemberSession } from './bot-group'
 
 /** A chat pick's link scheme; an older Orca matches only `bot:`, so it never reads one as the bot alone. */
 export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
@@ -51,6 +52,36 @@ export function botClientMentionToken(
   clientInstallationId: string
 ): string {
   return `[Bot: ${escapeName(bot.name)}](${BOT_ADDRESS_PREFIX}${bot.id}@client:${clientInstallationId})`
+}
+
+/** One of a bot's chats `@` offers: it takes mail now, isn't the asking chat, and isn't a group's. */
+export function botMentionOffersChat(row: BotChatRow): boolean {
+  return !row.closed && !row.self && !isBotGroupMemberSession(row.id)
+}
+
+/** Chats whose title or second line holds every word typed, in list order; spaces separate words. */
+export function botMentionChatsMatching<Chat extends { search: string }>(
+  chats: readonly Chat[],
+  filter: string
+): readonly Chat[] {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) {
+    return chats
+  }
+  return chats.filter((chat) => {
+    const text = chat.search.toLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+}
+
+/** A picked chat shown by its id, until something reads its title. */
+export function botChatIdLabel(chatId: string): string {
+  return `chat ${chatId.slice(0, 6)}`
+}
+
+/** How a token reads as plain text: `@<name>`, and ` › chat <id>` for one of its chats. */
+export function botMentionLabel({ name, chatId }: Pick<BotMention, 'name' | 'chatId'>): string {
+  return chatId ? `@${name} › ${botChatIdLabel(chatId)}` : `@${name}`
 }
 
 /** Each bot token in `text`: the name it shows, the id it is bound to, and its chat if one. */

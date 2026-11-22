@@ -24455,19 +24455,20 @@
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
       "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "every2h": "toutes les 2 heures",
-      "every4h": "toutes les 4 heures",
       "lookFirst": "Après votre premier chat · puis {{every}}",
-      "mornings": "chaque matin",
       "tidyUp": "Ranger la mémoire",
-      "twiceDaily": "deux fois par jour",
       "lastNeededSignIn": "Sa dernière exécution s’est arrêtée en attendant une connexion",
       "stopped": "Arrêté",
       "lookAroundSettings": "Paramètres du tour d’horizon",
       "dueNow": "À exécuter maintenant",
       "runsEvery": "S’exécute {{every}}",
       "tidySettings": "Paramètres du rangement de la mémoire",
-      "needsSignIn": "Connexion requise"
+      "needsSignIn": "Connexion requise",
+      "every4hWindow": "de {{from}} à {{to}}, toutes les 4 heures",
+      "every2hWindow": "de {{from}} à {{to}}, toutes les 2 heures",
+      "twiceDailyAt": "deux fois par jour, {{first}} et {{second}}",
+      "morningsAt": "chaque matin à {{time}}",
+      "weekdays": "en semaine, {{schedule}}"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

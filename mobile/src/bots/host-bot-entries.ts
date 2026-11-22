@@ -227,7 +227,6 @@ export function drawHostBotEntries(
       dot,
       foldLive: offline ? null : botFoldLiveStatus(workerCounts),
       ...(upNext > 0 ? { upNext } : {}),
-      ...(needsYou > 0 ? { needsYou } : {}),
       line: {
         chatSessionId: bot.chatSessionId ?? null,
         links: listing.links?.[home.id] ?? [],

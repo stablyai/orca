@@ -23988,18 +23988,19 @@
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
       "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
       "dueNow": "Zamanı geldi",
-      "every2h": "2 saatte bir",
-      "every4h": "4 saatte bir",
       "lastNeededSignIn": "Son çalıştırması oturum açılması gerektiği için durdu",
       "lookAroundSettings": "Göz atma ayarları",
       "lookFirst": "İlk sohbetinizden sonra · ardından {{every}}",
-      "mornings": "her sabah",
       "needsSignIn": "Giriş gerekli",
       "runsEvery": "{{every}} çalışır",
       "stopped": "Durduruldu",
       "tidySettings": "Bellek toparlama ayarları",
       "tidyUp": "Belleği toparla",
-      "twiceDaily": "günde iki kez"
+      "every4hWindow": "{{from}} - {{to}}, 4 saatte bir",
+      "every2hWindow": "{{from}} - {{to}}, 2 saatte bir",
+      "twiceDailyAt": "günde iki kez, {{first}} ve {{second}}",
+      "morningsAt": "her sabah {{time}}",
+      "weekdays": "hafta içi, {{schedule}}"
     },
     "palette": {
       "placeholder": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",

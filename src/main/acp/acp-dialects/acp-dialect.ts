@@ -1,6 +1,7 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionProviderRetry } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   AgentJournalThreadGoal,
@@ -64,6 +65,8 @@ export type AcpSubagentUpdate = {
   result?: string
   /** Why a failed subagent failed. */
   error?: string
+  /** A completed subagent's final message, unlike `result` never posted as a reply row. */
+  reply?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
   /** The provider started this subagent again; reopens it after an ending. */
@@ -208,8 +211,8 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
-  /** The cause, when this agent text only announces a retry of a failed model call. */
-  providerRetry?(text: string): string | undefined
+  /** A retry of a failed model call this update announces; null when the agent says retrying is over. */
+  providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
     error: AcpAgentError,
@@ -251,6 +254,8 @@ export type AcpDialect = {
   }
   /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
   linksFileMentions?: true
+  /** The agent advertises image prompts but drops image blocks, so images go as file references. */
+  dropsPromptImages?: true
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
