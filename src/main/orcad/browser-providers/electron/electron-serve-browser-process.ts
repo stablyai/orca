@@ -39,6 +39,7 @@ import {
 } from './electron-sidecar-method-routing'
 
 const START_TIMEOUT_MS = 120_000
+type SidecarRequest = (method: string, params: unknown) => Promise<unknown>
 const BrowserPageResult = z.object({ browserPageId: z.string() }).passthrough()
 const BrowserCloseResult = z.object({ closed: z.boolean() }).passthrough()
 const BrowserTabListResult = z.object({ tabs: z.array(ElectronSidecarTabSchema) }).passthrough()
@@ -50,6 +51,7 @@ export class ElectronServeBrowserProcess {
   private readonly tabs = new ElectronSidecarTabRegistry()
   private sidecarCapabilities: readonly string[] = []
   private sidecarProfile: ElectronSidecarProfile | null = null
+  private readonly request = sendOrcadSidecarRequest
 
   constructor(
     private readonly executablePath: string,
@@ -106,7 +108,7 @@ export class ElectronServeBrowserProcess {
       if (metadata) {
         try {
           const status = RuntimeStatusResult.parse(
-            await sendOrcadSidecarRequest(metadata, 'status.get', undefined, 5_000)
+            await this.request(metadata, 'status.get', undefined, 5_000)
           )
           signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
@@ -147,11 +149,12 @@ export class ElectronServeBrowserProcess {
       }
     })
   }
-  /** The running sidecar's RPC endpoint, when it advertises `capability` (on a kept profile). */
-  sidecarWith(capability: string, { persistent = false } = {}): RuntimeMetadata | null {
+  /** Requests to the running sidecar, when it advertises `capability` (on a kept profile). */
+  sidecarWith(capability: string, { persistent = false } = {}): SidecarRequest | null {
     const kept = !persistent || this.sidecarProfile?.persistent === true
-    return kept && this.isAvailable() && this.sidecarCapabilities.includes(capability)
-      ? this.metadata
+    const { metadata } = this
+    return metadata && kept && this.isAvailable() && this.sidecarCapabilities.includes(capability)
+      ? (method, params) => this.request(metadata, method, params)
       : null
   }
 
@@ -261,7 +264,7 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(
+      result = await this.request(
         metadata,
         rpcMethod,
         params,
