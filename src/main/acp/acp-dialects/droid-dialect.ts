@@ -1,6 +1,7 @@
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 import { droidToolSubagents } from './droid-subagents'
+import { droidModelEfforts } from './droid-model-catalog'
 
 const SHELL_EXIT_LINE = /(?:^|\n)\[Process exited with code (-?\d+)\]$/u
 const SHELL_FAILURE_LINE = /^Error: Command failed \(exit code: -?\d+\)(?:\n|$)/u
@@ -49,6 +50,7 @@ export const DROID_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   toolSubagents: droidToolSubagents,
+  modelEfforts: droidModelEfforts,
   // Droid's commands are all skills: its own, the user's and the project's.
   skillDescription: ({ description }) => description
 }
