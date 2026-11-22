@@ -1,5 +1,6 @@
 // Tidy-up: once a night, a bot tidies its own memory from its new chats. Its run has no tools and
 // replies with a draft (see bot-memory-tidy-up-draft.ts), which Orca checks and writes itself.
+import { botFailure, botFailureEnglishTable } from '../../shared/bots/bot-failure-copy'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { BOT_MEMORY_INDEX_LINE_CAP } from '../../shared/bot-memory-lines'
@@ -43,29 +44,26 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export const TIDY_UP_INDEX_BLOCK = 'MEMORY.md'
 export const TIDY_UP_REPLACED_BLOCK = 'REPLACED'
 
-export const TIDY_UP_FAILURES = {
-  unfinished: "The last tidy-up didn't finish.",
-  timedOut: `The last tidy-up was stopped after ${TIDY_UP_RUN_LIMIT_MS / 60_000} min.`,
-  couldNotStart: "The last tidy-up couldn't start.",
-  asleep: 'The last tidy-up was missed because this computer was asleep.',
-  unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
-  noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
-  noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
-  allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
-  notListLines:
-    "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
-  movedOnly:
-    'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
-  badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
-  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines and no shorter, so nothing changed.`,
-  tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
-  tooManyAdded: 'The last tidy-up added too many new lines at once, so nothing changed.',
-  notCopied:
-    "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed.",
-  tooManyFiled: `The last tidy-up filed more than ${TIDY_UP_MAX_FILED} lines at once, so nothing changed.`,
-  changed: 'MEMORY.md changed during the last tidy-up, so nothing changed.',
-  notApplied: "The last tidy-up's changes couldn't be saved, so nothing changed."
-} as const
+export const TIDY_UP_FAILURE_CODES = {
+  unfinished: botFailure('tidyUpUnfinished'),
+  timedOut: botFailure('tidyUpTimedOut', { minutes: TIDY_UP_RUN_LIMIT_MS / 60_000 }),
+  couldNotStart: botFailure('tidyUpCouldNotStart'),
+  asleep: botFailure('tidyUpAsleep'),
+  unreadChats: botFailure('tidyUpUnreadChats'),
+  noDraft: botFailure('tidyUpNoDraft'),
+  noOps: botFailure('tidyUpNoOps'),
+  notListLines: botFailure('tidyUpNotListLines'),
+  badTopic: botFailure('tidyUpBadTopic'),
+  tooLong: botFailure('tidyUpTooLong', { max: BOT_MEMORY_INDEX_LINE_CAP }),
+  tooManyRemoved: botFailure('tidyUpTooManyRemoved'),
+  tooManyAdded: botFailure('tidyUpTooManyAdded'),
+  notCopied: botFailure('tidyUpNotCopied'),
+  tooManyFiled: botFailure('tidyUpTooManyFiled', { max: TIDY_UP_MAX_FILED }),
+  changed: botFailure('tidyUpChanged'),
+  notApplied: botFailure('tidyUpNotApplied')
+}
+
+export const TIDY_UP_FAILURES = botFailureEnglishTable(TIDY_UP_FAILURE_CODES)
 
 /** One chat since the last tidy-up: the owner's lines and the bot's replies to them, oldest first. */
 export type TidyUpChat = { title: string | null; lines: { by: 'owner' | 'bot'; text: string }[] }

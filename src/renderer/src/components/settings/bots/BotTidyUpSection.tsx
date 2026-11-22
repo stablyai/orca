@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../../../shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { BotTidyUpReview, tidyUpRunMeta } from '@/components/bots/BotTidyUpReview'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
@@ -146,7 +147,7 @@ export function BotTidyUpSection({
                 {view?.error && !view.turnedOff ? (
                   <>
                     <br />
-                    {view.error}
+                    {botCodedText(view.error, view.failure, t)}
                   </>
                 ) : null}
                 <br />
