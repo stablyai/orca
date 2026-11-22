@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser'
 import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
 import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
@@ -104,4 +106,18 @@ export function serializeClaudeAgentViewBindings(
     text = applyEdits(text, modify(text, ['bindings', -1], next.bindings[index], options))
   }
   return text
+}
+
+/** The chord this config binds now: null when the binding is gone, undefined when unreadable. */
+export async function readClaudeAgentViewChord(
+  configDir: string
+): Promise<string | null | undefined> {
+  let text: string
+  try {
+    text = await readFile(join(configDir, 'keybindings.json'), 'utf8')
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT' ? null : undefined
+  }
+  // A half-written edit does not parse; that says nothing about the binding.
+  return parseClaudeAgentViewBindings(text) ? (claudeAgentViewChord(text) ?? null) : undefined
 }

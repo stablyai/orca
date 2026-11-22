@@ -20,6 +20,8 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/s
 import { workspaceLinkWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
+import { applyDiffCommentWrite } from '../../../shared/file-review/diff-comment-mutation'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -142,7 +144,8 @@ export class FolderWorkspacePersistenceOperations {
         | 'externalConversations'
       >
     > &
-      WorkspaceAttachmentMutation
+      WorkspaceAttachmentMutation &
+      DiffCommentBaseMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
@@ -249,7 +252,7 @@ export class FolderWorkspacePersistenceOperations {
       workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
     if (updates.diffComments !== undefined) {
-      workspace.diffComments = updates.diffComments
+      workspace.diffComments = applyDiffCommentWrite(workspace.diffComments, updates)
     }
     if (updates.externalConversations !== undefined) {
       workspace.externalConversations = updates.externalConversations

@@ -1,7 +1,7 @@
 // The rows of a bot's Needs you group: Orca's asks (approvals, then the rest, in botNow's order), then
 // the items the bot set to Needs you. Five rows, then Show N more; approvals never fold. Rows leave as
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
-import { memo, useLayoutEffect, useMemo, useState } from 'react'
+import { memo, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -11,7 +11,6 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity-model'
-import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
 import { approvalDetailPreview } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { manageConnectors } from './AddConnectorDialog'
@@ -31,7 +30,9 @@ import type { BotNeedView } from './use-bot-now'
 import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-fold'
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
-import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
+import { NeedRow, NeedRowBot, StoppedForSignInRow, type StoppedForSignIn } from './BotNeedRow'
+import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
+import { botItemGroupName } from '../../../../shared/bots/bot-item-status-name'
 
 type ReportApproval = (key: string, approval: boolean) => void
 
@@ -40,7 +41,7 @@ export type BotNeedsYouAsks = {
   /** What needs the owner, as `botNow` reads it and the filter keeps. */
   needs: readonly BotNeedView[]
   /** Runs a sign-in stopped: listed after the asks as context, never counted. */
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   /** The item a worker's Dispatch is linked to, whose title its ask takes. */
   itemOf: (dispatchId: string) => BotItem | null
 }
@@ -126,7 +127,7 @@ function paneOpener(row: BotSessionActivityRow, bot: BotOnHost): (() => void) | 
     case 'worker':
       return botWorkerRowOpener(row, botTarget(bot))
     case 'run':
-      return () => openBotAutomation(row.automationId, row.runId)
+      return () => openBotAutomation(bot.hostId, row.automationId, row.runId)
     case 'thread':
       return null
   }
@@ -302,7 +303,7 @@ function MemberNeedItem(props: React.ComponentProps<typeof NeedItem>): React.JSX
 
 type GroupRow =
   | { key: string; approval: boolean; need: BotNeedView }
-  | { key: string; approval: false; stopped: BotAutomationRow }
+  | { key: string; approval: false; stopped: StoppedForSignIn }
   | { key: string; approval: false; item: BotItem }
 
 /** A worker's own dot says it waits on a permission; a chat's prompt says so once read. */
@@ -320,7 +321,8 @@ export function BotNeedsYouSection({
   renderItem,
   revealUid = null,
   offline = false,
-  focusFallback
+  focusFallback,
+  backRow = null
 }: {
   /** The asks' bot, or in a group's merged list each ask's own, whose face its row then shows. */
   bot: Bot | ((need: BotNeedView) => Bot)
@@ -334,6 +336,8 @@ export function BotNeedsYouSection({
   offline?: boolean
   /** Takes focus when the focused row leaves and no other row has a control. */
   focusFallback?: React.RefObject<HTMLElement | null>
+  /** Back's item row, focused as it mounts. */
+  backRow?: { uid: string; ref: (node: HTMLElement | null) => void } | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { needs, stoppedForSignIn, itemOf } = asks
@@ -360,11 +364,9 @@ export function BotNeedsYouSection({
   )
   const focus = useNeedsYouFocus()
   const { cardRef, onFocus, onBlur } = focus
-  const fold = needsYouFold(rows, {
-    expanded,
-    focusedKey: focus.focusedKey,
-    showAll: offline
-  })
+  // Only a group panel's row faces read whether their row is folded.
+  const faces = useContext(BotGroupFacePicturesContext) !== null
+  const fold = needsYouFold(rows, { expanded, focusedKey: focus.focusedKey, showAll: offline })
   const rowCommitted = useNeedsYouRefocus(
     focus,
     fold.ordered.map((row) => row.key),
@@ -382,31 +384,43 @@ export function BotNeedsYouSection({
   return (
     <div ref={cardRef} className="contents" onFocus={onFocus} onBlur={onBlur}>
       <NeedsYouRowCommit value={rowCommitted}>
-        {fold.ordered.map((row) => (
-          <div
-            key={row.key}
-            data-need-key={row.key}
-            // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
-            hidden={!shown.has(row.key)}
-          >
-            {'need' in row ? (
-              typeof bot === 'function' ? (
-                <MemberNeedItem
-                  bot={bot(row.need)}
-                  need={row.need}
-                  itemOf={itemOf}
-                  onApproval={onApproval}
-                />
+        <div role="list" aria-label={botItemGroupName('needs_you', t)} className="contents">
+          {fold.ordered.map((row) => {
+            const folded = !shown.has(row.key)
+            const body =
+              'need' in row ? (
+                typeof bot === 'function' ? (
+                  <MemberNeedItem
+                    bot={bot(row.need)}
+                    need={row.need}
+                    itemOf={itemOf}
+                    onApproval={onApproval}
+                  />
+                ) : (
+                  <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+                )
+              ) : 'stopped' in row ? (
+                <StoppedForSignInRow row={row.stopped} />
               ) : (
-                <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+                renderItem?.(row.item)
               )
-            ) : 'stopped' in row ? (
-              <StoppedForSignInRow row={row.stopped} />
-            ) : (
-              renderItem?.(row.item)
-            )}
-          </div>
-        ))}
+            return (
+              <div
+                key={row.key}
+                data-need-key={row.key}
+                ref={'item' in row && row.item.uid === backRow?.uid ? backRow.ref : undefined}
+                // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
+                hidden={folded}
+              >
+                {faces ? (
+                  <BotItemFaceFolded.Provider value={folded}>{body}</BotItemFaceFolded.Provider>
+                ) : (
+                  body
+                )}
+              </div>
+            )
+          })}
+        </div>
       </NeedsYouRowCommit>
       {fold.hidden > 0 ? (
         <button

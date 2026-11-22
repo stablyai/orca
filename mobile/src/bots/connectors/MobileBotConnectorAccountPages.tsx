@@ -8,9 +8,9 @@ import type { MobileComposio } from '../../session/native-chat/transcript/bot-ca
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
-import { githubOrgsOf } from './connector-account-rows'
+import { githubOrgsOf } from './connector-entry-rows'
 import type { AccountConnectorPage, ConnectorPage } from './connector-pages'
-import { MobileBotComposioConnect } from './MobileBotComposio'
+import { MobileBotComposioConnect, MobileBotComposioFixKey } from './MobileBotComposio'
 import { MobileBotComposioApp } from './MobileBotComposioApp'
 import { MobileBotGitHubPage } from './MobileBotGitHubPage'
 import { MobileBotGitHubSetup } from './MobileBotGitHubSetup'
@@ -133,12 +133,9 @@ export function MobileBotConnectorAccountPage(
           github={props.github}
           save={props.save}
           onClose={() => setPage(page.from)}
-          onDone={() => {
-            props.showToast(
-              t('bots.github.setup.isOn', '{{name}} is on GitHub', { name: bot.name })
-            )
+          onDone={() =>
             setPage({ kind: 'github', installationId: shown[0]?.installationId ?? null })
-          }}
+          }
         />
       )
     case 'google':
@@ -196,6 +193,16 @@ export function MobileBotConnectorAccountPage(
             )
             list()
           }}
+        />
+      )
+    case 'composio-key':
+      return (
+        <MobileBotComposioFixKey
+          {...scope}
+          botId={bot.id}
+          hostKey={props.hostKey}
+          composio={props.composio}
+          onClose={list}
         />
       )
   }
