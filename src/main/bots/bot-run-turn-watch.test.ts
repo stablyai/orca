@@ -40,6 +40,7 @@ import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycl
 import { watchBotTurnEnds } from './bot-run-turn-watch'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcTurns } from '../pi/rpc/rpc-turns'
+import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import { PiRpcJoinedTurns } from '../pi/rpc/rpc-joined-turns'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
@@ -293,8 +294,11 @@ it('a Pi run steered into a turn waits for it, and fails when that turn fails', 
   )
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as { dir: 'in' | 'out'; raw: string })
-    .map(({ dir, raw }) => ({ dir, frame: JSON.parse(raw) as Record<string, unknown> }))
+    .map((line) => {
+      const { dir, raw }: { dir: 'in' | 'out'; raw: string } = JSON.parse(line)
+      const frame: JsonlRpcRecord = JSON.parse(raw)
+      return { dir, frame }
+    })
   const accepted = new Map<string, AcceptedReceipt>()
   let joined: PiRpcJoinedTurns | undefined
   const lane = new JsonlRpcTimelineLane({
