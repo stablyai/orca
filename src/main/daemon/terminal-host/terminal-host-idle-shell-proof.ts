@@ -59,11 +59,11 @@ export function rememberIdleShellProof(
   rows: readonly ProcessTableRow[],
   capturedAgeMs: number,
   outputChunks: number
-): void {
+): boolean {
   const name = session.getForegroundProcess({ rawFallback: true })
   if (!name || !isShellProcess(name)) {
     proofs.delete(session)
-    return
+    return false
   }
   const index = getProcessTableIndex(rows)
   const shell = session.shellIsRootChild
@@ -82,9 +82,10 @@ export function rememberIdleShellProof(
       provedAt: monotonicNow() - capturedAgeMs,
       outputChunks
     })
-  } else {
-    proofs.delete(session)
+    return true
   }
+  proofs.delete(session)
+  return false
 }
 
 function provenShellName(

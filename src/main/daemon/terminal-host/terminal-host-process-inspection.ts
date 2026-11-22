@@ -28,6 +28,8 @@ export type TerminalHostProcessInspection = {
   childProcessEvidence?: PtyChildProcessVerdict
   foregroundProcessEvidence?: RemoteForegroundEvidence
   foregroundExitWatched?: true
+  /** This read proved the shell alone in front with nothing running; only then may the pane stop re-checking. */
+  idleShellProven?: true
 }
 
 export type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
@@ -112,7 +114,7 @@ export async function inspectTerminalHostProcess(args: {
     )
     if (shell !== null) {
       args.onTier?.('cheap')
-      return { foregroundProcess: shell, hasChildProcesses: false }
+      return { foregroundProcess: shell, hasChildProcesses: false, idleShellProven: true }
     }
   }
   if (args.steadyState === true && incarnationMatches) {
@@ -131,6 +133,7 @@ export async function inspectTerminalHostProcess(args: {
     ? 'unverifiable'
     : undefined
   let evidence: RemoteForegroundEvidence
+  let idleShellProven = false
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
@@ -150,15 +153,20 @@ export async function inspectTerminalHostProcess(args: {
       args.ignoreDetached === true,
       steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
+    // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
+    idleShellProven =
+      childProcessEvidence === 'no-children' &&
+      foregroundProcess !== null &&
+      isShellProcess(foregroundProcess)
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
-      if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
+      idleShellProven =
+        !session.processNameIsSpawnFile &&
         rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
-      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -184,7 +192,10 @@ export async function inspectTerminalHostProcess(args: {
         snapshot.rows
       )
       await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      // Output after the capture may be a command the capture predates.
+      idleShellProven &&= session.outputChunks === outputChunks
     } catch {
+      idleShellProven = false
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
     }
@@ -192,6 +203,7 @@ export async function inspectTerminalHostProcess(args: {
   if (!session.isAlive || (args.currentSession && args.currentSession() !== session)) {
     childProcessEvidence = 'unverifiable'
     evidence = unverifiableEvidence(args, session, 'session_changed')
+    idleShellProven = false
   }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
   // Agent-only evidence must not erase an ordinary foreground command.
@@ -207,7 +219,8 @@ export async function inspectTerminalHostProcess(args: {
         ? nonShellForeground
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
-    foregroundProcessEvidence: evidence
+    foregroundProcessEvidence: evidence,
+    ...(idleShellProven ? { idleShellProven: true as const } : {})
   }
 }
 

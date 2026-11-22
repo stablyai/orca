@@ -30,8 +30,8 @@ export type ProcessMonitorState = {
   /** Earliest event no read has answered yet; null means no read is due. */
   readDueSince: number | null
   unresolvedFollowUps: number
-  /** A command in front can start an agent with no OS event, so a slow re-check stands in (never above main's). */
-  commandInForeground: boolean
+  /** No host proof that the shell is alone in front: a command may start an agent with no OS event, so a slow re-check stands in (never above main's). */
+  idleShellUnproven: boolean
   hasAgentRunEvidence: boolean
   pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null

@@ -17,7 +17,6 @@ import type {
 } from './agent-completion-identity-store'
 import type { ProcessMonitorState } from './agent-completion-process-types'
 import type { CadenceFollowUp } from './agent-completion-poll-scheduler'
-import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 
 export type RemoteInspectionState = {
@@ -32,24 +31,6 @@ type CompletionDispatch = (
   title: string,
   options?: { terminalIdleConfirmed?: boolean; completionIdentity?: LastCompletionIdentity | null }
 ) => boolean
-
-const WSL_LAUNCHER_RE = /(?:^|[\\/])wsl(?:\.exe)?$/i
-
-/** The pane's own shell at rest: a listed shell, a login shell (`-zsh`), or the `wsl.exe` launcher whose Linux side Windows reads cannot see. */
-function isPaneShell(processName: string): boolean {
-  const name = processName.trim().replace(/^-/, '')
-  return isShellProcess(name) || WSL_LAUNCHER_RE.test(name)
-}
-
-/** A full POSIX read whose foreground group is not the shell's: a command (`bash -c '…'`) holds the terminal. */
-function commandHoldsForeground(result: RuntimeTerminalProcessInspection): boolean {
-  const evidence = result.foregroundProcessEvidence
-  return (
-    evidence?.verdict === 'live' &&
-    evidence.fence.platform === 'posix' &&
-    evidence.fence.foregroundPgid !== evidence.fence.shellPid
-  )
-}
 
 // Two foreground misses can span one process handoff; only sustained absence confirms exit.
 const LOCAL_PROCESS_EXIT_SETTLE_MS = POLL_TIER_INTERVAL_MS.active * 2
@@ -91,7 +72,7 @@ export function handleAgentCompletionInspectionResult(args: {
     return false
   }
   if (remote) {
-    state.commandInForeground = false
+    state.idleShellUnproven = false
     const evidence = result.foregroundProcessEvidence
     // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
@@ -164,13 +145,8 @@ export function handleAgentCompletionInspectionResult(args: {
   const recognized = recognizeAgentProcess(result.foregroundProcess)
   const exitNoticed =
     result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
-  state.commandInForeground =
-    !recognized &&
-    (commandHoldsForeground(result) ||
-      (result.foregroundProcess !== null &&
-        (!isPaneShell(result.foregroundProcess) ||
-          result.childProcessEvidence === 'children' ||
-          (result.childProcessEvidence === undefined && result.hasChildProcesses))))
+  // A command can start an agent with no OS event, so only a host's proof of an idle shell ends re-checks.
+  state.idleShellUnproven = !recognized && result.idleShellProven !== true
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
@@ -232,15 +208,13 @@ export function handleAgentCompletionInspectionResult(args: {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
     options.onForegroundAgentExited?.(exited)
-    if (state.commandInForeground) {
+    if (state.idleShellUnproven) {
       requestFollowUp('unresolved')
     }
   } else {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
-    // A command, or a shell with children (Windows names only the shell), can start an agent silently
-    // (`npm run agent`), and no OS event reports a new child.
-    if (state.commandInForeground) {
+    if (state.idleShellUnproven) {
       requestFollowUp('unresolved')
     }
   }

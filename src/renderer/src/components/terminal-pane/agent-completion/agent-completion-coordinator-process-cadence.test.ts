@@ -49,7 +49,9 @@ describe('agent completion coordinator', () => {
       const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
         foregroundProcess,
         hasChildProcesses: foregroundProcess !== null,
-        ...(foregroundProcess ? { foregroundExitWatched: true as const } : {})
+        ...(foregroundProcess
+          ? { foregroundExitWatched: true as const }
+          : { idleShellProven: true as const })
       }))
       const coordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
@@ -125,6 +127,7 @@ describe('agent completion coordinator', () => {
     const observed = (capturedAgeMs: number): RuntimeTerminalProcessInspection => ({
       foregroundProcess: 'zsh',
       hasChildProcesses: false,
+      idleShellProven: true,
       foregroundProcessEvidence: {
         verdict: 'unverifiable',
         reason: 'test',
@@ -231,8 +234,8 @@ describe('agent completion coordinator', () => {
     expect(inspectProcess.mock.calls.length - reads).toBeGreaterThanOrEqual(3)
     expect(inspectProcess.mock.calls.length - reads).toBeLessThanOrEqual(5)
 
-    // Back at the shell, nothing re-checks.
-    result = { foregroundProcess: 'zsh', hasChildProcesses: false }
+    // Once the host proves the shell idle, nothing re-checks.
+    result = { foregroundProcess: 'zsh', hasChildProcesses: false, idleShellProven: true }
     await vi.advanceTimersByTimeAsync(20_000)
     const atShell = inspectProcess.mock.calls.length
     await vi.advanceTimersByTimeAsync(600_000)
@@ -241,46 +244,8 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
-  it('keeps re-checking while a shell wrapper holds the terminal on macOS/Linux', async () => {
-    // `bash -c 'sleep 30; codex exec … >agent.log'`: the read names no process, but the foreground group is not the shell.
-    const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      foregroundProcessEvidence: {
-        authorityGeneration: 'g1',
-        observationEpoch: 1,
-        capturedAgeMs: 0,
-        ptyId: 'pty-1',
-        ptyIncarnationId: 'i1',
-        verdict: 'live',
-        processName: null,
-        fence: {
-          platform: 'posix',
-          shellPid: 100,
-          shellStartTime: 's',
-          tty: 'ttys001',
-          foregroundPgid: 200
-        }
-      }
-    }))
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      inspectProcess,
-      dispatchCompletion: vi.fn(),
-      isLive: () => true
-    })
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(20_000)
-    const reads = inspectProcess.mock.calls.length
-
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(inspectProcess.mock.calls.length - reads).toBe(8)
-    coordinator.dispose()
-  })
-
-  it('re-checks a Windows shell running a child, but not an idle WSL launcher', async () => {
-    // ConPTY names only the shell while `python launch-agent.py` runs; WSL panes rest as wsl.exe.
+  it('stops re-checking only when the host proves the shell idle', async () => {
+    // A shell name alone proves nothing: a Windows launcher, a failed capture or a silent wrapper all read as one.
     const cases: [RuntimeTerminalProcessInspection, boolean][] = [
       [
         {
@@ -290,14 +255,9 @@ describe('agent completion coordinator', () => {
         },
         true
       ],
-      [
-        {
-          foregroundProcess: 'wsl.exe',
-          hasChildProcesses: false,
-          childProcessEvidence: 'no-children'
-        },
-        false
-      ]
+      [{ foregroundProcess: 'zsh', hasChildProcesses: false }, true],
+      [{ foregroundProcess: null, hasChildProcesses: false }, true],
+      [{ foregroundProcess: 'zsh', hasChildProcesses: false, idleShellProven: true }, false]
     ]
     for (const [result, rechecks] of cases) {
       const inspectProcess = vi.fn(async () => result)
@@ -316,6 +276,30 @@ describe('agent completion coordinator', () => {
       expect(inspectProcess.mock.calls.length - reads).toBe(rechecks ? 8 : 0)
       coordinator.dispose()
     }
+  })
+
+  it('reads after accepted input that prints nothing', async () => {
+    // `read -s -n1; run-agent`: the key is not echoed, and the agent's output goes to a log.
+    const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false,
+      idleShellProven: true
+    }))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+    const reads = inspectProcess.mock.calls.length
+
+    coordinator.observeInputActivity()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(reads + 1)
+    coordinator.dispose()
   })
 
   it('arms no timer for a watched agent whose host child census reads empty', async () => {

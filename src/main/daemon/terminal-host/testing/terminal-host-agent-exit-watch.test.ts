@@ -255,6 +255,14 @@ describe('TerminalHost foreground agent exit watch', () => {
       jobMembershipOnly: true
     })
     expect(result.childProcessEvidence).toBe('children')
+    // Only a full census that finds the shell alone proves the pane idle.
+    expect(result.idleShellProven).toBeUndefined()
+    inspectChildProcesses.mockReturnValue('no-children')
+    const idle = await windowsHost.inspectProcess('pane-store', {
+      steadyState: true,
+      jobMembershipOnly: true
+    })
+    expect(idle.idleShellProven).toBe(true)
     await windowsHost.dispose()
   })
 })

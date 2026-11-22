@@ -78,6 +78,8 @@ export type AgentCompletionCoordinator = {
   observeHiddenOutputActivity: () => void
   /** The host saw the foreground process exit or an agent appear; read the foreground as after output. */
   observeForegroundChange: () => void
+  /** Accepted input can start a command that prints nothing (`read -s -n1; run-agent`); read as after output. */
+  observeInputActivity: () => void
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void

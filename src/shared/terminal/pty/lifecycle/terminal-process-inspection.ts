@@ -26,6 +26,7 @@ export type ClientOnlyUnverifiableInspection = {
   ptyId?: never
   ptyIncarnationId?: never
   foregroundExitWatched?: never
+  idleShellProven?: never
 }
 
 /** Compatibility-shaped host/local inspection returned by the inspect RPC. */
@@ -39,6 +40,8 @@ export type HostProcessInspection = {
   childProcessEvidence?: PtyChildProcessVerdict
   /** The host will report this foreground process's exit as an event; absent where it cannot (older hosts too). */
   foregroundExitWatched?: true
+  /** The host proved the shell alone in front with nothing running; absent means it could not (older hosts too). */
+  idleShellProven?: true
   verdict?: never
   reason?: never
 }

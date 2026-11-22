@@ -68,8 +68,8 @@ export function createAgentCompletionPollScheduler(args: {
     if (
       (state.lastForegroundAgent ||
         state.hasAgentRunEvidence ||
-        // A hidden command pane reads nothing; keep main's restart-on-reveal pacing.
-        (state.commandInForeground && options.shouldPollProcessCadence?.() !== false)) &&
+        // A hidden pane reads nothing; keep main's restart-on-reveal pacing.
+        (state.idleShellUnproven && options.shouldPollProcessCadence?.() !== false)) &&
       state.pendingProcessExit === null &&
       isPaneQuiet(now)
     ) {
@@ -169,11 +169,11 @@ export function createAgentCompletionPollScheduler(args: {
 
   /** A read left a question open: an exit to confirm, a hook done in flight, a failed or inconclusive read. */
   function requestFollowUp(kind: CadenceFollowUp): void {
-    // A tracked agent's or a command's open question persists until a read settles it; the quiet tier paces it.
+    // A tracked agent's or an unproven idle shell's open question persists until a read settles it; the quiet tier paces it.
     if (
       kind === 'unresolved' &&
       !(state.lastForegroundAgent && state.hasAgentRunEvidence) &&
-      !state.commandInForeground
+      !state.idleShellUnproven
     ) {
       if (state.unresolvedFollowUps >= MAX_UNRESOLVED_FOLLOW_UPS) {
         return
