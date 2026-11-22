@@ -26,6 +26,7 @@ import { loadOffscreenPageUrl } from './offscreen-page-load'
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
 const OWNER_RETIREMENT_CONCURRENCY = 4
+const requestedUrlByWindow = new WeakMap<BrowserWindow, string>()
 
 type FreedPage = { worktreeId: string; entries: Electron.NavigationEntry[]; index: number }
 
@@ -102,6 +103,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     win.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
     followPublicationLeasesWithFrameRate(win.webContents)
     this.windowsByPageId.set(browserPageId, win)
+    requestedUrlByWindow.set(win, params.url)
     // Server pages have no window to ask in; agents and phones answer their dialogs.
     installBrowserJavaScriptDialogs(win.webContents, () => null)
 
@@ -186,7 +188,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     }
     const previousWebContentsId = win.webContents.id
     const worktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
-    const url = win.webContents.getURL()
+    // A page still holding its first load for extensions has no URL yet.
+    const url = win.webContents.getURL() || (requestedUrlByWindow.get(win) ?? '')
     // Hand the id over in one synchronous step so no command finds the page missing in between.
     this.windowsByPageId.delete(browserPageId)
     this.idleClock.untrack(browserPageId)

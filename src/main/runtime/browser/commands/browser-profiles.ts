@@ -53,7 +53,7 @@ export class RuntimeBrowserProfiles {
       'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
     >,
     private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>,
-    private readonly screencasts: Pick<RuntimeBrowserScreencasts, 'endPageStreams'>
+    private readonly screencasts: Pick<RuntimeBrowserScreencasts, 'replacePageGuest'>
   ) {}
 
   async browserTabSetProfile(
@@ -129,8 +129,9 @@ export class RuntimeBrowserProfiles {
     const offscreen = this.host.getOffscreenBrowserBackend()
     if (offscreen?.ownsTab(browserPageId)) {
       // No pane remounts a server's page; viewers resubscribe once it is rebuilt in the profile.
-      await this.screencasts.endPageStreams(browserPageId)
-      await offscreen.setTabProfile(browserPageId, profile.id)
+      await this.screencasts.replacePageGuest(browserPageId, () =>
+        offscreen.setTabProfile(browserPageId, profile.id)
+      )
       const worktreeId = browserManager.getWorktreeIdForTab(browserPageId)
       if (worktreeId) {
         this.host.serveBrowserTabs?.profileChanged({

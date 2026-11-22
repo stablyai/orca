@@ -28,7 +28,7 @@ export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntime
       resolveClientHostedBrowserPage: async () => undefined
     },
     { browserTabCreate: unavailable },
-    { endPageStreams: unavailable }
+    { replacePageGuest: unavailable }
   )
   const runtime = new OrcaRuntimeService(null)
   vi.spyOn(runtime, 'getRuntimeId').mockReturnValue(outerRuntimeId)

@@ -35,12 +35,16 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { watchGuestPointer } from '../../../browser/guest-lifecycle/input/browser-guest-pointer-watch'
 import { askScreencastViewerPagePrompts } from './browser-screencast-page-prompts'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
+  private readonly guestReplacements = new BrowserScreencastGuestReplacements(
+    this.activeScreencastsByPageId
+  )
 
   constructor(
     private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
@@ -71,7 +75,7 @@ export class RuntimeBrowserScreencasts {
     const target = await this.targets.resolveBrowserCommandTarget(params, {
       waitForFirstLoad: false
     })
-    const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
+    const { browserPageId } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
     )
@@ -83,11 +87,12 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone = resolve
     })
     let createdPageStream = false
-    let active = this.activeScreencastsByPageId.get(browserPageId)
-    while (active?.stopping) {
-      await active.session?.done
-      active = this.activeScreencastsByPageId.get(browserPageId)
-    }
+    let active = await this.guestReplacements.settledStream(browserPageId)
+    // Read the guest only now: a replacement swaps it while this viewer waits.
+    const { webContents: guest } = this.targets.resolveBrowserPageWebContents(
+      target.worktreeId,
+      browserPageId
+    )
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
@@ -274,16 +279,9 @@ export class RuntimeBrowserScreencasts {
     }
   }
 
-  /** Ends a page's streams with `end`, not a detach error, so viewers resubscribe to its next guest. */
-  async endPageStreams(browserPageId: string): Promise<void> {
-    const active = this.activeScreencastsByPageId.get(browserPageId)
-    const session = active ? await active.started.catch(() => null) : null
-    if (!active || !session) {
-      return
-    }
-    active.stopping = true
-    session.stop()
-    await session.done
+  /** Swaps a page's guest without failing its viewers; see BrowserScreencastGuestReplacements. */
+  replacePageGuest(browserPageId: string, swap: () => Promise<void>): Promise<void> {
+    return this.guestReplacements.replace(browserPageId, swap)
   }
 
   private leaveScreencastSubscriber(
