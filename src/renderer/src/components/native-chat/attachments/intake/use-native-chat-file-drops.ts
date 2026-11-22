@@ -1,10 +1,14 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
-import type { NativeChatComposerProps } from '../../composer/native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from '../../composer/native-chat-composer-types'
 import {
   useNativeChatExternalAttachments,
   type UseNativeChatExternalAttachmentsArgs
 } from './use-native-chat-external-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
+import { useNativeChatAgentReferenceDrop } from './use-native-chat-agent-reference-drop'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatPaneFileDropClaim } from './NativeChatPaneFileDropSurface'
 import type { NativeChatAttachmentFocusOptions } from '../uploads/native-chat-resolved-path-ownership'
@@ -15,6 +19,13 @@ type Args = UseNativeChatExternalAttachmentsArgs &
 export function useNativeChatFileDrops(args: Args) {
   const external = useNativeChatExternalAttachments(args)
   const workspace = useNativeChatWorkspaceFileDrop(args)
+  // Owned here so the pane's drop claim reaches the composer's handle, which mounts after it.
+  const composerHandle = useRef<NativeChatComposerHandle>(null)
+  const agentReference = useNativeChatAgentReferenceDrop({
+    disabled: args.disabled,
+    insertAgentReferences: (references) =>
+      composerHandle.current?.insertAgentReferences(references) ?? false
+  })
   const destinationKey = JSON.stringify([
     args.paneKey,
     args.draftScopeKey,
@@ -31,7 +42,14 @@ export function useNativeChatFileDrops(args: Args) {
     destinationKey,
     focusScopeKey: args.draftScopeKey ?? args.paneKey,
     disabled: args.disabled,
-    ...workspace,
+    onDragOverCapture: (event) => {
+      workspace.onDragOverCapture(event)
+      agentReference.onDragOverCapture(event)
+    },
+    onDropCapture: (event, attachTo) => {
+      workspace.onDropCapture(event, attachTo)
+      agentReference.onDropCapture(event)
+    },
     captureExternalDrop: () =>
       external.captureExternalDrop(() => destinationRef.current === destinationKey)
   })
@@ -47,6 +65,7 @@ export function useNativeChatFileDrops(args: Args) {
     attachExternalPaths: external.attachExternalPaths,
     captureExternalPaths: external.captureExternalDrop,
     captureCopiedFiles,
-    resolveAttachmentOwner: external.resolveAttachmentOwner
+    resolveAttachmentOwner: external.resolveAttachmentOwner,
+    composerHandle
   }
 }

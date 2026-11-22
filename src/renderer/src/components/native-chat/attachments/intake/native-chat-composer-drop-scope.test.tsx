@@ -3,9 +3,10 @@
 import type * as AttachmentOwnerModule from '../uploads/native-chat-attachment-owner'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
-import { useRef, useState } from 'react'
+import { useImperativeHandle, useRef, useState } from 'react'
 
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
+import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import { NativeChatPromptEditor } from '../../composer/editor/NativeChatPromptEditor'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
@@ -98,7 +99,7 @@ function ComposerBody({
     setDraft: () => {},
     setNotice
   })
-  const { pickAttachments } = useNativeChatFileDrops({
+  const { pickAttachments, composerHandle } = useNativeChatFileDrops({
     paneKey: pane,
     draftScopeKey: draft,
     targetPtyId: null,
@@ -108,6 +109,19 @@ function ComposerBody({
     pendingChips: attachments.pendingChips,
     setNotice
   })
+  useImperativeHandle(composerHandle, (): NativeChatComposerHandle => ({
+    insertAgentReferences: (references) => {
+      textareaRef.current?.insertAgentReferences?.(references)
+      return true
+    },
+    focus: () => false,
+    insertTypedText: () => false,
+    acceptsText: () => false,
+    appendText: () => {},
+    handlePasteEvent: () => {},
+    pasteFromClipboard: () => {},
+    contains: () => false
+  }))
   return (
     <div data-pane={pane} style={{ display: hidden ? 'none' : 'block' }}>
       <div>
@@ -161,6 +175,19 @@ async function dropTwoImages(target: Element): Promise<void> {
     value: {
       types: ['Files'],
       files: [new File(['a'], 'first.png'), new File(['b'], 'second.png')]
+    }
+  })
+  await act(async () => {
+    target.dispatchEvent(event)
+  })
+}
+
+async function dropAgent(target: Element): Promise<void> {
+  const event = new Event('drop', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', {
+    value: {
+      types: ['application/x-orca-agent-reference'],
+      getData: () => JSON.stringify({ label: 'Fix login', address: 'term_abc', hostKey: 'local' })
     }
   })
   await act(async () => {
@@ -250,6 +277,29 @@ describe('native chat composer drop scoping', () => {
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)
     expect(returned.container.querySelector('output')?.textContent).toBe('[]')
+  })
+
+  it('mentions a dragged agent in the pane it landed on, and not in a guarded composer', async () => {
+    const view = render(
+      <>
+        <ComposerProbe pane="chat-a" />
+        <ComposerProbe pane="chat-b" />
+        <ComposerProbe pane="chat-c" disabled />
+      </>
+    )
+    const mentioned = (pane: string): (string | null)[] =>
+      [
+        ...view.container.querySelectorAll(
+          `[data-pane="${pane}"] [data-native-chat-agent-reference]`
+        )
+      ].map((pill) => pill.getAttribute('data-native-chat-agent-reference'))
+
+    await dropAgent(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
+    await dropAgent(view.container.querySelector('[data-pane="chat-c"] .ProseMirror')!)
+
+    expect(mentioned('chat-a')).toEqual(['term_abc'])
+    expect(mentioned('chat-b')).toEqual([])
+    expect(mentioned('chat-c')).toEqual([])
   })
 
   it('attaches a drop once, from the pane it landed on, when two panes share a conversation’s draft', async () => {
