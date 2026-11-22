@@ -213,13 +213,16 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
   // Terminal-only usage of workspaces that also have chats, as paired clients have always seen it.
   const terminalUsage = new Map<string, RowTotals>()
+  let hasChatOnlyRows = false
   for (const { agentSessionId, rows } of agentTrees) {
     const usage = usageOf(sumRows(rows), hasPrivateMemory)
     addUsage(agents, usage)
     const chat = agentSessionId === null ? null : readAgentProcessChat(agentSessionId)
     if (agentSessionId !== null && chat) {
       const bucket = bucketFor(chat.worktreeId)
-      if (bucket.sessions.length > 0 && !terminalUsage.has(bucket.worktreeId)) {
+      if (bucket.sessions.length === 0) {
+        hasChatOnlyRows = true
+      } else if (!terminalUsage.has(bucket.worktreeId)) {
         const { cpu, memory, privateMemory } = bucket
         terminalUsage.set(bucket.worktreeId, { cpu, memory, privateMemory })
       }
@@ -267,6 +270,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     collectedAt: now
   }
   recordPairedReplyParts(snapshot, {
+    rowsDiffer: hasChatOnlyRows || terminalSeries.length > 0 || restoredSessionIds.size > 0,
     terminalSeries,
     hasPrivateMemory,
     readTerminalHistory: (worktreeId) => readMemoryHistory(terminalOnlyHistoryKey(worktreeId)),

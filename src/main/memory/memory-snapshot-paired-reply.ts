@@ -3,6 +3,8 @@ import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values
 
 /** What a sample recorded to rebuild the terminal-only snapshot paired clients have always received. */
 export type PairedReplyParts = {
+  /** False when every row is already what paired clients receive, so the reply sends them as they are. */
+  rowsDiffer: boolean
   /** Terminal-only usage of workspaces that have had chats; their history is read only when asked. */
   terminalSeries: readonly { worktreeId: string; usage: RowUsage }[]
   hasPrivateMemory: boolean
@@ -78,16 +80,18 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
     parts.terminalSeries.map(({ worktreeId, usage }) => [worktreeId, usage])
   )
   let worktrees: WorktreeMemory[] | undefined
-  snapshot.worktrees.forEach((wt, i) => {
-    const row = wt.sessions.length > 0 ? pairedRow(wt, parts, terminalUsage) : undefined
-    if (row !== wt) {
-      // Copied only from the first row that differs; a host without chats sends its array as is.
-      worktrees ??= snapshot.worktrees.slice(0, i)
-    }
-    if (worktrees && row) {
-      worktrees.push(row)
-    }
-  })
+  if (parts.rowsDiffer) {
+    snapshot.worktrees.forEach((wt, i) => {
+      const row = wt.sessions.length > 0 ? pairedRow(wt, parts, terminalUsage) : undefined
+      if (row !== wt) {
+        // Copied only from the first row that differs.
+        worktrees ??= snapshot.worktrees.slice(0, i)
+      }
+      if (worktrees && row) {
+        worktrees.push(row)
+      }
+    })
+  }
   const reply: MemorySnapshot = {
     ...base,
     worktrees: worktrees ?? snapshot.worktrees,
