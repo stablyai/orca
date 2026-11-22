@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { AlertCircle, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { AgentCommandFailedDialog } from '@/components/agent-command-failure/AgentCommandFailedDialog'
 import {
   chatNamingSettingsTarget,
@@ -65,7 +64,8 @@ export function NativeChatNamingErrorBlock({
             {regenerateLabel(naming, t)}
           </Button>
         ) : null}
-        {isWebClientLocation() || isTransientNamingFailure(naming.message) ? null : (
+        {!canOpenNamingSettings(naming.executionHostId) ||
+        isTransientNamingFailure(naming.message) ? null : (
           <Button
             type="button"
             variant="ghost"
