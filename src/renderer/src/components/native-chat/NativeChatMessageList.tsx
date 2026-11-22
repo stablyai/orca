@@ -5,13 +5,11 @@ import { NativeChatTranscriptColumn } from './NativeChatTranscriptColumn'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
-import { withoutPullRequestEventRows } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
+import { useNativeChatShownRows } from './conversation/slots/use-native-chat-shown-rows'
+import { projectionBesideStreamedText } from '../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  nativeChatShowsCiResultLines,
-  nativeChatShowsTurnDiffSummary
-} from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { nativeChatShowsTurnDiffSummary } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
 import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
@@ -172,15 +170,15 @@ export function NativeChatMessageList({
   useRereadWorkersOnNewRows(journalItems?.length ?? 0)
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
-  const loadedMessageIds = useMemo(() => new Set(messages.map(({ id }) => id)), [messages])
+  // Ids never change with a reply's text, so the set holds while one streams.
+  const savedMessages = projectionBesideStreamedText(messages)
+  const loadedMessageIds = useMemo(
+    () => new Set(savedMessages.map(({ id }) => id)),
+    [savedMessages]
+  )
   const taskListPredecessors = useNativeChatTaskListPredecessors(messages)
   const { liveTurnKey } = turnRows
-  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
-  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
-  const { messages: rows, turnKeys } = useMemo(
-    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
-    [showCiResultLines, turnRows]
-  )
+  const { messages: rows, turnKeys, structureMessages } = useNativeChatShownRows(turnRows)
   const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turns = scope.conversationTurns
@@ -212,6 +210,7 @@ export function NativeChatMessageList({
   const transcript = useNativeChatTranscriptSlots({
     typography,
     messages: rows,
+    structureMessages,
     unresolvedRowIds: turnRows.unresolvedRowIds,
     turnKeys,
     liveTurnKey,

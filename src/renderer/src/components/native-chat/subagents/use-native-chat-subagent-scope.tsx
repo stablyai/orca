@@ -33,7 +33,10 @@ import {
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
-import { stageBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  projectionBesideStreamedText,
+  stageBesideStreamedText
+} from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
@@ -78,13 +81,17 @@ export function useNativeChatSubagentScope({
   isWorking: boolean
 }) {
   const agentId = view?.agentId ?? null
+  // Entries, heads and child rows in order read no reply text, so they hold while a reply or a
+  // child streams; drawn rows still come from the current lists.
+  const savedConversation = projectionBesideStreamedText(conversation)
+  const subagentStructure = stageBesideStreamedText(subagentRows)
   // The conversation names its subagents only for heads, which need rows; a subagent's bar lists them all.
   const entries = useMemo(
     () =>
-      agentId === null && subagentRows.size === 0
+      agentId === null && subagentStructure.size === 0
         ? NO_ENTRIES
-        : nativeChatSubagentEntries(conversation, subagentRows, roster),
-    [agentId, conversation, roster, subagentRows]
+        : nativeChatSubagentEntries(savedConversation, subagentStructure, roster),
+    [agentId, savedConversation, roster, subagentStructure]
   )
   const t = useTranslate()
   const entry = agentId === null ? undefined : entries.get(agentId)
@@ -136,13 +143,12 @@ export function useNativeChatSubagentScope({
           )
         ]
   }, [agentId, conversation, entry, handoff, history, subagentRows, t])
+  const savedMessages = projectionBesideStreamedText(messages)
   const heads = useMemo(
-    () => nativeChatSubagentHeads(messages, subagentRows, entries, agentId),
-    [agentId, entries, messages, subagentRows]
+    () => nativeChatSubagentHeads(savedMessages, subagentStructure, entries, agentId),
+    [agentId, entries, savedMessages, subagentStructure]
   )
   // Child edits and PRs count in the conversation's turns, which a subagent's view does not draw.
-  // Only those scans read these rows, and never reply text, so a streaming child leaves them be.
-  const subagentStructure = stageBesideStreamedText(subagentRows)
   const rowsInOrder = useMemo(
     () => (agentId === null ? nativeChatSubagentRowsInOrder(subagentStructure) : NO_SUBAGENT_ROWS),
     [agentId, subagentStructure]

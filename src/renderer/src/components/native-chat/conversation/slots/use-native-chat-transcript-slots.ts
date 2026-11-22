@@ -15,6 +15,8 @@ import {
 } from './native-chat-transcript-slots'
 import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import { withStreamedRows } from './native-chat-transcript-streamed-slots'
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import {
   NO_LEAVING_TURNS,
@@ -24,8 +26,11 @@ import {
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
   line,
+  structureMessages,
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
+  /** `messages` as of their last change other than a streaming reply's text, row for row. */
+  structureMessages?: readonly NativeChatMessage[]
   line: {
     /** The row drawn under the transcript, if any. */
     tailRow: 'awaiting-input' | 'activity' | null
@@ -92,28 +97,28 @@ export function useNativeChatTranscriptSlots({
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
   const [leavingTurnKeys, setLeavingTurnKeys] = useState(NO_LEAVING_TURNS)
-  const { slots, forkPoint, quietTurnKeys } = useMemo(
-    () =>
-      buildNativeChatTranscript({
-        imageSources,
-        messages,
-        unresolvedRowIds,
-        typography,
-        turnKeys,
-        liveTurnKey,
-        receipts,
-        turnStatuses,
-        turnDiffs,
-        openedPullRequests,
-        expandedTurnKeys,
-        isWorking,
-        lifecycleWorking,
-        subagentHeads,
-        liveReasoningId,
-        forkOffer,
-        workers,
-        leavingTurnKeys
-      }),
+  // Built from the saved rows, so a live window that only grows a reply rebuilds no structure.
+  const saved = structureMessages?.length === messages.length ? structureMessages : messages
+  const buildInput = useMemo(
+    () => ({
+      imageSources,
+      unresolvedRowIds,
+      typography,
+      turnKeys,
+      liveTurnKey,
+      receipts,
+      turnStatuses,
+      turnDiffs,
+      openedPullRequests,
+      expandedTurnKeys,
+      isWorking,
+      lifecycleWorking,
+      subagentHeads,
+      liveReasoningId,
+      forkOffer,
+      workers,
+      leavingTurnKeys
+    }),
     [
       leavingTurnKeys,
       workers,
@@ -124,7 +129,6 @@ export function useNativeChatTranscriptSlots({
       lifecycleWorking,
       liveReasoningId,
       liveTurnKey,
-      messages,
       openedPullRequests,
       receipts,
       subagentHeads,
@@ -135,6 +139,14 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
+  const built = useMemo(
+    () => buildNativeChatTranscript({ ...buildInput, messages: saved }),
+    [buildInput, saved]
+  )
+  const { slots, forkPoint, quietTurnKeys } = useMemo(() => {
+    const slots = withStreamedRows(built.slots, saved, messages)
+    return slots ? { ...built, slots } : buildNativeChatTranscript({ ...buildInput, messages })
+  }, [built, buildInput, saved, messages])
   useNativeChatQuietTurnLeave({
     quietTurnKeys,
     liveTurnKey,
