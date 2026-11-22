@@ -35,6 +35,7 @@ import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chro
 import { useRemoteBrowserPagePointerHistory } from './use-remote-browser-page-pointer-history'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
 import { useRemoteBrowserPageZoom } from './use-remote-browser-page-zoom'
+import { useRemoteBrowserPageFind } from './use-remote-browser-page-find'
 import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
@@ -93,6 +94,8 @@ export function RemoteBrowserPagePane({
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
   const stagedPage = remotePageHandle?.staged === true
+  const remotePageId =
+    remotePageHandle?.environmentId === runtimeEnvironmentId ? remotePageHandle.remotePageId : null
   // Older hosts publish canGoBack/canGoForward as always false; keep both arrows enabled for them.
   const historyStateKnown = useRuntimeEnvironmentCapability(
     runtimeEnvironmentId,
@@ -154,7 +157,9 @@ export function RemoteBrowserPagePane({
     runtimeWorktree,
     createRemoteOperationToken,
     isCurrentRemoteOperationToken,
-    closeMissingRemotePage
+    closeMissingRemotePage,
+    runtimeEnvironmentId,
+    setPaneNotice
   }
 
   const {
@@ -173,7 +178,6 @@ export function RemoteBrowserPagePane({
     setAddressBarValueFromPage,
     onSetUrl,
     onUpdatePageState,
-    setPaneNotice,
     setPaneBusy
   })
 
@@ -188,11 +192,13 @@ export function RemoteBrowserPagePane({
     }
   }, [browserTab.id, navigateToUrl, stagedPage])
 
+  const find = useRemoteBrowserPageFind({ ...remotePageTarget, isActive, browserTab })
   useRemoteBrowserPageChromeChords({
+    ...remotePageTarget,
     chromeShortcutScope,
     workspaceId,
     runRemoteNavigation,
-    setPaneNotice
+    openFind: find.openFind
   })
   useRemoteBrowserPagePointerHistory({ isActive, remoteViewportRef, runRemoteNavigation })
 
@@ -242,10 +248,7 @@ export function RemoteBrowserPagePane({
     imageRef,
     remoteViewportRef,
     runtimeEnvironmentId,
-    remotePageId:
-      remotePageHandle?.environmentId === runtimeEnvironmentId
-        ? remotePageHandle.remotePageId
-        : null,
+    remotePageId,
     runtimeTarget,
     runtimeWorktree,
     lifecycle,
@@ -272,17 +275,14 @@ export function RemoteBrowserPagePane({
     remoteViewportSizeRef,
     frameMetadata,
     enqueueRemoteInput,
-    scheduleRemoteTabInfoRefresh,
-    setPaneNotice
+    scheduleRemoteTabInfoRefresh
   })
 
   const zoom = useRemoteBrowserPageZoom({
     ...remotePageTarget,
     browserPageId: browserTab.id,
-    runtimeEnvironmentId,
     streaming: frameUrl !== null,
-    onZoomed: resyncRemoteViewport,
-    setPaneNotice
+    onZoomed: resyncRemoteViewport
   })
   useRemoteBrowserPageWheel({
     ...remotePageTarget,
@@ -293,7 +293,6 @@ export function RemoteBrowserPagePane({
     getRemoteImagePoint,
     inputQueue,
     scheduleRemoteTabInfoRefresh,
-    setPaneNotice,
     requestZoom: zoom.requestZoom
   })
 
@@ -305,8 +304,7 @@ export function RemoteBrowserPagePane({
     imageRef,
     getRemoteImagePoint,
     enqueueRemoteInput,
-    mountedRef,
-    setPaneNotice
+    mountedRef
   })
 
   return (
@@ -371,12 +369,14 @@ export function RemoteBrowserPagePane({
           void runRemoteNavigation('browser.reload', undefined, ignoreCache)
         }
         onStop={() => void stopRemotePage()}
+        onFind={find.openFind}
       />
       {annotateBanner}
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
         imageRef={imageRef}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
+        find={find}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
         pagePointer={pagePointer}
