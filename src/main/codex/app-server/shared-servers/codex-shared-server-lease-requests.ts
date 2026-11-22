@@ -19,6 +19,7 @@ type RequestOptions = { timeoutMs?: number | null; onReply?: (result?: unknown) 
 /** What a lease's requests need from the lease itself. */
 export type CodexLeaseRequestOwner = {
   readonly id: string
+  readonly chatEnv: Readonly<Record<string, string>>
   readonly open: boolean
   readonly host: CodexSharedLeaseHost
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
@@ -41,15 +42,22 @@ export type CodexLeaseRequestOwner = {
 
 function withLeaseTag(
   params: Record<string, unknown> | undefined,
-  leaseId: string
+  leaseId: string,
+  chatEnv: Readonly<Record<string, string>>
 ): Record<string, unknown> {
+  const policy = Object.fromEntries(
+    Object.entries({ ...chatEnv, [CODEX_SHARED_LEASE_ENV]: leaseId }).map(([key, value]) => [
+      `shell_environment_policy.set.${key}`,
+      value
+    ])
+  )
   const config =
     typeof params?.config === 'object' && params.config !== null && !Array.isArray(params.config)
       ? params.config
       : {}
   return {
     ...params,
-    config: { ...config, [`shell_environment_policy.set.${CODEX_SHARED_LEASE_ENV}`]: leaseId }
+    config: { ...config, ...policy }
   }
 }
 
@@ -90,7 +98,7 @@ export async function sendCodexLeaseRequest(
   let callerGone = false
   const sent = host.connection.request(
     method,
-    opensThread ? withLeaseTag(params, owner.id) : params,
+    opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,
     {
       // An open is timed here, not by the transport, so a late answer still reaches onReply.
       timeoutMs: opensThread

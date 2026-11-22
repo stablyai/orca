@@ -6,6 +6,7 @@ import {
 } from '../../structured/acquisition/codex-structured-connection-opener'
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import { chat, fakeCodex, launch, startThread } from './codex-shared-server-pool-fixture'
+import { field } from './codex-shared-server-frames'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -90,6 +91,23 @@ describe('shared Codex app-servers', () => {
     })
     expect(askedA).toEqual([])
     expect(askedB).toEqual(['account/chatgptAuthTokens/refresh'])
+  })
+
+  it("gives each chat's threads that chat's own Orca identity, not the server's", async () => {
+    const { servers, pool } = fakeCodex()
+    const launchA = launch()
+    const launchB = launch()
+    const connA = await pool.open(launchA, chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launchB, chat().handlers, { sessionId: 'b', skillRoots: [] })
+    await startThread(connA)
+    await startThread(connB)
+    const sessionIds = servers[0]!.requests
+      .filter((r) => r.method === 'thread/start')
+      .map((r) => field(r.params, 'config', 'shell_environment_policy.set.ORCA_AGENT_SESSION_ID'))
+    expect(sessionIds).toEqual([
+      launchA.env.ORCA_AGENT_SESSION_ID,
+      launchB.env.ORCA_AGENT_SESSION_ID
+    ])
   })
 
   it('starts a second server at 20 chats and never shares across account homes', async () => {

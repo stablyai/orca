@@ -91,7 +91,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   constructor(
     readonly host: CodexSharedLeaseHost,
     private readonly handlers: CodexAppServerConnectionHandlers,
-    readonly sessionId: string | null
+    readonly sessionId: string | null,
+    /** Set on every thread this chat opens, so its commands keep the chat's identity. */
+    readonly chatEnv: Readonly<Record<string, string>> = {}
   ) {}
 
   get pid(): number | undefined {

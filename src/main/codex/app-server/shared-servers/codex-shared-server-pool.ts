@@ -61,7 +61,7 @@ export class CodexSharedServerPool {
     const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
     // Reserved before the server is ready, so concurrent opens respect the cap.
-    const lease = new CodexSharedServerLease(server, handlers, options.sessionId)
+    const lease = new CodexSharedServerLease(server, handlers, options.sessionId, spec.chatEnv)
     server.leases.add(lease)
     try {
       await server.ready

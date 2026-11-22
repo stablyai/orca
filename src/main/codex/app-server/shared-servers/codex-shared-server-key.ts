@@ -24,6 +24,8 @@ const PER_CHAT_ENV_KEYS = [
 export type CodexSharedServerSpec = {
   key: string
   launch: CodexAppServerLaunch
+  /** This chat's own identity values, set on each of its threads' commands instead. */
+  chatEnv: Readonly<Record<string, string>>
 }
 
 /** Drain generation: the version this launch's `codex --version` reported, plus the mtimes of the
@@ -59,7 +61,12 @@ export async function codexSharedServerSpec(
     ? launch.cwd
     : homedir()
   const env = { ...launch.env }
+  const chatEnv: Record<string, string> = {}
   for (const key of PER_CHAT_ENV_KEYS) {
+    const value = env[key]
+    if (typeof value === 'string') {
+      chatEnv[key] = value
+    }
     delete env[key]
   }
   const envToDelete = [...new Set([...(launch.envToDelete ?? []), ...PER_CHAT_ENV_KEYS])].sort()
@@ -80,7 +87,8 @@ export async function codexSharedServerSpec(
     key,
     // Otherwise the stock CLI runs the same from any folder, and a worktree cwd would pin that
     // folder (Windows can't delete it) for every chat on the server.
-    launch: { command: launch.command, args: launch.args, cwd, env, envToDelete }
+    launch: { command: launch.command, args: launch.args, cwd, env, envToDelete },
+    chatEnv
   }
 }
 
