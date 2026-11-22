@@ -34,7 +34,7 @@ export function LineageGuides({
     <div
       aria-hidden="true"
       data-worktree-lineage-guides=""
-      className="pointer-events-none absolute inset-0"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
     >
       {railXs(guides.rails).map((x) => (
         <span

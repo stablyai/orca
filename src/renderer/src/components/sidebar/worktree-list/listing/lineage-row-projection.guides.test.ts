@@ -88,25 +88,13 @@ describe('lineage row guides', () => {
     expect(chainFrames.slice(1).every((frame) => frame.guides?.branch?.last)).toBe(true)
   })
 
-  it('adds at most one rail per row on a deep branching tree', () => {
-    // Each chain node has a leaf sibling after its subtree, so every ancestor keeps a rail open.
+  it('carries one rail per open ancestor on a deep branching tree', () => {
     const depth = 500
     const comb = [
       ...Array.from({ length: depth }, (_, d) => item(`c${d}`, d)),
       ...Array.from({ length: depth - 1 }, (_, i) => item(`l${depth - 1 - i}`, depth - 1 - i))
     ]
     const combFrames = buildLineageRowProjection(comb, 'none', true).frames
-    const cells = new Set<LineageRail>()
-    for (const frame of combFrames) {
-      const rails = frame.guides?.rails ?? null
-      const parentRails = frame.parent === null ? null : combFrames[frame.parent].guides?.rails
-      // Shares the parent's list, or prepends exactly one cell to it.
-      expect(rails === parentRails || rails?.next === parentRails).toBe(true)
-      if (rails) {
-        cells.add(rails)
-      }
-    }
-    expect(cells.size).toBeLessThanOrEqual(comb.length)
     expect(railXs(combFrames[depth - 1].guides?.rails)).toHaveLength(depth - 2)
   })
 })

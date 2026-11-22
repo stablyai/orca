@@ -59,8 +59,7 @@ export function buildLineageRowProjection(
   rows: readonly RenderRow[],
   groupBy: WorktreeGroupBy,
   newCardStyle: boolean,
-  statusLane = newCardStyle,
-  guideWidth = Infinity
+  statusLane = newCardStyle
 ) {
   const rowIndexByKey = new Map<string, number>()
   const rowKeys: string[] = []
@@ -184,28 +183,24 @@ export function buildLineageRowProjection(
     let branch: LineageRowGuides['branch'] = null
     const parent = frame.parent
     if (parent !== null) {
-      if (guideX(index) < guideWidth) {
-        branch = {
-          x: guideX(index),
-          to: Math.min(frame.left + BRANCH_END_INSET, guideWidth),
-          last: frame.end === frames[parent].end
-        }
+      branch = {
+        x: guideX(index),
+        to: frame.left + BRANCH_END_INSET,
+        last: frame.end === frames[parent].end
       }
       // Why: this runs for every row before virtualization, so extend the parent's shared rail list
       // in O(1) instead of walking or copying ancestors; only visible rows walk it to paint.
       const parentRails = frames[parent].guides!.rails
       const grandparent = frames[parent].parent
       rails =
-        grandparent !== null &&
-        frames[parent].end < frames[grandparent].end &&
-        guideX(parent) < guideWidth
+        grandparent !== null && frames[parent].end < frames[grandparent].end
           ? { x: guideX(parent), next: parentRails }
           : parentRails
     }
     frame.guides = {
       rails,
       branch,
-      stem: hasChildren && guideX(index + 1) < guideWidth ? guideX(index + 1) : null
+      stem: hasChildren ? guideX(index + 1) : null
     }
   })
   return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
@@ -229,22 +224,14 @@ export function useLineageRowProjection(args: {
   rows: RenderRow[]
   groupBy: WorktreeGroupBy
   newCardStyle: boolean
-  guideWidth: number | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }) {
-  const {
-    rows,
-    groupBy,
-    newCardStyle,
-    guideWidth,
-    activeWorktreeId,
-    activeWorkspaceExecutionHostId
-  } = args
+  const { rows, groupBy, newCardStyle, activeWorktreeId, activeWorkspaceExecutionHostId } = args
   const statusLane = useAppStore((s) => s.worktreeCardProperties.includes('status')) && newCardStyle
   const projection = useMemo(
-    () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane, guideWidth ?? 0),
-    [rows, groupBy, newCardStyle, statusLane, guideWidth]
+    () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane),
+    [rows, groupBy, newCardStyle, statusLane]
   )
   const firstHeaderIndex = useMemo(
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
