@@ -32,12 +32,8 @@ function stateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): Ap
   return { ...useAppStore.getState(), unifiedTabsByWorktree }
 }
 
-// A copied owner input forces a from-scratch rebuild instead of a cache read.
-function rebuiltStateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): AppState {
-  const state = stateWith(unifiedTabsByWorktree)
-  const owners = state.restoredRuntimeHostIdByWorkspaceSessionKey
-  return { ...state, restoredRuntimeHostIdByWorkspaceSessionKey: { ...owners } }
-}
+// Pane keys are `<tab id>:<hash>`; tests name rows by tab id.
+const tabOf = (paneKey: string) => paneKey.slice(0, paneKey.indexOf(':'))
 
 function workForOneRetitle(chatCount: number): { encodes: number; visits: number } {
   const source: AppState['unifiedTabsByWorktree'] = {}
@@ -65,7 +61,7 @@ it('re-reads only the changed workspace and re-encodes no live chat, at N and 10
   }
 })
 
-it('keeps rows equal to a full rebuild across adds, moves and closes', () => {
+it('keeps the right rows across adds, moves and closes', () => {
   let source: AppState['unifiedTabsByWorktree'] = {
     'wt-a': [chatTab('wt-a', 'a1'), chatTab('wt-a', 'a2')],
     'wt-b': [chatTab('wt-b', 'b1')]
@@ -73,28 +69,60 @@ it('keeps rows equal to a full rebuild across adds, moves and closes', () => {
   for (let index = 0; index < 50; index += 1) {
     source[`wt-${index}`] = [chatTab(`wt-${index}`, `filler-${index}`)]
   }
-  const rows = () => [...representedOrchestrationWorktrees(stateWith(source)).entries()].sort()
-  const rebuilt = () => [...representedOrchestrationWorktrees(rebuiltStateWith(source)).entries()]
-  rows()
-  const steps: [string, Tab[] | null][][] = [
-    [['wt-c', [chatTab('wt-c', 'c1')]]],
+  const rows = () => {
+    const entries = [...representedOrchestrationWorktrees(stateWith(source)).entries()]
+    const named = entries.map(([pane, worktreeId]) => [tabOf(pane), worktreeId])
+    expect(named.filter(([tab]) => tab.startsWith('slot-filler-'))).toHaveLength(50)
+    return named.filter(([tab]) => !tab.startsWith('slot-filler-')).sort()
+  }
+  expect(rows()).toEqual([
+    ['slot-a1', 'wt-a'],
+    ['slot-a2', 'wt-a'],
+    ['slot-b1', 'wt-b']
+  ])
+  const steps: [[string, Tab[] | null][], string[][]][] = [
     [
-      ['wt-a', [chatTab('wt-a', 'a2')]],
-      ['wt-b', [chatTab('wt-b', 'b1'), chatTab('wt-b', 'a1')]]
+      [['wt-c', [chatTab('wt-c', 'c1')]]],
+      [
+        ['slot-a1', 'wt-a'],
+        ['slot-a2', 'wt-a'],
+        ['slot-b1', 'wt-b'],
+        ['slot-c1', 'wt-c']
+      ]
     ],
-    [['wt-b', null]],
-    [['wt-a', [{ ...chatTab('wt-a', 'a2'), executionHostId: 'runtime:env-1' }]]]
+    [
+      [
+        ['wt-a', [chatTab('wt-a', 'a2')]],
+        ['wt-b', [chatTab('wt-b', 'b1'), chatTab('wt-b', 'a1')]]
+      ],
+      [
+        ['slot-a1', 'wt-b'],
+        ['slot-a2', 'wt-a'],
+        ['slot-b1', 'wt-b'],
+        ['slot-c1', 'wt-c']
+      ]
+    ],
+    [
+      [['wt-b', null]],
+      [
+        ['slot-a2', 'wt-a'],
+        ['slot-c1', 'wt-c']
+      ]
+    ],
+    [
+      [['wt-a', [{ ...chatTab('wt-a', 'a2'), executionHostId: 'runtime:env-1' }]]],
+      [
+        ['slot-a2', 'wt-a'],
+        ['slot-c1', 'wt-c']
+      ]
+    ]
   ]
-  for (const step of steps) {
+  for (const [step, expected] of steps) {
     source = replaceTabBuckets(source, step)
     const before = visibleOrchestrationWorkForTest().visits
-    const incremental = rows()
+    expect(rows()).toEqual(expected)
     expect(visibleOrchestrationWorkForTest().visits - before).toBeLessThanOrEqual(4)
-    expect(incremental).toEqual(rebuilt().sort())
-    rows()
   }
-  expect(rows().filter(([, worktreeId]) => !worktreeId.startsWith('wt-'))).toEqual([])
-  expect(new Set(rows().map(([, worktreeId]) => worktreeId)).has('wt-b')).toBe(false)
 })
 
 it('re-picks the alias winner when tabs sharing one chat swap order', () => {
@@ -104,16 +132,12 @@ it('re-picks the alias winner when tabs sharing one chat swap order', () => {
     'wt-d': [first, second],
     'wt-e': [chatTab('wt-e', 'e1')]
   }
-  const aliases = (state: AppState) => [...rowIdentities(state).aliases.values()]
-  const initial = aliases(stateWith(source))
+  const winners = () => [...rowIdentities(stateWith(source)).aliases.values()].map(tabOf).sort()
+  expect(winners()).toEqual(['slot-e1', 'tab-d1-first'])
   source = replaceTabBuckets(source, [['wt-d', [second, first]]])
-  const swapped = aliases(stateWith(source))
-  expect(swapped).not.toEqual(initial)
-  expect(swapped).toEqual(aliases(rebuiltStateWith(source)))
-  aliases(stateWith(source))
-  const retitled = { ...second, label: 'renamed' }
-  source = replaceTabBuckets(source, [['wt-d', [retitled, first]]])
+  expect(winners()).toEqual(['slot-e1', 'tab-d1-second'])
+  source = replaceTabBuckets(source, [['wt-d', [{ ...second, label: 'renamed' }, first]]])
   const visits = visibleOrchestrationWorkForTest().visits
-  expect(aliases(stateWith(source))).toEqual(swapped)
+  expect(winners()).toEqual(['slot-e1', 'tab-d1-second'])
   expect(visibleOrchestrationWorkForTest().visits - visits).toBeLessThanOrEqual(2)
 })
