@@ -20,14 +20,14 @@ describe('moveOwnControl drain-stale flag', () => {
     })
   })
 
-  it('qualifies the same asks as drain, and only drain-stale qualifies stale moves', () => {
+  it('qualifies own control on the same asks as drain, stale moves on any ask but a region correction', () => {
     const asks = [{ reconnect: true }, { reconnect: true, regionCorrection: { v: 1 } }, {}]
     const own = (moveOwnControl: EdgeControlFlags['moveOwnControl']) =>
       asks.map((ask) => edgeMoveOwnControlAsk({ mode: 'on', moveOwnControl }, ask))
     const stale = (moveOwnControl: EdgeControlFlags['moveOwnControl']) =>
       asks.map((ask) => edgeMoveStaleUnitsAsk({ mode: 'on', moveOwnControl }, ask))
     expect(own('drain-stale')).toEqual([true, false, false])
-    expect(stale('drain-stale')).toEqual([true, false, false])
+    expect(stale('drain-stale')).toEqual([true, false, true])
     expect(stale('drain')).toEqual([false, false, false])
     expect(stale('off')).toEqual([false, false, false])
   })
