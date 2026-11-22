@@ -7,6 +7,7 @@ import {
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import { chat, fakeCodex, launch, startThread } from './codex-shared-server-pool-fixture'
 import { field } from './codex-shared-server-frames'
+import { CODEX_SHARED_SERVER_HUNG_MS } from './codex-shared-server-hang-watch'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -110,17 +111,44 @@ describe('shared Codex app-servers', () => {
     ])
   })
 
-  it('starts a second server at 20 chats and never shares across account homes', async () => {
+  it('serves every chat with one launch on one server and never shares across account homes', async () => {
     const { servers, pool } = fakeCodex()
-    for (let i = 0; i < 21; i += 1) {
-      await pool.open(launch(), chat().handlers, { sessionId: `c${i}`, skillRoots: [] })
-    }
-    expect(servers).toHaveLength(2)
+    const conns = await Promise.all(
+      Array.from({ length: 41 }, (_, i) =>
+        pool.open(launch(), chat().handlers, { sessionId: `c${i}`, skillRoots: [] })
+      )
+    )
+    const threads = await Promise.all(conns.map((conn) => startThread(conn)))
+    expect(servers).toHaveLength(1)
+    expect(new Set(threads).size).toBe(41)
     await pool.open(launch('/home/b/.codex'), chat().handlers, {
       sessionId: 'other-account',
       skillRoots: []
     })
-    expect(servers).toHaveLength(3)
+    expect(servers).toHaveLength(2)
+  })
+
+  it('retires a server that answers nothing for the hang window, and the next chat gets a new one', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const b = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    vi.useFakeTimers()
+    // A busy server that keeps talking is slow, not hung.
+    void connA.request('turn/start', { threadId: threadA, hang: true }).catch(() => {})
+    await vi.advanceTimersByTimeAsync(CODEX_SHARED_SERVER_HUNG_MS - 1)
+    servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    await vi.advanceTimersByTimeAsync(CODEX_SHARED_SERVER_HUNG_MS)
+    expect(a.exits).toEqual([])
+    // A silent one is retired: every chat on it ends as an unexpected exit.
+    void connA.request('turn/start', { threadId: threadA, hang: true }).catch(() => {})
+    await vi.advanceTimersByTimeAsync(CODEX_SHARED_SERVER_HUNG_MS)
+    expect(a.exits.map((exit) => exit.expected)).toEqual([false])
+    expect(b.exits.map((exit) => exit.expected)).toEqual([false])
+    await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    expect(servers).toHaveLength(2)
   })
 
   it('ends every chat on a crashed server as an unexpected exit, and the next chat gets a new server', async () => {

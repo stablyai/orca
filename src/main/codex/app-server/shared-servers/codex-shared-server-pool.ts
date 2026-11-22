@@ -12,11 +12,8 @@ import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import { CodexSharedServerMemoryCeiling } from './codex-shared-server-memory-ceiling'
 
-/** Bounds how many chats one crash or hang can reach. */
-export const CODEX_SHARED_SERVER_MAX_CHATS = 20
 /** A server with no chats waits this long for the next one before it stops. */
 const IDLE_SERVER_STOP_MS = 60_000
-/** Waits between attempts to stop a server whose exit could not be proven. */
 
 export type CodexSharedServerOpenOptions = {
   sessionId: string
@@ -26,7 +23,7 @@ export type CodexSharedServerOpenOptions = {
   codexVersion?: string | null
 }
 
-/** Servers grouped by launch key; a chat joins the first with room, else a new one starts. */
+/** One server per launch key serves every chat on it; a new one starts only once it drains. */
 export class CodexSharedServerPool {
   private readonly servers = new Map<string, CodexSharedServer[]>()
   private readonly idleTimers = new Map<CodexSharedServer, ReturnType<typeof setTimeout>>()
@@ -58,9 +55,9 @@ export class CodexSharedServerPool {
     for (const stale of this.unproven) {
       this.stop(stale)
     }
-    const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
+    const server = this.liveServer(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
-    // Reserved before the server is ready, so concurrent opens respect the cap.
+    // Reserved before the server is ready, so concurrent opens join the same server.
     const lease = new CodexSharedServerLease(server, handlers, options.sessionId, spec.chatEnv)
     server.leases.add(lease)
     try {
@@ -84,10 +81,8 @@ export class CodexSharedServerPool {
     return [...[...this.servers.values()].flat(), ...this.stopping]
   }
 
-  private serverWithRoom(key: string): CodexSharedServer | undefined {
-    return this.servers
-      .get(key)
-      ?.find((server) => !server.draining && server.leases.size < CODEX_SHARED_SERVER_MAX_CHATS)
+  private liveServer(key: string): CodexSharedServer | undefined {
+    return this.servers.get(key)?.find((server) => !server.draining)
   }
 
   private startServer(spec: CodexSharedServer['spec']): CodexSharedServer {

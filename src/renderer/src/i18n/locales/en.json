@@ -9228,7 +9228,7 @@
           },
           "sharedCodexServers": {
             "title": "Shared Codex servers",
-            "description": "Codex chats share a few background processes, up to 20 chats each, instead of starting one per chat.",
+            "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
             "copy": "Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.",
             "toggleLabel": "Toggle shared Codex servers"
           }
@@ -11456,7 +11456,7 @@
             },
             "sharedCodexServers": {
               "title": "Shared Codex servers",
-              "description": "Codex chats share a few background processes, up to 20 chats each, instead of starting one per chat.",
+              "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
               "codex": "codex",
               "memory": "memory"
             }

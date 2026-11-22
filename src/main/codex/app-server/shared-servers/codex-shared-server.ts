@@ -18,6 +18,7 @@ import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
 import { CodexSharedServerTurns } from './codex-shared-server-turns'
 import { stopCodexLeaseWriter } from './codex-shared-server-writer-stop'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
+import { retiringHungCodexServers } from './codex-shared-server-hang-watch'
 
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
 const INITIALIZE_TIMEOUT_MS = 15_000
@@ -48,7 +49,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     connect: typeof spawnCodexAppServerConnection = spawnCodexAppServerConnection,
     private readonly sweep?: CodexSharedServerProcessSweep
   ) {
-    this.ready = this.start(connect)
+    this.ready = this.start(retiringHungCodexServers(connect))
   }
 
   private async start(connect: typeof spawnCodexAppServerConnection): Promise<void> {
