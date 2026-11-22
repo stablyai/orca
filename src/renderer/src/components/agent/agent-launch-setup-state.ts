@@ -54,7 +54,9 @@ export function agentLaunchSetupState(
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
   const catalog = agentLaunchSetupCatalogState(entry, models, currentModel)
-  const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
+  const optionSurface =
+    entry.agent === 'kiro' && entry.surfaces.includes('chat') ? 'chat' : draft.surface
+  const options = agentPickerEntryOptions(entry, currentModel, optionSurface)
   return {
     argumentsView,
     models,

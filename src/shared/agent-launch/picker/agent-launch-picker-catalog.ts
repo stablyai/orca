@@ -70,6 +70,28 @@ export function agentPickerEntryOptions(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
     )
   }
+  if (entry.agent === 'kiro' && surface === 'chat' && live.effortsKnown === false) {
+    return [
+      ...options,
+      {
+        id: 'effort',
+        label: 'Reasoning effort',
+        category: 'thought_level',
+        kind: {
+          type: 'select',
+          choices: [
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'Extra high' },
+            { value: 'max', label: 'Max' }
+          ],
+          defaultValue: ''
+        },
+        apply: {}
+      }
+    ]
+  }
   if (entry.agent === 'claude') {
     options = createClaudeCatalogOptions({
       effortLevelIds: live.efforts.map((choice) => choice.value),

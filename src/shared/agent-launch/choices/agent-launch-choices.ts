@@ -16,7 +16,9 @@ export function terminalAgentChoices(
   agent: TuiAgent,
   choices: AgentDedicatedChoices
 ): AgentDedicatedChoices {
-  if (agent !== 'claude' || choices.options?.effort !== 'ultracode') {
+  const effort = choices.options?.effort
+  const chatOnlyEffort = agent === 'kiro' || (agent === 'claude' && effort === 'ultracode')
+  if (!choices.options || !effort || !chatOnlyEffort) {
     return choices
   }
   const { effort: _chatEffort, ...options } = choices.options

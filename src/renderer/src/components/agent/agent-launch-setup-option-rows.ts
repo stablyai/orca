@@ -106,7 +106,10 @@ export function agentLaunchSetupOptionRows(
     ...(currentModel ? { model: currentModel } : {}),
     ...argumentsView.choices.options
   }).descriptors.find((row) => row.id === 'effort')
-  const sharedEffort = agentPickerUsesComposerModelMenu(entry, draft.surface) ? effort : undefined
+  const kiroLaunchEffort =
+    entry.agent === 'kiro' && options.some((option) => option.id === 'effort')
+  const sharedEffort =
+    !kiroLaunchEffort && agentPickerUsesComposerModelMenu(entry, draft.surface) ? effort : undefined
   const rows: SessionOptionDescriptor[] = options
     .filter((option) => !sharedEffort || option.id !== 'effort')
     .map((option) => {

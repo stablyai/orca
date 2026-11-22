@@ -91,6 +91,18 @@ export async function applyAcpMessageOptions(
       return false
     }
   }
+  if (session.spec.agent === 'kiro' && options.effort !== undefined) {
+    const current = session.options.reported()
+    const modelMismatch = options.model !== undefined && current.model !== options.model
+    if (modelMismatch || current.effort !== options.effort) {
+      session.options.invalidateInput(modelMismatch ? 'model' : 'effort')
+      const detail = `Kiro could not apply reasoning effort "${options.effort}" to the selected model. Choose another model or effort and retry.`
+      throw withProviderDiagnostic(
+        new AgentSessionOptionRejectedError(detail),
+        providerDiagnostic(detail, 'person')
+      )
+    }
+  }
   return true
 }
 
