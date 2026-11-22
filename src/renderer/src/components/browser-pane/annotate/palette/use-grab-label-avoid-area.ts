@@ -191,7 +191,9 @@ export function useGrabLabelAvoidArea({
     }
     report()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
-    if (frame instanceof Element) observer?.observe(frame)
+    if (frame instanceof Element) {
+      observer?.observe(frame)
+    }
     observer?.observe(palette)
     return () => {
       disposed = true

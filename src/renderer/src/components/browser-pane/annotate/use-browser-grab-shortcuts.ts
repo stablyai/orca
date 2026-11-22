@@ -127,6 +127,16 @@ export function useBrowserGrabShortcuts({
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return
       }
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        e.shiftKey ||
+        e.getModifierState?.('AltGraph') ||
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId)
+      ) {
+        return
+      }
       const key = e.key.toLowerCase()
       if (key !== 'c' && key !== 's') {
         return
@@ -137,7 +147,14 @@ export function useBrowserGrabShortcuts({
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [enabled, grabIsInteractive, handleGrabActionShortcut, palette])
+  }, [
+    enabled,
+    grabIsInteractive,
+    handleGrabActionShortcut,
+    palette,
+    chromeShortcutScope,
+    workspaceId
+  ])
 
   useEffect(() => {
     if (!enabled || !grabIsInteractive || palette) {
@@ -147,7 +164,9 @@ export function useBrowserGrabShortcuts({
       if (browserPageId !== browserTabId) {
         return
       }
-      if (isBrowserGuestToolKey(key) && isBrowserGrabActionKey(key)) handleGrabActionShortcut(key)
+      if (isBrowserGuestToolKey(key) && isBrowserGrabActionKey(key)) {
+        handleGrabActionShortcut(key)
+      }
     })
   }, [browserTabId, enabled, grabIsInteractive, handleGrabActionShortcut, transport, palette])
   useBrowserAnnotateKeys({

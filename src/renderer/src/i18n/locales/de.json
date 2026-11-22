@@ -17429,7 +17429,9 @@
             "devToolsDockRight": "Rechts andocken",
             "devToolsDockBottom": "Unten andocken",
             "devToolsUndock": "In separatem Fenster öffnen",
-            "devToolsClose": "DevTools schließen"
+            "devToolsClose": "DevTools schließen",
+            "11c5084aa2": "Anmerkungen entfernen",
+            "734e4343ec": "Browser-Anmerkungen entfernen"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Abbrechen",

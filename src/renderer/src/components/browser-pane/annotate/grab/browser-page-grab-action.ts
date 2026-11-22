@@ -52,7 +52,9 @@ export function runBrowserGrabActionShortcut({
   const operationToken = grab.getOperationToken()
   const toolTargetId = toolTargetIdRef.current
   const copyFromPayload = (payload: BrowserGrabPayload): void => {
-    if (!grab.isCurrentOperationToken(operationToken)) return
+    if (!grab.isCurrentOperationToken(operationToken)) {
+      return
+    }
     if (key === 'c') {
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)

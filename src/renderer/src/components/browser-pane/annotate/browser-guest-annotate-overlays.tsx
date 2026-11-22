@@ -1,3 +1,4 @@
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useHeldGrabAction } from './palette/use-held-grab-action'
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -150,22 +151,32 @@ export function BrowserGuestAnnotateOverlays({
     },
     [pendingDraftKey, setDraft]
   )
-  const { payload: heldPayload, retire: retireHeldPick } = useHeldGrabPick({
+  const { payload: paletteHeldPayload, retire: retireHeldPick } = useHeldGrabPick({
     grab,
     grabIntent,
-    activeTool: toolSwitch
-      ? activeTool
-      : grab.state === 'confirming' && grabIntent === 'copy'
-        ? 'copy'
-        : null,
+    activeTool,
     owner: toolSwitch?.drawOwner ?? notesPageId,
     pageId: notesPageId,
     currentUrl
   })
+  const heldPayload = toolSwitch
+    ? paletteHeldPayload
+    : grab.state === 'confirming' && grabIntent === 'copy'
+      ? grab.payload
+      : null
+  const retirePick = useCallback(
+    (payload: BrowserGrabPayload) => {
+      retireHeldPick(payload)
+      if (!toolSwitch && grab.payload === payload) {
+        grab.cancel()
+      }
+    },
+    [grab, retireHeldPick, toolSwitch]
+  )
   const runPaletteGrabAction = useHeldGrabAction(
     heldPayload,
     notesPageId,
-    retireHeldPick,
+    retirePick,
     grab.transport
   )
   // Leaving the mode with the Send menu open must not leave its agent-target mode behind.

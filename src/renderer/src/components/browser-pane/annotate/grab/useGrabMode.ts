@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   BrowserGrabPayload,
-  BrowserGrabRejectReason,
   BrowserGrabResult,
   BrowserGrabScreenshot,
   BrowserSetGrabModeResult
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { getGrabEnableError } from './grab-enable-error'
 import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
@@ -42,31 +41,6 @@ export type GrabModeHook = {
 let opIdCounter = 0
 function nextOpId(): string {
   return `grab-${++opIdCounter}-${Date.now()}`
-}
-
-function getGrabEnableError(reason: BrowserGrabRejectReason): string {
-  switch (reason) {
-    case 'not-ready':
-      return translate(
-        'auto.components.browser-pane.grab.errorNotReady',
-        "This page isn't ready for element selection yet."
-      )
-    case 'not-authorized':
-      return translate(
-        'auto.components.browser-pane.grab.errorNotAuthorized',
-        'Browser access was denied.'
-      )
-    case 'already-active':
-      return translate(
-        'auto.components.browser-pane.grab.errorAlreadyActive',
-        'Element selection is already active.'
-      )
-    case 'injection-failed':
-      return translate(
-        'auto.components.browser-pane.grab.errorInjectionFailed',
-        'Could not start element selection on this page.'
-      )
-  }
 }
 
 export function useGrabMode(

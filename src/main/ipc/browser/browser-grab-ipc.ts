@@ -83,11 +83,12 @@ export function registerBrowserGrabHandlers(): void {
           owner: `renderer:${event.sender.id}`,
           destination: event.sender,
           onPolicyRetired: () => {
-            if (!event.sender.isDestroyed())
+            if (!event.sender.isDestroyed()) {
               event.sender.send('browser:grabPolicyRetired', {
                 browserPageId: args.browserPageId,
                 requestId: args.requestId
               })
+            }
           }
         }
       )

@@ -17979,7 +17979,9 @@
             "devToolsDockRight": "오른쪽에 도킹",
             "devToolsDockBottom": "아래쪽에 도킹",
             "devToolsUndock": "별도 창에서 열기",
-            "devToolsClose": "DevTools 닫기"
+            "devToolsClose": "DevTools 닫기",
+            "11c5084aa2": "주석 지우기",
+            "734e4343ec": "브라우저 주석 지우기"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",

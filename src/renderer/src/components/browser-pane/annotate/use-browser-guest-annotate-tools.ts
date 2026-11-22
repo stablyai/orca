@@ -218,7 +218,7 @@ export function useBrowserGuestAnnotateTools({
 
   const hasShortcuts = shortcuts !== undefined
   useBrowserGrabShortcuts({
-    enabled: hasShortcuts && shortcuts.bind !== false && toolTargetId !== '',
+    enabled: isActive && hasShortcuts && shortcuts.bind !== false && toolTargetId !== '',
     transport,
     browserTabId: toolTargetId,
     workspaceId: shortcuts?.workspaceId ?? '',

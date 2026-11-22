@@ -17408,7 +17408,9 @@
             "756bfc25c9": "Ouvert",
             "09a9489aa5": "Afficher",
             "2a4c4b8e1f": "Copier",
-            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier."
+            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier.",
+            "11c5084aa2": "Effacer les annotations",
+            "734e4343ec": "Effacer les annotations du navigateur"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Annuler",

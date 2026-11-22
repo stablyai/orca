@@ -17130,7 +17130,9 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
+            "11c5084aa2": "Borrar anotaciones",
+            "734e4343ec": "Borrar anotaciones del navegador"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",

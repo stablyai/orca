@@ -17916,7 +17916,9 @@
             "copyImage": "Copiar imagem",
             "pasteAsPlainText": "Colar como texto simples",
             "openImageInNewTab": "Abrir imagem em nova aba",
-            "saveImage": "Salvar imagem"
+            "saveImage": "Salvar imagem",
+            "11c5084aa2": "Limpar anotações",
+            "734e4343ec": "Limpar anotações do navegador"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",

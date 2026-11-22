@@ -18938,7 +18938,9 @@
             "499b31b84e": "Copy All",
             "e852e20cea": "Copied — press S to screenshot, or select another element",
             "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
-            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback."
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
+            "11c5084aa2": "Clear annotations",
+            "734e4343ec": "Clear browser annotations"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

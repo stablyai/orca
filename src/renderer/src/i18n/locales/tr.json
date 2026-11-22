@@ -17555,7 +17555,9 @@
             "devToolsDockRight": "Sağa sabitle",
             "devToolsDockBottom": "Alta sabitle",
             "devToolsUndock": "Ayrı pencerede aç",
-            "devToolsClose": "DevTools'u kapat"
+            "devToolsClose": "DevTools'u kapat",
+            "11c5084aa2": "Ek açıklamaları temizle",
+            "734e4343ec": "Tarayıcı ek açıklamalarını temizle"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "İptal",

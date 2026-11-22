@@ -73,8 +73,9 @@ export class RuntimeBrowserGrab {
     if (!guest) {
       return { opId: params.opId, kind: 'error', reason: 'Guest not ready' }
     }
-    if (!isCurrentBrowserGrabRequest(browserPageId, guest, params.requestId, 'runtime'))
+    if (!isCurrentBrowserGrabRequest(browserPageId, guest, params.requestId, 'runtime')) {
       return { opId: params.opId, kind: 'cancelled', reason: 'navigation' }
+    }
     // A viewer that disconnects or gives up must not leave the page armed until the grab times out.
     const abandon = (): void => {
       cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
