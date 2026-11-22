@@ -14,8 +14,9 @@ import {
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 export type ChatModelWaitJournal = {
-  /** Calls `onItems` with the ids each commit changed; returns the unsubscribe. */
-  observe: (sessionId: string, onItems: (itemIds: readonly string[]) => void) => () => void
+  /** Calls `onItems` with the ids each commit changed, or null when the journal was replaced
+   *  (nothing seen before still holds); returns the unsubscribe. */
+  observe: (sessionId: string, onItems: (itemIds: readonly string[] | null) => void) => () => void
   item: (sessionId: string, itemId: string) => Promise<AgentJournalRenderItem | null>
 }
 
@@ -27,6 +28,10 @@ const hostJournal: ChatModelWaitJournal = {
     }
     return host.observeConversationPublications(sessionId, {
       next: (publication) => {
+        if (publication.kind === 'reset') {
+          onItems(null)
+          return
+        }
         const ids = publication.commit?.items.flatMap((item) => (item.deleted ? [] : [item.itemId]))
         if (ids?.length) {
           onItems(ids)
@@ -43,6 +48,8 @@ const hostJournal: ChatModelWaitJournal = {
 
 type Watch = {
   turnKey: string
+  /** The provider turn whose rows this watch last saw open. */
+  turnId?: string
   /** Host clock at the last journal change that was not a retry row. */
   activityAt: number
   /** Root tool calls running and prompts waiting on a person: the model is not what is awaited. */
@@ -73,9 +80,13 @@ export class ChatWorkerModelWait {
     private readonly now: () => number = Date.now
   ) {}
 
-  /** A chat's working edge starts its watch, if a worker Dispatch is open on it; any other edge ends it. */
-  observe(sessionId: string, working: boolean): void {
-    if (!working) {
+  /** A chat's working edge starts its watch, if a worker Dispatch is open on it; an idle edge ends
+   *  it. An attention edge (a prompt waiting on a person) keeps it: the prompt row pauses it. */
+  observe(sessionId: string, status: 'working' | 'attention' | 'idle' | null): void {
+    if (status === 'attention') {
+      return
+    }
+    if (status !== 'working') {
       this.end(sessionId)
       return
     }
@@ -115,7 +126,13 @@ export class ChatWorkerModelWait {
     }
   }
 
-  private changed(sessionId: string, watch: Watch, itemIds: readonly string[]): void {
+  private changed(sessionId: string, watch: Watch, itemIds: readonly string[] | null): void {
+    if (!itemIds) {
+      watch.paused.clear()
+      watch.plain.clear()
+      watch.activityAt = this.now()
+      return
+    }
     for (const itemId of itemIds) {
       if (watch.plain.has(itemId)) {
         watch.activityAt = this.now()
@@ -149,6 +166,15 @@ export class ChatWorkerModelWait {
       return
     }
     watch.activityAt = this.now()
+    // A queued follow-up runs as a new provider turn under the same working status.
+    if (body.kind === 'turn' && body.state === 'running' && body.turnId !== watch.turnId) {
+      if (watch.turnId !== undefined) {
+        watch.turnKey = `${sessionId}:${watch.activityAt}`
+        watch.retried = false
+        watch.lastRetry = undefined
+      }
+      watch.turnId = body.turnId
+    }
     const pauses =
       (body.kind === 'tool-call' && isRootAgentJournalItem(item) && body.state === 'running') ||
       ((body.kind === 'approval' || body.kind === 'question') &&

@@ -27,7 +27,7 @@ function rig() {
   const task = db.createTask({ spec: 'work', runId: run.id })
   createRootDispatch(db, task.id, formatOrcaSessionAddress(SESSION))
   const items = new Map<string, AgentJournalRenderItem>()
-  let onItems: ((ids: readonly string[]) => void) | null = null
+  let onItems: ((ids: readonly string[] | null) => void) | null = null
   const journal: ChatModelWaitJournal = {
     observe: (_sessionId, listener) => {
       onItems = listener
@@ -85,7 +85,7 @@ describe('a chat worker waiting on its model', () => {
 
   it('tells the coordinator once when a request gets no reply for 10 minutes', async () => {
     const { db, watch, mail } = rig()
-    watch.observe(SESSION, true)
+    watch.observe(SESSION, 'working')
     await vi.advanceTimersByTimeAsync(9 * MINUTE)
     expect(mail()).toEqual([])
     await vi.advanceTimersByTimeAsync(1 * MINUTE)
@@ -103,7 +103,7 @@ describe('a chat worker waiting on its model', () => {
 
   it('says nothing while a reply streams or a tool runs', async () => {
     const { db, watch, write, mail } = rig()
-    watch.observe(SESSION, true)
+    watch.observe(SESSION, 'working')
     for (let minute = 0; minute < 12; minute++) {
       await write('reply-1', reply(`line ${minute}`))
       await vi.advanceTimersByTimeAsync(MINUTE)
@@ -117,7 +117,7 @@ describe('a chat worker waiting on its model', () => {
 
   it('restarts the stopwatch when the tool ends', async () => {
     const { db, watch, write, mail } = rig()
-    watch.observe(SESSION, true)
+    watch.observe(SESSION, 'working')
     await write('tool-1', tool('running'))
     await vi.advanceTimersByTimeAsync(15 * MINUTE)
     await write('tool-1', tool('completed'))
@@ -131,7 +131,7 @@ describe('a chat worker waiting on its model', () => {
 
   it("reports the first retry at once, and a retry still going at 10 minutes with the retry's words", async () => {
     const { db, watch, write, mail } = rig()
-    watch.observe(SESSION, true)
+    watch.observe(SESSION, 'working')
     await write('retry-1', retry(1))
     for (let attempt = 2; attempt <= 6; attempt++) {
       await vi.advanceTimersByTimeAsync(2 * MINUTE)
@@ -153,11 +153,24 @@ describe('a chat worker waiting on its model', () => {
     db.close()
   })
 
+  it('reports one retry per turn, though a permission prompt came between', async () => {
+    const { db, watch, write, mail } = rig()
+    watch.observe(SESSION, 'working')
+    await write('retry-1', retry(1))
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    watch.observe(SESSION, 'attention')
+    watch.observe(SESSION, 'working')
+    await write('retry-2', retry(1))
+    expect(mail().map((message) => message.subject)).toEqual(['Worker is retrying the model API'])
+    watch.dispose()
+    db.close()
+  })
+
   it('stops at the turn end', async () => {
     const { db, watch, mail } = rig()
-    watch.observe(SESSION, true)
+    watch.observe(SESSION, 'working')
     await vi.advanceTimersByTimeAsync(5 * MINUTE)
-    watch.observe(SESSION, false)
+    watch.observe(SESSION, 'idle')
     await vi.advanceTimersByTimeAsync(30 * MINUTE)
     expect(mail()).toEqual([])
     db.close()

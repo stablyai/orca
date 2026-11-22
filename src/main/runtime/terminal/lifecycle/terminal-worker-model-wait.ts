@@ -29,17 +29,19 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
       looks.push(this.readLiveTerminalScreenLines(ptyId))
     }
     const [first, middle, after] = looks
-    if (grew(first, middle) && grew(middle, after)) {
+    // An unreadable screen (a pending hydration) proves nothing either way: look again next time.
+    if (!first || !middle || !after || (grew(first, middle) && grew(middle, after))) {
       return true
     }
-    if (wait.toolMaybeOpen && after && claudeToolRunsOnScreen(after)) {
+    // A hook during the look (a tool call that just arrived) restarted the stopwatch.
+    if ((wait.toolMaybeOpen && claudeToolRunsOnScreen(after)) || !wait.stillWaiting()) {
       return true
     }
     // Re-read: the Dispatch may have settled while the screen was read.
     const db = this._orchestrationDb
     const target = this.modelWaitTarget(handle, paneKey)
     if (db && target) {
-      const lastSeen = after ? claudeModelWaitLastSeen(after) : undefined
+      const lastSeen = claudeModelWaitLastSeen(after)
       reportWorkerModelWait(
         db,
         target,
@@ -71,6 +73,6 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
   }
 }
 
-function grew(before: readonly string[] | null, after: readonly string[] | null): boolean {
-  return before !== null && after !== null && claudeReplyScreen(before) !== claudeReplyScreen(after)
+function grew(before: readonly string[], after: readonly string[]): boolean {
+  return claudeReplyScreen(before) !== claudeReplyScreen(after)
 }

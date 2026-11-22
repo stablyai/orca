@@ -6,6 +6,8 @@
 const SPINNER_LINE_RE = /^\s*[·✢✳✶✻✽*✦]\s+\S/u
 const FOOTER_RE = /esc to interrupt|shift\+tab to cycle/i
 const TOOL_RUNNING_RE = /⎿\s+Running…/u
+// A retry's countdown, should a Claude draw it below its spinner: it ticks while nothing arrives.
+const RETRY_COUNTDOWN_RE = /retrying in \d+|attempt \d+\/\d+/i
 // Claude's own words for a request that has not answered: a stalled stream, or a retried error.
 const MODEL_STATUS_RE = /Waiting for API response|retrying|API error/i
 
@@ -21,7 +23,9 @@ export function claudeReplyScreen(lines: readonly string[]): string {
         const tokens = RECEIVED_TOKENS_RE.exec(line)?.[1]
         return tokens ? [`↓ ${tokens}`] : []
       }
-      return FOOTER_RE.test(line) || TOOL_RUNNING_RE.test(line) ? [] : [line.trimEnd()]
+      return FOOTER_RE.test(line) || TOOL_RUNNING_RE.test(line) || RETRY_COUNTDOWN_RE.test(line)
+        ? []
+        : [line.trimEnd()]
     })
     .join('\n')
 }

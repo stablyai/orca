@@ -86,6 +86,24 @@ describe("terminal Claude's model-time stopwatch", () => {
     expect(checks).toEqual([{ toolMaybeOpen: true }])
   })
 
+  it("keeps a nested Claude, run by the lead's open tool, from ending the lead's tool time", async () => {
+    await prompt()
+    await tool('PreToolUse', 'tool-1')
+    await hook({ hook_event_name: 'PostToolBatch' })
+    await tool('PreToolUse', 'tool-2')
+    // `claude -p` inside the lead's Bash shares the pane key, not the session.
+    await hook({
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'nested',
+      session_id: 'session-nested'
+    })
+    const nested = { tool_name: 'Read', tool_use_id: 'nested-1', tool_input: {} }
+    await hook({ hook_event_name: 'PreToolUse', session_id: 'session-nested', ...nested })
+    await hook({ hook_event_name: 'PostToolUse', session_id: 'session-nested', ...nested })
+    await vi.advanceTimersByTimeAsync(25 * MINUTE)
+    expect(checks).toEqual([])
+  })
+
   it('stops at the turn end', async () => {
     await prompt()
     await hook({ hook_event_name: 'Stop' })

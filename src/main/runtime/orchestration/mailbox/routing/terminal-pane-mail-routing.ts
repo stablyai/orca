@@ -203,7 +203,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     if (!delivery.statusChanged(summary.sessionId, summary.status)) {
       return
     }
-    this.chatWorkerModelWait.observe(summary.sessionId, summary.status === 'working')
+    try {
+      this.chatWorkerModelWait.observe(summary.sessionId, summary.status)
+    } catch (error) {
+      console.warn('[orchestration] chat model-wait watch failed', summary.sessionId, error)
+    }
     if (summary.status === 'attention') {
       return
     }

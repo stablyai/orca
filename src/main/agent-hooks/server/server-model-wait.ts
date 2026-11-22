@@ -12,11 +12,20 @@ export type TerminalModelWait = {
   /** A lead tool looks open, but this Claude never sent PostToolBatch, which closes tools whose
    *  PostToolUse never came (older Claude, or one long run): only the screen can say it still runs. */
   toolMaybeOpen: boolean
+  /** False once a hook moved the stopwatch, or the turn ended, after this look began. */
+  stillWaiting: () => boolean
 }
 
 export const TERMINAL_MODEL_WAIT_MS = 10 * 60_000
 
-type PaneModelWait = { tools: Set<string>; batches: boolean; since: number; turnKey: string }
+type PaneModelWait = {
+  tools: Set<string>
+  batches: boolean
+  since: number
+  turnKey: string
+  /** The lead's Claude session: a nested `claude -p` in its Bash tool shares the pane key. */
+  session?: string
+}
 
 const TURN_ENDS = new Set(['Stop', 'StopFailure', 'SessionEnd'])
 const TOOL_ENDS = new Set(['PostToolUse', 'PostToolUseFailure'])
@@ -43,11 +52,16 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
   private observeModelWaitHook(event: AgentHookEventPayload, name: string): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey)
     const lead = event.toolAgentId === undefined
+    // A nested Claude run by the lead's open tool is that tool's work, not the lead's turn.
+    if (this.fromNestedSession(paneKey, event)) {
+      return
+    }
     if (lead && TURN_ENDS.has(name)) {
       this.modelWaits.delete(paneKey)
       this.modelWaitTimers.cancel(paneKey)
       return
     }
+    const session = event.providerSession?.id
     const now = Date.now()
     const wait = this.modelWaits.get(paneKey) ?? {
       tools: new Set<string>(),
@@ -57,6 +71,7 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     }
     this.modelWaits.set(paneKey, wait)
     wait.since = now
+    wait.session = session ?? wait.session
     if (lead && name === 'UserPromptSubmit') {
       wait.tools.clear()
       wait.turnKey = `${paneKey}:${now}`
@@ -92,28 +107,39 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
       rearm(remaining)
       return
     }
-    const state = this.state.lastStatusByPaneKey.get(paneKey)?.payload.state
-    // Waiting on a person ends with a hook, which arms the timer again; any other rest ends the turn.
-    if (state !== 'working') {
-      if (state !== 'waiting') {
-        this.modelWaits.delete(paneKey)
-      }
+    // Waiting on a person, or at rest: the next hook starts the stopwatch again.
+    if (this.state.lastStatusByPaneKey.get(paneKey)?.payload.state !== 'working') {
+      this.modelWaits.delete(paneKey)
       return
     }
     if (wait.tools.size > 0 && wait.batches) {
       rearm(TERMINAL_MODEL_WAIT_MS)
       return
     }
+    const { since } = wait
     const check = this.terminalPaneLifecycle?.modelWaitElapsed
     const keep = check
       ? await check(paneKey, {
-          since: wait.since,
+          since,
           turnKey: wait.turnKey,
-          toolMaybeOpen: wait.tools.size > 0
+          toolMaybeOpen: wait.tools.size > 0,
+          stillWaiting: () => this.modelWaits.get(paneKey) === wait && wait.since === since
         }).catch(() => false)
       : false
-    if (keep && this.modelWaits.get(paneKey) === wait) {
-      rearm(TERMINAL_MODEL_WAIT_MS)
+    if (this.modelWaits.get(paneKey) !== wait) {
+      return
     }
+    // No worker on the pane: nothing to tell anyone until its next hook.
+    if (keep) {
+      rearm(TERMINAL_MODEL_WAIT_MS)
+    } else {
+      this.modelWaits.delete(paneKey)
+    }
+  }
+
+  private fromNestedSession(paneKey: string, event: AgentHookEventPayload): boolean {
+    const known = this.modelWaits.get(paneKey)
+    const session = event.providerSession?.id
+    return Boolean(known?.session && session && session !== known.session && known.tools.size > 0)
   }
 }
