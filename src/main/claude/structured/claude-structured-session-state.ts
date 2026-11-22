@@ -116,6 +116,8 @@ export type ClaudeDispatchWaiter = {
   commandLifecycle?: 'queued' | 'started'
   /** How Claude's `cancelled` frame settles a send Orca is withdrawing because it never started. */
   withdrawnAs?: SubmissionRejectionKind
+  /** Claude's own `cancelled` frame settled it: proof of withdrawal even if the control answer is lost. */
+  cancelledByClaude?: true
   /** Sent as Claude's rename command; only its started window carries the user's new title. */
   renamesSession?: true
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */

@@ -109,7 +109,7 @@ export class ClaudeUnstartedSendWatch {
       const withdrawn = await session.connection
         .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
         .catch(() => false)
-      if (withdrawn) {
+      if (withdrawn || waiter.cancelledByClaude) {
         this.withdrawn.add(waiter.replayContentKey)
       } else {
         delete waiter.withdrawnAs

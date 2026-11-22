@@ -53,6 +53,9 @@ export function observeClaudeCommandLifecycle(
       onSettledLate
     )
   } else if (isTerminalState(state)) {
+    if (state === 'cancelled') {
+      waiter.cancelledByClaude = true
+    }
     rejectClaudeDispatchWaiters(
       session,
       [waiter.sentUuid],

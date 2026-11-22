@@ -20,7 +20,7 @@ afterEach(() => {
 
 async function idleChat(
   cancelConfirms: boolean,
-  duringCancel?: (connection: FakeConnection) => void
+  duringCancel?: (connection: FakeConnection, uuid: string) => void
 ) {
   const settlements: Settlement[] = []
   let connection!: FakeConnection
@@ -29,7 +29,7 @@ async function idleChat(
     routes: {
       // As captured from 2.1.280: Claude reports the withdrawn send cancelled before it answers.
       cancel_async_message: (params) => {
-        duringCancel?.(connection)
+        duringCancel?.(connection, String(params?.uuid))
         if (cancelConfirms) {
           lifecycle(connection, String(params?.uuid), 'cancelled')
         }
@@ -179,4 +179,22 @@ it('keeps an unconfirmed send held when Claude starts working during the withdra
   expect(withdrawals(connection)).toHaveLength(1)
   expect(settlements).toEqual([])
   expect(adapter.heldSends('session-1')).toEqual(new Set(['mail-1']))
+})
+
+it('fails a repeat stall even when Claude cancels the send but its withdrawal answer is lost', async () => {
+  const { adapter, connection, settlements } = await idleChat(false, (live, uuid) =>
+    lifecycle(live, uuid, 'cancelled')
+  )
+  await send(adapter, connection, 'mail-1')
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+  await send(adapter, connection, 'mail-1-again')
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+
+  expect(settlements.at(-1)).toEqual(
+    expect.objectContaining({
+      clientMessageId: 'mail-1-again',
+      state: 'rejected',
+      rejection: expect.objectContaining({ kind: 'providerRejected' })
+    })
+  )
 })
