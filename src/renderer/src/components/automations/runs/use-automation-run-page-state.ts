@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { worktreeCatalogConfirmsAbsence } from '@/store/slices/worktrees/listing/worktree-catalog-absence'
 import {
   getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
@@ -25,7 +27,6 @@ export function useAutomationRunPageState({
     | 'pendingAutomationRunNavigation'
     | 'setPendingAutomationRunNavigation'
     | 'runtimeEnvironments'
-    | 'startupWorktreeRefreshCompleted'
     | 'selectedId'
     | 'setSelectedId'
   >
@@ -57,7 +58,6 @@ export function useAutomationRunPageState({
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
     runtimeEnvironments,
-    startupWorktreeRefreshCompleted,
     selectedId,
     setSelectedId
   } = store
@@ -256,6 +256,17 @@ export function useAutomationRunPageState({
     ? list.runTargetFor(selectedAutomationRunPage)
     : null
   const viewState = selectedRunTarget?.viewState
+  const workspaceId = selectedAutomationRunPage?.workspaceId
+  const catalogHostId = selectedRunTarget?.workspaceCatalogHostId
+  const workspaceRemoved = useAppStore((state) =>
+    Boolean(
+      workspaceId &&
+      catalogHostId &&
+      !selectedRunTarget?.worktree &&
+      !viewState?.canOpen &&
+      worktreeCatalogConfirmsAbsence(state, workspaceId, catalogHostId)
+    )
+  )
   const selectedAutomationRunPageWorkspaceActionLabel = viewState?.canOpen
     ? viewState.actionLabel
     : null
@@ -265,7 +276,7 @@ export function useAutomationRunPageState({
           run: selectedAutomationRunPage,
           worktree: selectedRunTarget?.worktree ?? null,
           actionLabel: selectedAutomationRunPageWorkspaceActionLabel,
-          catalogHydrated: startupWorktreeRefreshCompleted
+          workspaceRemoved
         },
         t
       )

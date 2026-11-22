@@ -1,7 +1,15 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
+import { mergeFetchedWorktrees } from '@/store/slices/worktrees/listing/fetched-worktree-merge'
+import { worktreeCatalogConfirmsAbsence } from '@/store/slices/worktrees/listing/worktree-catalog-absence'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import { resolveAutomationRunTarget } from './automation-run-open-target'
 import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
@@ -49,16 +57,24 @@ const noop = (): void => {}
 
 const LONG_NAME = 'Quartz Lab - Watch (nightly flaky-test sweep on main)'
 const PAIRED_ENVIRONMENT_ID = 'sample-runtime'
+const PAIRED_HOST_ID = toRuntimeExecutionHostId(PAIRED_ENVIRONMENT_ID)
 const PAIRED_AUTHORITY = {
   kind: 'runtime',
   environmentId: PAIRED_ENVIRONMENT_ID,
   pairingRevision: 1
 } as const
+const sampleRepo = {
+  id: 'sample-repo',
+  path: '/sample',
+  displayName: 'Sample repo',
+  badgeColor: '',
+  addedAt: 1
+}
 
 type Scenario = {
   run?: Partial<AutomationRun>
   hostLabel?: string
-  workspaceCatalog?: 'removed' | 'loading'
+  workspaceMissing?: boolean
   paired?: boolean
   isRerunPending?: boolean
 }
@@ -73,7 +89,7 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
   const listed = runs.find((candidate) => candidate.id === runId) ?? runs[0]
   const run = { ...listed, ...scenario.run }
   const worktree =
-    run.workspaceDisplayName && !scenario.workspaceCatalog
+    run.workspaceDisplayName && !scenario.workspaceMissing
       ? { displayName: run.workspaceDisplayName }
       : null
   const viewState = scenario.paired
@@ -84,6 +100,14 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
         terminalTargetExists: false
       })
   const actionLabel = viewState.canOpen ? viewState.actionLabel : null
+  const workspaceRemoved = Boolean(
+    run.workspaceId &&
+    worktreeCatalogConfirmsAbsence(
+      useAppStore.getState(),
+      run.workspaceId,
+      scenario.paired ? PAIRED_HOST_ID : 'local'
+    )
+  )
   return (
     <div className="bg-background text-foreground">
       <AutomationRunDetailsPage
@@ -98,7 +122,7 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
           run,
           worktree,
           actionLabel,
-          catalogHydrated: scenario.workspaceCatalog !== 'loading'
+          workspaceRemoved
         })}
         workspaceActionLabel={actionLabel}
         canRerun={canRerunAutomationRun({ automation, run })}
@@ -153,8 +177,8 @@ const scenarios = {
     }
   },
   removed: {
-    run: { workspaceId: 'ws-3', workspaceDisplayName: 'Docs cleanup' },
-    workspaceCatalog: 'removed'
+    run: { workspaceId: 'sample-repo::/sample/docs', workspaceDisplayName: 'Docs cleanup' },
+    workspaceMissing: true
   },
   rerunAvailable: { run: failedRun },
   rerunPending: {
@@ -197,10 +221,14 @@ export const notLaunchedNarrow = defineFixture({
 })
 export const removedWide = defineFixture({
   width: 1280,
+  store: { repos: [sampleRepo] },
+  setup: () => applyWorkspaceCatalog('local', true),
   render: () => renderRunPage('run-23', scenarios.removed)
 })
 export const removedNarrow = defineFixture({
   width: 400,
+  store: { repos: [sampleRepo] },
+  setup: () => applyWorkspaceCatalog('local', true),
   render: () => renderRunPage('run-23', scenarios.removed)
 })
 export const rerunAvailableWide = defineFixture({
@@ -227,11 +255,15 @@ const pairedRun: Scenario = {
     terminalPtyId: 'sample-pty'
   },
   hostLabel: 'preview-box.example.net',
-  workspaceCatalog: 'loading',
+  workspaceMissing: true,
   paired: true
 }
 
 const pairedStore = {
+  startupWorktreeRefreshCompleted: true,
+  repos: [{ ...sampleRepo, executionHostId: PAIRED_HOST_ID }],
+  fetchRuntimeEnvironmentRepos: async () => [],
+  fetchAllWorktrees: async () => [],
   runtimeEnvironments: [
     {
       id: PAIRED_ENVIRONMENT_ID,
@@ -253,6 +285,37 @@ function setupPairedWorkspace(): void {
   }
 }
 
+function applyWorkspaceCatalog(hostId: ExecutionHostId, authoritative: boolean): void {
+  const repoId = sampleRepo.id
+  const runtimeAuthority =
+    hostId === PAIRED_HOST_ID
+      ? {
+          environmentId: PAIRED_ENVIRONMENT_ID,
+          connectionGeneration: getEnvironmentSshStateGeneration(PAIRED_ENVIRONMENT_ID),
+          runtimeConnectionGeneration:
+            getRuntimeEnvironmentConnectionGeneration(PAIRED_ENVIRONMENT_ID)
+        }
+      : undefined
+  mergeFetchedWorktrees(useAppStore.setState, useAppStore.getState, {
+    repoId,
+    hostId,
+    ownerWasMissingAtStart: false,
+    requestStartedWorktrees: undefined,
+    purgeRemovedWorktrees: false,
+    refresh: {
+      status: 'admitted',
+      executionHostId: hostId,
+      runtimeAuthority,
+      result: {
+        repoId,
+        authoritative,
+        source: authoritative ? 'git' : 'metadata-fallback',
+        worktrees: []
+      }
+    }
+  })
+}
+
 export const pairedWorkspaceName = defineFixture({
   width: 400,
   store: pairedStore,
@@ -269,6 +332,31 @@ export const pairedWorkspaceUnnamed = defineFixture({
   store: pairedStore,
   setup: setupPairedWorkspace,
   render: () => renderRunPage('run-23', pairedRun)
+})
+
+const pairedRunWithoutPty = {
+  ...pairedRun,
+  run: { ...pairedRun.run, workspaceDisplayName: LONG_NAME, terminalPtyId: null }
+}
+
+export const pairedCatalogLoading = defineFixture({
+  width: 400,
+  store: pairedStore,
+  render: () => renderRunPage('run-23', pairedRunWithoutPty)
+})
+
+export const pairedCatalogUnavailable = defineFixture({
+  width: 400,
+  store: pairedStore,
+  setup: () => applyWorkspaceCatalog(PAIRED_HOST_ID, false),
+  render: () => renderRunPage('run-23', pairedRunWithoutPty)
+})
+
+export const pairedWorkspaceRemoved = defineFixture({
+  width: 400,
+  store: pairedStore,
+  setup: () => applyWorkspaceCatalog(PAIRED_HOST_ID, true),
+  render: () => renderRunPage('run-23', pairedRunWithoutPty)
 })
 
 /** A middle run: both Older and Newer step somewhere. */

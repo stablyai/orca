@@ -268,11 +268,15 @@ export function AutomationRunDetailsPage({
                 {dot}
               </>
             ) : null}
-            <span>
+            <span className="inline-block max-w-full wrap-anywhere">
               <Monitor aria-hidden="true" className="mr-1 inline size-3.5 align-[-0.15em]" />
               {'\u2060'}
               {hostLabel}
-              {hasCost || hasTokens ? dot : null}
+              {hasCost || hasTokens ? (
+                <span aria-hidden="true" className="whitespace-pre">
+                  {'\u00a0· '}
+                </span>
+              ) : null}
             </span>
             {hasCost ? (
               <>
