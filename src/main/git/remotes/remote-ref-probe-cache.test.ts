@@ -15,6 +15,7 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
 
 import { PROBE_COALESCE_STALE_MS } from './coalesced-probe'
 import { createRemoteRefProbeCache, NEGATIVE_ENTRY_TTL_MS } from './remote-ref-probe-cache'
+import { readRemoteUrl, withSharedRemoteUrlReads } from './remote-url-probe'
 
 /** Stands in for a forge's parser: claims one host, rejects everything else. */
 function parseExampleRef(remoteUrl: string): { repo: string } | null {
@@ -123,6 +124,22 @@ describe('remote ref probe cache against a real checkout', () => {
 
     execFileSync('git', ['remote', 'set-url', 'origin', 'git@example.com:team/renamed.git'], {
       cwd: repoPath
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/renamed' })
+  })
+
+  it('does not sign a URL shared from before origin changed mid-detection', async () => {
+    const cache = createRemoteRefProbeCache(parseExampleRef)
+    execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:team/old.git'], {
+      cwd: repoPath
+    })
+    await withSharedRemoteUrlReads(async () => {
+      // An earlier provider in the same pass read origin before it changed.
+      await readRemoteUrl({ repoPath }, 'origin')
+      execFileSync('git', ['remote', 'set-url', 'origin', 'git@example.com:team/renamed.git'], {
+        cwd: repoPath
+      })
+      await cache.get(repoPath, 'origin')
     })
     await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/renamed' })
   })

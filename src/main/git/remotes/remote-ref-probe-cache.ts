@@ -1,6 +1,6 @@
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
-import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
+import { isTransientGitProbeError, readSignedRemoteUrl } from './remote-url-probe'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 const REPO_REF_CACHE_MAX_ENTRIES = 512
@@ -61,34 +61,36 @@ export function createRemoteRefProbeCache<Ref>(
     configSignature: string | undefined
   ): Promise<Ref | null> {
     // Stale probes may answer their own callers, but cannot publish over a successor.
-    const publish = (value: Ref | null): void => {
+    const publish = (value: Ref | null, signature: string | undefined): void => {
       if (ownsKey()) {
-        remember(cacheKey, value, configSignature)
+        remember(cacheKey, value, signature)
       }
     }
     try {
-      const stdout = await readRemoteUrl(
+      const read = await readSignedRemoteUrl(
         {
           repoPath,
           connectionId,
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
           ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
         },
-        remoteName
+        remoteName,
+        configSignature
       )
       // null means an SSH repo unavailable to this local reader, not a missing remote.
-      if (stdout === null) {
+      if (read === null) {
         return null
       }
-      const result = parseRemoteUrl(stdout)
-      publish(result)
+      const result = parseRemoteUrl(read.url)
+      // Sign with the URL's own signature: a URL shared earlier in a detection pass may predate ours.
+      publish(result, read.configSignature)
       return result
     } catch (error) {
       // Transient probe failure cannot establish a negative cache entry.
       if (isTransientGitProbeError(error)) {
         return null
       }
-      publish(null)
+      publish(null, configSignature)
       return null
     }
   }
