@@ -33,7 +33,7 @@ import {
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
   removeActiveRuntimeEnvironment,
-  assertEnvironmentPairingCurrent,
+  saveEnvironmentIfPairingCurrent,
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
   webRuntimeState
@@ -205,9 +205,8 @@ export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'
         return { environment: redactStoredWebRuntimeEnvironment(environment) }
       }
       // The resolved record may predate a re-pair in another tab; refuse to rename that stale copy.
-      assertEnvironmentPairingCurrent(environment)
       const next = { ...environment, name: trimmed, updatedAt: Date.now() }
-      saveStoredWebRuntimeEnvironment(next)
+      saveEnvironmentIfPairingCurrent(next, environment)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
         webRuntimeState.activeEnvironment = next
       }

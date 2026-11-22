@@ -13,6 +13,7 @@ import {
   getPreferredWebRuntimeConnection,
   readStoredWebRuntimeEnvironment,
   replaceStoredTokenWithDeviceKey,
+  saveStoredWebRuntimeEnvironmentIfCurrent,
   updateStoredEnvironmentRuntimeId,
   type StoredWebRuntimeEnvironment
 } from '../../pairing/web-runtime-environment'
@@ -214,16 +215,12 @@ export function assertActiveEnvironment(environmentId: string): void {
   }
 }
 
-export function assertEnvironmentPairingCurrent(environment: StoredWebRuntimeEnvironment): void {
-  const stored = readStoredWebRuntimeEnvironment()
-  // Anything but an exact match means another tab changed the pairing: removed
-  // it (null), re-paired to a different id, or re-paired the same id at a newer
-  // revision. Writing the stale copy would resurrect or clobber that state.
-  if (
-    !stored ||
-    stored.id !== environment.id ||
-    pairingRevisionOf(stored) !== pairingRevisionOf(environment)
-  ) {
+/** Writes `next` only while storage still holds `expected`'s exact pairing; compare-and-swap so another tab's change cannot land between a check and the write. */
+export function saveEnvironmentIfPairingCurrent(
+  next: StoredWebRuntimeEnvironment,
+  expected: StoredWebRuntimeEnvironment
+): void {
+  if (!saveStoredWebRuntimeEnvironmentIfCurrent(next, expected)) {
     throw new Error(PAIRING_CHANGED_MESSAGE)
   }
 }

@@ -94,6 +94,41 @@ export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnv
   if (stored?.id === environment.id && pairingRevision(stored) > pairingRevision(environment)) {
     return
   }
+  persistStoredWebRuntimeEnvironment(environment, stored)
+}
+
+/**
+ * Compare-and-swap save: the pairing check and the write share this one read, so
+ * another tab cannot slip a change between a separate check and save.
+ */
+export function saveStoredWebRuntimeEnvironmentIfCurrent(
+  environment: StoredWebRuntimeEnvironment,
+  expected: StoredWebRuntimeEnvironment
+): boolean {
+  const stored = readStoredWebRuntimeEnvironment()
+  // Anything but an exact match means another tab removed the pairing, re-paired
+  // to a different id, or re-paired the same id at a newer revision.
+  if (
+    !stored ||
+    stored.id !== expected.id ||
+    pairingRevision(stored) !== pairingRevision(expected)
+  ) {
+    return false
+  }
+  if (environment.sessionOnly) {
+    sessionEnvironment = environment
+    window.localStorage.removeItem(ENVIRONMENT_STORAGE_KEY)
+    return true
+  }
+  sessionEnvironment = null
+  persistStoredWebRuntimeEnvironment(environment, stored)
+  return true
+}
+
+function persistStoredWebRuntimeEnvironment(
+  environment: StoredWebRuntimeEnvironment,
+  stored: StoredWebRuntimeEnvironment | null
+): void {
   window.localStorage.setItem(
     ENVIRONMENT_STORAGE_KEY,
     JSON.stringify(keepMigratedPlaceholders(environment, stored))
