@@ -11,6 +11,12 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 /** Marks a Dispatch whose worker was resumed after a restart; a second loss is not resumed again. */
 export const WORKER_RESTART_RESUMED_STAGE = 'restart_resumed'
+/** A lost worker whose resume waits on a person, as a cut chat does with Resume work on restart off. */
+export const WORKER_RESTART_OFFERED_STAGE = 'restart_offered'
+
+export type WorkerRestartStage =
+  | typeof WORKER_RESTART_RESUMED_STAGE
+  | typeof WORKER_RESTART_OFFERED_STAGE
 
 export type WorkerRestartResumeClaim = {
   dispatchId: string
@@ -27,7 +33,8 @@ export type WorkerRestartResumeClaim = {
  */
 export function claimWorkerRestartResume(
   db: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  stage: WorkerRestartStage = WORKER_RESTART_RESUMED_STAGE
 ): WorkerRestartResumeClaim | null {
   db.db.exec('BEGIN IMMEDIATE')
   try {
@@ -38,13 +45,35 @@ export function claimWorkerRestartResume(
           `UPDATE worker_dispatches SET stage = ?, updated_at = datetime('now')
             WHERE dispatch_id = ? AND state = 'ready'`
         )
-        .run(WORKER_RESTART_RESUMED_STAGE, dispatchId)
+        .run(stage, dispatchId)
     }
     db.db.exec('COMMIT')
     return claim
   } catch (error) {
     db.db.exec('ROLLBACK')
     throw error
+  }
+}
+
+/** The claim a lost worker's restart takes, logged; a failed read leaves today's outcome. */
+export function claimLostWorkerRestart(
+  db: OrchestrationDb | null,
+  dispatchId: string,
+  stage: WorkerRestartStage
+): WorkerRestartResumeClaim | null {
+  try {
+    const claim = db ? claimWorkerRestartResume(db, dispatchId, stage) : null
+    if (claim) {
+      console.info('[orchestration] holding a terminal worker for its restart resume', {
+        dispatchId,
+        presence: claim.presence,
+        stage
+      })
+    }
+    return claim
+  } catch (error) {
+    console.warn('[orchestration] claiming a worker restart resume failed', dispatchId, error)
+    return null
   }
 }
 
@@ -71,6 +100,57 @@ function readClaimable(db: OrchestrationDb, dispatchId: string): WorkerRestartRe
     return null
   }
   return { dispatchId, worktreeId: resource.worktree_id, session, presence }
+}
+
+/** An offered resume no person has taken or dismissed yet. */
+export function isWorkerRestartOffered(db: OrchestrationDb, dispatchId: string): boolean {
+  return (
+    db.getWorkerDispatch(dispatchId)?.stage === WORKER_RESTART_OFFERED_STAGE &&
+    isWorkerRestartResumeOpen(db, dispatchId)
+  )
+}
+
+export type WorkerRestartOffer = WorkerRestartResumeClaim & {
+  /** The task's own name, else its spec: what the person sees the worker as. */
+  taskName: string
+  offeredAt: number
+}
+
+/** Every open Dispatch whose lost worker waits on a person's Resume or dismissal. */
+export function listWorkerRestartOffers(db: OrchestrationDb): WorkerRestartOffer[] {
+  return db.db
+    .prepare(
+      `SELECT w.dispatch_id AS dispatch_id, w.updated_at AS updated_at,
+              COALESCE(NULLIF(t.display_name, ''), NULLIF(t.task_title, ''), t.spec) AS spec
+         FROM worker_dispatches w
+         JOIN dispatch_contexts c ON c.id = w.dispatch_id
+         JOIN tasks t ON t.id = c.task_id
+        WHERE w.stage = ?`
+    )
+    .all(WORKER_RESTART_OFFERED_STAGE)
+    .flatMap((row) => {
+      const dispatchId = typeof row.dispatch_id === 'string' ? row.dispatch_id : null
+      const claim =
+        dispatchId && isWorkerRestartResumeOpen(db, dispatchId) ? readOffer(db, dispatchId) : null
+      return claim
+        ? [
+            {
+              ...claim,
+              taskName: typeof row.spec === 'string' ? row.spec : '',
+              offeredAt: Date.parse(`${String(row.updated_at)}Z`) || Date.now()
+            }
+          ]
+        : []
+    })
+}
+
+function readOffer(db: OrchestrationDb, dispatchId: string): WorkerRestartResumeClaim | null {
+  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+  const session = readWorkerResumeSession(resource)
+  const presence = readWorkerPresence(db, dispatchId)?.presence ?? null
+  return resource?.worktree_id && session && presence !== 'gone'
+    ? { dispatchId, worktreeId: resource.worktree_id, session, presence }
+    : null
 }
 
 /** A claimed resume may still start: its coordinator has not stopped or released the Dispatch since. */

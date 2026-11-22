@@ -172,14 +172,23 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   protected holdLostWorkerForRestartResume(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): boolean {
-    return this.terminalWorkerRestartResume.holdForReopen(candidate.dispatchId, () => {
-      // A failed close re-enters the sweep: its claim is spent, so the sweep's own retry owns it.
-      if (
-        !this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport)
-      ) {
-        void this.reconcileLegacyWorkerTerminals().catch(() => undefined)
-      }
-    })
+    return this.terminalWorkerRestartResume.holdForReopen(candidate.dispatchId, () =>
+      this.failLostRestartWorker(candidate.dispatchId)
+    )
+  }
+
+  protected failLostRestartWorker(dispatchId: string): void {
+    const dispatch = this.getExistingOrchestrationDb()?.getDispatchContextById(dispatchId)
+    const incarnation = dispatch?.process_incarnation ?? ''
+    const worker = {
+      dispatchId,
+      terminalHandle: dispatch?.assignee_handle ?? '',
+      ptyId: incarnation.slice(0, Math.max(0, incarnation.lastIndexOf(':')))
+    }
+    // A failed close re-enters the sweep: its claim is spent, so the sweep's own retry owns it.
+    if (!this.legacyWorkerRecoveryPersistence.reconcileMissing(worker, this.lostWorkerReport)) {
+      void this.reconcileLegacyWorkerTerminals().catch(() => undefined)
+    }
   }
 
   async reconcileLegacyWorkerTerminals(

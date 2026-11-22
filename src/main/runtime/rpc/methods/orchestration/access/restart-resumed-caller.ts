@@ -1,7 +1,10 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { isTerminalHandle } from '../../../../../../shared/terminal/terminal-handle-prefix'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { WORKER_RESTART_RESUMED_STAGE } from '../../../../orchestration/db/worker-dispatch/worker-restart-resume'
+import {
+  WORKER_RESTART_OFFERED_STAGE,
+  WORKER_RESTART_RESUMED_STAGE
+} from '../../../../orchestration/db/worker-dispatch/worker-restart-resume'
 
 /**
  * The handle a worker resumed after a restart reports as. Its conversation still names the terminal
@@ -30,8 +33,9 @@ export function restartResumedCallerHandle(
     return null
   }
   const dispatch = db.getActiveDispatchForIdentity(handle, paneKey)
-  return dispatch?.assignee_handle === handle &&
-    db.getWorkerDispatch(dispatch.id)?.stage === WORKER_RESTART_RESUMED_STAGE
+  const stage = dispatch?.assignee_handle === handle && db.getWorkerDispatch(dispatch.id)?.stage
+  // An offered worker's pane started again in place already runs its own conversation there.
+  return stage === WORKER_RESTART_RESUMED_STAGE || stage === WORKER_RESTART_OFFERED_STAGE
     ? handle
     : null
 }

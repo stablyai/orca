@@ -1,12 +1,12 @@
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
-import { useLocalStructuredChatsInUse } from '../../runtime/native-chat/local-sessions/local-structured-chats'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   localNativeChatRestartStore,
   useNativeChatRestartOffer,
-  useNativeChatRestartRun
+  useNativeChatRestartRun,
+  useLocalRestartOffersEnabled
 } from '../native-chat-recovery/offers/native-chat-resume-on-restart-store'
 import type { NativeChatRestartStore } from '../native-chat-recovery/offers/native-chat-restart-runtime-store'
 import { useNativeChatRestartRuntimes } from '../native-chat-recovery/offers/native-chat-restart-runtimes'
@@ -132,7 +132,7 @@ function checkText(count: number, t: Translate = translate): SegmentText {
 }
 
 export function NativeChatResumeStatusSegment(): React.JSX.Element {
-  const enabled = useLocalStructuredChatsInUse()
+  const enabled = useLocalRestartOffersEnabled()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>

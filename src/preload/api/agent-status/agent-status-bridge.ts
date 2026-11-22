@@ -62,6 +62,11 @@ export const agentStatusApi = {
     ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
     return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
   },
+  onRestartOffersChanged: (callback: () => void): (() => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('agentStatus:restartOffersChanged', listener)
+    return () => ipcRenderer.removeListener('agentStatus:restartOffersChanged', listener)
+  },
   getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
     ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
   drop: (paneKey: string): void => {

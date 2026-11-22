@@ -136,6 +136,16 @@ async function placeWorkerPane(
   })
 }
 
+/** The resumed agent's composer comes up; no real agent runs here. */
+function stubResumedComposer(runtime: OrcaRuntimeService): void {
+  vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockResolvedValue({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only `satisfied` and `status`.
+    ...({} as Awaited<ReturnType<typeof runtime.waitForFreshWorkerComposer>>),
+    satisfied: true,
+    status: 'running'
+  })
+}
+
 const LOST_INCARNATION = '66666666-6666-4666-8666-666666666666'
 const RESUMED_INCARNATION = '77777777-7777-4777-8777-777777777777'
 
@@ -153,10 +163,6 @@ describe('terminal worker resume after a terminal daemon crash', () => {
           hostExitConfirmed: true,
           paneRespawning: true
         })
-        if (!resumeWorkOnRestart) {
-          expect(db.getDispatchContextById(dispatchId)?.status).toBe('failed')
-          return
-        }
         expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
         await placeWorkerPane(runtime, 'pty-worker-2', RESUMED_INCARNATION, 'term_resumed_worker')
         reportPaneAgents(LIVE_PANE_KEY)
@@ -169,6 +175,10 @@ describe('terminal worker resume after a terminal daemon crash', () => {
           })
         )
         expect(db.db.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 0 })
+        // Off, its resume waits on a person beside the cut chats, as a cut chat worker's does.
+        expect(runtime.terminalWorkerRestartOffers.list().map((row) => row.sessionId)).toEqual(
+          resumeWorkOnRestart ? [] : [dispatchId]
+        )
       } finally {
         db.close()
       }
@@ -177,19 +187,58 @@ describe('terminal worker resume after a terminal daemon crash', () => {
 })
 
 describe('terminal worker resume after a reboot', () => {
-  it('with Resume work on restart off, fails the lost worker as before', async () => {
+  it('with Resume work on restart off, offers the lost worker and tells no one until a person acts', async () => {
     const { runtime, db, dispatchId, spawn } = setup(false, 'working')
     try {
-      await expect(runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
-        exitedDispatchIds: [dispatchId]
-      })
-      expect(db.getDispatchContextById(dispatchId)?.status).toBe('failed')
+      await runtime.reconcileLegacyWorkerTerminals()
+      expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
-        state: 'abandoned',
-        stage: 'terminal_missing'
+        state: 'ready',
+        stage: 'restart_offered'
       })
-      void runtime.reportWorkerStopsAcrossRestartOnce()
-      await vi.waitFor(() => expect(db.getWorkerDispatch(dispatchId)?.state).toBe('abandoned'))
+      expect(runtime.terminalWorkerRestartOffers.list()).toMatchObject([
+        { sessionId: dispatchId, agent: 'claude', latestPrompt: 'keep working', trigger: 'crash' }
+      ])
+      // Another restart before anyone acts keeps the offer, as a cut chat's has no expiry.
+      await runtime.reconcileLegacyWorkerTerminals()
+      expect(runtime.terminalWorkerRestartOffers.list()).toHaveLength(1)
+      expect(db.db.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 0 })
+      expect(spawn).not.toHaveBeenCalled()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('resumes an offered worker the way Resume work on restart does when a person chooses Resume', async () => {
+    const { runtime, db, dispatchId, spawn } = setup(false, 'resting')
+    stubResumedComposer(runtime)
+    try {
+      await runtime.reconcileLegacyWorkerTerminals()
+      await expect(runtime.terminalWorkerRestartOffers.continue([dispatchId])).resolves.toEqual([
+        { sessionId: dispatchId, outcome: 'continued' }
+      ])
+      expect(JSON.stringify(spawn.mock.calls[0])).toContain(SESSION.id)
+      expect(db.getDispatchContextById(dispatchId)?.assignee_handle).not.toBe('term_lost_worker')
+      expect(db.getWorkerDispatch(dispatchId)?.stage).toBe('restart_resumed')
+      expect(runtime.terminalWorkerRestartOffers.list()).toEqual([])
+      expect(db.db.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 0 })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('ends a dismissed offered worker with the lost alert, only then', async () => {
+    const { runtime, db, dispatchId, spawn } = setup(false, 'working')
+    try {
+      await runtime.reconcileLegacyWorkerTerminals()
+      expect(runtime.terminalWorkerRestartOffers.dismiss([dispatchId])).toBe(1)
+      expect(db.getDispatchContextById(dispatchId)?.status).toBe('failed')
+      await vi.waitFor(() =>
+        expect(
+          db.db.prepare("SELECT subject FROM messages WHERE type = 'escalation'").all()
+        ).toEqual([{ subject: 'Worker lost without reporting' }])
+      )
+      expect(runtime.terminalWorkerRestartOffers.list()).toEqual([])
       expect(spawn).not.toHaveBeenCalled()
     } finally {
       db.close()
@@ -198,13 +247,7 @@ describe('terminal worker resume after a reboot', () => {
 
   it('with it on, keeps the Dispatch and resumes its conversation in a new terminal', async () => {
     const { runtime, db, dispatchId, spawn } = setup(true, 'resting')
-    // The resumed agent's composer comes up; no real agent runs here.
-    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockResolvedValue({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only `satisfied` and `status`.
-      ...({} as Awaited<ReturnType<typeof runtime.waitForFreshWorkerComposer>>),
-      satisfied: true,
-      status: 'running'
-    })
+    stubResumedComposer(runtime)
     try {
       const result = await runtime.reconcileLegacyWorkerTerminals()
       expect(result.exitedDispatchIds).toEqual([])

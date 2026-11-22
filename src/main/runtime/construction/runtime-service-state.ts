@@ -321,6 +321,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected abstract readonly terminalWorkerRestartResume: TerminalWorkerRestartResume
 
   /** Keeps a lost worker's Dispatch for its restart resume; false leaves today's outcome. */
+  /** Today's lost-worker outcome for an offered or resumed worker, read from its Dispatch. */
+  protected abstract failLostRestartWorker(dispatchId: string): void
   protected abstract holdLostWorkerForRestartResume(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): boolean

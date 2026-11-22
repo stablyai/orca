@@ -56,16 +56,19 @@ function owner(
     waitForAgentReady?: () => Promise<boolean>
     closeTerminal?: () => Promise<undefined>
     decideHeldRest?: (dispatchId: string) => void
+    offersChanged?: () => void
+    resumeWorkOnRestart?: boolean
   } = {}
 ) {
   const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
   const resume = new TerminalWorkerRestartResume({
     getDb: () => db ?? null,
-    resumeWorkOnRestart: () => true,
+    resumeWorkOnRestart: () => overrides.resumeWorkOnRestart ?? true,
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
     closeTerminal: overrides.closeTerminal ?? (async () => undefined),
     reportResting: overrides.reportResting ?? (async () => undefined),
     decideHeldRest: overrides.decideHeldRest ?? (() => {}),
+    offersChanged: overrides.offersChanged ?? (() => {}),
     terminalAuthority: () => ({
       paneKey: 'tab_new:leaf_new',
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
@@ -153,6 +156,19 @@ describe('TerminalWorkerRestartResume', () => {
     resume.holdForReopen(dispatchId, vi.fn())
     resume.settleStartup()
     await vi.waitFor(() => expect(escalations()).toEqual({ n: 1 }))
+  })
+
+  it('with Resume work on restart off, offers the worker and starts nothing until a person acts', () => {
+    const dispatchId = lostWorker('working')
+    const reopen = vi.fn(async () => ({ handle: 'term_resumed' }))
+    const offersChanged = vi.fn()
+    const { resume } = owner({ reopen, offersChanged, resumeWorkOnRestart: false })
+    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    resume.settleStartup()
+    expect(reopen).not.toHaveBeenCalled()
+    expect(offersChanged).toHaveBeenCalledTimes(1)
+    // The restart's own stop report stays silent about it, as about a chat whose cut waits on a person.
+    expect(resume.isResumingThisStart(dispatchId)).toBe(true)
   })
 
   it('reports the worker lost once when its conversation cannot reopen', async () => {

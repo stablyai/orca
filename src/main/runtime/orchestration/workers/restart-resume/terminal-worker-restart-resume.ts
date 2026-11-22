@@ -1,23 +1,25 @@
-// Under "Resume work on restart", a terminal worker whose terminal a reboot or a terminal daemon crash
-// took keeps its Dispatch: its agent resumes once in its own conversation and the Dispatch follows it.
-// Only a failed resume reaches the coordinator, as today's lost-worker alert.
+// A terminal worker whose terminal a reboot or a terminal daemon crash took keeps its Dispatch, as a cut
+// chat worker does. Under "Resume work on restart" its agent resumes once in its own conversation and the
+// Dispatch follows it; without it, the resume is offered to a person beside the cut chats. Only a failed
+// or dismissed resume reaches the coordinator, as today's lost-worker alert.
 
-import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { continueResumedWorker } from './resumed-worker-continue'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
+  claimLostWorkerRestart,
   claimWorkerRestartResume,
+  isWorkerRestartOffered,
   isWorkerRestartResumeOpen,
   rebindRestartedWorkerTerminal,
+  WORKER_RESTART_OFFERED_STAGE,
+  WORKER_RESTART_RESUMED_STAGE,
   type WorkerRestartResumeClaim
 } from '../../db/worker-dispatch/worker-restart-resume'
 import type { WorkerResumeSession } from '../../db/dispatch-context/worker-follow-up-lineage'
 
 /** How long a pane started again in place has to show its agent before the worker is reported lost. */
 export const IN_PLACE_RESTART_RESUME_WAIT_MS = 120_000
-/** How long a resumed worker cut mid-turn has to take its continue prompt. */
-const RESTART_CONTINUE_BUDGET_MS = 60_000
-const RESTART_CONTINUE_RETRY_MS = 2_000
 /** Held reboot workers reopen once restored terminals are placed, or after this when no window places them. */
 export const RESTART_RESUME_STARTUP_WAIT_MS = 120_000
 /** A reopen that never answers is a lost worker, not a coordinator left waiting. */
@@ -46,6 +48,8 @@ export type TerminalWorkerRestartResumeDeps = {
   decideHeldRest: (dispatchId: string) => void
   /** The resumed worker is up but could not be asked to continue: its coordinator hears it rests. */
   reportResting: (paneKey: string) => Promise<void>
+  /** A resume now waits on a person: the restart offer is read again where it is shown. */
+  offersChanged: () => void
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
@@ -55,6 +59,8 @@ type HeldWorker = {
   fail: () => void
   /** The pane being started again in place, and the process it lost. */
   inPlace?: { paneKey: string; lostIncarnation: string | null; timer: { cancel: () => void } }
+  /** Offered to a person: its pane's new process takes the Dispatch, but nothing asks it to go on. */
+  offered?: true
 }
 
 export class TerminalWorkerRestartResume {
@@ -72,9 +78,14 @@ export class TerminalWorkerRestartResume {
     return this.held.has(dispatchId)
   }
 
-  /** Held now, or resumed by this start: the restart stop report has nothing to say about it. */
+  /** Held, resumed by this start, or waiting on a person: the restart stop report has nothing to say. */
   isResumingThisStart(dispatchId: string): boolean {
-    return this.held.has(dispatchId) || this.resumed.has(dispatchId)
+    const db = this.deps.getDb()
+    return (
+      this.held.has(dispatchId) ||
+      this.resumed.has(dispatchId) ||
+      (db !== null && isWorkerRestartOffered(db, dispatchId))
+    )
   }
 
   /** The terminal is gone with the run that ended: the conversation reopens in a new terminal once
@@ -84,11 +95,14 @@ export class TerminalWorkerRestartResume {
     if (this.held.get(dispatchId)?.inPlace) {
       return true
     }
+    if (!this.deps.resumeWorkOnRestart()) {
+      return this.offer(dispatchId)
+    }
     if (!this.hold(dispatchId, fail)) {
       return false
     }
     if (this.startupSettled) {
-      this.reopen(dispatchId)
+      void this.reopen(dispatchId)
     } else {
       // A start whose window never finishes placing terminals must not leave the coordinator waiting.
       this.startupDeadline ??= this.deps.setTimer(
@@ -110,16 +124,53 @@ export class TerminalWorkerRestartResume {
     if (this.held.has(dispatchId)) {
       return true
     }
-    if (!this.hold(dispatchId, fail)) {
+    const offered = !this.deps.resumeWorkOnRestart()
+    if (!this.hold(dispatchId, fail, offered)) {
       return false
     }
     const worker = this.held.get(dispatchId)!
+    // An offer outlives a pane that never shows its agent: Resume then reopens it in a new terminal.
+    const expire = () => (offered ? this.held.delete(dispatchId) : this.giveUp(dispatchId))
     worker.inPlace = {
       paneKey,
       lostIncarnation,
-      timer: this.deps.setTimer(() => this.giveUp(dispatchId), IN_PLACE_RESTART_RESUME_WAIT_MS)
+      timer: this.deps.setTimer(expire, IN_PLACE_RESTART_RESUME_WAIT_MS)
     }
     return true
+  }
+
+  /** A person chose Resume on an offered worker: the same once-only resume Resume work on restart runs.
+   *  True once its agent is back and owns the Dispatch. */
+  async resumeOffered(dispatchId: string, fail: () => void): Promise<boolean> {
+    const pending = this.held.get(dispatchId)
+    if (pending?.offered) {
+      // Its pane has not shown the agent yet: it goes on when it does.
+      delete pending.offered
+      return true
+    }
+    const db = this.deps.getDb()
+    const claim =
+      db && isWorkerRestartOffered(db, dispatchId) && claimWorkerRestartResume(db, dispatchId)
+    if (!db || !claim || this.held.has(dispatchId)) {
+      return false
+    }
+    const worker: HeldWorker = { claim, fail }
+    this.held.set(dispatchId, worker)
+    // A pane started again in place already runs its own conversation and owns the Dispatch.
+    const dispatch = db.getDispatchContextById(dispatchId)
+    const handle = dispatch?.assignee_pane_key
+      ? this.deps.handleForPane(dispatch.assignee_pane_key)
+      : null
+    if (
+      handle &&
+      this.deps.terminalAuthority(handle)?.processIncarnation === dispatch?.process_incarnation
+    ) {
+      return this.bind(dispatchId, worker, handle).catch(() => {
+        this.giveUp(dispatchId)
+        return false
+      })
+    }
+    return this.reopen(dispatchId)
   }
 
   /** Startup restoration is done: held terminals reopen now, later ones at once. */
@@ -129,7 +180,7 @@ export class TerminalWorkerRestartResume {
     this.startupDeadline = null
     for (const [dispatchId, worker] of this.held) {
       if (!worker.inPlace) {
-        this.reopen(dispatchId)
+        void this.reopen(dispatchId)
       }
     }
   }
@@ -158,53 +209,58 @@ export class TerminalWorkerRestartResume {
     }
   }
 
-  private hold(dispatchId: string, fail: () => void): boolean {
+  /** Resume work on restart is off: the resume waits on a person, durably, and nothing happens meanwhile. */
+  private offer(dispatchId: string): boolean {
+    const claim = this.claim(dispatchId, true)
+    if (claim) {
+      this.deps.offersChanged()
+    }
+    return claim !== null
+  }
+
+  private hold(dispatchId: string, fail: () => void, offered = false): boolean {
     if (this.held.has(dispatchId)) {
       return true
     }
-    const db = this.deps.getDb()
-    if (!db || !this.deps.resumeWorkOnRestart()) {
-      return false
-    }
-    let claim: WorkerRestartResumeClaim | null
-    try {
-      claim = claimWorkerRestartResume(db, dispatchId)
-    } catch (error) {
-      console.warn('[orchestration] claiming a worker restart resume failed', dispatchId, error)
-      return false
-    }
+    const claim = this.claim(dispatchId, offered)
     if (!claim) {
       return false
     }
-    this.held.set(dispatchId, { claim, fail })
-    console.info('[orchestration] holding a terminal worker for its restart resume', {
-      dispatchId,
-      presence: claim.presence
-    })
+    this.held.set(dispatchId, { claim, fail, ...(offered ? { offered: true as const } : {}) })
+    if (offered) {
+      this.deps.offersChanged()
+    }
     return true
   }
 
-  private reopen(dispatchId: string): void {
+  private claim(dispatchId: string, offered: boolean): WorkerRestartResumeClaim | null {
+    const stage = offered ? WORKER_RESTART_OFFERED_STAGE : WORKER_RESTART_RESUMED_STAGE
+    return claimLostWorkerRestart(this.deps.getDb(), dispatchId, stage)
+  }
+
+  private async reopen(dispatchId: string): Promise<boolean> {
     const worker = this.held.get(dispatchId)
     if (!worker || this.reopening.has(dispatchId)) {
-      return
+      return false
     }
     const db = this.deps.getDb()
     // Stopped or released while startup settled: nothing starts, and today's outcome settles it.
     if (!db || !isWorkerRestartResumeOpen(db, dispatchId)) {
       this.giveUp(dispatchId)
-      return
+      return false
     }
     this.reopening.add(dispatchId)
     const { worktreeId, session } = worker.claim
     const reopened = this.deps.reopen(worktreeId, session, `${dispatchId}:restart-resume`)
+    let timedOut: (() => void) | undefined
     const timer = this.deps.setTimer(() => {
       console.warn('[orchestration] resuming a terminal worker after a restart timed out', {
         dispatchId
       })
       this.giveUp(dispatchId)
+      timedOut?.()
     }, RESTART_RESUME_REOPEN_WAIT_MS)
-    void reopened
+    const resumed = reopened
       .then(async (terminal) => {
         timer.cancel()
         if (!terminal) {
@@ -213,14 +269,14 @@ export class TerminalWorkerRestartResume {
         // Late, after this worker was given up: its conversation must not run unowned.
         if (this.held.get(dispatchId) !== worker) {
           await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
-          return
+          return false
         }
         // The tab can open as a bare shell; only an agent that came up takes the Dispatch.
         const agentUp = await this.deps.waitForAgentReady(terminal.handle, session.agent)
         const bound = agentUp
           ? this.bind(dispatchId, worker, terminal.handle, true)
           : Promise.reject(new Error('restart_resume_agent_not_ready'))
-        await bound.catch(async (error: unknown) => {
+        return bound.catch(async (error: unknown) => {
           // The conversation runs in a terminal no Dispatch owns: close it before reporting the worker lost.
           await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
           throw error
@@ -233,8 +289,14 @@ export class TerminalWorkerRestartResume {
           error
         })
         this.giveUp(dispatchId)
+        return false
       })
       .finally(() => this.reopening.delete(dispatchId))
+    // A reopen that never answers settles as given up, not as a caller left waiting.
+    return Promise.race([
+      resumed,
+      new Promise<boolean>((resolve) => (timedOut = () => resolve(false)))
+    ])
   }
 
   private async bind(
@@ -242,9 +304,9 @@ export class TerminalWorkerRestartResume {
     worker: HeldWorker,
     handle: string,
     agentReady = false
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (this.held.get(dispatchId) !== worker) {
-      return
+      return false
     }
     const db = this.deps.getDb()
     const authority = this.deps.terminalAuthority(handle)
@@ -257,58 +319,28 @@ export class TerminalWorkerRestartResume {
       if (!worker.inPlace) {
         await this.deps.closeTerminal(handle).catch(() => undefined)
       }
-      return
+      return false
     }
     this.held.delete(dispatchId)
+    // Still offered: the person's Resume decides whether it goes on.
+    if (worker.offered) {
+      return true
+    }
     this.resumed.add(dispatchId)
     // A worker at rest or at a prompt was waiting already; only a cut turn is asked to go on.
     if (worker.claim.presence !== 'working') {
       // The restart's own pass skipped it while resuming: a report a wait held back goes out now.
       this.deps.decideHeldRest(dispatchId)
-      return
-    }
-    try {
-      if (
-        !(await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent, agentReady))
-      ) {
-        throw new Error('restart_resume_continue_not_taken')
-      }
-    } catch (error) {
-      console.warn('[orchestration] continuing a resumed terminal worker failed', {
-        dispatchId,
-        error
-      })
-      // Its agent is alive in the rebound terminal: the coordinator hears it rests, and mail continues it.
-      await this.deps.reportResting(authority.paneKey).catch(() => undefined)
-    }
-  }
-
-  /** A pane started again in place takes input only once its new process is attached and its agent up. */
-  private async continueWhenReady(
-    dispatchId: string,
-    handle: string,
-    agent: TuiAgent,
-    agentReady: boolean
-  ): Promise<boolean> {
-    const deadline = Date.now() + RESTART_CONTINUE_BUDGET_MS
-    while (!agentReady && !(await this.deps.waitForAgentReady(handle, agent))) {
-      if (Date.now() >= deadline) {
-        throw new Error('restart_resume_agent_not_ready')
-      }
-      await new Promise<void>((resolve) => this.deps.setTimer(resolve, RESTART_CONTINUE_RETRY_MS))
-    }
-    const db = this.deps.getDb()
-    // Stopped during the wait: the stop owns the outcome, and the agent is not asked to go on.
-    if (!db || !isWorkerRestartResumeOpen(db, dispatchId)) {
       return true
     }
-    // Sent once, even when it fails: a send can fail after writing, and a second paste could stack
-    // a duplicate turn or double the composer text.
-    return this.deps.sendPrompt(
+    await continueResumedWorker(this.deps, {
+      dispatchId,
       handle,
-      AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
-      `${dispatchId}:restart-continue`
-    )
+      paneKey: authority.paneKey,
+      agent: worker.claim.session.agent,
+      agentReady
+    })
+    return true
   }
 
   private giveUp(dispatchId: string): void {

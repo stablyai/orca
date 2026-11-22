@@ -1,6 +1,10 @@
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
+import {
+  TerminalWorkerRestartResume,
+  type TerminalWorkerRestartResumeDeps
+} from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
+import { TerminalWorkerRestartOffers } from '../orchestration/workers/restart-resume/terminal-worker-restart-offers'
 import { waitForWorkerAgentReady } from '../terminal/wait/launched-agent-composer-readiness'
 import { reconsiderRestAfterWait } from '../orchestration/workers/turn-stops/worker-presence-report'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
@@ -33,15 +37,14 @@ export function unrefTimer(run: () => void, delayMs: number): { cancel: () => vo
 /** A resumed worker comes back the way a follow-up reopens a closed one, in its own conversation. */
 function createTerminalWorkerRestartResume(
   runtime: RestartResumeRuntime,
-  resumeWorkOnRestart: () => boolean,
-  reportResting: (paneKey: string) => Promise<void>,
-  decideHeldRest: (dispatchId: string) => void
+  owners: Pick<
+    TerminalWorkerRestartResumeDeps,
+    'resumeWorkOnRestart' | 'reportResting' | 'decideHeldRest' | 'offersChanged'
+  >
 ): TerminalWorkerRestartResume {
   const resume = new TerminalWorkerRestartResume({
+    ...owners,
     getDb: () => runtime.getExistingOrchestrationDb(),
-    resumeWorkOnRestart,
-    reportResting,
-    decideHeldRest,
     closeTerminal: (handle) => runtime.closeTerminal(handle),
     setTimer: unrefTimer,
     reopen: (worktreeId, session, mutationId) =>
@@ -88,10 +91,27 @@ function createTerminalWorkerRestartResume(
 
 /** Holds the terminal-worker restart resume, built once every terminal and launch method it uses exists. */
 export abstract class OrcaRuntimeWithTerminalWorkerRestartResume extends OrcaRuntimeWithWindowlessTerminalActivity {
-  protected readonly terminalWorkerRestartResume = createTerminalWorkerRestartResume(
-    this,
-    () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
-    (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
-    (dispatchId) => reconsiderRestAfterWait(`dispatch:${dispatchId}`, this.workerTurnStopReportDeps)
-  )
+  private offersNoticeQueued = false
+  protected readonly terminalWorkerRestartResume = createTerminalWorkerRestartResume(this, {
+    resumeWorkOnRestart: () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
+    reportResting: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
+    decideHeldRest: (dispatchId) =>
+      reconsiderRestAfterWait(`dispatch:${dispatchId}`, this.workerTurnStopReportDeps),
+    // One notice per sweep, however many workers it offered.
+    offersChanged: () => {
+      if (!this.offersNoticeQueued) {
+        this.offersNoticeQueued = true
+        queueMicrotask(() => {
+          this.offersNoticeQueued = false
+          this.notifier?.restartOffersChanged?.()
+        })
+      }
+    }
+  })
+  /** Offered terminal workers, shown and acted on beside the cut chats' restart offers. */
+  readonly terminalWorkerRestartOffers = new TerminalWorkerRestartOffers({
+    getDb: () => this.getExistingOrchestrationDb(),
+    resume: this.terminalWorkerRestartResume,
+    failLost: (dispatchId) => this.failLostRestartWorker(dispatchId)
+  })
 }
