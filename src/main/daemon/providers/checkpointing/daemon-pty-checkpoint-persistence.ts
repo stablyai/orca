@@ -7,7 +7,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
   // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
   protected async writeSessionCheckpoint(
     sessionId: string,
-    opts: { final: boolean; teardown: boolean }
+    opts: { final: boolean; teardown: boolean; expectedIncarnationId?: string }
   ): Promise<'done' | 'deferred'> {
     if (!this.supportsIncrementalCheckpoints) {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
@@ -25,8 +25,12 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: opts.teardown,
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
-        requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
+        requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId),
+        expectedIncarnationId: opts.expectedIncarnationId
       })
+      if (opts.expectedIncarnationId !== undefined && checkpoint.checkpoint !== 'committed') {
+        return 'deferred'
+      }
       if (checkpoint.checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -93,13 +97,23 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       teardown: boolean
       forceLiveSnapshot?: boolean
       requireContinuityProof?: boolean
+      expectedIncarnationId?: string
     }
   ): Promise<SnapshotCheckpointResult> {
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId,
       includeSnapshot: true,
-      teardownSnapshot: opts.teardown
+      teardownSnapshot: opts.teardown,
+      ...(opts.expectedIncarnationId !== undefined
+        ? { expectedIncarnationId: opts.expectedIncarnationId }
+        : {})
     })
+    if (
+      opts.expectedIncarnationId !== undefined &&
+      take?.incarnationId !== opts.expectedIncarnationId
+    ) {
+      return { checkpoint: 'unavailable', snapshot: null }
+    }
     if (take?.snapshot && this.historyManager) {
       // Missing drainedRecords on older daemons cannot mean empty: snapshotting still drained their queue.
       // Teardown records repeat held bytes already emitted; use drainedRecords to avoid replaying them twice.

@@ -1,3 +1,8 @@
+import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
+import {
+  verifyWindowsTreeKillTarget,
+  type WindowsTreeKillTarget
+} from './windows-pty-root-identity'
 import { execFile } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { admitSelfInitiatedTreeKill } from './own-chromium-tree-kill-guard'
@@ -33,4 +38,38 @@ export function terminateWindowsProcessTree(
       }
     )
   })
+}
+
+export type WindowsPtyDescendantSweep = {
+  ownsRoot?: () => boolean
+  terminateOwnedTree?: () => JobTerminationOutcome
+  killWindowsTree?: WindowsTreeKiller
+  verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
+}
+
+export async function killWindowsPtyDescendants(
+  rootPid: number,
+  deps: WindowsPtyDescendantSweep,
+  authorize?: () => void
+): Promise<void> {
+  const ownsRoot = deps.ownsRoot ?? (() => true)
+  if (!ownsRoot() || !Number.isInteger(rootPid) || rootPid <= 0) {
+    return
+  }
+  // An owned job also reaches reparented descendants and survives PID reuse.
+  if (deps.terminateOwnedTree) {
+    authorize?.()
+    if (deps.terminateOwnedTree() === 'terminated') {
+      return
+    }
+  }
+  const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
+  const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
+  if (target === 'own' && ownsRoot()) {
+    authorize?.()
+    const killTree =
+      deps.killWindowsTree ??
+      ((pid: number) => terminateWindowsProcessTree(pid, { site: 'pty-descendant-sweep' }))
+    await killTree(rootPid).catch(() => {})
+  }
 }

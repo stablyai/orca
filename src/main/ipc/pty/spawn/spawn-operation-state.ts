@@ -7,6 +7,7 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 
 export type PtySpawnOperationState = Pick<
   RuntimePtySpawnState,
+  | 'accountRestartOperation'
   | 'spawnOptions'
   | 'cwd'
   | 'provider'

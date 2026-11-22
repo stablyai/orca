@@ -5,17 +5,12 @@ import {
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
-import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
-import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
-import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
-import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from '../wsl/daemon-wsl-sleep-cwd'
 import * as unlistedSession from '../routing/daemon-unlisted-session'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
@@ -26,8 +21,14 @@ const MAX_TOMBSTONES = 1000
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   protected abstract adoptListedSessionForSleep(
     sessionId: string,
-    deadlineMs?: number
+    deadlineMs?: number,
+    expectedIncarnationId?: string
   ): Promise<void>
+
+  protected abstract prepareHistoryForShutdown(
+    id: string,
+    opts: { deadlineMs?: number; expectedIncarnationId?: string }
+  ): Promise<() => void>
 
   async attach(id: string): Promise<PtySpawnResult> {
     await this.ensureConnected()
@@ -105,6 +106,16 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.listingDaemons = daemons
   }
 
+  protected trackKeepHistoryShutdown<T>(run: () => Promise<T>): Promise<T> {
+    const shutdown = Promise.resolve().then(run)
+    this.keepHistoryShutdowns.add(shutdown)
+    const forget = (): void => {
+      this.keepHistoryShutdowns.delete(shutdown)
+    }
+    void shutdown.then(forget, forget)
+    return shutdown
+  }
+
   async shutdown(
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
@@ -116,18 +127,12 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
       return
     }
-    const shutdown = Promise.resolve().then(async () => {
+    await this.trackKeepHistoryShutdown(async () => {
       // Outside the spawn lock, which adopting the session's history takes itself.
       await this.ensureConnected(opts.deadlineMs)
       await this.adoptListedSessionForSleep(id, opts.deadlineMs).catch(() => {})
       await this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
     })
-    this.keepHistoryShutdowns.add(shutdown)
-    try {
-      await shutdown
-    } finally {
-      this.keepHistoryShutdowns.delete(shutdown)
-    }
   }
 
   protected async shutdownWithHistoryLock(
@@ -136,75 +141,9 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   ): Promise<void> {
     // Connect lazily, sharing one deadline with checkpoint waits and kill; durable writes themselves remain unbounded.
     await this.ensureConnected(opts.deadlineMs)
-    // Sleep may precede the first periodic checkpoint; persist the screen before killing.
     if (opts.keepHistory) {
-      const sleepWslDistro = this.wslDistrosBySessionId.get(id)
-      const sleepPaneKey = this.wslPaneKeysBySessionId.get(id)
-      const live = this.activeSessionIds.has(id)
-      const startedAt = Date.now()
-      const read =
-        sleepWslDistro && sleepPaneKey
-          ? // A live pane's own wsl.exe keeps its distro running.
-            await readDaemonWslSleepCwdWithFacts(
-              { paneKey: sleepPaneKey, wslDistro: sleepWslDistro, live },
-              opts.deadlineMs
-            )
-          : { cwd: live ? await readDaemonLiveSleepCwd(this.client, id, opts.deadlineMs) : null }
-      const sleepCwd = read.cwd
-      // Device runs need to see why a WSL pane woke at its spawn folder (awin 5e).
-      const sleepFolder = {
-        wslDistro: sleepWslDistro,
-        paneKey: sleepPaneKey,
-        live,
-        elapsedMs: Date.now() - startedAt
-      }
-      logSleepFolderRead(id, read, sleepFolder)
-      const committed = await this.runExclusiveCheckpoint(
-        async () => {
-          // Set inside: a caller past its deadline leaves this checkpoint running without it.
-          if (sleepCwd) {
-            this.probedShellCwds.set(id, sleepCwd)
-          }
-          try {
-            await this.checkpointSessions([id], { final: true, teardown: true })
-          } finally {
-            this.probedShellCwds.delete(id)
-          }
-        },
-        { callerDeadlineMs: opts.deadlineMs }
-      )
-      // Caller timeout leaves the checkpoint running; preserve the live PTY until recovery data is verified.
-      if (!committed) {
-        throw new FinalCheckpointWaitExpiredError(id)
-      }
-      const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
-      const detected = detection?.status === 'restored' ? detection.restoreInfo : null
-      const restoreInfo = detected
-        ? {
-            ...detected,
-            cwd:
-              normalizeWslColdRestoreCwd({
-                recoveredCwd: detected.cwd,
-                requestedCwd: this.initialCwds.get(id) ?? resolveSafePtyDefaultCwd(),
-                wslDistro
-              }) ?? ''
-          }
-        : null
-      const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
-      if (coldRestore) {
-        this.coldRestoreCache.set(id, coldRestore)
-        if (this.coldRestoreCache.has(id)) {
-          this.sleepRestoreSessionIds.add(id)
-        }
-        // Intentional sleep keeps the final checkpoint authoritative; physical exit must not mark history clean.
-        this.historyManager?.suspendSession(id)
-      } else if (
-        detection?.status === 'unreadable' ||
-        (detection?.status === 'restored' && detection.hasUnreadableRecovery)
-      ) {
-        this.historyManager?.suspendSession(id)
-      }
+      const preserve = await this.prepareHistoryForShutdown(id, opts)
+      preserve()
     }
     try {
       await this.client.request(

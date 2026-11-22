@@ -7,6 +7,7 @@ import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../callers/rpc-caller-scope'
 import { LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
+import { isAccountRestartRpcCall } from '../terminal/account-restart-rpc'
 
 // Short calls that stop on disconnect without long-poll keepalives or admission slots.
 const DISCONNECT_FORWARDED_METHODS = new Set([
@@ -48,7 +49,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
         signal:
           longPoll ||
           request.method.startsWith('linear.') ||
-          DISCONNECT_FORWARDED_METHODS.has(request.method)
+          DISCONNECT_FORWARDED_METHODS.has(request.method) ||
+          isAccountRestartRpcCall(request.method, request.params)
             ? context?.signal
             : undefined,
         connectionSignal: context?.signal,

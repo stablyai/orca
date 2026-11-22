@@ -290,6 +290,64 @@ describe('createProcessTableSnapshotReader', () => {
 })
 
 describe('killWithDescendantSweep', () => {
+  it('refuses Windows fallback after authorization expires during identity verification', async () => {
+    let current = true
+    const authorize = () => {
+      if (!current) {
+        throw new Error('pane changed')
+      }
+    }
+    const killWindowsTree = vi.fn(async () => {})
+    const killRoot = vi.fn()
+    await expect(
+      killWithDescendantSweep(4242, killRoot, {
+        platform: 'win32',
+        beforeSignal: authorize,
+        terminateOwnedTree: () => 'unavailable',
+        verifyTreeKillTarget: async () => {
+          current = false
+          return 'own'
+        },
+        killWindowsTree
+      })
+    ).rejects.toThrow('pane changed')
+    expect(killWindowsTree).not.toHaveBeenCalled()
+    expect(killRoot).not.toHaveBeenCalled()
+  })
+
+  it('checks authorization after verifying a POSIX descendant and refuses root fallback', async () => {
+    let current = true
+    const tree = [row(10, 1, 10), row(20, 10, 20)]
+    const sendSignal = vi.fn()
+    const killRoot = vi.fn()
+    await expect(
+      killWithDescendantSweep(10, killRoot, {
+        platform: 'darwin',
+        beforeSignal: () => {
+          if (!current) {
+            throw new Error('pane changed')
+          }
+        },
+        readTable: async () => tableCapture(tree),
+        awaitEscalation: true,
+        terminateDescendants: (captured, authorize) =>
+          terminateDescendantSnapshotWithVerdict(captured, {
+            readTable: async () => {
+              current = false
+              return tableCapture(tree)
+            },
+            requireIdentityBeforeSignal: true,
+            sendSignal: (pid, signal) => {
+              authorize?.()
+              sendSignal(pid, signal)
+            }
+          })
+      })
+    ).rejects.toThrow('pane changed')
+    expect(sendSignal).not.toHaveBeenCalled()
+    expect(killRoot).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.useFakeTimers()
   })

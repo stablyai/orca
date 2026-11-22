@@ -40,7 +40,7 @@ export async function spawnLocalPty(
     if (pendingShutdown) {
       await pendingShutdown.promise
     }
-    const existing = reattachLocalPty(reattachId, args.cols, args.rows)
+    const existing = reattachLocalPty(reattachId, args.cols, args.rows, args.requireFreshSession)
     if (existing) {
       return existing
     }
@@ -109,7 +109,9 @@ export async function spawnLocalPty(
       }
       checkCanceled()
       // Preflight can yield to a same-id winner; attach before creating another shell.
-      const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
+      const concurrentWinner = reattachId
+        ? reattachLocalPty(id, args.cols, args.rows, args.requireFreshSession)
+        : null
       if (concurrentWinner) {
         return concurrentWinner
       }

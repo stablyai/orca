@@ -1,7 +1,7 @@
 import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { boundSnapshot } from './daemon-durable-history-snapshot'
-import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
+import { DaemonPtySessionRetirement } from '../adapter/daemon-pty-session-retirement'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import {
   focusLossReportSupport,
@@ -13,7 +13,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
-export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
+export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionRetirement {
   async getBufferSnapshot(
     id: string,
     opts: { scrollbackRows?: number } = {}

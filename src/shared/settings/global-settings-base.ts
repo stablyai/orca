@@ -30,6 +30,7 @@ import type { KeybindingGlobalSettings } from '../keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from '../workspace-cleanup/workspace-cleanup-policy'
 import type { PRAutoRefreshSettings } from '../source-control/hosted-review/review-refresh-policy'
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
+import type { CodexManagedAccountSettings } from '../agent-accounts/managed-account-types'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
@@ -77,6 +78,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorkspaceCleanupPolicySettings &
   PRAutoRefreshSettings &
   ManagedAccountNameSettings &
+  CodexManagedAccountSettings &
   NewTabMenuSettings &
   UiLanguageSettings &
   ChatDeleteSettings

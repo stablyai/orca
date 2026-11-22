@@ -1,9 +1,7 @@
-import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
-import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
-  verifyWindowsTreeKillTarget,
-  type WindowsTreeKillTarget
-} from './windows-pty-root-identity'
+  killWindowsPtyDescendants,
+  type WindowsPtyDescendantSweep
+} from './windows-process-tree-kill'
 import type { ProcessTableRow } from './pty-process-table-parser'
 import {
   DESCENDANT_SNAPSHOT_TIMEOUT_MS,
@@ -176,15 +174,15 @@ export async function captureDescendantSnapshot(
 }
 
 type KillSweepDeps = SnapshotDeps &
-  TerminateDeps & {
-    ownsRoot?: () => boolean
+  TerminateDeps &
+  WindowsPtyDescendantSweep & {
+    beforeSignal?: () => void
     /** Shutdown can retain the owner until descendant escalation finishes. */
-    terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
+    terminateDescendants?: (
+      snapshot: DescendantSnapshot,
+      beforeSignal?: () => void
+    ) => void | Promise<unknown>
     awaitEscalation?: boolean | (() => boolean)
-    /** unavailable means no owned job exists, not that the tree exited. */
-    terminateOwnedTree?: () => JobTerminationOutcome
-    killWindowsTree?: WindowsTreeKiller
-    verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
   }
 
 /** Call before killing the root: POSIX needs live ancestry; Windows prefers an owned job, then an identity-gated PID walk. */
@@ -194,57 +192,62 @@ export async function killWithDescendantSweep(
   deps: KillSweepDeps = {}
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
-  if (platform === 'win32') {
-    try {
-      if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
-        // Owned jobs survive PID reuse and include descendants reparented away from the shell.
-        if (deps.terminateOwnedTree?.() === 'terminated') {
-          return
-        }
-        // ConPTY closes the shell handle before JS sees exit; require OS identity to reject recycled PIDs.
-        const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
-        const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
-        // Re-check ownership: the identity query awaits, so exit can land meanwhile.
-        if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
-          const killTree =
-            deps.killWindowsTree ??
-            ((pid: number) => terminateWindowsProcessTree(pid, { site: 'pty-descendant-sweep' }))
-          // A taskkill failure must not skip root termination.
-          await killTree(rootPid).catch(() => {})
+  let refused = false
+  const authorize = deps.beforeSignal
+    ? () => {
+        try {
+          deps.beforeSignal?.()
+        } catch (error) {
+          refused = true
+          throw error
         }
       }
-    } finally {
+    : undefined
+  const finish = (): void => {
+    if (!refused) {
       killRoot()
+    }
+  }
+  if (platform === 'win32') {
+    try {
+      await killWindowsPtyDescendants(rootPid, deps, authorize)
+    } finally {
+      finish()
     }
     return
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
-  let descendants: void | Promise<unknown> = undefined
+  const terminateDescendants = (captured: DescendantSnapshot): void | Promise<unknown> => {
+    if (deps.terminateDescendants) {
+      return authorize
+        ? deps.terminateDescendants(captured, authorize)
+        : deps.terminateDescendants(captured)
+    }
+    if (!authorize) {
+      return terminateDescendantSnapshot(captured, deps)
+    }
+    const signal = deps.sendSignal ?? sendDescendantSignal
+    return terminateDescendantSnapshot(captured, {
+      ...deps,
+      sendSignal: (pid, name) => {
+        authorize()
+        signal(pid, name)
+      }
+    })
+  }
   const awaitEscalation =
     typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation
-  if (awaitEscalation) {
-    try {
-      if (snapshot && (deps.ownsRoot?.() ?? true)) {
-        descendants = deps.terminateDescendants
-          ? deps.terminateDescendants(snapshot)
-          : terminateDescendantSnapshot(snapshot, deps)
-      }
-      await descendants
-    } finally {
-      killRoot()
-    }
-    return
-  }
   try {
     // Signal descendants before root death creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
-      descendants = deps.terminateDescendants
-        ? deps.terminateDescendants(snapshot)
-        : terminateDescendantSnapshot(snapshot, deps)
+      const descendants = terminateDescendants(snapshot)
+      if (awaitEscalation || authorize) {
+        await descendants
+      }
     }
   } finally {
-    killRoot()
+    finish()
   }
 }
 
@@ -288,36 +291,35 @@ export function terminateDescendantSnapshot(
     return
   }
   const timer = setTimeout(() => {
-    void readProcessTableBeforeDeadline(
-      readTable,
-      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
-    ).then((capture) => {
-      if (!capture) {
-        return
-      }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Index only the small set of signal targets, not the whole process table.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+    void readProcessTableBeforeDeadline(readTable, deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS)
+      .then((capture) => {
+        if (!capture) {
+          return
         }
-      }
-      for (const row of snapshot.descendants) {
-        const live = liveTargets.get(row.pid)
-        if (
-          hasUnambiguousStartIdentity(
-            row,
-            snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
-          ) &&
-          live?.startedAt === row.startedAt &&
-          live.pgid === row.pgid
-        ) {
-          sendSignal(row.pid, 'SIGKILL')
+        const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
+        const liveTargets = new Map<number, ProcessTableRow | null>()
+        // Index only the small set of signal targets, not the whole process table.
+        for (const live of capture.rows) {
+          if (expectedPids.has(live.pid)) {
+            // Duplicate PID rows make identity ambiguous, so never escalate them.
+            liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+          }
         }
-      }
-    })
+        for (const row of snapshot.descendants) {
+          const live = liveTargets.get(row.pid)
+          if (
+            hasUnambiguousStartIdentity(
+              row,
+              snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+            ) &&
+            live?.startedAt === row.startedAt &&
+            live.pgid === row.pgid
+          ) {
+            sendSignal(row.pid, 'SIGKILL')
+          }
+        }
+      })
+      .catch(() => {})
   }, deps.graceMs ?? DESCENDANT_KILL_GRACE_MS)
   timer.unref?.()
 }

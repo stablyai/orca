@@ -16,6 +16,9 @@ export async function createDesktopTerminal(
   opts: TerminalCreateOptions,
   presentation: RuntimeTerminalPresentation | undefined
 ): Promise<RuntimeTerminalCreate> {
+  if (opts.accountRestart) {
+    throw new Error('invalid_account_restart')
+  }
   // Without a workspace there is no host on which to resolve a shell.
   if (opts.shellOverride) {
     throw new Error(

@@ -109,7 +109,8 @@ export class DaemonRequestRouter {
         if (
           request.payload.expectedIncarnationId !== undefined ||
           request.payload.requireNoAgentOwner !== undefined ||
-          request.payload.requireUnattached !== undefined
+          request.payload.requireUnattached !== undefined ||
+          request.payload.verifyExitOnly !== undefined
         ) {
           return handleDaemonFencedTermination(request.payload, this.options)
         }
@@ -180,7 +181,7 @@ export class DaemonRequestRouter {
         return this.options.host.takePendingOutput(
           request.payload.sessionId,
           request.payload.includeSnapshot === true,
-          { teardownSnapshot: request.payload.teardownSnapshot === true }
+          request.payload
         )
       case 'ping':
       case 'systemResolverHealth':

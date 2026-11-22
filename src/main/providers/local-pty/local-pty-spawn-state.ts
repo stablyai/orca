@@ -59,10 +59,18 @@ export function cancelAllPendingLocalPtySpawns(): void {
   }
 }
 
-export function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResult | null {
+export function reattachLocalPty(
+  id: string,
+  cols: number,
+  rows: number,
+  requireFreshSession?: true
+): PtySpawnResult | null {
   const existing = ptyProcesses.get(id)
   if (!existing) {
     return null
+  }
+  if (requireFreshSession) {
+    throw new Error('terminal_pane_owner_changed')
   }
   let resized = false
   try {

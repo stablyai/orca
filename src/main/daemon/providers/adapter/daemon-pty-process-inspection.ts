@@ -155,7 +155,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
   /** Recover daemon-only ownership and WSL pane keys before Sleep checkpoints a reopened session. */
   protected async adoptListedSessionForSleep(
     sessionId: string,
-    deadlineMs?: number
+    deadlineMs?: number,
+    expectedIncarnationId?: string
   ): Promise<void> {
     // Keep seed-failed sessions suspended so a fresh screen cannot overwrite their restore history.
     const needsAdoption =
@@ -175,7 +176,12 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       undefined,
       remainingDaemonRequestTimeoutMs(deadlineMs)
     )
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
+    const session = result.sessions.find(
+      (entry) =>
+        entry.sessionId === sessionId &&
+        entry.isAlive &&
+        (expectedIncarnationId === undefined || entry.incarnationId === expectedIncarnationId)
+    )
     if (session && needsAdoption) {
       await this.adoptLiveSession(session, { activeOnlyIfReconciled: true })
     } else if (session?.wslDistro && session.paneKey) {

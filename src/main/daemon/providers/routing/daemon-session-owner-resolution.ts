@@ -35,7 +35,8 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   constructor(
     providers: readonly T[],
     private readonly routes: Map<string, IPtyProvider>,
-    private readonly isProviderProvenGone?: (provider: T, error: unknown) => boolean
+    private readonly isProviderProvenGone?: (provider: T, error: unknown) => boolean,
+    private readonly inventoryCanProveExit = true
   ) {
     this.providers = [...providers]
   }
@@ -114,23 +115,55 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     return resolution
   }
 
-  resolveTermination = async (sessionId: string, incarnationId: string) => {
+  resolveTermination = async (sessionId: string, incarnationId: string, refresh = false) => {
     const routed = this.providers.find((provider) => provider === this.routes.get(sessionId))
-    if (routed && this.routeIncarnations.get(sessionId) === incarnationId) {
+    if (!refresh && routed && this.routeIncarnations.get(sessionId) === incarnationId) {
       return { kind: 'owner' as const, provider: routed }
+    }
+    if (refresh && this.inventoryInFlight) {
+      // Retirement needs observations started after its checkpoint finished.
+      await this.inventoryInFlight
     }
     // Another session's cached inventory cannot prove this one exited.
     const inventory = await this.inventory(false)
     if (inventory.epoch !== this.epoch) {
       return { kind: 'unknown' as const }
     }
-    return resolveDaemonInventoryTerminationOwner(
+    const resolution = resolveDaemonInventoryTerminationOwner(
       inventory,
       sessionId,
       this.providers.length > 0,
       (id, provider, incarnationId) => this.setRoute(id, provider, incarnationId),
       incarnationId
     )
+    // A degraded inventory may omit a live session on the unavailable daemon.
+    return resolution.kind === 'absent' && !this.inventoryCanProveExit
+      ? { kind: 'unknown' as const }
+      : resolution
+  }
+
+  async revalidateTermination(
+    sessionId: string,
+    incarnationId: string,
+    provider: IPtyProvider
+  ): Promise<(() => void) | 'already_exited'> {
+    const resolved = await this.resolveTermination(sessionId, incarnationId, true)
+    if (resolved.kind === 'absent') {
+      return 'already_exited'
+    }
+    if (resolved.kind !== 'owner' || resolved.provider !== provider) {
+      throw new Error('terminal_pane_owner_unverified')
+    }
+    const epoch = this.epoch
+    return () => {
+      if (
+        this.epoch !== epoch ||
+        this.getVerifiedRoute(sessionId) !== provider ||
+        this.getRouteIncarnation(sessionId) !== incarnationId
+      ) {
+        throw new Error('terminal_pane_owner_unverified')
+      }
+    }
   }
 
   async discoverRoutes(): Promise<void> {

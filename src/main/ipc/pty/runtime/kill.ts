@@ -7,6 +7,7 @@ import {
   resolvePtyExecutionHost
 } from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
+import { shutdownPtyIncarnation } from '../provider/shutdown-detect'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { errorMessage } from '../../../../shared/errors/error-message'
@@ -23,6 +24,14 @@ import {
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
+
+type StopAndWaitOptions = {
+  keepHistory?: boolean
+  deadlineMs?: number
+  expectedIncarnationId?: string
+  signal?: AbortSignal
+  authorize?: () => void
+}
 
 /** Unproved synthetic exit stays unverifiable; rejected incarnation proof publishes nothing for a same-ID respawn. */
 export function publishSyntheticExit(
@@ -180,7 +189,7 @@ export function retireRejectedPtyFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: StopAndWaitOptions
 ): Promise<boolean> {
   // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
   const relayOwesStop =
@@ -200,7 +209,7 @@ export async function stopAndWaitPtyFromRuntimeController(
 async function stopAndWaitPty(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: StopAndWaitOptions
 ): Promise<boolean> {
   const {
     runtime,
@@ -213,7 +222,7 @@ async function stopAndWaitPty(
   const connectionId = getPtySshConnectionId(ptyId)
   if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
     // A reversible stop must not leave the bridge's durable stop behind, so the pane stays live.
-    if (opts?.keepHistory) {
+    if (opts?.keepHistory || opts?.expectedIncarnationId) {
       return false
     }
     const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
@@ -252,17 +261,37 @@ async function stopAndWaitPty(
       await startupPromise
     }
   }
+  if (opts?.signal?.aborted) {
+    throw new Error('client_disconnected')
+  }
   let provider: IPtyProvider
   try {
     provider = getProviderForPty(ptyId)
   } catch {
-    if (connectionId) {
+    if (connectionId && !opts?.expectedIncarnationId) {
       // Missing SSH provider cannot confirm remote exit; retain its tombstoned lease.
       const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store, unproven)
       publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
     }
     return false
+  }
+  if (opts?.expectedIncarnationId) {
+    const proof = await shutdownPtyIncarnation(
+      provider,
+      ptyId,
+      opts.expectedIncarnationId,
+      opts.keepHistory ?? false,
+      opts.authorize
+    )
+    publishSyntheticExit(
+      deps,
+      ptyId,
+      0,
+      finishPtyShutdown(ptyId, connectionId, store, proof),
+      proof
+    )
+    return true
   }
   const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
   let providerExitObserved = false

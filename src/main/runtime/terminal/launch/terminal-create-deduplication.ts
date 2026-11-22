@@ -9,6 +9,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { ACCOUNT_RESTART_OUTCOME_UNKNOWN } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import { ownerSurfacing } from './terminal-presentation'
 import {
@@ -51,8 +52,12 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
     ) => Promise<RuntimeTerminalCreate>,
-    options: { wslUserAct?: boolean } = {}
+    options: { wslUserAct?: boolean; accountRestart?: object } = {}
   ): Promise<RuntimeTerminalCreate> {
+    // Restart reconciliation requires the pane's owner snapshot, not handle inventory.
+    if (options.accountRestart && reconcileExisting) {
+      throw new Error(ACCOUNT_RESTART_OUTCOME_UNKNOWN)
+    }
     if (!clientMutationId || !worktreeSelector) {
       if (reconcileExisting) {
         throw new Error('runtime_unavailable')
@@ -65,10 +70,12 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       options
     )
     const canonicalWorktreeSelector = `id:${workspace.id}`
+    const kind = options.accountRestart ? 'account-restart' : 'create'
     const preAllocatedHandle = deriveRemoteRuntimeTerminalCreateHandle(
       clientIdentity,
       workspace.id,
-      clientMutationId
+      clientMutationId,
+      kind
     )
     return this.terminalCreateIdempotency.run(
       clientIdentity,
@@ -87,7 +94,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
           }
         }
         return await run(canonicalWorktreeSelector, preAllocatedHandle)
-      }
+      },
+      kind,
+      options.accountRestart
     )
   }
 

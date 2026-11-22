@@ -1,5 +1,8 @@
-import type { IPtyProvider } from '../../providers/pty/provider-contract'
-import type { DaemonSessionOwnerResolution } from '../providers/routing/daemon-session-owner-resolution'
+import type { IPtyProvider, RevalidateFencedPtyRoute } from '../../providers/pty/provider-contract'
+import type {
+  DaemonSessionOwnerResolution,
+  DaemonSessionOwnerResolver
+} from '../providers/routing/daemon-session-owner-resolution'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -10,12 +13,34 @@ import type { DaemonSessionAttachments } from './daemon-session-attachments'
 
 type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { kind: 'replaced' }
 
+export function terminateDaemonFencedRoute(
+  resolver: Pick<
+    DaemonSessionOwnerResolver<IPtyProvider>,
+    'resolveTermination' | 'revalidateTermination'
+  >,
+  request: PtyFencedTerminationRequest,
+  authorize?: () => void
+): Promise<PtyFencedTerminationOutcome> {
+  return terminateResolvedDaemonSession(
+    request,
+    authorize,
+    () => resolver.resolveTermination(request.id, request.expectedIncarnationId),
+    authorize
+      ? (provider) =>
+          resolver.revalidateTermination(request.id, request.expectedIncarnationId, provider)
+      : undefined
+  )
+}
+
 export async function terminateResolvedDaemonSession(
   request: PtyFencedTerminationRequest,
-  resolve: () => Promise<FencedOwner<IPtyProvider>>
+  authorize: (() => void) | undefined,
+  resolve: () => Promise<FencedOwner<IPtyProvider>>,
+  revalidate?: (provider: IPtyProvider) => ReturnType<RevalidateFencedPtyRoute>
 ): Promise<PtyFencedTerminationOutcome> {
   const resolution = await resolve()
   if (resolution.kind === 'absent') {
+    authorize?.()
     return { outcome: 'already_exited' }
   }
   if (resolution.kind === 'replaced') {
@@ -24,10 +49,14 @@ export async function terminateResolvedDaemonSession(
   if (resolution.kind !== 'owner') {
     return { outcome: 'refused', reason: 'unverifiable' }
   }
-  if (!resolution.provider.supportsFencedTermination?.(request.id)) {
+  const { provider } = resolution
+  if (!provider.supportsFencedTermination?.(request.id, request) || !provider.killFenced) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
-  return resolution.provider.killFenced?.(request) ?? { outcome: 'refused', reason: 'unsupported' }
+  if (revalidate) {
+    return provider.killFenced(request, authorize, () => revalidate(provider))
+  }
+  return authorize ? provider.killFenced(request, authorize) : provider.killFenced(request)
 }
 
 export async function handleDaemonFencedTermination(
@@ -36,6 +65,7 @@ export async function handleDaemonFencedTermination(
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
+    verifyExitOnly?: true
   },
   deps: {
     host: TerminalHost
@@ -50,7 +80,8 @@ export async function handleDaemonFencedTermination(
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
     requireNoAgentOwner: payload.requireNoAgentOwner === true,
-    requireUnattached: payload.requireUnattached === true
+    requireUnattached: payload.requireUnattached === true,
+    ...(payload.verifyExitOnly === true ? { verifyExitOnly: true } : {})
   })
   if (!termination.accepted) {
     return termination.result

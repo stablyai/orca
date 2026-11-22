@@ -74,6 +74,8 @@ export type PtySpawnOptions = {
   agentWorkspaceTrust?: AgentWorkspaceTrustSpawnRequest
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
+  /** A conditional restart may create a new process but must never attach to an existing one. */
+  requireFreshSession?: true
   /** Exact persisted owner expected by an attach-only routing decision. */
   expectedIncarnationId?: PtyIncarnationId
   /** True when runtime state makes the expected incarnation a hard attach fence. */
@@ -110,6 +112,8 @@ export type PtySpawnOptions = {
 
 type PtyProbeOptions = { signal?: AbortSignal }
 
+export type RevalidateFencedPtyRoute = () => Promise<(() => void) | 'already_exited'>
+
 export type IPtyProvider = {
   /** SSH providers only: the relay session generation that registered them. */
   readonly providerGeneration?: number
@@ -131,8 +135,12 @@ export type IPtyProvider = {
   supportsAgentSessionClaims?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
-  supportsFencedTermination?: (id: string) => boolean
-  killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  supportsFencedTermination?: (id: string, request?: PtyFencedTerminationRequest) => boolean
+  killFenced?: (
+    request: PtyFencedTerminationRequest,
+    authorize?: () => void,
+    revalidateRoute?: RevalidateFencedPtyRoute
+  ) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<PtySpawnResult | void>

@@ -64,6 +64,7 @@ export async function createOrAttachClaimedAgentSession(args: {
     },
     claim: ensureRequest.claim,
     surface: ensureRequest.surface,
+    requireFresh: args.options.requireFreshSession,
     spawn: async ({ generation }) => {
       created = await args.createOrAttach({
         ...args.options,

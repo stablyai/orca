@@ -78,13 +78,13 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           : undefined
       const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
       const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
-      let preAllocatedHandle =
-        launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
+      let { preAllocatedHandle = this.createPreAllocatedTerminalHandle() } = launchOpts
       let { tabId, leafId, paneKey } = allocateTerminalPaneIdentity(launchOpts)
       const hint = migratedPaneRestoreHint(this.store, workspace, paneKey)
       const commit = createIdempotentCallback(hint.consumeThen(launchOpts.onPtySpawnCommitted))
       // Claimed before any await, so a concurrent create of this pane cannot slip in between.
-      const claimedStablePaneCreate = ptyController.claimStablePaneCreate?.({
+      const stablePaneController = opts.accountRestart ? undefined : ptyController
+      const claimedStablePaneCreate = stablePaneController?.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
         tabId,
@@ -184,7 +184,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
+        const adoptedBeforeLaunch = await stablePaneController?.adoptStablePane?.({
           ...initialSize,
           cwd,
           connectionId: workspace.connectionId,
@@ -202,8 +202,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (adoptedBeforeLaunch) {
           result = materializedStablePaneReply(adoptedBeforeLaunch, preAllocatedHandle)
           Object.assign(result, this.getTerminalLaunchResult(result.id))
-        } else if (!ptyController.adoptStablePane) {
-          result = await spawnFresh({ mustExist: false })
+        } else if (!stablePaneController?.adoptStablePane) {
+          result = await spawnFresh({ mustExist: Boolean(opts.accountRestart) })
           teamAllocation.acceptFresh(result)
         }
         if (!result.stablePaneOwner) {

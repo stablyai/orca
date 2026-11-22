@@ -59,6 +59,7 @@ export function terminalSpawnOptions({
 }) {
   return {
     ...spawnShellInputs(launchOpts),
+    ...(launchOpts.accountRestart ? { accountRestart: launchOpts.accountRestart } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...launcherSpawnArgs,
     terminalKittyKeyboardProtocol: launchOpts.terminalKittyKeyboardProtocol,

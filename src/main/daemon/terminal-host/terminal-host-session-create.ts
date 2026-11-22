@@ -59,6 +59,9 @@ export async function createOrAttachTerminalSession(
   // Attach synchronously: in-flight recovery resets arrive after the snapshot in stream order.
   // Checkpoint readers that require settled ownership use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
+    if (opts.requireFreshSession) {
+      throw new Error('terminal_pane_owner_changed')
+    }
     deps.assertCreateAllowed()
     const attachedSession = existing
     opts.onPhysicalOwner?.(

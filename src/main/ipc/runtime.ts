@@ -12,6 +12,7 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/browser/client-h
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './runtime-client/desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { isAccountRestartRpcCall } from '../runtime/rpc/terminal/account-restart-rpc'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
@@ -110,6 +111,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
+      const caller = desktopSenders.unaryContextFor(event.sender)
       return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
@@ -129,7 +131,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           clientId: 'desktop-renderer',
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
-          connectionId: desktopSenders.connectionIdFor(event.sender),
+          connectionId: caller.connectionId,
+          ...(isAccountRestartRpcCall(args.method, args.params) ? { signal: caller.signal } : {}),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }
       )

@@ -1,12 +1,19 @@
 import { createHash } from 'node:crypto'
 
+export type TerminalCreateOperationKind = 'create' | 'account-restart'
+
 export function deriveRemoteRuntimeTerminalCreateHandle(
   clientIdentity: string,
   worktreeId: string,
-  clientMutationId: string
+  clientMutationId: string,
+  kind: TerminalCreateOperationKind = 'create'
 ): string {
   const digest = createHash('sha256')
-    .update('orca.remote-terminal-create.v2\0')
+    .update(
+      kind === 'account-restart'
+        ? 'orca.remote-terminal-account-restart.v1\0'
+        : 'orca.remote-terminal-create.v2\0'
+    )
     .update(clientIdentity)
     .update('\0')
     .update(worktreeId)

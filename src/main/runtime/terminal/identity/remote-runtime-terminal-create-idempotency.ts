@@ -1,9 +1,14 @@
+import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { TerminalCreateOperationKind } from './remote-runtime-terminal-create-identity'
 
 const DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES = 4_096
 
 export class RemoteRuntimeTerminalCreateIdempotency {
-  private readonly inFlight = new Map<string, Promise<RuntimeTerminalCreate>>()
+  private readonly inFlight = new Map<
+    string,
+    { promise: Promise<RuntimeTerminalCreate>; restartIntent?: object }
+  >()
 
   constructor(private readonly maxInFlight = DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES) {}
 
@@ -11,12 +16,20 @@ export class RemoteRuntimeTerminalCreateIdempotency {
     clientIdentity: string,
     worktreeId: string,
     clientMutationId: string,
-    create: () => Promise<RuntimeTerminalCreate>
+    create: () => Promise<RuntimeTerminalCreate>,
+    kind: TerminalCreateOperationKind = 'create',
+    restartIntent?: object
   ): Promise<RuntimeTerminalCreate> {
-    const key = `${clientIdentity}\0${worktreeId}\0${clientMutationId}`
+    const key = JSON.stringify([kind, clientIdentity, worktreeId, clientMutationId])
     const existing = this.inFlight.get(key)
     if (existing) {
-      return existing
+      if (
+        existing.restartIntent !== restartIntent &&
+        !isDeepStrictEqual(existing.restartIntent, restartIntent)
+      ) {
+        return Promise.reject(new Error('terminal_create_identity_conflict'))
+      }
+      return existing.promise
     }
     if (this.inFlight.size >= this.maxInFlight) {
       return Promise.reject(
@@ -25,9 +38,9 @@ export class RemoteRuntimeTerminalCreateIdempotency {
     }
 
     const promise = create()
-    this.inFlight.set(key, promise)
+    this.inFlight.set(key, { promise, restartIntent })
     const drop = (): void => {
-      if (this.inFlight.get(key) === promise) {
+      if (this.inFlight.get(key)?.promise === promise) {
         this.inFlight.delete(key)
       }
     }

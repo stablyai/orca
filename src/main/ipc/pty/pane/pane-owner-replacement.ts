@@ -1,3 +1,7 @@
+import type { AccountRestartOperation } from './account-restart-owner'
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import type { PtyRetirementEvidence } from '../../../pty/process-retirement/pty-exit-proof'
+import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -11,9 +15,15 @@ export async function stopReplacedPaneOwner(
   deps: {
     runtime?: OrcaRuntimeService
     store?: Store
-    stopReplacedPty: (id: string) => Promise<void>
+    stopReplacedPty: (
+      id: string,
+      expectedIncarnationId?: string,
+      authorize?: () => void
+    ) => Promise<PtyRetirementEvidence | void>
   },
   args: {
+    expectedIncarnationId?: string
+    authorize?: () => void
     replacesPtyId: string
     paneKey: string | null
     worktreeId: string | undefined
@@ -27,10 +37,23 @@ export async function stopReplacedPaneOwner(
     args.worktreeId,
     args.connectionId
   )
-  if (owner && owner.ptyId !== args.replacesPtyId) {
+  if (
+    (owner && owner.ptyId !== args.replacesPtyId) ||
+    (args.expectedIncarnationId && owner?.incarnationId !== args.expectedIncarnationId)
+  ) {
     throw new Error('terminal_pane_owner_changed')
   }
-  await deps.stopReplacedPty(args.replacesPtyId)
+  const evidence = await deps.stopReplacedPty(
+    args.replacesPtyId,
+    args.expectedIncarnationId,
+    args.authorize
+  )
+  if (
+    args.expectedIncarnationId &&
+    (!(evidence instanceof PtyExitProof) || evidence.incarnationId !== args.expectedIncarnationId)
+  ) {
+    throw new Error('terminal_replaced_pty_stop_unverified')
+  }
   const pane = args.paneKey ? parsePaneKey(args.paneKey) : null
   return {
     ptyId: args.replacesPtyId,
@@ -50,11 +73,12 @@ export async function stopReplacedPaneOwner(
 export function swapReplacedPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,
-  replaced: ReplacedPaneOwner
+  replaced: ReplacedPaneOwner,
+  hostId = replaced.pane?.hostId
 ): () => PersistPtyBindingArgs | null {
   return () => {
     const bound =
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
+      store.getWorkspaceSession(hostId).terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
         binding.leafId
       ]
     // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab).
@@ -72,7 +96,11 @@ export async function retireReplacedPaneBinding(
   replaced: ReplacedPaneOwner & {
     pane: NonNullable<ReplacedPaneOwner['pane']>
     /** Also fence on the saved incarnation, for an id the host reported absent rather than stopped. */
-    absenceFence?: { incarnationId: string | undefined }
+    absenceFence?: {
+      incarnationId: string | undefined
+      onRetired?: (generation: number) => void
+      accountRestart?: AccountRestartCondition
+    }
   }
 ): Promise<boolean> {
   const { hostId, ...pane } = replaced.pane
@@ -88,14 +116,36 @@ export async function retireReplacedPaneBinding(
 /** Best effort: a failed replacement must not leave the stopped id bound for the remount to reattach. */
 export async function releaseStoppedPaneBinding(
   store: Store | undefined,
-  replaced: ReplacedPaneOwner
-): Promise<void> {
+  replaced: ReplacedPaneOwner,
+  operation?: AccountRestartOperation
+): Promise<boolean> {
   if (!store || !replaced.pane) {
-    return
+    return false
   }
   try {
-    await retireReplacedPaneBinding(store, { ...replaced, pane: replaced.pane })
+    return await retireReplacedPaneBinding(store, {
+      ...replaced,
+      pane: replaced.pane,
+      ...(operation
+        ? {
+            absenceFence: {
+              incarnationId:
+                operation.condition.expected.kind === 'endpoint'
+                  ? operation.condition.expected.incarnationId
+                  : undefined,
+              accountRestart: operation.condition,
+              onRetired: (generation: number) => {
+                operation.condition = {
+                  ...operation.condition,
+                  expected: { kind: 'empty', bindingGeneration: generation }
+                }
+              }
+            }
+          }
+        : {})
+    })
   } catch (error) {
     console.warn('[pty] could not clear the stopped pane binding after a failed restart:', error)
+    return false
   }
 }

@@ -19,10 +19,13 @@ import {
   type ResolvedPtyHost
 } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
+import { shutdownPtyIncarnation } from '../provider/shutdown-detect'
 import { publishSyntheticExit, stopLegacyRelayBridgedPty } from '../runtime/kill'
+import { isLegacyRelayBridgedPty } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import {
   PtyExitProof,
-  PtyRetirementWithoutProof
+  PtyRetirementWithoutProof,
+  type PtyRetirementEvidence
 } from '../../../pty/process-retirement/pty-exit-proof'
 
 export type PtyKillIpcDeps = {
@@ -50,8 +53,13 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
 }
 
 /** Label successful replacement stops as handoff; failed stops leave no label. */
-export async function stopReplacedPanePty(deps: PtyKillIpcDeps, id: string): Promise<void> {
-  await stopRendererOwnedPtyAs(deps, { id }, 'replaced')
+export async function stopReplacedPanePty(
+  deps: PtyKillIpcDeps,
+  id: string,
+  expectedIncarnationId?: string,
+  authorize?: () => void
+): Promise<PtyRetirementEvidence | void> {
+  return stopRendererOwnedPtyAs(deps, { id, expectedIncarnationId, authorize }, 'replaced')
 }
 
 /** Settle only after shutdown is observed or synthesized. */
@@ -68,11 +76,18 @@ export async function stopRendererOwnedPty(
   await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
 }
 
+type RendererPtyStop = {
+  id: string
+  keepHistory?: boolean
+  expectedIncarnationId?: string
+  authorize?: () => void
+}
+
 async function stopRendererOwnedPtyAs(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean },
+  args: RendererPtyStop,
   intentionalStop: TerminalIntentionalStopKind | null
-): Promise<void> {
+): Promise<PtyRetirementEvidence | void> {
   if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
     // Runtime handles belong to terminal.close; unowned routing could target a local provider.
     throw new Error('Invalid PTY provider id')
@@ -81,13 +96,15 @@ async function stopRendererOwnedPtyAs(
     ? deps.runtime?.intentionalPtyStops?.mark(
         args.id,
         intentionalStop,
-        ptyIncarnationById.get(args.id) ?? null
+        args.expectedIncarnationId ?? ptyIncarnationById.get(args.id) ?? null
       )
     : undefined
   let stopped = false
   try {
-    await stopRendererOwnedPtyProcess(deps, args)
-    stopped = true
+    const evidence = await stopRendererOwnedPtyProcess(deps, args)
+    // Legacy relay acknowledgement retains ordinary stop labels without proving account retirement.
+    stopped = evidence === undefined || evidence instanceof PtyExitProof
+    return evidence
   } finally {
     settleStop?.(stopped)
     if (!stopped) {
@@ -99,11 +116,14 @@ async function stopRendererOwnedPtyAs(
 
 async function stopRendererOwnedPtyProcess(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean }
-): Promise<void> {
-  const { store, runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
-  runtime?.markPtyStopRequested?.(args.id)
+  args: RendererPtyStop
+): Promise<PtyRetirementEvidence | void> {
+  const { store, runtime, getLocalPtyProviderStartupPromise } = deps
   const connectionId = getPtySshConnectionId(args.id)
+  if (args.expectedIncarnationId && isLegacyRelayBridgedPty(args.id)) {
+    throw new Error('terminal_replaced_pty_stop_unverified')
+  }
+  runtime?.markPtyStopRequested?.(args.id)
   const bridgedStop = stopLegacyRelayBridgedPty(args.id, connectionId, args.keepHistory === true)
   if (bridgedStop) {
     await bridgedStop
@@ -116,21 +136,45 @@ async function stopRendererOwnedPtyProcess(
   }
   const provider = tryGetProviderForPty(args.id)
   if (!provider && connectionId) {
+    if (args.expectedIncarnationId) {
+      throw new Error('terminal_replaced_pty_stop_unverified')
+    }
     // Detached/unhydrated SSH ownership must be tombstoned, never routed to local fallback.
     const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
     const incarnationId = finishPtyShutdown(args.id, connectionId, store, unproven)
     publishSyntheticExit(deps, args.id, -1, incarnationId, unproven)
-    return
+    return unproven
   }
   const shutdownProvider = provider ?? getProviderForPty(args.id)
+  const proof = args.expectedIncarnationId
+    ? await shutdownPtyIncarnation(
+        shutdownProvider,
+        args.id,
+        args.expectedIncarnationId,
+        true,
+        args.authorize
+      )
+    : await stopRendererProviderPty(deps, shutdownProvider, args)
+  // Some shutdown paths omit onExit; idempotent cleanup must cover them too.
+  const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
+  if (proof.source !== 'exit-observed') {
+    publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
+  }
+  return proof
+}
+
+async function stopRendererProviderPty(
+  { shutdownProviderAndDetectExit }: PtyKillIpcDeps,
+  provider: IPtyProvider,
+  args: { id: string; keepHistory?: boolean }
+): Promise<PtyExitProof> {
   const stoppingIncarnationId = ptyIncarnationById.get(args.id)
-  let proof: PtyExitProof
   try {
-    const providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+    const providerExitObserved = await shutdownProviderAndDetectExit(provider, args.id, {
       immediate: true,
       keepHistory: args.keepHistory ?? false
     })
-    proof = PtyExitProof.from(
+    return PtyExitProof.from(
       providerExitObserved ? 'exit-observed' : 'shutdown-acknowledged',
       stoppingIncarnationId
     )
@@ -139,12 +183,7 @@ async function stopRendererOwnedPtyProcess(
       // Failed shutdown may leave a live process; keep ownership so retry can reach it.
       throw err
     }
-    proof = PtyExitProof.from('absent', stoppingIncarnationId)
-  }
-  // Some shutdown paths omit onExit; idempotent cleanup must cover them too.
-  const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
-  if (proof.source !== 'exit-observed') {
-    publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
+    return PtyExitProof.from('absent', stoppingIncarnationId)
   }
 }
 

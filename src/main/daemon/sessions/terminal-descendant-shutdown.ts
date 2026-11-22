@@ -65,7 +65,8 @@ async function findLoneLoginShellPid(snapshot: DescendantSnapshot): Promise<numb
 
 export async function terminateShutdownDescendants(
   snapshot: DescendantSnapshot,
-  shellIsRootChild: boolean
+  shellIsRootChild: boolean,
+  authorize?: () => void
 ): Promise<DescendantTreeVerdict> {
   if (snapshot.descendants.length === 0) {
     return 'exited'
@@ -76,6 +77,14 @@ export async function terminateShutdownDescendants(
     keepAlive: true,
     requireIdentityBeforeSignal: true,
     readTable: readShutdownProcessTable,
+    ...(authorize
+      ? {
+          sendSignal: (pid, signal) => {
+            authorize()
+            descendantTermination.sendDescendantSignal(pid, signal)
+          }
+        }
+      : {}),
     shellPid: shellIsRootChild ? await findLoneLoginShellPid(snapshot) : undefined
   })
 }

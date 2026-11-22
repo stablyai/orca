@@ -28,6 +28,7 @@ import {
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { admitPtySpawnOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import type { PtySpawnOutcome } from './spawn-outcome'
+import type { AccountRestartOperation } from '../pane/account-restart-owner'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import type { RuntimePtySpawnArgs } from '../runtime/spawn-state'
@@ -78,6 +79,7 @@ export type PtySpawnCommitState = {
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null
+  accountRestartOperation?: AccountRestartOperation
   agentTeamsLeaderHandle?: string | null
 }
 

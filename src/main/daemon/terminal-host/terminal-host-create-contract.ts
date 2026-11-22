@@ -24,6 +24,7 @@ export type CreateOrAttachOptions = {
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
+  requireFreshSession?: true
   shellOverride?: string
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null

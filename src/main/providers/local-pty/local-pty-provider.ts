@@ -5,6 +5,10 @@ import type { IPtyProvider, PtySpawnOptions } from '../pty/provider-contract'
 import type { PtyProcessInfo } from '../pty/process-info'
 import type { PtySpawnResult } from '../pty/spawn-result'
 import {
+  killLocalPtyFenced,
+  supportsLocalPtyFencedTermination
+} from './local-pty-fenced-retirement'
+import {
   WRITE_ACCEPTED,
   writeRefused,
   type WriteSettlement
@@ -103,6 +107,9 @@ export class LocalPtyProvider implements IPtyProvider {
   shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     return shutdownLocalPty(id, opts)
   }
+
+  supportsFencedTermination = supportsLocalPtyFencedTermination
+  killFenced = killLocalPtyFenced
 
   sendSignal(id: string, signal: string): Promise<void> {
     return sendLocalPtySignal(id, signal)

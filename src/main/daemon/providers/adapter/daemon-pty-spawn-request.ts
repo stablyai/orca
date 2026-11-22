@@ -8,7 +8,10 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  FRESH_RESTART_SESSION_PROTOCOL_VERSION,
+  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import {
@@ -80,7 +83,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract reconnectAfterWriteFailure(): void
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,
-    opts?: { final?: boolean; teardown?: boolean }
+    opts?: { final?: boolean; teardown?: boolean; expectedIncarnationId?: string }
   ): Promise<Set<string>>
   protected abstract publishAuditObservation(observation: DaemonAuditObservation): void
   protected abstract isRetiredEndpointTokenMissing(): boolean
@@ -116,6 +119,12 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+      if (
+        opts.requireFreshSession &&
+        this.protocolVersion < FRESH_RESTART_SESSION_PROTOCOL_VERSION
+      ) {
+        throw new Error('terminal_account_restart_unsupported')
+      }
       const payload = {
         sessionId: context.sessionId,
         cols: context.effectiveCols,
@@ -127,6 +136,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
+        ...(opts.requireFreshSession ? { requireFreshSession: true as const } : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
         terminalShellArgs: context.attachOnly ? undefined : opts.terminalShellArgs,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,

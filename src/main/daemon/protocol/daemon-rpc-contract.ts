@@ -47,6 +47,7 @@ export type CreateOrAttachRequest = {
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean
+    requireFreshSession?: true
     /** Preserve the selected shell instead of defaulting to the daemon’s platform fallback. */
     shellOverride?: string
     terminalShellArgs?: string[]
@@ -129,6 +130,7 @@ export type KillRequest = {
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
+    verifyExitOnly?: true
   }
 }
 
@@ -227,11 +229,13 @@ export type TakePendingOutputRequest = {
     includeSnapshot?: boolean
     /** Final pre-teardown checkpoints may release held parser bytes without disturbing live or warm snapshots. */
     teardownSnapshot?: boolean
+    expectedIncarnationId?: string
   }
 }
 
 export type TakePendingOutputResult = {
   records: PendingOutputRecord[]
+  incarnationId?: string
   /** Absent on older daemons; records stays held-only with includeSnapshot to avoid mixed-version duplicate replay. */
   drainedRecords?: PendingOutputRecord[]
   /** Persist nondecreasing batch numbers to detect lost records; empty incremental takes repeat the prior value. */

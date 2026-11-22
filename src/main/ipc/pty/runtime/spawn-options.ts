@@ -8,11 +8,8 @@ import {
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
-import {
-  assemblePtySpawnEnvDeletions,
-  assemblePtySpawnLaunchOptions,
-  seedPtySpawnSize
-} from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnLaunchOptions, seedPtySpawnSize } from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnEnvDeletions } from '../spawn/spawn-env-deletions'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -42,6 +39,7 @@ export async function buildRuntimePtySpawnOptions(
     skipCodexHomeEnv: ctx.skipCodexHomeEnv,
     stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
     codexResumeHomeSelected: ctx.codexResumeHomeSelected,
+    accountRestartAttemptId: ctx.accountRestartOperation?.condition.attemptId,
     settings
   })
   ctx.env = deletions.env

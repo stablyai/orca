@@ -24,6 +24,17 @@ export type ExitCallback = Parameters<IPtyProvider['onExit']>[0]
 
 export const ptyProcesses = new Map<string, pty.IPty>()
 export const ptyIncarnations = new Map<string, string>()
+export const exitedLocalPtyIncarnations = new Map<string, string>()
+
+export function recordLocalPtyExit(id: string, incarnationId: string): void {
+  const limit = 4096
+  exitedLocalPtyIncarnations.delete(id)
+  const oldest = exitedLocalPtyIncarnations.keys().next().value
+  if (exitedLocalPtyIncarnations.size >= limit && oldest !== undefined) {
+    exitedLocalPtyIncarnations.delete(oldest)
+  }
+  exitedLocalPtyIncarnations.set(id, incarnationId)
+}
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 export const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.

@@ -1,3 +1,5 @@
+import { terminateDaemonFencedRoute } from '../../server/daemon-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
@@ -14,12 +16,12 @@ export class DegradedDaemonOwnerRecovery {
     private readonly routes: Map<string, IPtyProvider>,
     private readonly spawnFresh: (opts: PtySpawnOptions) => Promise<PtySpawnResult>
   ) {
-    this.attachResolver = new DaemonSessionOwnerResolver(providers, routes)
+    this.attachResolver = new DaemonSessionOwnerResolver(providers, routes, undefined, false)
     this.livenessResolver = new DaemonSessionOwnerResolver(daemonAdapters, routes)
   }
 
-  resolveFencedOwner = (id: string, incarnationId: string) =>
-    this.attachResolver.resolveTermination(id, incarnationId)
+  killFenced = (request: PtyFencedTerminationRequest, authorize?: () => void) =>
+    terminateDaemonFencedRoute(this.attachResolver, request, authorize)
 
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     if (opts.attachOnly && opts.sessionId) {

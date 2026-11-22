@@ -128,7 +128,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
 
   protected async checkpointSessions(
     sessionIds: Iterable<string>,
-    opts?: { final?: boolean; teardown?: boolean }
+    opts?: { final?: boolean; teardown?: boolean; expectedIncarnationId?: string }
   ): Promise<Set<string>> {
     const completed = new Set<string>()
     if (!this.historyManager) {
@@ -159,7 +159,8 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
         const sessionId = ids[index]
         await this.checkpointSession(sessionId, {
           final: opts?.final === true,
-          teardown: opts?.teardown === true
+          teardown: opts?.teardown === true,
+          expectedIncarnationId: opts?.expectedIncarnationId
         })
           .then((result) => {
             // Deferred sessions stay dirty for later checkpoint retries.
@@ -201,7 +202,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
 
   protected async checkpointSession(
     sessionId: string,
-    opts: { final: boolean; teardown: boolean }
+    opts: { final: boolean; teardown: boolean; expectedIncarnationId?: string }
   ): Promise<'done' | 'deferred'> {
     // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {

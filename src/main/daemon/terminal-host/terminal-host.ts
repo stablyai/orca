@@ -182,7 +182,7 @@ export class TerminalHost {
     return Promise.resolve(killed)
   }
 
-  beginFencedTermination(request: PtyFencedTerminationRequest) {
+  beginFencedTermination(request: PtyFencedTerminationRequest & { verifyExitOnly?: true }) {
     return beginTerminalHostFencedTermination(request, {
       sessions: this.sessions,
       pendingCreations: this.pendingCreations,
@@ -303,7 +303,7 @@ export class TerminalHost {
   takePendingOutput(
     sessionId: string,
     includeSnapshot: boolean,
-    opts: { teardownSnapshot?: boolean } = {}
+    opts: { teardownSnapshot?: boolean; expectedIncarnationId?: string } = {}
   ): TakePendingOutputResult | null {
     return takeTerminalHostPendingOutput(this.sessions.get(sessionId), includeSnapshot, opts)
   }

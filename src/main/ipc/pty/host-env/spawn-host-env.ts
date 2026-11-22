@@ -85,7 +85,7 @@ type PtySpawnHostEnvArgs = {
   callerNamedSession: boolean
   /** A failed env build sweeps per-PTY state only for an id this request minted. */
   mintedSessionId: boolean
-  /** An account-switch restart resumes onto the selected account; only the window has one. */
+  /** An account-switch restart resumes onto the selected account. */
   resumeOnSelectedAccount: boolean
   /** Host accepts empty IDs without host env; window rejects them. */
   emptySessionIdSkipsHostEnv: boolean

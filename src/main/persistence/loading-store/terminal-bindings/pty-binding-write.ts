@@ -8,7 +8,8 @@ import type {
   resolveHostId,
   SessionHostPartitionOperations
 } from '../workspace-sessions/session-host-partitions'
-import { bumpPtyBindingGeneration } from './pty-binding-generations'
+import { bumpPtyBindingGeneration, ptyBindingGenerationOf } from './pty-binding-generations'
+import { accountRestartBindingIsRefused } from './account-restart-binding-refusal'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 import { applyPtyBinding } from './pty-binding-session-update'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
@@ -44,7 +45,10 @@ export function writePtyBinding(
     runtime,
     sessions
   }: {
-    runtime: Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains' | 'ptyBindingGenerations'>
+    runtime: Pick<
+      StoreRuntimeState,
+      'state' | 'dirtyProfileStateDomains' | 'ptyBindingGenerations' | 'workspaceMetadataCursor'
+    >
     sessions: Pick<SessionHostPartitionOperations, 'getWorkspaceSession'>
   },
   args: PersistPtyBindingArgs,
@@ -77,6 +81,23 @@ export function writePtyBinding(
       if (rolledBack !== current) {
         publishPtyBindingSession(runtime, resolvedHostId, rolledBack)
         bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
+        if (args.accountRestart && args.onAccountRestartRollback) {
+          const bindingGeneration = ptyBindingGenerationOf(runtime, resolvedHostId, args.leafId)
+          if (bindingGeneration !== undefined) {
+            const condition = {
+              ...args.accountRestart,
+              expected: { ...args.accountRestart.expected, bindingGeneration }
+            }
+            if (
+              !accountRestartBindingIsRefused(runtime, rolledBack, resolvedHostId, {
+                ...args,
+                accountRestart: condition
+              })
+            ) {
+              args.onAccountRestartRollback(condition)
+            }
+          }
+        }
       }
     }
   }

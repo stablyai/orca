@@ -1,3 +1,6 @@
+import { reconcileTrackedPtyBindingGenerations } from '../../loading-store/terminal-bindings/pty-binding-generations'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import type { TerminalTopologyCommitContext } from '../terminal-topology-commit'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -75,4 +78,21 @@ export function assignWorkspaceSessionPartition(
   }
   state.workspaceSessionsByHostId = { ...state.workspaceSessionsByHostId, [hostId]: session }
   return 'workspaceSessionsByHostId'
+}
+
+export function publishTerminalTopologyPartition(
+  context: TerminalTopologyCommitContext,
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState
+): void {
+  if (context.generations) {
+    reconcileTrackedPtyBindingGenerations(
+      context.generations,
+      hostId,
+      context.getSession(hostId),
+      session,
+      ORCA_LAYOUT_OWNER_IS_MAIN
+    )
+  }
+  context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, session))
 }

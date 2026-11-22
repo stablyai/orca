@@ -64,10 +64,21 @@ export function getTerminalHostAppliedSize(
 export function takeTerminalHostPendingOutput(
   session: Session | undefined,
   includeSnapshot: boolean,
-  opts: { teardownSnapshot?: boolean }
+  opts: { teardownSnapshot?: boolean; expectedIncarnationId?: string }
 ): TakePendingOutputResult | null {
-  if (!session || !session.isAlive) {
+  if (
+    !session?.isAlive ||
+    (opts.expectedIncarnationId !== undefined &&
+      opts.expectedIncarnationId !== session.incarnationId)
+  ) {
     return null
   }
-  return session.takePendingOutput(includeSnapshot, opts)
+  // The caller may still refuse retirement after a fenced checkpoint.
+  const take = session.takePendingOutput(
+    includeSnapshot,
+    opts.expectedIncarnationId === undefined ? opts : { teardownSnapshot: false }
+  )
+  return take && opts.expectedIncarnationId !== undefined
+    ? { ...take, incarnationId: session.incarnationId }
+    : take
 }

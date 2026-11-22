@@ -122,6 +122,7 @@ export class DaemonTerminalAdmission {
         command: payload.command,
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),
+        ...(payload.requireFreshSession === true ? { requireFreshSession: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),
         shellOverride: payload.shellOverride,
         terminalShellArgs: payload.terminalShellArgs,

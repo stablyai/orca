@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -16,6 +17,7 @@ import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/c
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export type TerminalCreateOptions = {
+  accountRestart?: AccountRestartCondition
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

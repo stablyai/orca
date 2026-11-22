@@ -1,5 +1,5 @@
 import { DaemonPtyTargetInspection } from './daemon-pty-target-inspection'
-import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
+import { terminateDaemonFencedRoute } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
@@ -126,10 +126,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.ownerResolver.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
   }
 
-  killFenced = (request: PtyFencedTerminationRequest) =>
-    terminateResolvedDaemonSession(request, () =>
-      this.ownerResolver.resolveTermination(request.id, request.expectedIncarnationId)
-    )
+  killFenced = (request: PtyFencedTerminationRequest, authorize?: () => void) =>
+    terminateDaemonFencedRoute(this.ownerResolver, request, authorize)
 
   supportsAgentSessionCreateOperations(): boolean {
     // New sessions route to current; legacy adapters retain existing IDs.

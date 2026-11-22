@@ -3,6 +3,7 @@ export type PtyFencedTerminationRequest = {
   expectedIncarnationId: string
   requireNoAgentOwner: boolean
   requireUnattached: boolean
+  keepHistory?: boolean
   switchCondition?: {
     token: string
     remainingMs: number

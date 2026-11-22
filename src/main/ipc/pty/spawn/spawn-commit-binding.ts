@@ -1,3 +1,4 @@
+import type { AccountRestartOperation } from '../pane/account-restart-owner'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
@@ -9,6 +10,7 @@ import { persistFreshPaneBinding } from '../pane/fresh-pane-binding'
 import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** A lane's pane binding for its new process, saved before the spawn is acknowledged. */
 export type PtySpawnPaneBinding = {
@@ -23,6 +25,7 @@ export type PtySpawnPaneBinding = {
 /** Saves the binding, or a swap over the replaced owner; a failed save discards the new process. */
 export async function savePtySpawnPaneBinding(
   state: {
+    accountRestartOperation?: AccountRestartOperation
     result: PtySpawnResult
     provider: IPtyProvider
     replacedPaneOwner?: ReplacedPaneOwner | null
@@ -31,13 +34,33 @@ export async function savePtySpawnPaneBinding(
   { store, binding, absentOwner, refusal, failureLog }: PtySpawnPaneBinding,
   connectionId: string | null | undefined
 ): Promise<void> {
+  const restart = state.accountRestartOperation
+  if (restart) {
+    binding = {
+      ...binding,
+      accountRestart: restart.condition,
+      onAccountRestartRollback: (condition) => {
+        restart.condition = condition
+      },
+      mayCreate: false,
+      mayReviveRetiredSurface: false
+    }
+  }
   const replaced = state.replacedPaneOwner
+  const hostId = connectionId ? toSshExecutionHostId(connectionId) : replaced?.pane?.hostId
   try {
     const persisted = replaced
-      ? await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced))
+      ? await store.persistPtyBinding(
+          swapReplacedPaneBinding(store, binding, replaced, hostId),
+          hostId
+        )
       : await persistFreshPaneBinding(store, binding, connectionId, absentOwner)
     if (persisted === false) {
       throw new Error(refusal)
+    }
+    if (restart) {
+      // Registration can fail after this process became the durable pane owner.
+      restart.outcomeUnknown = true
     }
     if (replaced) {
       // The swap holds the live binding now: a later failure must not retire it under the same id.

@@ -10,7 +10,7 @@ type FencedTermination =
   | { accepted: true; completion: Promise<PtyFencedTerminationOutcome> }
 
 export function beginTerminalHostFencedTermination(
-  request: PtyFencedTerminationRequest,
+  request: PtyFencedTerminationRequest & { verifyExitOnly?: true },
   deps: {
     sessions: ReadonlyMap<string, Session>
     pendingCreations: ReadonlyMap<string, unknown>
@@ -19,11 +19,14 @@ export function beginTerminalHostFencedTermination(
   }
 ): FencedTermination {
   const session = deps.sessions.get(request.id)
+  if (session && session.incarnationId !== request.expectedIncarnationId) {
+    return { accepted: false, result: { outcome: 'refused', reason: 'replaced' } }
+  }
   if (!session || !session.isAlive) {
     return { accepted: false, result: { outcome: 'already_exited' } }
   }
-  if (session.incarnationId !== request.expectedIncarnationId) {
-    return { accepted: false, result: { outcome: 'refused', reason: 'replaced' } }
+  if (request.verifyExitOnly) {
+    return { accepted: false, result: { outcome: 'refused', reason: 'unverifiable' } }
   }
   // Pending creates include claim reservation and promotion, before the owner is listed.
   if (deps.pendingCreations.has(request.id)) {
