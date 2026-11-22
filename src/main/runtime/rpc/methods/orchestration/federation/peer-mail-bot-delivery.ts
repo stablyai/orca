@@ -4,6 +4,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { routeBotMail } from '../messaging/bot-chat-address'
 import { botAddressReach } from '../messaging/bot-recipient'
+import { pairedLabelComputer } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
+import { agentMessageSenderName } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
@@ -82,7 +84,18 @@ export async function deliverPeerMailToBot(
         routing: { run: undefined },
         messageId: params.messageId,
         senderSnapshot,
-        ...(pulled ? { fromPairedServer: pulled.serverName } : {}),
+        // A server's mail is named by this computer's catalog; a computer's, as its Orca named them.
+        // Neither grants anything here.
+        ...(pulled
+          ? { fromPairedServer: pulled.serverName }
+          : {
+              pairedSender: {
+                computer:
+                  agentMessageSenderName(params.sender?.computer) ??
+                  pairedLabelComputer(params.senderLabel),
+                botName: agentMessageSenderName(params.sender?.bot?.name)
+              }
+            }),
         // Its reply and any notice go back over this conversation, linked before the bot is woken.
         onAdmitted: link
       }

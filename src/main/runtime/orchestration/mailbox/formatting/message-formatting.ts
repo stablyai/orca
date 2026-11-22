@@ -1,4 +1,9 @@
 import type { MessageRow } from '../../db/orchestration-records'
+import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
+import {
+  pairedLabelComputer,
+  pairedSenderName
+} from '../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
@@ -10,6 +15,19 @@ import {
   formatBotItemReportHint,
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
+
+function pairedSenderOf(msg: MessageRow): string | null {
+  const computer = pairedLabelComputer(msg.from_handle)
+  if (!computer) {
+    return null
+  }
+  const saved = readAnswerSenderSnapshot(msg.answer_sender_snapshot)
+  const sender = saved?.party.address === msg.from_handle ? saved : undefined
+  return pairedSenderName({
+    computer: sender?.host ?? computer,
+    botName: sender?.bot ? sender.name : null
+  })
+}
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -90,9 +108,11 @@ export function formatMessageBannerWithContent(
         : authority === 'legacy_read_only'
           ? ' [LEGACY READ-ONLY]'
           : ''
-  const senderName = msg.from_handle.toUpperCase()
+  const paired = pairedSenderOf(msg)
+  // Mail from a paired computer is named as its Orca named the sender; its label is no address here.
+  const from = paired ?? `${msg.from_handle.toUpperCase()} (${msg.from_handle})`
 
-  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
+  const header = `──── From: ${from}${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
   const appendField = (value: string, prefix = '', suffix = ''): readonly [number, number] => {

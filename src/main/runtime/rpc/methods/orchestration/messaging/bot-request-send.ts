@@ -40,7 +40,8 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
-import { answersRequest, askedInConversation } from './bot-request-record'
+import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
+import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
@@ -73,7 +74,10 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'onAdmitted' | 'fromPairedServer'>
+  } & Pick<
+    SendBotRequestArgs,
+    'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'fromPairedServer'
+  >
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -123,6 +127,7 @@ type SendBotRequestArgs = {
   messageId?: string
   /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
   senderSnapshot?: string
+  pairedSender?: PairedSender
   /** Store images claimed for the receiving chat (`send --item --file`). */
   images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
@@ -192,8 +197,7 @@ async function admitBotRequestMail(
           }
         }
       : {}),
-    fromBotId: acting.bot?.id ?? null,
-    fromBotName: acting.bot?.name ?? null,
+    ...botRequestSender(acting.bot, args.pairedSender),
     ...(acting.worker ? { fromWorker: true } : {}),
     ...(args.fromPairedServer !== undefined ? { fromPairedServer: args.fromPairedServer } : {}),
     toBotId: target.id,
