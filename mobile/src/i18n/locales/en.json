@@ -5590,7 +5590,9 @@
     "section": {
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "newBot": "New bot"
+      "newBot": "New bot",
+      "reorderTitle": "Reorder bots",
+      "reorder": "Reorder…"
     },
     "groups": {
       "manageMembers": "Manage members",
@@ -5859,7 +5861,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "all": "All chats",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters",

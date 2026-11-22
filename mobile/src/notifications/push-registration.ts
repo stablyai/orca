@@ -295,13 +295,3 @@ export function startPushTokenSync(): () => void {
     stopToken()
   }
 }
-
-export function resetPushRegistrationForTests(): void {
-  for (const state of hostsById.values()) {
-    state.connection.support?.retire()
-  }
-  hostsById.clear()
-  registrationRecords = null
-  tokenPromise = null
-  consentGeneration = 0
-}

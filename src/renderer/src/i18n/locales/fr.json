@@ -249,7 +249,8 @@
         "safariFullDiskAccess": "macOS a refusé l'accès aux cookies de Safari. Accordez à Orca l'accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque.",
         "connectionEnded": "La connexion à ce serveur a été interrompue pendant l'importation. Reconnectez-vous et réessayez.",
         "serverRepaired": "Ce serveur a été jumelé à nouveau pendant l'importation. Réessayez.",
-        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca."
+        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca.",
+        "sshHostDisconnected": "Cette page n’est plus connectée via son hôte SSH. Reconnectez-vous et réessayez."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importé pour les domaines {{domains}} (+{{more}}). Rechargez la page pour l'utiliser.",
@@ -259,6 +260,13 @@
         "imported_other": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navigateurs sur cet appareil",
+        "destination": "Importe dans le navigateur de {{host}}.",
+        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
+        "stored": "Enregistré dans le navigateur de {{host}}.",
+        "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
     },
     "passwords": {
@@ -19750,7 +19758,17 @@
         "skip": "Ignorer",
         "sending": "Envoi…",
         "terminalRequired": "Répondez à cette question OMP dans le terminal.",
-        "openTerminal": "Répondre dans le terminal"
+        "openTerminal": "Répondre dans le terminal",
+        "recommended": "Recommandé",
+        "stepAnswered": "{{value0}}, répondue",
+        "stepOf": "{{value0}} sur {{value1}}",
+        "answered": "Répondue",
+        "title": "Question",
+        "previous": "Question précédente",
+        "nextQuestion": "Question suivante",
+        "back": "Retour",
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",
@@ -20029,7 +20047,6 @@
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
         "withdrawnHold": "Arrêté avant l'envoi",
-        "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
         "paused": "En pause",
         "resume": "Reprendre",
         "fromSender": "De",
@@ -20050,7 +20067,11 @@
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "couldNotSend": "Envoi impossible",
+        "retry": "Réessayer",
+        "showLessRows": "Afficher moins",
+        "moreRows": "+{{value0}} de plus"
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -20317,6 +20338,9 @@
       },
       "splitRight": "Diviser à droite",
       "splitDown": "Diviser vers le bas",
+      "dock": {
+        "label": "Zone de message et demandes"
+      },
       "automationSaved": {
         "openFullPage": "Ouvrir la page"
       },
@@ -20411,9 +20435,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Nettoyage alpha de la revue"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"

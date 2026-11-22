@@ -217,10 +217,24 @@ export function botAnswerView(
   return { from: record.toBotName, answers: `your ${record.purpose}`, next }
 }
 
+/** Why a bot request ended without an answer: its turn ended or failed, or it was never read. */
+export const BOT_REQUEST_DROP_REASONS = [
+  'paused',
+  'deleted',
+  'new-chat',
+  'chat-deleted',
+  'withdrawn'
+] as const
+export type BotRequestNoticeWhy =
+  | 'ended'
+  | 'failed'
+  | 'failed-continues'
+  | (typeof BOT_REQUEST_DROP_REASONS)[number]
+
 /** Why a request came back with no answer, for the sender to act on. */
 export function botRequestUnansweredText(
   record: BotRequestRecord,
-  why: 'ended' | 'failed' | 'failed-continues' | 'paused' | 'deleted' | 'new-chat' | 'chat-deleted',
+  why: BotRequestNoticeWhy,
   /** On a failure: why, as its chat words it; absent when the host recorded no reason. */
   failure?: string
 ): string {
@@ -245,9 +259,11 @@ export function botRequestUnansweredText(
         ? `${failedTurn} It ended without answering your ${record.purpose}`
         : why === 'new-chat'
           ? `${bot} started a new Chat before it read your ${record.purpose}`
-          : why === 'chat-deleted'
-            ? `${bot}'s chat was deleted before it read your ${record.purpose}`
-            : `${bot} was ${why} before it read your ${record.purpose}`
+          : why === 'withdrawn'
+            ? `${bot}'s owner removed your ${record.purpose} before ${bot} read it`
+            : why === 'chat-deleted'
+              ? `${bot}'s chat was deleted before it read your ${record.purpose}`
+              : `${bot} was ${why} before it read your ${record.purpose}`
   return record.fromWorker
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`

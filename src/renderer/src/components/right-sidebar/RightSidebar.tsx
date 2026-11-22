@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { measureTabTitle } from './right-sidebar-tab-title-width'
 import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
@@ -55,6 +56,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const routeFocusesVaultSearch = useAppStore((s) => s.rightSidebarRouteFocusesVaultSearch)
   const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
   const lastRouteRequestId = useRef(routeRequestId)
   const [focusVaultSearch, setFocusVaultSearch] = useState(false)
@@ -98,7 +100,8 @@ function RightSidebarInner(): React.JSX.Element {
     }
     lastRouteRequestId.current = routeRequestId
     setFocusVaultSearch(
-      rightSidebarOpen &&
+      routeFocusesVaultSearch &&
+        rightSidebarOpen &&
         !creatingWorktree &&
         rightSidebarTab === 'vault' &&
         effectiveTab === 'vault' &&
@@ -110,7 +113,8 @@ function RightSidebarInner(): React.JSX.Element {
     rightSidebarTab,
     effectiveTab,
     creatingWorktree,
-    settingsFocusRequested
+    settingsFocusRequested,
+    routeFocusesVaultSearch
   ])
 
   useEffect(() => {
@@ -203,7 +207,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => selectActivityTab(item.id)}
+      onClick={(fromKeyboard) => selectActivityTab(item.id, fromKeyboard)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
@@ -216,6 +220,7 @@ function RightSidebarInner(): React.JSX.Element {
           type="button"
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
+          {...keepPaneFocusPressProps}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <SidebarToggleIcon side="right" size={16} />

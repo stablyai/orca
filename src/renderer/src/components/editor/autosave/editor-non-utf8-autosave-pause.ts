@@ -51,7 +51,3 @@ export function releaseNonUtf8PausesWithoutDirtyTab(
     }
   }
 }
-
-export function __clearNonUtf8AutosavePausesForTests(): void {
-  pausedFiles.clear()
-}

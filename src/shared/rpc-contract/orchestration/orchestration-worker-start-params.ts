@@ -68,6 +68,13 @@ export const WorkerStartParams = z
         message: '--account applies to a new Claude terminal and cannot combine with --terminal.'
       })
     }
+    if (params.account && params.on) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['account'],
+        message: "--account runs Claude on this host's accounts and cannot combine with --on."
+      })
+    }
     // spec creates a new Task, so retryOf cannot refer to a prior Dispatch for it.
     if (params.retryOf && params.spec) {
       ctx.addIssue({

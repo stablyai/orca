@@ -12,8 +12,6 @@ import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
-  closeRemoteRunLinksOfChangedPairing,
-  closeRemoteRunLinksOfRemovedServer,
   dueRemoteResendsNow,
   getRemoteRunLink,
   noteRemoteRunLinkError,
@@ -22,6 +20,9 @@ import {
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
+import { settlePeerQuestionsOut } from './peer-questions-out'
+import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
+import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
@@ -111,6 +112,7 @@ export class PeerMailRelay {
     while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
         await this.pullOnce(environmentId, loop)
+        retryRemoteAskNotices(environmentId)
         if (failures > 0) {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
           dueRemoteResendsNow(loop.db, environmentId)
@@ -121,12 +123,7 @@ export class PeerMailRelay {
         if (await this.isEnvironmentRemoved(environmentId)) {
           // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
           try {
-            closeRemoteRunLinksOfRemovedServer(
-              loop.db,
-              environmentId,
-              `${serverName} was removed from this Orca's paired servers.`,
-              (handle, type) => this.runtime.notifyMessageArrived(handle, type)
-            )
+            settleRemovedPairedServer(this.runtime, loop.db, environmentId, serverName)
           } catch (error) {
             console.warn(
               `[orchestration] Settling the Runs on removed server ${environmentId} failed:`,
@@ -158,12 +155,7 @@ export class PeerMailRelay {
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
     // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
     const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
-    closeRemoteRunLinksOfChangedPairing(
-      loop.db,
-      remoteServerPin(server),
-      server.name,
-      (handle, type) => this.runtime.notifyMessageArrived(handle, type)
-    )
+    settleRepairedServer(this.runtime, loop.db, server)
     this.resendOwed(environmentId, loop)
     const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
     const response = await this.runtime
@@ -310,6 +302,7 @@ export class PeerMailRelay {
       kind: 'peer_mail',
       ...payload.data
     })
+    settlePeerQuestionsOut(db, conversation.conversation_id, payload.data)
     const stored = db.insertPeerMailMessage({
       conversationId: conversation.conversation_id,
       remoteParty: payload.data.fromAddress,
