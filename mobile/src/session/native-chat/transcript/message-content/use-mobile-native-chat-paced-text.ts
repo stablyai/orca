@@ -70,6 +70,8 @@ export function useMobileNativeChatPacedText(
 
   // A step's cost runs from the step to its commit.
   const stepStartedAt = useRef<number | null>(null)
+  // The length on screen; arrivals can move the reveal ahead of it without rendering.
+  const onScreen = useRef(initial.shown)
   const behind = !immediate && !savePaced && shown < text.length
   // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
   useEffect(() => {
@@ -86,7 +88,7 @@ export function useMobileNativeChatPacedText(
       () => pace.current,
       (next) => {
         // A step that shows nothing new renders nothing, so there is no cost to time.
-        stepStartedAt.current = next.shown === pace.current.shown ? null : performance.now()
+        stepStartedAt.current = next.shown === onScreen.current ? null : performance.now()
         pace.current = next
         list?.drawn.set(rowKey, next)
         setShown(next.shown)
@@ -96,6 +98,7 @@ export function useMobileNativeChatPacedText(
     )
   }, [behind, text, list, rowKey, streaming, held, frames])
   useLayoutEffect(() => {
+    onScreen.current = shown
     if (stepStartedAt.current !== null) {
       frames.stepCost?.(performance.now() - stepStartedAt.current)
       stepStartedAt.current = null
