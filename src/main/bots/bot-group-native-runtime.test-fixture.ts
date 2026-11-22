@@ -27,6 +27,16 @@ vi.mock('./bot-chat-session', () => ({
     // The whole snapshot answers each bounded read: it holds every row a window would.
     journalReads: async (sessionId: string) => ({
       operationWindow: async () => ({ complete: true, snapshot: await mocks.snapshot(sessionId) }),
+      // The send whose user row `rowId` is: what a turn's root row resolves to.
+      acceptedSendOfRow: async (rowId: string | null) => {
+        const journal: { submissions: { clientMessageId: string }[] } =
+          await mocks.snapshot(sessionId)
+        return (
+          journal.submissions.find(
+            (submission) => agentJournalSubmissionKey(submission.clientMessageId) === rowId
+          ) ?? null
+        )
+      },
       operationSent: async (operationId: string) => {
         const journal: { submissions: { clientMessageId: string; queuedMessageId?: string }[] } =
           await mocks.snapshot(sessionId)

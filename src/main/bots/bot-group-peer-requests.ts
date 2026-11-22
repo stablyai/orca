@@ -77,7 +77,8 @@ export async function groupPeerScope(
     group,
     source,
     target,
-    operationId: turn.operationId,
+    // The live turn: a mail turn has no send of its own, so its root row names an earlier turn.
+    operationId: (await liveGroupOperation(groups, sessionId)) ?? turn.operationId,
     ...root
   }
 }

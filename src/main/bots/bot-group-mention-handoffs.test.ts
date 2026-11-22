@@ -1,8 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import { fixture, groupNativeMocks, journal } from './bot-group-native-runtime.test-fixture'
 import { noteBotGroupMemberReply } from './bot-group-latest'
+
+const live = vi.hoisted((): { turnItemId: string | null } => ({ turnItemId: null }))
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => ({
+    currentWork: async () => ({
+      activeTurn: () => (live.turnItemId ? { item: { itemId: live.turnItemId } } : null)
+    }),
+    journalReads: async (sessionId: string) => ({
+      operationWindow: async () => ({ snapshot: await groupNativeMocks().snapshot(sessionId) })
+    })
+  })
+}))
 
 const mocks = groupNativeMocks()
 
@@ -181,6 +194,38 @@ describe('group @Name hand-offs', () => {
     groups.noteMailed('sent-op', 'bot-1')
     await reply(sent, 'Asked @Forge for the logs')
     expect(lines().map((line) => line.id)).toEqual([next.id, 'answered', 'sent'])
+  })
+
+  it('wakes no second turn for a member a mail turn sent a request to and named', async () => {
+    const { groups, group, post, reply, finish, ended, lines } = await room()
+    const next = await post('@Scout look')
+    await reply(next, 'On it.')
+    const [scout] = groups.store.get(group.id).members
+    const mail = groups.store.append({
+      id: 'mail',
+      groupId: group.id,
+      author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
+      text: 'Scout read a reply',
+      createdAt: next.createdAt,
+      rootRequestId: next.id,
+      rootSequence: next.sequence,
+      requester: { id: 'bot-0', name: 'Scout' },
+      turns: [
+        { ...next.turns[0]!, operationId: 'mail-op', sessionId: scout!.sessionId, mailbox: true }
+      ]
+    })
+    await finish(mail, 'Asked @Forge for the logs')
+    // A mail turn has no send of its own: its root row is the earlier turn's send.
+    live.turnItemId = 'turn-mail-op'
+    const scope = await groups.peerScope(
+      scout!.sessionId,
+      'bot-1',
+      agentJournalSubmissionKey(next.turns[0]!.operationId)
+    )
+    groups.noteMailed(scope?.operationId, 'bot-1')
+    live.turnItemId = null
+    await ended(mail)
+    expect(lines().map((line) => line.id)).toEqual([next.id, 'mail'])
   })
 
   it("wakes the member a worker report's turn names", async () => {
