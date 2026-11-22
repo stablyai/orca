@@ -19536,7 +19536,17 @@
         "skip": "跳過",
         "sending": "正在傳送…",
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
-        "openTerminal": "在終端機中回答"
+        "openTerminal": "在終端機中回答",
+        "recommended": "推薦",
+        "stepAnswered": "{{value0}}，已回答",
+        "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
+        "answered": "已回答",
+        "title": "問題",
+        "previous": "上一個問題",
+        "nextQuestion": "下一個問題",
+        "back": "返回",
+        "skipAndSubmit": "略過並提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",
@@ -19680,7 +19690,6 @@
         "listLabel": "排隊的訊息",
         "alreadySent": "此訊息已傳送。",
         "withdrawnHold": "在傳送前已停止",
-        "pausedSendFailed": "無法傳送。點按傳送以重試。",
         "paused": "已暫停",
         "resume": "繼續",
         "fromSender": "來自",
@@ -19696,7 +19705,11 @@
         "imageCount_one": "{{count}} 張圖片",
         "imageCount_other": "{{count}} 張圖片",
         "queued": "已排隊",
-        "clearAll": "全部清除"
+        "clearAll": "全部清除",
+        "couldNotSend": "無法傳送",
+        "retry": "重試",
+        "showLessRows": "收合",
+        "moreRows": "還有 {{value0}} 則"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19931,6 +19944,9 @@
       },
       "splitRight": "向右分割",
       "splitDown": "向下分割",
+      "dock": {
+        "label": "訊息框和提示"
+      },
       "automationSaved": {
         "openFullPage": "開啟頁面"
       },

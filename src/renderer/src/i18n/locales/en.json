@@ -21567,7 +21567,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21802,7 +21812,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",
@@ -21823,7 +21832,11 @@
         "commandsUnsupported": "Commands can't be saved in a queued message.",
         "imageCount": "{{count}} images",
         "queuedCount_one": "{{count}} queued",
-        "queuedCount_other": "{{count}} queued"
+        "queuedCount_other": "{{count}} queued",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -22602,6 +22615,9 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {

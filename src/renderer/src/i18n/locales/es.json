@@ -19438,7 +19438,17 @@
         "skip": "Omitir",
         "sending": "Enviando…",
         "terminalRequired": "Responda esta pregunta OMP en la terminal.",
-        "openTerminal": "Responder en la terminal"
+        "openTerminal": "Responder en la terminal",
+        "recommended": "Recomendado",
+        "stepAnswered": "{{value0}}, respondida",
+        "stepOf": "{{value0}} de {{value1}}",
+        "answered": "Respondida",
+        "title": "Pregunta",
+        "previous": "Pregunta anterior",
+        "nextQuestion": "Siguiente pregunta",
+        "back": "Atrás",
+        "skipAndSubmit": "Omitir y enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",
@@ -19524,7 +19534,6 @@
         "showFullMessage": "Mostrar el mensaje completo",
         "showLess": "Mostrar menos",
         "withdrawnHold": "Detenido antes de enviarse",
-        "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
         "paused": "En pausa",
         "resume": "Reanudar",
         "fromSender": "De",
@@ -19545,7 +19554,11 @@
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
         "reorderHint": "Arrastra para reordenar o usa las teclas de flecha arriba y abajo.",
         "reorderMessage": "Reordenar mensaje",
-        "imageCount": "{{count}} imágenes"
+        "imageCount": "{{count}} imágenes",
+        "couldNotSend": "No se pudo enviar",
+        "retry": "Reintentar",
+        "showLessRows": "Mostrar menos",
+        "moreRows": "+{{value0}} más"
       },
       "thought": "Pensó",
       "thoughtForDuration": "Pensó durante {{duration}}",
@@ -20005,6 +20018,9 @@
       },
       "splitRight": "Dividir a la derecha",
       "splitDown": "Dividir hacia abajo",
+      "dock": {
+        "label": "Cuadro de mensaje y solicitudes"
+      },
       "automationSaved": {
         "openFullPage": "Abrir página"
       },
