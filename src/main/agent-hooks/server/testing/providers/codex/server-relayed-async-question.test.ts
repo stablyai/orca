@@ -87,3 +87,27 @@ it('does not relay a closed question as work after the turn and its child ended'
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+// A yielded command keeps running without the tool lock, so its network approval outlives the call that started it.
+it('relays a yielded session network approval as waiting while another tool runs', () => {
+  const report = relayedPane()
+  const dev = { tool_name: 'Bash', tool_use_id: 'dev', tool_input: { command: 'pnpm dev' } }
+  report({ hook_event_name: 'PreToolUse', ...dev })
+  report({ hook_event_name: 'PostToolUse', ...dev })
+  report({
+    hook_event_name: 'PermissionRequest',
+    tool_name: 'Bash',
+    tool_input: { command: 'pnpm dev', description: 'network-access registry.npmjs.org' }
+  })
+
+  const patch = {
+    tool_name: 'apply_patch',
+    tool_use_id: 'patch',
+    tool_input: { command: '*** Begin Patch' }
+  }
+  for (const hook_event_name of ['PreToolUse', 'PostToolUse']) {
+    const row = report({ hook_event_name, ...patch })
+    expect(row).toMatchObject({ state: 'waiting', toolInput: 'pnpm dev' })
+    expect(agentWorksBehindQuestion(row)).toBe(false)
+  }
+})
