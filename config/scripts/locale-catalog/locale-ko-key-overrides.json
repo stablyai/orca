@@ -3996,7 +3996,7 @@
     "ko": "Hex"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
-    "ko": "워크스페이스 안전성 확인 중"
+    "ko": "워크스페이스 스캔 중"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
