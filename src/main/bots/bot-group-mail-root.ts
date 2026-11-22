@@ -1,5 +1,5 @@
 // Which group request a mail to a member continues, decided once for delivery and admission.
-import type { BotGroupMember } from '../../shared/bots/bot-group'
+import type { BotGroupMember, BotGroupTurn } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
@@ -35,7 +35,11 @@ export function mailRoot(
   mail: Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>
 ): BotGroupPeerScope | null {
   if (mail.from_handle === BOT_ITEM_MAIL_SENDER) {
-    return itemsRoot(groupId, member)
+    // Mail already on a line whose turn hasn't run is that line's request, which a later Stop ends.
+    const line = itemMailLine(groups, member, mail.id)
+    return line && !mailTurnRan(line.turns[0])
+      ? { ...itemsRoot(groupId, member), rootSequence: line.sequence }
+      : itemsRoot(groupId, member)
   }
   const db = groups.runtime.getOrchestrationDb()
   const request =
@@ -66,4 +70,22 @@ export function mailRoot(
         targetSessionId: member.sessionId
       }
     : null
+}
+
+/** Whether a mail line's turn ran, by what the line itself saved: its reply, or its retirement. */
+export function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
+  return (
+    turn === undefined ||
+    turn.reply !== undefined ||
+    turn.revoked === true ||
+    turn.frozenItems !== undefined
+  )
+}
+
+/** The newest line a member's mail turn took `mailId` on: its id is `mail:<sessionId>:<ids>[#n]`. */
+function itemMailLine(groups: BotGroupRuntime, member: BotGroupMember, mailId: string) {
+  const prefix = `mail:${member.sessionId}:`
+  return groups.store
+    .linesByIdPrefix(prefix, mailId)
+    .find((line) => line.id.slice(prefix.length).split('#', 1)[0]?.split(',').includes(mailId))
 }

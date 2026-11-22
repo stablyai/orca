@@ -212,6 +212,16 @@ export class BotGroupStore {
     return row ? this.messageRow(row) : null
   }
 
+  /** Lines whose id starts with `prefix` and contains `part`, newest first. */
+  linesByIdPrefix(prefix: string, part: string): BotGroupMessage[] {
+    const query = `SELECT sequence, record FROM bot_group_messages
+      WHERE id >= ? AND id < ? AND instr(id, ?) > 0 ORDER BY sequence DESC`
+    return this.db
+      .prepare(query)
+      .all(prefix, `${prefix}\uffff`, part)
+      .map((row) => this.messageRow(row))
+  }
+
   operationMessage(operationId: string): BotGroupMessage | null {
     const row = this.db
       .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
