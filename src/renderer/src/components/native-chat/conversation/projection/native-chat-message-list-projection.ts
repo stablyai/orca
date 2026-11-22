@@ -21,6 +21,10 @@ import {
 import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  noteStreamedTextStage,
+  projectionBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { reuseUnits } from './native-chat-message-list-reuse'
 import { subagentTurnKeys } from './native-chat-message-list-turns'
 import {
@@ -174,8 +178,17 @@ export function createNativeChatMessageListProjection(): (
 ) => NativeChatTranscriptProjection {
   let state: NativeChatListState | null = null
   return (messages, journal) => {
+    const previous = state
     state =
       (state && reuseUnits(state, messages, journal)) ?? projectFully(messages, journal, state)
+    // A subagent's streaming reply changes only text, so scans that read none (turn diffs, opened
+    // pull requests) keep what they built for the rows it revised.
+    if (
+      previous &&
+      projectionBesideStreamedText(messages) === projectionBesideStreamedText(previous.input)
+    ) {
+      noteStreamedTextStage(state.projection.subagentRows, previous.projection.subagentRows)
+    }
     return state.projection
   }
 }

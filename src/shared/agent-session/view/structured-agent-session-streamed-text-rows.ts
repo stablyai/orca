@@ -114,6 +114,23 @@ export function rowsBesideStreamedText(
 
 // A projection of a text-only row revision maps to the projection of the rows it revised.
 const textOnlyProjections = new WeakMap<readonly object[], readonly object[]>()
+
+// Any later stage's output for a text-only revision maps to its output for the revised rows.
+const textOnlyStages = new WeakMap<object, object>()
+
+/** `next` is `from` with only streamed reply text changed, so a scan that reads no reply text
+ *  may keep what it built for `from`. */
+export function noteStreamedTextStage<T extends object>(next: T, from: T): void {
+  if (next !== from) {
+    textOnlyStages.set(next, textOnlyStages.get(from) ?? from)
+  }
+}
+
+/** The stage output a text-only revision stands for, or the output itself. */
+export function stageBesideStreamedText<T extends object>(value: T): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only outputs of one stage are linked.
+  return (textOnlyStages.get(value) as T | undefined) ?? value
+}
 const lastProjection = new WeakMap<
   readonly AgentJournalRenderItem[],
   { inputs: readonly unknown[]; projected: readonly object[] }

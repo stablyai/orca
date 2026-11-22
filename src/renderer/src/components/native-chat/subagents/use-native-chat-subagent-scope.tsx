@@ -33,6 +33,7 @@ import {
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
+import { stageBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
@@ -140,9 +141,11 @@ export function useNativeChatSubagentScope({
     [agentId, entries, messages, subagentRows]
   )
   // Child edits and PRs count in the conversation's turns, which a subagent's view does not draw.
+  // Only those scans read these rows, and never reply text, so a streaming child leaves them be.
+  const subagentStructure = stageBesideStreamedText(subagentRows)
   const rowsInOrder = useMemo(
-    () => (agentId === null ? nativeChatSubagentRowsInOrder(subagentRows) : NO_SUBAGENT_ROWS),
-    [agentId, subagentRows]
+    () => (agentId === null ? nativeChatSubagentRowsInOrder(subagentStructure) : NO_SUBAGENT_ROWS),
+    [agentId, subagentStructure]
   )
   const conversationTurns = useNativeChatTurnMembership(
     agentId === null ? messages : NO_MESSAGES,
