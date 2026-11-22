@@ -5,6 +5,8 @@ type NativeChatApprovalOptionProps = {
   label: string
   /** The card's default answer: filled, and focused as the card opens. */
   primary: boolean
+  /** The request's text: focus starts on the default answer, past it. */
+  describedBy?: string
   /** A sign-in request's secondary answer reads as a quiet link. */
   urlRequest: boolean
   quiet: boolean
@@ -16,6 +18,7 @@ type NativeChatApprovalOptionProps = {
 export function NativeChatApprovalOption({
   label,
   primary,
+  describedBy,
   urlRequest,
   quiet,
   disabled,
@@ -26,6 +29,7 @@ export function NativeChatApprovalOption({
     <button
       type="button"
       data-native-chat-prompt-card-focus-target={primary || undefined}
+      aria-describedby={primary ? describedBy : undefined}
       disabled={disabled}
       onClick={onClick}
       className={cn(
