@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { owedPage } from '../connector-cloud/connector-reply-journal.test-fixture'
 import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyRow
@@ -51,6 +52,9 @@ function fill(rows: JournalConnectorReplyRow[], askedByOwner?: AskedByOwner) {
   const filled: JournalConnectorReplyFill[] = []
   const store = {
     read: vi.fn(async () => rows),
+    readOwed: vi.fn(async (account: string, after: string | null, limit: number) =>
+      owedPage(rows, account, after, limit)
+    ),
     fillOutcomes: vi.fn(async (fills: readonly JournalConnectorReplyFill[]) => {
       filled.push(...fills)
       return fills.length > 0

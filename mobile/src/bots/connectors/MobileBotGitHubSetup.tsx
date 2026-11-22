@@ -14,7 +14,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -99,7 +99,7 @@ export function MobileBotGitHubSetup(props: {
   const openInstall = () => {
     if (state) {
       setOpened(true)
-      openExternalLink(state.installUrl)
+      openConnectorLink(state.installUrl, GITHUB_LINK_HOSTS)
     }
   }
   const body = (() => {

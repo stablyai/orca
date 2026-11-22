@@ -27,6 +27,7 @@ const DOCUMENT = [
   `THIRD ${LONG}`,
   ''
 ].join('\n')
+const QUOTE_DOCUMENT = ['# Reading width', '', `> QUOTED ${LONG}`, ''].join('\n')
 
 type Rect = { left: number; right: number; top: number; bottom: number; width: number }
 
@@ -34,6 +35,18 @@ function rectOf(locator: Locator): Promise<Rect> {
   return locator.evaluate((element) => {
     const r = element.getBoundingClientRect()
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }
+  })
+}
+
+// Right edge of the element's content box, inside its padding and border.
+function contentRightOf(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return (
+      element.getBoundingClientRect().right -
+      Number.parseFloat(style.paddingRight) -
+      Number.parseFloat(style.borderRightWidth)
+    )
   })
 }
 
@@ -252,6 +265,58 @@ test.describe('Markdown reading width', () => {
       const composerRect = await rectOf(composer)
       expect(Math.abs(composerRect.left - before.right - 32)).toBeLessThanOrEqual(1)
       expectSameRect(await rectOf(paragraph), before)
+    } finally {
+      await cleanupMarkdownFixture(filePath)
+    }
+  })
+
+  test('R8 note-less quote paragraph keeps only the add-button gap until its composer opens', async ({
+    orcaPage
+  }, testInfo) => {
+    await layoutWindow(orcaPage, 1920)
+    const context = await getActiveWorktreeContext(orcaPage)
+    let filePath: string | null = null
+    try {
+      filePath = await createMarkdownFixture(
+        context,
+        FIXTURE_DIRECTORY,
+        'nested-quote',
+        testInfo.workerIndex,
+        QUOTE_DOCUMENT
+      )
+      const preview = await openPreview(orcaPage, context, filePath)
+      const quote = preview.locator('.markdown-body blockquote').filter({ hasText: 'QUOTED' })
+      const block = quote.locator(':scope > .markdown-annotation-block').first()
+      const paragraph = block.locator(':scope > p')
+
+      // The 32px gap is the add button's slot, not an empty notes rail.
+      await expect
+        .poll(async () =>
+          Math.abs((await contentRightOf(quote)) - (await rectOf(paragraph)).right - 32)
+        )
+        .toBeLessThanOrEqual(1)
+      const quoteRight = await contentRightOf(quote)
+      const before = await rectOf(paragraph)
+
+      await block.hover()
+      const addNote = block.getByRole('button', { name: 'Add note', exact: true })
+      await expect(addNote).toBeVisible()
+      const button = await rectOf(addNote)
+      expect(button.left).toBeGreaterThanOrEqual(before.right)
+      expect(button.right).toBeLessThanOrEqual(quoteRight)
+
+      await addNote.click()
+      const composer = block.locator('.markdown-annotation-composer')
+      await expect(composer).toBeVisible()
+      // Why: the composer needs the rail back, so the quote text reflows narrower while it is open.
+      await expect
+        .poll(async () =>
+          Math.abs((await rectOf(composer)).left - (await rectOf(paragraph)).right - 32)
+        )
+        .toBeLessThanOrEqual(1)
+      const composerRect = await rectOf(composer)
+      expect(composerRect.width).toBeGreaterThanOrEqual(219)
+      expect(Math.abs(composerRect.right - quoteRight)).toBeLessThanOrEqual(1)
     } finally {
       await cleanupMarkdownFixture(filePath)
     }

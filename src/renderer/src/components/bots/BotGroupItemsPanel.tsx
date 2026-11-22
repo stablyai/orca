@@ -29,6 +29,7 @@ import { BotItemPane } from './items/BotItemPane'
 import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotGroupItems } from './use-bot-group-items'
+import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 const GROUP_SCOPE = 'group'
 const ALL_SCOPE = 'all'
@@ -117,6 +118,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
+  const gutterResize = useRightSidebarGutterResize(scroll)
   const filteredBots = members.filter((bot) => filter.botIds?.includes(bot.id))
   const named = [
     ...(filteredBots.length > 0 ? [filteredBots.map((bot) => bot.name).join(', ')] : []),
@@ -223,10 +225,11 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
         />
       ) : (
         <div
-          ref={scroll}
           data-bot-items-scroller=""
           tabIndex={-1}
-          className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
+          // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
+          className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
+          {...gutterResize}
         >
           <BotGroupPanelHeader
             group={group}

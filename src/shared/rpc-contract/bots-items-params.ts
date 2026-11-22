@@ -7,6 +7,10 @@ import {
 import { BotItemAskSchema } from '../bots/bot-item-ask'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
+  MAX_SKILL_REFS,
+  SendSkillRef
+} from './structured-agent-session/structured-agent-session-message-params'
+import {
   OptionalBoolean,
   OptionalPlainString,
   OptionalPositiveInt,
@@ -151,7 +155,10 @@ export const BotItemsOwnerComment = z
     questionId: z.string().min(1).max(128).optional(),
     /** A comment of its own: it answers no question the agent waits on. Only to a host advertising
      *  BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY. */
-    plain: z.literal(true).optional()
+    plain: z.literal(true).optional(),
+    /** Skills picked in the comment, each by its file on the bot's host. Only to a host advertising
+     *  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY. */
+    skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 

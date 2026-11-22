@@ -18,6 +18,7 @@ import {
 import type { Automation } from '../../shared/automations/automation-definition'
 import { webhookRuleId } from '../../shared/connector-webhook-contract'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import type { WebhookView } from '../../shared/connector-webhook-routes'
 import type { WebhookCloudCalls } from './webhook-cloud-routes'
 import { WebhookHooks, WEBHOOKS_UNSUPPORTED } from './webhook-hooks'
@@ -73,8 +74,9 @@ let userDataPath: string
 beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'orca-webhook-hooks-'))
 })
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
+afterEach(async () => {
+  // Windows hardens a secure write's directory ACL in the background, so a case can end with it held.
+  await removeTempDirs([userDataPath])
 })
 
 function setup(

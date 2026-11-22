@@ -36,8 +36,20 @@ import {
 } from './bot-group-peer-requests'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { groupAnswerTurn, saveGroupPeerAnswer } from './bot-group-peer-answer'
+import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
+import { botGroupRoomChat } from './bot-group-automation-run'
+import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
+/** `homeChat`, also finding the group rooms a bot is a member of, where its automations may run. */
+export function withGroupRoomChats(
+  runtime: OrcaRuntimeService,
+  homeChat: BotChatLookup
+): BotChatLookup {
+  return async (bot, id) =>
+    botGroupRoomChat(runtimeBotGroups(runtime), bot, id) ?? homeChat(bot, id)
+}
+
 export function runtimeBotGroups(runtime: OrcaRuntimeService): BotGroupRuntime {
   let groups = runtimes.get(runtime)
   if (!groups) {
@@ -152,7 +164,11 @@ export class BotGroupRuntime {
     assertGroupQueuedMessageAllowed(this, sessionId, operationId)
   peerScope = (sessionId: string, targetBotId: string, rootItemId: string | null) =>
     groupPeerScope(this, sessionId, targetBotId, rootItemId)
-  assertPeerScope = (scope: GroupPeerScope) => assertGroupPeerScope(this, scope)
+  assertPeerScope = (scope: GroupPeerScope | null | undefined) => {
+    if (scope) {
+      assertGroupPeerScope(this, scope)
+    }
+  }
   reserveMailTurn = (input: Parameters<StructuredMailboxPointerHost['send']>[0]) =>
     reserveGroupMailTurn(this, input)
   narrowMailBatch = <T extends Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>>(
@@ -161,6 +177,8 @@ export class BotGroupRuntime {
   ) => narrowGroupMailBatch(this, sessionId, messages)
   captureWorkerOperation = (sessionId: string) => liveGroupOperation(this, sessionId)
   answerTurn = (sessionId: string, text: string) => groupAnswerTurn(this, sessionId, text)
+  noteMailed = (operationId: string | undefined, botId: string) =>
+    noteGroupTurnMailed(this, operationId, botId)
   saveAnswer = (operationId: string, text: string) => saveGroupPeerAnswer(this, operationId, text)
   recordWorker = (operation: Promise<string | null>, dispatchId: string) =>
     recordGroupWorker(this, operation, dispatchId)

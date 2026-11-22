@@ -14,6 +14,9 @@ import {
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
 } from './connector-reply-outbox'
+import { owedPage } from './connector-reply-journal.test-fixture'
+import { ANSWER_CUT_NOTE } from './connector-snapshot'
+import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
 
 // Design item 125 §3 and §8, desktop sender: a turn's end fills its rows; filled rows go as reply
 // events under the outbox, or through /replies under the kill switch; only acceptance sends them,
@@ -33,6 +36,7 @@ function journal(rows: JournalConnectorReplyRow[]): ConnectorReplyJournal & {
     rows,
     read: async (sessionId) =>
       rows.filter((row) => sessionId === undefined || row.sessionId === sessionId),
+    readOwed: async (account, after, limit) => owedPage(rows, account, after, limit),
     fillOutcomes: async (fills: readonly JournalConnectorReplyFill[]) => {
       let changed = false
       for (const { account, deliveryId, ...fill } of fills) {
@@ -301,15 +305,104 @@ describe('the sender', () => {
   })
 })
 
+describe('a large backlog', () => {
+  const backlog = (count: number) =>
+    Array.from({ length: count }, (_, index) => {
+      const id = `d${String(index).padStart(4, '0')}`
+      return row(id, answered(id))
+    })
+
+  it('drains past a page under the outbox, every row once and in order', async () => {
+    const store = journal(backlog(450))
+    const pages: (string | null)[] = []
+    const readOwed = store.readOwed
+    store.readOwed = async (account, after, limit) => {
+      pages.push(after)
+      return await readOwed(account, after, limit)
+    }
+    const sender = outbox(store)
+    const { sender: c, pushed } = client()
+    await sender.via(c, true)
+    const ids = pushed.flatMap((event) => event.deliveryIds)
+    expect(ids).toEqual(store.rows.map((r) => r.deliveryId))
+    expect(ids).toHaveLength(450)
+    expect(pages).toEqual([null, 'd0199', 'd0399'])
+    expect(sender.owed).toBe(0)
+    await sender.accepted(pushed)
+    expect(store.rows).toEqual([])
+  })
+
+  it('drains past a page under the kill switch, keeping a refused row and the rows after it', async () => {
+    vi.useFakeTimers()
+    const store = journal(backlog(250))
+    const wake = vi.fn()
+    const sender = outbox(store, 'account-a', { wake })
+    let calls = 0
+    const c: ConnectorReplyClient = {
+      push: () => {},
+      post: async (): Promise<ConnectorResult<unknown>> =>
+        ++calls === 1
+          ? { ok: false, status: 503, error: null, retryAfterMs: null }
+          : { ok: true, value: { status: 'queued' } },
+      hostName: () => 'build-box'
+    }
+    sender.route.client = c
+    sender.route.outbox = false
+    await sender.drain()
+    expect(calls).toBe(250)
+    expect(store.rows.map((r) => r.deliveryId)).toEqual(['d0000'])
+    expect(sender.owed).toBe(1)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(wake).toHaveBeenCalledOnce()
+  })
+
+  it('cuts an oversize answer to the cap with its note, and sends the rows behind it', async () => {
+    const huge = 'x'.repeat(2 * 1024 * 1024)
+    const store = journal([row('d1', answered('d1', huge)), row('d2', answered('d2'))])
+    const { sender: c, pushed } = client()
+    await outbox(store).via(c, true)
+    expect(pushed.map((event) => event.answerDeliveryId)).toEqual(['d1', 'd2'])
+    const prose = pushed[0]?.prose ?? ''
+    expect(Buffer.byteLength(prose)).toBeLessThanOrEqual(JOURNAL_CONNECTOR_REPLY_PROSE_BYTES)
+    expect(prose.endsWith(ANSWER_CUT_NOTE)).toBe(true)
+    expect(pushed[1]?.prose).toBe('Done.')
+  })
+
+  it('logs a failed read and reads again after the usual wait, rather than calling nothing owed', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = journal([row('d1', answered('d1'))])
+    const readOwed = store.readOwed
+    store.readOwed = async () => {
+      store.readOwed = readOwed
+      throw new Error('journal read reply (database) exceeds 67108864 bytes')
+    }
+    const wake = vi.fn()
+    const sender = outbox(store, 'account-a', { wake })
+    const { sender: c, pushed } = client()
+    await sender.via(c, true)
+    expect(pushed).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      '[connector] could not read the reply outbox',
+      expect.any(Error)
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(wake).toHaveBeenCalledOnce()
+    await sender.drain()
+    expect(pushed.flatMap((event) => event.deliveryIds)).toEqual(['d1'])
+    warn.mockRestore()
+  })
+})
+
 describe('the sender across hellos, accounts and refusals', () => {
   /** A journal whose next read alone waits until released. */
   function pausedReads(store: ReturnType<typeof journal>) {
     let release: () => void = () => {}
-    const read = store.read
-    store.read = (sessionId) => {
-      store.read = read
+    const read = store.readOwed
+    store.readOwed = (...page) => {
+      store.readOwed = read
       return new Promise((resolve) => {
-        release = () => void read(sessionId).then(resolve)
+        release = () => void read(...page).then(resolve)
       })
     }
     return () => release()

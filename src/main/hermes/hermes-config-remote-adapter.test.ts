@@ -30,7 +30,8 @@ describe('Hermes remote installer through a local filesystem adapter (no SSH)', 
     const filesystem = createManagedHookLocalFilesystem()
     const rename = filesystem.ext_openssh_rename.bind(filesystem)
     filesystem.ext_openssh_rename = (source, destination, callback) => {
-      if (destination === join(directory, '.hermes', 'plugins', 'orca-status', 'plugin.yaml')) {
+      // Why: the installer joins remote paths with '/', so path.join would never match on Windows.
+      if (destination === `${directory}/.hermes/plugins/orca-status/plugin.yaml`) {
         writeFileSync(configPath, updated)
       }
       rename(source, destination, callback)

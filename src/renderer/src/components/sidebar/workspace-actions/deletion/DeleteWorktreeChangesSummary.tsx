@@ -87,7 +87,8 @@ export function DeleteWorktreeChangesSummary({
   worktree,
   dirtyChanges,
   unsavedFiles,
-  atRiskLocalFilesByIdentity
+  atRiskLocalFilesByIdentity,
+  showRoutineCheckStatus
 }: {
   worktree: Worktree
   dirtyChanges: {
@@ -97,6 +98,7 @@ export function DeleteWorktreeChangesSummary({
   }
   unsavedFiles: readonly UnsavedFile[]
   atRiskLocalFilesByIdentity: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
+  showRoutineCheckStatus: boolean
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -173,42 +175,44 @@ export function DeleteWorktreeChangesSummary({
   const changesChecking = checkState === 'checking'
   const changesFailed = checkState === 'unavailable'
   const ignoredChecking = localFilesState?.status === 'checking'
-  const ignoredUnchecked =
-    localFilesState?.status === 'unsupported' ||
-    (atRiskLocalFiles !== undefined && atRiskLocalFiles.count === 0 && !atRiskLocalFiles.complete)
-  const checkingLabel = t('components.workspace.delete.changes.checking', 'Checking for changes…')
-  const failedLabel = t(
-    'components.workspace.delete.changes.unavailable',
-    'Changes could not be checked'
-  )
-  // Show the Git result as soon as it lands; a trailing spinner covers the ignored-files scan.
-  const [tone, text]: [StatusTone, string] | [null, null] = loss
-    ? ['warning', loss]
-    : changesFailed
-      ? ['warning', failedLabel]
-      : changesChecking || (ignoredChecking && checkState !== 'complete')
-        ? [ignoredUnchecked ? 'warning' : 'checking', checkingLabel]
-        : // An open panel outlives its last loss (e.g. an autosave), so it never collapses on its own.
-          checkState === 'complete'
-          ? [
-              ignoredUnchecked ? 'warning' : 'clean',
-              t('components.workspace.delete.changes.none', 'No uncommitted changes')
-            ]
-          : open || focused
-            ? ['clean', t('components.workspace.delete.changes.noUnsaved', 'No unsaved files')]
-            : [null, null]
-  const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
-  // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
-  const note = [
-    loss && changesFailed ? failedLabel : null,
+  const ignoredFailure =
     localFilesState?.status === 'unsupported'
       ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
-      : ignoredUnchecked
+      : atRiskLocalFiles && atRiskLocalFiles.count === 0 && !atRiskLocalFiles.complete
         ? t(
             'components.workspace.delete.ignoredFilesUnchecked',
             'Ignored files could not be fully checked'
           )
         : null
+  const checkingLabel = t('components.workspace.delete.changes.checking', 'Checking for changes…')
+  const failedLabel = t(
+    'components.workspace.delete.changes.unavailable',
+    'Changes could not be checked'
+  )
+  const [tone, text]: [StatusTone, string] | [null, null] = loss
+    ? ['warning', loss]
+    : changesFailed
+      ? ['warning', failedLabel]
+      : showRoutineCheckStatus &&
+          (changesChecking || (ignoredChecking && checkState !== 'complete'))
+        ? [ignoredFailure ? 'warning' : 'checking', checkingLabel]
+        : // An open panel outlives its last loss (e.g. an autosave), so it never collapses on its own.
+          checkState === 'complete' && (showRoutineCheckStatus || open || focused)
+          ? [
+              ignoredFailure ? 'warning' : 'clean',
+              t('components.workspace.delete.changes.none', 'No uncommitted changes')
+            ]
+          : ignoredFailure
+            ? ['warning', ignoredFailure]
+            : open || focused
+              ? ['clean', t('components.workspace.delete.changes.noUnsaved', 'No unsaved files')]
+              : [null, null]
+  const stillChecking =
+    showRoutineCheckStatus && tone !== 'checking' && (changesChecking || ignoredChecking)
+  // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
+  const note = [
+    loss && changesFailed ? failedLabel : null,
+    text === ignoredFailure ? null : ignoredFailure
   ]
     .filter(Boolean)
     .join(' · ')
