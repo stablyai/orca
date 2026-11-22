@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -6,7 +7,14 @@ import type {
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
-import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
+  parseHooksJsonText,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
+  findOutdatedManagedEvents,
+  type OutdatedManagedEvents
+} from '../agent-hooks/installation/configuration/managed-hooks-json-outdated-events'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -71,6 +79,21 @@ function getManagedCommand(scriptPath: string, event: AntigravityEvent): string 
   return getPosixManagedCommand(scriptPath, event)
 }
 
+async function scanManagedEntries(
+  scriptPath: string
+): Promise<OutdatedManagedEvents<AntigravityEvent>> {
+  // A missing or unreadable file has no Orca entries to repair.
+  const raw = await readFile(getConfigPath(), 'utf8').catch(() => null)
+  const config = raw === null ? null : parseHooksJsonText(raw)
+  return findOutdatedManagedEvents(
+    config ? getBundle(config) : {},
+    ANTIGRAVITY_EVENTS,
+    (event) => event.eventName,
+    createAntigravityManagedCommandMatcher(),
+    (definition, event) => hasManagedCommand([definition], getManagedCommand(scriptPath, event))
+  )
+}
+
 export class AntigravityHookService {
   private getWindowsRuntimePath = (): string => process.execPath
 
@@ -101,6 +124,11 @@ export class AntigravityHookService {
       getManagedScriptPath(),
       getManagedScript('local', runtimePath)
     )
+    // agy and the desktop app run these entries without the CLI that gates install(); update only what Orca owns.
+    const scan = await scanManagedEntries(getManagedScriptPath())
+    if (scan.outdated) {
+      this.install(scan.events, { onlyOwnedEvents: true })
+    }
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -159,7 +187,10 @@ export class AntigravityHookService {
     return { agent: 'antigravity', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
+  install(
+    events: readonly AntigravityEvent[] = ANTIGRAVITY_EVENTS,
+    options: { onlyOwnedEvents?: boolean } = {}
+  ): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
@@ -176,7 +207,8 @@ export class AntigravityHookService {
     buildInstalledConfig(
       config,
       (event) => getManagedCommand(scriptPath, event),
-      createAntigravityManagedCommandMatcher()
+      createAntigravityManagedCommandMatcher(),
+      { events, onlyOwnedEvents: options.onlyOwnedEvents }
     )
     const runtimePath = process.platform === 'win32' ? this.getWindowsRuntimePath() : undefined
     if (process.platform === 'win32') {

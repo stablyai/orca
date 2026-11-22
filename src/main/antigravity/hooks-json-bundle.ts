@@ -84,11 +84,12 @@ function buildEventDefinition(event: AntigravityEvent, command: string): HookDef
 
 function removeManagedCommandsFromBundle(
   bundle: Record<string, unknown>,
-  isManagedCommand: (command: string | undefined) => boolean
+  isManagedCommand: (command: string | undefined) => boolean,
+  keepEvents: ReadonlySet<string> = new Set()
 ): Record<string, unknown> {
   const next = { ...bundle }
   for (const [eventName, definitions] of Object.entries(next)) {
-    if (!Array.isArray(definitions)) {
+    if (keepEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
     }
     const cleaned = removeManagedCommands(definitions as HookDefinition[], isManagedCommand)
@@ -104,14 +105,27 @@ function removeManagedCommandsFromBundle(
 export function buildInstalledConfig(
   config: HooksConfig,
   commandForEvent: (event: AntigravityEvent) => string,
-  isManagedCommand: (command: string | undefined) => boolean
+  isManagedCommand: (command: string | undefined) => boolean,
+  options: { events?: readonly AntigravityEvent[]; onlyOwnedEvents?: boolean } = {}
 ): void {
-  const bundle = removeManagedCommandsFromBundle(getBundle(config), isManagedCommand)
+  // Retired events lose Orca entries; current events are rewritten below.
+  const bundle = removeManagedCommandsFromBundle(
+    getBundle(config),
+    isManagedCommand,
+    new Set(ANTIGRAVITY_EVENTS.map((event) => event.eventName))
+  )
 
-  for (const event of ANTIGRAVITY_EVENTS) {
+  for (const event of options.events ?? ANTIGRAVITY_EVENTS) {
     const current = Array.isArray(bundle[event.eventName])
       ? (bundle[event.eventName] as HookDefinition[])
       : []
+    // The refresh scan read the file earlier; skip events the user has since cleared of Orca entries.
+    if (
+      options.onlyOwnedEvents &&
+      !current.some((definition) => hookDefinitionHasManagedCommand(definition, isManagedCommand))
+    ) {
+      continue
+    }
     const cleaned = removeManagedCommands(current, isManagedCommand)
     bundle[event.eventName] = [...cleaned, buildEventDefinition(event, commandForEvent(event))]
   }
