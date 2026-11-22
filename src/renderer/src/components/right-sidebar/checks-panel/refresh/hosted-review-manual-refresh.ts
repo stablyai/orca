@@ -118,7 +118,7 @@ export async function refreshChecksPanelHostedReview(
     })
     return 'review'
   }
-  setChecks([])
-  setComments([])
+  setChecks(null)
+  setComments(undefined)
   return 'no-review'
 }

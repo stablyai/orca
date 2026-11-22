@@ -95,7 +95,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
           return
         }
         console.warn('Failed to fetch PR comments:', err)
-        setComments([])
+        setComments(null)
         setCommentsError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
       } finally {
         if (
@@ -158,8 +158,12 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     if (activeGitLabReview) {
       return
     }
-    if (!repo || !prNumber || !isPanelVisible) {
-      setComments([])
+    if (!repo || !prNumber) {
+      setComments(undefined)
+      return
+    }
+    if (!isPanelVisible) {
+      setCommentsLoading(false)
       return
     }
     let cancelled = false
@@ -184,7 +188,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       },
       () => {
         if (!cancelled && isCurrentAsyncResult(requestKey)) {
-          setComments([])
+          setComments(null)
           setCommentsLoading(false)
         }
       }

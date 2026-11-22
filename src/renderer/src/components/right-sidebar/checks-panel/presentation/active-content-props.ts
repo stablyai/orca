@@ -23,7 +23,6 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'claimedCommentResolutionRef'
   | 'commentResolutionLaunchAcceptedRef'
   | 'comments'
-  | 'commentsError'
   | 'commentsLoading'
   | 'commentsSelectionClearRequest'
   | 'conflictDetailsRefreshing'
@@ -50,7 +49,6 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'activeReview'
     | 'linkedGitLabMR'
     | 'pr'
-    | 'prRefreshState'
     | 'setChecksPanelContentRef'
   > &
   Pick<

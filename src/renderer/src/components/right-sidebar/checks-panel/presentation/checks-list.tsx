@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
+import { ChecksListLoading } from './checks-list-loading'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
 import {
@@ -24,13 +25,16 @@ import {
 } from '@/lib/browser/navigation/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
-export function ChecksList(props: ChecksListProps): React.JSX.Element {
+export function ChecksList(
+  props: ChecksListProps & { loadingSkeleton?: boolean }
+): React.JSX.Element {
   const t = useTranslate()
   const {
     checks,
     pipelineCheck,
     checksError,
     checksLoading,
+    loadingSkeleton,
     checkDetailsContextKey,
     detailsStickySurface = 'sidebar',
     getGitLabProjectRef,
@@ -54,6 +58,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     toggleCheckExpanded,
     requestCheckDetails
   } = useChecksListState(props)
+  const emptyLoading = checks.length === 0 && !checksError && (loadingSkeleton ?? checksLoading)
   return (
     <>
       {pipelineCheck && <PipelineCheckRow check={pipelineCheck} />}
@@ -121,12 +126,14 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
       )}
 
       {/* A kept parent stands in for an empty job list, but a failed read still reports itself. */}
-      {pipelineCheck && checks.length === 0 && !checksError ? null : checksLoading &&
-        checks.length === 0 &&
-        !pipelineCheck ? (
-        <div className="flex items-center justify-center py-8">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-        </div>
+      {pipelineCheck && checks.length === 0 && !checksError ? null : emptyLoading ? (
+        loadingSkeleton ? (
+          <ChecksListLoading expanded={checksExpanded} detailsHeight={detailsHeight} />
+        ) : (
+          <div className="flex items-center justify-center py-8">
+            <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        )
       ) : checks.length === 0 && checksError ? (
         <div role="alert" className="px-4 py-8 text-[11px] break-words text-destructive">
           {checksError}
