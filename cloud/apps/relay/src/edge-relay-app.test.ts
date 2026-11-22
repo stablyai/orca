@@ -161,6 +161,42 @@ describe('director routes with the relay edge', () => {
     expect(h.assignments.assign).toHaveBeenCalled()
   })
 
+  it('moveOwnControl drain: moves a host holding only its own control on its drain reconnect', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on' }
+    const h = await harness({ control: () => flags })
+    await h.database.query(
+      `INSERT INTO relay_assignments
+       (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at, last_activity_at,
+        reserved_controls, reserved_splices, reserved_invites, pending_installs,
+        pending_confirmations, migration_leases)
+       VALUES ('user-1', ?, 'us-c1', 5, 0, 0, 1, 0, 0, 0, 0, 0)`,
+      [COHORT_HOST]
+    )
+    await h.database.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id, request_units, expires_at, updated_at)
+       VALUES ('user-1', ?, 'control:us-c1:1', 'control', 'us-c1', 1, 99999999999999, 0)`,
+      [COHORT_HOST]
+    )
+    const deferrals = () =>
+      warn.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('orca_relay_edge_move_deferred'))
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+    // Flag absent: deferred, and the log counts it as own-control-only.
+    expect(await (await h.assign(COHORT_HOST, { reconnect: true })).json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+    expect(deferrals()).toEqual([
+      { event: 'orca_relay_edge_move_deferred', reason: 'relay_edge_move_deferred:units_held', ownControlOnly: true }
+    ])
+    // Which asks qualify is edgeMoveOwnControlAsk's (edge-relay-move-own-control.test.ts).
+    flags.moveOwnControl = 'drain'
+    const moved = await h.assign(COHORT_HOST, { reconnect: true })
+    expect(await moved.json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 6 })
+    expect(h.raiseEpochFloor).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: COHORT_HOST }, 6)
+    warn.mockRestore()
+  })
+
   it('answers a phone /v1/resolve for an edge host from the edge row, with the exact wire shape', async () => {
     const h = await harness()
     await h.assign(COHORT_HOST)

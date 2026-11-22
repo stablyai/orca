@@ -68,7 +68,7 @@ import {
   type EdgeCohortJudgement,
   type EdgeAssignments
 } from './edge-relay.js'
-import { EDGE_CONTROL_DEFAULTS } from './edge-relay-control.js'
+import { EDGE_CONTROL_DEFAULTS, edgeMoveOwnControlAsk } from './edge-relay-control.js'
 import { edgeAlternateCellUrls, edgeAuthOrigin, edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
@@ -609,13 +609,24 @@ export function createRelayApp(
           // Only with front doors configured (ORCA_RELAY_EDGE_FRONT_DOOR_URLS); else as before.
           edgeRoute(edge.config, claims.relayHostId, cohortRegion, country, body.data),
           // A regionless ask under 'host' only keeps a host on the edge (re-checked under the lock).
-          { keepOnly: judged.by === 'record' }
+          // director/edge.json moveOwnControl: whether this ask may take the host's own control
+          // unit off its old cell with the move.
+          {
+            keepOnly: judged.by === 'record',
+            ownControl: edgeMoveOwnControlAsk(edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS, body.data)
+          }
         )
       } catch (error) {
         if (error instanceof EdgeMoveDeferredError) {
           // Nothing moved (old-cell units still held, or the edge did not take the push): today's
           // path below keeps the host where it is, and a later ask moves it. Never a 503 loop.
-          console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
+          console.warn(
+            JSON.stringify({
+              event: 'orca_relay_edge_move_deferred',
+              reason: error.message,
+              ...(error.ownControlOnly ? { ownControlOnly: true } : {})
+            })
+          )
           moved = null
         } else {
           if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error

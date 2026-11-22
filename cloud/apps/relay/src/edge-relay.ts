@@ -184,7 +184,12 @@ export const EDGE_LOCKED_CALLS_MAX = 8
 // row off the edge) and nothing changed: the host
 // stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(readonly reason: 'units_held' | 'push_failed' | 'edge_busy' | 'not_on_edge') {
+  constructor(
+    readonly reason: 'units_held' | 'push_failed' | 'edge_busy' | 'not_on_edge',
+    // units_held only: the row's counters hold nothing but one control unit (what moveOwnControl
+    // could take on a qualifying ask), so the deferral log can count them. Counters only.
+    readonly ownControlOnly = false
+  ) {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
@@ -223,7 +228,12 @@ export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: b
 // keepOnly: answer only a host whose row is (under the lock) on the edge; anything else throws
 // EdgeMoveDeferredError('not_on_edge') with nothing written (cohortRegion 'host', regionless asks).
 // It never writes the host's region either.
-export type EdgeMoveOptions = { keepOnly?: boolean }
+// ownControl: this ask may move a host whose old cell holds only the host's own control
+// (director/edge.json moveOwnControl, edgeMoveOwnControlAsk); see EdgeAssignments.heldUnits.
+export type EdgeMoveOptions = { keepOnly?: boolean; ownControl?: boolean }
+
+// The host's own control unit a move takes off its old cell (EdgeAssignments.heldUnits).
+type OwnControl = { cellId: string; assignmentEpoch: number; activityId: string; units: number }
 
 // How an ask's cohort is judged (EdgeAssignments.judgeCohort).
 // - ask: by the region the ask names (none: RELAY_DEFAULT_REGION), as without cohortRegion.
@@ -587,22 +597,19 @@ export class EdgeAssignments {
         await recordRegion(transaction, true)
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
-      if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
+      const own = await this.heldUnits(transaction, identity, row, options)
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
-      await transaction.query(
-        `UPDATE relay_assignments
-         SET cell_id = ?, assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
-         WHERE user_id = ? AND relay_host_id = ?`,
-        [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
-      )
+      await this.writeMove(transaction, identity, epoch, leaseExpiresAt, now, own)
       // Still under the row lock: the row commits only once the edge holds the host's data.
       const pushed = await this.pushOnto(transaction, identity, epoch, region)
       await recordRegion(transaction)
+      if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
           fromCellId: text(row, 'cell_id'),
-          assignmentEpoch: pushed
+          assignmentEpoch: pushed,
+          ...(own ? { ownControl: true } : {})
         })
       )
       return this.answer(identity, pushed, leaseExpiresAt)
@@ -823,26 +830,146 @@ export class EdgeAssignments {
         // A switch: leave this transaction with nothing written, record it as pending, then finish it.
         throw new FrontDoorSwitchIntent(Math.max(rowEpoch, mapFloor) + 1, chosen)
       }
-      if (requestUnits(row) > 0) { throw new EdgeMoveDeferredError('units_held') }
+      const own = await this.heldUnits(transaction, identity, row, options)
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
-      await transaction.query(
-        `UPDATE relay_assignments
-         SET cell_id = ?, assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
-         WHERE user_id = ? AND relay_host_id = ?`,
-        [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
-      )
+      await this.writeMove(transaction, identity, epoch, leaseExpiresAt, now, own)
       const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
       await record(transaction, chosen)
+      if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
           fromCellId: text(row, 'cell_id'),
           assignmentEpoch: pushed,
-          ...(viaFrontDoor ? { frontDoor: true } : {})
+          ...(viaFrontDoor ? { frontDoor: true } : {}),
+          ...(own ? { ownControl: true } : {})
         })
       )
       return this.answer(identity, pushed, leaseExpiresAt, chosen)
     })
+  }
+
+  // Units the host's row still holds on its old cell, read under the assignment row lock. None:
+  // undefined, and the move goes ahead as always. Only the host's own control, on an ask allowed
+  // to take it (options.ownControl): exactly one control unit, backed by exactly one control lease
+  // (the activated `control:<cell>:<generation>` or the director's `control-pending:<epoch>`) on
+  // the row's cell, and no open migration or region rehome. The move then takes that unit off the
+  // old cell (writeMove, releaseOldCellUnits). Anything else (splices, invites, installs,
+  // confirmations, migration leases, a unit no lease backs, another lease) defers, as before.
+  private async heldUnits(
+    transaction: RelayDatabase,
+    identity: Identity,
+    row: SqlRow,
+    options: EdgeMoveOptions
+  ): Promise<OwnControl | undefined> {
+    const units = requestUnits(row)
+    if (units === 0) { return undefined }
+    const ownControlOnly = units === 1 && integer(row, 'reserved_controls') === 1
+    if (!ownControlOnly || options.ownControl !== true) {
+      throw new EdgeMoveDeferredError('units_held', ownControlOnly)
+    }
+    const cellId = text(row, 'cell_id')
+    let leases: SqlRow[]
+    try {
+      // After the assignment row, as every lease writer locks them (assignment, leases, cell).
+      leases = await transaction.queryLocked(
+        `SELECT activity_id, activity_kind, cell_id, request_units FROM relay_assignment_activity_leases
+         WHERE user_id = ? AND relay_host_id = ? ORDER BY activity_id ASC`,
+        [identity.userId, identity.relayHostId],
+        { failIfUnavailable: true }
+      )
+    } catch (error) {
+      // A busy lease row defers (the ask falls through to today's lanes) rather than answering 503:
+      // the host moves on a later ask, and a herd never turns into director 503s.
+      if (error instanceof Error && error.message === 'database_lock_unavailable') {
+        throw new EdgeMoveDeferredError('units_held', true)
+      }
+      throw error
+    }
+    const lease = leases[0]
+    if (
+      leases.length !== 1 ||
+      !lease ||
+      text(lease, 'activity_kind') !== 'control' ||
+      text(lease, 'cell_id') !== cellId ||
+      integer(lease, 'request_units') !== 1
+    ) {
+      throw new EdgeMoveDeferredError('units_held')
+    }
+    const open = await transaction.query(
+      `SELECT 1 AS held FROM relay_assignment_migrations
+       WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL
+       UNION ALL
+       SELECT 1 AS held FROM relay_region_rehome_attempts
+       WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL`,
+      [identity.userId, identity.relayHostId, identity.userId, identity.relayHostId]
+    )
+    if (open.length > 0) { throw new EdgeMoveDeferredError('units_held') }
+    return {
+      cellId,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      activityId: text(lease, 'activity_id'),
+      units: 1
+    }
+  }
+
+  // The move's row write. With the host's own control (heldUnits) the edge row starts with no units
+  // (the edge holds none in Postgres) and the control's lease goes with the move, so a late release
+  // or renewal from the old cell finds nothing to decrement: release answers false, renewal and
+  // activation see the row on another cell (activity_cell_not_authoritative, wrong_assignment) and
+  // the cell closes that control. Its connection reservations at the old epoch are released, as a
+  // re-placement does (AssignmentStore.releaseSupersededControlConnectionReservations).
+  private async writeMove(
+    transaction: RelayDatabase,
+    identity: Identity,
+    epoch: number,
+    leaseExpiresAt: number,
+    now: number,
+    own: OwnControl | undefined
+  ): Promise<void> {
+    await transaction.query(
+      `UPDATE relay_assignments
+       SET cell_id = ?, assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
+       ${own ? `, reserved_controls = 0, reserved_splices = 0, reserved_invites = 0, pending_installs = 0,
+         pending_confirmations = 0, migration_leases = 0` : ''}
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+    )
+    if (!own) { return }
+    await transaction.query(
+      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+      [identity.userId, identity.relayHostId, own.activityId]
+    )
+    // Its capability goes with it (activateControl clears orphans only at the host's next activation).
+    await transaction.query(
+      `DELETE FROM relay_control_capabilities WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+      [identity.userId, identity.relayHostId, own.activityId]
+    )
+  }
+
+  // The old cell's share of the unit the move took (heldUnits): its connection reservations at the
+  // old epoch, as a re-placement releases them (AssignmentStore.releaseSupersededControlConnectionReservations),
+  // then its reservation counter, clamped at zero as every release is. After the edge push, so the
+  // contended reservation and cell rows are locked only to the commit, never across the push.
+  private async releaseOldCellUnits(
+    transaction: RelayDatabase,
+    identity: Identity,
+    own: OwnControl,
+    now: number
+  ): Promise<void> {
+    await transaction.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'released', released_at = ?, updated_at = ?
+       WHERE user_id = ? AND relay_host_id = ? AND cell_id = ? AND assignment_epoch = ? AND state <> 'released'`,
+      [now, now, identity.userId, identity.relayHostId, own.cellId, own.assignmentEpoch]
+    )
+    await transaction.query(
+      `UPDATE relay_cells SET reserved_requests =
+         CASE WHEN reserved_requests - ? < 0 THEN 0 ELSE reserved_requests - ? END,
+         updated_at = ?
+       WHERE cell_id = ?`,
+      [own.units, own.units, now, own.cellId]
+    )
   }
 
   // Pushes the row just written (epoch `epoch`, still uncommitted) with the host's devices. An edge
