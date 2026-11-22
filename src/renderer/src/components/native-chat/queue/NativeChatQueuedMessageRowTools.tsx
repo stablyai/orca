@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 
-/** Hidden until the row is hovered or holds focus; a tap on touch hovers the row first, so hidden tools never take it. */
+/** Hidden until the row is hovered or holds focus (a tap focuses it); hidden tools never take a tap. */
 export const QUEUED_ROW_REVEAL =
   'pointer-events-none opacity-0 group-hover/queued:pointer-events-auto group-hover/queued:opacity-100 group-focus-within/queued:pointer-events-auto group-focus-within/queued:opacity-100'
 

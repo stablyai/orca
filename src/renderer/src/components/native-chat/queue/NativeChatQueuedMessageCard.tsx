@@ -228,7 +228,9 @@ export function NativeChatQueuedMessageCard({
       style={rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      className="group/queued relative rounded-md py-1 pr-1 pl-1.5 hover:bg-accent/50 focus-within:bg-accent/50"
+      // Touch has no hover: a tap focuses the row, and focus-within reveals its tools.
+      tabIndex={-1}
+      className="group/queued relative rounded-md py-1 pr-1 pl-1.5 outline-none hover:bg-accent/50 focus-within:bg-accent/50"
     >
       {drag?.insertion ? (
         <span
