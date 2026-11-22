@@ -16,7 +16,8 @@ import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-wor
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { buildConversationKnowledgeGraph } from '../../../../shared/conversation-knowledge-graph'
 import { getCommitMessageAgentSpec } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   conversationKnowledgeItemsInGraph,
   scopeConversationKnowledgeGraphToProject,
@@ -56,6 +57,8 @@ export default function ConversationKnowledgePanel({
 }: {
   onClose?: () => void
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   useTranslation()
   const settings = useAppStore((state) => state.settings)
   const repos = useAppStore((state) => state.repos)
@@ -87,7 +90,7 @@ export default function ConversationKnowledgePanel({
     [generatorAgent, settings?.conversationKnowledgeEnrichmentModel]
   )
   const scopePaths = undefined
-  const summaryLanguage = getIntlLocale()
+  const summaryLanguage = intlLocale
   const fullGraph = useMemo(
     () => buildConversationKnowledgeGraph({ repos, worktrees, items }),
     [items, repos, worktrees]
@@ -194,10 +197,13 @@ export default function ConversationKnowledgePanel({
     if (status.state !== 'running') {
       return
     }
-    const timer = window.setInterval(() => {
-      void refreshKnowledge()
-    }, 1_200)
-    return () => window.clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: () => {
+        void refreshKnowledge()
+      },
+      intervalMs: 1_200,
+      slowWhileUnfocused: true
+    })
   }, [refreshKnowledge, status.state])
 
   useEffect(() => {
@@ -224,22 +230,21 @@ export default function ConversationKnowledgePanel({
       <header className="flex items-start gap-3 border-b border-border p-3">
         <div className="shrink-0">
           <h1 className="text-sm font-medium">
-            {translate('conversationKnowledge.name', 'Conversation Knowledge')}
+            {t('conversationKnowledge.name', 'Conversation Knowledge')}
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'conversationKnowledge.description',
               'AI-generated topics, conclusions, and relationships from agent history.'
             )}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {scopedItems.length
-              ? translate(
-                  'conversationKnowledge.items.count',
-                  'Showing {{visible}} of {{total}} items',
-                  { visible: visibleItems.length, total: scopedItems.length }
-                )
-              : translate('conversationKnowledge.items.empty', 'No knowledge items')}
+              ? t('conversationKnowledge.items.count', 'Showing {{visible}} of {{total}} items', {
+                  visible: visibleItems.length,
+                  total: scopedItems.length
+                })
+              : t('conversationKnowledge.items.empty', 'No knowledge items')}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ConversationKnowledgeGraphModeSwitch value={graphMode} onChange={setGraphMode} />
@@ -255,16 +260,13 @@ export default function ConversationKnowledgePanel({
                 }
               }}
               className="h-7"
-              aria-label={translate(
-                'conversationKnowledge.scope.ariaLabel',
-                'Knowledge graph scope'
-              )}
+              aria-label={t('conversationKnowledge.scope.ariaLabel', 'Knowledge graph scope')}
             >
               {(['all', 'project'] as const).map((mode) => (
                 <ToggleGroupItem key={mode} value={mode}>
                   {mode === 'all'
-                    ? translate('conversationKnowledge.scope.all', 'All')
-                    : translate('conversationKnowledge.scope.project', 'By project')}
+                    ? t('conversationKnowledge.scope.all', 'All')
+                    : t('conversationKnowledge.scope.project', 'By project')}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -274,11 +276,11 @@ export default function ConversationKnowledgePanel({
                 value={searchQuery}
                 className="h-6"
                 density="compact"
-                aria-label={translate(
+                aria-label={t(
                   'conversationKnowledge.search.ariaLabel',
                   'Search conversation knowledge'
                 )}
-                placeholder={translate(
+                placeholder={t(
                   'conversationKnowledge.search.placeholder',
                   'Search statements, summaries, or nodes'
                 )}
@@ -303,13 +305,11 @@ export default function ConversationKnowledgePanel({
             <TooltipTrigger asChild>
               <Button size="icon-sm" variant="ghost" onClick={onClose}>
                 <X />
-                <span className="sr-only">
-                  {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
-                </span>
+                <span className="sr-only">{t('auto.components.ui.sheet.1189e9fe0a', 'Close')}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
+              {t('auto.components.ui.sheet.1189e9fe0a', 'Close')}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -320,7 +320,7 @@ export default function ConversationKnowledgePanel({
       ) : null}
       {!generatorAgent || !generatorModel ? (
         <div className="p-4 text-sm text-muted-foreground">
-          {translate(
+          {t(
             'conversationKnowledge.configurationRequired',
             'Choose an enabled summary agent and model in Settings → Experimental → Conversation Knowledge.'
           )}
@@ -351,14 +351,11 @@ export default function ConversationKnowledgePanel({
                   projectId={activeProjectId}
                   emptyMessage={
                     searchQuery.trim()
-                      ? translate(
+                      ? t(
                           'conversationKnowledge.empty.search',
                           'No matching summaries or related nodes.'
                         )
-                      : translate(
-                          'conversationKnowledge.empty.generated',
-                          'No generated knowledge yet.'
-                        )
+                      : t('conversationKnowledge.empty.generated', 'No generated knowledge yet.')
                   }
                 />
               )}
@@ -392,11 +389,11 @@ export default function ConversationKnowledgePanel({
               ) : (
                 <p className="p-4 text-sm text-muted-foreground">
                   {searchQuery.trim()
-                    ? translate(
+                    ? t(
                         'conversationKnowledge.empty.search',
                         'No matching summaries or related nodes.'
                       )
-                    : translate(
+                    : t(
                         'conversationKnowledge.empty.selection',
                         'Select a topic or summary node to inspect its details and sources.'
                       )}
@@ -409,3 +406,4 @@ export default function ConversationKnowledgePanel({
     </div>
   )
 }
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'

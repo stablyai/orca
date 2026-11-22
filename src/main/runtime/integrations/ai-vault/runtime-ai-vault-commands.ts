@@ -1,16 +1,15 @@
-import type {
-  ConversationKnowledgeIndexStatus,
-  ConversationKnowledgeItem,
-  ConversationKnowledgeListResult,
-  GenerateConversationKnowledgeRequest,
-  StartConversationKnowledgeIndexRequest
+import {
+  searchConversationKnowledgeItems,
+  type ConversationKnowledgeIndexStatus,
+  type ConversationKnowledgeItem,
+  type ConversationKnowledgeListResult,
+  type GenerateConversationKnowledgeRequest,
+  type StartConversationKnowledgeIndexRequest
 } from '../../../../shared/conversation-knowledge-items'
 import type {
   AiVaultHistoryReadResult,
   AiVaultHistorySearchResult
 } from '../../../../shared/ai-vault-history-types'
-import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { searchConversationKnowledgeItems } from '../../../../shared/conversation-knowledge-items'
 import { readAiVaultHistorySession, searchAiVaultHistory } from '../../../ai-vault/session-history'
 import { getConversationKnowledgeService } from '../../../ai-vault/conversation-knowledge-service-registry'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
@@ -23,6 +22,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
+  AiVaultAgent,
   AiVaultListArgs,
   AiVaultListResult
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'

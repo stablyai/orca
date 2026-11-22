@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ConversationKnowledgeClaimMatch } from '@/lib/conversation-knowledge-claim-search'
 import type { ConversationKnowledgeRelation } from '@/lib/conversation-knowledge-relations'
 import { claimReliabilityLabel, claimStatusLabel } from './ConversationKnowledgeClaimResults'
@@ -19,6 +19,7 @@ export function ConversationKnowledgeRelationGraph({
   relations: readonly ConversationKnowledgeRelation[]
   onSelect: (match: ConversationKnowledgeClaimMatch) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [focusedConcept, setFocusedConcept] = useState<string | null>(null)
   const visible = focusedConcept
     ? relations.filter(
@@ -31,7 +32,7 @@ export function ConversationKnowledgeRelationGraph({
   if (!relations.length) {
     return (
       <div className="flex h-full min-h-52 items-center justify-center rounded-lg border border-border/60 bg-muted/15 px-6 text-center text-sm text-muted-foreground">
-        {translate(
+        {t(
           'conversationKnowledge.relations.empty',
           'No source-backed statements or relationships yet. Regenerate knowledge to extract them.'
         )}
@@ -43,16 +44,13 @@ export function ConversationKnowledgeRelationGraph({
     <div className="scrollbar-sleek h-full min-h-0 overflow-y-auto rounded-lg border border-border/60 bg-muted/15 p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-xs font-medium">
-          {translate(
-            'conversationKnowledge.relations.title',
-            'Source-backed statements and relationships'
-          )}{' '}
+          {t('conversationKnowledge.relations.title', 'Source-backed statements and relationships')}{' '}
           · {visible.length}
         </h2>
         {focusedConcept ? (
           <Button variant="ghost" size="xs" onClick={() => setFocusedConcept(null)}>
             <X className="size-3" />
-            {translate('conversationKnowledge.relations.clearFocus', 'Show all')}
+            {t('conversationKnowledge.relations.clearFocus', 'Show all')}
           </Button>
         ) : null}
       </div>
@@ -84,8 +82,8 @@ export function ConversationKnowledgeRelationGraph({
             </div>
             <Badge className="mt-1" variant={relation.kind === 'claim' ? 'outline' : 'secondary'}>
               {relation.kind === 'claim'
-                ? translate('conversationKnowledge.relations.structuredClaim', 'Structured claim')
-                : translate(
+                ? t('conversationKnowledge.relations.structuredClaim', 'Structured claim')
+                : t(
                     'conversationKnowledge.relations.sourceBackedStatement',
                     'Source-backed statement'
                   )}

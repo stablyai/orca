@@ -1,10 +1,13 @@
 import { getCommitMessageAgentSpec } from '../../source-control/ai/generation/commit-message-agent-spec'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { ALL_TUI_AGENTS } from '../../agent-launch/catalog/tui-agent-display-names'
-import { AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../ai-vault/contracts/ai-vault-types'
 import { z } from 'zod'
 import { parseExecutionHostId } from '../../execution-host/execution-host'
-import { AI_VAULT_AGENTS, boundedAiVaultScopeArgs } from '../../ai-vault/contracts/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  boundedAiVaultScopeArgs
+} from '../../ai-vault/contracts/ai-vault-types'
 import { OptionalBoolean } from '../rpc-param-primitives'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../ai-vault/contracts/ai-vault-session-title'
 

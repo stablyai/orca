@@ -1,5 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type ConversationKnowledgeGraphMode = 'map' | 'graph'
 
@@ -10,6 +10,7 @@ export function ConversationKnowledgeGraphModeSwitch({
   value: ConversationKnowledgeGraphMode
   onChange: (mode: ConversationKnowledgeGraphMode) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ToggleGroup
       type="single"
@@ -23,13 +24,13 @@ export function ConversationKnowledgeGraphModeSwitch({
         }
       }}
       className="h-7"
-      aria-label={translate('conversationKnowledge.graphMode.ariaLabel', 'Graph view')}
+      aria-label={t('conversationKnowledge.graphMode.ariaLabel', 'Graph view')}
     >
       <ToggleGroupItem value="map">
-        {translate('conversationKnowledge.graphMode.map', 'Map')}
+        {t('conversationKnowledge.graphMode.map', 'Map')}
       </ToggleGroupItem>
       <ToggleGroupItem value="graph">
-        {translate('conversationKnowledge.graphMode.graph', 'Graph')}
+        {t('conversationKnowledge.graphMode.graph', 'Graph')}
       </ToggleGroupItem>
     </ToggleGroup>
   )

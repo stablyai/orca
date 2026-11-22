@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   ConversationKnowledgeGraph,
   ConversationKnowledgeGraphRelation,
@@ -36,6 +37,7 @@ export function ConversationKnowledgeGraphPreview({
   projectId?: string | null
   emptyMessage?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const [focusedNode, setFocusedNode] = useState<FocusedNode | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -80,8 +82,7 @@ export function ConversationKnowledgeGraphPreview({
   if (!positions.length) {
     return (
       <div className="flex min-h-52 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        {emptyMessage ??
-          translate('conversationKnowledge.empty.generated', 'No generated knowledge yet.')}
+        {emptyMessage ?? t('conversationKnowledge.empty.generated', 'No generated knowledge yet.')}
       </div>
     )
   }
@@ -90,7 +91,7 @@ export function ConversationKnowledgeGraphPreview({
     <div
       ref={viewportRef}
       tabIndex={0}
-      aria-label={translate('conversationKnowledge.graph', 'Conversation Knowledge Graph')}
+      aria-label={t('conversationKnowledge.graph', 'Conversation Knowledge Graph')}
       className="scrollbar-sleek h-full min-h-0 overflow-auto overscroll-contain rounded-lg border border-border/60 bg-muted/15 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       <div className="relative" style={{ height, width: canvasWidth }}>

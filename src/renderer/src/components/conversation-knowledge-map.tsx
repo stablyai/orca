@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createConversationKnowledgeMapOverviewLayout } from '@/lib/conversation-knowledge-map-layout'
 import {
   buildConversationKnowledgeMap,
@@ -30,6 +30,7 @@ export function ConversationKnowledgeMap({
   selectedConceptId: string | null
   onSelectConcept: (concept: ConversationKnowledgeGraphNode) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState<Viewport>({ height: 480, width: 720 })
@@ -100,7 +101,7 @@ export function ConversationKnowledgeMap({
   if (!clusters.length) {
     return (
       <div className="flex min-h-52 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        {translate('conversationKnowledge.map.empty', 'No concepts are available for the map yet.')}
+        {t('conversationKnowledge.map.empty', 'No concepts are available for the map yet.')}
       </div>
     )
   }
@@ -110,7 +111,7 @@ export function ConversationKnowledgeMap({
       {clusters.length > 1 ? (
         <label className="absolute top-3 left-3 z-10 max-w-[calc(100%-8rem)] rounded-md border border-border/60 bg-background/95 px-2 py-1 text-xs shadow-xs">
           <span className="sr-only">
-            {translate('conversationKnowledge.map.cluster', 'Concept cluster')}
+            {t('conversationKnowledge.map.cluster', 'Concept cluster')}
           </span>
           <select
             className="max-w-full bg-transparent outline-none"
@@ -127,7 +128,7 @@ export function ConversationKnowledgeMap({
       ) : null}
       <div
         ref={viewportRef}
-        aria-label={translate('conversationKnowledge.map.relationships', 'Concept relationships')}
+        aria-label={t('conversationKnowledge.map.relationships', 'Concept relationships')}
         className="h-full min-h-96 touch-none select-none outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         onPointerDown={(event) => {
           if (event.target instanceof Element && event.target.closest('button')) {
@@ -179,16 +180,16 @@ export function ConversationKnowledgeMap({
       </div>
       <div className="absolute right-3 bottom-3 flex items-center gap-1 rounded-md border border-border/60 bg-background/95 p-1 shadow-xs">
         <MapControl
-          label={translate('conversationKnowledge.map.zoomOut', 'Zoom out')}
+          label={t('conversationKnowledge.map.zoomOut', 'Zoom out')}
           onClick={() => zoomBy(1 / 1.2)}
         >
           <Minus />
         </MapControl>
-        <MapControl label={translate('conversationKnowledge.map.fit', 'Fit map')} onClick={fitMap}>
+        <MapControl label={t('conversationKnowledge.map.fit', 'Fit map')} onClick={fitMap}>
           <Maximize2 />
         </MapControl>
         <MapControl
-          label={translate('conversationKnowledge.map.zoomIn', 'Zoom in')}
+          label={t('conversationKnowledge.map.zoomIn', 'Zoom in')}
           onClick={() => zoomBy(1.2)}
         >
           <Plus />
@@ -254,6 +255,7 @@ function ConceptMapNode({
   x: number
   y: number
 }): React.JSX.Element {
+  const t = useTranslate()
   const nodeSize = Math.min(112, 72 + entry.evidenceCount * 8)
   return (
     <Button
@@ -268,13 +270,13 @@ function ConceptMapNode({
     >
       <span className="line-clamp-2 max-w-full text-xs font-medium">{entry.concept.label}</span>
       <span className="mt-1 text-[10px] font-normal text-muted-foreground">
-        {translate('conversationKnowledge.map.evidenceCount', '{{count}} source-backed', {
+        {t('conversationKnowledge.map.evidenceCount', '{{count}} source-backed', {
           count: entry.evidenceCount
         })}
       </span>
       {entry.verifiedEvidenceCount ? (
         <Badge className="mt-1" variant="outline">
-          {translate('conversationKnowledge.map.verifiedCount', '{{count}} verified', {
+          {t('conversationKnowledge.map.verifiedCount', '{{count}} verified', {
             count: entry.verifiedEvidenceCount
           })}
         </Badge>

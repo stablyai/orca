@@ -9,7 +9,6 @@ import type {
   AiVaultHistoryReadResult,
   AiVaultHistorySearchResult
 } from '../../../../../shared/ai-vault-history-types'
-import type { AiVaultAgent } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
@@ -30,6 +29,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
+  AiVaultAgent,
   AiVaultListArgs,
   AiVaultListResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'

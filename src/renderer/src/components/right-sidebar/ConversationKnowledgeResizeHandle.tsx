@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ConversationKnowledgeResizeHandle({
   isResizing,
@@ -7,9 +7,10 @@ export function ConversationKnowledgeResizeHandle({
   isResizing: boolean
   onResizeStart: React.MouseEventHandler<HTMLDivElement>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
-      aria-label={translate('conversationKnowledge.detail.resize', 'Resize details')}
+      aria-label={t('conversationKnowledge.detail.resize', 'Resize details')}
       className={`absolute -left-1.5 top-0 z-20 flex h-full w-3 cursor-col-resize items-stretch justify-center ${isResizing ? 'bg-ring/10' : ''}`}
       onMouseDown={onResizeStart}
       role="separator"

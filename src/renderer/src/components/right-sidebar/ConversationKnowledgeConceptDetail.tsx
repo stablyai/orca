@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openConversationKnowledgeSourceHistory } from '@/lib/conversation-knowledge-source-history'
 import type {
   ConversationKnowledgeGraph,
@@ -20,6 +20,7 @@ export function ConversationKnowledgeConceptDetail({
   sourceHistoryScope: 'all' | 'project'
   onSelectItem: (item: ConversationKnowledgeItem) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const { digests, sessions, statements } = useMemo(
     () => relatedConceptKnowledge(graph, concept.id),
@@ -30,11 +31,11 @@ export function ConversationKnowledgeConceptDetail({
     <article className="space-y-4 p-4">
       <div>
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          {translate('conversationKnowledge.conceptOverview.eyebrow', 'Concept overview')}
+          {t('conversationKnowledge.conceptOverview.eyebrow', 'Concept overview')}
         </p>
         <h2 className="mt-1 text-base font-medium">{concept.label}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'conversationKnowledge.conceptOverview.description',
             'Observed in {{count}} conversation digests. This is not a verified knowledge note.',
             { count: digests.length }
@@ -42,11 +43,8 @@ export function ConversationKnowledgeConceptDetail({
         </p>
       </div>
       <ConceptSection
-        title={translate(
-          'conversationKnowledge.conceptOverview.sourceBacked',
-          'Source-backed statements'
-        )}
-        empty={translate(
+        title={t('conversationKnowledge.conceptOverview.sourceBacked', 'Source-backed statements')}
+        empty={t(
           'conversationKnowledge.conceptOverview.noSourceBacked',
           'No source-backed statements are linked to this concept yet.'
         )}
@@ -55,8 +53,8 @@ export function ConversationKnowledgeConceptDetail({
       />
       <SourceSessionSection sessions={sessions} sourceHistoryScope={sourceHistoryScope} />
       <ConceptSection
-        title={translate('conversationKnowledge.conceptOverview.digests', 'Conversation digests')}
-        empty={translate(
+        title={t('conversationKnowledge.conceptOverview.digests', 'Conversation digests')}
+        empty={t(
           'conversationKnowledge.conceptOverview.noDigests',
           'No conversation digests are linked to this concept.'
         )}
@@ -110,10 +108,11 @@ function SourceSessionSection({
   sessions: readonly ConversationKnowledgeItem[]
   sourceHistoryScope: 'all' | 'project'
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section>
       <h3 className="text-sm font-medium">
-        {translate('conversationKnowledge.conceptOverview.sourceSessions', 'Source sessions')}
+        {t('conversationKnowledge.conceptOverview.sourceSessions', 'Source sessions')}
       </h3>
       {sessions.length ? (
         <ul className="mt-2 space-y-1">
@@ -135,7 +134,7 @@ function SourceSessionSection({
         </ul>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'conversationKnowledge.conceptOverview.noSourceSessions',
             'No source sessions are linked to this concept.'
           )}

@@ -1,10 +1,11 @@
 import { Network } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useTranslation } from 'react-i18next'
 
 export default function ConversationKnowledgeSidebarEntry(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const open = useAppStore((s) => s.conversationKnowledgeDrawerOpen)
   const setOpen = useAppStore((s) => s.setConversationKnowledgeDrawerOpen)
@@ -21,9 +22,7 @@ export default function ConversationKnowledgeSidebarEntry(): React.JSX.Element {
       )}
     >
       <Network className="size-4 shrink-0 text-worktree-sidebar-foreground/30" strokeWidth={1.75} />
-      <span className="flex-1">
-        {translate('conversationKnowledge.name', 'Conversation Knowledge')}
-      </span>
+      <span className="flex-1">{t('conversationKnowledge.name', 'Conversation Knowledge')}</span>
     </button>
   )
 }

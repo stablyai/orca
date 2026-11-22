@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ConversationKnowledgeClaimMatch } from '@/lib/conversation-knowledge-claim-search'
 import {
   conversationKnowledgeEvidenceMessageIds,
@@ -14,16 +15,17 @@ export function ConversationKnowledgeClaimResults({
   matches: readonly ConversationKnowledgeClaimMatch[]
   onSelect: (match: ConversationKnowledgeClaimMatch) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!matches.length) {
     return null
   }
   return (
     <section
-      aria-label={translate('conversationKnowledge.claimResults', 'Matching statements')}
+      aria-label={t('conversationKnowledge.claimResults', 'Matching statements')}
       className="mb-3 border-b border-border pb-3"
     >
       <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {translate('conversationKnowledge.claimResults', 'Matching statements')} · {matches.length}
+        {t('conversationKnowledge.claimResults', 'Matching statements')} · {matches.length}
       </h2>
       <ul className="scrollbar-sleek max-h-44 space-y-1 overflow-y-auto">
         {matches.slice(0, 12).map((match) => {

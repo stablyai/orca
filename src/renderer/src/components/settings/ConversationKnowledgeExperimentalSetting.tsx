@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   ALL_TUI_AGENTS,
@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../../store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Switch as SettingsSwitch } from '../ui/switch'
@@ -25,6 +25,7 @@ type Props = {
 }
 
 export function ConversationKnowledgeExperimentalSetting({ settings, updateSettings }: Props) {
+  const t = useTranslate()
   useTranslation()
   const searchEntry = getExperimentalSearchEntry().conversationKnowledge
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
@@ -84,7 +85,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
     }
   }, [knowledgeAgentKey, shouldDiscoverModels])
 
-  const knowledgeModels = useMemo(() => {
+  const knowledgeModels = (() => {
     if (!selectedKnowledgeAgent) {
       return []
     }
@@ -99,12 +100,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
       unique.set(configuredModel, { id: configuredModel, label: configuredModel })
     }
     return [...unique.values()]
-  }, [
-    discoveredModels,
-    selectedKnowledgeAgent,
-    settings.conversationKnowledgeEnrichmentModel,
-    settings.sourceControlAi?.discoveredModelsByAgent
-  ])
+  })()
 
   return (
     <SearchableSetting
@@ -114,9 +110,9 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
-          <Label>{translate('conversationKnowledge.name', 'Conversation Knowledge')}</Label>
+          <Label>{t('conversationKnowledge.name', 'Conversation Knowledge')}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'conversationKnowledge.settings.description',
               'Adds a graph and detail workspace for exploring generated topics, conclusions, projects, worktrees, and source sessions.'
             )}
@@ -124,10 +120,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
         </div>
         <SettingsSwitch
           checked={settings.conversationKnowledgeEnabled === true}
-          aria-label={translate(
-            'conversationKnowledge.settings.toggle',
-            'Toggle Conversation Knowledge'
-          )}
+          aria-label={t('conversationKnowledge.settings.toggle', 'Toggle Conversation Knowledge')}
           onCheckedChange={() =>
             updateSettings({
               conversationKnowledgeEnabled: settings.conversationKnowledgeEnabled !== true
@@ -139,11 +132,9 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
         <div className="ml-4 space-y-3 border-l-2 border-border/60 py-2 pl-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
-              <Label>
-                {translate('conversationKnowledge.enrichment', 'AI Knowledge Enrichment')}
-              </Label>
+              <Label>{t('conversationKnowledge.enrichment', 'AI Knowledge Enrichment')}</Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'conversationKnowledge.enrichmentCopy',
                   'Checks for new or changed sessions once per day and turns them into summaries, topics, conclusions, and graph relationships.'
                 )}
@@ -151,7 +142,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
             </div>
             <SettingsSwitch
               checked={settings.conversationKnowledgeEnrichmentEnabled === true}
-              aria-label={translate(
+              aria-label={t(
                 'conversationKnowledge.enrichmentToggle',
                 'Toggle AI Knowledge Enrichment'
               )}
@@ -167,7 +158,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
             <div className="space-y-3 border-t border-border pt-3">
               <div>
                 <p className="mb-1.5 text-xs font-medium">
-                  {translate('conversationKnowledge.settings.summaryAgent', 'Summary agent')}
+                  {t('conversationKnowledge.settings.summaryAgent', 'Summary agent')}
                 </p>
                 <Select
                   value={selectedKnowledgeAgent ?? undefined}
@@ -185,7 +176,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
                 >
                   <SelectTrigger size="sm" className="w-full max-w-72">
                     <SelectValue
-                      placeholder={translate(
+                      placeholder={t(
                         'conversationKnowledge.settings.chooseAgent',
                         'Choose an enabled agent'
                       )}
@@ -200,7 +191,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'conversationKnowledge.settings.agentHelp',
                     'Only detected, enabled agents that support background generation are shown.'
                   )}
@@ -209,7 +200,7 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
               {selectedKnowledgeAgent ? (
                 <div>
                   <p className="mb-1.5 text-xs font-medium">
-                    {translate('conversationKnowledge.settings.summaryModel', 'Summary model')}
+                    {t('conversationKnowledge.settings.summaryModel', 'Summary model')}
                   </p>
                   <Select
                     value={

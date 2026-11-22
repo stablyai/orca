@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ConversationKnowledgeIndexButton({
   running,
@@ -22,6 +22,7 @@ export function ConversationKnowledgeIndexButton({
   onRegenerateAll: () => void
   onStop: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ButtonGroup>
       <Button
@@ -32,8 +33,8 @@ export function ConversationKnowledgeIndexButton({
       >
         {running ? <Square /> : <RefreshCw />}
         {running
-          ? translate('conversationKnowledge.stop', 'Stop generating')
-          : translate('conversationKnowledge.generateUpdates', 'Generate updates')}
+          ? t('conversationKnowledge.stop', 'Stop generating')
+          : t('conversationKnowledge.generateUpdates', 'Generate updates')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -41,10 +42,7 @@ export function ConversationKnowledgeIndexButton({
             size="icon-sm"
             variant="outline"
             disabled={disabled || running}
-            aria-label={translate(
-              'conversationKnowledge.generationOptions',
-              'More generation options'
-            )}
+            aria-label={t('conversationKnowledge.generationOptions', 'More generation options')}
           >
             <ChevronDown className="size-3" />
           </Button>
@@ -54,10 +52,10 @@ export function ConversationKnowledgeIndexButton({
             <RefreshCw className="mt-0.5" />
             <span>
               <span className="block">
-                {translate('conversationKnowledge.regenerateAll', 'Regenerate all')}
+                {t('conversationKnowledge.regenerateAll', 'Regenerate all')}
               </span>
               <span className="block text-[11px] text-muted-foreground">
-                {translate(
+                {t(
                   'conversationKnowledge.regenerateAllDescription',
                   'Replace every generated knowledge item.'
                 )}

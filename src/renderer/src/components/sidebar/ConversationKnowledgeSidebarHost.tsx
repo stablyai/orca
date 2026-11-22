@@ -6,7 +6,7 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../../app-shell/chrome/workspace-chrome-metrics'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useTranslation } from 'react-i18next'
 
 export default function ConversationKnowledgeSidebarHost({
@@ -18,6 +18,7 @@ export default function ConversationKnowledgeSidebarHost({
   leftSidebarStyle?: React.CSSProperties
   statusBarVisible: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   useTranslation()
   const open = useAppStore((s) => s.conversationKnowledgeDrawerOpen)
   const setOpen = useAppStore((s) => s.setConversationKnowledgeDrawerOpen)
@@ -61,7 +62,7 @@ export default function ConversationKnowledgeSidebarHost({
         style={contentStyle}
       >
         <SheetTitle className="sr-only">
-          {translate('conversationKnowledge.name', 'Conversation Knowledge')}
+          {t('conversationKnowledge.name', 'Conversation Knowledge')}
         </SheetTitle>
         <div className="flex min-h-0 flex-1 flex-col">
           <ConversationKnowledgePanel onClose={() => setOpen(false)} />
