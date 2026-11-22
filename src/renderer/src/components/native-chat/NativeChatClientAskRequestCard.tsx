@@ -82,9 +82,13 @@ export function NativeChatClientAskRequestCard({
       : reading.outcome === null
         ? here
           ? t('components.native-chat.clientAsk.waitingForYou', 'Waiting for you')
-          : t('components.native-chat.clientAsk.waitingOn', 'Waiting on {{computer}}', {
-              computer: client.computer
-            })
+          : t(
+              'components.native-chat.clientAsk.waitingOn',
+              'Waiting for approval on {{computer}}',
+              {
+                computer: client.computer
+              }
+            )
         : null
   return (
     <NativeChatEventRow

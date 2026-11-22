@@ -22614,7 +22614,7 @@
         "declined": "Declined",
         "notConnected": "{{computer}} isn’t connected",
         "waitingForYou": "Waiting for you",
-        "waitingOn": "Waiting on {{computer}}"
+        "waitingOn": "Waiting for approval on {{computer}}"
       }
     },
     "tab": {

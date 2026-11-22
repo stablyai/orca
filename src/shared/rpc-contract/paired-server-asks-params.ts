@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PeerMailSender } from './orchestration/orchestration-peer-mail-params'
 
 const ID = z.string().trim().min(1).max(500)
