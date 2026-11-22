@@ -144,10 +144,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     if (!this.botShareClient) {
       throw new Error('Sharing a bot needs the Orca desktop app.')
     }
-    const { client, download } = this.botShareClient
     this.botShareService ??= new BotShareService({
-      client,
-      download,
+      ...this.botShareClient,
       candidates: new BotShareCandidates(join(getProfileUserDataPath(), 'bot-share-candidates')),
       picks: this.botSharePicks(),
       readShareable: (bot, skills) =>
