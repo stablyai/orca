@@ -1,4 +1,7 @@
-import { nextStreamedTextCheckpointLength } from '../../../agent-session/journal/streamed-text-checkpoint-growth'
+import {
+  NATIVE_CHAT_REVEAL_MAX_STEP_MS as MAX_STEP_MS,
+  receiveSavePacedText
+} from './native-chat-text-reveal-save-paced'
 /** Whitespace-free script ranges used as character-sized reveal units. */
 export const SPACELESS_SCRIPT_RANGES = String.raw`\u2e80-\ud7ff\uf900-\uffef`
 const SPACELESS_SCRIPT_CHAR = new RegExp(`[${SPACELESS_SCRIPT_RANGES}]`, 'u')
@@ -20,6 +23,8 @@ export type NativeChatTextReveal = {
   savePaced?: true
   /** When a save-paced reply last showed its newest text. */
   shownAt?: number
+  /** The saved revision a save-paced reply last showed; a new one is a save to show. */
+  savedRevision?: number
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -63,8 +68,6 @@ function medianStepCost(costs: readonly number[]): number {
 /** A step this slow redraws the whole reply (footnotes, reference links, raw HTML re-parse it all),
  *  so it costs more than the update a save would make, and stepping it only lengthens each wait. */
 export const NATIVE_CHAT_WHOLE_REDRAW_STEP_MS = 100
-/** However slowly the reply renders, it still moves at least this often. */
-const MAX_STEP_MS = 6000
 /** A wait longer than this many frames sleeps on a timer instead of asking for every frame. */
 const PARK_FRAMES = 2
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
@@ -243,10 +246,11 @@ export function startNativeChatTextReveal(
   remembered: NativeChatTextReveal | undefined,
   begun: boolean,
   now: number,
-  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS,
+  savedRevision?: number
 ): NativeChatTextReveal {
   if (remembered?.savePaced) {
-    return receiveNativeChatText(remembered, text, streaming, false, now, revealMs)
+    return receiveNativeChatText(remembered, text, streaming, false, now, revealMs, savedRevision)
   }
   // Text received while unmounted has no arrival timestamp: show it without adding latency.
   if (remembered?.source === text && streaming) {
@@ -267,10 +271,12 @@ export function receiveNativeChatText(
   streaming: boolean,
   reducedMotion: boolean,
   now: number,
-  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS,
+  /** The row's saved revision, where the surface knows it, so a save-paced reply shows saves. */
+  savedRevision?: number
 ): NativeChatTextReveal {
   if (previous.savePaced) {
-    return receiveSavePacedText(previous, text, streaming, reducedMotion, now)
+    return receiveSavePacedText(previous, text, streaming, reducedMotion, now, savedRevision)
   }
   const immediate =
     reducedMotion ||
@@ -280,48 +286,6 @@ export function receiveNativeChatText(
   return immediate
     ? { source: text, shown: text.length, arrivals: [] }
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
-}
-
-/** A reply shown only where a save would show it: everything received so far now, then the newest
- *  text each time it grows past the next save's length or has waited the longest a step may, and all
- *  of it at its end. No reveal runs. */
-export function savePacedNativeChatText(
-  previous: NativeChatTextReveal,
-  now: number
-): NativeChatTextReveal {
-  return savePacedAt(previous.source, now)
-}
-
-function savePacedAt(source: string, now: number): NativeChatTextReveal {
-  return { source, shown: source.length, arrivals: [], savePaced: true, shownAt: now }
-}
-
-/** When a save-paced reply must show the `text` it is holding back, or undefined if it holds none. */
-export function savePacedNativeChatTextDue(
-  reveal: NativeChatTextReveal,
-  text: string
-): number | undefined {
-  return reveal.savePaced && text.length > reveal.source.length && text.startsWith(reveal.source)
-    ? (reveal.shownAt ?? 0) + MAX_STEP_MS
-    : undefined
-}
-
-function receiveSavePacedText(
-  previous: NativeChatTextReveal,
-  text: string,
-  streaming: boolean,
-  immediate: boolean,
-  now: number
-): NativeChatTextReveal {
-  const saved = previous.source.length
-  const due =
-    immediate ||
-    !streaming ||
-    !text.startsWith(previous.source) ||
-    saved === 0 ||
-    text.length >= nextStreamedTextCheckpointLength(saved) ||
-    now - (previous.shownAt ?? -Infinity) >= MAX_STEP_MS
-  return due && text !== previous.source ? savePacedAt(text, now) : previous
 }
 
 /** Step on the frame clock until complete and return cancellation. The clock spaces the steps. */

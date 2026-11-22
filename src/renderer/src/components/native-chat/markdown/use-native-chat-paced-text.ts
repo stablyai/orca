@@ -16,11 +16,13 @@ import {
   nativeChatTextAppended,
   playNativeChatTextReveal,
   receiveNativeChatText,
-  savePacedNativeChatText,
-  savePacedNativeChatTextDue,
   startNativeChatTextReveal,
   type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
+import {
+  savePacedNativeChatText,
+  savePacedNativeChatTextDue
+} from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal-save-paced'
 
 const WORD_FADE_MS = 300
 /** A step that shows a long stretch at once (a slow-to-draw reply steps seconds apart) fades only
@@ -53,7 +55,9 @@ export function useNativeChatPacedText(
   text: string,
   streaming: boolean,
   /** The reply's element; only a selection of its fading words keeps them as elements. */
-  root: React.RefObject<HTMLElement | null>
+  root: React.RefObject<HTMLElement | null>,
+  /** The row's saved journal revision, so a reply showing as saves would shows each save. */
+  savedRevision?: number
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
   const revealMs = reducedMotion ? REDUCED_MOTION_REVEAL_MS : undefined
@@ -65,7 +69,8 @@ export function useNativeChatPacedText(
       reveals?.drawn.get(rowKey),
       reveals?.begun.has(rowKey) === true,
       performance.now(),
-      revealMs
+      revealMs,
+      savedRevision
     )
   )
   const pace = useRef(initial)
@@ -124,7 +129,8 @@ export function useNativeChatPacedText(
       streaming,
       caughtUp,
       performance.now(),
-      revealMs
+      revealMs,
+      savedRevision
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
     const plain = caughtUp || pace.current.savePaced === true
@@ -132,7 +138,7 @@ export function useNativeChatPacedText(
       setShown(pace.current.shown, plain)
     }
     reveals?.drawn.set(rowKey, pace.current)
-  }, [text, streaming, revealMs, reveals, rowKey, setShown, heldTextSession])
+  }, [text, streaming, revealMs, savedRevision, reveals, rowKey, setShown, heldTextSession])
 
   const behind = !savePaced && shown < text.length
   useEffect(() => {
@@ -152,7 +158,7 @@ export function useNativeChatPacedText(
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
         if (frames.redrawsWhole?.() && !pace.current.savePaced) {
-          pace.current = savePacedNativeChatText(pace.current, performance.now())
+          pace.current = savePacedNativeChatText(pace.current, performance.now(), savedRevision)
           reveals?.drawn.set(rowKey, pace.current)
           setSavePaced(true)
           setShown(pace.current.shown, true)
@@ -161,7 +167,7 @@ export function useNativeChatPacedText(
       frames,
       revealMs
     )
-  }, [behind, text, reveals, rowKey, streaming, setShown, frames, revealMs])
+  }, [behind, text, reveals, rowKey, streaming, setShown, frames, revealMs, savedRevision])
   // Held-back text still shows once the reply has waited its longest step, even if no more arrives.
   useEffect(() => {
     const due = savePaced && streaming ? savePacedNativeChatTextDue(pace.current, text) : undefined
@@ -176,7 +182,9 @@ export function useNativeChatPacedText(
           true,
           false,
           // A timer can fire a little early; at its deadline the held text is due.
-          Math.max(performance.now(), due)
+          Math.max(performance.now(), due),
+          revealMs,
+          savedRevision
         )
         reveals?.drawn.set(rowKey, pace.current)
         setShown(pace.current.shown, true)
@@ -184,7 +192,7 @@ export function useNativeChatPacedText(
       Math.max(0, Math.ceil(due - performance.now()))
     )
     return () => clearTimeout(timer)
-  }, [savePaced, streaming, text, reveals, rowKey, setShown])
+  }, [savePaced, streaming, text, reveals, rowKey, setShown, revealMs, savedRevision])
   const revealing = !reducedMotion && !savePaced && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)
   useEffect(() => {

@@ -10,10 +10,12 @@ import {
   nativeChatRevealStepFrames,
   playNativeChatTextReveal,
   receiveNativeChatText,
-  savePacedNativeChatText,
-  savePacedNativeChatTextDue,
   startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
+import {
+  savePacedNativeChatText,
+  savePacedNativeChatTextDue
+} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal-save-paced'
 import { REVEAL_STEP_TIMED_EXACTLY, renderRevealStep } from './render-reveal-step'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-chat-growth-hold'
@@ -32,7 +34,9 @@ export function useMobileNativeChatPacedText(
   rowKey: string,
   text: string,
   streaming: boolean,
-  paced: boolean
+  paced: boolean,
+  /** The row's saved journal revision, so a reply showing as saves would shows each save. */
+  savedRevision?: number
 ): MobileNativeChatPacedText {
   const chat = useContext(MobileNativeChatReplyRevealsContext)
   const growth = useContext(MobileNativeChatGrowthHoldContext)
@@ -49,7 +53,8 @@ export function useMobileNativeChatPacedText(
       list?.drawn.get(rowKey),
       list?.begun.has(rowKey) === true,
       frames.now(),
-      revealMs
+      revealMs,
+      savedRevision
     )
   )
   const pace = useRef(initial)
@@ -64,7 +69,8 @@ export function useMobileNativeChatPacedText(
       streaming,
       immediate,
       frames.now(),
-      revealMs
+      revealMs,
+      savedRevision
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
     if (immediate || pace.current.savePaced || pace.current.shown >= text.length) {
@@ -72,7 +78,7 @@ export function useMobileNativeChatPacedText(
     }
     list?.drawn.set(rowKey, pace.current)
     list?.begun.delete(rowKey)
-  }, [text, streaming, immediate, list, rowKey, frames, revealMs])
+  }, [text, streaming, immediate, list, rowKey, frames, revealMs, savedRevision])
 
   // A step's cost runs from the step to its commit.
   const stepStartedAt = useRef<number | null>(null)
@@ -109,13 +115,13 @@ export function useMobileNativeChatPacedText(
       frames.stepCost?.(performance.now() - stepStartedAt.current, REVEAL_STEP_TIMED_EXACTLY)
       stepStartedAt.current = null
       if (frames.redrawsWhole?.() && !pace.current.savePaced) {
-        pace.current = savePacedNativeChatText(pace.current, performance.now())
+        pace.current = savePacedNativeChatText(pace.current, performance.now(), savedRevision)
         list?.drawn.set(rowKey, pace.current)
         setSavePaced(true)
         setShown(pace.current.shown)
       }
     }
-  }, [shown, frames, list, rowKey])
+  }, [shown, frames, list, rowKey, savedRevision])
 
   // Held-back text still shows once the reply has waited its longest step, even if no more arrives.
   useEffect(() => {
@@ -132,7 +138,8 @@ export function useMobileNativeChatPacedText(
           false,
           // A timer can fire a little early; at its deadline the held text is due.
           Math.max(frames.now(), due),
-          revealMs
+          revealMs,
+          savedRevision
         )
         list?.drawn.set(rowKey, pace.current)
         setShown(pace.current.shown)
@@ -140,7 +147,7 @@ export function useMobileNativeChatPacedText(
       Math.max(0, Math.ceil(due - frames.now()))
     )
     return () => clearTimeout(timer)
-  }, [savePaced, streaming, text, list, rowKey, frames, revealMs])
+  }, [savePaced, streaming, text, list, rowKey, frames, revealMs, savedRevision])
 
   return immediate
     ? { text, revealing: false }

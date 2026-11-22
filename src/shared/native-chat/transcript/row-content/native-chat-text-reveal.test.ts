@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nativeChatRevealStepFrames, receiveNativeChatText } from './native-chat-text-reveal'
 import {
-  nativeChatRevealStepFrames,
-  receiveNativeChatText,
   savePacedNativeChatText,
   savePacedNativeChatTextDue
-} from './native-chat-text-reveal'
+} from './native-chat-text-reveal-save-paced'
 
 let clock = 0
 let callbacks = new Map<number, (at: number) => void>()
@@ -130,5 +129,19 @@ describe('a reply redrawn whole each step', () => {
     // Drawn at once (a window shown again, or reduced motion), it shows all it has.
     const caughtUp = receiveNativeChatText(held, text(1124), true, true, 0)
     expect(caughtUp).toMatchObject({ shown: 1124, savePaced: true })
+  })
+
+  it('shows a save the moment its revision changes, whatever its length', () => {
+    const text = (length: number) => 'w'.repeat(length)
+    const switched = savePacedNativeChatText(
+      { source: text(11000), shown: 11000, arrivals: [] },
+      0,
+      4
+    )
+    // The host saved at 10,000 and saves again at 11,250, short of an eighth more than 11,000.
+    const live = receiveNativeChatText(switched, text(11200), true, false, 0, undefined, 4)
+    expect(live.shown).toBe(11000)
+    const saved = receiveNativeChatText(live, text(11250), true, false, 0, undefined, 5)
+    expect(saved).toMatchObject({ shown: 11250, savedRevision: 5 })
   })
 })

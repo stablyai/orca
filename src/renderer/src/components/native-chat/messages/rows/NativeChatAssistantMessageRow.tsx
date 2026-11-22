@@ -109,6 +109,7 @@ export function NativeChatAssistantMessageRow({
       {shownWords ? (
         <NativeChatPacedMarkdown
           rowKey={message.id}
+          savedRevision={message.journalRevision}
           content={shownWords}
           variant="document"
           className="text-sm"
