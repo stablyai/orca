@@ -1,8 +1,11 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { useAppStore } from '@/store/index'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
-import type { AutomationRunViewState } from './automation-run-view-state'
-import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { resolveAutomationRunTarget } from './automation-run-open-target'
+import { getAutomationRunViewState } from './automation-run-view-state'
+import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import { makeAutomation, makeRun, makeRunUsage } from '../automations-page-fixtures'
 
@@ -44,18 +47,13 @@ const history: SelectedAutomationRunHistoryOutcome = {
 const noop = (): void => {}
 
 const LONG_NAME = 'Quartz Lab - Watch (nightly flaky-test sweep on main)'
-
-const openable: AutomationRunViewState = {
-  availability: 'workspace',
-  actionLabel: 'Open workspace',
-  statusLabel: 'Done',
-  canOpen: true
-}
+const PAIRED_ENVIRONMENT_ID = 'sample-runtime'
 
 type Scenario = {
   run?: Partial<AutomationRun>
   hostLabel?: string
-  removedWorkspace?: boolean
+  workspaceCatalog?: 'removed' | 'loading'
+  paired?: boolean
   canRerun?: boolean
   isRerunPending?: boolean
 }
@@ -64,14 +62,20 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
   const listed = runs.find((candidate) => candidate.id === runId) ?? runs[0]
   const run = { ...listed, ...scenario.run }
   const worktree =
-    run.workspaceDisplayName && !scenario.removedWorkspace
+    run.workspaceDisplayName && !scenario.workspaceCatalog
       ? { displayName: run.workspaceDisplayName }
       : null
-  const viewState = scenario.removedWorkspace
-    ? { ...openable, availability: 'metadata' as const, canOpen: false }
-    : worktree
-      ? openable
-      : null
+  const viewState = scenario.paired
+    ? resolveAutomationRunTarget(useAppStore.getState(), run, {
+        kind: 'runtime',
+        environmentId: PAIRED_ENVIRONMENT_ID,
+        pairingRevision: 1
+      }).viewState
+    : getAutomationRunViewState({
+        run,
+        workspaceExists: worktree !== null,
+        terminalTargetExists: false
+      })
   return (
     <div className="bg-background text-foreground">
       <AutomationRunDetailsPage
@@ -82,8 +86,13 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
         history={history}
         relativeNow={NOW}
         hostLabel={scenario.hostLabel ?? 'This Mac'}
-        workspaceDisplay={getAutomationRunWorkspaceDisplay({ run, worktree })}
-        viewState={viewState}
+        workspaceName={getAutomationRunDetailsWorkspaceName({
+          run,
+          worktree,
+          canOpen: viewState.canOpen,
+          catalogHydrated: scenario.workspaceCatalog !== 'loading'
+        })}
+        canOpenWorkspace={viewState.canOpen}
         canRerun={scenario.canRerun ?? false}
         isRerunPending={scenario.isRerunPending ?? false}
         onRerun={noop}
@@ -118,10 +127,17 @@ const scenarios = {
     },
     canRerun: true
   },
-  notLaunched: { canRerun: true },
+  notLaunched: {
+    run: {
+      status: 'pending',
+      startedAt: null,
+      dispatchedAt: null,
+      outputSnapshot: null
+    }
+  },
   removed: {
     run: { workspaceId: 'ws-3', workspaceDisplayName: 'Docs cleanup' },
-    removedWorkspace: true,
+    workspaceCatalog: 'removed',
     canRerun: true
   },
   rerunPending: {
@@ -178,6 +194,49 @@ export const rerunPendingWide = defineFixture({
 export const rerunPendingNarrow = defineFixture({
   width: 400,
   render: () => renderRunPage('run-23', scenarios.rerunPending)
+})
+
+const pairedRun: Scenario = {
+  run: {
+    workspaceId: 'ws-4',
+    terminalPaneKey: makePaneKey('sample-run', '00000000-0000-4000-8000-000000000001'),
+    terminalPtyId: 'sample-pty'
+  },
+  hostLabel: 'preview-box.example.net',
+  workspaceCatalog: 'loading',
+  paired: true,
+  canRerun: true
+}
+
+const pairedStore = {
+  runtimeEnvironments: [
+    {
+      id: PAIRED_ENVIRONMENT_ID,
+      name: 'Preview box',
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      preferredEndpointId: 'preview',
+      endpoints: []
+    }
+  ]
+}
+
+export const pairedWorkspaceName = defineFixture({
+  width: 400,
+  store: pairedStore,
+  render: () =>
+    renderRunPage('run-23', {
+      ...pairedRun,
+      run: { ...pairedRun.run, workspaceDisplayName: LONG_NAME }
+    })
+})
+
+export const pairedWorkspaceUnnamed = defineFixture({
+  width: 400,
+  store: pairedStore,
+  render: () => renderRunPage('run-23', pairedRun)
 })
 
 /** A middle run: both Older and Newer step somewhere. */

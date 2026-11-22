@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { ArrowUpRight, ChevronLeft, ChevronRight, KeyRound, Monitor, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, ChevronRight, KeyRound, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
@@ -14,8 +14,6 @@ import { sayAutomationRun } from '../../native-chat/automation-run/automation-ru
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
-import type { AutomationRunViewState } from './automation-run-view-state'
-import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { useFullAutomationRun } from './use-full-automation-run'
 import { pendingAutomationSetupReview } from '../authoring/automation-setup-review'
 import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
@@ -28,6 +26,7 @@ import {
   formatAutomationDateTimeWithRelative
 } from '../automation-page-parts'
 import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
+import { AutomationRunRerunButton } from './AutomationRunRerunButton'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
@@ -47,8 +46,8 @@ export function AutomationRunDetailsPage({
   history,
   relativeNow,
   hostLabel,
-  workspaceDisplay,
-  viewState,
+  workspaceName,
+  canOpenWorkspace,
   canRerun,
   isRerunPending,
   onRerun,
@@ -66,8 +65,8 @@ export function AutomationRunDetailsPage({
   history: SelectedAutomationRunHistoryOutcome
   relativeNow: number
   hostLabel: string
-  workspaceDisplay: AutomationRunWorkspaceDisplay | null
-  viewState: AutomationRunViewState | null
+  workspaceName: string | null
+  canOpenWorkspace: boolean
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
@@ -135,9 +134,6 @@ export function AutomationRunDetailsPage({
   const tokens = usage?.totalTokens
   const hasCost = cost != null
   const hasTokens = tokens != null
-  const workspaceName = listedRun.workspaceId
-    ? (workspaceDisplay?.title ?? workspaceDisplay?.detailLabel)
-    : null
   const triggerLabel =
     run.trigger === 'manual'
       ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
@@ -146,7 +142,6 @@ export function AutomationRunDetailsPage({
         : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
   // The nonbreaking space keeps each separator with the preceding item.
   const dot = <span aria-hidden="true">{'\u00a0· '}</span>
-  const rerunLabel = t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')
   const stepLabel = {
     newer: t('auto.components.automations.runIdentity.newerRun', 'Newer run'),
     older: t('auto.components.automations.runIdentity.olderRun', 'Older run')
@@ -163,44 +158,7 @@ export function AutomationRunDetailsPage({
             <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
             {canRerun && automation ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="@max-[32.5rem]/run-header:hidden"
-                  disabled={isRerunPending}
-                  aria-busy={isRerunPending || undefined}
-                  onClick={onRerun}
-                >
-                  <RefreshCw
-                    className={cn('size-3.5', isRerunPending && 'motion-safe:animate-spin')}
-                  />
-                  {rerunLabel}
-                </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="shrink-0 @min-[32.5rem]/run-header:hidden">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={rerunLabel}
-                        disabled={isRerunPending}
-                        aria-busy={isRerunPending || undefined}
-                        onClick={onRerun}
-                      >
-                        <RefreshCw
-                          className={cn('size-3.5', isRerunPending && 'motion-safe:animate-spin')}
-                        />
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={4}>
-                    {rerunLabel}
-                  </TooltipContent>
-                </Tooltip>
-              </>
+              <AutomationRunRerunButton pending={isRerunPending} onRerun={onRerun} />
             ) : null}
             {/* Why: left reads as back in time, so Older sits left and Newer right. */}
             {(['older', 'newer'] as const).map((step) => {
@@ -276,7 +234,7 @@ export function AutomationRunDetailsPage({
             {workspaceName ? <span aria-hidden="true">{'\u00a0·\u00a0'}</span> : dot}
             {workspaceName ? (
               <>
-                {viewState?.canOpen ? (
+                {canOpenWorkspace ? (
                   <span
                     role="button"
                     tabIndex={0}

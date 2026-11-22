@@ -7,7 +7,7 @@ import {
 } from '../hosts/automation-host-client'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { canRerunAutomationRun } from './automation-run-view-state'
-import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from '../use-automations-page-local-state'
 import type { AutomationsPageSetupState } from '../authoring/use-automations-page-setup-state'
@@ -25,6 +25,7 @@ export function useAutomationRunPageState({
     | 'pendingAutomationRunNavigation'
     | 'setPendingAutomationRunNavigation'
     | 'runtimeEnvironments'
+    | 'startupWorktreeRefreshCompleted'
     | 'selectedId'
     | 'setSelectedId'
   >
@@ -56,6 +57,7 @@ export function useAutomationRunPageState({
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
     runtimeEnvironments,
+    startupWorktreeRefreshCompleted,
     selectedId,
     setSelectedId
   } = store
@@ -253,16 +255,18 @@ export function useAutomationRunPageState({
   const selectedRunTarget = selectedAutomationRunPage
     ? list.runTargetFor(selectedAutomationRunPage)
     : null
-  const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
-    ? getAutomationRunWorkspaceDisplay(
+  const canOpenSelectedAutomationRunPageWorkspace = selectedRunTarget?.viewState.canOpen ?? false
+  const selectedAutomationRunPageWorkspaceName = selectedAutomationRunPage
+    ? getAutomationRunDetailsWorkspaceName(
         {
           run: selectedAutomationRunPage,
-          worktree: selectedRunTarget?.worktree ?? null
+          worktree: selectedRunTarget?.worktree ?? null,
+          canOpen: canOpenSelectedAutomationRunPageWorkspace,
+          catalogHydrated: startupWorktreeRefreshCompleted
         },
         t
       )
     : null
-  const selectedAutomationRunPageViewState = selectedRunTarget?.viewState ?? null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
@@ -270,8 +274,8 @@ export function useAutomationRunPageState({
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
 
   return {
-    selectedAutomationRunPageWorkspaceDisplay,
-    selectedAutomationRunPageViewState,
+    selectedAutomationRunPageWorkspaceName,
+    canOpenSelectedAutomationRunPageWorkspace,
     canRerunSelectedAutomationRunPage,
     isSelectedAutomationRunPageRerunPending
   }

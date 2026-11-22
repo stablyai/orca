@@ -50,3 +50,32 @@ export function getAutomationRunWorkspaceDisplay(
       : undefined
   }
 }
+
+export function getAutomationRunDetailsWorkspaceName(
+  {
+    run,
+    worktree,
+    canOpen,
+    catalogHydrated
+  }: {
+    run: Pick<AutomationRun, 'workspaceId' | 'workspaceDisplayName'>
+    worktree: Pick<Worktree, 'displayName'> | null
+    canOpen: boolean
+    catalogHydrated: boolean
+  },
+  t: Translate = translate
+): string | null {
+  if (!run.workspaceId) {
+    return null
+  }
+  if (!worktree && (canOpen || !catalogHydrated)) {
+    return (
+      run.workspaceDisplayName?.trim() ||
+      (canOpen
+        ? t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')
+        : null)
+    )
+  }
+  const display = getAutomationRunWorkspaceDisplay({ run, worktree }, t)
+  return display.title ?? display.detailLabel
+}
