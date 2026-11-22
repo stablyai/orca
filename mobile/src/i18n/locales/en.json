@@ -5671,7 +5671,19 @@
       "newThreadTab": "New thread",
       "newThreadHint": "starts fresh",
       "newThread": "New thread in {{name}}",
-      "peerReadItems": "{{bot}} read an update to its items"
+      "peerReadItems": "{{bot}} read an update to its items",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
+      "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}."
     },
     "templates": {
       "title": "Bot templates",
