@@ -10,6 +10,7 @@ import { botAccessSeenFile, createBotAccessRequestWatch } from '../bots/bot-acce
 import { notifyBotCouldNotFinish, runtimeBotOwnerNotice } from '../bots/bot-could-not-finish'
 import { WebhookHostService } from '../webhooks/webhook-host-service'
 import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upkeep'
+import { installGitLabEventHooks } from '../gitlab/events/gitlab-event-hooks-install'
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
@@ -105,9 +106,11 @@ export function installConnectorHost({
   if (runtime.getConnectorCloud()) {
     runtime.setWebhooks(webhooks)
     const composio = installComposioUpkeep(runtime, webhooks)
+    const gitlab = installGitLabEventHooks(runtime, webhooks, userDataPath)
     stops.push(
       () => webhooks.stop(),
-      () => composio.stop()
+      () => composio.stop(),
+      () => gitlab.stop()
     )
     runtime.onClientEvent(
       (event) => {
@@ -117,6 +120,7 @@ export function installConnectorHost({
         // A deleted bot, hook or automation leaves Composio triggers to remove.
         if (event.type === 'automationsChanged') {
           composio.soon()
+          gitlab.soon()
         }
       },
       { consumesTerminalSideEffects: false }

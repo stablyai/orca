@@ -38,8 +38,12 @@ export class ComposioUpkeep {
   private interval: ReturnType<typeof setInterval> | null = null
   private soonTimer: ReturnType<typeof setTimeout> | null = null
   private running: Promise<void> | null = null
+  private stopped = false
 
-  constructor(private readonly pass: () => Promise<void>) {}
+  constructor(
+    private readonly pass: () => Promise<void>,
+    private readonly label = 'composio'
+  ) {}
 
   start(): void {
     void this.run()
@@ -48,6 +52,10 @@ export class ComposioUpkeep {
   }
 
   soon(): void {
+    // A change heard after the host stopped must not start the pass again.
+    if (this.stopped) {
+      return
+    }
     if (this.soonTimer) {
       clearTimeout(this.soonTimer)
     }
@@ -56,6 +64,7 @@ export class ComposioUpkeep {
   }
 
   stop(): void {
+    this.stopped = true
     if (this.interval) {
       clearInterval(this.interval)
     }
@@ -67,7 +76,7 @@ export class ComposioUpkeep {
   /** One pass at a time; a failure waits for the next. */
   run(): Promise<void> {
     this.running ??= this.pass()
-      .catch((error: unknown) => console.warn('[composio] upkeep pass failed', error))
+      .catch((error: unknown) => console.warn(`[${this.label}] upkeep pass failed`, error))
       .finally(() => {
         this.running = null
       })
