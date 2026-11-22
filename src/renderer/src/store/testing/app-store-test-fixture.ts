@@ -22,6 +22,7 @@ import { createWorkspaceSpaceSlice } from '../slices/workspace-cleanup/workspace
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
+  createMistralVibeUsageSlice,
   createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from '../slices/usage/usage-provider-slices'
@@ -97,6 +98,7 @@ export function createTestStore(
         ...createCodexUsageSlice(...a),
         ...createOpenCodeUsageSlice(...a),
         ...createMuseUsageSlice(...a),
+        ...createMistralVibeUsageSlice(...a),
         ...createBrowserSlice(...a),
         ...createRateLimitSlice(...a),
         ...createSshSlice(...a),

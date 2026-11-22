@@ -18,6 +18,7 @@ import type { WorkspaceSpaceSlice } from './slices/workspace-cleanup/workspace-s
 import type {
   ClaudeUsageSlice,
   CodexUsageSlice,
+  MistralVibeUsageSlice,
   MuseUsageSlice,
   OpenCodeUsageSlice
 } from './slices/usage/usage-provider-slice-contract'
@@ -75,6 +76,7 @@ export type AppState = RepoSlice &
   CodexUsageSlice &
   OpenCodeUsageSlice &
   MuseUsageSlice &
+  MistralVibeUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &

@@ -1,7 +1,12 @@
 import { createUsageProviderApi } from '../../../../preload/usage/usage-provider-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 
-type UsageProviderKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
+type UsageProviderKey =
+  | 'claudeUsage'
+  | 'codexUsage'
+  | 'openCodeUsage'
+  | 'museUsage'
+  | 'mistralVibeUsage'
 
 // Other reads wait for the host to rescan its transcripts; a first scan outlasts the default timeout.
 const USAGE_SCAN_TIMEOUT_MS = 10 * 60_000

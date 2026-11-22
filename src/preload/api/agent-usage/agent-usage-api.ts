@@ -19,6 +19,10 @@ import type {
   MuseUsageSnapshot
 } from '../../../shared/agent-usage/analytics/muse-usage-types'
 import type {
+  MistralVibeUsageBreakdownKind,
+  MistralVibeUsageSnapshot
+} from '../../../shared/agent-usage/analytics/mistral-vibe-usage-types'
+import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
@@ -63,6 +67,11 @@ export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreak
 export type OpenCodeUsageApi = UsageProviderApi<OpenCodeUsageSnapshot, OpenCodeUsageBreakdownKind>
 
 export type MuseUsageApi = UsageProviderApi<MuseUsageSnapshot, MuseUsageBreakdownKind>
+
+export type MistralVibeUsageApi = UsageProviderApi<
+  MistralVibeUsageSnapshot,
+  MistralVibeUsageBreakdownKind
+>
 
 export type RateLimitsApi = {
   get: () => Promise<RateLimitState>

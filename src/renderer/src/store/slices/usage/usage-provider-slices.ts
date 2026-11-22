@@ -6,14 +6,16 @@ import type {
   ClaudeUsageTypes,
   CodexUsageTypes,
   OpenCodeUsageTypes,
-  MuseUsageTypes
+  MuseUsageTypes,
+  MistralVibeUsageTypes
 } from './usage-provider-slice-contract'
 
 export type {
   ClaudeUsageSlice,
   CodexUsageSlice,
   OpenCodeUsageSlice,
-  MuseUsageSlice
+  MuseUsageSlice,
+  MistralVibeUsageSlice
 } from './usage-provider-slice-contract'
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
@@ -60,11 +62,24 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   hasCachedData: (state) => state.hasAnyMuseData
 })
 
+export const createMistralVibeUsageSlice = createUsageProviderSlice<
+  'mistralVibe',
+  'MistralVibe',
+  MistralVibeUsageTypes
+>({
+  prefix: 'mistralVibe',
+  name: 'MistralVibe',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: (host) => usageApiForHost(host, 'mistralVibeUsage'),
+  hasCachedData: (state) => state.hasAnyMistralVibeData
+})
+
 /** A host switch clears every provider's numbers, keeping the chosen scope and range. */
 export function clearUsageProviderData(): Partial<AppState> {
   return Object.assign(
     {},
-    ...(['claude', 'codex', 'openCode', 'muse'] as const).map((prefix) =>
+    ...(['claude', 'codex', 'openCode', 'muse', 'mistralVibe'] as const).map((prefix) =>
       createUsagePatch(prefix, {
         failure: null,
         scanState: null,

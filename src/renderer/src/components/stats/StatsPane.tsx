@@ -7,6 +7,7 @@ import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
+import { MistralVibeUsagePane } from './MistralVibeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import {
   StatsHostCaption,
@@ -67,7 +68,7 @@ function formatTrackingSince(
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'mistral-vibe' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -98,6 +99,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'muse',
     get label() {
       return translate('auto.lib.agent.catalog.muse_label', 'Muse')
+    }
+  },
+  {
+    id: 'mistral-vibe',
+    get label() {
+      return translate('auto.components.stats.StatsPane.mistralVibeUsageTab', 'Mistral Vibe')
     }
   },
   {
@@ -267,6 +274,8 @@ function StatsPaneContent({
             <OpenCodeUsagePane />
           ) : activeUsageTab === 'muse' ? (
             <MuseUsagePane />
+          ) : activeUsageTab === 'mistral-vibe' ? (
+            <MistralVibeUsagePane />
           ) : (
             <GrokUsagePane />
           )}

@@ -3,7 +3,12 @@ import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { createRuntimeUsageProviderApi } from '../../../runtime/usage-analytics/runtime-usage-provider-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
 
-type UsageProviderKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
+type UsageProviderKey =
+  | 'claudeUsage'
+  | 'codexUsage'
+  | 'openCodeUsage'
+  | 'museUsage'
+  | 'mistralVibeUsage'
 
 /** Identifies the host whose usage Stats & Usage shows. */
 export function usageHostKey(target: RuntimeClientTarget): string {
