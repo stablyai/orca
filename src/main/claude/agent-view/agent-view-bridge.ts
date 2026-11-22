@@ -208,7 +208,9 @@ export class ClaudeAgentViewBridge {
     if (!session || session.sessionId !== args.sessionId || !shortcut) {
       return { status: 'unsupported' }
     }
-    if (args.signal?.aborted || !session.view) {
+    // A checking-in mod (WSL, relative config, older Orca) that went quiet may be stopped: 15 s rule.
+    const stale = !session.configDir && Date.now() - session.seenAt > 15_000
+    if (args.signal?.aborted || !session.view || stale) {
       return { status: 'unavailable' }
     }
     session.pending?.finish({ status: 'busy' })

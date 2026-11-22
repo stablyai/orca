@@ -60,6 +60,16 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     )
   }
 
+  /** Whether the pane's agent can take typed input now: its process runs and isn't stopped by job
+   *  control (Ctrl-Z, then another program in front). A silent idle mod proves neither. */
+  async agentAcceptsInput(paneKey: string): Promise<boolean> {
+    if ((await this.checkAgentPresence(paneKey)) === 'exited') {
+      return false
+    }
+    const row = this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+    return row?.agentPresence?.suspended !== true && row?.agentPresence?.ended !== true
+  }
+
   private claudeAgentEnded(paneKey: string): boolean {
     return (
       this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))?.agentPresence
