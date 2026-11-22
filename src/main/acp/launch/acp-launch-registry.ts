@@ -42,6 +42,7 @@ import { GEMINI_LAUNCH_SPEC } from '../../gemini/gemini-acp-launch-spec'
 import { DROID_LAUNCH_SPEC } from '../../droid/droid-acp-launch-spec'
 import { QWEN_CODE_LAUNCH_SPEC } from '../../qwen-code/qwen-code-acp-launch-spec'
 import { CLINE_LAUNCH_SPEC } from '../../cline/cline-acp-launch-spec'
+import { DEVIN_LAUNCH_SPEC } from '../../devin/devin-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
@@ -184,7 +185,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GEMINI_LAUNCH_SPEC,
   DROID_LAUNCH_SPEC,
   QWEN_CODE_LAUNCH_SPEC,
-  CLINE_LAUNCH_SPEC
+  CLINE_LAUNCH_SPEC,
+  DEVIN_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
