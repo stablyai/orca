@@ -3,7 +3,8 @@ import type { TerminalModelWait } from '../../../agent-hooks/server/server-model
 import {
   claudeModelWaitLastSeen,
   claudeReplyScreen,
-  claudeToolRunsOnScreen
+  claudeToolRunsOnScreen,
+  claudeTurnDoneOnScreen
 } from '../wait/claude-model-wait-screen'
 import { reportWorkerModelWait } from '../../orchestration/workers/turn-stops/worker-model-wait-report'
 import type { WorkerTurnStopDispatch } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
@@ -33,8 +34,9 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
     if (!first || !middle || !after || (grew(first, middle) && grew(middle, after))) {
       return true
     }
-    // A hook during the look (a tool call that just arrived) restarted the stopwatch.
-    if (!wait.stillWaiting()) {
+    // A hook during the look (a tool call that just arrived) restarted the stopwatch, and a turn
+    // Claude shows as done waits on nothing.
+    if (!wait.stillWaiting() || claudeTurnDoneOnScreen(after)) {
       return true
     }
     if (wait.toolMaybeOpen && claudeToolRunsOnScreen(after)) {
