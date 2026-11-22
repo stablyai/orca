@@ -60,7 +60,10 @@ export function useMobileNativeChatPacedText(
       frames.now(),
       REVEAL_MS
     )
-    setShown(pace.current.shown)
+    // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
+    if (immediate || pace.current.savePaced || pace.current.shown >= text.length) {
+      setShown(pace.current.shown)
+    }
     list?.drawn.set(rowKey, pace.current)
     list?.begun.delete(rowKey)
   }, [text, streaming, immediate, list, rowKey, frames])

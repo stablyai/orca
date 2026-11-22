@@ -263,7 +263,7 @@ export function receiveNativeChatText(
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
   if (previous.savePaced) {
-    return receiveSavePacedText(previous, text, streaming)
+    return receiveSavePacedText(previous, text, streaming, reducedMotion)
   }
   const immediate =
     reducedMotion ||
@@ -284,10 +284,12 @@ export function savePacedNativeChatText(previous: NativeChatTextReveal): NativeC
 function receiveSavePacedText(
   previous: NativeChatTextReveal,
   text: string,
-  streaming: boolean
+  streaming: boolean,
+  immediate: boolean
 ): NativeChatTextReveal {
   const saved = previous.source.length
   const due =
+    immediate ||
     !streaming ||
     !text.startsWith(previous.source) ||
     saved === 0 ||

@@ -112,5 +112,8 @@ describe('a reply redrawn whole each step', () => {
     expect(saved.arrivals).toEqual([])
     const ended = receiveNativeChatText(saved, text(1130), false, false, 0)
     expect(ended.shown).toBe(1130)
+    // Drawn at once (a window shown again, or reduced motion), it shows all it has.
+    const caughtUp = receiveNativeChatText(held, text(1124), true, true, 0)
+    expect(caughtUp).toMatchObject({ shown: 1124, savePaced: true })
   })
 })
