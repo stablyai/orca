@@ -228,6 +228,9 @@ export async function reportWorkerStopsAcrossRestart(
   }
   // No wait for mail outlives a restart, so none holds back a rest any more.
   for (const dispatchId of listUndecidedWorkerRests(db)) {
+    if (deps.resuming?.(dispatchId)) {
+      continue
+    }
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
     if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
       visit(dispatchId, () => void reconsiderWorkerRest(db, dispatchId, deps.reportDeps))

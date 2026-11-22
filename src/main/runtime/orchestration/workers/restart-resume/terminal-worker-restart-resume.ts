@@ -7,6 +7,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   claimWorkerRestartResume,
+  isWorkerRestartResumeOpen,
   rebindRestartedWorkerTerminal,
   type WorkerRestartResumeClaim
 } from '../../db/worker-dispatch/worker-restart-resume'
@@ -186,6 +187,12 @@ export class TerminalWorkerRestartResume {
     if (!worker || this.reopening.has(dispatchId)) {
       return
     }
+    const db = this.deps.getDb()
+    // Stopped or released while startup settled: its coordinator's outcome stands, nothing starts.
+    if (!db || !isWorkerRestartResumeOpen(db, dispatchId)) {
+      this.held.delete(dispatchId)
+      return
+    }
     this.reopening.add(dispatchId)
     const { worktreeId, session } = worker.claim
     const reopened = this.deps.reopen(worktreeId, session, `${dispatchId}:restart-resume`)
@@ -206,7 +213,12 @@ export class TerminalWorkerRestartResume {
           await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
           return
         }
-        await this.bind(dispatchId, worker, terminal.handle).catch(async (error: unknown) => {
+        // The tab can open as a bare shell; only an agent that came up takes the Dispatch.
+        const agentUp = await this.deps.waitForAgentReady(terminal.handle, session.agent)
+        const bound = agentUp
+          ? this.bind(dispatchId, worker, terminal.handle, true)
+          : Promise.reject(new Error('restart_resume_agent_not_ready'))
+        await bound.catch(async (error: unknown) => {
           // The conversation runs in a terminal no Dispatch owns: close it before reporting the worker lost.
           await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
           throw error
@@ -223,7 +235,12 @@ export class TerminalWorkerRestartResume {
       .finally(() => this.reopening.delete(dispatchId))
   }
 
-  private async bind(dispatchId: string, worker: HeldWorker, handle: string): Promise<void> {
+  private async bind(
+    dispatchId: string,
+    worker: HeldWorker,
+    handle: string,
+    agentReady = false
+  ): Promise<void> {
     if (this.held.get(dispatchId) !== worker) {
       return
     }
@@ -247,7 +264,9 @@ export class TerminalWorkerRestartResume {
       return
     }
     try {
-      if (!(await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent))) {
+      if (
+        !(await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent, agentReady))
+      ) {
         throw new Error('restart_resume_continue_not_taken')
       }
     } catch (error) {
@@ -264,27 +283,23 @@ export class TerminalWorkerRestartResume {
   private async continueWhenReady(
     dispatchId: string,
     handle: string,
-    agent: TuiAgent
+    agent: TuiAgent,
+    agentReady: boolean
   ): Promise<boolean> {
     const deadline = Date.now() + RESTART_CONTINUE_BUDGET_MS
-    for (;;) {
-      try {
-        if (!(await this.deps.waitForAgentReady(handle, agent))) {
-          throw new Error('restart_resume_agent_not_ready')
-        }
-        // Sent once: a second paste could stack a duplicate turn or double the composer text.
-        return await this.deps.sendPrompt(
-          handle,
-          AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
-          `${dispatchId}:restart-continue`
-        )
-      } catch (error) {
-        if (Date.now() >= deadline) {
-          throw error
-        }
-        await new Promise<void>((resolve) => this.deps.setTimer(resolve, RESTART_CONTINUE_RETRY_MS))
+    while (!agentReady && !(await this.deps.waitForAgentReady(handle, agent))) {
+      if (Date.now() >= deadline) {
+        throw new Error('restart_resume_agent_not_ready')
       }
+      await new Promise<void>((resolve) => this.deps.setTimer(resolve, RESTART_CONTINUE_RETRY_MS))
     }
+    // Sent once, even when it fails: a send can fail after writing, and a second paste could stack
+    // a duplicate turn or double the composer text.
+    return this.deps.sendPrompt(
+      handle,
+      AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
+      `${dispatchId}:restart-continue`
+    )
   }
 
   private giveUp(dispatchId: string): void {

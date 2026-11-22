@@ -198,6 +198,13 @@ describe('terminal worker resume after a reboot', () => {
 
   it('with it on, keeps the Dispatch and resumes its conversation in a new terminal', async () => {
     const { runtime, db, dispatchId, spawn } = setup(true, 'resting')
+    // The resumed agent's composer comes up; no real agent runs here.
+    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockResolvedValue({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only `satisfied` and `status`.
+      ...({} as Awaited<ReturnType<typeof runtime.waitForFreshWorkerComposer>>),
+      satisfied: true,
+      status: 'running'
+    })
     try {
       const result = await runtime.reconcileLegacyWorkerTerminals()
       expect(result.exitedDispatchIds).toEqual([])

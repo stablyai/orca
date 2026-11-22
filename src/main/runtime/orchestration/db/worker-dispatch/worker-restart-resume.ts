@@ -73,6 +73,18 @@ function readClaimable(db: OrchestrationDb, dispatchId: string): WorkerRestartRe
   return { dispatchId, worktreeId: resource.worktree_id, session, presence }
 }
 
+/** A claimed resume may still start: its coordinator has not stopped or released the Dispatch since. */
+export function isWorkerRestartResumeOpen(db: OrchestrationDb, dispatchId: string): boolean {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+  return (
+    (dispatch?.status === 'pending' || dispatch?.status === 'dispatched') &&
+    db.getWorkerDispatch(dispatchId)?.state === 'ready' &&
+    resource?.ownership_state === 'owned' &&
+    resource.release_state === 'not_requested'
+  )
+}
+
 /** Points the Dispatch, its worker and its terminal resource at the terminal its agent resumed in. */
 export function rebindRestartedWorkerTerminal(
   db: OrchestrationDb,

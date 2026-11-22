@@ -52,6 +52,8 @@ function owner(
     handleForPane?: () => string
     sendPrompt?: () => Promise<boolean>
     reportResting?: () => Promise<void>
+    waitForAgentReady?: () => Promise<boolean>
+    closeTerminal?: () => Promise<undefined>
   } = {}
 ) {
   const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
@@ -59,14 +61,14 @@ function owner(
     getDb: () => db ?? null,
     resumeWorkOnRestart: () => true,
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
-    closeTerminal: async () => undefined,
+    closeTerminal: overrides.closeTerminal ?? (async () => undefined),
     reportResting: overrides.reportResting ?? (async () => undefined),
     terminalAuthority: () => ({
       paneKey: 'tab_new:leaf_new',
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
     }),
     handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
-    waitForAgentReady: async () => true,
+    waitForAgentReady: overrides.waitForAgentReady ?? (async () => true),
     sendPrompt,
     setTimer: () => ({ cancel: () => {} })
   })
@@ -110,6 +112,30 @@ describe('TerminalWorkerRestartResume', () => {
     resume.settleStartup()
     await vi.waitFor(() => expect(fail).toHaveBeenCalledTimes(1))
     expect(resume.isHeld(dispatchId)).toBe(false)
+  })
+
+  it('reports the worker lost when its conversation reopens as a bare shell', async () => {
+    const dispatchId = lostWorker('resting')
+    const fail = vi.fn()
+    const closeTerminal = vi.fn(async () => undefined)
+    const { resume } = owner({ waitForAgentReady: async () => false, closeTerminal })
+    resume.holdForReopen(dispatchId, fail)
+    resume.settleStartup()
+    await vi.waitFor(() => expect(fail).toHaveBeenCalledTimes(1))
+    expect(closeTerminal).toHaveBeenCalledWith('term_resumed')
+    expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_lost')
+  })
+
+  it('starts nothing for a held Dispatch its coordinator stops before startup settles', () => {
+    const dispatchId = lostWorker('working')
+    const reopen = vi.fn(async () => ({ handle: 'term_resumed' }))
+    const { resume } = owner({ reopen })
+    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    db!.db
+      .prepare("UPDATE worker_dispatches SET state = 'stopping' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    resume.settleStartup()
+    expect(reopen).not.toHaveBeenCalled()
   })
 
   it('never resumes a Dispatch its coordinator stopped', () => {
