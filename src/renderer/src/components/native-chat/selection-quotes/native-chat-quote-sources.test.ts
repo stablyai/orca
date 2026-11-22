@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import {
   jumpToQuoteSource,
   nativeChatQuoteSource,
   quotedFileLocation,
-  rememberNativeChatQuoteSource
+  rememberNativeChatQuoteSource,
+  type QuotedFileLocation
 } from './native-chat-quote-sources'
 
 afterEach(() => localStorage.clear())
@@ -64,7 +66,9 @@ describe('quote sources', () => {
 describe('jumpToQuoteSource', () => {
   const deps = () => ({
     jumpToMessage: vi.fn(() => true),
-    openFile: vi.fn(() => true),
+    openFile: vi.fn<(location: QuotedFileLocation, isCurrent: () => boolean) => boolean>(
+      () => true
+    ),
     notifyMissing: vi.fn()
   })
   const fileQuote = 'src/a.ts:7-9\n```ts\nconst a = 1\n```'
@@ -86,15 +90,36 @@ describe('jumpToQuoteSource', () => {
     rememberNativeChatQuoteSource(fileQuote, source('gone'))
     const fake = { ...deps(), jumpToMessage: vi.fn(() => false) }
     expect(jumpToQuoteSource(fileQuote, fake)).toBe('file')
-    expect(fake.openFile).toHaveBeenCalledWith({ pathText: 'src/a.ts', line: 7 })
+    expect(fake.openFile).toHaveBeenCalledWith(
+      { pathText: 'src/a.ts', line: 7 },
+      expect.any(Function)
+    )
   })
 
-  it('shows a notice for a chat quote that only looks like a path', () => {
+  // The open uses the click's own turn, so a newer click stops it.
+  it("gives the file open the click's turn", () => {
+    const fake = deps()
+    jumpToQuoteSource(fileQuote, { ...fake, jumpToMessage: null })
+    const isCurrent = fake.openFile.mock.calls[0][1]
+    expect(isCurrent()).toBe(true)
+    beginLinkOpenRequest()
+    expect(isCurrent()).toBe(false)
+  })
+
+  it('shows a notice when the known message of a quote is not here', () => {
+    rememberNativeChatQuoteSource('chat words', source('gone'))
+    const fake = { ...deps(), jumpToMessage: vi.fn(() => false) }
+    expect(jumpToQuoteSource('chat words', fake)).toBe('missing')
+    expect(fake.notifyMissing).toHaveBeenCalledOnce()
+  })
+
+  // A quote the user typed has no source: its chip only shows the quote.
+  it('does nothing for a quote with no known source that only looks like a path', () => {
     for (const text of ['v1.2', 'example.com', 'and/or\nmore text']) {
       const fake = deps()
       expect(jumpToQuoteSource(text, fake)).toBe('missing')
       expect(fake.openFile).not.toHaveBeenCalled()
-      expect(fake.notifyMissing).toHaveBeenCalledOnce()
+      expect(fake.notifyMissing).not.toHaveBeenCalled()
     }
   })
 })

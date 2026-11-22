@@ -7,7 +7,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { openDetectedFilePath } from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { openLinkedFileInEditor } from '@/components/terminal-pane/links/files/terminal-file-link-editor-open'
 import { isHtmlFilePath } from '@/components/terminal-pane/links/files/local-html-file-destinations'
-import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import { relativePathInsideRoot } from '../../../../../shared/file-access/cross-platform-path'
 import type { NativeChatFileLinkContext } from '../links/actions/native-chat-file-link-context'
 import { resolveNativeChatFileLink } from '../links/actions/native-chat-file-link'
@@ -49,7 +48,8 @@ function hastText(node: HastNode | undefined): string {
 
 function openQuotedFile(
   location: QuotedFileLocation,
-  context: NativeChatFileLinkContext | null
+  context: NativeChatFileLinkContext | null,
+  isCurrent: () => boolean
 ): boolean {
   const target = resolveNativeChatFileLink(`${location.pathText}:${location.line}`, context)
   if (!context || !target) {
@@ -68,7 +68,7 @@ function openQuotedFile(
       },
       null,
       { line, column: 1, length: Number.MAX_SAFE_INTEGER },
-      beginLinkOpenRequest()
+      isCurrent
     )
     return true
   }
@@ -104,7 +104,8 @@ export function NativeChatSentQuote({ node }: { node?: HastNode }): React.JSX.El
           onClick={() =>
             jumpToQuoteSource(sourceText, {
               jumpToMessage,
-              openFile: (location) => openQuotedFile(location, fileLinkContext),
+              openFile: (location, isCurrent) =>
+                openQuotedFile(location, fileLinkContext, isCurrent),
               notifyMissing: () =>
                 toast(
                   t(

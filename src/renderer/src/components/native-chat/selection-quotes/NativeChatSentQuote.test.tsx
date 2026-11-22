@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import type * as LinkOpenRequest from '@/lib/links/link-open-request'
 
 const opened = vi.hoisted(() => ({ open: vi.fn(), toast: vi.fn(), editor: vi.fn() }))
 vi.mock('@/store/index', () => ({
@@ -15,6 +16,18 @@ vi.mock('@/components/terminal-pane/links/files/terminal-file-link-editor-open',
   openLinkedFileInEditor: opened.editor
 }))
 vi.mock('sonner', () => ({ toast: opened.toast }))
+// Counts the link-open turns that a click takes.
+const turns = vi.hoisted(() => ({ begun: 0 }))
+vi.mock('@/lib/links/link-open-request', async (importOriginal) => {
+  const actual = await importOriginal<typeof LinkOpenRequest>()
+  return {
+    ...actual,
+    beginLinkOpenRequest: () => {
+      turns.begun += 1
+      return actual.beginLinkOpenRequest()
+    }
+  }
+})
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -83,6 +96,7 @@ it('opens the quoted file at its first line and highlights that line', () => {
 // The page of an HTML file has no lines: a quote of its source opens the code at the quoted line.
 it('opens a quoted HTML file in the editor at its first line', () => {
   sent('> site/index.html:7-9\n> ```html\n> <p>hi</p>\n> ```\n\nreply')
+  turns.begun = 0
   fireEvent.click(screen.getByRole('button', { name: /^Quote: site\/index\.html:7-9/ }))
   expect(opened.editor).toHaveBeenCalledWith(
     expect.objectContaining({ filePath: '/repo/site/index.html', relativePath: 'site/index.html' }),
@@ -92,12 +106,15 @@ it('opens a quoted HTML file in the editor at its first line', () => {
   )
   expect(opened.open).not.toHaveBeenCalled()
   expect(opened.toast).not.toHaveBeenCalled()
+  // The open uses the click's turn; a second turn would make the click's own steps stale.
+  expect(turns.begun).toBe(1)
 })
 
-it('shows a notice when the quote has no known source', () => {
+// A typed or pasted quote is a chip too; it has nowhere to go, so a click shows no error.
+it('shows no notice when the quote has no known source', () => {
   sent('> typed by hand\n\nreply')
   fireEvent.click(screen.getByRole('button', { name: 'Quote: typed by hand' }))
-  expect(opened.toast).toHaveBeenCalledOnce()
+  expect(opened.toast).not.toHaveBeenCalled()
   expect(opened.open).not.toHaveBeenCalled()
 })
 

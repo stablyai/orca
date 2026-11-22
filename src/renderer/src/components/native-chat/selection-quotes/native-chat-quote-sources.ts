@@ -131,13 +131,17 @@ export type NativeChatQuoteJumpDeps = {
         isCurrent: () => boolean
       ) => boolean)
     | null
-  /** Opens the file at the line and highlights it; false when the chat cannot open it. */
-  openFile: ((location: QuotedFileLocation) => boolean) | null
+  /**
+   * Opens the file at the line and highlights it; false when the chat cannot open it. Each later
+   * step does nothing once `isCurrent` is false.
+   */
+  openFile: ((location: QuotedFileLocation, isCurrent: () => boolean) => boolean) | null
   notifyMissing: () => void
 }
 
 /**
  * Goes back to where a sent quote came from: its chat message, else its file, else a notice.
+ * A quote with no known source and no file, such as one the user typed, does nothing.
  * `text` is the quote's source text, without the `>` marks.
  */
 export function jumpToQuoteSource(
@@ -152,9 +156,11 @@ export function jumpToQuoteSource(
   }
   const [firstLine = '', secondLine = ''] = text.split('\n')
   const location = quotedFileLocation(firstLine, /^\s*(?:```|~~~)/.test(secondLine))
-  if (location && deps.openFile?.(location)) {
+  if (location && deps.openFile?.(location, isCurrent)) {
     return 'file'
   }
-  deps.notifyMissing()
+  if (source || location) {
+    deps.notifyMissing()
+  }
   return 'missing'
 }
