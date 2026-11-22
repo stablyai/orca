@@ -11,8 +11,9 @@ import {
   type NativeMenuProps
 } from './native-menu-items'
 
-function submenuKeyOf(item: MenuSubmenu): string {
-  return item.id ?? item.label
+// Group-scoped, so ID-less submenus that share a label in different groups stay apart.
+function submenuKeyOf(groupIndex: number, item: MenuSubmenu): string {
+  return `${groupIndex}/${item.id ?? item.label}`
 }
 
 /** The drawn pull-down, for web and for menus whose rows show more than a native menu can. */
@@ -26,10 +27,13 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
     submenuKey === null
       ? undefined
       : visible
-          .flat()
-          .find(
-            (item): item is MenuSubmenu => isMenuSubmenu(item) && submenuKeyOf(item) === submenuKey
+          .flatMap((group, groupIndex) =>
+            group.filter(
+              (item): item is MenuSubmenu =>
+                isMenuSubmenu(item) && submenuKeyOf(groupIndex, item) === submenuKey
+            )
           )
+          .at(0)
   const changeOpen = (next: boolean) => {
     setOpen(next)
     if (!next) {
@@ -39,7 +43,7 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
   }
   const drawn: (readonly ActionSheetAction[])[] = submenu
     ? [submenu.actions]
-    : visible.map((group) =>
+    : visible.map((group, groupIndex) =>
         group.map((item) =>
           isMenuSubmenu(item)
             ? {
@@ -48,7 +52,7 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
                 status: item.value,
                 skipAutoClose: true,
                 renderIcon: () => <ChevronRight size={16} color={colors.textMuted} />,
-                onPress: () => setSubmenuKey(submenuKeyOf(item))
+                onPress: () => setSubmenuKey(submenuKeyOf(groupIndex, item))
               }
             : item
         )
