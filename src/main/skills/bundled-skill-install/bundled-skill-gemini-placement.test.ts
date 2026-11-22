@@ -78,6 +78,16 @@ describe('Gemini CLI bundled skill placement', () => {
     expect(await snapshot(geminiSkill(home.home))).toBe(`dir[SKILL.md]:${EDITED_TEXT}`)
   })
 
+  it("keeps a former copy that another agent's link points at", async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+    await writeCopy(geminiSkill(home.home), NEW_TEXT)
+    await mkdir(dirname(home.claude), { recursive: true })
+    await linkDirectory(geminiSkill(home.home), home.claude)
+    await previewAndInstall(serviceInput(home, { agents: ['claude'] }))
+    expect(await snapshot(geminiSkill(home.home))).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+  })
+
   it("keeps another agent's link when ~/.gemini/skills links to that agent's folder", async () => {
     const home = await makeSkillHome()
     await writeCopy(home.shared, NEW_TEXT)

@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { BundledSkillOp } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
@@ -49,6 +49,27 @@ async function plainFormerRootRealPath(
     : null
 }
 
+/** A target agent's link through this placement would dangle once it is retired. */
+async function linkedFromTarget(
+  input: BundledSkillPlanInput,
+  roots: readonly BundledSkillTargetRoot[],
+  name: string,
+  paths: readonly string[]
+): Promise<boolean> {
+  const keys = new Set(paths.map(bundledSkillPathKey))
+  for (const root of roots) {
+    const link = join(root.path, name)
+    if (root.role === 'shared' || (await input.filesystem.stat(link))?.kind !== 'symlink') {
+      continue
+    }
+    const target = await input.filesystem.readLink(link)
+    if (target !== null && keys.has(bundledSkillPathKey(resolve(root.realPath, target)))) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Orca's copies or links under any of the skill's names, retired once the shared copy is in place. */
 export async function planFormerRootPlacements(
   context: {
@@ -96,6 +117,7 @@ export async function planFormerRootPlacements(
             !(await hasCloudReceipt(stateDirectory, keys))
       if (
         owned &&
+        !(await linkedFromTarget(input, roots, name, [path, join(rootRealPath, name)])) &&
         !(await hasPendingCloudTransaction(stateDirectory, keys)) &&
         (await filesystem.canWrite(rootRealPath))
       ) {
