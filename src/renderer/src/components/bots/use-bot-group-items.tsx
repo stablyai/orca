@@ -169,6 +169,17 @@ export function botGroupNeedsYouOutside(counts: {
 }
 
 /** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
+// Each read's seen marks by bot id, built the first time a list asks (so not while an item is open).
+const seenIndexes = new WeakMap<readonly MemberRead[], Map<string, string | null>>()
+function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
+  let index = seenIndexes.get(reads)
+  if (!index) {
+    index = new Map(reads.map((read) => [read.bot.id, read.seenEventId]))
+    seenIndexes.set(reads, index)
+  }
+  return index
+}
+
 function memberClosed(read: MemberRead): {
   closed: BotItem[]
   more: boolean
@@ -245,15 +256,11 @@ export function useBotGroupItems(
     () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
   )
-  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range:
-  // indexed on the first ask of each read, so nothing is built while no list asks (an item open).
-  const seenOf = useMemo(() => {
-    let byId: Map<string, string | null> | null = null
-    return (item: BotItem): string => {
-      byId ??= new Map(shownReads.map((read) => [read.bot.id, read.seenEventId]))
-      return byId.get(item.owner.botId) ?? ''
-    }
-  }, [shownReads])
+  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range.
+  const seenOf = useCallback(
+    (item: BotItem): string => seenIndexOf(shownReads).get(item.owner.botId) ?? '',
+    [shownReads]
+  )
   const ready =
     shownReads.length === members.filter((bot) => filter.botIds?.includes(bot.id) ?? true).length &&
     shownReads.every((read) => read.list.read !== null && read.seenEventId !== null)

@@ -399,8 +399,9 @@ export function BotItemRowsWindow({
           const within =
             event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)
           setFocusWithin(within)
-          // Focus moving elsewhere on the page: Tab back in enters at the first row, as in a plain list.
-          if (!within && event.relatedTarget !== null) {
+          // Focus moving elsewhere on the page (or to nothing, as a menu closed by the pointer leaves it,
+          // while Orca keeps focus): Tab back in enters at the first row, as in a plain list.
+          if (!within && (event.relatedTarget !== null || document.hasFocus())) {
             setStop(null)
           }
         }}

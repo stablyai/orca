@@ -4,7 +4,7 @@
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
 // is offline (asked once either comes back); a failed read is tried again on Back from an item or when
 // the panel reopens.
-import { createContext, createElement, useContext, useEffect, useState } from 'react'
+import { createContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
   readLiveBotHostIds,
@@ -17,6 +17,7 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
+import { isDocumentVisibilityProvenStale } from '../../terminal-pane/viewport/visibility/stale-document-visibility'
 import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
 
 type Picture = {
@@ -42,19 +43,6 @@ export type BotGroupFacePicture = {
 /** A face sits in a row folded out of view (Needs you keeps folded rows mounted). */
 export const BotItemFaceFolded = createContext(false)
 
-/** Tells a group panel's faces in `children` whether their row is folded; elsewhere nothing reads it. */
-export function BotItemFaceFoldScope({
-  folded,
-  children
-}: {
-  folded: boolean
-  children: React.ReactNode
-}): React.ReactNode {
-  return useContext(BotGroupFacePicturesContext) === null
-    ? children
-    : createElement(BotItemFaceFolded.Provider, { value: folded }, children)
-}
-
 export type BotGroupFacePictures = {
   faceOf: (bot: BotRef, version: string) => BotGroupFacePicture
   /** The panel is shown: watch what waits. */
@@ -69,6 +57,9 @@ export type BotGroupFacePictures = {
 }
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
+
+// After macOS display wake Chromium can keep the window marked hidden while it scrolls and takes input.
+const windowShown = (): boolean => getWindowParkVisible() || isDocumentVisibilityProvenStale()
 
 const hostOffline = (picture: Picture): boolean =>
   readBotHostState(picture.bot.hostId) === 'offline'
@@ -144,7 +135,7 @@ function createFacePictures(): BotGroupFacePictures {
       return
     }
     const offline = hostOffline(picture)
-    if (offline || !getWindowParkVisible()) {
+    if (offline || !windowShown()) {
       wait(picture, offline)
       return
     }
@@ -187,7 +178,7 @@ function createFacePictures(): BotGroupFacePictures {
   }
 
   function onVisibility(): void {
-    if (!getWindowParkVisible()) {
+    if (!windowShown()) {
       return
     }
     eachWaiting(admit)

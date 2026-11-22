@@ -82,8 +82,11 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   status: (a, b) => a.status === b.status,
   chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
-  // A question is one item event, which never changes once written.
-  question: (a, b) => a.question?.eventId === b.question?.eventId,
+  // A question is one item event, which never changes once written; a host on another release reads it
+  // with other fields (ask, or gist and decisions).
+  question: (a, b) =>
+    a.question?.eventId === b.question?.eventId &&
+    Object.keys(a.question ?? {}).join() === Object.keys(b.question ?? {}).join(),
   closeNote: (a, b) => a.closeNote === b.closeNote,
   links: (a, b) => itemLive(a) === itemLive(b),
   version: (a, b) => a.version === b.version,

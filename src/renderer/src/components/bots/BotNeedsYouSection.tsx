@@ -1,7 +1,7 @@
 // The rows of a bot's Needs you group: Orca's asks (approvals, then the rest, in botNow's order), then
 // the items the bot set to Needs you. Five rows, then Show N more; approvals never fold. Rows leave as
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
-import { memo, useLayoutEffect, useMemo, useState } from 'react'
+import { memo, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -32,7 +32,7 @@ import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-f
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
-import { BotItemFaceFoldScope } from './items/bot-group-face-pictures'
+import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
 import { botItemGroupName } from '../../../../shared/bots/bot-item-status-name'
 
 type ReportApproval = (key: string, approval: boolean) => void
@@ -365,11 +365,9 @@ export function BotNeedsYouSection({
   )
   const focus = useNeedsYouFocus()
   const { cardRef, onFocus, onBlur } = focus
-  const fold = needsYouFold(rows, {
-    expanded,
-    focusedKey: focus.focusedKey,
-    showAll: offline
-  })
+  // Only a group panel's row faces read whether their row is folded.
+  const faces = useContext(BotGroupFacePicturesContext) !== null
+  const fold = needsYouFold(rows, { expanded, focusedKey: focus.focusedKey, showAll: offline })
   const rowCommitted = useNeedsYouRefocus(
     focus,
     fold.ordered.map((row) => row.key),
@@ -415,7 +413,11 @@ export function BotNeedsYouSection({
                 // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
                 hidden={folded}
               >
-                <BotItemFaceFoldScope folded={folded}>{body}</BotItemFaceFoldScope>
+                {faces ? (
+                  <BotItemFaceFolded.Provider value={folded}>{body}</BotItemFaceFolded.Provider>
+                ) : (
+                  body
+                )}
               </div>
             )
           })}
