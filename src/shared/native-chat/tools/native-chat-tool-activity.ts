@@ -32,6 +32,7 @@ export const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set([
   'terminal',
   'execute',
   'run_command',
+  'run_commands',
   'run_shell_command',
   'shell_command',
   'exec_command',

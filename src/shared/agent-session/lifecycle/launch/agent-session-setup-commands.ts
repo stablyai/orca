@@ -106,6 +106,8 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript:
       'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
   },
+  // `cline auth` signs in to Cline or connects another provider.
+  { agent: 'cline', loginCommand: ['cline', 'auth'], installCommand: 'npm install -g cline' },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',
