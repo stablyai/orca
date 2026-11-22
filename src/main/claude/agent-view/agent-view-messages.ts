@@ -76,12 +76,6 @@ export function clickReadableConfigDir(
   return sameMachine && configDir && isAbsolute(configDir) ? configDir : undefined
 }
 
-/** Mod instance ids start with their creation time; an older one is a delayed post from a replaced session. */
-export function isOlderInstance(incoming: string, current: string): boolean {
-  const [a, b] = [incoming, current].map((id) => Number(id.split('-')[0]))
-  return Number.isFinite(a) && Number.isFinite(b) && a < b
-}
-
 /** What renderers see: panes whose Claude has reported a view, and which agent it shows. */
 export function claudeAgentViewSnapshot(
   sessions: Iterable<RegisteredClaudeAgentView>

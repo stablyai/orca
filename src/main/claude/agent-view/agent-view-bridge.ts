@@ -5,7 +5,6 @@ import {
   answerPendingView,
   claudeAgentViewSnapshot,
   clickReadableConfigDir,
-  isOlderInstance,
   ClaudeAgentViewMessage,
   type ClaudeAgentViewReply,
   type PendingView
@@ -28,6 +27,8 @@ export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
   private registry?: ClaudeAgentViewRegistryFile
+  // Set by the hook server: the pane's status shows that Claude session alive.
+  isLive: (paneKey: string, sessionId: string) => boolean = () => true
   private publishQueued = false
   private lastFrame = '[]'
 
@@ -115,8 +116,10 @@ export class ClaudeAgentViewBridge {
     const message = parsed.data
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
-      if (current && isOlderInstance(message.instanceId, current.instanceId)) {
-        return {} // a delayed post from a session /clear already replaced
+      const known = current?.instanceId === message.instanceId
+      // Refuses a post that outlived its pane or its session (/clear); the mod retries.
+      if (!known && !this.isLive(message.paneKey, message.sessionId)) {
+        return {}
       }
       const chord = claudeAgentViewChord(message.keybindings)
       const configDir = clickReadableConfigDir(message.configDir, options.sameMachine)
@@ -191,8 +194,7 @@ export class ClaudeAgentViewBridge {
     }
     const registered = this.sessions.get(args.paneKey)
     if (registered?.configDir && registered.sessionId === args.sessionId) {
-      // An idle mod does not re-read its keybindings, so read the chord the user has bound now.
-      // Unreadable here (mid-edit, or a folder only Claude may read): keep the chord the mod sent.
+      // An idle mod won't re-read its keybindings; read them here, keeping the sent chord if unreadable.
       const chord = await readClaudeAgentViewChord(registered.configDir)
       if (
         chord !== undefined &&
@@ -208,7 +210,7 @@ export class ClaudeAgentViewBridge {
     if (!session || session.sessionId !== args.sessionId || !shortcut) {
       return { status: 'unsupported' }
     }
-    // A checking-in mod (WSL, relative config, older Orca) that went quiet may be stopped: 15 s rule.
+    // A checking-in mod (WSL, relative config) that went quiet may be stopped: 15 s rule.
     const stale = !session.configDir && Date.now() - session.seenAt > 15_000
     if (args.signal?.aborted || !session.view || stale) {
       return { status: 'unavailable' }
@@ -267,7 +269,6 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  /** Stop: the saved registry outlives this main; memory and subscribers do not. */
   close(): void {
     this.release()
     this.registry?.close()
@@ -276,7 +277,6 @@ export class ClaudeAgentViewBridge {
     this.publish()
   }
 
-  /** Drops a pane's entry: its Claude ended, its binding went away, or Orca dropped the pane. */
   /** Drops entries of `sessionId` whose own pane `isLive` no longer vouches for (a moved, dead pane). */
   forgetSession(sessionId: string, isLive: (paneKey: string) => boolean): void {
     for (const session of this.sessions.values()) {

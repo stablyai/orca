@@ -96,8 +96,15 @@ let announceAgain = false
         }, session)
       } catch {}
       // A relay that could not forward answers {} with neither flag.
-      if (!result?.registered && !result?.unbound) {
+      if (!result) {
         await retry($)
+        return {}
+      }
+      // Delivered but not taken ({}: Orca not ready for this pane yet, an older Orca without a
+      // binding, a relay that could not forward): keep the 5 s check-in.
+      if (!result.registered && !result.unbound) {
+        retryDelay = 0
+        schedule($, 5000)
         return {}
       }
       retryDelay = 0

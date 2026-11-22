@@ -13,7 +13,7 @@ import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plug
 import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
-  readonly claudeAgentViews = new ClaudeAgentViewBridge()
+  readonly claudeAgentViews = this.createClaudeAgentViews()
   protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
   private restoredOwnersChecked: Promise<void> = Promise.resolve()
@@ -58,6 +58,19 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
             (row) => row.agentType === 'claude'
           ))
     )
+  }
+
+  private createClaudeAgentViews(): ClaudeAgentViewBridge {
+    const bridge = new ClaudeAgentViewBridge()
+    bridge.isLive = (paneKey, sessionId) =>
+      !this.statusHooksEnabled ||
+      (!this.claudeAgentEnded(paneKey) &&
+        this.getStatusSnapshotForPane(this.resolvePaneKeyAlias(paneKey)).some(
+          (row) =>
+            row.agentType === 'claude' &&
+            (!row.providerSession?.id || row.providerSession.id === sessionId)
+        ))
+    return bridge
   }
 
   /** Whether the pane's agent can take typed input now: its process runs and isn't stopped by job
