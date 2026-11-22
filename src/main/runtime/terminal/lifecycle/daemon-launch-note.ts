@@ -115,7 +115,9 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { launchNote?: DaemonLaunchNote | null } | undefined
   ): void {
     let agent: TuiAgent | undefined
+    // A null note is a launch main saw finish; the daemon's launch agent outlives it.
     if (
+      reattach?.launchNote !== null &&
       identity &&
       pty.incarnationId === identity.incarnationId &&
       isTuiAgent(identity.launchAgent)
@@ -163,6 +165,9 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     if (foreground === 'shell') {
       this.ptyController?.setLaunchNote?.(pty.ptyId, { retire: note.launchToken })
       retireLaunch(pty)
+      if (pty.launchAgent === agent) {
+        pty.launchAgent = null
+      }
     } else if (foreground === 'agent' && pty.launchAgent === agent) {
       holdLaunch(pty, incarnationId, { agent, token: note.launchToken, config: note.launchConfig })
     }
