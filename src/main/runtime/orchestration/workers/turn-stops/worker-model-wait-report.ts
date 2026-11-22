@@ -106,7 +106,9 @@ function describeModelWait(notice: WorkerModelWaitNotice, task: string): string 
 
 function oneLine(text: string): string {
   const line = text.replace(/\s+/g, ' ').trim()
-  return line.length > LAST_SEEN_MAX_CHARS ? `${line.slice(0, LAST_SEEN_MAX_CHARS - 1)}…` : line
+  return line.length > LAST_SEEN_MAX_CHARS
+    ? `${line.slice(0, LAST_SEEN_MAX_CHARS - 1)}\u2026`
+    : line
 }
 
 function isOpen(db: OrchestrationDb, dispatchId: string): boolean {
@@ -115,5 +117,5 @@ function isOpen(db: OrchestrationDb, dispatchId: string): boolean {
 }
 
 function sentence(text: string): string {
-  return /[.!?…]$/u.test(text) ? text : `${text}.`
+  return /[.!?\u2026]$/u.test(text) ? text : `${text}.`
 }

@@ -3,9 +3,9 @@
  *  as it arrives; its spinner, footer and a running tool's timer move whether or not a reply does. */
 
 // Claude's spinner and status line: a glyph, then its words ("✻ Waiting for API response · …").
-const SPINNER_LINE_RE = /^\s*[·✢✳✶✻✽*✦]\s+\S/u
+const SPINNER_LINE_RE = /^\s*[\u00B7\u2722\u2733\u2736\u273B\u273D*\u2726]\s+\S/u
 const FOOTER_RE = /esc to interrupt|shift\+tab to cycle/i
-const TOOL_RUNNING_RE = /⎿\s+Running…/u
+const TOOL_RUNNING_RE = /\u23BF\s+Running\u2026/u
 // A retry's countdown, should a Claude draw it below its spinner: it ticks while nothing arrives.
 const RETRY_COUNTDOWN_RE = /retrying in \d+|attempt \d+\/\d+/i
 // Claude's own words for a request that has not answered: a stalled stream, or a retried error.
@@ -13,7 +13,7 @@ const MODEL_STATUS_RE = /Waiting for API response|retrying|API error/i
 
 // The spinner's count of tokens received: the only sign of a tool call's input streaming, which
 // Claude does not draw ("✻ Zigzagging… (10m 8s · ↓ 1.2k tokens)").
-const RECEIVED_TOKENS_RE = /↓\s*([\d.,]+k?)\s*tokens/u
+const RECEIVED_TOKENS_RE = /\u2193\s*([\d.,]+k?)\s*tokens/u
 
 /** The screen without what moves when no reply does; the spinner keeps only its received tokens. */
 export function claudeReplyScreen(lines: readonly string[]): string {
@@ -21,7 +21,7 @@ export function claudeReplyScreen(lines: readonly string[]): string {
     .flatMap((line) => {
       if (SPINNER_LINE_RE.test(line)) {
         const tokens = RECEIVED_TOKENS_RE.exec(line)?.[1]
-        return tokens ? [`↓ ${tokens}`] : []
+        return tokens ? [`\u2193 ${tokens}`] : []
       }
       return FOOTER_RE.test(line) || TOOL_RUNNING_RE.test(line) || RETRY_COUNTDOWN_RE.test(line)
         ? []
@@ -41,7 +41,7 @@ export function claudeModelWaitLastSeen(lines: readonly string[]): string | unde
   const status =
     lines.findLast((line) => spinner(line) && MODEL_STATUS_RE.test(line)) ?? lines.findLast(spinner)
   if (status) {
-    return status.replace(/^\s*[·✢✳✶✻✽*✦]\s+/u, '').trim()
+    return status.replace(/^\s*[\u00B7\u2722\u2733\u2736\u273B\u273D*\u2726]\s+/u, '').trim()
   }
   return lines.findLast((line) => /[\p{L}\p{N}]/u.test(line) && !FOOTER_RE.test(line))?.trim()
 }
