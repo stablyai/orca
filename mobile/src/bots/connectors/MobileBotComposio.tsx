@@ -14,7 +14,7 @@ import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink } from './connector-link'
 import {
   composioAdd,
   composioAppRead,
@@ -106,7 +106,7 @@ export function MobileBotComposioConnect(
       )
       setOpened({ url, read: composio.connections })
       rereadMobileComposio(props.hostKey, props.botId)
-      openExternalLink(url)
+      openConnectorLink(url)
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
@@ -203,7 +203,7 @@ export function MobileBotComposioConnect(
             leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
             title={t('bots.composio.key.getKey', 'Get a key')}
             accessibilityRole="link"
-            onPress={() => openExternalLink(COMPOSIO_PAGES.apiKeys)}
+            onPress={() => openConnectorLink(COMPOSIO_PAGES.apiKeys)}
           />
         </SettingsSection>
         <View style={styles.field}>
@@ -248,7 +248,7 @@ export function MobileBotComposioConnect(
           <SheetPrimaryButton
             label={t('chat.botCards.composio.openAuthConfigs', 'Open Auth Configs')}
             icon={ExternalLink}
-            onPress={() => openExternalLink(COMPOSIO_PAGES.authConfigs)}
+            onPress={() => openConnectorLink(COMPOSIO_PAGES.authConfigs)}
           />
           <MobileStateButton
             label={t('chat.botCards.composio.checkAgain', 'Check again')}
@@ -311,7 +311,7 @@ export function MobileBotComposioConnect(
             {page ? (
               <MobileStateButton
                 label={t('bots.apps.openPageAgain', 'Open page again')}
-                onPress={() => openExternalLink(page)}
+                onPress={() => openConnectorLink(page)}
               />
             ) : null}
           </>

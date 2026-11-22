@@ -58,9 +58,3 @@ export function resolveExpectedTeardownScope({
   }
   return isExpectedRendererReload ? 'renderer-reload' : 'none'
 }
-
-export function resetExpectedTeardownStateForTest(clock: Clock = monotonicNow): void {
-  now = clock
-  systemSessionEndedAt = null
-  systemSessionEnded = false
-}
