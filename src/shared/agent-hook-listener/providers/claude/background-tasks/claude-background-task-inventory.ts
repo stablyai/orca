@@ -95,8 +95,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       const command = [obj.command, obj.description].find(
         (text): text is string => typeof text === 'string' && text.trim().length > 0
       )
-      if (command && !runsOrcaOrchestrationWait(obj.command)) {
-        runningNonAgentTaskCommands.push(command.trim())
+      if (!runsOrcaOrchestrationWait(obj.command)) {
+        runningNonAgentTaskCommands.push(command?.trim() ?? 'background task')
       }
     }
     if (!isAgentTask) {

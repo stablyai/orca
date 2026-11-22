@@ -28,6 +28,9 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
+const SEND_RETRIES = 3
+const SEND_RETRY_MS = 60_000
+
 type PaneWorker = {
   db: OrchestrationDb
   target: WorkerTurnStopDispatch
@@ -53,12 +56,14 @@ export class WorkerBackgroundWaits {
     try {
       this.observePane(change.paneKey)
     } catch (error) {
+      // Seen again, a wait that failed to record is recorded then.
+      this.waitingSince.delete(change.paneKey)
       console.warn('[orchestration] observing a worker background wait failed', error)
     }
   }
 
   /** Re-arms a recorded wait's notice, as after a restart; a wait already due is decided now. */
-  arm(db: OrchestrationDb, dispatchId: string): void {
+  arm(db: OrchestrationDb, dispatchId: string, retries = SEND_RETRIES): void {
     const recorded = recordedWait(db, dispatchId)
     if (!recorded) {
       return
@@ -75,11 +80,24 @@ export class WorkerBackgroundWaits {
     const timer = this.deps.setTimer(
       () => {
         this.timers.delete(dispatchId)
-        this.decide(dispatchId)
+        this.decide(dispatchId, retries)
       },
       Math.max(0, dueAt - Date.now())
     )
     this.timers.set(dispatchId, { dueAt, cancel: timer.cancel })
+  }
+
+  /** A notice still undecided past its bound (its send failed, or a deliberate reason holds it) is
+   *  decided again a few times, a minute apart; its own edges decide it after that. */
+  private retry(db: OrchestrationDb, dispatchId: string, retries: number): void {
+    if (!recordedWait(db, dispatchId)) {
+      return
+    }
+    const timer = this.deps.setTimer(() => {
+      this.timers.delete(dispatchId)
+      this.decide(dispatchId, retries)
+    }, SEND_RETRY_MS)
+    this.timers.set(dispatchId, { dueAt: Date.now() + SEND_RETRY_MS, cancel: timer.cancel })
   }
 
   dispose(): void {
@@ -162,7 +180,7 @@ export class WorkerBackgroundWaits {
   /** A notice falls due: the stored rest decides, so a turn, worker_done, stop or exit since supersedes
    *  it; and its pane's row must still show this wait, whichever edge ended it unseen. A pane with no
    *  row yet (not restored) leaves the record to decide. */
-  private decide(dispatchId: string): void {
+  private decide(dispatchId: string, retries: number): void {
     const db = this.deps.getDb()
     const recorded = db ? recordedWait(db, dispatchId) : null
     if (!db || !recorded) {
@@ -174,7 +192,9 @@ export class WorkerBackgroundWaits {
         settleWorkerRestUnreported(db, dispatchId)
         return
       }
-      reconsiderWorkerRest(db, dispatchId, this.deps)
+      if (!reconsiderWorkerRest(db, dispatchId, this.deps) && retries > 0) {
+        this.retry(db, dispatchId, retries - 1)
+      }
     } catch (error) {
       console.warn('[orchestration] deciding a worker background wait failed', dispatchId, error)
     }

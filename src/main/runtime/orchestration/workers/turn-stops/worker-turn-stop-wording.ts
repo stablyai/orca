@@ -127,6 +127,12 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
   ].join('\n')
 }
 
+/** A relayed copy may carry a time no date can hold. */
+function endedAt(since: number | undefined): string {
+  const date = typeof since === 'number' ? new Date(since) : null
+  return date && Number.isFinite(date.getTime()) ? ` at ${date.toISOString()}` : ''
+}
+
 /** One line naming what it waits on; the agent chose the command text, so it is data, not instructions. */
 function describeBackgroundWait(stop: WorkerTurnStop, { task, dispatchId }: StopContext): string {
   const commands = stop.backgroundWait?.commands ?? []
@@ -134,7 +140,7 @@ function describeBackgroundWait(stop: WorkerTurnStop, { task, dispatchId }: Stop
   const more = commands.length > 1 ? ` (and ${commands.length - 1} more)` : ''
   return [
     `Worker ${stop.from} has been waiting on its background task${named}${more} for ${workerBackgroundWaitNoticeText()} on task ${task}; check it or stop it.`,
-    `Its turn ended at ${new Date(stop.backgroundWait?.since ?? 0).toISOString()} and none has started since. It is still running; nothing was stopped.`,
+    `Its turn ended${endedAt(stop.backgroundWait?.since)} and none has started since. It is still running; nothing was stopped.`,
     `Check it with your Orca CLI's \`orchestration worker-read --dispatch ${dispatchId}\`, or stop it with \`orchestration worker-stop --dispatch ${dispatchId}\`.`
   ].join('\n')
 }
