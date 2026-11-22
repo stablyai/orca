@@ -102,6 +102,30 @@ describe('TerminalWorkerRestartResume', () => {
     expect(sendPrompt).toHaveBeenCalledTimes(1)
   })
 
+  it('does not ask a resumed worker to continue once its coordinator stopped it', async () => {
+    const dispatchId = lostWorker('working')
+    let stop = (): void => {}
+    const { resume, sendPrompt } = owner({
+      waitForAgentReady: () =>
+        new Promise((resolve) => {
+          stop = () => {
+            db!.db
+              .prepare("UPDATE worker_dispatches SET state = 'stopping' WHERE dispatch_id = ?")
+              .run(dispatchId)
+            resolve(true)
+          }
+        })
+    })
+    resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await vi.waitFor(() =>
+      expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
+    )
+    stop()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(sendPrompt).not.toHaveBeenCalled()
+  })
+
   it('reports the worker lost once when its conversation cannot reopen', async () => {
     const dispatchId = lostWorker('working')
     const fail = vi.fn()

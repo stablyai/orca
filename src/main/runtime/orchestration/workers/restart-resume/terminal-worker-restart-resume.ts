@@ -293,6 +293,11 @@ export class TerminalWorkerRestartResume {
       }
       await new Promise<void>((resolve) => this.deps.setTimer(resolve, RESTART_CONTINUE_RETRY_MS))
     }
+    const db = this.deps.getDb()
+    // Stopped during the wait: the stop owns the outcome, and the agent is not asked to go on.
+    if (!db || !isWorkerRestartResumeOpen(db, dispatchId)) {
+      return true
+    }
     // Sent once, even when it fails: a send can fail after writing, and a second paste could stack
     // a duplicate turn or double the composer text.
     return this.deps.sendPrompt(
