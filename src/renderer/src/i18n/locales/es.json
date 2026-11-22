@@ -251,7 +251,8 @@
       },
       "userAgent": {
         "title": "Identidad del navegador",
-        "description": "Elija el agente de usuario para cada perfil y página del navegador. Los cambios surten efecto después de un reinicio.",
+        "descriptionPageKinds": "Elija el agente de usuario para cada página que muestra este equipo, incluidas las páginas SSH y las páginas remotas configuradas en Este dispositivo. Los cambios surten efecto después de un reinicio.",
+        "serverPagesNote": "Las páginas en Servidor (transmitido) usan la identidad de ese servidor; cámbiela allí con orca browser identity set.",
         "remoteUnsupported": "Gestiona la identidad del navegador en el host remoto con la CLI de Orca.",
         "loading": "Cargando…",
         "resetRequired": "Los datos de identidad deben restablecerse explícitamente antes de que se puedan cambiar.",
@@ -4541,37 +4542,37 @@
             "runningSkills_many": "Actualizando {{count}} skills…"
           },
           "NativeChatResumeStatusSegment": {
-            "failedTooltip": "Chats que Orca no pudo reanudar tras el reinicio. Haz clic para ver los detalles.",
-            "checkTooltip": "Chats que Orca no pudo reanudar, o no pudo confirmar que reanudó, tras el reinicio. Haz clic para ver los detalles.",
-            "resumingTooltip": "Restaurando los chats interrumpidos y pidiéndoles que continúen…",
-            "tooltip": "Abrir chats interrumpidos disponibles para reanudar",
-            "resumingProgressLabel": "Reanudando chats {{value0}}/{{value1}}",
-            "resumingProgressAria": "Reanudando chats, {{value0}} de {{value1}} listos. Haz clic para ver los detalles.",
-            "resumedTooltip": "Chats que Orca reanudó tras el reinicio. Haz clic para verlos.",
-            "chatsFailedLabel_one": "No se pudo reanudar {{count}} chat",
-            "chatsFailedLabel_other": "No se pudieron reanudar {{count}} chats",
-            "chatsFailedLabel_many": "No se pudieron reanudar {{count}} chats",
-            "chatsFailedAria_one": "No se pudo reanudar {{count}} chat. Haz clic para ver los detalles.",
-            "chatsFailedAria_other": "No se pudieron reanudar {{count}} chats. Haz clic para ver los detalles.",
-            "chatsFailedAria_many": "No se pudieron reanudar {{count}} chats. Haz clic para ver los detalles.",
-            "resumedLabelCount_one": "{{count}} chat reanudado",
-            "resumedLabelCount_other": "{{count}} chats reanudados",
-            "resumedLabelCount_many": "{{count}} chats reanudados",
-            "resumedAriaCount_one": "{{count}} chat reanudado. Haz clic para verlo.",
-            "resumedAriaCount_other": "{{count}} chats reanudados. Haz clic para verlos.",
-            "resumedAriaCount_many": "{{count}} chats reanudados. Haz clic para verlos.",
-            "checkLabelCount_one": "{{count}} chat por revisar",
-            "checkLabelCount_other": "{{count}} chats por revisar",
-            "checkLabelCount_many": "{{count}} chats por revisar",
-            "checkAriaCount_one": "{{count}} chat por revisar tras reanudarlo. Haz clic para ver los detalles.",
-            "checkAriaCount_other": "{{count}} chats por revisar tras reanudarlos. Haz clic para ver los detalles.",
-            "checkAriaCount_many": "{{count}} chats por revisar tras reanudarlos. Haz clic para ver los detalles.",
-            "labelCount_one": "{{count}} chat por reanudar",
-            "labelCount_other": "{{count}} chats por reanudar",
-            "labelCount_many": "{{count}} chats por reanudar",
-            "ariaLabelCount_one": "{{count}} chat disponible para reanudar",
-            "ariaLabelCount_other": "{{count}} chats disponibles para reanudar",
-            "ariaLabelCount_many": "{{count}} chats disponibles para reanudar"
+            "failedTooltip": "Agentes que Orca no pudo reanudar tras el reinicio. Haz clic para ver los detalles.",
+            "checkTooltip": "Agentes que Orca no pudo reanudar, o no pudo confirmar que reanudó, tras el reinicio. Haz clic para ver los detalles.",
+            "resumingTooltip": "Restaurando los agentes interrumpidos y pidiéndoles que continúen…",
+            "tooltip": "Abrir agentes interrumpidos disponibles para reanudar",
+            "resumingProgressLabel": "Reanudando agentes {{value0}}/{{value1}}",
+            "resumingProgressAria": "Reanudando agentes, {{value0}} de {{value1}} listos. Haz clic para ver los detalles.",
+            "resumedTooltip": "Agentes que Orca reanudó tras el reinicio. Haz clic para verlos.",
+            "chatsFailedLabel_one": "No se pudo reanudar {{count}} agente",
+            "chatsFailedLabel_other": "No se pudieron reanudar {{count}} agentes",
+            "chatsFailedLabel_many": "No se pudieron reanudar {{count}} agentes",
+            "chatsFailedAria_one": "No se pudo reanudar {{count}} agente. Haz clic para ver los detalles.",
+            "chatsFailedAria_other": "No se pudieron reanudar {{count}} agentes. Haz clic para ver los detalles.",
+            "chatsFailedAria_many": "No se pudieron reanudar {{count}} agentes. Haz clic para ver los detalles.",
+            "resumedLabelCount_one": "{{count}} agente reanudado",
+            "resumedLabelCount_other": "{{count}} agentes reanudados",
+            "resumedLabelCount_many": "{{count}} agentes reanudados",
+            "resumedAriaCount_one": "{{count}} agente reanudado. Haz clic para verlo.",
+            "resumedAriaCount_other": "{{count}} agentes reanudados. Haz clic para verlos.",
+            "resumedAriaCount_many": "{{count}} agentes reanudados. Haz clic para verlos.",
+            "checkLabelCount_one": "{{count}} agente por revisar",
+            "checkLabelCount_other": "{{count}} agentes por revisar",
+            "checkLabelCount_many": "{{count}} agentes por revisar",
+            "checkAriaCount_one": "{{count}} agente por revisar tras reanudarlo. Haz clic para ver los detalles.",
+            "checkAriaCount_other": "{{count}} agentes por revisar tras reanudarlos. Haz clic para ver los detalles.",
+            "checkAriaCount_many": "{{count}} agentes por revisar tras reanudarlos. Haz clic para ver los detalles.",
+            "labelCount_one": "{{count}} agente por reanudar",
+            "labelCount_other": "{{count}} agentes por reanudar",
+            "labelCount_many": "{{count}} agentes por reanudar",
+            "ariaLabelCount_one": "{{count}} agente disponible para reanudar",
+            "ariaLabelCount_other": "{{count}} agentes disponibles para reanudar",
+            "ariaLabelCount_many": "{{count}} agentes disponibles para reanudar"
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "La conexión anterior cerrada.",
@@ -17277,7 +17278,6 @@
           "failed7d": "Fallidas · 7 días",
           "automation": "Automatización",
           "triggered": "Activada",
-          "trigger": "Activar",
           "loading": "Cargando ejecuciones…",
           "noRuns": "Aún no hay ejecuciones",
           "emptyDescription": "Las ejecuciones aparecerán aquí después de activar una automatización.",
@@ -17404,11 +17404,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aún no hay carreras.",
-          "13988187b3": "Fichas",
           "86a248187e": "Gastar",
           "149c0b49c7": "Espacio de trabajo",
           "8faaa00726": "Correr",
-          "a00e38d1a3": "—",
           "historyUnavailable": "El historial de ejecuciones no está disponible desde este host. Esto no significa que la automatización haya fallado ni que no tenga ejecuciones."
         },
         "AutomationSchedulePicker": {
@@ -17478,7 +17476,6 @@
           "missingWorkspace": "Espacio de trabajo ausente",
           "usageUnavailable": "Uso no disponible",
           "noRunUsageYet": "Aún no hay uso de ejecución",
-          "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
           "fullOutputUnavailable": "No se pudo cargar la salida completa.",
           "retryFullOutput": "Reintentar",
@@ -17804,7 +17801,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} gastados",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -18715,39 +18716,39 @@
         "keyword-hooks": "hooks"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Reanudando {{count}} chat en {{machine}}…",
-        "resumingOn_many": "Reanudando {{count}} chats en {{machine}}…",
-        "resumingOn_other": "Reanudando {{count}} chats en {{machine}}…",
-        "resuming_one": "Reanudando {{count}} chat…",
-        "resuming_many": "Reanudando {{count}} chats…",
-        "resuming_other": "Reanudando {{count}} chats…",
-        "resumedOn_one": "{{count}} chat reanudado en {{machine}}.",
-        "resumedOn_many": "{{count}} chats reanudados en {{machine}}.",
-        "resumedOn_other": "{{count}} chats reanudados en {{machine}}.",
-        "resumedUpdate_one": "{{count}} chat reanudado tras la actualización.",
-        "resumedUpdate_many": "{{count}} chats reanudados tras la actualización.",
-        "resumedUpdate_other": "{{count}} chats reanudados tras la actualización.",
-        "resumedRestart_one": "{{count}} chat reanudado tras el reinicio.",
-        "resumedRestart_many": "{{count}} chats reanudados tras el reinicio.",
-        "resumedRestart_other": "{{count}} chats reanudados tras el reinicio.",
-        "partial_one": "{{resumed}} de {{total}} chats reanudados. {{count}} te necesita.",
-        "partial_many": "{{resumed}} de {{total}} chats reanudados. {{count}} te necesitan.",
-        "partial_other": "{{resumed}} de {{total}} chats reanudados. {{count}} te necesitan.",
-        "stoppedOn_one": "{{count}} chat detenido en {{machine}}.",
-        "stoppedOn_many": "{{count}} chats detenidos en {{machine}}.",
-        "stoppedOn_other": "{{count}} chats detenidos en {{machine}}.",
-        "stoppedUpdate_one": "{{count}} chat detenido al actualizar Orca.",
-        "stoppedUpdate_many": "{{count}} chats detenidos al actualizar Orca.",
-        "stoppedUpdate_other": "{{count}} chats detenidos al actualizar Orca.",
-        "stoppedRestart_one": "{{count}} chat detenido al cerrar Orca.",
-        "stoppedRestart_many": "{{count}} chats detenidos al cerrar Orca.",
-        "stoppedRestart_other": "{{count}} chats detenidos al cerrar Orca.",
+        "resumingOn_one": "Reanudando {{count}} agente en {{machine}}…",
+        "resumingOn_many": "Reanudando {{count}} agentes en {{machine}}…",
+        "resumingOn_other": "Reanudando {{count}} agentes en {{machine}}…",
+        "resuming_one": "Reanudando {{count}} agente…",
+        "resuming_many": "Reanudando {{count}} agentes…",
+        "resuming_other": "Reanudando {{count}} agentes…",
+        "resumedOn_one": "{{count}} agente reanudado en {{machine}}.",
+        "resumedOn_many": "{{count}} agentes reanudados en {{machine}}.",
+        "resumedOn_other": "{{count}} agentes reanudados en {{machine}}.",
+        "resumedUpdate_one": "{{count}} agente reanudado tras la actualización.",
+        "resumedUpdate_many": "{{count}} agentes reanudados tras la actualización.",
+        "resumedUpdate_other": "{{count}} agentes reanudados tras la actualización.",
+        "resumedRestart_one": "{{count}} agente reanudado tras el reinicio.",
+        "resumedRestart_many": "{{count}} agentes reanudados tras el reinicio.",
+        "resumedRestart_other": "{{count}} agentes reanudados tras el reinicio.",
+        "partial_one": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesita.",
+        "partial_many": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan.",
+        "partial_other": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan.",
+        "stoppedOn_one": "{{count}} agente detenido en {{machine}}.",
+        "stoppedOn_many": "{{count}} agentes detenidos en {{machine}}.",
+        "stoppedOn_other": "{{count}} agentes detenidos en {{machine}}.",
+        "stoppedUpdate_one": "{{count}} agente detenido al actualizar Orca.",
+        "stoppedUpdate_many": "{{count}} agentes detenidos al actualizar Orca.",
+        "stoppedUpdate_other": "{{count}} agentes detenidos al actualizar Orca.",
+        "stoppedRestart_one": "{{count}} agente detenido al cerrar Orca.",
+        "stoppedRestart_many": "{{count}} agentes detenidos al cerrar Orca.",
+        "stoppedRestart_other": "{{count}} agentes detenidos al cerrar Orca.",
         "promptsNotResent": "Al reanudar, no se reenviarán tus prompts.",
         "resume": "Reanudar",
         "details": "Detalles",
         "close": "Cerrar",
-        "listLabel": "Chats",
-        "untitled": "Chat sin título",
+        "listLabel": "Agentes",
+        "untitled": "Agente sin título",
         "willAsk": "Orca pedirá continuar. Los mensajes en cola pueden enviarse.",
         "asked": "Orca pidió continuar. Los mensajes en cola pueden enviarse.",
         "resumedAutomatically": "Reanudado automáticamente.",
@@ -18769,7 +18770,7 @@
         "ownershipUnknownShort": "Aún no está listo para reanudar.",
         "notAttachedShort": "No se reconectó.",
         "dispatchRejectedShort": "El agente se negó a continuar.",
-        "unsupportedShort": "Orca no puede reanudar este chat."
+        "unsupportedShort": "Orca no puede reanudar este agente."
       }
     },
     "i18n": {
@@ -19530,6 +19531,7 @@
         "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
+        "moreActions": "Más acciones",
         "editMessage": "Editar mensaje",
         "showFullMessage": "Mostrar el mensaje completo",
         "showLess": "Mostrar menos",
@@ -20115,9 +20117,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Revisar la limpieza alfa"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -21273,7 +21272,8 @@
         "safariFullDiskAccess": "macOS denegó el acceso a las cookies de Safari. Concede a Orca acceso total al disco en Configuración del sistema → Privacidad y seguridad → Acceso total al disco.",
         "connectionEnded": "La conexión con este servidor se interrumpió durante la importación. Vuelve a conectarte e inténtalo de nuevo.",
         "serverRepaired": "Este servidor se volvió a emparejar durante la importación. Inténtalo de nuevo.",
-        "macFullDiskAccess": "macOS denegó el acceso a las cookies de {{browser}}. Concede a Orca acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco y reinicia Orca."
+        "macFullDiskAccess": "macOS denegó el acceso a las cookies de {{browser}}. Concede a Orca acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco y reinicia Orca.",
+        "sshHostDisconnected": "Esta página ya no está conectada a través de su host SSH. Vuelve a conectarte e inténtalo de nuevo."
       },
       "notice": {
         "importedMore_one": "Se importó {{count}} cookie para {{domains}} +{{more}} más. Recarga la página para usarla.",
@@ -21283,6 +21283,13 @@
         "imported_other": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navegadores en este dispositivo",
+        "destination": "Importa al navegador de {{host}}.",
+        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
+        "stored": "Guardado en el navegador de {{host}}.",
+        "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
     },
     "passwords": {
@@ -22069,7 +22076,8 @@
         "agentNotSupported": "agente no compatible"
       },
       "consentTranscriptIndex": "La búsqueda coincide con los detalles de las sesiones y las vistas previas de los mensajes. Para buscar en conversaciones completas, activa la búsqueda de texto completo (indexa las transcripciones locales, sin ocultar contenido). Los dispositivos emparejados también pueden buscar en ellas.",
-      "noMatchesToShow": "No hay sesiones coincidentes para mostrar."
+      "noMatchesToShow": "No hay sesiones coincidentes para mostrar.",
+      "titleMatchesOnly": "No hay coincidencias de texto completo. Se muestran las sesiones cuyo título o detalles coinciden."
     }
   },
   "sessionHistory": {
@@ -24429,19 +24437,20 @@
     "upcoming": {
       "tidyNightAfter": "Cada noche a partir de las {{from}}, o en cuanto este ordenador esté activo",
       "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "every2h": "cada 2 horas",
-      "every4h": "cada 4 horas",
       "lookFirst": "Después de tu primer chat · luego {{every}}",
-      "mornings": "cada mañana",
       "tidyUp": "Ordenar memoria",
-      "twiceDaily": "dos veces al día",
       "lastNeededSignIn": "Su última ejecución se detuvo para iniciar sesión",
       "stopped": "Detenida",
       "lookAroundSettings": "Ajustes de revisión",
       "dueNow": "Toca ahora",
       "runsEvery": "Se ejecuta {{every}}",
       "tidySettings": "Ajustes de ordenación de memoria",
-      "needsSignIn": "Necesita iniciar sesión"
+      "needsSignIn": "Necesita iniciar sesión",
+      "every4hWindow": "de {{from}} a {{to}}, cada 4 horas",
+      "every2hWindow": "de {{from}} a {{to}}, cada 2 horas",
+      "twiceDailyAt": "dos veces al día, {{first}} y {{second}}",
+      "morningsAt": "cada mañana a las {{time}}",
+      "weekdays": "entre semana, {{schedule}}"
     },
     "palette": {
       "placeholder": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones...",

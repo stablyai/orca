@@ -89,9 +89,8 @@ async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
     throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
   }
+  // Mail its old Chat never read is not carried over (dropped by the reset).
   const sessionId = await runtimeBotChats(runtime).reset(bot.id)
-  // Mail its old Chat never read is not carried over.
-  await dropUnreadBotRequests(runtime, bot.id, 'new-chat', bot.chatSessionId ?? undefined)
   return { sessionId }
 }
 

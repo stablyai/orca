@@ -1,13 +1,24 @@
 import { useState } from 'react'
-import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
+import { useAppStore } from '@/store/index'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { BrowserNavigationControlRow } from '../assemble-chrome/toolbar/browser-navigation-control-row'
+import { BrowserChromeToolbar } from '../assemble-chrome/toolbar/browser-chrome-toolbar'
+import { BrowserToolbarMenu } from '../assemble-chrome/toolbar/BrowserToolbarMenu'
+import type { BrowserPageSiteDisplaySource } from '../assemble-chrome/toolbar/browser-page-site-display-source'
+import { BrowserPageStateChips } from '../assemble-chrome/address-bar/browser-address-chips'
+import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserPageDocLocation,
+  BrowserViewportPresetId
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
 import { BrowserReloadControl } from '../assemble-chrome/toolbar/browser-reload-control'
 import { useBrowserReloadControlLabels } from '../navigate/use-browser-reload-control-labels'
@@ -17,14 +28,19 @@ import {
 } from '../navigate/browser-reload-action'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import {
-  BrowserAnnotateToolButton,
-  type BrowserChromeElementTools,
-  type BrowserChromeMarkupTool,
-  type BrowserChromeNoteActions
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
 } from '../assemble-chrome/toolbar/browser-annotate-tool-button'
 
+/** The local page toolbar over a page the host renders and streams, minus what the host can't do. */
 export function RemoteBrowserPageToolbar({
+  page,
+  workspaceId,
+  worktreeId,
+  isActive,
+  siteDisplaySource,
   runtimeEnvironmentId,
   addressBarValue,
   onAddressBarChange,
@@ -34,8 +50,6 @@ export function RemoteBrowserPageToolbar({
   addressBarInputRef,
   addressBarEditSession,
   busy,
-  loading,
-  loadErrorCode,
   history,
   pickerAvailable,
   annotateTools,
@@ -44,6 +58,12 @@ export function RemoteBrowserPageToolbar({
   onReload,
   onStop
 }: {
+  page: BrowserPage
+  workspaceId: string
+  worktreeId: string
+  isActive: boolean
+  /** Null on hosts that can't report the page's site zoom and color scheme. */
+  siteDisplaySource: BrowserPageSiteDisplaySource | null
   runtimeEnvironmentId: string
   addressBarValue: string
   onAddressBarChange: (value: string) => void
@@ -54,8 +74,6 @@ export function RemoteBrowserPageToolbar({
   addressBarInputRef: React.RefObject<HTMLInputElement | null>
   addressBarEditSession: BrowserAddressBarEditSessionBinding
   busy: boolean
-  loading: boolean
-  loadErrorCode: number | null
   history: { canGoBack: boolean; canGoForward: boolean }
   pickerAvailable: boolean
   annotateTools: {
@@ -69,6 +87,12 @@ export function RemoteBrowserPageToolbar({
   onStop: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const { id: browserPageId, url: pageUrl, loading } = page
+  const viewportPresetId = page.viewportPresetId ?? null
+  // The stream reads the preset from the page and sizes the host's page to it.
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    useAppStore.getState().setBrowserPageViewportPreset(browserPageId, nextId)
+  const loadErrorCode = page.loadError?.code ?? null
   // Older hosts have no stop and reload normally either way, so they keep the plain button.
   const stopHardReloadSupported = useRuntimeEnvironmentCapability(
     runtimeEnvironmentId,
@@ -86,8 +110,12 @@ export function RemoteBrowserPageToolbar({
       onReload(intent === 'hard-reload')
     }
   }
+  const openableUrl = getOpenableExternalUrl(pageUrl)
+  // The host's loopback address would open this machine's, not the page's.
+  const externalUrl = openableUrl ? resolveRemoteFailureExternalUrl(openableUrl) : null
   return (
-    <BrowserNavigationControlRow
+    <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       controls={{
         canGoBack: history.canGoBack,
         canGoForward: history.canGoForward,
@@ -110,6 +138,16 @@ export function RemoteBrowserPageToolbar({
             <RemoteRuntimeEgressIndicator
               runtimeEnvironmentId={runtimeEnvironmentId}
               presentation="streamed"
+            />
+          }
+          trailing={
+            <BrowserPageStateChips
+              browserPageId={browserPageId}
+              siteDisplaySource={siteDisplaySource}
+              url={toDisplayUrl(pageUrl)}
+              viewportPresetId={viewportPresetId}
+              onApplyViewportPreset={applyViewportPreset}
+              isActive={isActive}
             />
           }
           loading={busy || loading}
@@ -148,22 +186,35 @@ export function RemoteBrowserPageToolbar({
           </Tooltip>
         )
       }
-    >
-      {pickerAvailable ? (
-        <BrowserAnnotateToolButton
-          tools={annotateTools.tools}
-          markup={annotateTools.markup}
-          notes={annotateTools.notes}
-          showTourAnchors={false}
-        />
-      ) : (
-        <MarkupDrawButton
-          onClick={annotateTools.markup.onToggle}
-          disabled={annotateTools.markup.disabled}
-          active={annotateTools.markup.active}
-          surfaceActive={annotateTools.markup.canShowDiscoveryHint}
+      elementTools={pickerAvailable ? annotateTools.tools : null}
+      markup={annotateTools.markup}
+      notes={annotateTools.notes}
+      // The page runs in the host's browser, whose extensions and profiles this desktop can't drive.
+      extensionActions={null}
+      overflowMenu={(overflow) => (
+        <BrowserToolbarMenu
+          currentProfileId={null}
+          workspaceId={workspaceId}
+          worktreeId={worktreeId}
+          browserPageId={browserPageId}
+          viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={applyViewportPreset}
+          siteDisplaySource={siteDisplaySource}
+          isActive={isActive}
+          isBlankTab={isBlankBrowserUrl(pageUrl)}
+          pageActions={{
+            onFind: null,
+            onHardReload: stopHardReloadSupported ? () => runReloadTrigger('hard-reload') : null,
+            onOpenDevTools: null,
+            onOpenExternal: externalUrl
+              ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
+              : null
+          }}
+          extensionsSub={null}
+          showProfiles={false}
+          overflow={overflow}
         />
       )}
-    </BrowserNavigationControlRow>
+    />
   )
 }

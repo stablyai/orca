@@ -21,14 +21,20 @@ import {
 import { BrowserToolbarProfileDialogs } from '../profile-routing/browser-toolbar-profile-dialogs'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
+import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
-import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
+import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
   workspaceId: string
+  worktreeId: string
   browserPageId: string
   viewportPresetId: BrowserViewportPresetId | null
+  /** Null hides Viewport Size where the page's host can't resize it. */
+  onApplyViewportPreset: ((nextId: BrowserViewportPresetId | null) => void) | null
+  /** Null hides Zoom and Appearance where the page's host can't report its site settings. */
+  siteDisplaySource: BrowserPageSiteDisplaySource | null
   isActive: boolean
   extensionDiscoveryTarget?: boolean
   /** A blank tab shows the import hint on its new tab page, so the tour points there instead. */
@@ -44,8 +50,11 @@ type BrowserToolbarMenuProps = {
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
+  worktreeId,
   browserPageId,
   viewportPresetId,
+  onApplyViewportPreset,
+  siteDisplaySource,
   isActive,
   extensionDiscoveryTarget = false,
   isBlankTab,
@@ -55,13 +64,13 @@ export function BrowserToolbarMenu({
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const { sshRoute, detectedBrowsers, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 1
@@ -91,18 +100,26 @@ export function BrowserToolbarMenu({
   const mountedRef = useMountedRef()
 
   const showSiteDisplay = (request: Promise<BrowserPageSiteDisplay | null>): void => {
-    void request.then((display) => {
-      // Tell the address field's zoom chip too; main has no push event for site display.
-      publishBrowserPageSiteDisplay({ browserPageId, display })
-      if (mountedRef.current) {
-        setSiteDisplay(display)
-      }
-    })
+    void request.then(
+      (display) => {
+        // Tell the address field's zoom chip too; main has no push event for site display.
+        publishBrowserPageSiteDisplay({ browserPageId, display })
+        if (mountedRef.current) {
+          setSiteDisplay(display)
+        }
+      },
+      // A host that dropped the call leaves the menu showing the last value it reported.
+      () => undefined
+    )
   }
-  const zoomPage = (direction: BrowserPageZoomDirection): void =>
-    showSiteDisplay(window.api.browser.zoomPage({ browserPageId, direction }))
-  const setSiteColorScheme = (colorScheme: BrowserSiteColorScheme | null): void =>
-    showSiteDisplay(window.api.browser.setPageSiteColorScheme({ browserPageId, colorScheme }))
+  const zoomPage = siteDisplaySource
+    ? (direction: BrowserPageZoomDirection): void =>
+        showSiteDisplay(siteDisplaySource.zoom(direction))
+    : null
+  const setSiteColorScheme = siteDisplaySource
+    ? (colorScheme: BrowserSiteColorScheme | null): void =>
+        showSiteDisplay(siteDisplaySource.setColorScheme(colorScheme))
+    : null
 
   useEffect(() => {
     if (!menuOpen) {
@@ -119,9 +136,9 @@ export function BrowserToolbarMenu({
     if (shouldForceMenuOpen && !open) {
       return
     }
-    if (open) {
+    if (open && siteDisplaySource) {
       // Why on open: the site changes with every navigation and keyboard zoom, so a cached value goes stale.
-      showSiteDisplay(window.api.browser.getPageSiteDisplay({ browserPageId }))
+      showSiteDisplay(siteDisplaySource.read())
     }
     setMenuOpen(open)
   }
@@ -213,7 +230,12 @@ export function BrowserToolbarMenu({
     browserFamily: string,
     browserProfile?: string
   ): Promise<void> => {
-    const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+    const result = await importCookiesFromBrowser(
+      effectiveProfileId,
+      browserFamily,
+      browserProfile,
+      sshRoute
+    )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -244,7 +266,7 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, sshRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -286,6 +308,7 @@ export function BrowserToolbarMenu({
                 detectedBrowsers,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
+                sshRoute,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile()
@@ -295,7 +318,7 @@ export function BrowserToolbarMenu({
         pageActions={pageActions}
         extensionsSub={extensionsSub}
         viewportPresetId={viewportPresetId}
-        onApplyViewportPreset={(nextId) => applyBrowserViewportPreset(browserPageId, nextId)}
+        onApplyViewportPreset={onApplyViewportPreset}
         siteDisplay={siteDisplay}
         onZoomPage={zoomPage}
         onSetSiteColorScheme={setSiteColorScheme}

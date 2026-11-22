@@ -28,7 +28,6 @@ import {
   type RemoteBrowserStreamToken,
   type RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-export type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 
 // Own one pane’s screencast and bounded recovery outside React so races can be driven with injected dependencies.
@@ -277,6 +276,7 @@ export class RemoteBrowserStreamLifecycle {
           },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
+          onPointer: (pointer) => deps.setPointer(pointer),
           onClosed: () => this.handleStreamClosed(token, true),
           javaScriptDialog: new RemoteBrowserJavaScriptDialog(deps)
         }

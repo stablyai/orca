@@ -129,15 +129,19 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
   )
+  const stoppedForSignIn = useMemo(
+    () => now.stoppedForSignIn.map((row) => ({ ...row, hostId: bot.hostId })),
+    [now.stoppedForSignIn, bot.hostId]
+  )
   // Every ask leads Needs you, whatever the filter: Needs you only keeps them all.
   const asks = useMemo<BotNeedsYouAsks>(() => {
     const byDispatch = botItemsByDispatch(read?.items ?? [])
     return {
       needs: now.needs,
-      stoppedForSignIn: now.stoppedForSignIn,
+      stoppedForSignIn,
       itemOf: (dispatchId: string) => byDispatch.get(dispatchId) ?? null
     }
-  }, [read, now.needs, now.stoppedForSignIn])
+  }, [read, now.needs, stoppedForSignIn])
   // The badge's count, unfiltered: the header's dot and line say what the Items tab says.
   const needsYou = useBotNeedsYouCount(bot, now)
   const signInStops = useMemo(
@@ -171,6 +175,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <div
+      data-bot-items-scroller=""
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""
@@ -208,6 +213,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           asks={asks}
           offline={offline}
           focusFallback={scroll}
+          scroller={scroll}
         />
         <BotUpcomingSection
           bot={bot}

@@ -249,7 +249,8 @@
         "safariFullDiskAccess": "macOS a refusé l'accès aux cookies de Safari. Accordez à Orca l'accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque.",
         "connectionEnded": "La connexion à ce serveur a été interrompue pendant l'importation. Reconnectez-vous et réessayez.",
         "serverRepaired": "Ce serveur a été jumelé à nouveau pendant l'importation. Réessayez.",
-        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca."
+        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca.",
+        "sshHostDisconnected": "Cette page n’est plus connectée via son hôte SSH. Reconnectez-vous et réessayez."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importé pour les domaines {{domains}} (+{{more}}). Rechargez la page pour l'utiliser.",
@@ -259,6 +260,13 @@
         "imported_other": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navigateurs sur cet appareil",
+        "destination": "Importe dans le navigateur de {{host}}.",
+        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
+        "stored": "Enregistré dans le navigateur de {{host}}.",
+        "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
     },
     "passwords": {
@@ -505,7 +513,8 @@
       },
       "userAgent": {
         "title": "Identité du navigateur",
-        "description": "Choisissez l'agent utilisateur pour chaque profil et page de navigateur. Les modifications prennent effet après un redémarrage.",
+        "descriptionPageKinds": "Choisissez l'agent utilisateur pour chaque page affichée par cet ordinateur, y compris les pages SSH et les pages distantes réglées sur Cet appareil. Les modifications prennent effet après un redémarrage.",
+        "serverPagesNote": "Les pages Serveur (diffusé) utilisent l'identité de ce serveur ; modifiez-la là-bas avec orca browser identity set.",
         "remoteUnsupported": "Gérez l'identité du navigateur sur l'hôte distant avec la CLI Orca.",
         "loading": "Chargement…",
         "resetRequired": "Les données d'identité doivent être réinitialisées explicitement avant de pouvoir être modifiées.",
@@ -4835,37 +4844,37 @@
             "server_replaced_explanation": "Orca se connecte à l’hôte avec un autre utilisateur SSH, ou son serveur a été réinstallé. Dans Paramètres › Serveurs Orca distants, ouvrez le menu ⋯ de ce serveur et choisissez Oublier…, puis connectez l’hôte SSH pour l’associer à son serveur actuel."
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "Ouvrir les discussions interrompues disponibles pour reprendre",
-            "failedTooltip": "Chats qu'Orca n'a pas pu reprendre après le redémarrage. Cliquez pour plus de détails.",
-            "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails.",
-            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…",
-            "resumingProgressLabel": "Reprise des discussions {{value0}}/{{value1}}",
-            "resumingProgressAria": "Reprise des discussions, {{value0}} sur {{value1}} terminées. Cliquez pour voir les détails.",
-            "resumedTooltip": "Discussions reprises par Orca après le redémarrage. Cliquez pour les voir.",
-            "chatsFailedLabel_one": "Impossible de reprendre {{count}} chat",
-            "chatsFailedLabel_other": "Impossible de reprendre {{count}} chats",
-            "chatsFailedLabel_many": "Impossible de reprendre {{count}} chats",
-            "chatsFailedAria_one": "Impossible de reprendre {{count}} chat. Cliquez pour voir les détails.",
-            "chatsFailedAria_other": "Impossible de reprendre {{count}} chats. Cliquez pour voir les détails.",
-            "chatsFailedAria_many": "Impossible de reprendre {{count}} chats. Cliquez pour voir les détails.",
-            "resumedLabelCount_one": "{{count}} chat repris",
-            "resumedLabelCount_other": "{{count}} chats repris",
-            "resumedLabelCount_many": "{{count}} chats repris",
-            "resumedAriaCount_one": "{{count}} chat repris. Cliquez pour l’afficher.",
-            "resumedAriaCount_other": "{{count}} chats repris. Cliquez pour les afficher.",
-            "resumedAriaCount_many": "{{count}} chats repris. Cliquez pour les afficher.",
-            "checkLabelCount_one": "{{count}} chat à vérifier",
-            "checkLabelCount_other": "{{count}} chats à vérifier",
-            "checkLabelCount_many": "{{count}} chats à vérifier",
-            "checkAriaCount_one": "{{count}} chat à vérifier après sa reprise. Cliquez pour voir les détails.",
-            "checkAriaCount_other": "{{count}} chats à vérifier après leur reprise. Cliquez pour voir les détails.",
-            "checkAriaCount_many": "{{count}} chats à vérifier après leur reprise. Cliquez pour voir les détails.",
-            "labelCount_one": "{{count}} chat à reprendre",
-            "labelCount_other": "{{count}} chats à reprendre",
-            "labelCount_many": "{{count}} chats à reprendre",
-            "ariaLabelCount_one": "{{count}} chat peut être repris",
-            "ariaLabelCount_other": "{{count}} chats peuvent être repris",
-            "ariaLabelCount_many": "{{count}} chats peuvent être repris"
+            "tooltip": "Ouvrir les agents interrompus disponibles pour reprendre",
+            "failedTooltip": "Agents qu'Orca n'a pas pu reprendre après le redémarrage. Cliquez pour plus de détails.",
+            "checkTooltip": "Agents qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails.",
+            "resumingTooltip": "Restauration des agents interrompus et demande de poursuite…",
+            "resumingProgressLabel": "Reprise des agents {{value0}}/{{value1}}",
+            "resumingProgressAria": "Reprise des agents, {{value0}} sur {{value1}} terminés. Cliquez pour voir les détails.",
+            "resumedTooltip": "Agents repris par Orca après le redémarrage. Cliquez pour les voir.",
+            "chatsFailedLabel_one": "Impossible de reprendre {{count}} agent",
+            "chatsFailedLabel_other": "Impossible de reprendre {{count}} agents",
+            "chatsFailedLabel_many": "Impossible de reprendre {{count}} agents",
+            "chatsFailedAria_one": "Impossible de reprendre {{count}} agent. Cliquez pour voir les détails.",
+            "chatsFailedAria_other": "Impossible de reprendre {{count}} agents. Cliquez pour voir les détails.",
+            "chatsFailedAria_many": "Impossible de reprendre {{count}} agents. Cliquez pour voir les détails.",
+            "resumedLabelCount_one": "{{count}} agent repris",
+            "resumedLabelCount_other": "{{count}} agents repris",
+            "resumedLabelCount_many": "{{count}} agents repris",
+            "resumedAriaCount_one": "{{count}} agent repris. Cliquez pour l’afficher.",
+            "resumedAriaCount_other": "{{count}} agents repris. Cliquez pour les afficher.",
+            "resumedAriaCount_many": "{{count}} agents repris. Cliquez pour les afficher.",
+            "checkLabelCount_one": "{{count}} agent à vérifier",
+            "checkLabelCount_other": "{{count}} agents à vérifier",
+            "checkLabelCount_many": "{{count}} agents à vérifier",
+            "checkAriaCount_one": "{{count}} agent à vérifier après sa reprise. Cliquez pour voir les détails.",
+            "checkAriaCount_other": "{{count}} agents à vérifier après leur reprise. Cliquez pour voir les détails.",
+            "checkAriaCount_many": "{{count}} agents à vérifier après leur reprise. Cliquez pour voir les détails.",
+            "labelCount_one": "{{count}} agent à reprendre",
+            "labelCount_other": "{{count}} agents à reprendre",
+            "labelCount_many": "{{count}} agents à reprendre",
+            "ariaLabelCount_one": "{{count}} agent peut être repris",
+            "ariaLabelCount_other": "{{count}} agents peuvent être repris",
+            "ariaLabelCount_many": "{{count}} agents peuvent être repris"
           },
           "provider": {
             "extra": {
@@ -17647,11 +17656,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aucune exécution pour l'instant.",
-          "13988187b3": "Tokens",
           "86a248187e": "Dépense",
           "149c0b49c7": "Espace de travail",
           "8faaa00726": "Exécution",
-          "a00e38d1a3": "—",
           "historyUnavailable": "L'historique des exécutions n'est pas disponible sur cet hôte. Cela ne signifie pas que l’automatisation a échoué ou qu’elle n’a pas été exécutée."
         },
         "AutomationSchedulePicker": {
@@ -17718,7 +17725,6 @@
           "missingWorkspace": "Espace de travail manquant",
           "usageUnavailable": "Utilisation indisponible",
           "noRunUsageYet": "Aucune utilisation d'exécution pour l'instant",
-          "noWorkspace": "Aucun espace de travail",
           "latestSavedOutput": "Dernière sortie enregistrée",
           "fullOutputUnavailable": "Impossible de charger la sortie complète.",
           "retryFullOutput": "Réessayer",
@@ -17993,7 +17999,6 @@
           "failed7d": "Échec · 7j",
           "automation": "Automation",
           "triggered": "Déclenché",
-          "trigger": "Déclenchement",
           "loading": "Chargement des courses…",
           "noRuns": "Aucune course pour l'instant",
           "emptyDescription": "Les exécutions apparaissent ici après le déclenchement d'une automatisation.",
@@ -18073,7 +18078,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} dépensés",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Hôte SSH",
@@ -18980,39 +18989,39 @@
         "keyword-hooks": "hooks"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Reprise de {{count}} chat sur {{machine}}…",
-        "resumingOn_many": "Reprise de {{count}} chats sur {{machine}}…",
-        "resumingOn_other": "Reprise de {{count}} chats sur {{machine}}…",
-        "resuming_one": "Reprise de {{count}} chat…",
-        "resuming_many": "Reprise de {{count}} chats…",
-        "resuming_other": "Reprise de {{count}} chats…",
-        "resumedOn_one": "{{count}} chat repris sur {{machine}}.",
-        "resumedOn_many": "{{count}} chats repris sur {{machine}}.",
-        "resumedOn_other": "{{count}} chats repris sur {{machine}}.",
-        "resumedUpdate_one": "{{count}} chat repris après la mise à jour.",
-        "resumedUpdate_many": "{{count}} chats repris après la mise à jour.",
-        "resumedUpdate_other": "{{count}} chats repris après la mise à jour.",
-        "resumedRestart_one": "{{count}} chat repris après le redémarrage.",
-        "resumedRestart_many": "{{count}} chats repris après le redémarrage.",
-        "resumedRestart_other": "{{count}} chats repris après le redémarrage.",
-        "partial_one": "{{resumed}} chats sur {{total}} repris. {{count}} a besoin de vous.",
-        "partial_many": "{{resumed}} chats sur {{total}} repris. {{count}} ont besoin de vous.",
-        "partial_other": "{{resumed}} chats sur {{total}} repris. {{count}} ont besoin de vous.",
-        "stoppedOn_one": "{{count}} chat arrêté sur {{machine}}.",
-        "stoppedOn_many": "{{count}} chats arrêtés sur {{machine}}.",
-        "stoppedOn_other": "{{count}} chats arrêtés sur {{machine}}.",
-        "stoppedUpdate_one": "{{count}} chat arrêté par la mise à jour d’Orca.",
-        "stoppedUpdate_many": "{{count}} chats arrêtés par la mise à jour d’Orca.",
-        "stoppedUpdate_other": "{{count}} chats arrêtés par la mise à jour d’Orca.",
-        "stoppedRestart_one": "{{count}} chat arrêté à la fermeture d’Orca.",
-        "stoppedRestart_many": "{{count}} chats arrêtés à la fermeture d’Orca.",
-        "stoppedRestart_other": "{{count}} chats arrêtés à la fermeture d’Orca.",
+        "resumingOn_one": "Reprise de {{count}} agent sur {{machine}}…",
+        "resumingOn_many": "Reprise de {{count}} agents sur {{machine}}…",
+        "resumingOn_other": "Reprise de {{count}} agents sur {{machine}}…",
+        "resuming_one": "Reprise de {{count}} agent…",
+        "resuming_many": "Reprise de {{count}} agents…",
+        "resuming_other": "Reprise de {{count}} agents…",
+        "resumedOn_one": "{{count}} agent repris sur {{machine}}.",
+        "resumedOn_many": "{{count}} agents repris sur {{machine}}.",
+        "resumedOn_other": "{{count}} agents repris sur {{machine}}.",
+        "resumedUpdate_one": "{{count}} agent repris après la mise à jour.",
+        "resumedUpdate_many": "{{count}} agents repris après la mise à jour.",
+        "resumedUpdate_other": "{{count}} agents repris après la mise à jour.",
+        "resumedRestart_one": "{{count}} agent repris après le redémarrage.",
+        "resumedRestart_many": "{{count}} agents repris après le redémarrage.",
+        "resumedRestart_other": "{{count}} agents repris après le redémarrage.",
+        "partial_one": "{{resumed}} agents sur {{total}} repris. {{count}} a besoin de vous.",
+        "partial_many": "{{resumed}} agents sur {{total}} repris. {{count}} ont besoin de vous.",
+        "partial_other": "{{resumed}} agents sur {{total}} repris. {{count}} ont besoin de vous.",
+        "stoppedOn_one": "{{count}} agent arrêté sur {{machine}}.",
+        "stoppedOn_many": "{{count}} agents arrêtés sur {{machine}}.",
+        "stoppedOn_other": "{{count}} agents arrêtés sur {{machine}}.",
+        "stoppedUpdate_one": "{{count}} agent arrêté par la mise à jour d’Orca.",
+        "stoppedUpdate_many": "{{count}} agents arrêtés par la mise à jour d’Orca.",
+        "stoppedUpdate_other": "{{count}} agents arrêtés par la mise à jour d’Orca.",
+        "stoppedRestart_one": "{{count}} agent arrêté à la fermeture d’Orca.",
+        "stoppedRestart_many": "{{count}} agents arrêtés à la fermeture d’Orca.",
+        "stoppedRestart_other": "{{count}} agents arrêtés à la fermeture d’Orca.",
         "promptsNotResent": "La reprise ne renverra pas vos prompts.",
         "resume": "Reprendre",
         "details": "Détails",
         "close": "Fermer",
-        "listLabel": "Chats",
-        "untitled": "Chat sans titre",
+        "listLabel": "Agents",
+        "untitled": "Agent sans titre",
         "willAsk": "Orca demandera la reprise. Les messages en attente peuvent être envoyés.",
         "asked": "Orca a demandé la reprise. Les messages en attente peuvent être envoyés.",
         "resumedAutomatically": "Repris automatiquement.",
@@ -19034,7 +19043,7 @@
         "ownershipUnknownShort": "Pas encore prêt à reprendre.",
         "notAttachedShort": "Pas reconnecté.",
         "dispatchRejectedShort": "L’agent a refusé de continuer.",
-        "unsupportedShort": "Orca ne peut pas reprendre ce chat."
+        "unsupportedShort": "Orca ne peut pas reprendre cet agent."
       }
     },
     "i18n": {
@@ -19994,6 +20003,7 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
+        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
@@ -20386,9 +20396,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Nettoyage alpha de la revue"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -22177,7 +22184,8 @@
         "agentNotSupported": "agent non pris en charge"
       },
       "consentTranscriptIndex": "La recherche porte sur les détails des sessions et les aperçus des messages. Pour rechercher dans les conversations complètes, activez la recherche en texte intégral (indexe les transcriptions locales, sans masquage). Les appareils appairés peuvent aussi y effectuer des recherches.",
-      "noMatchesToShow": "Aucune session correspondante à afficher."
+      "noMatchesToShow": "Aucune session correspondante à afficher.",
+      "titleMatchesOnly": "Aucune correspondance en texte intégral. Affichage des sessions dont le titre ou les détails correspondent."
     }
   },
   "sessionHistory": {
@@ -24450,19 +24458,20 @@
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
       "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "every2h": "toutes les 2 heures",
-      "every4h": "toutes les 4 heures",
       "lookFirst": "Après votre premier chat · puis {{every}}",
-      "mornings": "chaque matin",
       "tidyUp": "Ranger la mémoire",
-      "twiceDaily": "deux fois par jour",
       "lastNeededSignIn": "Sa dernière exécution s’est arrêtée en attendant une connexion",
       "stopped": "Arrêté",
       "lookAroundSettings": "Paramètres du tour d’horizon",
       "dueNow": "À exécuter maintenant",
       "runsEvery": "S’exécute {{every}}",
       "tidySettings": "Paramètres du rangement de la mémoire",
-      "needsSignIn": "Connexion requise"
+      "needsSignIn": "Connexion requise",
+      "every4hWindow": "de {{from}} à {{to}}, toutes les 4 heures",
+      "every2hWindow": "de {{from}} à {{to}}, toutes les 2 heures",
+      "twiceDailyAt": "deux fois par jour, {{first}} et {{second}}",
+      "morningsAt": "chaque matin à {{time}}",
+      "weekdays": "en semaine, {{schedule}}"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

@@ -500,7 +500,8 @@
         "safariFullDiskAccess": "macOS hat den Zugriff auf Safari-Cookies verweigert. Orca unter System Settings → Privacy & Security → Full Disk Access Festplattenvollzugriff gewähren.",
         "connectionEnded": "Die Verbindung zu diesem Server wurde während des Imports beendet. Erneut verbinden und noch einmal versuchen.",
         "serverRepaired": "Dieser Server wurde während des Imports erneut gekoppelt. Erneut versuchen.",
-        "macFullDiskAccess": "macOS hat den Zugriff auf Cookies von {{browser}} verweigert. Gewähre Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff Zugriff und starte Orca neu."
+        "macFullDiskAccess": "macOS hat den Zugriff auf Cookies von {{browser}} verweigert. Gewähre Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff Zugriff und starte Orca neu.",
+        "sshHostDisconnected": "Diese Seite ist nicht mehr über ihren SSH-Host verbunden. Verbinde dich erneut und versuche es noch einmal."
       },
       "notice": {
         "importedMore_one": "{{count}} Cookie für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
@@ -508,6 +509,13 @@
         "imported_one": "{{count}} Cookie für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browser auf diesem Gerät",
+        "destination": "Importiert in den Browser für {{host}}.",
+        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen.",
+        "stored": "Im Browser für {{host}} gespeichert.",
+        "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
       }
     },
     "passwords": {
@@ -764,7 +772,8 @@
       },
       "userAgent": {
         "title": "Browser-Identität",
-        "description": "Den User-Agent für alle Browser-Profile und Seiten auswählen. Änderungen werden nach einem Neustart wirksam.",
+        "descriptionPageKinds": "Den User-Agent für jede Seite auswählen, die dieser Computer anzeigt, auch SSH-Seiten und Remote-Seiten mit „Dieses Gerät“. Änderungen werden nach einem Neustart wirksam.",
+        "serverPagesNote": "Seiten mit „Server (gestreamt)“ verwenden die Identität dieses Servers; ändere sie dort mit orca browser identity set.",
         "remoteUnsupported": "Die Browser-Identität auf dem Remote-Host mit der Orca-CLI verwalten.",
         "loading": "Wird geladen…",
         "resetRequired": "Die Identitätsdaten müssen vor einer Änderung ausdrücklich zurückgesetzt werden.",
@@ -5050,29 +5059,29 @@
             "server_replaced_explanation": "Orca verbindet sich als ein anderer SSH-Benutzer mit dem Host oder dessen Server wurde neu installiert. Öffne unter Einstellungen › Entfernte Orca-Server das Menü ⋯ dieses Servers und wähle „Vergessen…“. Verbinde dann den SSH-Host, um ihn mit seinem aktuellen Server zu koppeln."
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "Unterbrochene Chats öffnen, die fortgesetzt werden können",
-            "failedTooltip": "Chats, die Orca nach dem Neustart nicht fortsetzen konnte. Für Details klicken.",
-            "checkTooltip": "Chats, die Orca nach dem Neustart nicht fortsetzen konnte oder deren Fortsetzung nicht bestätigt werden konnte. Für Details klicken.",
-            "resumingTooltip": "Unterbrochene Chats werden wiederhergestellt und zum Fortfahren aufgefordert…",
-            "resumingProgressLabel": "Chats werden fortgesetzt: {{value0}}/{{value1}}",
-            "resumingProgressAria": "Chats werden fortgesetzt, {{value0}} von {{value1}} abgeschlossen. Zum Öffnen der Details klicken.",
-            "resumedTooltip": "Chats, die Orca nach dem Neustart fortgesetzt hat. Zum Anzeigen klicken.",
-            "chatsFailedLabel_one": "{{count}} Chat konnte nicht fortgesetzt werden",
-            "chatsFailedLabel_other": "{{count}} Chats konnten nicht fortgesetzt werden",
-            "chatsFailedAria_one": "{{count}} Chat konnte nicht fortgesetzt werden. Für Details klicken.",
-            "chatsFailedAria_other": "{{count}} Chats konnten nicht fortgesetzt werden. Für Details klicken.",
-            "resumedLabelCount_one": "{{count}} Chat fortgesetzt",
-            "resumedLabelCount_other": "{{count}} Chats fortgesetzt",
-            "resumedAriaCount_one": "{{count}} Chat fortgesetzt. Zum Anzeigen klicken.",
-            "resumedAriaCount_other": "{{count}} Chats fortgesetzt. Zum Anzeigen klicken.",
-            "checkLabelCount_one": "{{count}} Chat zu prüfen",
-            "checkLabelCount_other": "{{count}} Chats zu prüfen",
-            "checkAriaCount_one": "{{count}} Chat nach dem Fortsetzen zu prüfen. Für Details klicken.",
-            "checkAriaCount_other": "{{count}} Chats nach dem Fortsetzen zu prüfen. Für Details klicken.",
-            "labelCount_one": "{{count}} Chat zum Fortsetzen",
-            "labelCount_other": "{{count}} Chats zum Fortsetzen",
-            "ariaLabelCount_one": "{{count}} Chat kann fortgesetzt werden",
-            "ariaLabelCount_other": "{{count}} Chats können fortgesetzt werden"
+            "tooltip": "Unterbrochene Agenten öffnen, die fortgesetzt werden können",
+            "failedTooltip": "Agenten, die Orca nach dem Neustart nicht fortsetzen konnte. Für Details klicken.",
+            "checkTooltip": "Agenten, die Orca nach dem Neustart nicht fortsetzen konnte oder deren Fortsetzung nicht bestätigt werden konnte. Für Details klicken.",
+            "resumingTooltip": "Unterbrochene Agenten werden wiederhergestellt und zum Fortfahren aufgefordert…",
+            "resumingProgressLabel": "Agenten werden fortgesetzt: {{value0}}/{{value1}}",
+            "resumingProgressAria": "Agenten werden fortgesetzt, {{value0}} von {{value1}} abgeschlossen. Zum Öffnen der Details klicken.",
+            "resumedTooltip": "Agenten, die Orca nach dem Neustart fortgesetzt hat. Zum Anzeigen klicken.",
+            "chatsFailedLabel_one": "{{count}} Agent konnte nicht fortgesetzt werden",
+            "chatsFailedLabel_other": "{{count}} Agenten konnten nicht fortgesetzt werden",
+            "chatsFailedAria_one": "{{count}} Agent konnte nicht fortgesetzt werden. Für Details klicken.",
+            "chatsFailedAria_other": "{{count}} Agenten konnten nicht fortgesetzt werden. Für Details klicken.",
+            "resumedLabelCount_one": "{{count}} Agent fortgesetzt",
+            "resumedLabelCount_other": "{{count}} Agenten fortgesetzt",
+            "resumedAriaCount_one": "{{count}} Agent fortgesetzt. Zum Anzeigen klicken.",
+            "resumedAriaCount_other": "{{count}} Agenten fortgesetzt. Zum Anzeigen klicken.",
+            "checkLabelCount_one": "{{count}} Agent zu prüfen",
+            "checkLabelCount_other": "{{count}} Agenten zu prüfen",
+            "checkAriaCount_one": "{{count}} Agent nach dem Fortsetzen zu prüfen. Für Details klicken.",
+            "checkAriaCount_other": "{{count}} Agenten nach dem Fortsetzen zu prüfen. Für Details klicken.",
+            "labelCount_one": "{{count}} Agent zum Fortsetzen",
+            "labelCount_other": "{{count}} Agenten zum Fortsetzen",
+            "ariaLabelCount_one": "{{count}} Agent kann fortgesetzt werden",
+            "ariaLabelCount_other": "{{count}} Agenten können fortgesetzt werden"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Nutzungsanzeige ist jetzt kompakt",
@@ -17665,11 +17674,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Bisher gibt es keine Ausführungen.",
-          "13988187b3": "Tokens",
           "86a248187e": "Ausgaben",
           "149c0b49c7": "Arbeitsbereich",
           "8faaa00726": "Ausführung",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Der Ausführungsverlauf ist von diesem Host aus nicht verfügbar. Dies bedeutet nicht, dass die Automatisierung fehlgeschlagen ist oder keine Ausführungen hat."
         },
         "AutomationSchedulePicker": {
@@ -17739,7 +17746,6 @@
           "missingWorkspace": "Arbeitsbereich fehlt",
           "usageUnavailable": "Nutzungsdaten nicht verfügbar",
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
-          "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
           "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
           "retryFullOutput": "Erneut versuchen",
@@ -18008,7 +18014,6 @@
           "failed7d": "Fehlgeschlagen · 7 Tage",
           "automation": "Automatisierung",
           "triggered": "Ausgelöst",
-          "trigger": "Auslöser",
           "loading": "Ausführungen werden geladen…",
           "noRuns": "Noch keine Ausführungen",
           "emptyDescription": "Ausführungen erscheinen hier, sobald eine Automatisierung ausgelöst wurde.",
@@ -18083,7 +18088,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} ausgegeben",
+          "tokens_one": "{{tokens}} Token",
+          "tokens_other": "{{tokens}} Tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",
@@ -18963,32 +18971,32 @@
         "keyword-hooks": "Hooks"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "{{count}} Chat auf {{machine}} wird fortgesetzt…",
-        "resumingOn_other": "{{count}} Chats auf {{machine}} werden fortgesetzt…",
-        "resuming_one": "{{count}} Chat wird fortgesetzt…",
-        "resuming_other": "{{count}} Chats werden fortgesetzt…",
-        "resumedOn_one": "{{count}} Chat auf {{machine}} fortgesetzt.",
-        "resumedOn_other": "{{count}} Chats auf {{machine}} fortgesetzt.",
-        "resumedUpdate_one": "{{count}} Chat nach dem Update fortgesetzt.",
-        "resumedUpdate_other": "{{count}} Chats nach dem Update fortgesetzt.",
-        "resumedRestart_one": "{{count}} Chat nach dem Neustart fortgesetzt.",
-        "resumedRestart_other": "{{count}} Chats nach dem Neustart fortgesetzt.",
-        "partial_one": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} braucht dich.",
-        "partial_other": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} brauchen dich.",
-        "stoppedOn_one": "{{count}} Chat auf {{machine}} angehalten.",
-        "stoppedOn_other": "{{count}} Chats auf {{machine}} angehalten.",
-        "stoppedUpdate_one": "{{count}} Chat beim Orca-Update angehalten.",
-        "stoppedUpdate_other": "{{count}} Chats beim Orca-Update angehalten.",
-        "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
-        "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
+        "resumingOn_one": "{{count}} Agent auf {{machine}} wird fortgesetzt…",
+        "resumingOn_other": "{{count}} Agenten auf {{machine}} werden fortgesetzt…",
+        "resuming_one": "{{count}} Agent wird fortgesetzt…",
+        "resuming_other": "{{count}} Agenten werden fortgesetzt…",
+        "resumedOn_one": "{{count}} Agent auf {{machine}} fortgesetzt.",
+        "resumedOn_other": "{{count}} Agenten auf {{machine}} fortgesetzt.",
+        "resumedUpdate_one": "{{count}} Agent nach dem Update fortgesetzt.",
+        "resumedUpdate_other": "{{count}} Agenten nach dem Update fortgesetzt.",
+        "resumedRestart_one": "{{count}} Agent nach dem Neustart fortgesetzt.",
+        "resumedRestart_other": "{{count}} Agenten nach dem Neustart fortgesetzt.",
+        "partial_one": "{{resumed}} von {{total}} Agenten fortgesetzt. {{count}} braucht dich.",
+        "partial_other": "{{resumed}} von {{total}} Agenten fortgesetzt. {{count}} brauchen dich.",
+        "stoppedOn_one": "{{count}} Agent auf {{machine}} angehalten.",
+        "stoppedOn_other": "{{count}} Agenten auf {{machine}} angehalten.",
+        "stoppedUpdate_one": "{{count}} Agent beim Orca-Update angehalten.",
+        "stoppedUpdate_other": "{{count}} Agenten beim Orca-Update angehalten.",
+        "stoppedRestart_one": "{{count}} Agent beim Beenden von Orca angehalten.",
+        "stoppedRestart_other": "{{count}} Agenten beim Beenden von Orca angehalten.",
         "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",
         "close": "Schließen",
-        "listLabel": "Chats",
-        "untitled": "Chat ohne Titel",
-        "willAsk": "Orca bittet die Chats, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
-        "asked": "Orca hat die Chats gebeten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
+        "listLabel": "Agenten",
+        "untitled": "Agent ohne Titel",
+        "willAsk": "Orca bittet die Agenten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
+        "asked": "Orca hat die Agenten gebeten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
         "resumedAutomatically": "Automatisch fortgesetzt.",
         "changeInSettings": "In den Einstellungen ändern",
         "dismissAll": "Alle verwerfen",
@@ -19985,6 +19993,7 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
+        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
@@ -20349,9 +20358,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Alpha-Bereinigung prüfen"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -21806,7 +21812,8 @@
         "agentNotSupported": "Agent nicht unterstützt"
       },
       "consentTranscriptIndex": "Die Suche berücksichtigt Sitzungsdetails und Nachrichtenvorschauen. Um vollständige Unterhaltungen zu durchsuchen, die Volltextsuche aktivieren (indexiert lokale Transkripte, ohne Schwärzung). Gekoppelte Geräte können sie ebenfalls durchsuchen.",
-      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen."
+      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen.",
+      "titleMatchesOnly": "Keine Volltexttreffer. Angezeigt werden Sitzungen, deren Titel oder Details passen."
     }
   },
   "sessionHistory": {
@@ -23864,19 +23871,20 @@
     "upcoming": {
       "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
       "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
-      "every2h": "alle 2 Stunden",
-      "every4h": "alle 4 Stunden",
       "lookFirst": "Nach deinem ersten Chat · danach {{every}}",
-      "mornings": "jeden Morgen",
       "tidyUp": "Gedächtnis aufräumen",
-      "twiceDaily": "zweimal täglich",
       "lastNeededSignIn": "Die letzte Ausführung wurde wegen einer Anmeldung gestoppt",
       "stopped": "Gestoppt",
       "lookAroundSettings": "Einstellungen zum Umsehen",
       "dueNow": "Jetzt fällig",
       "runsEvery": "Läuft {{every}}",
       "tidySettings": "Einstellungen zum Aufräumen des Gedächtnisses",
-      "needsSignIn": "Anmeldung erforderlich"
+      "needsSignIn": "Anmeldung erforderlich",
+      "every4hWindow": "{{from}} bis {{to}}, alle 4 Stunden",
+      "every2hWindow": "{{from}} bis {{to}}, alle 2 Stunden",
+      "twiceDailyAt": "zweimal täglich, {{first}} und {{second}}",
+      "morningsAt": "jeden Morgen um {{time}}",
+      "weekdays": "werktags, {{schedule}}"
     },
     "palette": {
       "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",

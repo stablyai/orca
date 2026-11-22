@@ -20,6 +20,7 @@ import {
   endAdoptedTurn,
   endMirroredTurn,
   endRepliedTurn,
+  legacyTurnWords,
   readOnce,
   turnFailure,
   botTurnReply,
@@ -314,6 +315,7 @@ export class ChatTurns {
       if (replied === 'told') {
         return
       }
+      const words = legacyTurnWords(turn, linked.link, replied, reply)
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
@@ -335,7 +337,7 @@ export class ChatTurns {
         ...ended,
         ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(reply ? { lastAssistantMessage: reply } : {}),
+        ...(words ? { lastAssistantMessage: words } : {}),
         ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })

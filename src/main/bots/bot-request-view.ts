@@ -15,6 +15,8 @@ export type BotRequestRecord = {
   fromBotName: string | null
   /** Sent by a worker that bot started, for it; the answer goes to the worker. */
   fromWorker?: boolean
+  /** Sent by an agent on a server this computer is paired to, named as this computer names it. */
+  fromPairedServer?: string
   toBotId: string
   toBotName: string
   purpose: BotRequestPurpose
@@ -73,8 +75,11 @@ const askersOf = (record: BotRequestRecord): string =>
 
 /** Who sent it, as the receiving bot reads it. */
 export function botRequestSenderName(
-  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker'>
+  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedServer'>
 ): string {
+  if (record.fromPairedServer !== undefined) {
+    return `an agent on ${record.fromPairedServer || 'a server'} (paired server)`
+  }
   if (!record.fromBotName) {
     return "your owner's agent"
   }
@@ -231,7 +236,8 @@ export const BOT_REQUEST_DROP_REASONS = [
   'deleted',
   'new-chat',
   'chat-deleted',
-  'withdrawn'
+  'withdrawn',
+  'unpaired'
 ] as const
 export type BotRequestNoticeWhy =
   | 'ended'
@@ -267,7 +273,9 @@ export function botRequestUnansweredText(
             ? `${bot}'s owner removed your ${record.purpose} before ${bot} read it`
             : why === 'chat-deleted'
               ? `${bot}'s chat was deleted before it read your ${record.purpose}`
-              : `${bot} was ${why} before it read your ${record.purpose}`
+              : why === 'unpaired'
+                ? `${bot}'s owner unpaired its computer from this one before ${bot} answered your ${record.purpose}`
+                : `${bot} was ${why} before it read your ${record.purpose}`
   return record.fromWorker
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`

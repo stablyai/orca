@@ -9,6 +9,7 @@ import { useNativeChatDraftEvents } from './editor/use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from '../drafts/use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatComposerMentions } from '../native-chat-composer-room'
+import { useNativeChatRoomSend } from '../native-chat-room-send'
 import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
@@ -56,7 +57,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -217,22 +217,23 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
-      readTerminalScreen,
       paneKey,
       structuredTransport
     })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 
-    const sendStructured = useNativeChatStructuredComposerSend({
-      agent,
-      draftScopeKey,
-      imageAttachments,
-      structuredTransport,
-      isComposing: imeEnterGesture.isComposing,
-      clearSkillOrigin,
-      setDraft,
-      setCaret
-    })
+    const sendStructured = useNativeChatRoomSend(
+      useNativeChatStructuredComposerSend({
+        agent,
+        draftScopeKey,
+        imageAttachments,
+        structuredTransport,
+        isComposing: imeEnterGesture.isComposing,
+        clearSkillOrigin,
+        setDraft,
+        setCaret
+      })
+    )
 
     const ptyCommandRouting = {
       ...ptyCommandTarget,

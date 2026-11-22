@@ -9,6 +9,10 @@ export const PageZoom = BrowserTarget.extend({
   direction: z.enum(['in', 'out', 'reset'])
 })
 
+export const SiteColorScheme = BrowserTarget.extend({
+  colorScheme: z.enum(['light', 'dark']).nullable()
+})
+
 export const CertificateProceed = BrowserTarget.extend({
   challengeId: requiredString('Missing required challengeId')
 })

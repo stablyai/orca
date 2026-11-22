@@ -1,5 +1,5 @@
 // The Items tab's list part: the bot's items grouped, Orca's own asks leading Needs you whatever the item
-// read says, then what it says of items: loading, failed, a new bot, all clear, or nothing matching.
+// read says, then what it says of items: all clear above them; loading, failed, a new bot or nothing matching below.
 import { ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -11,6 +11,9 @@ import {
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
+import { cn } from '@/lib/class-names'
+import { BotAvatar } from '../BotAvatar'
+import { ALL_CLEAR_PICTURE, BotItemsAllClear } from './BotItemsAllClear'
 import { BotItemsList } from './BotItemsList'
 import { BotItemsLoading } from './BotItemsLoading'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
@@ -39,7 +42,8 @@ export function BotItemsSection({
   botRead,
   asks,
   offline,
-  focusFallback
+  focusFallback,
+  scroller
 }: {
   bot: Bot
   list: BotItemsShownList
@@ -57,6 +61,8 @@ export function BotItemsSection({
   asks: BotNeedsYouAsks
   offline: boolean
   focusFallback: React.RefObject<HTMLElement | null>
+  /** The panel's scroller, for windowing long groups. */
+  scroller?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const { items, shown, staleDays } = list
@@ -101,21 +107,36 @@ export function BotItemsSection({
     if (asking) {
       return null
     }
-    if (filtered) {
-      return shown.length === 0 ? (
-        <FilteredEmpty onClear={() => onFilter(BOT_ITEM_NO_FILTER)} />
-      ) : null
-    }
-    return groups.needs_you.length === 0 && groups.working.length === 0 ? (
-      <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-        {t('bots.items.empty.allClear', 'Nothing needs you and nothing is running.')}
-      </p>
+    return filtered && shown.length === 0 ? (
+      <FilteredEmpty onClear={() => onFilter(BOT_ITEM_NO_FILTER)} />
     ) : null
   }
+  // Paused and offline say so elsewhere; the line leads the folded sections rather than trailing them.
+  const allClear =
+    read !== null &&
+    items.length > 0 &&
+    !asking &&
+    !filtered &&
+    !bot.paused &&
+    !offline &&
+    groups.needs_you.length === 0 &&
+    groups.working.length === 0
   return (
     <>
       {/* Mounted in every read state, so an ask keeps its place and focus as items arrive. */}
       <BotItemsList
+        allClear={
+          allClear ? (
+            <BotItemsAllClear
+              picture={
+                <BotAvatar
+                  bot={bot}
+                  className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
+                />
+              }
+            />
+          ) : null
+        }
         bot={bot}
         groups={groups}
         seenEventId={seenEventId ?? ''}
@@ -128,6 +149,7 @@ export function BotItemsSection({
         asks={asks}
         offline={offline}
         focusFallback={focusFallback}
+        scroller={scroller}
       />
       {itemsNote()}
     </>

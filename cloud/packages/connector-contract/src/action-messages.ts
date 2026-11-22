@@ -183,6 +183,9 @@ export const ConnectorUploadSchema = z
 export type ConnectorUpload = z.infer<typeof ConnectorUploadSchema>
 // The most files one `orca bot reply` posts with its words.
 export const CONNECTOR_REPLY_MAX_FILES = 10
+// The most buttons one `orca bot reply` offers, and the longest label each takes (Slack's own cap).
+export const CONNECTOR_REPLY_MAX_CHOICES = 10
+export const CONNECTOR_REPLY_CHOICE_MAX_CHARS = 75
 
 const SEARCH_NAME = z.string().trim().min(1).max(100)
 // state: a state's name, or `open` for any not done or canceled.
@@ -240,6 +243,13 @@ export const ConnectorActionArgsSchema = z
     // reply and attach: the postIds of files staged for it, posted with its text as one post. attach
     // takes them only from a cloud listing `files.direct`.
     files: z.array(z.string().min(1).max(128)).min(1).max(CONNECTOR_REPLY_MAX_FILES).optional(),
+    // reply: a button for each under its text (Slack). A press comes back to the bot as the presser's
+    // next message in the thread. Sent only to a cloud listing `reply.choices`.
+    choices: z
+      .array(z.string().trim().min(1).max(CONNECTOR_REPLY_CHOICE_MAX_CHARS))
+      .min(1)
+      .max(CONNECTOR_REPLY_MAX_CHOICES)
+      .optional(),
     // read: the id of a file on the message read, to download it.
     download: z.string().min(1).max(64).optional(),
     // read, with download: answer a link the machine streams the bytes from, not the bytes inline.

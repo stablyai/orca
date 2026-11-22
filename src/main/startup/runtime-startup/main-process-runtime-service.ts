@@ -3,6 +3,8 @@ import {
   installDesktopWorkspaceVmWaker,
   configureDesktopCloudServices
 } from '../../runtime/construction/desktop-workspace-services'
+import { setBeforeRuntimeEnvironmentRemoval } from '../../ipc/runtime-environments/catalog/runtime-environment-removal-hooks'
+import { settlePairedServerAsksOnRemoval } from '../../runtime/orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import { wireRecipeWorkspaceRemoval } from '../../ephemeral-vm/recipe-workspace-removal-wiring'
 import { wireGitHubIssueLinkTitleFill } from '../../github/workspace-links/github-issue-link-title-wiring'
 import {
@@ -90,8 +92,6 @@ export function initializeMainProcessRuntime(
     servedOrcaProfileId: deps.servedOrcaProfileId,
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
-    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
-      agentHookServer.retireProcessAuthority(paneKey, options),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
@@ -160,6 +160,9 @@ export function initializeMainProcessRuntime(
   runtime.rehydrateClientHostedBrowserPages()
   deps.attachBrowserHost(runtime)
   runtime.startupWorkerAuthority.begin()
+  setBeforeRuntimeEnvironmentRemoval((environmentId) =>
+    settlePairedServerAsksOnRemoval(runtime, environmentId)
+  )
   return runtime
 }
 
