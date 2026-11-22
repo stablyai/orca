@@ -38,6 +38,7 @@ import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrenc
 import {
   isSkillRootUnavailableError,
   SkillScanCoalescer,
+  throwIfSkillRootUnreadable,
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
@@ -104,7 +105,8 @@ async function pathExists(pathValue: string): Promise<boolean> {
   try {
     await stat(pathValue)
     return true
-  } catch {
+  } catch (error) {
+    throwIfSkillRootUnreadable(error)
     return false
   }
 }

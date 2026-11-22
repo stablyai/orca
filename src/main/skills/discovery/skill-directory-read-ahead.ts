@@ -7,7 +7,12 @@ const MAX_IN_FLIGHT_DIRECTORY_READS = 3
 // Finished listings the walk has not claimed yet; bounds memory on wide trees.
 const MAX_UNCLAIMED_DIRECTORY_READS = 512
 
-export type DirectoryRead = { resolvedPath: string | null; entries: Dirent[] | null }
+export type DirectoryRead = {
+  resolvedPath: string | null
+  entries: Dirent[] | null
+  realpathError?: unknown
+  readdirError?: unknown
+}
 
 /** A directory's place in the walk: entry indexes from the root. Lexical order is walk order. */
 export type WalkOrder = readonly number[]
@@ -32,11 +37,25 @@ function compareWalkOrder(left: WalkOrder, right: WalkOrder): number {
 }
 
 async function readDirectory(ticket: Ticket): Promise<DirectoryRead> {
+  let realpathError: unknown
+  let readdirError: unknown
   const [resolvedPath, entries] = await Promise.all([
-    ticket.resolvedPath ?? realpath(ticket.dirPath).catch(() => null),
-    readdir(ticket.dirPath, { withFileTypes: true }).catch(() => null)
+    ticket.resolvedPath ??
+      realpath(ticket.dirPath).catch((error: unknown) => {
+        realpathError = error
+        return null
+      }),
+    readdir(ticket.dirPath, { withFileTypes: true }).catch((error: unknown) => {
+      readdirError = error
+      return null
+    })
   ])
-  return { resolvedPath, entries }
+  return {
+    resolvedPath,
+    entries,
+    ...(realpathError !== undefined ? { realpathError } : {}),
+    ...(readdirError !== undefined ? { readdirError } : {})
+  }
 }
 
 export type DirectoryReadAhead = {
@@ -65,7 +84,7 @@ export function createDirectoryReadAhead(args: {
     inFlight += 1
     const started = readDirectory(ticket).then((read) => {
       inFlight -= 1
-      if (read.entries && !ticket.dropped && !signal?.aborted) {
+      if (read.resolvedPath !== null && read.entries && !ticket.dropped && !signal?.aborted) {
         queueChildren(ticket, read)
       }
       pump()

@@ -24,12 +24,49 @@ export class SkillScanShedError extends Error {
   }
 }
 
-/** Shed/abort/timeout means unavailable. Name matching is narrow because local filesystem errors are caught inside scans; only their signal errors escape. */
+/** Root could not be read due to a filesystem access or I/O error rather than confirmed absence. */
+export class SkillRootUnreadableError extends Error {
+  readonly code?: string
+
+  constructor(cause: unknown) {
+    const code =
+      typeof cause === 'object' &&
+      cause !== null &&
+      'code' in cause &&
+      typeof cause.code === 'string'
+        ? cause.code
+        : undefined
+    super(code ? `Skill root could not be read (${code})` : 'Skill root could not be read', {
+      cause
+    })
+    this.name = 'SkillRootUnreadableError'
+    this.code = code
+  }
+}
+
+/** Only ENOENT and ENOTDIR confirm a skill root is absent rather than unreadable. */
+function isSkillRootMissingError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return false
+  }
+  return error.code === 'ENOENT' || error.code === 'ENOTDIR'
+}
+
+/** Shed/abort/timeout or an unreadable root means unavailable, never missing or empty. */
 export function isSkillRootUnavailableError(error: unknown): boolean {
   return (
     error instanceof SkillScanShedError ||
+    error instanceof SkillRootUnreadableError ||
     (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
   )
+}
+
+/** Throws an unavailable-root error unless `error` confirms the root is absent (ENOENT/ENOTDIR). */
+export function throwIfSkillRootUnreadable(error: unknown): void {
+  if (isSkillRootMissingError(error)) {
+    return
+  }
+  throw isSkillRootUnavailableError(error) ? error : new SkillRootUnreadableError(error)
 }
 
 /** Coalesce scans and optionally retain results. Keys remain case-sensitive so distinct Linux paths cannot alias. */

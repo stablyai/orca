@@ -6,6 +6,7 @@ import {
   isSkillStagingEntryName
 } from '../filesystem/skill-transaction-staging-names'
 import { createDirectoryReadAhead, type WalkOrder } from './skill-directory-read-ahead'
+import { throwIfSkillRootUnreadable } from './skill-scan-coalescer'
 
 export const SKILL_FILE_NAME = 'SKILL.md'
 
@@ -82,13 +83,34 @@ export async function findSkillFiles(
   async function visit(dirPath: string, order: WalkOrder): Promise<void> {
     // Reject on abort; a cached truncated listing would falsely report skills removed.
     signal?.throwIfAborted()
-    const { resolvedPath: resolvedDirPath, entries } = await readAhead.claim(dirPath, order)
-    if (resolvedDirPath === null || visitedDirectoryPaths.has(resolvedDirPath)) {
+    const {
+      resolvedPath: resolvedDirPath,
+      entries,
+      realpathError,
+      readdirError
+    } = await readAhead.claim(dirPath, order)
+    const isRoot = order.length === 0
+    if (resolvedDirPath === null) {
+      readAhead.drop(dirPath)
+      if (isRoot) {
+        if (realpathError !== undefined) {
+          throwIfSkillRootUnreadable(realpathError)
+        }
+        if (readdirError !== undefined) {
+          throwIfSkillRootUnreadable(readdirError)
+        }
+      }
+      return
+    }
+    if (visitedDirectoryPaths.has(resolvedDirPath)) {
       readAhead.drop(dirPath)
       return
     }
     visitedDirectoryPaths.add(resolvedDirPath)
     if (!entries) {
+      if (isRoot && readdirError !== undefined) {
+        throwIfSkillRootUnreadable(readdirError)
+      }
       return
     }
     const childIndexes = new Set(enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options))

@@ -1,3 +1,4 @@
+import type * as FsPromises from 'node:fs/promises'
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +11,36 @@ import '../../../shared/agent-launch/catalog/tui-agent-config'
 import type * as SkillRootFileWalk from './skill-root-file-walk'
 
 let unavailableRootPath: string | null = null
+let fsFault: { op: 'stat' | 'readdir' | 'realpath'; path: string; code: string } | null = null
+
+function makeFsError(code: string, op: string, path: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(`${code}: ${op} ${path}`), { code })
+}
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    stat: async (path: Parameters<typeof actual.stat>[0], ...rest: unknown[]) => {
+      if (fsFault?.op === 'stat' && String(path) === fsFault.path) {
+        throw makeFsError(fsFault.code, 'stat', String(path))
+      }
+      return (actual.stat as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
+    },
+    readdir: async (path: Parameters<typeof actual.readdir>[0], ...rest: unknown[]) => {
+      if (fsFault?.op === 'readdir' && String(path) === fsFault.path) {
+        throw makeFsError(fsFault.code, 'readdir', String(path))
+      }
+      return (actual.readdir as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
+    },
+    realpath: async (path: Parameters<typeof actual.realpath>[0], ...rest: unknown[]) => {
+      if (fsFault?.op === 'realpath' && String(path) === fsFault.path) {
+        throw makeFsError(fsFault.code, 'realpath', String(path))
+      }
+      return (actual.realpath as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
+    }
+  }
+})
 
 vi.mock('./skill-root-file-walk', async (importOriginal) => {
   const actual = await importOriginal<typeof SkillRootFileWalk>()
@@ -41,6 +72,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unavailableRootPath = null
+  fsFault = null
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
@@ -107,6 +139,79 @@ describe('skill discovery', () => {
     })
 
     expect(result.skills.map((skill) => skill.name)).toEqual([])
+  })
+
+  it.each([
+    { op: 'stat' as const, code: 'EACCES' },
+    { op: 'stat' as const, code: 'EIO' },
+    { op: 'readdir' as const, code: 'EACCES' },
+    { op: 'realpath' as const, code: 'EACCES' }
+  ])(
+    'marks a root unavailable and retains its last skills when root $op throws $code',
+    async ({ op, code }) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+      const home = join(root, 'home')
+      const skillRoot = join(home, '.omp', 'agent', 'skills')
+      await mkdir(join(skillRoot, 'planning'), { recursive: true })
+      await writeFile(join(skillRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+
+      const first = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+      expect(first.skills.map((skill) => skill.name)).toEqual(['Planning'])
+
+      fsFault = { op, path: skillRoot, code }
+      const refreshed = await discoverSkills({
+        homeDir: home,
+        cwd: join(root, 'missing-cwd'),
+        refresh: true
+      })
+
+      expect(refreshed.skills.map((skill) => skill.name)).toEqual(['Planning'])
+      expect(refreshed.sources.find((source) => source.path === skillRoot)).toMatchObject({
+        exists: true,
+        skippedReason: 'unavailable'
+      })
+    }
+  )
+
+  it('keeps missing and empty roots distinct from unreadable roots without resurrecting removed skills', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillRoot = join(home, '.omp', 'agent', 'skills')
+    const emptyRoot = join(home, '.codex', 'skills')
+    await mkdir(join(skillRoot, 'planning'), { recursive: true })
+    await mkdir(emptyRoot, { recursive: true })
+    await writeFile(join(skillRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+    await rm(skillRoot, { recursive: true })
+
+    const afterDelete = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+    expect(afterDelete.skills).toEqual([])
+    expect(afterDelete.sources.find((source) => source.path === skillRoot)).toMatchObject({
+      exists: false,
+      skippedReason: 'missing'
+    })
+    expect(afterDelete.sources.find((source) => source.path === emptyRoot)).toMatchObject({
+      exists: true,
+      skippedReason: undefined
+    })
+
+    fsFault = { op: 'stat', path: skillRoot, code: 'EACCES' }
+    const unreadableAfterDelete = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+    expect(unreadableAfterDelete.skills).toEqual([])
+    expect(unreadableAfterDelete.sources.find((source) => source.path === skillRoot)).toMatchObject(
+      {
+        skippedReason: 'unavailable'
+      }
+    )
   })
 
   it('filters discovery by requested directory name and source kind', async () => {
