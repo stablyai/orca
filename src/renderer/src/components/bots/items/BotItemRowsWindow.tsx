@@ -457,9 +457,11 @@ export function BotItemRowsWindow({
           height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
         />
       </div>
-      {/* Shift+Tab from below the group lands here while focus is outside it: on to the last row. */}
+      {/* Shift+Tab from below the group lands here while focus is outside it: on to the last row. It
+          takes back the section's gap it adds. */}
       {all || count === 0 ? null : (
         <div
+          className="-mt-0.5"
           tabIndex={focusWithin ? -1 : 0}
           onFocus={() => setTarget({ uid: items[count - 1]!.uid, at: count - 1, edge: 'last' })}
         />
