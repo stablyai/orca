@@ -16,7 +16,11 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
-import { isClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import {
+  clientEnvironmentId,
+  clientInstallationOf
+} from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { requireListeningClient } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
@@ -89,10 +93,19 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
-  if (isClientEnvironment(environmentId)) {
+  const installation = clientInstallationOf(environmentId)
+  if (installation !== null) {
+    // Under the pairing the computer pulls with now; after a re-pair the old conversation is never pulled.
+    const client = requireListeningClient(runtime, installation, 'No reply was sent.')
+    const current = db.openHomePeerMailConversation({
+      environmentId: clientEnvironmentId(client.deviceId, client.installationId),
+      peerFingerprint: client.fingerprint,
+      localParty: conversation.local_party ?? '',
+      localPaneKey: conversation.local_pane_key
+    })
     // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
     queueClientItem(db, {
-      conversationId: conversation.conversation_id,
+      conversationId: current.conversation_id,
       messageId: id,
       kind: 'client_reply',
       payload: {

@@ -21,3 +21,12 @@ export function clientDeviceEnvironmentPattern(deviceId: string): string {
   const escaped = deviceId.replace(/[\\%_]/g, '\\$&')
   return `${CLIENT_ENVIRONMENT_PREFIX}${escaped}/%`
 }
+
+/** The installation a paired computer's environment names, which outlives a re-pair. */
+export function clientInstallationOf(environmentId: string): string | null {
+  if (!isClientEnvironment(environmentId)) {
+    return null
+  }
+  const slash = environmentId.lastIndexOf('/')
+  return slash === -1 ? null : environmentId.slice(slash + 1)
+}

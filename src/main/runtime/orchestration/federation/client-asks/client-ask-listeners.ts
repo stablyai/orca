@@ -3,6 +3,7 @@
 // since it pulls again at once. Nothing is timed, and a server restart starts with none.
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { OrchestrationError } from '../../orchestration-error'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -47,6 +48,16 @@ export function clientAskPullStarted(
       listeners.delete(key)
     }
     return null
+  }
+  // The pairing it replaced pulls no more, so that pairing's last session stops counting.
+  for (const [other, listener] of listeners) {
+    if (
+      pull.previousPairing !== undefined &&
+      listener.fingerprint === pull.previousPairing &&
+      listener.installationId === pull.installationId
+    ) {
+      listeners.delete(other)
+    }
   }
   const same = current?.session === pull.session
   listeners.set(key, {
@@ -97,4 +108,29 @@ export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: s
       listeners.delete(key)
     }
   }
+}
+
+/** The one listening computer a selector names; refused when none is connected or two share it. */
+export function requireListeningClient(
+  owner: ClientAskListenerOwner,
+  selector: string,
+  nothingDone: string
+): ClientAskListener {
+  const listening = listeningClients(owner, selector)
+  if (listening.length > 1) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Two paired computers share the id ${selector}. ${nothingDone}`,
+      { effectsApplied: false }
+    )
+  }
+  const [client] = listening
+  if (!client) {
+    throw new OrchestrationError(
+      'remote_runtime_unavailable',
+      `${selector} is offline: it isn't connected to this Orca right now. ${nothingDone}`,
+      { effectsApplied: false }
+    )
+  }
+  return client
 }

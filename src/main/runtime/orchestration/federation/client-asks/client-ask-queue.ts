@@ -25,27 +25,38 @@ export function queueClientItem(
 }
 
 /** What that computer hasn't taken under an ended pairing will never be taken. */
-function dropQueuedClientItems(db: OrchestrationDb, environmentId: string): void {
+function dropQueuedClientItems(
+  db: OrchestrationDb,
+  environmentId: string,
+  currentPairing: string | null
+): void {
   db.db
     .prepare(
       `UPDATE federation_relay_items SET acked_at = datetime('now')
        WHERE direction = 'to_worker' AND acked_at IS NULL AND dispatch_id IN (
          SELECT conversation_id FROM peer_mail_conversations
-         WHERE role = 'home' AND environment_id = ?)`
+         WHERE role = 'home' AND environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2))`
     )
-    .run(environmentId)
+    .run(environmentId, currentPairing)
 }
 
 function endClientPairings(
   runtime: OrcaRuntimeService,
   environmentIds: readonly string[],
   serverName: string,
-  reason: string
+  reason: string,
+  // Kept when the computer still pulls under it: only older pairings' mail is lost.
+  currentPairing: string | null = null
 ): void {
   const db = runtime.getOrchestrationDb()
   for (const environmentId of environmentIds) {
-    tellUnpairedPeerQuestions(runtime, db, { environmentId, serverName, reason })
-    dropQueuedClientItems(db, environmentId)
+    tellUnpairedPeerQuestions(runtime, db, {
+      environmentId,
+      serverName,
+      reason,
+      ...(currentPairing ? { currentPairing } : {})
+    })
+    dropQueuedClientItems(db, environmentId, currentPairing)
   }
 }
 
@@ -78,7 +89,8 @@ export function settleReplacedClientPairing(
     runtime,
     environmentIds,
     params.name,
-    `The pairing with ${params.name} was re-made.`
+    `The pairing with ${params.name} was re-made.`,
+    params.currentFingerprint
   )
 }
 

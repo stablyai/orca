@@ -14,7 +14,7 @@ import {
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 import { clientEnvironmentId } from '../../../../orchestration/federation/client-asks/client-ask-environment'
-import { listeningClients } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { requireListeningClient } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import { clientAskRootSession } from '../../../../orchestration/federation/client-asks/client-ask-root-session'
 import {
@@ -70,22 +70,7 @@ export function sendClientAsk(args: {
     )
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
-  const listening = listeningClients(runtime, params.onClient)
-  if (listening.length > 1) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `Two paired computers share the id ${params.onClient}. Nothing was sent.`,
-      NOTHING_SENT
-    )
-  }
-  const [client] = listening
-  if (!client) {
-    throw new OrchestrationError(
-      'remote_runtime_unavailable',
-      `${params.onClient} is offline: it isn't connected to this Orca right now. Nothing was sent.`,
-      NOTHING_SENT
-    )
-  }
+  const client = requireListeningClient(runtime, params.onClient, 'Nothing was sent.')
   const db = runtime.getOrchestrationDb()
   const environmentId = clientEnvironmentId(client.deviceId, client.installationId)
   const conversation = db.openHomePeerMailConversation({

@@ -283,6 +283,84 @@ describe('agents here messaging agents on a paired computer', () => {
     expect(JSON.parse(items[0]!.payload)).toMatchObject({ to: 'bot:Literature', body: 'Thanks.' })
   })
 
+  it('on a re-pair that keeps its device, tells only questions of the older pairing', async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const repaired = { deviceId: 'device_a', fingerprint: 'fp_a2' }
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_2') },
+      repaired
+    )
+    await ask({ type: 'question', subject: 'Second question' })
+
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_3', { previousPairing: 'fp_a' }) },
+      repaired
+    )
+
+    expect(told()).toHaveLength(1)
+    const pending = await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_3') },
+      repaired
+    )
+    expect(
+      Pulled.parse(pending.ok ? pending.result : null).items.map(
+        (item) => JSON.parse(item.payload).subject
+      )
+    ).toEqual(['Second question'])
+  })
+
+  it('queues a reply under the pairing the computer pulls with after a re-pair', async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const [item] = (await pull()).items
+    await fromClient('orchestration.peerMailReturn', {
+      items: [
+        {
+          conversationId: item!.conversationId,
+          sequence: 1,
+          messageId: 'msg_answer_2',
+          kind: 'peer_mail',
+          payload: JSON.stringify({
+            senderLabel: 'Literature on Client A',
+            fromAddress: 'bot:Literature',
+            subject: 'Re: Check the citations',
+            body: 'All real.',
+            threadId: item!.messageId
+          })
+        }
+      ]
+    })
+    const [answer] = db.getUnreadMessages('term_s')
+    const repaired = { deviceId: 'device_a2', fingerprint: 'fp_a2' }
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_2', { previousPairing: 'fp_a' }) },
+      repaired
+    )
+
+    await local('orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_s' })
+
+    const pulled = await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_2') },
+      repaired
+    )
+    expect(
+      Pulled.parse(pulled.ok ? pulled.result : null).items.map((queued) => queued.kind)
+    ).toEqual(['client_reply'])
+  })
+
+  it('refuses an empty computer instead of sending the mail here', async () => {
+    const sent = await ask({ onClient: '' })
+
+    expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(db.getInbox(10)).toEqual([])
+  })
+
   it('never starts a pull loop toward a paired computer', async () => {
     await pull()
     await ask()
