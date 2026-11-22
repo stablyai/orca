@@ -88,15 +88,6 @@ export async function configureWslHostsGate(facts: {
   publishWslHostsGateState(process.env, state)
 }
 
-export function resetWslHostsGateForTests(): void {
-  promoted = null
-  noteWslHostsServeOnly(false)
-  notePolicy(null, undefined)
-  publishWslHostsGateState(process.env, null)
-  liveBlockNoted = false
-  newWorkListeners.clear()
-}
-
 export function wslHostsGateState(): WslHostsGateState {
   return resolveWslHostsGateState({
     gateOpen: wslHostsGateOpen(),

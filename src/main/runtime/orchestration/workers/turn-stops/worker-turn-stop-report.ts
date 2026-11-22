@@ -19,6 +19,8 @@ export type WorkerTurnStopReason =
   | 'exited'
   | 'lost'
   | 'start-unconfirmed'
+  | 'start-blocked'
+  | 'never-ready'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -41,6 +43,9 @@ export type WorkerTurnStop = {
   leftover?: string
   /** A start that never got a terminal has no output to read. */
   neverStarted?: true
+  /** For `start-blocked`: the screen a person must answer, and when the start fails if its agent
+   *  is still not ready. */
+  blockedStart?: { screen: string; readyBy: number }
   /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
   startSurface?: 'terminal' | 'chat'
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
@@ -52,6 +57,10 @@ export type WorkerTurnStop = {
 export type WorkerRequestError = {
   text: string
   detail?: string
+  /** The shared failure kind, when the failure was typed. */
+  kind?: string
+  /** A terminal's failure, held back like its other rests while it waits for mail; a chat's is not. */
+  heldByWaits?: true
   /** What the coordinator's mail carries about the failed request. */
   facts: Record<string, unknown>
 }
@@ -75,14 +84,18 @@ export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }
 
-/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate. */
+/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
+ *  A failed request a chat showed never is. */
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt'>,
+  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError'>,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
+  if (stop.requestError && !stop.requestError.heldByWaits) {
+    return false
+  }
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
     (stop.reason === 'finished' &&
@@ -105,7 +118,9 @@ export function sendWorkerReport(
   const dispatchId = workerTurnStopDispatchId(target)
   const subject = stop.approval
     ? 'Worker is waiting for permission'
-    : WORKER_STOP_SUBJECTS[stop.reason]
+    : stop.requestError?.kind === 'usageLimitReached'
+      ? 'Worker hit its usage limit'
+      : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,
@@ -145,7 +160,7 @@ export function sendWorkerReport(
   return sent
 }
 
-type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
+export type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
 
 /** Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox. */
 function mailWorkerReport(
@@ -190,25 +205,35 @@ function relayWorkerReport(
   { id, subject, payload }: WorkerReportMail,
   deps: WorkerTurnStopReportDeps
 ): true {
+  const body = describeStop(stop, {
+    task: attachment.task_id,
+    taskId: attachment.task_id,
+    dispatchId: attachment.dispatch_id,
+    coordinatorApprovals: deps.coordinatorApprovals?.() === true
+  })
+  return relayWorkerMail(db, attachment, { id, from: stop.from, subject, body, payload })
+}
+
+/** Queues worker mail for its Run home, which imports it into the coordinator's Run and wakes it. */
+export function relayWorkerMail(
+  db: OrchestrationDb,
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'>,
+  mail: WorkerReportMail & { from: string; body: string; notice?: true }
+): true {
   db.enqueueFederationRelay({
     dispatchId: attachment.dispatch_id,
     direction: 'to_home',
     kind: 'escalation',
-    messageId: id,
+    messageId: mail.id,
     payload: JSON.stringify({
-      from: stop.from,
-      subject,
-      body: describeStop(stop, {
-        task: attachment.task_id,
-        taskId: attachment.task_id,
-        dispatchId: attachment.dispatch_id,
-        coordinatorApprovals: deps.coordinatorApprovals?.() === true
-      }),
-      type: 'escalation',
-      priority: 'high',
+      from: mail.from,
+      subject: mail.subject,
+      body: mail.body,
+      type: mail.notice ? 'status' : 'escalation',
+      priority: mail.notice ? 'normal' : 'high',
       threadId: null,
       // Relayed payloads travel as strings, as a worker's own `send` relays them.
-      payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
+      payload: JSON.stringify({ taskId: attachment.task_id, ...mail.payload })
     })
   })
   return true

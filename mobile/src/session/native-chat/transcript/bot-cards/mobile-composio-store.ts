@@ -11,12 +11,20 @@ export type MobileComposio = {
   status: { key: string; added: boolean } | null
   /** Null until read and while no key is saved; a failed read keeps the last. */
   connections: {
-    connections: { app: string; status: string; label: string | null }[]
+    connections: {
+      app: string
+      name?: string
+      status: string
+      label: string | null
+      id?: string
+    }[]
     pending: { app: string; url: string }[]
   } | null
+  /** The last read of the sign-ins failed. */
+  unread: boolean
 }
 
-const EMPTY: MobileComposio = { status: null, connections: null }
+const EMPTY: MobileComposio = { status: null, connections: null, unread: false }
 
 type Entry = {
   /** Held only while a card shows, so a closed or replaced client isn't kept for the app's life. */
@@ -49,13 +57,18 @@ async function readOnce(entry: Entry, client: RpcClient): Promise<MobileComposio
     return null
   }
   let connections = status.key === 'none' ? null : entry.view.connections
+  let unread = false
   if (status.key === 'ok') {
+    const known = connections
     connections = await composioConnectionsRead
       .request(client, { botId })
       .then((response) => composioConnectionsRead.interpret(response))
-      .catch(() => connections)
+      .catch(() => {
+        unread = true
+        return known
+      })
   }
-  return { status, connections }
+  return { status, connections, unread }
 }
 
 async function read(key: string): Promise<void> {

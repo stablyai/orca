@@ -165,6 +165,13 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+        // Blocked or statusless titles mid-turn keep the turn; only an idle title means at rest.
+        if (prevStatus === 'working' || prevStatus === 'idle') {
+          pty.lastAgentStatusEndedTurn = prevStatus === 'working'
+        }
+        if (agentStatus === 'working') {
+          pty.lastAgentStatusWorkingStartedAtEpochMs = observedAtEpochMs
+        }
       }
       if (prevStatus !== agentStatus || retiresDisplayClear) {
         this.onTitleAgentStatusChanged()
@@ -297,6 +304,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       // so the seed a same-id restore applies must not inherit its authority.
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
+      pty.lastAgentStatusWorkingStartedAtEpochMs = null
+      pty.lastAgentStatusEndedTurn = false
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.providerGenerationResetAtEpochMs = pty.lastAgentStatusRichInvalidatedAtEpochMs
       pty.managementTitle = null

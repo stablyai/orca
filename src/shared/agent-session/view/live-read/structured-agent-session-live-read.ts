@@ -238,7 +238,10 @@ export function startStructuredAgentSessionLiveRead(args: {
           ...(cursor ? { cursor } : {}),
           ...(capabilities ? { capabilities } : {})
         },
-        (event) => handleEvent(event, currentOpenGeneration),
+        (event) => {
+          closedDuringOpen ||= event.type === 'end'
+          handleEvent(event, currentOpenGeneration)
+        },
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
             return
