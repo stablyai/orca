@@ -151,7 +151,10 @@ describe('edge move past stale unleased counters on a reserve-mode cell', () => 
     const deferred = await h.edge
       .moveToEdge(IDENTITY, 0, undefined, undefined, { ownControl: true, staleOnReserveCells: RESERVE })
       .catch((error: unknown) => error)
-    expect(deferred).toMatchObject({ reason: 'units_held' })
+    expect(deferred).toMatchObject({
+      reason: 'units_held',
+      stale: { candidate: true, leases: 2, liveLeases: 1, liveKinds: ['invite'], otherCellLeases: 0 }
+    })
     expect((await h.row()).cell_id).toBe(GCE_CELL.id)
     expect(h.pushes).toHaveLength(0)
   })
@@ -160,7 +163,11 @@ describe('edge move past stale unleased counters on a reserve-mode cell', () => 
     const h = await setup()
     for (const options of [{ ownControl: true, staleOnReserveCells: new Set<string>() }, { ownControl: true }]) {
       const deferred = await h.edge.moveToEdge(IDENTITY, 0, undefined, undefined, options).catch((error: unknown) => error)
-      expect(deferred).toMatchObject({ reason: 'units_held', held: expect.objectContaining({ invites: 28 }) })
+      expect(deferred).toMatchObject({
+        reason: 'units_held',
+        held: expect.objectContaining({ invites: 28 }),
+        stale: { candidate: false }
+      })
     }
     expect((await h.row()).cell_id).toBe(GCE_CELL.id)
     expect(h.pushes).toHaveLength(0)
