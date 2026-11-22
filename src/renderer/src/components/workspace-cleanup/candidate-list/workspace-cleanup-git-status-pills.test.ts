@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { countWholeGitStatusPills } from './workspace-cleanup-git-status-pills'
+import {
+  countWholeGitStatusPills,
+  getMostSevereGitStatusTone
+} from './workspace-cleanup-git-status-pills'
 
 describe('countWholeGitStatusPills', () => {
   it('shows every pill when they all fit', () => {
@@ -18,5 +21,15 @@ describe('countWholeGitStatusPills', () => {
   it('collapses everything into the +N chip when even a truncated first pill would be too narrow', () => {
     expect(countWholeGitStatusPills([45], 30, 20, 6)).toBe(0)
     expect(countWholeGitStatusPills([200, 60], 41, 28, 6)).toBe(1)
+  })
+})
+
+describe('getMostSevereGitStatusTone', () => {
+  it('flags folded warnings and stays neutral for harmless ones', () => {
+    expect(getMostSevereGitStatusTone([{ tone: 'ready' }, { tone: 'review' }])).toBe('review')
+    expect(getMostSevereGitStatusTone([{ tone: 'review' }, { tone: 'destructive' }])).toBe(
+      'destructive'
+    )
+    expect(getMostSevereGitStatusTone([{ tone: 'ready' }, { tone: 'neutral' }])).toBeNull()
   })
 })

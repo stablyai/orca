@@ -1,9 +1,19 @@
 import React, { useLayoutEffect, useRef, useState, useEffectEvent } from 'react'
 import { cn } from '@/lib/class-names'
 import type { StatusPillTone } from './workspace-cleanup-candidate-row-data'
-import { StatusPill } from './workspace-cleanup-status-pill'
+import { getStatusPillToneClassName, StatusPill } from './workspace-cleanup-status-pill'
 
 type GitStatusPill = { label: string; tone: StatusPillTone }
+
+/** The hidden statuses' most severe tone, so a folded warning still shows on the +N chip. */
+export function getMostSevereGitStatusTone(
+  statuses: readonly { tone: StatusPillTone }[]
+): StatusPillTone | null {
+  if (statuses.some((status) => status.tone === 'destructive')) {
+    return 'destructive'
+  }
+  return statuses.some((status) => status.tone === 'review') ? 'review' : null
+}
 
 /** Narrowest a truncated first pill may get while its ellipsis still reads as one. */
 const MIN_TRUNCATED_PILL_WIDTH = 40
@@ -87,6 +97,7 @@ export function WorkspaceCleanupGitStatusPills({
 
   const shown = statuses.slice(0, Math.min(visibleCount, statuses.length))
   const hidden = statuses.slice(shown.length)
+  const hiddenTone = getMostSevereGitStatusTone(hidden)
   return (
     <span
       ref={groupRef}
@@ -116,7 +127,15 @@ export function WorkspaceCleanupGitStatusPills({
         <span
           tabIndex={0}
           aria-label={hidden.map((status) => status.label).join(' · ')}
-          className="shrink-0 rounded-sm text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className={cn(
+            'shrink-0 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            hiddenTone
+              ? cn(
+                  'inline-flex h-5 items-center rounded-full border px-1.5 font-medium',
+                  getStatusPillToneClassName(hiddenTone)
+                )
+              : 'rounded-sm text-muted-foreground'
+          )}
         >
           +{hidden.length}
         </span>
