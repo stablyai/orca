@@ -108,10 +108,14 @@ export type EdgeControlFlags = {
   // to the ledger's reconcile interval while its phones resolve to the edge. A bad value drops only
   // this key (reported in ignoredKeys) and keeps the last applied one. An older director ignores
   // the key (ignoredKeys).
+  // 'drain-stale' also moves, on the same asks, a host whose row holds counters no lease backs on
+  // a reserve-mode cell: the expiry sweep never clears those (it skips reserve cells), so they would
+  // defer the host's move forever. The move zeroes them and leaves the old cell's reservation
+  // counter alone.
   moveOwnControl?: EdgeMoveOwnControl
 }
 
-export type EdgeMoveOwnControl = 'off' | 'drain'
+export type EdgeMoveOwnControl = 'off' | 'drain' | 'drain-stale'
 
 export type EdgeCohortRegion = 'ask' | 'host'
 
@@ -148,7 +152,7 @@ const EdgeControlFlagsSchema = z.object({
 const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
 const EdgeAlternatesSchema = z.enum(['off', 'listed', 'country'])
 const EdgeFrontDoorAuthSchema = z.enum(['off', 'on'])
-const EdgeMoveOwnControlSchema = z.enum(['off', 'drain'])
+const EdgeMoveOwnControlSchema = z.enum(['off', 'drain', 'drain-stale'])
 const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
@@ -316,7 +320,20 @@ export function edgeMoveOwnControlAsk(
   flags: EdgeControlFlags,
   ask: { reconnect?: boolean; regionCorrection?: unknown }
 ): boolean {
-  return flags.moveOwnControl === 'drain' && ask.reconnect === true && ask.regionCorrection === undefined
+  return (
+    (flags.moveOwnControl === 'drain' || flags.moveOwnControl === 'drain-stale') &&
+    ask.reconnect === true &&
+    ask.regionCorrection === undefined
+  )
+}
+
+// Whether this ask may also move a host past unleased counters on a reserve-mode cell
+// (moveOwnControl 'drain-stale'): the same asks as edgeMoveOwnControlAsk.
+export function edgeMoveStaleUnitsAsk(
+  flags: EdgeControlFlags,
+  ask: { reconnect?: boolean; regionCorrection?: unknown }
+): boolean {
+  return flags.moveOwnControl === 'drain-stale' && edgeMoveOwnControlAsk(flags, ask)
 }
 
 // Effective rollout for hosts asking for `region`: its regional value, else the global rollout

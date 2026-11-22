@@ -68,7 +68,7 @@ import {
   type EdgeCohortJudgement,
   type EdgeAssignments
 } from './edge-relay.js'
-import { EDGE_CONTROL_DEFAULTS, edgeMoveOwnControlAsk } from './edge-relay-control.js'
+import { EDGE_CONTROL_DEFAULTS, edgeMoveOwnControlAsk, edgeMoveStaleUnitsAsk } from './edge-relay-control.js'
 import { edgeAlternateCellUrls, edgeAuthOrigin, edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
@@ -597,6 +597,11 @@ export function createRelayApp(
     }
     if (edge && toEdge) {
       let moved: RelayAssignment | null
+      const moveFlags = edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS
+      // Read before the move's transaction (cached); unreadable means no stale-counter moves.
+      const staleOnReserveCells = edgeMoveStaleUnitsAsk(moveFlags, body.data)
+        ? ((await operations.assignments.reserveModeCells()) ?? undefined)
+        : undefined
       try {
         moved = await edge.moveToEdge(
           identity,
@@ -613,7 +618,8 @@ export function createRelayApp(
           // unit off its old cell with the move.
           {
             keepOnly: judged.by === 'record',
-            ownControl: edgeMoveOwnControlAsk(edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS, body.data)
+            ownControl: edgeMoveOwnControlAsk(moveFlags, body.data),
+            ...(staleOnReserveCells === undefined ? {} : { staleOnReserveCells })
           }
         )
       } catch (error) {
