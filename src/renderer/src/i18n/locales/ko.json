@@ -18130,7 +18130,6 @@
           "failed7d": "실패 · 7일",
           "automation": "자동화",
           "triggered": "트리거됨",
-          "trigger": "트리거",
           "loading": "실행 로드 중…",
           "noRuns": "아직 실행이 없습니다",
           "emptyDescription": "자동화를 트리거하면 여기에 실행이 표시됩니다.",
@@ -18259,11 +18258,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "아직 실행이 없습니다.",
-          "13988187b3": "토큰",
           "86a248187e": "경비",
           "149c0b49c7": "워크스페이스",
           "8faaa00726": "실행",
-          "a00e38d1a3": "—",
           "historyUnavailable": "이 호스트에서는 실행 기록을 사용할 수 없습니다. 이는 자동화가 실패했거나 실행이 없음을 의미하지 않습니다."
         },
         "AutomationSchedulePicker": {
@@ -18333,7 +18330,6 @@
           "missingWorkspace": "워크스페이스 없음",
           "usageUnavailable": "사용량을 사용할 수 없음",
           "noRunUsageYet": "아직 실행 사용량 없음",
-          "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
           "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
           "retryFullOutput": "다시 시도",
@@ -18656,7 +18652,9 @@
         "usage": {
           "tokensAndCost_one": "토큰 {{tokens}}개 · {{cost}}",
           "tokensAndCost_other": "{{tokens}} 토큰 · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} 사용",
+          "tokens_other": "{{tokens}} 토큰"
         },
         "externalDisplay": {
           "sshHost": "SSH 호스트",
@@ -18703,7 +18701,6 @@
           "needsCredentials": "{{host}}이(가) 다시 연결하려면 자격 증명이 필요하여 이번 실행이 시작되지 않았습니다.",
           "signIn": "{{host}}에 로그인",
           "output": "출력",
-          "details": "세부 정보",
           "runNumber": "실행 #{{number}}",
           "runFailed": "실행하지 못했습니다.",
           "scheduledAt": "예약 시각 {{time}}",
