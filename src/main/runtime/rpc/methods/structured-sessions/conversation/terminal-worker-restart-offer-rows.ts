@@ -13,17 +13,25 @@ import type { StructuredAgentSessionRestartResume } from '../../../../../native-
 type OfferRuntime = Pick<OrcaRuntimeService, 'terminalWorkerRestartOffers'>
 type OfferHost = Pick<StructuredAgentSessionHost, 'restartResume'>
 
-function workerIds(
+/** The ids that name workers rather than chats, and of those the offers this client may act on. */
+function partition(
   runtime: OfferRuntime,
   ids: readonly string[] | undefined,
   audience: StructuredAgentSessionRestartAudience | undefined
-): string[] {
-  // An unnamed action covers only the workers this client is shown.
-  return ids === undefined
-    ? restartRowsFor(runtime.terminalWorkerRestartOffers.list(), audience).map(
-        (row) => row.sessionId
-      )
-    : runtime.terminalWorkerRestartOffers.owned(ids)
+): { chats: string[] | undefined; workers: string[] } {
+  const offered = runtime.terminalWorkerRestartOffers.list()
+  const shown = restartRowsFor(offered, audience).map((row) => row.sessionId)
+  if (ids === undefined) {
+    return { chats: undefined, workers: shown }
+  }
+  const owned = runtime.terminalWorkerRestartOffers.owned(ids)
+  const hidden = new Set(offered.map((row) => row.sessionId).filter((id) => !shown.includes(id)))
+  // A worker id whose offer ended since it was shown is refused, never read as a chat; one this
+  // client is not shown is left alone.
+  return {
+    chats: ids.filter((id) => !owned.includes(id)),
+    workers: owned.filter((id) => !hidden.has(id))
+  }
 }
 
 export async function listRestartOffers(
@@ -43,8 +51,7 @@ export async function dismissRestartOffers(
   ids: readonly string[] | undefined,
   audience: StructuredAgentSessionRestartAudience | undefined
 ): Promise<number> {
-  const workers = workerIds(runtime, ids, audience)
-  const chats = ids?.filter((id) => !workers.includes(id))
+  const { chats, workers } = partition(runtime, ids, audience)
   const dismissedChats =
     chats === undefined || chats.length > 0 ? await host.restartResume.dismiss(chats, audience) : 0
   return dismissedChats + runtime.terminalWorkerRestartOffers.dismiss(workers)
@@ -57,8 +64,7 @@ export async function continueRestartOffers(
   owner: string,
   audience: StructuredAgentSessionRestartAudience | undefined
 ): Promise<Awaited<ReturnType<StructuredAgentSessionRestartResume['continueAfterRestart']>>> {
-  const workers = workerIds(runtime, ids, audience)
-  const chats = ids?.filter((id) => !workers.includes(id))
+  const { chats, workers } = partition(runtime, ids, audience)
   type Answer = Awaited<ReturnType<StructuredAgentSessionRestartResume['continueAfterRestart']>>
   const none: Answer = { resumed: [], continued: [] }
   const [answer, resumedWorkers] = await Promise.all([

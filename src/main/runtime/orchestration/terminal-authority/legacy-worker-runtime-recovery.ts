@@ -1,4 +1,5 @@
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { listWorkerRestartOffers } from '../db/worker-dispatch/worker-restart-resume'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { RuntimeWorkspaceSessionFlush } from '../../workspaces/session-hosts/runtime-workspace-session-flush'
@@ -69,6 +70,11 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   reportWorkerStopsAcrossRestartOnce(): Promise<void> {
     // Restored terminals are placed: workers held for a restart resume reopen now.
     this.terminalWorkerRestartResume.settleStartup()
+    // Workers still offered from before this start are shown with the cut chats, as their offers are.
+    const db = this.getExistingOrchestrationDb()
+    if (db && listWorkerRestartOffers(db).length > 0) {
+      this.notifier?.restartOffersChanged?.()
+    }
     if (this.restartWorkerStopReport === null) {
       // A restoration retried after a failure passes over what it continued and left, again.
       this.structuredAgentSessionLaunchContinuation.onRetried(

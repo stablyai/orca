@@ -17,6 +17,7 @@ type RestartResumeRuntime = Pick<
   | 'getTerminalPaneKey'
   | 'getTerminalProcessIncarnation'
   | 'getTerminalHandleForPaneKey'
+  | 'getAgentStatusRowsForPane'
   | 'waitForTerminal'
   | 'waitForFreshWorkerComposer'
   | 'sendTerminalAgentPrompt'
@@ -63,6 +64,10 @@ function createTerminalWorkerRestartResume(
         : null
     },
     handleForPane: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey),
+    paneRunsSession: (paneKey, sessionId) =>
+      runtime
+        .getAgentStatusRowsForPane(paneKey)
+        .some((row) => !row.providerSessionOnly && row.providerSession?.id === sessionId),
     // A resumed agent is a fresh launch: its composer must be up, or it drops the prompt.
     waitForAgentReady: (handle, agent) =>
       waitForWorkerAgentReady(runtime, handle, {

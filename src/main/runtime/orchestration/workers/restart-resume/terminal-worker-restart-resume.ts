@@ -38,6 +38,8 @@ export type TerminalWorkerRestartResumeDeps = {
     handle: string
   ) => { paneKey: string; processIncarnation: string; hostScope?: string } | null
   handleForPane: (paneKey: string) => string | null
+  /** Whether this pane's live agent runs this conversation now. */
+  paneRunsSession: (paneKey: string, sessionId: string) => boolean
   /** Resolves once the resumed agent's composer takes input; false when it never does. */
   waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
   /** False when the agent provably did not start the turn. */
@@ -130,7 +132,7 @@ export class TerminalWorkerRestartResume {
     }
     const worker = this.held.get(dispatchId)!
     // An offer outlives a pane that never shows its agent: Resume then reopens it in a new terminal.
-    const expire = () => (offered ? this.held.delete(dispatchId) : this.giveUp(dispatchId))
+    const expire = () => (worker.offered ? this.held.delete(dispatchId) : this.giveUp(dispatchId))
     worker.inPlace = {
       paneKey,
       lostIncarnation,
@@ -142,30 +144,35 @@ export class TerminalWorkerRestartResume {
   /** A person chose Resume on an offered worker: the same once-only resume Resume work on restart runs.
    *  True once its agent is back and owns the Dispatch. */
   async resumeOffered(dispatchId: string, fail: () => void): Promise<boolean> {
+    const db = this.deps.getDb()
     const pending = this.held.get(dispatchId)
-    if (pending?.offered) {
-      // Its pane has not shown the agent yet: it goes on when it does.
+    // Already resuming from another Resume: that one decides.
+    if (!db || (pending && !pending.offered)) {
+      return pending !== undefined
+    }
+    const claim = isWorkerRestartOffered(db, dispatchId) && claimWorkerRestartResume(db, dispatchId)
+    if (!claim) {
+      return false
+    }
+    if (pending) {
+      // Its pane has not shown the agent yet: it goes on when it does, or is reported lost.
       delete pending.offered
       return true
     }
-    const db = this.deps.getDb()
-    const claim =
-      db && isWorkerRestartOffered(db, dispatchId) && claimWorkerRestartResume(db, dispatchId)
-    if (!db || !claim || this.held.has(dispatchId)) {
-      return false
-    }
     const worker: HeldWorker = { claim, fail }
     this.held.set(dispatchId, worker)
-    // A pane started again in place already runs its own conversation and owns the Dispatch.
     const dispatch = db.getDispatchContextById(dispatchId)
-    const handle = dispatch?.assignee_pane_key
-      ? this.deps.handleForPane(dispatch.assignee_pane_key)
-      : null
+    const paneKey = dispatch?.assignee_pane_key ?? null
+    const handle = paneKey ? this.deps.handleForPane(paneKey) : null
+    const authority = handle ? this.deps.terminalAuthority(handle) : null
+    const bound = authority?.processIncarnation === dispatch?.process_incarnation
+    // Its pane already runs its own conversation, bound or restored late: never a second copy.
     if (
       handle &&
-      this.deps.terminalAuthority(handle)?.processIncarnation === dispatch?.process_incarnation
+      authority &&
+      (bound || this.deps.paneRunsSession(paneKey!, claim.session.providerSession.id))
     ) {
-      return this.bind(dispatchId, worker, handle).catch(() => {
+      return this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
         this.giveUp(dispatchId)
         return false
       })
@@ -211,7 +218,12 @@ export class TerminalWorkerRestartResume {
 
   /** Resume work on restart is off: the resume waits on a person, durably, and nothing happens meanwhile. */
   private offer(dispatchId: string): boolean {
-    const claim = this.claim(dispatchId, true)
+    const db = this.deps.getDb()
+    // Offered before this start: still offered, and no news that would bring a closed toast back.
+    if (db && isWorkerRestartOffered(db, dispatchId)) {
+      return true
+    }
+    const claim = claimLostWorkerRestart(db, dispatchId, WORKER_RESTART_OFFERED_STAGE)
     if (claim) {
       this.deps.offersChanged()
     }
@@ -222,7 +234,8 @@ export class TerminalWorkerRestartResume {
     if (this.held.has(dispatchId)) {
       return true
     }
-    const claim = this.claim(dispatchId, offered)
+    const stage = offered ? WORKER_RESTART_OFFERED_STAGE : WORKER_RESTART_RESUMED_STAGE
+    const claim = claimLostWorkerRestart(this.deps.getDb(), dispatchId, stage)
     if (!claim) {
       return false
     }
@@ -231,11 +244,6 @@ export class TerminalWorkerRestartResume {
       this.deps.offersChanged()
     }
     return true
-  }
-
-  private claim(dispatchId: string, offered: boolean): WorkerRestartResumeClaim | null {
-    const stage = offered ? WORKER_RESTART_OFFERED_STAGE : WORKER_RESTART_RESUMED_STAGE
-    return claimLostWorkerRestart(this.deps.getDb(), dispatchId, stage)
   }
 
   private async reopen(dispatchId: string): Promise<boolean> {
@@ -274,7 +282,7 @@ export class TerminalWorkerRestartResume {
         // The tab can open as a bare shell; only an agent that came up takes the Dispatch.
         const agentUp = await this.deps.waitForAgentReady(terminal.handle, session.agent)
         const bound = agentUp
-          ? this.bind(dispatchId, worker, terminal.handle, true)
+          ? this.bind(dispatchId, worker, terminal.handle, { agentReady: true })
           : Promise.reject(new Error('restart_resume_agent_not_ready'))
         return bound.catch(async (error: unknown) => {
           // The conversation runs in a terminal no Dispatch owns: close it before reporting the worker lost.
@@ -303,7 +311,7 @@ export class TerminalWorkerRestartResume {
     dispatchId: string,
     worker: HeldWorker,
     handle: string,
-    agentReady = false
+    { agentReady = false, rebind = true }: { agentReady?: boolean; rebind?: boolean } = {}
   ): Promise<boolean> {
     if (this.held.get(dispatchId) !== worker) {
       return false
@@ -314,7 +322,7 @@ export class TerminalWorkerRestartResume {
       throw new Error('restart_resume_unbound')
     }
     // A Dispatch its coordinator settled meanwhile keeps that outcome.
-    if (!rebindRestartedWorkerTerminal(db, { dispatchId, handle, ...authority })) {
+    if (rebind && !rebindRestartedWorkerTerminal(db, { dispatchId, handle, ...authority })) {
       this.held.delete(dispatchId)
       if (!worker.inPlace) {
         await this.deps.closeTerminal(handle).catch(() => undefined)

@@ -35,19 +35,15 @@ export class TerminalWorkerRestartOffers {
       latestPrompt: offer.taskName,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       workspaceKind:
-        parseWorkspaceKey(offer.worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
+        parseWorkspaceKey(offer.worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree',
+      surface: 'terminal'
     }))
   }
 
-  /** The ids among these that name an offered worker rather than a chat. */
-  owned(ids: readonly string[] | undefined): string[] {
+  /** The ids among these that name a worker's Dispatch, offered or since settled, never a chat. */
+  owned(ids: readonly string[]): string[] {
     const db = this.deps.getDb()
-    if (!db) {
-      return []
-    }
-    return ids === undefined
-      ? listWorkerRestartOffers(db).map((offer) => offer.dispatchId)
-      : ids.filter((id) => isWorkerRestartOffered(db, id))
+    return db ? ids.filter((id) => db.getDispatchContextById(id) !== null) : []
   }
 
   /** A person's Resume: each worker resumes once in its own conversation, as with the setting on. */

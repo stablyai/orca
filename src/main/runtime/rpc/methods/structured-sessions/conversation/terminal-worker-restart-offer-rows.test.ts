@@ -20,8 +20,7 @@ function offers() {
   }
   const terminalWorkerRestartOffers = {
     list: vi.fn(() => [workerRow]),
-    owned: (ids: readonly string[] | undefined) =>
-      (ids ?? ['ctx_worker']).filter((id) => id === 'ctx_worker'),
+    owned: (ids: readonly string[]) => ids.filter((id) => id.startsWith('ctx_')),
     continue: vi.fn(async (ids: readonly string[]) =>
       ids.map((sessionId) => ({ sessionId, outcome: 'continued' as const }))
     ),

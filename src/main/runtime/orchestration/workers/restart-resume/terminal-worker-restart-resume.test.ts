@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { TerminalWorkerRestartResume } from './terminal-worker-restart-resume'
 import { observeWorker, reconsiderRestAfterWait } from '../turn-stops/worker-presence-report'
+import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
 
 let db: OrchestrationDb | undefined
 afterEach(() => db?.close())
@@ -74,6 +75,7 @@ function owner(
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
     }),
     handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
+    paneRunsSession: () => false,
     waitForAgentReady: overrides.waitForAgentReady ?? (async () => true),
     sendPrompt,
     setTimer: () => ({ cancel: () => {} })
@@ -169,6 +171,43 @@ describe('TerminalWorkerRestartResume', () => {
     expect(offersChanged).toHaveBeenCalledTimes(1)
     // The restart's own stop report stays silent about it, as about a chat whose cut waits on a person.
     expect(resume.isResumingThisStart(dispatchId)).toBe(true)
+  })
+
+  it('resumes an offered pane that has not shown its agent once it does, asking a cut turn to go on', async () => {
+    const dispatchId = lostWorker('working')
+    const offersChanged = vi.fn()
+    const { resume, sendPrompt } = owner({ offersChanged, resumeWorkOnRestart: false })
+    expect(resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())).toBe(true)
+    // The person chose Resume before the window brought the conversation back in its pane.
+    await expect(resume.resumeOffered(dispatchId, vi.fn())).resolves.toBe(true)
+    expect(db!.getWorkerDispatch(dispatchId)?.stage).toBe('restart_resumed')
+    // A second Resume is the same resume.
+    await expect(resume.resumeOffered(dispatchId, vi.fn())).resolves.toBe(true)
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1))
+    expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
+  })
+
+  it("keeps an offered worker's own turn stops from its coordinator until a person acts", () => {
+    const dispatchId = lostWorker('resting')
+    const turnStops = {
+      getDb: () => db!,
+      getHandle: () => 'term_lost',
+      getProcessIncarnation: () => null
+    }
+    expect(resolveTerminalWorkerDispatch(turnStops, 'tab_lost:leaf_lost')).not.toBeNull()
+    owner({ resumeWorkOnRestart: false }).resume.holdForReopen(dispatchId, vi.fn())
+    expect(resolveTerminalWorkerDispatch(turnStops, 'tab_lost:leaf_lost')).toBeNull()
+  })
+
+  it('does not raise an offer again that a person was already shown', () => {
+    const dispatchId = lostWorker('resting')
+    const offersChanged = vi.fn()
+    const { resume } = owner({ offersChanged, resumeWorkOnRestart: false })
+    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    // A later sweep in the same run, or the next start, finds it offered already.
+    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    expect(offersChanged).toHaveBeenCalledTimes(1)
   })
 
   it('reports the worker lost once when its conversation cannot reopen', async () => {

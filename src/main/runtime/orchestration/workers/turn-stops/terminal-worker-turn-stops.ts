@@ -1,4 +1,5 @@
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
+import { isWorkerRestartOffered } from '../../db/worker-dispatch/worker-restart-resume'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
@@ -252,7 +253,10 @@ export function resolveTerminalWorkerDispatch(
   }
   const dispatch = db.getActiveDispatchForTerminal(handle, paneKey)
   if (dispatch) {
-    return { db, handle, target: { kind: 'local', dispatch } }
+    // Its resume waits on a person, as a cut chat's does: nothing tells its coordinator until they act.
+    return isWorkerRestartOffered(db, dispatch.id)
+      ? null
+      : { db, handle, target: { kind: 'local', dispatch } }
   }
   // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
   const attachment = db.findActiveRemoteAttachmentForPane(paneKey)
