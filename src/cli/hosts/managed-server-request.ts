@@ -4,8 +4,8 @@ import {
   MANAGED_SERVER_RUNTIME_CAPABILITY
 } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type { HandlerContext } from '../dispatch/dispatch'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import { DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS } from '../runtime/connection/runtime-request-timeout'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 
@@ -24,8 +24,8 @@ function unsupported(): RuntimeClientError {
   return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
 }
 
-function statusCommand(selector: string): string {
-  return `orca environment status --environment=${quoteCliCommandArgument(selector)}`
+function statusGuidance(selector: string): string {
+  return `Before retrying, run \`${resolveInvokedCliCommand()} environment status\` with \`--environment\` set to ${JSON.stringify(selector)}.`
 }
 
 type ManagedServerRequestOptions = {
@@ -81,7 +81,8 @@ export async function callManagedServer<TResult>(
     ) {
       throw new RuntimeClientError(
         'managed_server_in_progress',
-        `Stopped waiting, but the desktop may still be running this action. Run \`${statusCommand(params.selector)}\` before retrying.`
+        `Stopped waiting, but the desktop may still be running this action. ${statusGuidance(params.selector)}`,
+        { selector: params.selector }
       )
     }
     throw error
@@ -113,7 +114,7 @@ export async function callExpectingRestart<TResult>(
     }
     throw new RuntimeClientError(
       'managed_server_outcome_unknown',
-      `The connection closed before Orca could confirm the action outcome. Run \`${statusCommand(params.selector)}\` before retrying.`,
+      `The connection closed before Orca could confirm the action outcome. ${statusGuidance(params.selector)}`,
       { selector: params.selector }
     )
   }
