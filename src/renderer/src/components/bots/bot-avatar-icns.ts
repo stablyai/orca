@@ -1,67 +1,43 @@
+// A macOS .icns bundle holds one icon at several sizes; modern entries are plain PNGs the browser decodes.
+import { BOT_AVATAR_SIZE } from '../../../../shared/bot-avatar'
 import { readPngDimensions } from '../../../../shared/file-preview/raster-image-dimensions'
 
-const ICNS_MAGIC = [0x69, 0x63, 0x6e, 0x73]
-const PNG_ICNS_SIDES: Readonly<Record<string, number>> = {
-  ic04: 16,
-  ic05: 32,
-  icp4: 16,
-  icp5: 32,
-  icp6: 64,
-  ic07: 128,
-  ic08: 256,
-  ic09: 512,
-  ic10: 1024,
-  ic11: 32,
-  ic12: 64,
-  ic13: 256,
-  ic14: 512
-}
-
-function uint32(bytes: Uint8Array, offset: number): number {
-  return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0)
-}
+const HEADER_BYTES = 8
 
 export function hasIcnsMagic(bytes: Uint8Array): boolean {
-  return ICNS_MAGIC.every((value, index) => bytes[index] === value)
+  return bytes[0] === 0x69 && bytes[1] === 0x63 && bytes[2] === 0x6e && bytes[3] === 0x73
 }
 
-/** The largest PNG representation, bounded by ICNS's 1024 px slots; other encodings are not decoded. */
-export function bestIcnsPng(bytes: Uint8Array): Uint8Array | null {
-  if (bytes.byteLength < 8 || !hasIcnsMagic(bytes) || uint32(bytes, 4) !== bytes.byteLength) {
+// The smallest entry that covers the crop, else the largest; legacy ARGB and JPEG 2000 entries are skipped.
+function fitsAvatarBetter(side: number, bestSide: number): boolean {
+  return bestSide >= BOT_AVATAR_SIZE ? side >= BOT_AVATAR_SIZE && side < bestSide : side > bestSide
+}
+
+/** The PNG entry to crop a bot picture from, or null for a malformed or PNG-less bundle. */
+export function avatarPngFromIcns(bytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> | null {
+  if (bytes.byteLength < HEADER_BYTES || !hasIcnsMagic(bytes)) {
     return null
   }
-  let best: Uint8Array | null = null
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const end = view.getUint32(4)
+  if (end < HEADER_BYTES || end > bytes.byteLength) {
+    return null
+  }
+  let best: Uint8Array<ArrayBuffer> | null = null
   let bestSide = 0
-  for (let offset = 8; offset < bytes.byteLength;) {
-    if (bytes.byteLength - offset < 8) {
+  for (let offset = HEADER_BYTES; offset < end;) {
+    const length = end - offset < HEADER_BYTES ? 0 : view.getUint32(offset + 4)
+    if (length < HEADER_BYTES || length > end - offset) {
       return null
     }
-    const type = String.fromCharCode(...bytes.subarray(offset, offset + 4))
-    const length = uint32(bytes, offset + 4)
-    if (length < 8 || offset + length > bytes.byteLength) {
-      return null
-    }
-    const expectedSide = PNG_ICNS_SIDES[type]
-    const png = bytes.subarray(offset + 8, offset + length)
-    const size = expectedSide === undefined ? null : readPngDimensions(png)
-    if (
-      expectedSide !== undefined &&
-      size?.width === expectedSide &&
-      size.height === expectedSide &&
-      expectedSide > bestSide
-    ) {
-      best = png
-      bestSide = expectedSide
+    const entry = bytes.subarray(offset + HEADER_BYTES, offset + length)
+    const size = readPngDimensions(entry)
+    const side = size ? Math.min(size.width, size.height) : 0
+    if (side > 0 && fitsAvatarBetter(side, bestSide)) {
+      best = entry
+      bestSide = side
     }
     offset += length
   }
   return best
-}
-
-export function isIcnsFileName(name: string): boolean {
-  return name.toLowerCase().endsWith('.icns')
-}
-
-export function isIcnsMimeType(type: string): boolean {
-  return type === 'image/icns' || type === 'image/x-icns'
 }
