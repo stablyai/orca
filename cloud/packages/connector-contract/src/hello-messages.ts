@@ -5,6 +5,7 @@ import { readHelloTriggers } from './trigger-messages.js'
 import { WebhookHookIdSchema } from './webhook-messages.js'
 import { webhookRuleId } from './webhook-names.js'
 import { CONNECTOR_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
+import { ConnectorHelloWakeOfferSchema } from './wake-messages.js'
 
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // trigger: takes trigger deliveries, which start its bot automations. webhook: also those of its hooks'
@@ -212,7 +213,9 @@ export const ConnectorHelloResponseSchema = z.object({
   helloRev: SequenceSchema,
   features: z.array(z.string()).optional(),
   // Hooks of this machine deleted while it was away, so it drops their rules, files and calls.
-  webhookTombstones: z.array(WebhookHookIdSchema).optional()
+  webhookTombstones: z.array(WebhookHookIdSchema).optional(),
+  // Only to a machine that listed connector-wake-v1 (wake-messages.ts).
+  wake: ConnectorHelloWakeOfferSchema
 })
 
 export type ConnectorBot = z.infer<typeof ConnectorBotSchema>

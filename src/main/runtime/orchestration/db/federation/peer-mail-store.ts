@@ -118,7 +118,9 @@ export function isPeerMailSenderLabel(this: OrchestrationDb, label: string): boo
 function openPeerConversation(
   db: OrchestrationDb,
   conversationId: string,
-  peerFingerprint: string
+  peerFingerprint: string,
+  // Set when the far side is a server this Orca dials: the server opened it for its agents' asks.
+  environmentId: string | null = null
 ): void {
   const conversation = db.getPeerMailConversation(conversationId)
   if (
@@ -134,10 +136,10 @@ function openPeerConversation(
   if (!conversation) {
     db.db
       .prepare(
-        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint)
-         VALUES (?, 'peer', ?)`
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', ?, ?)`
       )
-      .run(conversationId, peerFingerprint)
+      .run(conversationId, peerFingerprint, environmentId)
   }
 }
 
@@ -175,9 +177,10 @@ export function linkPeerMailMessage(
     peerFingerprint: string
     messageId: string
     senderLabel: string
+    environmentId?: string
   }
 ): void {
-  openPeerConversation(this, params.conversationId, params.peerFingerprint)
+  openPeerConversation(this, params.conversationId, params.peerFingerprint, params.environmentId)
   this.db
     .prepare(
       `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party)
@@ -193,6 +196,8 @@ export function insertPeerMailMessage(
     conversationId: string
     /** Only a 'peer' conversation is created here, by the paired Orca that opened it. */
     peerFingerprint?: string
+    /** With `peerFingerprint`: the server this Orca dials that opened it. */
+    environmentId?: string
     remoteParty: string | null
     message: MessageInsert & { id: string; from: string }
   }
@@ -210,7 +215,12 @@ export function insertPeerMailMessage(
       )
     }
     if (params.peerFingerprint !== undefined) {
-      openPeerConversation(this, params.conversationId, params.peerFingerprint)
+      openPeerConversation(
+        this,
+        params.conversationId,
+        params.peerFingerprint,
+        params.environmentId
+      )
     }
     if (this.getPeerMailMessage(params.message.id)) {
       this.db.exec('RELEASE peer_mail_insert')

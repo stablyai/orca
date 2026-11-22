@@ -67,7 +67,7 @@ async function importIntoClientRoutePartition(
     return imported
   }
   // Badge this desktop’s server-route jar, rather than the local profile jar.
-  recordClientRouteCookieImportSource({
+  await recordClientRouteCookieImportSource({
     environmentId: target.environmentId,
     profileId: target.browserProfileId,
     source: { ...imported.source.badge, importedAt: Date.now() }

@@ -7,8 +7,14 @@ import { PeerMailItem } from '../../../../../../shared/rpc-contract/orchestratio
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import { peerMailRelayEnvironments } from '../../../../orchestration/federation/peer-mail/peer-mail-relay-environments'
-import { settleRemovedPairedClient } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import {
+  peerMailRelayEnvironments,
+  peerMailRelayWants
+} from '../../../../orchestration/federation/peer-mail/peer-mail-relay-environments'
+import {
+  settleRemovedPairedClient,
+  withdrawClientAsksOf
+} from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
@@ -111,6 +117,17 @@ describe('agents here messaging agents on a paired computer', () => {
       body: 'Are they all real?',
       ...params
     })
+
+  // The computer's pull ends because it went away.
+  function settleOffline() {
+    const gone = new AbortController()
+    gone.abort()
+    return fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_1') },
+      { signal: gone.signal }
+    )
+  }
 
   const told = () => db.getAllMessagesForHandle('term_s').map((message) => message.body)
 
@@ -354,11 +371,66 @@ describe('agents here messaging agents on a paired computer', () => {
     ).toEqual(['client_reply'])
   })
 
+  it('queues a reply while the computer is offline, for its next pull', async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const [item] = (await pull()).items
+    await fromClient('orchestration.peerMailReturn', {
+      items: [
+        {
+          conversationId: item!.conversationId,
+          sequence: 1,
+          messageId: 'msg_answer_3',
+          kind: 'peer_mail',
+          payload: JSON.stringify({
+            senderLabel: 'Literature on Client A',
+            fromAddress: 'bot:Literature',
+            subject: 'Re: Check the citations',
+            body: 'All real.',
+            threadId: item!.messageId
+          })
+        }
+      ]
+    })
+    const [answer] = db.getUnreadMessages('term_s')
+    await settleOffline()
+
+    const replied = await local('orchestration.reply', {
+      id: answer!.id,
+      body: 'Thanks.',
+      from: 'term_s'
+    })
+
+    expect(replied).toMatchObject({ ok: true })
+    const items = (await pull('session_back')).items.filter(
+      (queued) => queued.messageId !== item!.messageId
+    )
+    expect(items.map((queued) => queued.kind)).toEqual(['client_reply'])
+  })
+
   it('refuses an empty computer instead of sending the mail here', async () => {
     const sent = await ask({ onClient: '' })
 
     expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(db.getInbox(10)).toEqual([])
+  })
+
+  it("withdraws a deleted chat's asks: drops the one not taken yet, withdraws the one taken", async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const [taken] = (await pull()).items
+    await fromClient('orchestration.peerMailAck', {
+      acknowledgments: [{ conversationId: taken!.conversationId, throughSequence: taken!.sequence }]
+    })
+    await ask({ type: 'question', subject: 'Not taken yet' })
+
+    withdrawClientAsksOf(runtime, ['term_s'])
+
+    const items = (await pull()).items
+    expect(items.map((item) => [item.kind, JSON.parse(item.payload)])).toEqual([
+      ['client_ask_withdraw', { requestId: taken!.messageId }]
+    ])
+    expect(db.db.prepare('SELECT COUNT(*) AS n FROM peer_questions_out').get()).toEqual({ n: 0 })
   })
 
   it('never starts a pull loop toward a paired computer', async () => {
@@ -367,5 +439,6 @@ describe('agents here messaging agents on a paired computer', () => {
 
     expect([...peerMailRelayEnvironments(db)]).toEqual([])
     expect(db.listHomePeerMailEnvironments()).toEqual([])
+    expect(peerMailRelayWants(db, 'client:device_a/install_a')).toBe(false)
   })
 })

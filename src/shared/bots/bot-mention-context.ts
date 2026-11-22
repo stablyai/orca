@@ -139,6 +139,20 @@ export function mentionedServerBots(text: string): { id: string; name: string; s
   return named
 }
 
+/** Bots on computers paired to this host that `text` names, once per bot and computer, in order. */
+export function mentionedClientBots(text: string): { id: string; name: string; client: string }[] {
+  const named: { id: string; name: string; client: string }[] = []
+  const seen = new Set<string>()
+  for (const { id, name, client } of botMentionTokens(text)) {
+    const key = `${id}\0${client}`
+    if (client && !seen.has(key)) {
+      seen.add(key)
+      named.push({ id, name, client })
+    }
+  }
+  return named
+}
+
 /** This host's unpaused bots `text` names, by the id each token is bound to, once per bot and chat, in order;
  *  `chatId` is null for the bot alone (its Home Chat). */
 export function mentionedBots<B extends Pick<Bot, 'id' | 'paused'>>(
@@ -205,13 +219,29 @@ export function botMentionContext(
     chat?: BotMentionChat
     /** The paired server a bot on another computer runs on. */
     server?: BotRosterServer
+    /** The computer paired to this host a bot runs on, by installation id; its name while connected. */
+    client?: { installationId: string; name: string | null }
   }[]
 ): string | null {
   if (bots.length === 0) {
     return null
   }
-  const lines = bots.map(({ id, name, purpose, chat, server }) => {
+  const lines = bots.map(({ id, name, purpose, chat, server, client }) => {
     const shown = inert(name)
+    if (client) {
+      // Ids only in the command: a name typed there could carry anything.
+      const computer = client.name
+        ? `${JSON.stringify(inert(client.name))}, a computer paired to this one`
+        : 'a computer paired to this one'
+      const address =
+        shown === name && !name.includes('`')
+          ? botAddressArgument(name)
+          : `${BOT_ADDRESS_PREFIX}${id}`
+      const target = /^[\w-]+$/.test(id) && /^[\w-]+$/.test(client.installationId)
+      return target
+        ? `${shown} is an agent on ${computer}. To message it, run \`orca orchestration send --on-client ${client.installationId} --to ${address} --type question|handoff --subject … --body-file …\`; that computer's owner may need to approve it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.`
+        : `${shown} is an agent on ${computer}, but its mention can't be used. Tell the user.`
+    }
     // A name a code span or the block can't hold as typed is addressed by its id instead.
     const address =
       shown === name && !name.includes('`')

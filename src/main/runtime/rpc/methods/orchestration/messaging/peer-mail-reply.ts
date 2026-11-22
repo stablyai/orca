@@ -18,9 +18,9 @@ import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import {
   clientEnvironmentId,
-  clientInstallationOf
+  clientEnvironmentParts
 } from '../../../../orchestration/federation/client-asks/client-ask-environment'
-import { requireListeningClient } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { listenerForClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
@@ -93,16 +93,23 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const installation = clientInstallationOf(environmentId)
-  if (installation !== null) {
-    // Under the pairing the computer pulls with now; after a re-pair the old conversation is never pulled.
-    const client = requireListeningClient(runtime, installation, 'No reply was sent.')
-    const current = db.openHomePeerMailConversation({
-      environmentId: clientEnvironmentId(client.deviceId, client.installationId),
-      peerFingerprint: client.fingerprint,
-      localParty: conversation.local_party ?? '',
-      localPaneKey: conversation.local_pane_key
-    })
+  const clientParts = clientEnvironmentParts(environmentId)
+  if (clientParts !== null) {
+    // Under the pairing the computer pulls with now; while it is offline, on this conversation,
+    // which it pulls when it reconnects under the same pairing.
+    const client = listenerForClientEnvironment(
+      runtime,
+      clientParts.deviceId,
+      clientParts.installationId
+    )
+    const current = client
+      ? db.openHomePeerMailConversation({
+          environmentId: clientEnvironmentId(client.deviceId, client.installationId),
+          peerFingerprint: client.fingerprint,
+          localParty: conversation.local_party ?? '',
+          localPaneKey: conversation.local_pane_key
+        })
+      : conversation
     // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
     queueClientItem(db, {
       conversationId: current.conversation_id,

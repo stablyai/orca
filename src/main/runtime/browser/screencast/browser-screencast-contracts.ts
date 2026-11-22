@@ -1,4 +1,7 @@
-import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type {
+  BrowserScreencastPointer,
+  BrowserScreencastResult
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,
@@ -22,6 +25,8 @@ export type BrowserScreencastParams = {
   minFrameIntervalMs?: number
   // The viewer acks frames with browser.screencast.ack; `ready` echoes `frameAck: true`.
   frameAck?: 1
+  // The viewer draws the page's cursor and link bubble: `ready.pointer`, then `pointer` events.
+  pointerEvents?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -47,6 +52,7 @@ export type ActiveBrowserScreencastSubscriber = {
   delivery: ScreencastSubscriberDeliveryState
   // Present when the viewer acks frames; `release` unregisters it from acks.
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
+  pointerEvents: boolean
 }
 
 export type ActiveBrowserScreencastPage = {
@@ -57,4 +63,5 @@ export type ActiveBrowserScreencastPage = {
   subscribers: Map<string, ActiveBrowserScreencastSubscriber>
   viewportOwnerSubscriptionId: string | null
   appliedBudget: BrowserScreencastFrameBudget
+  pointer: () => BrowserScreencastPointer
 }
