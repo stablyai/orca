@@ -67,7 +67,13 @@ function createTerminalWorkerRestartResume(
     paneRunsSession: (paneKey, sessionId) =>
       runtime
         .getAgentStatusRowsForPane(paneKey)
-        .some((row) => !row.providerSessionOnly && row.providerSession?.id === sessionId),
+        // A row restored from disk names what ran there before, not what runs now.
+        .some(
+          (row) =>
+            !row.providerSessionOnly &&
+            !row.restoredUnconfirmed &&
+            row.providerSession?.id === sessionId
+        ),
     // A resumed agent is a fresh launch: its composer must be up, or it drops the prompt.
     waitForAgentReady: (handle, agent) =>
       waitForWorkerAgentReady(runtime, handle, {

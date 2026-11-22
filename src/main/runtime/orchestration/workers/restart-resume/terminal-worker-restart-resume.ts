@@ -11,6 +11,7 @@ import {
   claimWorkerRestartResume,
   isWorkerRestartOffered,
   isWorkerRestartResumeOpen,
+  openWorkerRestartStage,
   rebindRestartedWorkerTerminal,
   WORKER_RESTART_OFFERED_STAGE,
   WORKER_RESTART_RESUMED_STAGE,
@@ -150,9 +151,11 @@ export class TerminalWorkerRestartResume {
     if (!db || (pending && !pending.offered)) {
       return pending !== undefined
     }
-    const claim = isWorkerRestartOffered(db, dispatchId) && claimWorkerRestartResume(db, dispatchId)
+    const stage = openWorkerRestartStage(db, dispatchId)
+    // Resumed already from another client: that resume stands.
+    const claim = stage === WORKER_RESTART_OFFERED_STAGE && claimWorkerRestartResume(db, dispatchId)
     if (!claim) {
-      return false
+      return stage === WORKER_RESTART_RESUMED_STAGE
     }
     if (pending) {
       // Its pane has not shown the agent yet: it goes on when it does, or is reported lost.
@@ -162,16 +165,13 @@ export class TerminalWorkerRestartResume {
     const worker: HeldWorker = { claim, fail }
     this.held.set(dispatchId, worker)
     const dispatch = db.getDispatchContextById(dispatchId)
-    const paneKey = dispatch?.assignee_pane_key ?? null
+    const paneKey = dispatch?.assignee_pane_key ?? ''
     const handle = paneKey ? this.deps.handleForPane(paneKey) : null
-    const authority = handle ? this.deps.terminalAuthority(handle) : null
-    const bound = authority?.processIncarnation === dispatch?.process_incarnation
+    const live = handle ? this.deps.terminalAuthority(handle)?.processIncarnation : undefined
+    const bound = live !== undefined && live === dispatch?.process_incarnation
     // Its pane already runs its own conversation, bound or restored late: never a second copy.
-    if (
-      handle &&
-      authority &&
-      (bound || this.deps.paneRunsSession(paneKey!, claim.session.providerSession.id))
-    ) {
+    const own = bound || this.deps.paneRunsSession(paneKey, claim.session.providerSession.id)
+    if (handle && live !== undefined && own) {
       return this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
         this.giveUp(dispatchId)
         return false

@@ -102,6 +102,13 @@ function readClaimable(db: OrchestrationDb, dispatchId: string): WorkerRestartRe
   return { dispatchId, worktreeId: resource.worktree_id, session, presence }
 }
 
+/** The restart stage of an open Dispatch still waiting on, or resumed after, a restart. */
+export function openWorkerRestartStage(db: OrchestrationDb, dispatchId: string): string | null {
+  return isWorkerRestartResumeOpen(db, dispatchId)
+    ? (db.getWorkerDispatch(dispatchId)?.stage ?? null)
+    : null
+}
+
 /** An offered resume no person has taken or dismissed yet. */
 export function isWorkerRestartOffered(db: OrchestrationDb, dispatchId: string): boolean {
   return (
