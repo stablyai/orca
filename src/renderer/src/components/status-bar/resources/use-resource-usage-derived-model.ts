@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
-import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
+import type {
+  MemorySnapshot,
+  ProcessMemoryMetric
+} from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
@@ -28,7 +31,16 @@ import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
 } from '../../../lib/workspace/ownership/unified-tab-host-ownership'
-import { useTranslate } from '../../../i18n/use-translate'
+import { useTranslate, type Translate } from '../../../i18n/use-translate'
+
+function serverMemoryLabel(
+  metric: ProcessMemoryMetric | undefined,
+  localLabel: string,
+  t: Translate
+): string | null {
+  const label = metric ? getResourceMemoryMetricCopy(metric, t).columnLabel : localLabel
+  return label === localLabel ? null : label
+}
 
 export function useResourceUsageDerivedModel({
   open,
@@ -168,23 +180,30 @@ export function useResourceUsageDerivedModel({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
-  // Paired-server samples exist only while the Resources tab is open, so the closed badge stays local.
-  const hostSessionCount = useMemo(
-    () =>
-      runtimeHostResources.reduce(
-        (total, host) =>
-          total + host.worktrees.reduce((sum, worktree) => sum + worktree.sessions.length, 0),
-        0
-      ),
-    [runtimeHostResources]
-  )
-  // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
-  const triggerSessionCount = sessionCount === null ? null : sessionCount + hostSessionCount
-
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss',
     t
   )
+  // Paired-server samples exist only while the Resources tab is open, so the closed badge stays local.
+  const serverSubtotals = useMemo(
+    () =>
+      runtimeHostResources
+        .map((host) => ({
+          hostId: host.hostId,
+          label: host.hostLabel,
+          // Name the metric only when it differs from the local one, so mixed platforms never read as comparable.
+          memoryLabel: serverMemoryLabel(host.memoryMetric, memoryMetricCopy.columnLabel, t),
+          memory: host.worktrees.reduce((sum, worktree) => sum + worktree.memory, 0),
+          sessionCount: host.worktrees.reduce((sum, worktree) => sum + worktree.sessions.length, 0)
+        }))
+        // Samples land in reply order; sort so the rows do not swap places on each poll.
+        .sort((a, b) => a.label.localeCompare(b.label) || a.hostId.localeCompare(b.hostId)),
+    [runtimeHostResources, memoryMetricCopy.columnLabel, t]
+  )
+  const serverSessionCount = serverSubtotals.reduce((sum, host) => sum + host.sessionCount, 0)
+  // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
+  const triggerSessionCount = sessionCount === null ? null : sessionCount + serverSessionCount
+
   const { totalPrivateMemory, commitToneClass } = useMemo(() => {
     const privateMemory = resourceSnapshot?.totalPrivateMemory
     return {
@@ -225,6 +244,7 @@ export function useResourceUsageDerivedModel({
     ownerSplit,
     orphanCount,
     triggerSessionCount,
+    serverSubtotals,
     memoryMetricCopy,
     commitToneClass,
     commitBadgeLabel,

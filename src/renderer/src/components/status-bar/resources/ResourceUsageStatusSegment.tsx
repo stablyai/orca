@@ -47,6 +47,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
     unifiedRepos,
     orphanCount,
     triggerSessionCount,
+    serverSubtotals,
     memoryMetricCopy,
     ownerSplit,
     commitToneClass,
@@ -153,6 +154,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
                 {renderResourceUsageSummary(
                   {
                     ownerSplit,
+                    serverSubtotals,
                     commitBadgeLabel,
                     commitToneClass,
                     orphanCount

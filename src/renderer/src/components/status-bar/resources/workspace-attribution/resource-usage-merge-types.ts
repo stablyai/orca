@@ -1,5 +1,8 @@
 import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  ProcessMemoryMetric,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -87,4 +90,5 @@ export type RuntimeHostResourceSample = {
   hostId: `runtime:${string}`
   hostLabel: string
   worktrees: readonly WorktreeMemory[]
+  memoryMetric?: ProcessMemoryMetric
 }

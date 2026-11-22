@@ -8,6 +8,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type { DaemonActionsApi } from '../../../shared/useDaemonActions'
 import { formatMemory } from './resource-usage-metrics'
 import type { ResourceOwnerSplit } from './resource-owner-split'
+import { formatTerminalSessionCount } from './resource-manager-terminal-copy'
 import { resourceOwnerLabels, type ResourceOwnerKey } from './resource-owner-labels'
 
 export function renderResourceUsagePopoverHeader(
@@ -156,14 +157,24 @@ function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> 
   }
 }
 
+export type ResourceServerSubtotal = {
+  hostId: string
+  label: string
+  memory: number
+  memoryLabel: string | null
+  sessionCount: number
+}
+
 export function renderResourceUsageSummary(
   {
     ownerSplit,
+    serverSubtotals = [],
     commitBadgeLabel,
     commitToneClass,
     orphanCount
   }: {
     ownerSplit: ResourceOwnerSplit
+    serverSubtotals?: readonly ResourceServerSubtotal[]
     commitBadgeLabel: string | null
     commitToneClass: string | null
     orphanCount: number
@@ -175,6 +186,11 @@ export function renderResourceUsageSummary(
   const privateLabel = t('resourceManager.owner.privateBytes', 'Committed by Orca and terminals')
   return (
     <div className="shrink-0 border-b border-border px-3 pt-2 pb-1.5 text-xs tabular-nums">
+      {serverSubtotals.length > 0 && (
+        <div className="mb-0.5 text-2xs text-muted-foreground">
+          {t('resourceManager.owner.thisComputer', 'This computer')}
+        </div>
+      )}
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
         {OWNERS.map((owner) => (
           <span key={owner} className="inline-flex items-baseline gap-1 whitespace-nowrap">
@@ -200,6 +216,22 @@ export function renderResourceUsageSummary(
           />
         ))}
       </div>
+      {serverSubtotals.map((server) => (
+        <div key={server.hostId} className="mt-1.5 flex items-baseline gap-x-2.5">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">{server.label}</span>
+          <span className="shrink-0 font-medium text-foreground">
+            {formatMemory(server.memory)}
+            {server.memoryLabel && (
+              <span className="ml-1 text-2xs font-normal text-muted-foreground">
+                {server.memoryLabel}
+              </span>
+            )}
+          </span>
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            {formatTerminalSessionCount(server.sessionCount, t)}
+          </span>
+        </div>
+      ))}
       {(commitBadgeLabel !== null && commitToneClass) || orphanCount > 0 ? (
         <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-2xs text-muted-foreground">
           {commitBadgeLabel !== null && commitToneClass && (

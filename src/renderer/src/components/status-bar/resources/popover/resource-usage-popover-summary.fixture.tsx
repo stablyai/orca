@@ -21,6 +21,33 @@ export const ownerBreakdown = defineFixture({
     })
 })
 
+export const ownerBreakdownWithServers = defineFixture({
+  width: 448,
+  render: () =>
+    renderResourceUsageSummary({
+      ownerSplit: fixtureOwnerSplit,
+      serverSubtotals: [
+        {
+          hostId: 'runtime:a',
+          label: 'Build server',
+          memory: 3221225472,
+          memoryLabel: 'WS',
+          sessionCount: 5
+        },
+        {
+          hostId: 'runtime:b',
+          label: 'A very long paired server name that must truncate before the memory figure',
+          memory: 52428800,
+          memoryLabel: null,
+          sessionCount: 1
+        }
+      ],
+      commitBadgeLabel: null,
+      commitToneClass: null,
+      orphanCount: 0
+    })
+})
+
 export const orphanSummary = defineFixture({
   width: 420,
   render: () =>

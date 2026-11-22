@@ -25983,6 +25983,7 @@
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
+      "thisComputer": "This computer",
       "privateBytes": "Committed by Orca and terminals"
     }
   },
