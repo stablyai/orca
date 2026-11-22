@@ -241,7 +241,7 @@
         }
       },
       "tilingWindowMode": {
-        "title": "타일링 윈도우 매니저 모드",
+        "title": "바둑판식 창 관리자 모드",
         "description": "최소화·최대화 버튼을 숨기고 워크스페이스 탭을 맨 위쪽 가장자리로 옮깁니다. 창 이동과 크기 조절은 윈도우 매니저로 하세요."
       },
       "reduceVisualEffects": {
@@ -895,12 +895,12 @@
       "reducedEffects": "시각 효과 줄이기 또는 시스템의 투명도 줄이기 설정이 켜져 있으면 꺼집니다.",
       "needsOpacity": "터미널 너머로 바탕 화면을 보려면 배경 불투명도를 1보다 낮추세요.",
       "linuxCompositor": "흐림 적용 여부는 컴포지터가 결정합니다. 다시 시작해야 합니다.",
-      "restartDescription": "창 재질 변경을 적용하려면 Orca를 다시 시작하세요.",
+      "restartDescription": "창 배경 효과 변경을 적용하려면 Orca를 다시 시작하세요.",
       "keywords": {
         "acrylic": "아크릴"
       },
       "windowsUnsupported": "Windows 11 22H2 버전 이상이 필요합니다.",
-      "fc2ba9b528": "창 재질"
+      "fc2ba9b528": "창 배경 효과"
     },
     "sharedLinks": {
       "title": "공유 링크",
@@ -3971,8 +3971,8 @@
             "create": "워크스페이스 만들기",
             "editRecipe": "레시피 편집",
             "fixWithAgent": "에이전트로 수정",
-            "openAnyway": "그래도 열기",
-            "openAnywayHint": "그래도 열기를 선택하면 이 VM을 유지한 채 그대로 워크스페이스를 만듭니다. 닫기를 선택하면 VM이 삭제됩니다.",
+            "openAnyway": "무시하고 열기",
+            "openAnywayHint": "무시하고 열기를 선택하면 이 VM을 유지한 채 그대로 워크스페이스를 만듭니다. 닫기를 선택하면 VM이 삭제됩니다.",
             "provision": "VM 프로비저닝",
             "retryChecks": "확인 다시 시도",
             "title": "VM 구축 중"
@@ -4244,7 +4244,7 @@
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "디스크 공간 분석기",
             "ae20d0ffc2": "닫기",
-            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 공간 분석기를 선택하여 왼쪽 하단 도구 상자 메뉴에서 열 수도 있습니다."
+            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 왼쪽 아래 도구 상자 메뉴에서 Space Analyzer를 선택해 열 수도 있습니다."
           },
           "zcode": {
             "missing": {
@@ -4784,12 +4784,12 @@
             "81cd37af99": "메인",
             "fa6d36758d": "세션 {{value0}} 강제 종료",
             "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?",
-            "endOrphanTerminals_one": "고아 터미널 {{count}}개 종료",
+            "endOrphanTerminals_one": "연결 끊긴 터미널 {{count}}개 종료",
             "8a0472ab54": "{{value0}}에 연결할 수 없어 리소스를 알 수 없습니다.",
             "1ea066b73f": "리소스를 보려면 {{value0}}을(를) 업데이트하세요.",
-            "endOrphanTerminals_other": "고아 터미널 {{count}}개 종료",
-            "orphanCount_one": "고아 {{count}}개",
-            "orphanCount_other": "고아 {{count}}개"
+            "endOrphanTerminals_other": "연결 끊긴 터미널 {{count}}개 종료",
+            "orphanCount_one": "연결 끊김 {{count}}개",
+            "orphanCount_other": "연결 끊김 {{count}}개"
           },
           "SshStatusSegment": {
             "3ad70e0365": "원격 호스트 관리…",
@@ -4909,7 +4909,7 @@
             "f4d2651498": "스캔됨",
             "6a5dc3c61a": "리뷰",
             "c361440dc0": "베타",
-            "8ff597593d": "저장 공간",
+            "8ff597593d": "Space",
             "0582df6d2e": "스캔",
             "f5e1a84d79": "새로고침",
             "2af2174d6d": "취소",
@@ -4982,8 +4982,8 @@
             "0990a63160": "아직 스캔된 워크스페이스 크기가 없습니다.",
             "977bdf9a36": "표시할 최상위 항목이 없습니다.",
             "0d1c78d749": "{{value0}} 선택",
-            "removedFromSpace_one": "워크스페이스 {{count}}개를 공간에서 제거했습니다.",
-            "removedFromSpace_other": "저장 공간에서 워크스페이스 {{count}}개를 제거했습니다.",
+            "removedFromSpace_one": "워크스페이스 {{count}}개를 Space에서 제거했습니다.",
+            "removedFromSpace_other": "워크스페이스 {{count}}개를 Space에서 제거했습니다.",
             "topLevelItems_one": "최상위 항목 {{formattedCount}}개",
             "topLevelItems_other": "최상위 항목 {{formattedCount}}개",
             "selectedCount_one": "{{count}}개 선택됨",
@@ -5153,7 +5153,7 @@
                 "copy": {
                   "terminalSessionCount_one": "터미널 세션 {{count}}개",
                   "terminalSessionCount_other": "터미널 세션 {{count}}개",
-                  "spaceScanReady": "공간 스캔 준비됨",
+                  "spaceScanReady": "Space 스캔 준비됨",
                   "sessionsGroupedByWorkspace": "터미널 세션은 워크스페이스별로 그룹화됩니다.",
                   "noTerminalSessions": "아직 터미널 세션이 없습니다.",
                   "ariaLabel": "리소스 관리자, {{sessions}}",
@@ -11620,7 +11620,7 @@
               "gpuKeyword": "그래픽 카드",
               "cleanupDescription": "텍스트가 입력되기 전에 에이전트로 문장 부호, 숫자, 음성 정정을 바로잡습니다.",
               "cleanupKeyword": "정정 단어",
-              "cleanupScratchKeyword": "방금 말 취소"
+              "cleanupScratchKeyword": "방금 말 지우기"
             }
           }
         },
@@ -22808,14 +22808,14 @@
       "sendingUnavailable": "보낼 수 없음",
       "workers_one": "워커 {{count}}개",
       "workers_other": "워커 {{count}}개",
-      "managedBy": "관리자",
-      "managing": "관리 중",
+      "managedBy": "코디네이터",
+      "managing": "워커",
       "talkingWith": "대화 상대",
       "collapse": "오케스트레이션 패널 접기",
       "show": "오케스트레이션 표시: {{counts}}",
       "summary": "오케스트레이션: {{counts}}",
       "needsYou_one": "확인 필요 {{count}}개",
-      "needsYou_other": "대응 필요 {{count}}건",
+      "needsYou_other": "확인 필요 {{count}}개",
       "waitingPrefix": "사용자 대기 중 · ",
       "noTask": "공유된 작업 없음",
       "open": "{{name}} 열기",
@@ -23670,7 +23670,7 @@
   "editor": {
     "richMarkdown": {
       "tooLarge": "파일이 {{limit}} 리치 편집 한도보다 큽니다. 대신 소스 모드를 표시합니다.",
-      "openAnyway": "그래도 열기"
+      "openAnyway": "무시하고 열기"
     },
     "fileLoad": {
       "hostUnresolved": "호스트가 이 파일의 워크스페이스를 찾을 수 없습니다. 삭제되었거나 호스트가 아직 이에 대해 알지 못할 수도 있습니다. 다시 시도하거나 탭 표시줄에서 이 탭을 닫으세요.",
@@ -25900,7 +25900,7 @@
     },
     "dialog": {
       "importCookies": "쿠키 가져오기",
-      "spaceTitle": "Orca 스페이스 베타",
+      "spaceTitle": "Orca Space 베타",
       "dashboardTitle": "Orca 에이전트 대시보드",
       "cookieFiles": "쿠키 파일",
       "allFiles": "모든 파일",
@@ -27348,7 +27348,7 @@
   },
   "backgroundWorkerPaused": {
     "title": "반복해서 중단된 일부 백그라운드 작업을 일시 중지했습니다",
-    "description": "Claude 채팅 복구는 다시 시도할 때까지 꺼져 있습니다. 복사, 되감기, 공간 스캔은 다시 시작하면 재개됩니다.",
+    "description": "Claude 채팅 복구는 다시 시도할 때까지 꺼져 있습니다. 복사, 되감기, Space 스캔은 다시 시작하면 재개됩니다.",
     "retry": "다시 시도"
   },
   "perfNotices": {
