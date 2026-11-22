@@ -17,8 +17,8 @@ export type ConnectorPage =
   | { kind: 'composio-connect'; app: { slug: string; name: string }; from: ConnectorPage }
   /** The desktop's Fix key: a new key for the one Composio refuses. */
   | { kind: 'composio-key' }
-  /** An app the bot has as a tool; `signIn` opens on its sign-in. */
-  | { kind: 'tool'; name: string; signIn: boolean }
+  /** An app the bot has as a tool; `signIn` opens on its sign-in, `editing` on its Edit page. */
+  | { kind: 'tool'; name: string; signIn: boolean; editing?: boolean }
   /** Add by URL; `preset`: a listed app's address and name, to add as they are or change first. */
   | { kind: 'add-tool'; preset?: { source: string; name: string }; from: ConnectorPage }
 
