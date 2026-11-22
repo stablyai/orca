@@ -110,61 +110,47 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, attach.reattach)
   }
 
-  /** Daemon metadata owns the surviving process: its incarnation fence restores the launched agent
-   *  without minting launch authority, then the note main armed re-holds the launch. `reattach` is
-   *  absent when the host attached nothing it could note. */
+  /** Daemon metadata names the agent launched in a surviving process, fenced to its incarnation; the
+   *  note main armed re-holds that launch. Neither alone proves the agent still runs: the terminal
+   *  may since run vim, ssh or another agent. `reattach` is absent when the host noted nothing. */
   protected restoreReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     incarnationId: PtyIncarnationId | undefined,
     identity: ReattachedLaunchIdentity | null,
     reattach: { launchNote?: DaemonLaunchNote | null } | undefined
   ): void {
-    let agent: TuiAgent | undefined
     const fenced =
       identity && pty.incarnationId === identity.incarnationId && isTuiAgent(identity.launchAgent)
         ? identity
         : null
-    const unnoted = reattach?.launchNote === null
-    if (fenced && !unnoted) {
-      pty.launchAgent = agent = fenced.launchAgent
-    }
+    let pending: LaunchEvidence | null = null
     // An older relay reports no incarnation; that still can't prove the launch gone.
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
-      this.recordReattachedLaunch(pty, incarnationId, reattach.launchNote, agent)
+      pending = recordReattachedLaunch(pty, incarnationId, reattach.launchNote)
     }
-    if (fenced && unnoted) {
-      void this.restoreUnnotedLaunchAgent(pty, fenced, pty.launchEvidence)
-    }
-  }
-
-  /** An unretired note is held only while its agent still holds the foreground. Main can't tell when
-   *  the host keeps no notes (an older daemon) or the foreground is unreadable (Windows). */
-  protected recordReattachedLaunch(
-    pty: RuntimePtyWorktreeRecord,
-    incarnationId: PtyIncarnationId | undefined,
-    note: DaemonLaunchNote | null | undefined,
-    agent: TuiAgent | undefined
-  ): void {
-    const pending = recordReattachedLaunch(pty, incarnationId, note)
-    if (pending && note && incarnationId && agent) {
-      void this.checkReattachedLaunch(pty, pending, incarnationId, note, agent)
+    if (fenced && !pty.launchToken) {
+      const note = pending ? (reattach?.launchNote ?? null) : null
+      void this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note)
     }
   }
 
-  /** No note: main never armed one (a launch without a recipe), or an older daemon kept the agent of
-   *  a launch main saw finish. Only that agent's own process in front proves it still runs; anything
-   *  else (vim, ssh, another agent, an unreadable Windows/WSL/SSH foreground) restores nothing. */
-  private async restoreUnnotedLaunchAgent(
+  /** Only the launched agent's own process in front restores it (and re-holds a noted launch). With
+   *  no such proof (vim, ssh, another agent, an unreadable Windows/WSL/SSH foreground) the pane gets
+   *  no launch agent, and its foreground name decides; a shell in front also retires the note. */
+  private async confirmReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     identity: ReattachedLaunchIdentity,
-    evidence: LaunchEvidence | undefined
+    evidence: LaunchEvidence | undefined,
+    note: DaemonLaunchNote | null
   ): Promise<void> {
+    const agent = identity.launchAgent
     const foreground = await readExactAgentForeground(
       this,
       this.ptyController,
       pty.ptyId,
-      identity.launchAgent
+      agent
     ).catch(() => 'unknown' as const)
+    // Newer evidence (a later attach, a finished command, a fresh launch) outranks this read.
     if (
       pty.launchEvidence !== evidence ||
       this.ptysById.get(pty.ptyId) !== pty ||
@@ -173,39 +159,23 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       return
     }
     if (foreground === 'agent') {
-      pty.launchAgent ??= identity.launchAgent
-    } else if (pty.launchAgent === identity.launchAgent) {
-      // An earlier attach may have restored it before the launch ended.
-      pty.launchAgent = null
-    }
-  }
-
-  private async checkReattachedLaunch(
-    pty: RuntimePtyWorktreeRecord,
-    pending: LaunchEvidence,
-    incarnationId: PtyIncarnationId,
-    note: DaemonLaunchNote,
-    agent: TuiAgent
-  ): Promise<void> {
-    const foreground = await this.readLaunchedAgentForeground(pty.ptyId, agent).catch(
-      () => 'unknown' as const
-    )
-    // Newer evidence (a later attach, a finished command, a fresh launch) outranks this read.
-    if (
-      pty.launchEvidence !== pending ||
-      this.ptysById.get(pty.ptyId) !== pty ||
-      pty.incarnationId !== incarnationId
-    ) {
+      pty.launchAgent ??= agent
+      if (note && pty.launchAgent === agent) {
+        holdLaunch(pty, identity.incarnationId, {
+          agent,
+          token: note.launchToken,
+          config: note.launchConfig
+        })
+      }
       return
     }
-    if (foreground === 'shell') {
+    // An earlier attach may have restored it before the launch ended.
+    if (pty.launchAgent === agent) {
+      pty.launchAgent = null
+    }
+    if (foreground === 'shell' && note) {
       this.ptyController?.setLaunchNote?.(pty.ptyId, { retire: note.launchToken })
       retireLaunch(pty)
-      if (pty.launchAgent === agent) {
-        pty.launchAgent = null
-      }
-    } else if (foreground === 'agent' && pty.launchAgent === agent) {
-      holdLaunch(pty, incarnationId, { agent, token: note.launchToken, config: note.launchConfig })
     }
   }
 }

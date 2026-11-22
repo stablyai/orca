@@ -50,77 +50,83 @@ function survivingSession(): OrcaRuntimeService {
 
 async function attachWith(
   runtime: OrcaRuntimeService,
-  launchNote: PtySpawnResult['launchNote']
+  launchNote: PtySpawnResult['launchNote'] | undefined
 ): Promise<void> {
   installDaemonAttach({
     id: PTY_ID,
     incarnationId: INCARNATION_ID,
     launchAgent: 'claude',
-    launchNote
+    ...(launchNote === undefined ? {} : { launchNote })
   })
   await expect(attachPtyFromRuntimeController({ runtime }, PTY_ID)).resolves.toBe(true)
 }
 
+/** The launched-agent read as each host answers it: local POSIX admits any non-shell as 'agent',
+ *  Windows/WSL/SSH cannot see one ('unknown'); the owner's fresh name settles which program it is. */
+function foregroundIs(
+  runtime: OrcaRuntimeService,
+  foreground: 'agent' | 'shell' | 'unknown',
+  name: string | null
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exact read asks the owner only for a fresh foreground name.
+  runtime.setPtyController({
+    confirmForegroundProcess: async () => (name === '2.1.330' ? 'claude' : name),
+    setLaunchNote: () => {}
+  } as unknown as RuntimePtyController)
+  return vi
+    .spyOn(runtime, 'readLaunchedAgentForeground')
+    .mockImplementation(async (_ptyId, _agent, exact) => {
+      if (exact) {
+        exact.named = name === 'claude'
+      }
+      return foreground
+    })
+}
+
+async function settled(read: ReturnType<typeof foregroundIs>): Promise<void> {
+  await vi.waitFor(() => expect(read).toHaveBeenCalled())
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+const FOREGROUNDS = [
+  ['claude by name', 'agent', 'claude', 'claude'],
+  ['native claude by version name', 'agent', '2.1.330', 'claude'],
+  ['vim', 'agent', 'vim', null],
+  ['ssh', 'agent', 'ssh', null],
+  ['codex', 'agent', 'codex', null],
+  ['an unreadable Windows foreground', 'unknown', null, null],
+  ['a shell', 'shell', 'zsh', null]
+] as const
+
 describe('main attach of a surviving daemon session', () => {
-  // After an app or server restart, a background worker terminal that no pane mounts is attached
-  // by main alone; the daemon still reports the agent this incarnation launched.
-  it('restores the launched agent while it still holds the foreground', async () => {
-    const runtime = survivingSession()
-    vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
-
-    await attachWith(runtime, NOTE)
-
-    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
+  // After an app or server restart, a background worker terminal that no pane mounts is attached by
+  // main alone. The daemon names the agent this incarnation launched, armed (a note), never armed
+  // or retired by an older daemon (null), or from a daemon that keeps no notes (undefined).
+  describe.each([
+    ['a held note', NOTE],
+    ['no note', null],
+    ['an older daemon without notes', undefined]
+  ] as const)('with %s', (_label, launchNote) => {
+    it.each(FOREGROUNDS)(
+      'restores the launched agent only for %s in front',
+      async (_case, foreground, name, expected) => {
+        const runtime = survivingSession()
+        const read = foregroundIs(runtime, foreground, name)
+        await attachWith(runtime, launchNote)
+        await settled(read)
+        expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected)
+      }
+    )
   })
 
-  // No note: main never armed one (or an older daemon kept a finished launch's agent). Only that
-  // agent's own process in front restores it. The local read admits any non-shell as 'agent'.
-  it.each([
-    ['claude by name', 'agent', 'claude', 'claude'],
-    ['native claude by version name', 'agent', '2.1.330', 'claude'],
-    ['vim', 'agent', 'vim', null],
-    ['ssh', 'agent', 'ssh', null],
-    ['codex', 'agent', 'codex', null],
-    ['an unreadable Windows foreground', 'unknown', null, null],
-    ['a shell', 'shell', 'zsh', null]
-  ] as const)(
-    'restores an unnoted launch only for %s',
-    async (_case, foreground, name, expected) => {
-      const runtime = survivingSession()
-      const confirmed = name === '2.1.330' ? 'claude' : name
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exact read asks the owner only for a fresh foreground name.
-      runtime.setPtyController({
-        confirmForegroundProcess: async () => confirmed
-      } as unknown as RuntimePtyController)
-      const read = vi
-        .spyOn(runtime, 'readLaunchedAgentForeground')
-        .mockImplementation(async (_ptyId, _agent, exact) => {
-          if (exact) {
-            exact.named = name === 'claude'
-          }
-          return foreground
-        })
-      await attachWith(runtime, null)
-      await vi.waitFor(() => expect(read).toHaveBeenCalled())
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected)
-    }
-  )
-
-  it('drops an agent an earlier attach restored once a later unnoted reattach finds a shell', async () => {
+  it('drops an agent an earlier attach restored once a later reattach finds vim', async () => {
     const runtime = survivingSession()
-    const read = vi
-      .spyOn(runtime, 'readLaunchedAgentForeground')
-      .mockImplementation(async (_ptyId, _agent, exact) => {
-        if (exact) {
-          exact.named = true
-        }
-        return 'agent'
-      })
+    const read = foregroundIs(runtime, 'agent', 'claude')
     await attachWith(runtime, null)
     await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
 
-    read.mockResolvedValue('shell')
+    read.mockClear()
+    foregroundIs(runtime, 'agent', 'vim')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane reattach calls this same restore.
     const internals = runtime as unknown as RuntimeInternals
     internals.restoreReattachedLaunch(
@@ -129,16 +135,6 @@ describe('main attach of a surviving daemon session', () => {
       { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
       { launchNote: null }
     )
-    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull())
-  })
-
-  it('drops the restored agent once a shell holds the foreground', async () => {
-    const runtime = survivingSession()
-    const read = vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('shell')
-
-    await attachWith(runtime, NOTE)
-
-    await vi.waitFor(() => expect(read).toHaveBeenCalled())
     await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull())
   })
 })
