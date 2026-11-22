@@ -9,15 +9,16 @@ import { createDetectedAgentsSlice } from './create-detected-agents-slice'
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
 
-globalThis.window = {
+vi.stubGlobal('window', {
   api: {
     preflight: { detectAgents, refreshAgents },
     platform: { get: () => ({ platform: 'win32' }) }
-  } as unknown as Window['api']
-} as Window & typeof globalThis
+  }
+})
 
 function createTestStore(repos: Repo[]) {
   const store = create<AppState>()(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice reads only the repos, projects, settings and active ids this test sets.
     (...args) => createDetectedAgentsSlice(...args) as unknown as AppState
   )
   store.setState({
