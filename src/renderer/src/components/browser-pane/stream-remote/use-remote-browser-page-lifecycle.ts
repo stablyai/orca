@@ -28,7 +28,7 @@ import {
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
+import { remoteBrowserPagePromptAsks } from './remote-browser-page-prompt-asks'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -142,7 +142,7 @@ export function useRemoteBrowserPageLifecycle({
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
       syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
-      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
+      ...remoteBrowserPagePromptAsks(confirm)
     })
   }
   const lifecycle = lifecycleRef.current

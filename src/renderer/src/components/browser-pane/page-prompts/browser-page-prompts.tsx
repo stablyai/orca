@@ -33,13 +33,29 @@ const PROMPT_HANDLERS: { [K in BrowserPagePromptKind]: BrowserPagePromptHandler<
   'site-permission': sitePermissionPrompt
 }
 
+/** Asks a page prompt the way this window does; streamed server pages ask through it too. */
+export function askBrowserPagePrompt<K extends BrowserPagePromptKind>(
+  confirm: ConfirmationDialogContextValue,
+  request: BrowserPagePromptRequest<K>,
+  signal: AbortSignal
+): Promise<BrowserPagePromptAnswer<K> | null> {
+  const handler: BrowserPagePromptHandler<K> = PROMPT_HANDLERS[request.kind]
+  return handler.ask(confirm, request.details, signal)
+}
+
+export function reportBrowserPagePromptFailed<K extends BrowserPagePromptKind>(
+  request: BrowserPagePromptRequest<K>
+): void {
+  const handler: BrowserPagePromptHandler<K> = PROMPT_HANDLERS[request.kind]
+  handler.onFailed?.(request.details)
+}
+
 async function answerPrompt<K extends BrowserPagePromptKind>(
   confirm: ConfirmationDialogContextValue,
   request: BrowserPagePromptRequest<K>,
   signal: AbortSignal
 ): Promise<void> {
-  const handler: BrowserPagePromptHandler<K> = PROMPT_HANDLERS[request.kind]
-  const answer = await handler.ask(confirm, request.details, signal)
+  const answer = await askBrowserPagePrompt(confirm, request, signal)
   if (signal.aborted) {
     return
   }
@@ -48,7 +64,7 @@ async function answerPrompt<K extends BrowserPagePromptKind>(
     answer
   })
   if (result === 'failed') {
-    handler.onFailed?.(request.details)
+    reportBrowserPagePromptFailed(request)
   }
 }
 

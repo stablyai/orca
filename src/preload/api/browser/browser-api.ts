@@ -115,6 +115,8 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
+  /** Opens a streamed server page's link in an app on this computer; false when none opened it. */
+  openStreamedExternalAppLink: (url: string) => Promise<boolean>
   /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
   openDevTools: (args: {
     browserPageId: string
