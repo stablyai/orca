@@ -1,4 +1,6 @@
 import type { RefObject } from 'react'
+import { useLocalBrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
 import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
@@ -62,6 +64,7 @@ export function ClientHostedBrowserPageToolbar({
   onOpenFind: () => void
 }): React.JSX.Element {
   const browserPageId = browserTab.id
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const externalUrl = getOpenableExternalUrl(browserTab.url)
   return (
@@ -102,6 +105,7 @@ export function ClientHostedBrowserPageToolbar({
               <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
               <BrowserPageStateChips
                 browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
                 url={toDisplayUrl(browserTab.url)}
                 viewportPresetId={viewportPresetId}
                 isActive={isActive}
@@ -136,6 +140,8 @@ export function ClientHostedBrowserPageToolbar({
           worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={(nextId) => applyBrowserViewportPreset(browserPageId, nextId)}
+          siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(browserTab.url)}
           pageActions={{

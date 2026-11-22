@@ -360,6 +360,11 @@ export function RemoteBrowserPagePane({
         />
       ) : null}
       <RemoteBrowserPageToolbar
+        page={browserTab}
+        workspaceId={workspaceId}
+        worktreeId={worktreeId}
+        isActive={isActive}
+        siteDisplaySource={zoom.siteDisplaySource}
         runtimeEnvironmentId={runtimeEnvironmentId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
@@ -371,8 +376,6 @@ export function RemoteBrowserPagePane({
         addressBarInputRef={addressBarInputRef}
         addressBarEditSession={addressBarEditSession}
         busy={busy}
-        loading={browserTab.loading}
-        loadErrorCode={browserTab.loadError?.code ?? null}
         history={history}
         pickerAvailable={pickerAvailable}
         annotateTools={annotateTools}

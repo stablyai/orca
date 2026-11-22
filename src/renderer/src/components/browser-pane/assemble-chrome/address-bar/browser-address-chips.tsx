@@ -8,6 +8,7 @@ import { getBrowserViewportPreset } from '../../../../../../shared/browser/guest
 import { publishBrowserPageSiteDisplay } from '../../host-guest/viewport/browser-page-zoom'
 import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
 import { useBrowserPageSiteDisplay } from '../toolbar/use-browser-page-site-display'
+import type { BrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
 
 function AddressChip({
   label,
@@ -44,17 +45,20 @@ function AddressChip({
 /** Zoom and viewport show only when they differ from the default; a click puts them back. */
 export function BrowserPageStateChips({
   browserPageId,
+  siteDisplaySource,
   url,
   viewportPresetId,
   isActive
 }: {
   browserPageId: string
+  /** Null where the page's host can't report its site zoom. */
+  siteDisplaySource: BrowserPageSiteDisplaySource | null
   url: string
   viewportPresetId: BrowserViewportPresetId | null
   isActive: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const display = useBrowserPageSiteDisplay(browserPageId, url, isActive)
+  const display = useBrowserPageSiteDisplay(browserPageId, siteDisplaySource, url, isActive)
   const preset = getBrowserViewportPreset(viewportPresetId)
   const showZoom = Boolean(display?.site && display.siteHasZoom)
   if (!showZoom && !preset) {
@@ -62,14 +66,15 @@ export function BrowserPageStateChips({
   }
   return (
     <>
-      {showZoom && display ? (
+      {showZoom && display && siteDisplaySource ? (
         <AddressChip
           label={`${browserPageZoomLevelToPercent(display.zoomLevel)}%`}
           tooltip={t('browser.toolbar.resetZoom', 'Reset zoom')}
           onClick={() =>
-            void window.api.browser
-              .zoomPage({ browserPageId, direction: 'reset' })
+            void siteDisplaySource
+              .zoom('reset')
               .then((next) => publishBrowserPageSiteDisplay({ browserPageId, display: next }))
+              .catch(() => undefined)
           }
         >
           <ZoomIn className="size-3.5" />
