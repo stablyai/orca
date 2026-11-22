@@ -231,7 +231,9 @@ export async function getWorkItemDetails(
             )
         ),
         withWorkItemDetailsPermit(() =>
-          getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+          getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions, {
+            noCache: canonical
+          })
         ),
         resolvedRepository
           ? getPRComments(
