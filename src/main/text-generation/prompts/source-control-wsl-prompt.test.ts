@@ -155,6 +155,9 @@ it.each(['pending', 'rejected'] as const)(
   }
 )
 
+// These cases run the guest materialization script under a real /bin/sh, so they need a POSIX host.
+const itWithPosixShell = it.skipIf(process.platform === 'win32')
+
 const tricky = `${Array.from({ length: 128 }, (_, i) => String.fromCharCode(i)).join('')}\\c\\012\r\n'!%$\`🌊界﻿\ud800`
 
 async function shellFixture(
@@ -225,7 +228,11 @@ process.stdout.write(JSON.stringify({ content: Buffer.concat(files.map(file => B
   }
 }
 
-it.each(['', tricky.repeat(12), `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a${tricky}`])(
+itWithPosixShell.each([
+  '',
+  tricky.repeat(12),
+  `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a${tricky}`
+])(
   'materializes exact native text with private modes across encoding and file boundaries',
   async (content) => {
     const result = await shellFixture(content)
@@ -240,7 +247,7 @@ it.each(['', tricky.repeat(12), `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a
   }
 )
 
-it.each([
+itWithPosixShell.each([
   'collision',
   'partial-data',
   'wrong-end',
@@ -290,14 +297,17 @@ it.each([
   }
 })
 
-it('fails a real post-proof storage redirect without running a partial request', async () => {
-  const result = await shellFixture('private data', undefined, undefined, (directory) =>
-    mkdirSync(join(directory, 'prompt-1.txt'))
-  )
-  expect(result.code).not.toBe(0)
-  expect(result.stdout).toBe('')
-  expect(result.existed).toBe(true)
-})
+itWithPosixShell(
+  'fails a real post-proof storage redirect without running a partial request',
+  async () => {
+    const result = await shellFixture('private data', undefined, undefined, (directory) =>
+      mkdirSync(join(directory, 'prompt-1.txt'))
+    )
+    expect(result.code).not.toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.existed).toBe(true)
+  }
+)
 
 it.each([
   { boundary: 'data', stopping: 'cancel' },
@@ -334,55 +344,58 @@ it.each([
   }
 )
 
-it('delivers a plain UTF-8 policy module and preserves the stdin task after guest materialization', async () => {
-  const guest = prepareWslPrompt(
-    {
-      binary: process.execPath,
-      args: ['{module}'],
-      label: 'Policy fixture',
-      stdinPayload: 'Name this chat 🌊\nlast line',
-      taskFiles: [
-        { name: 'task-policy.mjs', content: 'export const text = "policy 🌊"\n', argIndex: 0 }
-      ]
-    },
-    'Actual'
-  )
-  const directory = `/tmp/orca-generation-${guest.preparation.args[0]}`
-  const child = spawnProcess({
-    program: '/bin/sh',
-    args: [
-      '-c',
-      guest.preparation.script,
-      'fixture',
-      ...guest.preparation.args,
-      process.execPath,
-      '-e',
-      `const fs = require('node:fs'); const {pathToFileURL}=require('node:url'); import(pathToFileURL(process.argv[1])).then(module => process.stdout.write(JSON.stringify({ text: module.text, task: fs.readFileSync(0,'utf8'), prefix: fs.readFileSync(process.argv[1]).subarray(0,3).toString('hex') })))`,
-      '--',
-      ...guest.plan.args
-    ],
-    stdio: 'pipe'
-  })
-  let stdout = ''
-  child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
-  child.stdin.on('error', () => {})
-  child.stderr.on('data', (chunk) => {
-    if (guest.observe(chunk)) {
-      child.stdin.end([...guest.records()].join(''))
+itWithPosixShell(
+  'delivers a plain UTF-8 policy module and preserves the stdin task after guest materialization',
+  async () => {
+    const guest = prepareWslPrompt(
+      {
+        binary: process.execPath,
+        args: ['{module}'],
+        label: 'Policy fixture',
+        stdinPayload: 'Name this chat 🌊\nlast line',
+        taskFiles: [
+          { name: 'task-policy.mjs', content: 'export const text = "policy 🌊"\n', argIndex: 0 }
+        ]
+      },
+      'Actual'
+    )
+    const directory = `/tmp/orca-generation-${guest.preparation.args[0]}`
+    const child = spawnProcess({
+      program: '/bin/sh',
+      args: [
+        '-c',
+        guest.preparation.script,
+        'fixture',
+        ...guest.preparation.args,
+        process.execPath,
+        '-e',
+        `const fs = require('node:fs'); const {pathToFileURL}=require('node:url'); import(pathToFileURL(process.argv[1])).then(module => process.stdout.write(JSON.stringify({ text: module.text, task: fs.readFileSync(0,'utf8'), prefix: fs.readFileSync(process.argv[1]).subarray(0,3).toString('hex') })))`,
+        '--',
+        ...guest.plan.args
+      ],
+      stdio: 'pipe'
+    })
+    let stdout = ''
+    child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
+    child.stdin.on('error', () => {})
+    child.stderr.on('data', (chunk) => {
+      if (guest.observe(chunk)) {
+        child.stdin.end([...guest.records()].join(''))
+      }
+    })
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once('close', resolve)
+        child.once('error', reject)
+      })
+      expect(code).toBe(0)
+      expect(JSON.parse(stdout)).toEqual({
+        text: 'policy 🌊',
+        task: 'Name this chat 🌊\nlast line',
+        prefix: '657870'
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
     }
-  })
-  try {
-    const code = await new Promise<number | null>((resolve, reject) => {
-      child.once('close', resolve)
-      child.once('error', reject)
-    })
-    expect(code).toBe(0)
-    expect(JSON.parse(stdout)).toEqual({
-      text: 'policy 🌊',
-      task: 'Name this chat 🌊\nlast line',
-      prefix: '657870'
-    })
-  } finally {
-    await rm(directory, { recursive: true, force: true })
   }
-})
+)

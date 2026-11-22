@@ -43,6 +43,7 @@ export function dispatchContextRow(fields: Partial<DispatchContextRow>): Dispatc
     follow_up_mail_at: null,
     creator_turn_source: null,
     origin_ref: null,
+    for_message_id: null,
     host_scope: null,
     status: 'dispatched',
     failure_count: 0,

@@ -57,14 +57,18 @@ export function NativeChatAutomationRowFrame({
       clampDetails={clampDetails}
       details={children}
     >
-      {/* The status keeps its own line when the name needs the width, so neither is cut short. */}
-      <span className="flex flex-wrap gap-x-1">
-        <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
+      <span className="flex min-w-0 items-center">
+        <span className="shrink-0 whitespace-pre">
           {lead}
           {leadIsVerb ? ' ' : ' · '}
-          <span className="text-chat-foreground">{name}</span>
         </span>
-        {status ? <span className="max-w-full truncate">· {status}</span> : null}
+        <span
+          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
+          title={name}
+        >
+          {name}
+        </span>
+        {status ? <span className="min-w-0 truncate whitespace-pre">{` · ${status}`}</span> : null}
       </span>
     </NativeChatEventRow>
   )

@@ -214,7 +214,7 @@ export class RelayControlOrigin {
     const watchStall = dialUrl === this.cellUrl && this.alternateCellUrls.length > 0
     const control: RelayControlClient = new RelayControlClient({
       cellUrl: dialUrl,
-      relayJwt: overrides?.relayJwt ?? this.options.relayJwt,
+      relayJwt: overrides?.relayJwt ?? this.relayJwt,
       relayHostId: this.options.relayHostId,
       assignmentEpoch: overrides?.assignmentEpoch ?? this.assignmentEpoch,
       identity: this.options.identity,

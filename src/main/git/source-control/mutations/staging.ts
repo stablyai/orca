@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/git/paths/git-stage-worktree-scope'
 import { findExistingWorktreeSymlinkPaths } from '../../worktrees/content-paths/worktree-symlink-detection'
 import { checkIgnoredPaths } from '../ignores/check-ignored-paths'
+import { withoutPathsInsideSubmodules } from '../submodules/submodule-paths'
 import { redoWriteForDriveCheckoutSuspects } from '../drive-checkout/drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
@@ -150,11 +151,16 @@ export async function stageWorktreeChanges(
   try {
     const gitOptions = gitOptionsForWorktree(worktreePath, options)
     // Exclude unignored shared links from add --all; excluding an ignored path makes add exit 1.
+    // A link inside a submodule is the submodule's to stage, and Git rejects it as a pathspec here.
     const sharedLinks =
       scope === 'all' && options.sharedLinkPaths && options.sharedLinkPaths.length > 0
-        ? await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
-            wslDistro: options.wslDistro
-          })
+        ? await withoutPathsInsideSubmodules(
+            worktreePath,
+            await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
+              wslDistro: options.wslDistro
+            }),
+            options
+          )
         : []
     const ignoredLinks = new Set(await checkIgnoredPaths(worktreePath, sharedLinks, options))
     const excludedUntrackedPaths = sharedLinks.filter((link) => !ignoredLinks.has(link))

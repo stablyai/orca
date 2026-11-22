@@ -3,13 +3,17 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { botPackageName } from '../../../../../shared/bots/bot-share-status'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { stubBots } from '../../../component-fixtures/fixture-bots'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   type BotSettingsHost,
@@ -325,6 +329,43 @@ export const rootFromLinkLongName = at('panel', null, 260, {
 export const density280 = at('panel', null, 280 + 32)
 export const density353 = at('panel', null, 353 + 32)
 export const density480 = at('panel', null, 480 + 32)
+export const density240 = at('panel', null, 240 + 32)
+
+const studio: PublicKnownRuntimeEnvironment = {
+  id: 'studio',
+  name: 'Design studio Mac mini in the back office',
+  createdAt: 1,
+  updatedAt: 1,
+  lastUsedAt: null,
+  runtimeId: null,
+  endpoints: [],
+  preferredEndpointId: 'studio'
+}
+
+// Long values at the narrowest panel: a long bot name, server name, people list and project list.
+export const longValues240 = defineFixture({
+  ...at(
+    'panel',
+    null,
+    240 + 32,
+    stampBotHost('runtime:studio', {
+      ...withPeople,
+      name: 'Release notes and changelog builder'
+    }),
+    () => {
+      linkedLinear()
+      // The studio server answers as this computer's runtime does.
+      Reflect.set(window.api, 'runtimeEnvironments', {
+        ...window.api.runtimeEnvironments,
+        call: async (request: { method: string; params: Record<string, unknown> }) =>
+          request.method === 'status.get'
+            ? { ok: true, result: createCompatibleRuntimeStatusResponse('studio').result }
+            : window.api.runtime.call(request)
+      })
+    }
+  ),
+  store: { ...store, runtimeEnvironments: [studio] }
+})
 
 function HeaderWithDuplicate(): React.JSX.Element {
   const [frame, setFrame] = useState<HTMLDivElement | null>(null)
@@ -334,10 +375,19 @@ function HeaderWithDuplicate(): React.JSX.Element {
       {density280.render()}
       {actions &&
         createPortal(
-          <Button variant="outline" size="xs" className="h-7">
-            <Copy className="size-3.5" />
-            Duplicate
-          </Button>,
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted-field-icon"
+                size="icon-sm"
+                className="size-7"
+                aria-label="Duplicate"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Duplicate</TooltipContent>
+          </Tooltip>,
           actions
         )}
     </div>
@@ -347,4 +397,16 @@ function HeaderWithDuplicate(): React.JSX.Element {
 export const density280WithDuplicate = defineFixture({
   ...density280,
   render: () => <HeaderWithDuplicate />
+})
+
+/** Share's tooltip, on hover. */
+export const shareTooltip = defineFixture({
+  ...density280,
+  interact: async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    frame
+      .querySelector('[data-slot="bot-settings-actions"] button')
+      ?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise((resolve) => setTimeout(resolve, 900))
+  }
 })

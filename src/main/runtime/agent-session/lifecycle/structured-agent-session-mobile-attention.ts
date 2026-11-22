@@ -27,7 +27,10 @@ import {
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-group-room-pane-key'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
-import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
+import {
+  buildNotificationOptions,
+  notificationNeedsSlackReplyCheck
+} from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from '../../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -174,11 +177,12 @@ export function createStructuredAttentionMobileDelivery(
         ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
         ...(summary?.lastAssistantMessage
           ? { agentLastAssistantMessage: summary.lastAssistantMessage }
-          : {}),
-        ...(deps.repliesInSlack?.(sessionId) ? { agentRepliesInSlack: true as const } : {})
+          : {})
       }
       const { title, body } = buildNotificationOptions(
-        request,
+        notificationNeedsSlackReplyCheck(request) && deps.repliesInSlack?.(sessionId)
+          ? { ...request, agentRepliesInSlack: true }
+          : request,
         getRuntimeDesktopSurface().translateNotification
       )
       // Apply the desktop fan-out preferences to phone delivery too.

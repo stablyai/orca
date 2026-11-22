@@ -1,6 +1,7 @@
-// Settings › Webhooks: the desktop's BotWebhooksCard as pages inside the bot's settings. Hooks are made and
-// their filters changed in chat; here the owner reads, copies, pauses, rotates, signs and deletes.
+// Settings › Connectors › Webhooks: the desktop's BotWebhooksCard as pages inside the bot's settings. Hooks are
+// made and their filters changed in chat; here the owner reads, copies, pauses, rotates, signs and deletes.
 import { useEffect, useState, type ReactNode } from 'react'
+import { Webhook } from 'lucide-react-native'
 import { webhookStatusFact } from '../../../../src/shared/bots/webhook-card-view'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
@@ -11,8 +12,9 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
+import { SettingsNote } from '../../settings/settings-screen-frame'
 import { mobileWebhookStatus } from '../../session/native-chat/transcript/bot-cards/MobileBotWebhookCard'
+import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
@@ -62,7 +64,7 @@ type SettingsContext = {
   onAskInChat?: ((draft: string) => void) | null
 }
 
-/** The Settings row (once the bot has a hook) and, while open, the page that replaces Settings. */
+/** The Connectors row (once the bot has a hook) and, while open, the page that replaces Connectors. */
 export function useMobileBotWebhookSettings(
   settings: SettingsContext,
   banner: ReactNode
@@ -104,6 +106,7 @@ export function useMobileBotWebhookSettings(
 
 /** The desktop's Webhooks row face: how many hooks, the last call, and one status. */
 function WebhooksRow(props: { hooks: readonly PhoneWebhook[]; onOpen: () => void }) {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const now = useNow(30_000)
   const { hooks } = props
@@ -118,15 +121,14 @@ function WebhooksRow(props: { hooks: readonly PhoneWebhook[]; onOpen: () => void
       ? t('bots.webhooks.status.receiving', 'Receiving')
       : t('bots.webhooks.status.noCalls', 'No calls yet')
   return (
-    <SettingsSection>
-      <ListRow
-        title={t('bots.webhooks.name', 'Webhooks')}
-        subtitle={`${count} · ${lastCallLower(lastAt, now, t)}`}
-        value={status}
-        navigates
-        onPress={props.onOpen}
-      />
-    </SettingsSection>
+    <ListRow
+      leading={<Webhook size={20} color={colors.textSecondary} />}
+      title={t('bots.webhooks.name', 'Webhooks')}
+      subtitle={`${count} · ${lastCallLower(lastAt, now, t)}`}
+      value={status}
+      navigates
+      onPress={props.onOpen}
+    />
   )
 }
 
@@ -188,7 +190,10 @@ function WebhooksPage(props: WebhooksPageProps) {
     <>
       <SheetHeader
         title={t('bots.webhooks.name', 'Webhooks')}
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.connectors.back', 'Back to Connectors'),
+          onPress: props.onBack
+        }}
       />
       {props.banner}
       <SettingsNote>
@@ -277,14 +282,29 @@ function HookPages(
   if (props.step === 'delete') {
     return (
       <ConfirmContent
-        title={t('bots.webhooks.delete.title', 'Delete the webhook for “{{automation}}”?', {
-          automation: hook.automationName
-        })}
-        message={t(
-          'bots.webhooks.delete.note',
-          'Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.'
-        )}
-        confirmLabel={t('bots.webhooks.delete.confirm', 'Delete webhook')}
+        {...(hook.deletesAutomation
+          ? {
+              title: t(
+                'bots.webhooks.delete.withAutomation.title',
+                'Delete “{{automation}}” and its webhook?',
+                { automation: hook.automationName }
+              ),
+              message: t(
+                'bots.webhooks.delete.withAutomation.note',
+                "Nothing else starts this automation, so it's deleted with its run history. The webhook's URL stops working, and calls still waiting are cancelled."
+              ),
+              confirmLabel: t('bots.webhooks.delete.withAutomation.confirm', 'Delete both')
+            }
+          : {
+              title: t('bots.webhooks.delete.title', 'Delete the webhook for “{{automation}}”?', {
+                automation: hook.automationName
+              }),
+              message: t(
+                'bots.webhooks.delete.note',
+                'Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.'
+              ),
+              confirmLabel: t('bots.webhooks.delete.confirm', 'Delete webhook')
+            })}
         destructive
         onCancel={back}
         onConfirm={() =>

@@ -69,7 +69,8 @@ describe('AgentSessionAttachmentStore', () => {
     expect(await readdir(store.rootDir)).toEqual([])
   })
 
-  it('never follows a link out of the store', async () => {
+  // Windows file symlinks need elevation, and the case hinges on one.
+  it.skipIf(process.platform === 'win32')('never follows a link out of the store', async () => {
     const stored = await upload('shot.png', Buffer.from('png-bytes'))
     const outside = join(root, 'secret.png')
     await writeFile(outside, 'secret')

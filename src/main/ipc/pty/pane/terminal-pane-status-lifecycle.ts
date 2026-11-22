@@ -23,6 +23,7 @@ export function bindTerminalPaneStatusLifecycle(
 ): void {
   agentHookServer.setTerminalPaneLifecycle({
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
+    agentExited: (paneKey) => runtime?.observeWorkerAgentExit(paneKey),
     confirmProcessExit: async (paneKey, agent) => {
       if (!runtime) {
         return false
@@ -111,7 +112,7 @@ export function bindTerminalPaneStatusLifecycle(
       )
     }
   })
-  agentHookServer.pruneUnplacedSleepingPanes()
+  agentHookServer.pruneUnplacedPanes()
 }
 
 /** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards; null on

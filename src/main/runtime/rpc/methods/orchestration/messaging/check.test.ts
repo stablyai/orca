@@ -11,6 +11,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 import '../../../../orchestration/db/root-dispatch-test-fixture'
 import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
+import { getQuestionTaker } from '../../../../orchestration/db/messages/mail-taker'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -167,7 +168,7 @@ describe('orchestration RPC methods', () => {
           subject: `new read ${index}`,
           runId: activeRunId
         })
-        db.markAsRead([read.id])
+        db.markAsRead([read.id], { kind: 'orca' })
       }
 
       const peeked = (await call('orchestration.check', {
@@ -211,6 +212,37 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getMessageById(arrivedId)?.read).toBe(0)
       expect(db.getUnreadMessages(`run:${activeRunId}`, ['worker_done'])).toHaveLength(1)
+    })
+
+    it('records the checking terminal as the taker of a question it reads, in a Run or its own mail', async () => {
+      setup()
+      resolveDirectPanes('b')
+      const ask = (to: string) => {
+        const admitted = db.admitBotRequest({
+          rootKey: to,
+          fromBotId: 'ranger',
+          toBotId: 'docs',
+          purpose: 'question',
+          depth: 1,
+          record: '{}',
+          message: {
+            from: 'orca_session_id:asker',
+            to,
+            subject: to,
+            type: 'question',
+            runId: activeRunId
+          }
+        })
+        return admitted.kind === 'sent' ? admitted.message.id : ''
+      }
+      const direct = ask('b')
+      const inRun = ask(`run:${activeRunId}`)
+
+      await call('orchestration.check', { terminal: 'b' })
+      await call('orchestration.check', { terminal: 'term_coord' })
+
+      expect(getQuestionTaker(db, direct)).toBe('terminal:b')
+      expect(getQuestionTaker(db, inRun)).toBe('terminal:term_coord')
     })
 
     it('default (unread only) marks returned rows as read', async () => {
@@ -258,7 +290,7 @@ describe('orchestration RPC methods', () => {
     it("treats the CLI's {peek, unread:false} compat pair as peek, not all", async () => {
       setup()
       const seen = db.insertMessage({ from: 'a', to: 'b', subject: 'seen' })
-      db.markAsRead([seen.id])
+      db.markAsRead([seen.id], { kind: 'orca' })
       db.insertMessage({ from: 'a', to: 'b', subject: 'fresh' })
 
       const result = (await call('orchestration.check', {
@@ -276,7 +308,7 @@ describe('orchestration RPC methods', () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
       const second = db.insertMessage({ from: 'a', to: 'b', subject: 'two' })
-      db.markAsRead([second.id])
+      db.markAsRead([second.id], { kind: 'orca' })
 
       const result = (await call('orchestration.check', {
         terminal: 'b',
