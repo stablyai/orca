@@ -72,7 +72,7 @@ export function useWorkspaceHandToBot(args: {
         // None while closed, so the hidden form asks the computer for nothing.
         computerId={newBotFor ? LOCAL_EXECUTION_HOST_ID : null}
         computers={computers}
-        botNamesOn={() => handBots.bots.map((bot) => bot.name)}
+        botsOn={() => handBots.bots}
         clientFor={() => client}
         pairedClientFor={() => client}
         seed={

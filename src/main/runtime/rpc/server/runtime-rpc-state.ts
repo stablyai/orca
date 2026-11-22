@@ -14,7 +14,8 @@ import { RuntimeClientConnectionLog } from './runtime-rpc-client-connection-log'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
-import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
+import type { AuthenticatedMobileSocket, MobileSocketWiring } from '../mobile/mobile-socket-wiring'
+import { isIdlePassiveSocket } from '../mobile/mobile-socket-idle-passive'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
@@ -174,6 +175,14 @@ export class RuntimeRpcState {
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
     this.authenticatedSourceRecorder = new AuthenticatedSourceRecorder(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
+  }
+
+  /** A passive watcher's requests are not use either, or opening one would reset the idle clock. */
+  protected trackSocketRequest<T>(
+    socket: Pick<AuthenticatedMobileSocket, 'clientCapabilities'>,
+    work: () => Promise<T>
+  ): Promise<T> {
+    return isIdlePassiveSocket(socket) ? work() : this.trackClientRequest(work)
   }
 
   /** Counts a client message for idle exit, from receipt until its dispatch settles. */

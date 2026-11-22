@@ -166,7 +166,3 @@ export function registerTelemetryHandlers(store: Store): void {
     return persistBannerAcknowledgeWithoutEmitting()
   })
 }
-
-export function _resetStoreForTests(): void {
-  storeRef = null
-}

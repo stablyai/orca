@@ -26,6 +26,9 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 // Alias-dependent actions need actual-source selected-path correspondence, absent on v1 hosts.
 export const STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY =
   'agent-session.structured.resume-linked-cwd.v1' as const
+// Hosts without it refuse a conversation saved in a sub-folder of the workspace as another folder's.
+export const STRUCTURED_AGENT_SESSION_RESUME_SUBFOLDER_CWD_RUNTIME_CAPABILITY =
+  'agent-session.structured.resume-subfolder-cwd.v1' as const
 
 // Gate savedOnly because old strict catalog params reject it; otherwise preload only agents with saved picks.
 export const AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY =
@@ -69,6 +72,7 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_SUBFOLDER_CWD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY,

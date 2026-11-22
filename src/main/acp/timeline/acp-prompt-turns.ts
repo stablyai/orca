@@ -103,7 +103,7 @@ export class AcpPromptTurns {
     update: SessionUpdate | undefined
   ): boolean {
     const prompt = this.compacting(turn)
-    return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
+    return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update, this.dialect)
   }
 
   endCompaction(

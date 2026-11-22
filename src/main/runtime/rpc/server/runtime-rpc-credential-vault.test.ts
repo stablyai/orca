@@ -2,6 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { decodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { openOrcadSecret, sealOrcadSecret } from '../../../orcad/credentials/orcad-secret-sealing'
 import {
   _resetSecretStoreForTests,
@@ -10,11 +12,6 @@ import {
 import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import {
-  authenticateMobileWsSession,
-  createEncryptedWsResponseReader,
-  sendEncryptedWsRequest
-} from './runtime-rpc-mobile-ws-test-harness'
 
 it('serves the same encrypted vault to newly authorized pairings but denies standard pairings', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-server-vault-test-'))
@@ -46,15 +43,13 @@ it('serves the same encrypted vault to newly authorized pairings but denies stan
     if (!offer.available) {
       throw new Error('Pairing unavailable')
     }
-    const session = await authenticateMobileWsSession(offer.pairingUrl)
-    const reader = createEncryptedWsResponseReader(session)
-    try {
-      sendEncryptedWsRequest(session, { id: 'vault', method: 'credentialVault.operate', params })
-      return await reader.next('vault')
-    } finally {
-      reader.dispose()
-      session.ws.close()
-    }
+    const { endpoint, publicKeyB64, deviceToken } = decodePairingOffer(offer.pairingUrl)
+    return sendRemoteRuntimeRequestOnSocket(
+      { endpoint, hostPublicKeyB64: publicKeyB64, credential: { kind: 'token', deviceToken } },
+      'credentialVault.operate',
+      params,
+      5_000
+    )
   }
   try {
     setSecretStore({
@@ -88,7 +83,7 @@ it('serves the same encrypted vault to newly authorized pairings but denies stan
     const listed = await callFromNewPairing(['credential-vault'], { op: 'list' })
     expect(listed).toMatchObject({ ok: true, result: { ok: true, value: [summary] } })
     expect(JSON.stringify(listed)).not.toContain('test-only-token')
-    const entry = listed.result
+    const entry = listed.ok ? listed.result : null
     if (
       typeof entry !== 'object' ||
       entry === null ||

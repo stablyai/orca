@@ -61,19 +61,23 @@ async function saveKey(bot: BotRef, text: string): Promise<void> {
 const DONE_KEY_READ_TIMEOUT_MS = 3000
 
 /** Whether a key found in Downloads replaces the host's saved one: only a newer file does (Make a
- *  new key), so a key saved elsewhere, or one Google no longer knows, isn't re-imported. No host
- *  view counts as no saved key. */
+ *  new key), so a key saved elsewhere, or one Google no longer knows, isn't re-imported. A host
+ *  that didn't answer may hold a newer key, so nothing is imported over it: Done answers as before,
+ *  and a missing key shows Import a key file. */
 function importsFoundKey(found: GoogleSetupFoundKey, host: GoogleHostView | null): boolean {
-  const google = host?.status === 'ready' ? host.google : null
-  return !google?.client || found.modifiedAt > google.client.savedAt
+  if (host?.status !== 'ready') {
+    return false
+  }
+  const { client } = host.google
+  return !client || found.modifiedAt > client.savedAt
 }
 
 /** A step card answer. Done on the key step in the person's own browser saves a key already in
  *  Downloads first: the watch only sees files that land while its card is on screen. */
 async function answerStepCard(bot: BotRef, run: GoogleSetupRun, values: string[]): Promise<void> {
   if (values[0] === 'done' && values[1] === 'client' && keySource(run, true)) {
-    // Each read has its own limit, so a slow host doesn't drop a found key; a stalled Downloads mount
-    // answers Done as before.
+    // Each read has its own limit. A stalled Downloads mount or an unanswered host answers Done as
+    // before, without importing.
     const [found, host] = await Promise.all([
       withTimeout(
         window.api.googleSetup.findDownloadedKey({
