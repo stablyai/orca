@@ -113,9 +113,10 @@ export function createBotMemoryRecord(
               ? await fs.writeText(path, next, { exclusive: true })
               : next === current || (await fs.replaceText(path, current, next))
           if (wrote) {
+            const options = { keepRemovedPositions: asked.removed.some((line) => line.position) }
             made = mergeBotMemoryChanges(
-              botMemoryChange(base, next),
-              text === null ? NO_CHANGE : botMemoryChange(text, recorded)
+              botMemoryChange(base, next, options),
+              text === null ? NO_CHANGE : botMemoryChange(text, recorded, options)
             )
             noted(botId, by, made)
             return recorded
@@ -168,7 +169,10 @@ export function createBotMemoryRecord(
       const made = await change(botId, folder, by, (file, record) => ({
         added: [],
         removed: [file, record ?? ''].flatMap(
-          (text) => botMemoryChange(text, dropBotMemoryFact(text, fact).text).removed
+          (text) =>
+            botMemoryChange(text, dropBotMemoryFact(text, fact).text, {
+              keepRemovedPositions: true
+            }).removed
         )
       }))
       return made.removed.length > 0

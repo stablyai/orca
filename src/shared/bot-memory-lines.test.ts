@@ -235,10 +235,10 @@ describe('a fact whose spacing is part of its value', () => {
 
   it('keeps its spaces through a turn-end mark, an edit and an add', () => {
     const before = '# M\n'
-    const after = '# M\n2026-11-06:  header  X-Token\n- tab\tsep  ok  \n'
+    const after = '# M\n2026-11-06:  header  X-Token  · local\n- tab\tsep  ok  \n'
     expect(tagBotMemoryChanges(before, after, null)).toBe(after)
     expect(tagBotMemoryChanges(before, after, 'Slack')).toBe(
-      '# M\n2026-11-06:  header  X-Token · from: Slack\n- tab\tsep  ok · from: Slack\n'
+      '# M\n2026-11-06:  header  X-Token  · local · from: Slack\n- tab\tsep  ok · from: Slack\n'
     )
     expect(tagBotMemoryChanges(before, '# M\n- a  b · from: me\n', null)).toBe('# M\n- a  b\n')
     const [fact] = parseBotMemoryFacts(TWO)

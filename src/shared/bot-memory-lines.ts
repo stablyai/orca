@@ -25,7 +25,7 @@ const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
 const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
-function splitLines(text: string): { lines: string[]; eol: string } {
+function splitLines(text: string): { lines: string[]; eol: '\n' | '\r\n' } {
   return { lines: text.split(/\r?\n/), eol: text.includes('\r\n') ? '\r\n' : '\n' }
 }
 
@@ -118,8 +118,8 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
     if (fact) {
       earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
     }
-    if (fact && !known.has(factKey(fact.text))) {
-      known.set(factKey(fact.text), fact.source)
+    if (fact && !known.has(fact.text)) {
+      known.set(fact.text, fact.source)
     }
   })
   const { lines, eol } = splitLines(after)
@@ -134,10 +134,10 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
       if (!fact || !text) {
         return raw
       }
-      const kept = known.get(factKey(fact.text))
+      const kept = known.get(fact.text)
       const mark = kept === undefined ? label : kept
       // With no source or lookalike to take out, the line stays as written, its mark appended.
-      if (!raw.includes('·')) {
+      if (text === fact.text && !raw.includes(BOT_MEMORY_SOURCE_SEPARATOR)) {
         return mark ? `${raw.trimEnd()}${BOT_MEMORY_SOURCE_SEPARATOR}${mark}` : raw
       }
       return factLine(fact.prefix, fact.date, text, mark)
@@ -148,18 +148,21 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
 /** `text` without the lines stating `fact`, given as its words or as a whole line. */
 export function dropBotMemoryFact(text: string, fact: string): { text: string; dropped: number } {
   const wanted = factParts(`- ${fact.trim().replace(/^[-*]\s+/, '')}`)
-  const key = wanted ? factKey(wanted.text) : ''
+  const key = wanted?.text ?? ''
   const { lines, eol } = splitLines(text)
   const facts = lineFacts(lines)
   const kept = lines.filter((_raw, index) => {
-    const parts = facts[index]
-    return key === '' || !parts || factKey(parts.text) !== key
+    return key === '' || facts[index]?.text !== key
   })
   return { text: kept.join(eol), dropped: lines.length - kept.length }
 }
 
 /** A fact line, and the non-blank line it followed (null: the top of the file). */
-export type BotMemoryLine = { line: string; after: string | null }
+export type BotMemoryLine = {
+  line: string
+  after: string | null
+  position?: { index: number; lineCount: number; eol: '\n' | '\r\n' }
+}
 
 /** What a write did to MEMORY.md's facts, by their words: dates and marks aside. */
 export type BotMemoryChange = { added: BotMemoryLine[]; removed: BotMemoryLine[] }
@@ -169,13 +172,12 @@ export function isEmptyBotMemoryChange(change: BotMemoryChange): boolean {
 }
 
 function rawFactKey(raw: string): string | null {
-  const fact = factParts(raw)
-  return fact ? factKey(fact.text) : null
+  return factParts(raw)?.text ?? null
 }
 
 /** Each line's fact key in `text`, fences read: null for a line that states no fact. */
 function lineKeys(lines: readonly string[]): (string | null)[] {
-  return lineFacts(lines).map((fact) => (fact ? factKey(fact.text) : null))
+  return lineFacts(lines).map((fact) => fact?.text ?? null)
 }
 
 /** The facts `text` states, by their words. */
@@ -187,22 +189,15 @@ export function botMemoryLineKey({ line }: BotMemoryLine): string | null {
   return rawFactKey(line)
 }
 
-/** Both changes as one, each fact once. */
+/** Prefer the first change's lines for any fact both changes include. */
 export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): BotMemoryChange {
-  const unique = (lines: BotMemoryLine[]): BotMemoryLine[] => {
-    const seen = new Set<string | null>()
-    return lines.filter((line) => {
-      const key = rawFactKey(line.line)
-      if (seen.has(key)) {
-        return false
-      }
-      seen.add(key)
-      return true
-    })
+  const merge = (first: BotMemoryLine[], second: BotMemoryLine[]): BotMemoryLine[] => {
+    const seen = new Set(first.map(botMemoryLineKey))
+    return [...first, ...second.filter((line) => !seen.has(botMemoryLineKey(line)))]
   }
   return {
-    added: unique([...a.added, ...b.added]),
-    removed: unique([...a.removed, ...b.removed])
+    added: merge(a.added, b.added),
+    removed: merge(a.removed, b.removed)
   }
 }
 
@@ -220,23 +215,31 @@ export function onlyBotMemoryFactsChanged(before: string, after: string): boolea
 }
 
 /** The facts `after` has that `before` hasn't, and the reverse. */
-export function botMemoryChange(before: string, after: string): BotMemoryChange {
-  const only = (from: string, other: string): BotMemoryLine[] => {
+export function botMemoryChange(
+  before: string,
+  after: string,
+  options?: { keepRemovedPositions?: boolean }
+): BotMemoryChange {
+  const only = (from: string, other: string, keepPositions = false): BotMemoryLine[] => {
     const keys = new Set(lineKeys(splitLines(other).lines))
     const lines: BotMemoryLine[] = []
     let previous: string | null = null
-    const rows = splitLines(from).lines
+    const { lines: rows, eol } = splitLines(from)
     const rowKeys = lineKeys(rows)
     for (const [index, raw] of rows.entries()) {
       const key = rowKeys[index]
       if (key !== null && !keys.has(key)) {
-        lines.push({ line: raw, after: previous })
+        lines.push({
+          line: raw,
+          after: previous,
+          ...(keepPositions ? { position: { index, lineCount: rows.length, eol } } : {})
+        })
       }
       previous = raw.trim() === '' ? previous : raw
     }
     return lines
   }
-  return { added: only(after, before), removed: only(before, after) }
+  return { added: only(after, before), removed: only(before, after, options?.keepRemovedPositions) }
 }
 
 /** `text` with `change` made: its removed facts gone, and each added one not already there after
@@ -249,29 +252,38 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     const key = keys[index]
     return key === null || !gone.has(key)
   })
+  const original = change.added[0]?.position
+  if (text === '' && original?.lineCount === change.added.length) {
+    kept.length = 0
+  }
   const present = new Set(lineKeys(kept))
-  for (const { line, after } of change.added) {
+  for (const { line, after, position } of change.added) {
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
       continue
     }
-    present.add(key)
+    if (position) {
+      // Copies from the same Forget are all restored if the fact was absent at the start.
+      const { index } = position
+      const previous = kept.findLast((raw, at) => at < index && raw.trim() !== '') ?? null
+      if (index <= kept.length && previous === after) {
+        kept.splice(index, 0, line)
+        continue
+      }
+    } else {
+      present.add(key)
+    }
     const anchor = after === null ? -1 : kept.lastIndexOf(after)
     const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
     kept.splice(after === null || anchor !== -1 ? anchor + 1 : end, 0, line)
   }
-  return kept.join(eol)
+  return kept.join(original && lines.length === 1 ? original.eol : eol)
 }
 
 /** A source's words and its link, as Orca writes them: "Slack, Dana <https://…>". */
 export function botMemorySourceLink(source: string): { text: string; url: string | null } {
   const linked = /^(.*?)\s*<(https:\/\/[^\s<>]+)>$/.exec(source)
   return linked ? { text: linked[1], url: linked[2] } : { text: source, url: null }
-}
-
-/** A fact's identity: its text without Orca's mark, exactly, since its spacing can be the value. */
-function factKey(text: string): string {
-  return oneLine(text)
 }
 
 function defusedSeparators(text: string): string {
@@ -298,7 +310,7 @@ export function findBotMemoryFact(text: string, fact: BotMemoryFact): BotMemoryF
 
 /** One fact is one line: its line breaks become spaces, and every other space stays. */
 function oneLine(fact: string): string {
-  return fact.replace(/[ \t]*[\n\r\v\f\u2028\u2029]+[ \t]*/g, ' ').trim()
+  return fact.replace(/[ \t]*[\n\r\u2028\u2029]+[ \t]*/g, ' ').trim()
 }
 
 function factLine(
