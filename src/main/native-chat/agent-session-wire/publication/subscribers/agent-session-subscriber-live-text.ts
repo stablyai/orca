@@ -14,6 +14,7 @@ import {
   forgetEndedLiveRows,
   noteShortenedRow,
   framesWithin,
+  shownViewer,
   sentRowsAfter,
   subscriberAtHead,
   subscriberLiveTextReaders
@@ -271,7 +272,8 @@ export async function publishSubscriberLiveText(
     const rows: SubscriberLiveRow[] = []
     const fresh: SubscriberLiveRow[] = []
     for (const source of items) {
-      if (!subscriber.holdsTextBase && isAppendOnlyLiveRow(source)) {
+      // Rechecked as it is sent: a viewer may have said it is hidden while this waited in its lane.
+      if (isAppendOnlyLiveRow(source) && (!subscriber.holdsTextBase || !shownViewer(subscriber))) {
         continue
       }
       // A shortened row never grows on screen, so its save carries it.
