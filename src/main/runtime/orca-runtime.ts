@@ -218,6 +218,11 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     this.emitClientEvent({ type: 'relayHostsChanged' })
   }
 
+  /** A relayed server's agent rows changed. */
+  notifyRelayHostRowsChanged(hostId: `runtime:${string}`): void {
+    this.emitClientEvent({ type: 'relayHostRowsChanged', hostId })
+  }
+
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>
 
   /** Subscribe from first use; returns the release function. */

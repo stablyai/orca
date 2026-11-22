@@ -3,6 +3,7 @@ import type { RuntimeClientCapabilities } from './callers/runtime-client-capabil
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RelayHostRowsReader } from '../mobile-desktop-relay/mobile-relay-host-rows-announcer'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
@@ -188,7 +189,7 @@ export type RpcContext = {
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
     list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
-    worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
+    worktrees(hostId: string, reader?: RelayHostRowsReader): Promise<MobileRelayHostWorktreesResult>
   }
   // Authenticated runtime devices see which other desktops share this server.
   peerDesktops?: {

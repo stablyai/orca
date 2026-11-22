@@ -169,6 +169,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const stateWord = needsYou ? agentStateLabel(row.dotState) : ''
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
+    row.entry.executionHost?.label,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)

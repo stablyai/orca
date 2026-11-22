@@ -1,5 +1,9 @@
 import * as z from 'zod'
 import {
+  MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
+  MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
+} from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
+import {
   botHomeWorktreeId,
   hostBotsKey,
   readHostBots,
@@ -7,13 +11,19 @@ import {
 } from '../../bots/host-bots-read'
 import {
   HOME_WORKTREE_COUNTS_FAMILY,
+  readHostServerWorkspaces,
   type NO_HOST_LIST_INPUT
 } from '../../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../../query/host-query'
+import { readHostStatusReply } from '../../query/host-status-query'
+import { readProbedHostStatus } from '../../transport/connection/host-status-probe-operations'
+import { relaysToServers } from '../execution-hosts/execution-host-scoped-rpc-client'
+import { NO_SERVER_WORKSPACES } from '../execution-hosts/server-workspaces'
 import {
   homeAgentEntries,
   type HomeAgentBot,
   type HomeAgentEntry,
+  type HomeServerAgentsRead,
   type HomeWorktreeSummary
 } from './home-worktree-info'
 import { isWorktreeActive } from '../workspace-list/workspace-row-filtering'
@@ -86,6 +96,43 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       agents: z.tuple([])
     }),
     strip: ({ totalWorktrees, activeCount }) => ({ totalWorktrees, activeCount, agents: [] })
+  }
+})
+
+/** Agents on the servers a desktop relays to; read only from desktops that announce their row changes. */
+export const homeServerAgentsQuery = defineHostQuery<
+  typeof NO_HOST_LIST_INPUT,
+  HomeServerAgentsRead
+>({
+  family: 'relayHosts.homeAgents',
+  fetch: async (client, _target, _input, previous) => {
+    const status = await readHostStatusReply(client)
+      .then((reply) => readProbedHostStatus(reply)?.status ?? null)
+      .catch(() => null)
+    const capabilities = status?.capabilities ?? []
+    const installationId = status?.hostDescriptor?.installationId
+    // A desktop that can't announce row changes would leave them stale, and Home doesn't poll.
+    const announces =
+      relaysToServers(client, capabilities) &&
+      capabilities.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
+    return {
+      ...(installationId ? { installationId } : {}),
+      servers: announces
+        ? await readHostServerWorkspaces(
+            client,
+            capabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY),
+            previous?.servers
+          )
+        : NO_SERVER_WORKSPACES
+    }
+  },
+  staleTime: HOME_WORKTREE_REFRESH_FLOOR_MS,
+  gcTime: Infinity,
+  refetchOnWindowFocus: true,
+  signal: {
+    // A server coming back reads again, which watches it again.
+    events: ['relayHostRowsChanged', 'relayHostsChanged'],
+    floorMs: HOME_WORKTREE_REFRESH_FLOOR_MS
   }
 })
 

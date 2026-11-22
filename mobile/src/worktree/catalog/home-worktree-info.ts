@@ -1,5 +1,7 @@
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { ServerWorkspaces } from '../execution-hosts/server-workspaces'
 
 export type HomeWorktreeSummary = {
   worktreeId: string
@@ -27,6 +29,8 @@ export type HomeAgentEntry = Readonly<{
   agent: RuntimeWorktreeAgentRow
   /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
   bot?: HomeAgentBot
+  /** Set when the agent runs on a server the desktop relays to, not on the desktop itself. */
+  executionHost?: Readonly<{ id: ExecutionHostId; label: string }>
 }>
 
 export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
@@ -49,7 +53,10 @@ export type HostWorktreeInfo = {
 }
 
 export function homeAgentEntries(
-  worktrees: readonly HomeWorktreeSummary[],
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents'
+  >[],
   botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
 ): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) => {
@@ -66,6 +73,50 @@ export function homeAgentEntries(
       ...(bot ? { bot } : {})
     }))
   })
+}
+
+/** A desktop's relayed servers as Home read them, with its own identity so a server paired directly lists once. */
+export type HomeServerAgentsRead = {
+  installationId?: string
+  servers: ServerWorkspaces
+}
+
+/**
+ * Adds each relayed server's agents to its desktop's live ones, labelled with the server. A server paired
+ * directly lists only there; one several desktops relay lists under the first in Home's order.
+ */
+export function withRelayedServerAgents(
+  hostIds: readonly string[],
+  worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>,
+  reads: Readonly<Record<string, HomeServerAgentsRead>>
+): Readonly<Record<string, HostWorktreeInfo>> {
+  const listed = new Set(hostIds.flatMap((hostId) => reads[hostId]?.installationId ?? []))
+  let merged: Record<string, HostWorktreeInfo> | null = null
+  for (const hostId of hostIds) {
+    const info = worktreeInfo[hostId]
+    const servers = reads[hostId]?.servers
+    if (!info?.agents || !servers) {
+      continue
+    }
+    const relayed = servers.hosts.flatMap((server) => {
+      if (server.installationId) {
+        if (listed.has(server.installationId)) {
+          return []
+        }
+        listed.add(server.installationId)
+      }
+      const executionHost = { id: server.hostId, label: server.label }
+      const rows = servers.worktrees.filter(
+        (row) => row.hostId === server.hostId && row.isArchived !== true
+      )
+      return homeAgentEntries(rows).map((entry) => ({ ...entry, executionHost }))
+    })
+    if (relayed.length > 0) {
+      merged ??= { ...worktreeInfo }
+      merged[hostId] = { ...info, agents: [...info.agents, ...relayed] }
+    }
+  }
+  return merged ?? worktreeInfo
 }
 
 /** One desktop's counts read, as its card and the Agents list see it. */
