@@ -36,6 +36,7 @@ function countSelected(identities: readonly string[], selectedIds: ReadonlySet<s
  */
 export function useWorkspaceCleanupBulkSelection({
   rows,
+  matchedIdentities,
   selectedIds,
   setSelectedIds,
   deletingIdentities,
@@ -45,6 +46,8 @@ export function useWorkspaceCleanupBulkSelection({
   loading
 }: {
   rows: readonly BulkSelectionRow[]
+  /** Rows matching the active filters; held rows that no longer match are never bulk-selected. */
+  matchedIdentities: ReadonlySet<string>
   selectedIds: ReadonlySet<string>
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>
   deletingIdentities: ReadonlySet<string>
@@ -105,13 +108,13 @@ export function useWorkspaceCleanupBulkSelection({
           continue
         }
         displayed.push(row.identity)
-        if (row.isSelectable) {
+        if (row.isSelectable && matchedIdentities.has(row.identity)) {
           bulk.push(row.identity)
         }
       }
     }
     return { bulkIdentities: bulk, displayedIdentities: displayed }
-  }, [deletingIdentities, removalInFlight, rows])
+  }, [deletingIdentities, matchedIdentities, removalInFlight, rows])
 
   const toggleSelectAll = useCallback(
     (selectAll: boolean) => {

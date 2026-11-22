@@ -38,7 +38,7 @@ type Harness = {
   render: (candidates: WorkspaceCleanupCandidate[]) => void
 }
 
-function mount(initial: WorkspaceCleanupCandidate[]): Harness {
+function mount(initial: WorkspaceCleanupCandidate[], unmatched: string[] = []): Harness {
   let candidates = initial
   let selectedIds = new Set<string>()
   let select: Harness['select'] = () => {}
@@ -52,6 +52,9 @@ function mount(initial: WorkspaceCleanupCandidate[]): Harness {
       )
     api = useWorkspaceCleanupBulkSelection({
       rows: candidates.map(facet),
+      matchedIdentities: new Set(
+        candidates.map(getWorkspaceCleanupCandidateIdentity).filter((i) => !unmatched.includes(i))
+      ),
       selectedIds: selected,
       setSelectedIds: setSelected,
       deletingIdentities: new Set(),
@@ -99,6 +102,13 @@ describe('useWorkspaceCleanupBulkSelection', () => {
     act(() => h.api.toggleSelectAll(true))
     expect(h.selected().sort()).toEqual([id('a'), id('b')].sort())
     expect(h.api.selectedBulkCount).toBe(2)
+  })
+
+  it('select-all and the count skip held rows the filter no longer matches', () => {
+    const h = mount([candidate('a'), candidate('b')], [id('b')])
+    expect(h.api.bulkSelectableCount).toBe(1)
+    act(() => h.api.toggleSelectAll(true))
+    expect(h.selected()).toEqual([id('a')])
   })
 
   it('select-all never adds an ignored row; a manually ticked one counts and clears', () => {

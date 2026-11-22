@@ -288,6 +288,7 @@ function WorkspaceCleanupDialogContent({
 
   const bulk = useWorkspaceCleanupBulkSelection({
     rows,
+    matchedIdentities: facetRows.facetMatchedIdentities,
     selectedIds,
     setSelectedIds,
     deletingIdentities,
