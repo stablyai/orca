@@ -203,6 +203,11 @@ export class ChatDeliveries {
     const admitted = () => {
       if (current()) {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
+        // Its turn may end before the send returns: a rows-less one vetoes outbox silence from here.
+        // A later refusal leaves the veto, which only keeps the lost-reply notice until the turn ends.
+        if (!delivery.reply) {
+          this.legacyAnswered.add(chat.sessionId)
+        }
       }
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {

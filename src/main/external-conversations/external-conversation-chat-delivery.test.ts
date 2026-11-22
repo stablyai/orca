@@ -1,6 +1,50 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ChatDeliveries } from './external-conversation-chat-delivery'
 import { HOST_CLOCK } from './external-conversation-host'
+import type * as ChatModule from './external-conversation-chat'
+import type { Delivery } from './external-conversation-types'
+
+const chatModule = vi.hoisted(() => ({
+  deliverToChat: vi.fn<typeof ChatModule.deliverToChat>()
+}))
+vi.mock('./external-conversation-chat', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChatModule>()),
+  deliverToChat: chatModule.deliverToChat
+}))
+
+describe('ChatDeliveries.deliver', () => {
+  it('vetoes outbox silence at admission, before a rows-less send returns', async () => {
+    const deliveries = new ChatDeliveries(vi.fn())
+    const key = { source: 'slack' as const, externalId: 'T1:C1:1.0' }
+    const chat = { worktreeId: 'folder:home', sessionId: 's1', agent: 'claude' as const }
+    const send = (deliveryId: string, reply?: { account: string }) =>
+      deliveries.deliver(undefined, key, chat, {
+        text: 'hi',
+        deliveryId,
+        signal: new AbortController().signal,
+        ...(reply ? { reply } : {})
+      })
+    chatModule.deliverToChat.mockImplementationOnce(async (_chat, _link, delivery) => {
+      delivery.admitted?.()
+      return { outcome: 'accepted' }
+    })
+    await send('d1', { account: 'a' })
+    expect(deliveries.answeredThroughOutbox('s1')).toBe(true)
+
+    let finish: (delivery: Delivery) => void = () => {}
+    chatModule.deliverToChat.mockImplementationOnce((_chat, _link, delivery) => {
+      delivery.admitted?.()
+      return new Promise((resolve) => (finish = resolve))
+    })
+    const pending = send('d2')
+    await vi.waitFor(() => expect(chatModule.deliverToChat).toHaveBeenCalledTimes(2))
+    // A turn ending now answers the rows-less message too: no outbox row has its words.
+    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
+    finish({ outcome: 'accepted' })
+    await pending
+    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
+  })
+})
 
 describe('ChatDeliveries.adopt', () => {
   it("links the chat and makes its running turn the conversation's, so the cloud mirrors it", () => {
