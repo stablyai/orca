@@ -29,7 +29,10 @@ export function installPreviewImeBridge(
     terminalElement: terminal.element,
     isComposing: () => compositionTracker?.isActive() ?? false,
     sendInput: (data) => terminal.input(data),
-    getKittyKeyboardFlags: options.getKittyKeyboardFlags
+    getKittyKeyboardFlags: options.getKittyKeyboardFlags,
+    // macOS only: Linux IBus commits every composed syllable as insertText, and none of it is rebuilt.
+    subscribeToTerminalData:
+      platform === 'darwin' ? (listener) => terminal.onData(listener) : undefined
   })
   return {
     claimKeyEvent: (event) => forwarder?.claimKeyEvent(event) ?? false,
