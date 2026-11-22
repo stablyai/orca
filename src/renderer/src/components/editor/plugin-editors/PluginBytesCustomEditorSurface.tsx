@@ -62,13 +62,15 @@ export default function PluginBytesCustomEditorSurface({
   file,
   fileContent,
   onSave,
-  reloadContent
+  reloadContent,
+  viewStateKey
 }: {
   editor: ActivePluginCustomEditor
   file: OpenFile
   fileContent: FileContent
   onSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
+  viewStateKey: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<BytesState>({ status: 'ok' })
@@ -183,6 +185,7 @@ export default function PluginBytesCustomEditorSurface({
         <PluginCustomEditorFrame
           editor={editor}
           fileId={fileId}
+          viewStateKey={viewStateKey}
           content=""
           readOnly={file.readOnly === true}
           onContentChange={noopContentChange}

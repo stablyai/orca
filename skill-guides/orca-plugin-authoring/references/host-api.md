@@ -41,6 +41,8 @@ Host API 1.10 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; 
 - `document.onDidChange(handler: (document: EditorDocument) => void)`: Replays the current document, then each one Orca sends when the file changes outside.
 - `document.applyEdit(edit: EditorEdit)`: Rejects with `conflict`, `too_large` or `not_permitted` (read-only).
 - `document.session(options?: EditorSessionOptions<T>)`: Document sync in one call; resolves once theme, locale and the first document are in.
+- `document.getViewState()`: What `setViewState` last kept for this tab, or null. A tab's editor reopens (tab switch, plugin reload) with it while Orca runs; it is in once the first document is. Absent on older Orca: check `'getViewState' in orca.document`.
+- `document.setViewState(state: JsonValue)`: Keeps this tab's view (scroll, zoom; never document content); null forgets it. Throws for values JSON cannot hold, non-finite numbers included, and for more than 16 KiB of JSON (16,384 characters). Call it on every view change, not after a debounce: a tab switch unloads the frame at once. View posts have their own lane and no rate limit; skip unchanged views. Absent on older Orca: check `'setViewState' in orca.document`.
 
 ## Theme variables in frames
 

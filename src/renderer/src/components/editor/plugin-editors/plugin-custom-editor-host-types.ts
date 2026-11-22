@@ -32,6 +32,10 @@ export type CustomEditorHostOptions = {
   onFrameProgress?: (step: 'delivered' | 'subscribed') => void
   /** The frame's document session merges outside changes; set once per frame. */
   onMergesOutside?: () => void
+  /** The JSON text of the view this tab's editor last posted, sent before the first document. */
+  getViewState?: () => string | null
+  /** The frame posted its view (scroll, zoom) as JSON text; null clears it. */
+  onViewState?: (json: string | null) => void
   /** The edit lane; every other message spends the frame's shared budget. */
   budget?: PanelMessageBudget
   now?: () => number

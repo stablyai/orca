@@ -1,7 +1,7 @@
 /**
  * Part of the frame shell's IIFE (plugin-panel-shell.ts): an editor's `orca.document`, including
  * `session()`, the document sync every editor otherwise rebuilds. Uses the shell's `call`, `on`,
- * `latest`, `waiting`, `starting` and `helloSeen`.
+ * `post`, `latest`, `viewState`, `waiting`, `starting` and `helloSeen`.
  *
  * The baseline (`base`, `baseVersion`, `baseContent`) moves only when Orca accepts an edit or sends
  * a document while nothing is unaccepted, so a refused edit leaves a draft that is still dirty
@@ -49,7 +49,21 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
       },
       applyEdit: applyEdit,
-      session: documentSession
+      session: documentSession,
+      getViewState: function () { return viewState },
+      // Why JSON text on the wire: the host keeps it as is, and one length rule holds on both sides.
+      setViewState: function (state) {
+        var json = state == null ? 'null' : JSON.stringify(state, function (key, value) {
+          // JSON would store these as null, which silently forgets the view.
+          if (typeof value === 'number' && !isFinite(value)) throw new TypeError('view state must be JSON, got ' + value)
+          return value
+        })
+        if (json === undefined) throw new TypeError('view state must be JSON')
+        // Refused here, before it is kept, so getViewState never shows a view Orca would drop.
+        if (json.length > C.viewStateMaxChars) throw new RangeError('view state is over ' + C.viewStateMaxChars + ' characters of JSON')
+        viewState = JSON.parse(json)
+        post({ kind: 'evt', event: E.editorViewState, payload: viewState === null ? null : json })
+      }
     })
   }
   function sameContent(a, b) {

@@ -29,6 +29,9 @@ export const FRAME_EVENTS = {
   editorSubscribed: 'editor.subscribed',
   /** frame → host, once: its document session merges outside changes into unsaved work. */
   editorMerges: 'editor.merges',
+  /** Both ways: the editor's view of this tab (scroll, zoom), JSON or null. Orca keeps the last one
+   *  the frame posted and sends it before the first document when the tab's editor opens again. */
+  editorViewState: 'editor.viewState',
   /** host → frame, payload `PluginPanelPush`: a worker post, an event or a data change. */
   push: 'plugin.push'
 } as const

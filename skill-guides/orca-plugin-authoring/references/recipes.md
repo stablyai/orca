@@ -113,7 +113,11 @@ There is no bundler or network: copy the library's ESM build into the plugin and
 (`vendor/lib.d.ts` for `lib.js`, `.d.mts` for `.mjs`) with only the exports you use, and import
 it by relative path; a package's split `.d.ts` files rarely resolve once copied. Style from the `--orca-*` variables in `references/host-api.md`
 and redo it on `orca.on('theme', ...)`. Orca keeps no undo for editors: the library's own undo
-gets Cmd/Ctrl+Z.
+gets Cmd/Ctrl+Z. Switching tabs unloads the editor's frame, so call
+`orca.document.setViewState(view)` with the library's scroll and zoom on every view change (not
+after a debounce, which dies with the frame), and open at `orca.document.getViewState()` (in once
+the first document is; null on a first open). Below an `engines.orca` that has them, guard both
+with `'setViewState' in orca.document`.
 
 ```ts
 // editor/sync.ts: the only code that talks to Orca; merge by id, never by array position.
