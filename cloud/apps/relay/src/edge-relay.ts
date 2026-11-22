@@ -188,10 +188,22 @@ export class EdgeMoveDeferredError extends Error {
     readonly reason: 'units_held' | 'push_failed' | 'edge_busy' | 'not_on_edge',
     // units_held only: the row's counters hold nothing but one control unit (what moveOwnControl
     // could take on a qualifying ask), so the deferral log can count them. Counters only.
-    readonly ownControlOnly = false
+    readonly ownControlOnly = false,
+    // units_held only: which counters the row holds, so the deferral log shows what blocks moves.
+    // Counts only, never identities.
+    readonly held?: EdgeHeldCounters
   ) {
     super(`relay_edge_move_deferred:${reason}`)
   }
+}
+
+export type EdgeHeldCounters = {
+  controls: number
+  splices: number
+  invites: number
+  installs: number
+  confirmations: number
+  migrationLeases: number
 }
 
 type Identity = { userId: string; relayHostId: string }
@@ -866,7 +878,7 @@ export class EdgeAssignments {
     if (units === 0) { return undefined }
     const ownControlOnly = units === 1 && integer(row, 'reserved_controls') === 1
     if (!ownControlOnly || options.ownControl !== true) {
-      throw new EdgeMoveDeferredError('units_held', ownControlOnly)
+      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row))
     }
     const cellId = text(row, 'cell_id')
     let leases: SqlRow[]
@@ -1188,6 +1200,17 @@ export class EdgeAssignments {
       assignmentEpoch,
       leaseExpiresAt
     }
+  }
+}
+
+function heldCounters(row: SqlRow): EdgeHeldCounters {
+  return {
+    controls: integer(row, 'reserved_controls'),
+    splices: integer(row, 'reserved_splices'),
+    invites: integer(row, 'reserved_invites'),
+    installs: integer(row, 'pending_installs'),
+    confirmations: integer(row, 'pending_confirmations'),
+    migrationLeases: integer(row, 'migration_leases')
   }
 }
 

@@ -155,7 +155,11 @@ describe('edge move past the host\'s own control', () => {
     const { placed } = await connectedOnGce(h)
     const deferred = await h.edge.moveToEdge(IDENTITY, 0).catch((error: unknown) => error)
     expect(deferred).toBeInstanceOf(EdgeMoveDeferredError)
-    expect(deferred).toMatchObject({ reason: 'units_held', ownControlOnly: true })
+    expect(deferred).toMatchObject({
+      reason: 'units_held',
+      ownControlOnly: true,
+      held: { controls: 1, splices: 0, invites: 0, installs: 0, confirmations: 0, migrationLeases: 0 }
+    })
     expect(await h.row()).toMatchObject({ cell_id: GCE_CELL.id, assignment_epoch: placed.assignmentEpoch })
     expect(await h.cellReserved()).toBe(1)
     expect(h.pushes).toEqual([])
