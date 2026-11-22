@@ -77,7 +77,20 @@ export function structuredChatNamingDeps(
       // These save every CLI run, so a naming run would sit in the user's own history.
       if (
         useChatAgent &&
-        ['copilot', 'kimi', 'cursor', 'hermes', 'kiro', 'goose', 'aug'].includes(record.provider)
+        [
+          'copilot',
+          'kimi',
+          'cursor',
+          'hermes',
+          'kiro',
+          'goose',
+          'aug',
+          'kilo',
+          'mimo-code',
+          'gemini',
+          'droid',
+          'qwen-code'
+        ].includes(record.provider)
       ) {
         return null
       }

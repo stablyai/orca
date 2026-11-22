@@ -106,33 +106,6 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   resetMirroredTerminalHandlesForTests()
 }
 
-export function _getWebSessionTabsTrackingCountsForTest(): {
-  freshness: number
-  hostMappings: number
-  hostMappingWorktrees: number
-} {
-  let hostMappingWorktrees = 0
-  for (const mappingKeysByWorktree of hostSessionTabMappingKeysByEnvironmentAndWorktree.values()) {
-    hostMappingWorktrees += mappingKeysByWorktree.size
-  }
-  return {
-    freshness: latestSessionTabsSnapshotByWorktree.size,
-    hostMappings: hostSessionTabIdByLocalKey.size,
-    // Why: the mapping index is a parallel structure, so leak tests must see it drain alongside the flat map.
-    hostMappingWorktrees
-  }
-}
-
-export function _getWebSessionTabsReceiptTrackingCountsForTest(): {
-  receipts: number
-  removalWatermarks: number
-} {
-  return {
-    receipts: latestReceivedSessionTabsSnapshotByWorktree.size,
-    removalWatermarks: sessionTabsRemovalWatermarkByWorktree.size
-  }
-}
-
 export function clearWebSessionTabsTrackingForWorktree(
   environmentId: string,
   worktreeId: string

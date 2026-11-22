@@ -22,6 +22,7 @@ import type {
   AutomationWorkspaceMode
 } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AutomationEventTrigger } from '../../../../../shared/automation-event-triggers'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -54,6 +55,8 @@ export type AutomationDraft = {
   extraAgentArgs: string
   /** Set when the automation runs as a bot; the project, workspace, session and agent are then the bot's. */
   bot: AutomationBotTarget | null
+  /** The host listing the picked bot: ids are random per host, so the id alone can name two. */
+  botHostId?: ExecutionHostId
   launchPreferences?: AutomationLaunchPreferences
   agentArgs?: string | null
   launchSetupPatch?: AutomationLaunchSetupPatch & { legacyOnly?: true }

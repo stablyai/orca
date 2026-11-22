@@ -31,11 +31,16 @@ export const BOT_AGENTS = [
   'kimi',
   'kiro',
   'aug',
-  'goose'
+  'goose',
+  'kilo',
+  'mimo-code',
+  'gemini',
+  'droid',
+  'qwen-code'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
-const BOT_AGENTS_OLDER_BUILDS_READ: readonly string[] = [
+const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
   'claude',
   'codex',
   'grok',
@@ -43,17 +48,23 @@ const BOT_AGENTS_OLDER_BUILDS_READ: readonly string[] = [
   'omp',
   'pi',
   'antigravity'
-]
+])
 
 /** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
 export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   readable: Bot[]
   newer: Bot[]
 } {
-  return {
-    readable: bots.filter((bot) => BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent)),
-    newer: bots.filter((bot) => !BOT_AGENTS_OLDER_BUILDS_READ.includes(bot.agent))
+  const readable: Bot[] = []
+  const newer: Bot[] = []
+  for (const bot of bots) {
+    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
+      readable.push(bot)
+    } else {
+      newer.push(bot)
+    }
   }
+  return { readable, newer }
 }
 
 export function isBotAgent(agent: string): agent is BotAgent {
@@ -100,7 +111,9 @@ export const BotMemberSchema = z.object({
   /** The service's workspace the id belongs to: a Linear workspace, or a Slack team. A Slack entry without one is in the bot's first Slack workspace. */
   workspaceId: z.string().min(1).optional(),
   /** The service's picture of them, as it gave it when they were added; Slack's only. */
-  avatarUrl: optionalConnectorAvatarUrl
+  avatarUrl: optionalConnectorAvatarUrl,
+  /** `app`: another Slack app's bot user, not a person. Absent for a person; an unknown kind reads as absent, so a newer one never voids the bot. */
+  kind: z.literal('app').optional().catch(undefined)
 })
 
 export const BotNotificationsSchema = z.object({

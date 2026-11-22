@@ -79,16 +79,7 @@ export function readAdoption(
   db: Database.Database,
   only: readonly string[] | null
 ): Adoption {
-  const claims = new Map<string, Claim[]>()
-  for (const claim of source
-    .prepare(`SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims
-      WHERE ?1 IS NULL OR session_id IN (SELECT value FROM json_each(?1))`)
-    .all(only && JSON.stringify(only))) {
-    const id = String(claim.session_id)
-    const list = claims.get(id) ?? []
-    list.push(claim)
-    claims.set(id, list)
-  }
+  const claims = readJournalLegacyClaims(source, only)
   const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
   const tabsRecorded = readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
   // Recording the tab index adds one tab per record, so it takes this file's tabs as a set.
@@ -112,6 +103,24 @@ export function readAdoption(
     tabsRecorded,
     added: []
   }
+}
+
+/** The original's upload claims by chat, for only the given chats when listed. */
+export function readJournalLegacyClaims(
+  source: Database.Database,
+  only: readonly string[] | null
+): Map<string, Claim[]> {
+  const claims = new Map<string, Claim[]>()
+  for (const claim of source
+    .prepare(`SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims
+      WHERE ?1 IS NULL OR session_id IN (SELECT value FROM json_each(?1))`)
+    .all(only && JSON.stringify(only))) {
+    const id = String(claim.session_id)
+    const list = claims.get(id) ?? []
+    list.push(claim)
+    claims.set(id, list)
+  }
+  return claims
 }
 
 /** This file's own rows answer, so a tab added or rolled back needs no bookkeeping here. */

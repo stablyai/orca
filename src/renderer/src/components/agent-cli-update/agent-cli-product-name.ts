@@ -35,5 +35,11 @@ export function agentCliProductName(
       return t('agentCliUpdate.gooseProduct', 'Goose CLI')
     case 'aug':
       return t('agentCliUpdate.auggieProduct', 'Auggie')
+    case 'kilo':
+      return t('agentCliUpdate.kiloProduct', 'Kilo CLI')
+    case 'mimo-code':
+      return t('agentCliUpdate.mimoCodeProduct', 'MiMo Code')
+    case 'qwen-code':
+      return t('agentCliUpdate.qwenCodeProduct', 'Qwen Code')
   }
 }

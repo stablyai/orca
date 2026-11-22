@@ -2,6 +2,7 @@
 
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
+  AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   launchPreparationFailure
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -39,7 +40,10 @@ export async function prepareAcpLaunch<
 >(resolve: () => Promise<Launch>, closedBeforeSpawn: () => void): Promise<Launch> {
   const preparationFailure = (error: unknown): never => {
     closedBeforeSpawn()
-    throw launchPreparationFailure(error)
+    // An account that can't sign in says so, as the agent itself would.
+    throw error instanceof AgentSessionAcquisitionRefusal && error.reason === 'notSignedIn'
+      ? error
+      : launchPreparationFailure(error)
   }
   const launch = await resolve().catch(preparationFailure)
   const { spec } = launch

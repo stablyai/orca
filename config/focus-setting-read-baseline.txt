@@ -104,8 +104,7 @@
 1 src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.ts
 2 src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-details.ts
 1 src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-refresh-targets.ts
-1 src/renderer/src/components/sidebar/workspace-card/surface/worktree-card-secondary-rows.tsx
-1 src/renderer/src/components/sidebar/workspace-card/template/card-activity-parts.tsx # parity oracle keeps the old secondary-rows read until it is deleted
+1 src/renderer/src/components/sidebar/workspace-card/template/card-activity-parts.tsx
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/worktree-visibility-host-target.ts
 2 src/renderer/src/components/sidebar/worktree-list/controls/sidebar-host-options.ts

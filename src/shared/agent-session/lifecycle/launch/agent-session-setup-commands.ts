@@ -78,6 +78,34 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     remoteLoginCommand: ['auggie', 'auth', 'login', '--headless', '--json'],
     installCommand: 'npm install -g @augmentcode/auggie'
   },
+  {
+    agent: 'kilo',
+    loginCommand: ['kilo', 'auth', 'login'],
+    installCommand: 'curl -fsSL https://kilo.ai/cli/install | bash'
+  },
+  {
+    agent: 'mimo-code',
+    loginCommand: ['mimo', 'auth', 'login'],
+    installCommand: 'curl -fsSL https://mimo.xiaomi.com/install | bash',
+    windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
+  },
+  { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
+  {
+    agent: 'droid',
+    loginCommand: ['droid'],
+    slashCommand: '/login',
+    installCommand: 'curl -fsSL https://app.factory.ai/cli | sh'
+  },
+  // Qwen has no login command; `/auth` in its CLI connects a provider.
+  {
+    agent: 'qwen-code',
+    loginCommand: ['qwen'],
+    slashCommand: '/auth',
+    installCommand:
+      'curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash',
+    windowsInstallScript:
+      'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

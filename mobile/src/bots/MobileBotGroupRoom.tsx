@@ -103,6 +103,7 @@ export function MobileBotGroupRoom({
     bots,
     needsYou,
     itemReads,
+    itemMemberIds,
     loadEarlier
   } = useMobileBotGroupTranscript(client, groupId, threadId, hostId, visible && connected, setError)
   const group = data?.group
@@ -161,7 +162,7 @@ export function MobileBotGroupRoom({
   }
   const memberFaces = (group?.members ?? []).flatMap((member) => {
     const bot = bots.find((bot) => bot.id === member.botId)
-    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot, undefined) }] : []
+    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
   })
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -230,7 +231,8 @@ export function MobileBotGroupRoom({
                   role: 'user',
                   blocks: botGroupOwnerMessageBlocks(message),
                   timestamp: message.createdAt,
-                  source: 'transcript'
+                  source: 'transcript',
+                  ...(message.automationRun ? { automationRun: message.automationRun } : {})
                 }}
               />
             ) : (
@@ -379,6 +381,7 @@ export function MobileBotGroupRoom({
           bots={bots}
           needsYou={needsYou}
           reads={itemReads}
+          memberIds={itemMemberIds}
           online={connected}
           hostName={hostName}
           onOpenRoom={setThreadId}
