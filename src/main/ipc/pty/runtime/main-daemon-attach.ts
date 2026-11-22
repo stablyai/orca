@@ -3,7 +3,10 @@ import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
-import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
+import {
+  admitProviderReattachLaunchIdentity,
+  reattachLaunchBinding
+} from '../pane/launch-authority'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
@@ -48,7 +51,7 @@ export async function attachPtyFromRuntimeController(
       deps.runtime?.restoreAttachedLaunch(ptyId, {
         incarnationId: attachResult.incarnationId,
         identity: admitProviderReattachLaunchIdentity({ ...attachResult, isReattach: true }),
-        launchNote: attachResult.launchNote
+        reattach: reattachLaunchBinding({ ...attachResult, isReattach: true }).reattach
       })
     }
     deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')

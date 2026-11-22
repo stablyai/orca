@@ -83,22 +83,26 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
   }
 
   /** Main's own attach of a surviving session (no pane mounted it, or no renderer at all) restores
-   *  its launch exactly as a pane reattach does. A launch this run already knows is left alone. */
+   *  its launch exactly as a pane reattach does. Why the evidence gate: a launch this run already
+   *  holds, or saw finish, must not be revived by a re-attach after an endpoint loss. */
   restoreAttachedLaunch(
     ptyId: string,
     attach: {
       incarnationId: PtyIncarnationId | undefined
       identity: ReattachedLaunchIdentity | null
-      launchNote: DaemonLaunchNote | null | undefined
+      reattach: { launchNote?: DaemonLaunchNote | null } | undefined
     }
   ): void {
     const pty = this.ptysById.get(ptyId)
-    if (!pty || pty.launchAgent || pty.launchToken) {
+    if (
+      !pty ||
+      pty.launchAgent ||
+      pty.launchToken ||
+      (pty.launchEvidence && pty.launchEvidence.kind !== 'unknown')
+    ) {
       return
     }
-    this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, {
-      launchNote: attach.launchNote
-    })
+    this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, attach.reattach)
   }
 
   /** Daemon metadata owns the surviving process: its incarnation fence restores the launched agent

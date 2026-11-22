@@ -8,7 +8,10 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { recordFreshLaunch, retireLaunch } from '../launch/launch-evidence'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
-import { OrcaRuntimeWithDaemonLaunchNote } from './daemon-launch-note'
+import {
+  OrcaRuntimeWithDaemonLaunchNote,
+  type ReattachedLaunchIdentity
+} from './daemon-launch-note'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -52,10 +55,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       }
       /** The agent a fresh spawn's launch command starts, whose submits wait for its composer. */
       launchedAgent?: TuiAgent
-      providerReattachLaunchIdentity?: {
-        incarnationId: PtyIncarnationId
-        launchAgent: TuiAgent
-      }
+      providerReattachLaunchIdentity?: ReattachedLaunchIdentity
       /** A newly started process, which runs no launch but an admitted one. */
       freshSpawn?: true
       /** A reattach, with its host's launch note; none when the host keeps no notes (an older daemon, SSH). */
