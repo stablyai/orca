@@ -5,7 +5,6 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
-  getSystemCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'

@@ -144,7 +144,7 @@ export function useAccountOwnerUsage(
     owner,
     rateLimits: claudeContextual.rateLimits,
     accountRateLimits: ownerRateLimits,
-    accounts: ownerId && owned?.ownerId === ownerId ? owned.snapshot : null,
+    accounts: owned?.snapshot ?? null,
     remoteOwner,
     refreshRemote: claudeContextual.refresh
   }

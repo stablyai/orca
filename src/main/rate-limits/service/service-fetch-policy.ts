@@ -28,6 +28,7 @@ import {
 import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
 import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { credentialUnavailableResult } from './credential-error-result'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   private readonly claudeSessionReports = new ClaudeLiveUsageSessionReports()
@@ -46,28 +47,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
-    return {
-      provider: 'minimax',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: message,
-      status: 'error',
-      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
-    }
+    return credentialUnavailableResult('minimax', message)
   }
 
   protected getZcodePlanCredentialError(message: string): ProviderRateLimits {
-    return {
-      provider: 'zcode',
-      session: null,
-      weekly: null,
-      monthly: null,
-      updatedAt: Date.now(),
-      error: message,
-      status: 'error',
-      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
-    }
+    return credentialUnavailableResult('zcode', message)
   }
 
   protected claudeStateAtCycleStart(limits: ProviderRateLimits | null): ProviderRateLimits {

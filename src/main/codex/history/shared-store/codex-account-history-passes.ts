@@ -185,6 +185,16 @@ export class CodexAccountHistoryPasses {
       })
   }
 
+  async preparePinnedHome(home: string): Promise<void> {
+    const key = normalizeRuntimePathForComparison(home)
+    const accountHome = this.homes
+      .sharedHomes()
+      ?.find((candidate) => normalizeRuntimePathForComparison(candidate) === key)
+    if (accountHome) {
+      await this.run(accountHome, true, { forLaunch: true })
+    }
+  }
+
   /** Reports the move status if every listed home has settled; for launches no census follows. */
   reportMoves(): void {
     void this.reportUnlessPending(null)

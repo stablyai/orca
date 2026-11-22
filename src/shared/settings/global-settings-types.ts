@@ -309,11 +309,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   promptCacheTimerEnabled: boolean
   /** Prompt-cache TTL (ms); only 300000 (5 min standard) or 3600000 (1 hr, extended-TTL plans). */
   promptCacheTtlMs: number
-  /** Why: durable main-owned pref so Orca can prepare shared ~/.codex before the renderer hydrates. */
   codexManagedAccounts: CodexManagedAccount[]
-  /** Workspace IDs on this host mapped to saved Codex accounts; absent IDs inherit. */
-  codexWorkspaceAccounts?: Record<string, string>
-  claudeWorkspaceAccounts?: Record<string, string>
   activeCodexManagedAccountId: string | null
   activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
   /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */
@@ -382,8 +378,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   claudeOAuthUsageEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
-  /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or
-   *  into ~/.codex, and removes nothing already linked (#24511). Absent means on (#10770). */
+  /** Whether histories are shared across accounts; absent means enabled. */
   codexShareHistoryAcrossAccounts?: boolean
   /** Workspace cleanup also deletes agent chat history whose Orca workspace folder is gone. Absent means off. */
   deleteChatHistoryWithWorkspace?: boolean

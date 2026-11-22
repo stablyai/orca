@@ -6,11 +6,13 @@ import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-cont
 export function projectSourceControlLaunchRecipes(
   settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
 ): RuntimeClientSourceControlAi {
-  const { actions } = normalizeSourceControlAiSettings(
+  const normalized = normalizeSourceControlAiSettings(
     settings.sourceControlAi,
     settings.commitMessageAi
   )
+  const { actions } = normalized
   return {
+    enabled: normalized.enabled,
     actions: Object.fromEntries(
       SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
         const recipe = actions?.[actionId]

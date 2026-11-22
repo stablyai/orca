@@ -16,7 +16,13 @@ export const codexStructuredLaunchHomeResolvers = {
     workspaceId?: string
   }) => prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, { workspaceId }),
   // Throw like preparation: null would silently key the catalog to the system home instead of the account.
-  resolveCodexStructuredLaunchHome: ({ launchEnv, workspaceId }: { launchEnv: NodeJS.ProcessEnv; workspaceId?: string }) => {
+  resolveCodexStructuredLaunchHome: ({
+    launchEnv,
+    workspaceId
+  }: {
+    launchEnv: NodeJS.ProcessEnv
+    workspaceId?: string
+  }) => {
     const runtimeHome = state.core.codexRuntimeHome
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')

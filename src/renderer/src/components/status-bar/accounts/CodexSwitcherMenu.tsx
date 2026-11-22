@@ -56,6 +56,7 @@ export function CodexSwitcherMenu({
     resetCreditExpiry,
     selectedGroup,
     selectedRuntimeKey,
+    activeTarget,
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,

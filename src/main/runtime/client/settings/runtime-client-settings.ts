@@ -1,4 +1,3 @@
-import { projectSourceControlLaunchRecipes } from './runtime-source-control-launch-recipes'
 import { workspaceAccountSettingUpdates } from './workspace-account-setting-updates'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
@@ -7,10 +6,7 @@ import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-
 import { isAgentSkillSharingEnabled } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
-import {
-  applyTerminalQuickCommandMutation,
-  type TerminalQuickCommandMutation
-} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommandMutation } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -22,11 +18,11 @@ import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/c
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal/input/terminal-word-separator'
-import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
@@ -45,8 +41,11 @@ import type {
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
-import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
-import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
+import { projectHostNotificationSettings } from './host-notification-settings-projection'
+import {
+  readRuntimeTerminalQuickCommands,
+  updateRuntimeTerminalQuickCommands
+} from './runtime-terminal-quick-command-settings'
 import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
 import { projectHostOwnedSettings } from '../../../../shared/settings/host-owned-settings'
 
@@ -223,18 +222,15 @@ export class RuntimeClientSettingsController {
     return this.get()
   }
 
-  getTerminalQuickCommands(): TerminalQuickCommand[] {
-    if (!this.store?.getSettings) {
-      throw new Error('runtime_unavailable')
-    }
-    return this.store.getSettings().terminalQuickCommands ?? []
-  }
-
   getAgentLaunch(): AgentLaunchSettings {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
     return projectAgentLaunchSettings(this.store.getSettings(), process.platform)
+  }
+
+  getTerminalQuickCommands() {
+    return readRuntimeTerminalQuickCommands(this.store)
   }
 
   async mutateAgentLaunch(mutation: AgentLaunchSettingsMutation): Promise<AgentLaunchSettings> {
@@ -279,14 +275,8 @@ export class RuntimeClientSettingsController {
     return committed.settings
   }
 
-  updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation): TerminalQuickCommand[] {
-    if (!this.store?.getSettings || !this.store.updateSettings) {
-      throw new Error('runtime_unavailable')
-    }
-    const current = this.getTerminalQuickCommands()
-    const next = applyTerminalQuickCommandMutation(current, mutation)
-    this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
-    return this.getTerminalQuickCommands()
+  updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation) {
+    return updateRuntimeTerminalQuickCommands(this.store, mutation)
   }
 
   updatePRBotAuthorOverride(args: { author: string; isBot: boolean }): RuntimeClientSettings {
@@ -338,11 +328,4 @@ export class RuntimeClientSettingsController {
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
   }
-}
-
-function projectHostNotificationSettings(
-  settings: NotificationSettings = getDefaultNotificationSettings()
-): RuntimeClientSettings['hostNotifications'] {
-  const { enabled, agentTaskComplete, agentNeedsInput, terminalBell } = settings
-  return { enabled, agentTaskComplete, agentNeedsInput, terminalBell }
 }

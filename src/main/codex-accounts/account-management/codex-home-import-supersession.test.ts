@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+﻿import { beforeEach, expect, it, vi } from 'vitest'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'

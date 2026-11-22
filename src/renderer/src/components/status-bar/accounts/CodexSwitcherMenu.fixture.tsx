@@ -204,20 +204,13 @@ function switcherFixture(
               <CodexSwitcherMenu
                 codex={shownCodex}
                 ownerUsage={usage}
-                compact={false}
-                iconOnly={false}
                 asSubmenu
                 triggerContent="Codex"
               />
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <CodexSwitcherMenu
-            codex={shownCodex}
-            ownerUsage={usage}
-            compact={false}
-            iconOnly={false}
-          />
+          <CodexSwitcherMenu codex={shownCodex} ownerUsage={usage} />
         )}
       </div>
     )

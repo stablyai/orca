@@ -47,6 +47,11 @@ export class CodexConfigMirror {
     }
   }
 
+  readHostModelProviderSync(): string | null {
+    const config = this.readHostConfig()
+    return config ? readCodexTopLevelModelProvider(config.contents) : null
+  }
+
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
     private readonly assertManagedHomePath: (

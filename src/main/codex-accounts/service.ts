@@ -1,22 +1,22 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch/windows/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  CodexSystemDefaultIdentity
 } from '../../shared/agent-accounts/managed-account-types'
 import type { CodexRateLimitResetResult } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
-import { runCodexLoginSession, type CodexLoginChild } from './login/codex-login-session'
+import { runCodexLoginSession } from './login/codex-login-session'
+import { killCodexLoginProcessTree } from './login/codex-login-process-tree'
 import { CodexManagedHomePath } from './managed-homes/codex-managed-home-path'
 import { CodexManagedHomeLifecycle } from './managed-homes/codex-managed-home-lifecycle'
 import { CodexResetCreditCoordinator } from './reset-credits/codex-reset-credit-coordinator'
@@ -31,39 +31,6 @@ import type {
 import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/agent-accounts/codex/codex-auth-errors'
 import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
-
-const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
-
-function killLoginProcessTree(
-  child: CodexLoginChild,
-  interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
-): void {
-  const pid = interactiveLogin?.getTerminationPid?.() ?? child.pid
-  if (
-    process.platform === 'win32' &&
-    typeof pid === 'number' &&
-    (child.exitCode ?? child.signalCode) === null &&
-    // Record only attempted kills; Electron-owned PIDs fall back to a direct signal.
-    admitSelfInitiatedTreeKill({
-      pid,
-      site: 'codex-account-login-teardown',
-      scope: 'win-taskkill-tree'
-    })
-  ) {
-    try {
-      // Kill descendants too: their Windows file handles can block post-login home operations.
-      execFileSync(windowsSystem32Binary('taskkill.exe'), ['/pid', String(pid), '/t', '/f'], {
-        windowsHide: true,
-        timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
-        stdio: 'ignore'
-      })
-      return
-    } catch {
-      // If the tree already exited, still try signaling the direct child.
-    }
-  }
-  child.kill()
-}
 
 export class CodexAccountService {
   // Serialize settings read-modify-write operations to prevent overlapping account changes losing updates.
@@ -287,7 +254,7 @@ export class CodexAccountService {
   }
 
   resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
+    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProviderSync())
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {
@@ -327,7 +294,7 @@ export class CodexAccountService {
             env
           })
         },
-        killProcessTree: killLoginProcessTree,
+        killProcessTree: killCodexLoginProcessTree,
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel
           cancelThisLogin = cancel

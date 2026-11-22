@@ -14,7 +14,7 @@ afterEach(() => {
   }
 })
 
-it('records live workspace usage with OAuth polling disabled and leaves host default quota unchanged', () => {
+it('records live workspace usage with OAuth polling disabled and leaves host default quota unchanged', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-workspace-live-'))
   roots.push(root)
   mkdirSync(join(root, 'user'), { recursive: true })
@@ -44,7 +44,7 @@ it('records live workspace usage with OAuth polling disabled and leaves host def
     sevenDay: null
   })
   service.discardClaudeOAuthUsage()
-  const state = service.getState()
+  const state = await service.getState()
   expect(state.claude?.session).toBeNull()
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(28)
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.weekly?.usedPercent).toBe(42)
@@ -58,8 +58,10 @@ it('records live workspace usage with OAuth polling disabled and leaves host def
     fiveHour: { used_percentage: 99 },
     sevenDay: null
   })
-  expect(service.getState().inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(28)
-  expect(service.getState().claude?.session).toBeNull()
+  expect(
+    (await service.getState()).inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent
+  ).toBe(28)
+  expect((await service.getState()).claude?.session).toBeNull()
 })
 
 it('attributes the first live reading when the bound account is also the host default', async () => {
@@ -95,8 +97,8 @@ it('attributes the first live reading when the bound account is also the host de
     fiveHour: { used_percentage: 13 },
     sevenDay: null
   })
-  expect(service.getState().claude?.session?.usedPercent).toBe(13)
-  expect(service.getState().claude?.usageMetadata?.readingAccount?.accountId).toBe('work')
+  expect((await service.getState()).claude?.session?.usedPercent).toBe(13)
+  expect((await service.getState()).claude?.usageMetadata?.readingAccount?.accountId).toBe('work')
 })
 
 it('records system-default workspace usage from live posts without replacing the managed host quota', async () => {
@@ -138,7 +140,7 @@ it('records system-default workspace usage from live posts without replacing the
     fiveHour: { used_percentage: 38 },
     sevenDay: null
   })
-  const state = service.getState()
+  const state = await service.getState()
   expect(state.claude?.session?.usedPercent).toBe(91)
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(38)
   expect(state.inactiveClaudeAccounts[0]?.rateLimits?.usageMetadata?.authProvenance).toBe('system')

@@ -272,7 +272,7 @@
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/runtime-home/wsl/wsl-codex-auth-batch-reader.ts
-2 src/main/codex-accounts/service.ts
+1 src/main/codex-accounts/service.ts
 10 src/main/codex-cli/command.ts
 1 src/main/codex-usage/codex-usage-provider.ts
 1 src/main/codex-usage/store.ts

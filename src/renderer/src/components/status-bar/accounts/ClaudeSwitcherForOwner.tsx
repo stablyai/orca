@@ -69,7 +69,6 @@ export function ClaudeSwitcherForOwner({
   owner: AccountOwner
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const hostClaude = useAppStore((state) => state.rateLimits.claude)
   const workspaceAccountId = claude?.usageMetadata?.contextAccountId
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)

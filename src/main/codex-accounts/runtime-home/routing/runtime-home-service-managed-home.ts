@@ -171,21 +171,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     )
   }
 
-  /**
-   * For launches pinned to a home other than the selected account's, such as a resume. Only
-   * shares: provenance chose this home for a transcript that unsharing would move out of reach.
-   */
   async prepareAccountHistoryForPinnedHome(home: string): Promise<void> {
-    if (!isCodexHistorySharedAcrossAccounts(this.store.getSettings())) {
-      return
-    }
-    const key = normalizeRuntimePathForComparison(home)
-    const accountHome = this.getManagedHostAccountHomesForSessionDiscovery().find(
-      (candidate) => normalizeRuntimePathForComparison(candidate) === key
-    )
-    if (accountHome) {
-      await this.prepareAccountHistory(accountHome, { forLaunch: true })
-    }
+    await this.accountHistoryPasses.preparePinnedHome(home)
   }
 
   // Reading a distro's history over 9P would boot it (E9); the WSL lane owns those homes.
