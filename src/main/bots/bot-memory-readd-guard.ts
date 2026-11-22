@@ -17,9 +17,12 @@ const SAME_LINE = 0.8
 /** Share of the line's key words the owner's own words must hold for the owner to have asked. */
 const OWNER_ASKED = 0.5
 
+/** A fact's text: its words, without its bullet, date or source. */
+const factText = (line: string): string => parseBotMemoryFacts(line)[0]?.text ?? line
+
 /** A line's words for matching; its whole text when it has none, never empty for a real line. */
 const plain = (line: string): string => {
-  const text = parseBotMemoryFacts(line)[0]?.text ?? line
+  const text = factText(line)
   return lineWords(text).join(' ') || text.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
@@ -31,20 +34,24 @@ export function linesToKeepOut(
   ownerWords: string,
   now: number
 ): string[] {
-  const moved = history
-    .filter((row) => row.by.kind === 'tidy-up' && row.at >= now - READD_GUARD_MS)
-    .flatMap((row) => row.change.removed.map(({ line }) => line))
-  if (moved.length === 0) {
+  // History keeps every raw copy a tidy-up moved; copies with the same words, whatever their dates
+  // and sources, are one line to match against.
+  const moved = new Map(
+    history
+      .filter((row) => row.by.kind === 'tidy-up' && row.at >= now - READD_GUARD_MS)
+      .flatMap((row) => row.change.removed.map(({ line }) => [plain(line), line] as const))
+  )
+  moved.delete('')
+  if (moved.size === 0) {
     return []
   }
-  const words = new Set(moved.map(plain).filter((word) => word !== ''))
-  const movedWords = moved.map(keyWords)
+  const movedWords = [...moved.values()].map((line) => keyWords(factText(line)))
   return added.filter((line) => {
-    const mine = keyWords(line)
+    const mine = keyWords(factText(line))
     return (
-      (words.has(plain(line)) ||
+      (moved.has(plain(line)) ||
         movedWords.some((old) => wordSimilarity(old, mine) >= SAME_LINE)) &&
-      lineCoverage(parseBotMemoryFacts(line)[0]?.text ?? line, ownerWords) < OWNER_ASKED
+      lineCoverage(factText(line), ownerWords) < OWNER_ASKED
     )
   })
 }

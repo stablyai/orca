@@ -466,6 +466,44 @@ describe('a value whose spacing matters', () => {
     expect(read()).toBe(file)
   })
 
+  it('keeps a record-only copy before its successor when its heading was renamed on disk', async () => {
+    const prefix = '- 2026-11-01 sep is a  b'
+    const middle = '- 2026-11-02 sep is a  b · from: Slack'
+    const identical = '- sep is a  b'
+    const file = `${prefix}\n# First\n${identical}\n# Middle\n${middle}\n# Last\n${identical}\n`
+    const { forget, read, reopenRecord, rows, write } = bot(file)
+    write(`# First\n# Mid\n# Last\n${identical}\n# Tail\n`)
+    expect(await forget('sep is a  b')).toBe(true)
+
+    const record = await reopenRecord()
+    expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
+    expect(read()).toBe(
+      `${prefix}\n# First\n${identical}\n# Mid\n# Last\n${middle}\n${identical}\n# Tail\n`
+    )
+  })
+
+  it('keeps equal copies under headings that both texts still have as separate copies', async () => {
+    const { forget, read, rows, undo, write } = bot('# A\n- x\n# B\n- x\n# C\n')
+    write('# A\n# B\n- x\n# C\n- x\n')
+    expect(await forget('x')).toBe(true)
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe('# A\n- x\n# B\n- x\n# C\n- x\n')
+  })
+
+  it('puts back both dated copies after a Forget, its Undo, and undoing each Undo in turn', async () => {
+    const file = '# Memory\n- 2026-11-01 old\n- keep\n- 2026-11-02 old · from: Slack\n'
+    const { forget, read, rows, undo } = bot(file)
+    expect(await forget('old')).toBe(true)
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n')
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
   it('keeps a single copy when an unrelated edit changed its anchor on disk', async () => {
     const { forget, read, rows, undo, write } = bot('# Memory\n- old\n')
     const file = '# Memory\n- another fact\n- old\n'

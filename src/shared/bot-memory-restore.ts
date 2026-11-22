@@ -1,10 +1,9 @@
 import type { BotMemoryLine } from './bot-memory-lines'
 
-function copyKeys(
-  entries: readonly BotMemoryLine[],
-  positioned: boolean,
-  anchorIds: Map<string | null, number>
-): string[] {
+/** The texts, the file's and the record's, that the removed copies were read from. */
+export type BotMemorySnapshots = { file: string; record: string }
+
+function copyAnchors(entries: readonly BotMemoryLine[], positioned: boolean): (string | null)[] {
   let previous: BotMemoryLine | undefined
   let anchor: string | null = null
   return entries.map((entry) => {
@@ -13,9 +12,7 @@ function copyKeys(
       anchor = entry.after
     }
     previous = entry
-    const id = anchorIds.get(anchor) ?? anchorIds.size
-    anchorIds.set(anchor, id)
-    return `${id}:${entry.line}`
+    return anchor
   })
 }
 
@@ -23,14 +20,19 @@ function copyKeys(
 export function mergeBotMemoryCopies(
   file: BotMemoryLine[],
   record: BotMemoryLine[],
-  positioned = false
+  positioned = false,
+  snapshots?: BotMemorySnapshots
 ): BotMemoryLine[] {
   if (file.length === 0 || record.length === 0) {
     return file.length === 0 ? record : file
   }
   const matchedFile = new Set<number>()
   const matchedRecord = new Map<number, number>()
-  const matchCopies = (fileKeys: string[], recordKeys: string[]): void => {
+  const matchCopies = (
+    fileKeys: string[],
+    recordKeys: string[],
+    may: (fileIndex: number, recordIndex: number) => boolean = () => true
+  ): void => {
     const slots = new Map<string, number[]>()
     for (let index = fileKeys.length - 1; index >= 0; index -= 1) {
       if (matchedFile.has(index)) {
@@ -45,23 +47,37 @@ export function mergeBotMemoryCopies(
       }
     }
     for (const [index, key] of recordKeys.entries()) {
-      if (matchedRecord.has(index)) {
-        continue
-      }
-      const match = slots.get(key)?.pop()
-      if (match !== undefined) {
+      const match = slots.get(key)?.at(-1)
+      if (!matchedRecord.has(index) && match !== undefined && may(match, index)) {
+        slots.get(key)?.pop()
         matchedFile.add(match)
         matchedRecord.set(index, match)
       }
     }
   }
+  const fileAnchors = copyAnchors(file, positioned)
+  const recordAnchors = copyAnchors(record, positioned)
   const anchorIds = new Map<string | null, number>()
-  matchCopies(copyKeys(file, positioned, anchorIds), copyKeys(record, positioned, anchorIds))
+  const keyed = (anchors: (string | null)[], entries: BotMemoryLine[]): string[] =>
+    entries.map(({ line }, index) => {
+      const id = anchorIds.get(anchors[index]) ?? anchorIds.size
+      anchorIds.set(anchors[index], id)
+      return `${id}:${line}`
+    })
+  matchCopies(keyed(fileAnchors, file), keyed(recordAnchors, record))
   if (positioned && matchedRecord.size < Math.min(file.length, record.length)) {
-    // An unrelated edit can change a copy's anchor: match those after the stable anchors.
+    // An unrelated edit can change a copy's anchor: match those after the stable anchors, unless
+    // each copy's anchor is still in the other text, where they are two occurrences.
+    const lines = (text: string | undefined): Set<string> | null =>
+      text === undefined ? null : new Set(text.split(/\r?\n/))
+    const [inFile, inRecord] = [lines(snapshots?.file), lines(snapshots?.record)]
+    const kept = (anchor: string | null, text: Set<string> | null): boolean =>
+      text !== null && (anchor === null || text.has(anchor))
     matchCopies(
       file.map(({ line }) => line),
-      record.map(({ line }) => line)
+      record.map(({ line }) => line),
+      (fileIndex, recordIndex) =>
+        !kept(fileAnchors[fileIndex], inRecord) || !kept(recordAnchors[recordIndex], inFile)
     )
   }
 
@@ -90,7 +106,9 @@ export function mergeBotMemoryCopies(
 
 /** Restore into gaps in the surviving file in one pass: each anchor is indexed once and each gap
  *  emitted once. A line goes after the last copy of the line it followed, or at the end when that
- *  line is gone; a positioned copy goes back to its own index when its predecessor is unchanged. */
+ *  line is gone; a positioned copy goes back to its own index when its predecessor is unchanged.
+ *  An unpositioned copy listed between positioned ones stays between them, so neighbors keep their
+ *  order whatever became of its anchor. */
 export function restoreBotMemoryLines(kept: string[], copies: readonly BotMemoryLine[]): string[] {
   const anchors = new Map<string, number>()
   const precedingAnchor = [0]
@@ -104,32 +122,7 @@ export function restoreBotMemoryLines(kept: string[], copies: readonly BotMemory
   }
 
   const gaps = new Map<number, string[]>()
-  const fileAnchors = new Map(anchors)
-  let fileCount = 0
-  let fileFloor = -1
-  let previousFile: string | null = null
-  let fileEnd = end
-  for (const { line, after, position } of copies) {
-    const index = position?.index
-    let gap: number
-    if (index == null) {
-      gap = after === null ? 0 : (anchors.get(after) ?? end)
-    } else {
-      // Record-only copies do not shift or invalidate the file's original positions.
-      const originalGap = index - fileCount
-      const preceding = precedingAnchor[originalGap]
-      const predecessor = fileFloor >= preceding ? previousFile : (kept[preceding - 1] ?? null)
-      const anchor = after === null ? 0 : (fileAnchors.get(after) ?? fileEnd)
-      gap =
-        preceding !== undefined && originalGap >= fileFloor && predecessor === after
-          ? originalGap
-          : Math.max(anchor, fileFloor)
-      fileCount += 1
-      fileFloor = gap
-      previousFile = line
-      fileEnd = Math.max(fileEnd, gap)
-      fileAnchors.set(line, Math.max(gap, fileAnchors.get(line) ?? 0))
-    }
+  const put = (gap: number, line: string): void => {
     const inserted = gaps.get(gap)
     if (inserted) {
       inserted.push(line)
@@ -139,6 +132,45 @@ export function restoreBotMemoryLines(kept: string[], copies: readonly BotMemory
     end = Math.max(end, gap)
     anchors.set(line, Math.max(gap, anchors.get(line) ?? 0))
   }
+  const fileAnchors = new Map(anchors)
+  let fileCount = 0
+  let fileFloor = -1
+  let previousFile: string | null = null
+  let fileEnd = end
+  // Unpositioned copies since the last positioned one, placed once the next one's gap is known.
+  let waiting: BotMemoryLine[] = []
+  const placeWaiting = (ceiling: number): void => {
+    for (const { line, after } of waiting) {
+      const gap = after === null ? 0 : (anchors.get(after) ?? end)
+      put(Math.min(Math.max(gap, fileFloor), ceiling), line)
+    }
+    waiting = []
+  }
+  for (const copy of copies) {
+    const { line, after, position } = copy
+    const index = position?.index
+    if (index == null) {
+      waiting.push(copy)
+      continue
+    }
+    // Record-only copies do not shift or invalidate the file's original positions.
+    const originalGap = index - fileCount
+    const preceding = precedingAnchor[originalGap]
+    const predecessor = fileFloor >= preceding ? previousFile : (kept[preceding - 1] ?? null)
+    const anchor = after === null ? 0 : (fileAnchors.get(after) ?? fileEnd)
+    const gap =
+      preceding !== undefined && originalGap >= fileFloor && predecessor === after
+        ? originalGap
+        : Math.max(anchor, fileFloor)
+    placeWaiting(gap)
+    fileCount += 1
+    fileFloor = gap
+    previousFile = line
+    fileEnd = Math.max(fileEnd, gap)
+    fileAnchors.set(line, Math.max(gap, fileAnchors.get(line) ?? 0))
+    put(gap, line)
+  }
+  placeWaiting(Number.POSITIVE_INFINITY)
 
   const restored: string[] = []
   for (const [gap, raw] of kept.entries()) {

@@ -114,11 +114,18 @@ export function createBotMemoryRecord(
               ? await fs.writeText(path, next, { exclusive: true })
               : next === current || (await fs.replaceText(path, current, next))
           if (wrote) {
-            const options = { keepRemovedPositions: asked.removed.some((line) => line.position) }
-            made = mergeBotMemoryChanges(
-              botMemoryChange(base, next, options),
-              sameSnapshot ? NO_CHANGE : botMemoryChange(text, recorded, options)
-            )
+            // An Undo's removals keep their places too, so undoing it puts every copy back.
+            const options = {
+              keepRemovedPositions:
+                by.kind === 'undo' || asked.removed.some((line) => line.position)
+            }
+            made = sameSnapshot
+              ? botMemoryChange(base, next, options)
+              : mergeBotMemoryChanges(
+                  botMemoryChange(base, next, options),
+                  botMemoryChange(text, recorded, options),
+                  { file: base, record: text }
+                )
             noted(botId, by, made)
             return recorded
           }

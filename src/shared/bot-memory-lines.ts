@@ -10,7 +10,11 @@ import {
   parseBotMemoryFacts,
   splitLines
 } from './bot-memory-facts'
-import { mergeBotMemoryCopies, restoreBotMemoryLines } from './bot-memory-restore'
+import {
+  type BotMemorySnapshots,
+  mergeBotMemoryCopies,
+  restoreBotMemoryLines
+} from './bot-memory-restore'
 
 export { BOT_MEMORY_SEED_INTRO } from './bot-memory-facts'
 export { BOT_MEMORY_SOURCE_SEPARATOR, parseBotMemoryFacts, type BotMemoryFact }
@@ -52,9 +56,7 @@ export function tagBotMemoryChanges(
       return
     }
     earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
-    if (!known.has(fact.text)) {
-      known.set(fact.text, fact.source)
-    }
+    known.set(fact.text, leastTrusted(known.get(fact.text), fact.source))
   })
   const { lines, eol } = splitLines(after)
   const facts = lineFacts(lines)
@@ -78,7 +80,8 @@ export function tagBotMemoryChanges(
       continue
     }
     const replacement = fresh.get(sourceKey(text))
-    // Only an unambiguous rewrite seen before put-back can inherit a spacing variant's mark.
+    // Only a one-to-one rewrite seen before put-back can inherit a spacing variant's mark: two old
+    // facts respaced into one line leave it to the turn's own mark.
     if (replacement !== undefined) {
       respaced.set(replacement, respaced.has(replacement) ? undefined : source)
     }
@@ -93,8 +96,7 @@ export function tagBotMemoryChanges(
       if (!fact || !text) {
         return raw
       }
-      const exact = known.get(fact.text)
-      const kept = exact === undefined ? respaced.get(fact.text) : exact
+      const kept = known.has(fact.text) ? known.get(fact.text) : respaced.get(fact.text)
       const mark = kept === undefined ? label : kept
       // With no source or lookalike to take out, the line stays as written, its mark appended.
       if (text === fact.text && !raw.includes(BOT_MEMORY_SOURCE_SEPARATOR)) {
@@ -149,14 +151,20 @@ export function botMemoryLineKey({ line }: BotMemoryLine): string | null {
   return rawFactKey(line)
 }
 
-/** Merge the file and record changes, retaining raw variants for history. */
-export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): BotMemoryChange {
+/** Merge the file and record changes, retaining raw variants for history; `snapshots` are the
+ *  texts each was made from. */
+export function mergeBotMemoryChanges(
+  a: BotMemoryChange,
+  b: BotMemoryChange,
+  snapshots?: BotMemorySnapshots
+): BotMemoryChange {
   return {
     added: mergeBotMemoryCopies(a.added, b.added),
     removed: mergeBotMemoryCopies(
       a.removed,
       b.removed,
-      a.removed.some(({ position }) => position) || b.removed.some(({ position }) => position)
+      a.removed.some(({ position }) => position) || b.removed.some(({ position }) => position),
+      snapshots
     )
   }
 }
@@ -247,6 +255,13 @@ export function botMemorySourceLink(source: string): { text: string; url: string
   return linked ? { text: linked[1], url: linked[2] } : { text: source, url: null }
 }
 
+/** An old fact's mark from its copies: an outside source over the owner's (null), so a copy the
+ *  owner wrote never vouches for one an outsider did; of two outside sources, the one listed first
+ *  (MEMORY.md is newest first). Never more trusted than any copy. */
+function leastTrusted(seen: string | null | undefined, source: string | null): string | null {
+  return seen ?? source
+}
+
 function defusedSeparators(text: string): string {
   const [first = '', ...rest] = text.split('·')
   const parts = [first]
@@ -269,9 +284,27 @@ export function findBotMemoryFact(text: string, fact: BotMemoryFact): BotMemoryF
   return facts.find((entry) => same(entry) && entry.line === fact.line) ?? facts.find(same)
 }
 
-/** One fact is one line: its line breaks become spaces, and every other space stays. */
+/** One fact is one line: each run of line breaks, with the spaces and tabs around it, becomes one
+ *  space, and every other space stays. One pass, so a long run of spaces costs no more than its length. */
 function oneLine(fact: string): string {
-  return fact.replace(/[ \t]*[\n\r\u2028\u2029]+[ \t]*/g, ' ').trim()
+  let line = ''
+  // Spaces and tabs not yet known to stay, and whether a line break came since the last character.
+  let spaces = ''
+  let broke = false
+  for (const char of fact) {
+    if (char === ' ' || char === '\t') {
+      spaces += char
+    } else if (char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029') {
+      spaces = ''
+      broke = true
+    } else {
+      line += broke ? ' ' : spaces
+      line += char
+      spaces = ''
+      broke = false
+    }
+  }
+  return line.trim()
 }
 
 function factLine(

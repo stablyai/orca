@@ -29,6 +29,35 @@ describe('a fact whose spacing is part of its value', () => {
     )
   })
 
+  it.each([
+    ['the owner', '- a  b\n- a  b · from: Slack\n'],
+    ['an outsider', '- a  b · from: Slack\n- a  b\n']
+  ])(
+    'gives a collapse of copies with different marks the outside one, whoever wrote first: %s',
+    (_first, before) => {
+      expect(tagBotMemoryChanges(before, `${before}- a b\n`, null, '- a b\n')).toBe(
+        `${before}- a b · from: Slack\n`
+      )
+    }
+  )
+
+  it('gives a collapse of copies from two outsiders the newest one listed, never the owner', () => {
+    const before = '- a  b · from: Slack\n- a  b\n- a  b · from: Webhook\n'
+    expect(tagBotMemoryChanges(before, `${before}- a b\n`, null, '- a b\n')).toBe(
+      `${before}- a b · from: Slack\n`
+    )
+  })
+
+  it('keeps a long run of spaces through an add and an edit, and joins lines around it', () => {
+    const spaces = ' '.repeat(8_192)
+    const added = addBotMemoryFact('', `a${spaces}b`, '2026-11-06')
+    expect(added).toBe(`- 2026-11-06 a${spaces}b\n`)
+    const [fact] = parseBotMemoryFacts(added)
+    expect(editBotMemoryFact(added, fact, `c${spaces}\n${spaces}\t\r\nd${spaces}e`)).toBe(
+      `- 2026-11-06 c d${spaces}e\n`
+    )
+  })
+
   it('keeps its spaces through a turn-end mark, an edit and an add', () => {
     const before = '# M\n'
     const after = '# M\n2026-11-06:  header  X-Token  · local\n- tab\tsep  ok  \n'

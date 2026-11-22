@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { botMemoryChange, dropBotMemoryFact, type BotMemoryLine } from './bot-memory-lines'
 import { mergeBotMemoryCopies, restoreBotMemoryLines } from './bot-memory-restore'
 
-// Wall time on a loaded machine can't tell one pass from a scan per copy; element reads can.
+// Perf contract (STA-17040): Undo of a Forget put each removed copy back with a scan of the file per
+// copy, and merged the file's and the record's copies pairwise. Wall time on a loaded machine can't
+// tell one pass from a scan per copy; element reads can.
 function counted<T>(items: T[]): { array: T[]; reads: () => number } {
   let reads = 0
   const array = new Proxy(items, {

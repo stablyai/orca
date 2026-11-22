@@ -7,6 +7,7 @@ import {
   type BotMemoryChange,
   botMemoryChange,
   botMemoryFactKeys,
+  type BotMemoryLine,
   botMemoryLineKey,
   countBotMemoryLines,
   mergeBotMemoryChanges,
@@ -310,6 +311,16 @@ export async function writeTidyUpFiles(
 const POINTER = /memory\/[a-z0-9-]+\.md/
 const factText = (line: string): string => parseBotMemoryFacts(line)[0]?.text ?? line.trim()
 
+/** Each fact's key and a line stating it, once: history keeps every raw copy, a summary names a
+ *  fact once. */
+const factsOnce = (lines: readonly BotMemoryLine[]): Map<string, string> =>
+  new Map(
+    lines.flatMap(({ line }) => {
+      const key = keyOf(line)
+      return key === null ? [] : [[key, line] as const]
+    })
+  )
+
 /** What a tidy-up changed, for its summary: `asked` is what it asked the writer for, `made` what
  *  MEMORY.md took, `written` the lines each memory/ file took. */
 export function tidyUpSummaryOf(
@@ -318,21 +329,19 @@ export function tidyUpSummaryOf(
   made: BotMemoryChange,
   written: ReadonlyMap<string, number>
 ): Pick<BotTidyUpSummary, 'learned' | 'replaced' | 'filed' | 'moved' | 'merged'> {
-  const removed = made.removed.flatMap(({ line }) => {
-    const key = keyOf(line)
-    return key === null ? [] : [{ key, line }]
-  })
+  const removed = [...factsOnce(made.removed)].map(([key, line]) => ({ key, line }))
+  const gone = new Set(removed.map(({ key }) => key))
   const askedRemoved = keysOf(asked.removed.map(({ line }) => line))
   return {
-    learned: made.added.flatMap(({ line }) => {
-      const learned = plan.learned ? plan.learned.has(keyOf(line) ?? '') : !POINTER.test(line)
+    learned: [...factsOnce(made.added)].flatMap(([key, line]) => {
+      const learned = plan.learned ? plan.learned.has(key) : !POINTER.test(line)
       return learned ? [factText(line)] : []
     }),
     replaced: removed.flatMap(({ key, line }) => (plan.replaced.has(key) ? [factText(line)] : [])),
     // Lines MEMORY.md really gave up to each topic, also when the topic already had them.
     filed: [...plan.topics].flatMap(([topic, lines]) => {
-      const gone = [...keysOf(lines)].filter((key) => removed.some((line) => line.key === key))
-      const count = Math.max(written.get(topic) ?? 0, gone.length)
+      const given = [...keysOf(lines)].filter((key) => gone.has(key))
+      const count = Math.max(written.get(topic) ?? 0, given.length)
       return count > 0 ? [{ topic, count }] : []
     }),
     moved: removed.filter(
