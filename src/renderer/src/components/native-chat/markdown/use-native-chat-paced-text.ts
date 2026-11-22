@@ -44,6 +44,8 @@ export type NativeChatPacedText = {
   fadeFrom: number | undefined
   /** Selected fading words, which keep their elements so the selection keeps its nodes. */
   fadeHold: MarkdownFadeHold | undefined
+  /** False once the reply steps plainly: held words keep their elements, but nothing animates. */
+  fadeAnimates: boolean
 }
 
 type ShownSample = { at: number; length: number }
@@ -213,6 +215,7 @@ export function useNativeChatPacedText(
     revealing,
     fading,
     fadeFrom: fading ? (drawsWhole ? shown : fadeFrom) : undefined,
-    fadeHold: fading ? hold : undefined
+    fadeHold: fading ? hold : undefined,
+    fadeAnimates: !drawsWhole
   }
 }

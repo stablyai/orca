@@ -12,7 +12,8 @@ export async function unpacedTextModule(
       revealing: false,
       fading: false,
       fadeFrom: undefined,
-      fadeHold: undefined
+      fadeHold: undefined,
+      fadeAnimates: true
     })
   }
 }

@@ -63,6 +63,8 @@ type NativeChatMarkdownProps = Omit<
   rowKey?: string
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
   slackMentions?: boolean
+  /** False keeps the fade's word elements (a held selection's) but animates nothing. */
+  fadeAnimates?: boolean
 }
 
 const NO_NAMES: readonly string[] = []
@@ -194,10 +196,11 @@ export function NativeChatMarkdown({
   content,
   variant,
   slackMentions = false,
+  fadeAnimates = true,
   ...props
 }: NativeChatMarkdownProps): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
-  const wordFadeArmed = useWordFadeArmed(fadeFrom !== undefined)
+  const wordFadeArmed = useWordFadeArmed(fadeFrom !== undefined && fadeAnimates)
   const visualExtension = useNativeChatVisualMarkdownExtension(visualMessageId)
   const mentionNames = withBoundBotMentions(useContext(NativeChatMentionNamesContext), content)
   const everyone = useContext(NativeChatMentionEveryoneContext)
