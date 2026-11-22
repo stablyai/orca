@@ -35,6 +35,7 @@ import { browserPopupPageId } from '../../popups/browser-popup-page-id'
 import { watchBrowserPopupSiteFrameRemoval } from '../navigation/browser-guest-frame-user-agent-demand'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-app-launch'
+import { installBrowserJavaScriptDialogs } from '../../prompts/browser-javascript-dialogs'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   private serverPagePopupPresenter: ((popup: ServerPagePopupPresentation) => void) | null = null
@@ -236,14 +237,28 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     return this.offscreenGuestIds.has(rootGuestId)
   }
 
+  protected notifyWorktreeBrowserGuestStateChanged(worktreeId: string): void {
+    // Isolate listener exceptions from Electron event dispatch.
+    try {
+      this.browserGuestStateChangedListener?.(worktreeId)
+    } catch (error) {
+      console.error('[browser-manager] browserGuestStateChanged listener failed', error)
+    }
+  }
+
   // A server page's popup is listed as a tab; the paired client whose click opened it moves to it.
   private publishServerPagePopup(contents: Electron.WebContents, owner: PopupOwnerContext): void {
-    const notify = (): void => this.notifyBrowserGuestStateChanged(owner.rootGuestWebContentsId)
-    contents.once('destroyed', notify)
-    notify()
-    const pairedDeviceId = this.pageInputCredit.consume(owner.browserTabId)
     const worktreeId = this.worktreeIdByTabId.get(owner.browserTabId)
-    if (pairedDeviceId && worktreeId) {
+    if (!worktreeId) {
+      return
+    }
+    // Hidden on the server, so its viewers and agents answer its dialogs, as for the page itself.
+    installBrowserJavaScriptDialogs(contents, () => null)
+    // The opener may already be unregistered when its close takes the popup down.
+    contents.once('destroyed', () => this.notifyWorktreeBrowserGuestStateChanged(worktreeId))
+    this.notifyWorktreeBrowserGuestStateChanged(worktreeId)
+    const pairedDeviceId = this.pageInputCredit.consume(owner.browserTabId)
+    if (pairedDeviceId) {
       this.serverPagePopupPresenter?.({
         worktreeId,
         browserPageId: browserPopupPageId(contents.id),
