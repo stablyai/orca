@@ -12,6 +12,7 @@ import { LOOK_AROUND_REFUSAL, REPLY_ONLY_REFUSAL } from '../../../bots/bot-look-
 import { assertLookAroundMayCall } from '../look-around-rpc-guard'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { BOT_LOOK_AROUND_METHODS } from './bots-look-around'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const chatLines = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -32,11 +33,17 @@ vi.mock('../../../bots/bot-look-around-runtime', () => ({
   runtimeLookAroundRunner: () => ({ lookNow: () => lookNow.outcome })
 }))
 
+const tokens = botRunTokens(['b1'])
+
+/** A call naming its session comes from b1's chat or look, which hold b1's token. */
 const request = (method: string, params?: unknown): RpcRequest => ({
   id: 'req-1',
   authToken: 'tok',
   method,
-  params
+  params,
+  ...(typeof params === 'object' && params !== null && 'callerSessionId' in params
+    ? { botToken: tokens.b1 }
+    : {})
 })
 
 type BotUpdates = Parameters<typeof applyBotUpdates>[1]
@@ -48,6 +55,7 @@ function lookRuntime() {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     bots: {
+      enabled: () => true,
       assertEnabled: () => {},
       list: () => [bot],
       update: vi.fn(

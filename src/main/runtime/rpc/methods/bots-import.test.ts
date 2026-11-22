@@ -7,6 +7,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { BOT_IMPORT_METHODS } from './bots-import'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -22,18 +23,24 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
   })
 }))
 
+const tokens = botRunTokens(['b1'])
+
+/** A call naming its session comes from one of b1's runs, which hold b1's token. */
 const request = (method: string, params: unknown): RpcRequest => ({
   id: 'req-1',
   authToken: 'tok',
   method,
-  params
+  params,
+  ...(typeof params === 'object' && params !== null && 'callerSessionId' in params
+    ? { botToken: tokens.b1 }
+    : {})
 })
 
 function importRuntime(bot: Bot) {
   cards.length = 0
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    bots: { assertEnabled: () => {}, list: () => [bot] },
+    bots: { enabled: () => true, assertEnabled: () => {}, list: () => [bot] },
     lookAround: {
       botOfLook: (sessionId: string) => (sessionId === 'look' ? bot.id : null),
       botOfTidyUp: () => null

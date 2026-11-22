@@ -6,6 +6,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -25,7 +26,7 @@ function offerDispatcher() {
   cards.length = 0
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    bots: { assertEnabled: () => {}, list: () => [scout] },
+    bots: { enabled: () => true, assertEnabled: () => {}, list: () => [scout] },
     lookAround: { botOfLook: () => null, botOfTidyUp: () => null }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, runtime.lookAround and the runtime id, which the stub provides.
@@ -33,11 +34,15 @@ function offerDispatcher() {
   return new RpcDispatcher({ runtime: service, methods: [BOT_CREATE_OFFER_METHOD] })
 }
 
+const tokens = botRunTokens(['b1'])
+
+/** Every session here is one of Scout's runs, which hold its token. */
 const offer = (callerSessionId: string, name = 'Triage') => ({
   id: 'req-1',
   authToken: 'tok',
   method: 'bots.createOffer',
-  params: { callerSessionId, name, purpose: 'Triages new issues.' }
+  params: { callerSessionId, name, purpose: 'Triages new issues.' },
+  botToken: tokens.b1
 })
 
 describe('orca bot create --offer', () => {

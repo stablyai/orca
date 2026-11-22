@@ -21,6 +21,7 @@ import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-sessi
 import { BOT_ITEMS_METHODS } from './bots-items'
 import { BotItemsListReadSchema } from '../../../../shared/bots/bot-item-schema'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const paths = vi.hoisted(() => ({ userData: '' }))
 const RANGER_CHAT = vi.hoisted(() => '0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e')
@@ -30,16 +31,18 @@ vi.mock('../../../orca-profiles/profile-storage-paths', () => ({
 }))
 
 // Ranger's chat and its Look around run live in Ranger's home; Docs's chat lives in Docs's.
-vi.mock('../../../bots/bot-session-tabs', () => ({
-  botOfSession: (bots: { list: () => { id: string }[] }, sessionId: string) => {
-    const botId =
+const botOfRun = vi.hoisted(
+  () =>
+    (sessionId: string | undefined): 'ranger' | 'docs' | null =>
       sessionId === RANGER_CHAT || sessionId === 'ranger-look'
         ? 'ranger'
         : sessionId === DOCS_CHAT
           ? 'docs'
           : null
-    return bots.list().find((bot) => bot.id === botId) ?? null
-  }
+)
+vi.mock('../../../bots/bot-session-tabs', () => ({
+  botOfSession: (bots: { list: () => { id: string }[] }, sessionId: string) =>
+    bots.list().find((bot) => bot.id === botOfRun(sessionId)) ?? null
 }))
 vi.mock(
   import('../../orchestration/addressing/session-lineage/structured-session-lineage'),
@@ -104,18 +107,25 @@ vi.mock('./orchestration/messaging/bot-request-send', () => ({ sendToBot }))
 const messages = new Map<string, { to_handle: string }>()
 const mailed: { chatId: string; eventId: number; kind: string }[] = []
 
-/** A CLI call from a session: its verified evidence is the chat it names unless `from` says otherwise. */
+const tokens = botRunTokens(['ranger', 'docs'])
+
+/** A CLI call from a session: its verified evidence is the chat it names unless `from` says otherwise,
+ *  and it holds the token of the bot that session runs for. */
 const request = (
   method: string,
   params?: { callerSessionId?: string } & Record<string, unknown>,
   from = params?.callerSessionId
-): RpcRequest => ({
-  id: 'req-1',
-  authToken: 'tok',
-  method,
-  params,
-  ...(from ? { orchestrationCompatibilityEvidence: { agentSessionId: from } } : {})
-})
+): RpcRequest => {
+  const bot = botOfRun(from)
+  return {
+    id: 'req-1',
+    authToken: 'tok',
+    method,
+    params,
+    ...(from ? { orchestrationCompatibilityEvidence: { agentSessionId: from } } : {}),
+    ...(bot ? { botToken: tokens[bot] } : {})
+  }
+}
 
 let host: BotItemsHost | null = null
 

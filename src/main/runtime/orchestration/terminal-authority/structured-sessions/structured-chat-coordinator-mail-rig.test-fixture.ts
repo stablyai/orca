@@ -54,7 +54,7 @@ export const observationClock = createCoordinatorMailObservationClock(() => host
 export function request(
   method: string,
   params: Record<string, unknown>,
-  options: { sessionId?: string } = {}
+  options: { sessionId?: string; botToken?: string } = {}
 ): Parameters<RpcDispatcher['dispatch']>[0] {
   requests += 1
   return {
@@ -66,14 +66,15 @@ export function request(
     orchestrationRequestId: `req-${requests}`,
     ...(options.sessionId
       ? { orchestrationCompatibilityEvidence: { agentSessionId: options.sessionId } }
-      : {})
+      : {}),
+    ...(options.botToken ? { botToken: options.botToken } : {})
   }
 }
 
 export async function call(
   method: string,
   params: Record<string, unknown>,
-  options?: { sessionId?: string }
+  options?: { sessionId?: string; botToken?: string }
 ): Promise<Record<string, unknown>> {
   const response = await dispatcher.dispatch(request(method, params, options))
   if (!response.ok) {
@@ -186,12 +187,16 @@ export async function finishWorker(
   return started.dispatch.id
 }
 
-export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
+/** `botToken` is the coordinator's when it is a bot's chat, as the bot's run would send it. */
+export async function coordinatorRunAndTask(
+  botToken?: string
+): Promise<{ runId: string; taskId: string }> {
   const created = await call(
     'orchestration.runCreate',
     { objective: 'ship' },
     {
-      sessionId: COORDINATOR
+      sessionId: COORDINATOR,
+      botToken
     }
   )
   const runId = idOf(created.run)
@@ -199,7 +204,8 @@ export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: 
     'orchestration.taskCreate',
     { spec: 'build it' },
     {
-      sessionId: COORDINATOR
+      sessionId: COORDINATOR,
+      botToken
     }
   )
   return { runId, taskId: idOf(task.task) }

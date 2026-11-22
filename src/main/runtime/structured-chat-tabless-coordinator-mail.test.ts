@@ -26,6 +26,9 @@ import {
 } from './agent-session/lifecycle/structured-agent-session-close'
 import { runsForBot } from '../bots/bot-session-tabs'
 import { makeTestBot } from '../bots/bot.test-fixture'
+import { botRunTokens } from '../bots/tool-relay/bot-run-tokens.test-fixture'
+
+const tokens = botRunTokens(['bot-1'])
 
 /** What a background chat (a bot's thread or run) gets: no tab, and still open. */
 function moveToBackground(sessionId: string): Promise<void> {
@@ -103,7 +106,7 @@ describe('a coordinator chat with no tab', () => {
     await host.setSessionTabVisibility(COORDINATOR, true)
     threadBySession.set(COORDINATOR, codex.connections.at(-1)!.threadId!)
     const chat = connectionFor(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
+    const { taskId } = await coordinatorRunAndTask(tokens['bot-1'])
 
     // As agentSession.close does; this runtime has no window presentation to capture.
     const keepRunning = runsForBot(runtime.bots, COORDINATOR)

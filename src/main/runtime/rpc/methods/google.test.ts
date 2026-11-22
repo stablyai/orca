@@ -92,7 +92,7 @@ describe('google.* owner-only changes', () => {
   ])('%s works from the owner’s terminal, which holds no bot token', async (method, params) => {
     const { dispatcher } = googleRuntime([makeTestBot({ id: 'b1', name: 'Scout' })])
     expect(
-      await dispatcher.dispatch(request(method, { ...params, callerSessionId: 'look' }), {
+      await dispatcher.dispatch(request(method, { ...params, callerSessionId: 'owner-terminal' }), {
         caller: LOCAL_CLI_RPC_CALLER
       })
     ).toMatchObject({ ok: true })
