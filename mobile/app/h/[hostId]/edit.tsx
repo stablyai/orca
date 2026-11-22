@@ -181,12 +181,13 @@ export default function EditHostScreen() {
         ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
       })
     } catch (err) {
+      // Always unblock Save: a screen pushed over this one mid-save comes back to it.
+      savingRef.current = false
+      setSaving(false)
       if (revision === routeRevision.current) {
         setSaveError(
           err instanceof Error ? err.message : t('host.edit.saveFailed', 'Failed to save host.')
         )
-        savingRef.current = false
-        setSaving(false)
       }
       return
     }
@@ -199,9 +200,9 @@ export default function EditHostScreen() {
       // best-effort re-prime; persisted data is unaffected
     }
 
+    savingRef.current = false
+    setSaving(false)
     if (revision === routeRevision.current) {
-      savingRef.current = false
-      setSaving(false)
       leave()
     }
 
