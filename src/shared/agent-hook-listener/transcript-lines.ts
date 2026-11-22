@@ -57,11 +57,6 @@ export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
   }
 }
 
-/** Inside withStopTranscriptReadsSkipped the host reads Stop transcripts itself, off the event loop. */
-export function stopTranscriptReadsDeferred(): boolean {
-  return skippedStopTranscripts !== null
-}
-
 /** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
 export function readLastAssistantFromTranscript(
   transcriptPath: unknown,

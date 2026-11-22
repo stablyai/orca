@@ -12,7 +12,11 @@ import {
 } from '../../../shared/agent-hook-listener/transcript-reader'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeLeadModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
-import { readClaudeTranscriptReplyModelAsync } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
+import {
+  claudeReplyModelChange,
+  claudeReplyModelRetryDelayMs,
+  readClaudeTranscriptReplyModelAsync
+} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -90,8 +94,7 @@ const replyModelRead = (transcriptPath: string): StopTranscriptRead => ({
     // null: the transcript ends on a newer user record, so this reply isn't written yet.
     return model ? { model } : undefined
   },
-  retryDelayMs: (attempt) =>
-    attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS ? ASSISTANT_MESSAGE_RETRY_MS : undefined
+  retryDelayMs: claudeReplyModelRetryDelayMs
 })
 
 /** A Stop that came without its reply gets it from the transcript, and a Droid Stop its turn
@@ -302,14 +305,11 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
   ): void {
     // A statusline report since this Stop is newer than the reply's model.
     const newModel =
-      model && row.payload.model === claim.row.payload.model && row.payload.model !== model
-        ? model
+      model && row.payload.model === claim.row.payload.model
+        ? claudeReplyModelChange(row.payload.model, model)
         : undefined
     if (!text && !verdict && !newModel) {
       return
-    }
-    if (newModel) {
-      retainClaudeLeadModel(this.state, claim.paneKey, newModel)
     }
     const payload = normalizeAgentStatusPayload({
       ...row.payload,
@@ -339,6 +339,10 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
       hookEventName: undefined,
       hasExplicitPrompt: undefined
     })
+    if (restated && newModel) {
+      // Later lead events rebuild the row from this record.
+      retainClaudeLeadModel(this.state, claim.paneKey, newModel)
+    }
     claim.row = restated ?? claim.row
     this.stopReplyClaims.set(claim.paneKey, claim)
   }

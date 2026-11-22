@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { readClaudeTranscriptReplyModel } from './claude-transcript-reply-model'
+import { readClaudeTranscriptReplyModelAsync } from './claude-transcript-reply-model'
 
 let root: string
 beforeEach(() => {
@@ -22,7 +22,7 @@ const assistant = (model: string, extra: Record<string, unknown> = {}) => ({
 })
 const user = (content: unknown) => ({ type: 'user', message: { role: 'user', content } })
 
-it('reads the model of the reply after the latest prompt, past tool results and repair text', () => {
+it('reads the model of the reply after the latest prompt, past tool results and repair text', async () => {
   const path = transcript([
     user('go'),
     assistant('claude-fable-5-2'),
@@ -31,13 +31,13 @@ it('reads the model of the reply after the latest prompt, past tool results and 
     assistant('<synthetic>'),
     { type: 'system', subtype: 'turn_duration' }
   ])
-  expect(readClaudeTranscriptReplyModel(path)).toBe('claude-fable-5-2')
+  expect(await readClaudeTranscriptReplyModelAsync(path, () => true)).toBe('claude-fable-5-2')
 })
 
-it('reports no reply yet when a prompt or /model output follows the last reply', () => {
+it('reports no reply yet when a prompt or /model output follows the last reply', async () => {
   const path = transcript([
     assistant('claude-opus-5-5'),
     user('<local-command-stdout>Set model to Fable 5.2</local-command-stdout>')
   ])
-  expect(readClaudeTranscriptReplyModel(path)).toBeNull()
+  expect(await readClaudeTranscriptReplyModelAsync(path, () => true)).toBeNull()
 })

@@ -53,9 +53,14 @@ it('forwards the model a remote Claude reply names after /model', async () => {
         .join('')
     )
     await post({ hook_event_name: 'Stop', last_assistant_message: 'Two.' })
-    expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({
-      payload: { state: 'done', model: 'claude-fable-5-2' }
-    })
+    await vi.waitFor(() =>
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({
+        payload: { state: 'done', model: 'claude-fable-5-2' }
+      })
+    )
+    // Later hooks carry no model; they must not bring the start model back.
+    await post({ hook_event_name: 'UserPromptSubmit', prompt: 'third' })
+    expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({ payload: { model: 'claude-fable-5-2' } })
   } finally {
     relay.stop()
   }

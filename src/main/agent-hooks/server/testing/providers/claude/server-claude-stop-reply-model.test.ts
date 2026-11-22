@@ -129,3 +129,16 @@ it('keeps a statusline model reported while the Stop reply was being read', asyn
   await new Promise((resolve) => setImmediate(resolve))
   expect(model()).toBe('claude-fable-5-2')
 })
+
+it('keeps the 1M window the session started with, which replies do not name', async () => {
+  await hook({ hook_event_name: 'SessionStart', source: 'startup', model: 'claude-opus-5-5[1m]' })
+  await hook({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
+  held.active = true
+  await hook({ hook_event_name: 'Stop', last_assistant_message: 'One.' })
+  await vi.waitFor(() => expect(held.pending).toHaveLength(1))
+
+  held.pending[0]!('claude-opus-5-5')
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(model()).toBe('claude-opus-5-5[1m]')
+})

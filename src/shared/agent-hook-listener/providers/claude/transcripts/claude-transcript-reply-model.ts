@@ -2,36 +2,64 @@ import {
   AGENT_MODEL_MAX_LENGTH,
   normalizeOptionalField
 } from '../../../../agent-status/contracts/agent-status-field-normalization'
+import { baseModelId } from '../../../../agent-session/options/model-catalog/model-id-label'
+import { parseHookBodyPayloadRecord } from '../../../grok-result-discovery'
+import type { AgentHookEventPayload } from '../../../listener-event'
 import { parseTranscriptRecord } from '../../../transcript-entry-text'
-import { stopTranscriptReadsDeferred } from '../../../transcript-lines'
 import { TRANSCRIPT_CHUNK_BYTES, TRANSCRIPT_MAX_SCAN_BYTES } from '../../../transcript-reader'
-import {
-  scanFileRegionsBackward,
-  scanFileRegionsBackwardAsync
-} from '../../../reverse-file-region-scan'
+import type { AgentHookSource } from '../../../transport/agent-hook-relay'
+import { scanFileRegionsBackwardAsync } from '../../../reverse-file-region-scan'
 
 /** The model of the turn's reply, or null when the transcript ends on a user record (reply not written yet). */
 type ReplyModelFind = { model: string | null }
 
-const LIMITS = { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES }
+const REPLY_MODEL_READ_ATTEMPTS = 5
+const REPLY_MODEL_RETRY_MS = 50
 // Skip parsing the big attachment and request records that sit between turns.
 const LEAD_RECORD_TYPE = /"type"\s*:\s*"(?:assistant|user)"/
 
-/** Claude hooks name the model only at SessionStart; each assistant record names the model that wrote it, so /model shows up here. */
-export function readClaudeTranscriptReplyModel(transcriptPath: string): string | null | undefined {
-  return scanFileRegionsBackward(transcriptPath, LIMITS, findReplyModel)?.model
+/** The transcript a lead Claude Stop's reply model is read from, after the Stop lands. */
+export function claudeStopReplyModelTranscriptPath(
+  source: AgentHookSource,
+  event: Pick<AgentHookEventPayload, 'hookEventName' | 'toolAgentId'> | null,
+  body: unknown
+): string | undefined {
+  if (source !== 'claude' || event?.hookEventName !== 'Stop' || event.toolAgentId !== undefined) {
+    return undefined
+  }
+  const hookPayload = parseHookBodyPayloadRecord(body)
+  const transcriptPath = hookPayload?.transcript_path
+  return typeof transcriptPath === 'string' && transcriptPath && hookPayload?.agent_id === undefined
+    ? transcriptPath
+    : undefined
 }
 
-/** The async twin for event-loop callers; undefined when nothing was found or the read failed. */
+/** The reply's model when it names a different model than the row; replies drop the `[1m]` window
+ *  suffix, which must not relabel an unchanged session. */
+export function claudeReplyModelChange(
+  current: string | undefined,
+  reply: string
+): string | undefined {
+  return current !== undefined && baseModelId(current) === baseModelId(reply) ? undefined : reply
+}
+
+/** Stop can precede the reply's transcript write. */
+export function claudeReplyModelRetryDelayMs(attempt: number): number | undefined {
+  return attempt < REPLY_MODEL_READ_ATTEMPTS ? REPLY_MODEL_RETRY_MS : undefined
+}
+
+/** Claude hooks name the model only at SessionStart; each assistant record names the model that
+ *  wrote it, so /model shows up here. undefined when nothing was found or the read failed. */
 export async function readClaudeTranscriptReplyModelAsync(
   transcriptPath: string,
   keepReading: () => boolean,
-  floor: number | undefined,
-  onError: () => void
+  /** A retry passes the size its last scan saw: only lines reaching past it are searched again. */
+  floor?: number,
+  onError?: () => void
 ): Promise<string | null | undefined> {
   const found = await scanFileRegionsBackwardAsync(
     transcriptPath,
-    { ...LIMITS, floor },
+    { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES, floor },
     findReplyModel,
     keepReading,
     onError
@@ -81,22 +109,4 @@ function replyModelOfLine(line: string): ReplyModelFind | undefined {
   )
   // `<synthetic>` marks Claude Code's own error and repair text, not a model.
   return model && model !== '<synthetic>' ? { model } : undefined
-}
-
-/** A lead Stop's reply model, read inline where the host doesn't defer Stop transcript reads. */
-export function readClaudeStopReplyModel(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): string | undefined {
-  const transcriptPath = hookPayload.transcript_path
-  if (
-    eventName !== 'Stop' ||
-    typeof transcriptPath !== 'string' ||
-    !transcriptPath ||
-    hookPayload.agent_id !== undefined ||
-    stopTranscriptReadsDeferred()
-  ) {
-    return undefined
-  }
-  return readClaudeTranscriptReplyModel(transcriptPath) ?? undefined
 }
