@@ -3,6 +3,7 @@ import {
   ORCA_AGENT_SESSION_TOOL_TOKEN_ENV
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { RuntimeClient } from './client'
+import { RuntimeClientError } from './connection/types'
 
 /** This host's answer for a token: `{ env }`, the session's identity, or `{ env: null }`. */
 export async function tradeSessionToolToken(
@@ -17,8 +18,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** A chat whose tools run in a process other chats share carries a token in place of its identity:
- *  trade it with this host once, before anything reads the identity. A refused or failed trade
- *  leaves no identity, so commands that act as a chat refuse instead of acting as another. */
+ *  trade it with this host once, before anything reads the identity. Without an answer the command
+ *  runs nothing: as no one it would pass as the owner, past a bot's own limits. */
 export async function adoptSessionToolCaller(
   env: NodeJS.ProcessEnv,
   trade: (token: string) => Promise<unknown>
@@ -32,8 +33,19 @@ export async function adoptSessionToolCaller(
   for (const key of CALLER_IDENTITY_ENV) {
     delete env[key]
   }
-  const answer = await trade(token).catch(() => null)
-  const caller = isRecord(answer) && isRecord(answer.env) ? answer.env : {}
+  const answer = await trade(token).catch((error: unknown) => {
+    throw new RuntimeClientError(
+      'session_tool_caller_unavailable',
+      `Orca could not confirm which chat ran this command, so it ran nothing: ${error instanceof Error ? error.message : String(error)}`
+    )
+  })
+  const caller = isRecord(answer) && isRecord(answer.env) ? answer.env : null
+  if (!caller) {
+    throw new RuntimeClientError(
+      'session_tool_caller_ended',
+      'This chat ended in Orca, or Orca restarted since it started, so this command ran nothing. Run it from a chat that is open in Orca.'
+    )
+  }
   for (const key of CALLER_IDENTITY_ENV) {
     const value = caller[key]
     if (typeof value === 'string' && value.length > 0) {

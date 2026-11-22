@@ -18,7 +18,7 @@ describe('adoptSessionToolCaller', () => {
     expect(env).toEqual({ ORCA_AGENT_SESSION_ID: 'chat-b' })
   })
 
-  it('keeps no identity when the host names no one or cannot answer', async () => {
+  it('runs nothing when the host names no one or cannot answer', async () => {
     for (const answer of [
       async () => ({ env: null }),
       async () => {
@@ -26,7 +26,7 @@ describe('adoptSessionToolCaller', () => {
       }
     ]) {
       const env: NodeJS.ProcessEnv = inherited()
-      await adoptSessionToolCaller(env, answer)
+      await expect(adoptSessionToolCaller(env, answer)).rejects.toThrow(/ran nothing/)
       expect(env).toEqual({})
     }
   })

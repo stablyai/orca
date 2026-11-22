@@ -67,6 +67,11 @@ except ImportError:
     # Hermes before the shared gateway runs each pane's session in that pane's own process.
     bound_client_env = None
 
+try:
+    from gateway.session_context import _bound_session_value
+except ImportError:
+    _bound_session_value = None
+
 EVENTS = ${JSON.stringify(HERMES_EVENTS)}
 # Why: the gateway runs every chat's tools, so its own environment names no chat. Orca writes each
 # chat's here, by Hermes session id, and Hermes asks for it at every tool spawn.
@@ -224,7 +229,7 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
     return payload
 
 
-def _session_env(session_id: str) -> Optional[dict[str, Any]]:
+def _published_env(session_id: str) -> Optional[dict[str, Any]]:
     if not SESSION_ID.fullmatch(session_id or ""):
         return None
     try:
@@ -232,6 +237,16 @@ def _session_env(session_id: str) -> Optional[dict[str, Any]]:
             return json.load(f)
     except (OSError, ValueError):
         return None
+
+
+def _session_env(session_id: str) -> Optional[dict[str, Any]]:
+    published = _published_env(session_id)
+    if published is not None or _bound_session_value is None:
+        return published
+    # A delegated subagent, and the rest of a turn Hermes compressed, run under a new session id;
+    # the chat id bound to this turn still names the chat (never the gateway's os.environ copy).
+    chat_id = _bound_session_value("HERMES_SESSION_CHAT_ID")
+    return _published_env(chat_id) if isinstance(chat_id, str) and chat_id != session_id else None
 
 
 def _make_hook(event_name: str) -> Callable[..., None]:
