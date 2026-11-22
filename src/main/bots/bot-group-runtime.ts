@@ -37,8 +37,19 @@ import {
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { groupAnswerTurn, saveGroupPeerAnswer } from './bot-group-peer-answer'
 import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
+import { botGroupRoomChat } from './bot-group-automation-run'
+import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
+/** `homeChat`, also finding the group rooms a bot is a member of, where its automations may run. */
+export function withGroupRoomChats(
+  runtime: OrcaRuntimeService,
+  homeChat: BotChatLookup
+): BotChatLookup {
+  return async (bot, id) =>
+    botGroupRoomChat(runtimeBotGroups(runtime), bot, id) ?? homeChat(bot, id)
+}
+
 export function runtimeBotGroups(runtime: OrcaRuntimeService): BotGroupRuntime {
   let groups = runtimes.get(runtime)
   if (!groups) {
