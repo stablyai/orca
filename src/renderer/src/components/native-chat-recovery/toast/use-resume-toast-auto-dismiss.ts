@@ -15,6 +15,11 @@ function getWindowVisibility(): WindowVisibility {
   return isDocumentVisibilityProvenStale() ? 'stale-hidden' : 'hidden'
 }
 
+// A stale hidden flag is disproved only by the focused window; once it blurs, nobody may be looking.
+function canBeSeen(visibility: WindowVisibility, windowFocused: boolean): boolean {
+  return visibility === 'visible' || (visibility === 'stale-hidden' && windowFocused)
+}
+
 /**
  * The report owns its timer because Sonner's stays paused while Chromium reports a focused
  * window as hidden. The countdown runs only while the report can be seen, restarts each time
@@ -32,8 +37,7 @@ export function useResumeToastAutoDismiss(
   const [windowFocused, setWindowFocused] = useState(() => document.hasFocus())
   const [focusReturns, setFocusReturns] = useState(0)
   const visibility = useSyncExternalStore(subscribeWindowParkVisibility, getWindowVisibility)
-  // A stale hidden flag is disproved only by the focused window; once it blurs, nobody may be looking.
-  const visible = visibility === 'visible' || (visibility === 'stale-hidden' && windowFocused)
+  const visible = canBeSeen(visibility, windowFocused)
   const autoDismiss = transient && visible && !detailsOpened && !focusWithin && !pointerWithin
 
   useEffect(() => {
@@ -82,7 +86,12 @@ export function useResumeToastAutoDismiss(
     if (!autoDismiss) {
       return
     }
-    const timer = window.setTimeout(onExpire, RESUMED_TOAST_MS)
+    const timer = window.setTimeout(() => {
+      // Focus can leave before its blur reaches React; the next focus restarts the countdown.
+      if (canBeSeen(getWindowVisibility(), document.hasFocus())) {
+        onExpire()
+      }
+    }, RESUMED_TOAST_MS)
     return () => window.clearTimeout(timer)
   }, [autoDismiss, onExpire, focusReturns])
 

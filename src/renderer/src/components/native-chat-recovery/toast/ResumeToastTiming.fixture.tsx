@@ -84,6 +84,14 @@ function expectReport(frame: HTMLElement, shown: boolean, why: string): void {
   }
 }
 
+// Drive window focus directly so each case controls what document.hasFocus() reports.
+function setWindowFocus(focused: boolean, { deliverEvent }: { deliverEvent: boolean }): void {
+  Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => focused })
+  if (deliverEvent) {
+    window.dispatchEvent(new Event(focused ? 'focus' : 'blur'))
+  }
+}
+
 // On macOS, Chromium can keep reporting a window as hidden after it is back on screen.
 async function whileDocumentReportsHidden(run: () => Promise<void>): Promise<void> {
   Object.defineProperties(document, {
@@ -96,6 +104,7 @@ async function whileDocumentReportsHidden(run: () => Promise<void>): Promise<voi
   } finally {
     Reflect.deleteProperty(document, 'hidden')
     Reflect.deleteProperty(document, 'visibilityState')
+    Reflect.deleteProperty(document, 'hasFocus')
     document.dispatchEvent(new Event('visibilitychange'))
   }
 }
@@ -109,6 +118,21 @@ export const dismissed = defineFixture({
     expectReport(frame, true, 'Expected the successful restart report to appear')
     await wait(5700)
     expectReport(frame, false, 'The report stayed open five seconds after it was shown')
+  }
+})
+export const visibleButUnfocused = defineFixture({
+  width: 448,
+  render,
+  interact: async (frame) => {
+    await wait(300)
+    // A visible window behind another app still shows the report, so it still leaves on time.
+    setWindowFocus(false, { deliverEvent: true })
+    try {
+      await wait(5700)
+      expectReport(frame, false, 'The report stayed open on a visible but unfocused window')
+    } finally {
+      Reflect.deleteProperty(document, 'hasFocus')
+    }
   }
 })
 export const hovered = defineFixture({
@@ -143,7 +167,7 @@ export const restoredWithStaleVisibility = defineFixture({
     await whileDocumentReportsHidden(async () => {
       await wait(5500)
       expectReport(frame, true, 'The report expired while the window was hidden')
-      window.dispatchEvent(new Event('focus'))
+      setWindowFocus(true, { deliverEvent: true })
       await wait(4000)
       expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
       await wait(1600)
@@ -157,13 +181,34 @@ export const blurredAgainWhileHidden = defineFixture({
   interact: async (frame) => {
     await wait(300)
     await whileDocumentReportsHidden(async () => {
-      window.dispatchEvent(new Event('focus'))
+      setWindowFocus(true, { deliverEvent: true })
       await wait(3000)
       // Leaving the window again means the stale hidden flag no longer proves anyone is looking.
-      window.dispatchEvent(new Event('blur'))
+      setWindowFocus(false, { deliverEvent: true })
       await wait(4000)
       expectReport(frame, true, 'The report expired after the window lost focus')
-      window.dispatchEvent(new Event('focus'))
+      setWindowFocus(true, { deliverEvent: true })
+      await wait(4000)
+      expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
+      await wait(1600)
+      expectReport(frame, false, 'The report stayed open five seconds after focus')
+    })
+  }
+})
+export const focusLostAtExpiryWhileHidden = defineFixture({
+  width: 448,
+  render,
+  interact: async (frame) => {
+    await wait(300)
+    await whileDocumentReportsHidden(async () => {
+      setWindowFocus(true, { deliverEvent: true })
+      await wait(4800)
+      // Focus is gone at the deadline, but its blur has not reached the report yet.
+      setWindowFocus(false, { deliverEvent: false })
+      await wait(1000)
+      expectReport(frame, true, 'The report expired after focus left, before its blur arrived')
+      setWindowFocus(false, { deliverEvent: true })
+      setWindowFocus(true, { deliverEvent: true })
       await wait(4000)
       expectReport(frame, true, 'The report did not get a fresh five seconds after focus')
       await wait(1600)
