@@ -5,6 +5,7 @@ import {
   connectorLinkTarget,
   GITHUB_LINK_HOSTS,
   GOOGLE_LINK_HOSTS,
+  requireConnectorLink,
   SLACK_LINK_HOSTS
 } from './connector-link'
 
