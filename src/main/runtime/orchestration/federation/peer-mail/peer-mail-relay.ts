@@ -22,6 +22,7 @@ import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
 import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
+import { deletedCoordinatorChat } from '../../../rpc/methods/orchestration/messaging/deleted-coordinator-chat'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
 
@@ -291,7 +292,8 @@ export class PeerMailRelay {
       const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {
         name: server.name,
-        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type),
+        deletedChat: deletedCoordinatorChat
       })
     }
     const stored = this.importReply(db, environmentId, item)

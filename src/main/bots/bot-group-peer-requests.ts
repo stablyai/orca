@@ -2,8 +2,7 @@ import {
   botGroupTurnOperation,
   isBotGroupMemberSession,
   type BotGroup,
-  type BotGroupMember,
-  type BotGroupTurn
+  type BotGroupMember
 } from '../../shared/bots/bot-group'
 import { startsBotGroupRequest, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
@@ -11,7 +10,7 @@ import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mail
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { requireStructuredHost } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { itemsRoot, mailRoot, rootOf } from './bot-group-mail-root'
+import { itemsRoot, mailRoot, mailTurnRan, rootOf } from './bot-group-mail-root'
 
 export type GroupPeerScope = NonNullable<Awaited<ReturnType<typeof groupPeerScope>>>
 
@@ -122,16 +121,6 @@ export function narrowGroupMailBatch<
     ),
     ended
   }
-}
-
-/** Whether a mail line's turn ran, by what the line itself saved: its reply, or its retirement. */
-function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
-  return (
-    turn === undefined ||
-    turn.reply !== undefined ||
-    turn.revoked === true ||
-    turn.frozenItems !== undefined
-  )
 }
 
 /** Records a peer request's or owned worker's mail as the receiving member's turn, refusing mail

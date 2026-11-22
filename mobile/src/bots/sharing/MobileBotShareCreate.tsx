@@ -187,9 +187,7 @@ export function MobileBotShareCreate(props: {
       {props.runsOn}
       <View style={styles.picture}>
         <MobileBotAvatar
-          avatar={
-            avatar ? mobileBotAvatarSource({ name, avatar }, undefined) : reviewAvatar(review)
-          }
+          avatar={avatar ? mobileBotAvatarSource({ name, avatar }) : reviewAvatar(review)}
           size={72}
         />
         <Pressable

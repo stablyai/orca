@@ -9,6 +9,7 @@ import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { BotGroupStore } from './bot-group-store'
 import { migrateBotGroupHomes } from './bot-group-home-migration'
+import { settleStoredRoomMail } from './bot-group-remote-answers'
 import {
   createBotGroup,
   createBotGroupThread,
@@ -116,6 +117,7 @@ export function startBotGroupsSoon(runtime: OrcaRuntimeService, isCurrent: () =>
     try {
       if (isCurrent()) {
         const groups = runtimeBotGroups(runtime)
+        settleStoredRoomMail(groups)
         void migrateBotGroupHomes(groups)
           .catch(warn)
           .then(() => groups.resumePending())

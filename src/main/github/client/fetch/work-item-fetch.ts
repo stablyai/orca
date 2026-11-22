@@ -26,15 +26,18 @@ import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
 import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
 
+type PRWorkItemReadOptions = { includeChecksSummary?: boolean }
+
 async function withCompletePRChecks(
   item: MainWorkItem,
   repository: GitHubApiRepository | null,
   number: number,
-  options: GhExecOptions
+  options: GhExecOptions,
+  { includeChecksSummary = true }: PRWorkItemReadOptions
 ): Promise<MainWorkItem> {
   const source = repository ?? ownerRepoFromPullRequestUrl(item.url)
   const rollup =
-    source && item.number === number
+    includeChecksSummary && source && item.number === number
       ? await readCompletePRCheckObservation(source, number, item.headSha, options)
       : undefined
   return {
@@ -119,7 +122,8 @@ export async function fetchPullRequestWorkItem(
   ownerRepo: GitHubApiRepository | null,
   number: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  readOptions: PRWorkItemReadOptions = {}
 ): Promise<MainWorkItem | null> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
@@ -144,7 +148,8 @@ export async function fetchPullRequestWorkItem(
         mapPullRequestWorkItem(item, ownerRepo),
         ownerRepo,
         number,
-        ghOptions
+        ghOptions,
+        readOptions
       )
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
@@ -189,7 +194,8 @@ export async function fetchPullRequestWorkItem(
         mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo),
         ownerRepo,
         number,
-        ghOptions
+        ghOptions,
+        readOptions
       )
       const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
       return { ...mapped, ...reviewFields }
@@ -209,7 +215,8 @@ export async function fetchPullRequestWorkItem(
     mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>),
     null,
     number,
-    ghOptions
+    ghOptions,
+    readOptions
   )
 }
 
@@ -218,7 +225,8 @@ export async function fetchPullRequestWorkItemFromCandidates(
   number: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  preference?: IssueSourcePreference
+  preference?: IssueSourcePreference,
+  readOptions?: PRWorkItemReadOptions
 ): Promise<MainWorkItem | null> {
   const candidates = await resolvePullRequestLookupCandidates(
     repoPath,
@@ -230,7 +238,14 @@ export async function fetchPullRequestWorkItemFromCandidates(
     if (preference === 'origin') {
       return null
     }
-    return fetchPullRequestWorkItem(repoPath, null, number, connectionId, localGitOptions)
+    return fetchPullRequestWorkItem(
+      repoPath,
+      null,
+      number,
+      connectionId,
+      localGitOptions,
+      readOptions
+    )
   }
   for (const candidate of candidates) {
     try {
@@ -239,7 +254,8 @@ export async function fetchPullRequestWorkItemFromCandidates(
         candidate,
         number,
         connectionId,
-        localGitOptions
+        localGitOptions,
+        readOptions
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

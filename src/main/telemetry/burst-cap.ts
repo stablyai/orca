@@ -102,11 +102,3 @@ export function resetBurstCapsForSession(): void {
   consentMutationCount = 0
   consentMutationWarned = false
 }
-
-export function _getBurstCapStateForTests(): {
-  perEventBuckets: Map<string, TokenBucket>
-  perSessionCount: number
-  consentMutationCount: number
-} {
-  return { perEventBuckets, perSessionCount, consentMutationCount }
-}

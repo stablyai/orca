@@ -211,11 +211,7 @@ export function MobileBotGroupItems({
           checked={null}
           now={now}
           disabled={failed}
-          owner={
-            owner
-              ? { name: owner.name, avatar: mobileBotAvatarSource(owner, undefined) }
-              : undefined
-          }
+          owner={owner ? { name: owner.name, avatar: mobileBotAvatarSource(owner) } : undefined}
           onPress={() => pager.open(`item:${item.uid}`)}
           onLongPress={() => setSheet({ kind: 'row', item })}
         />
