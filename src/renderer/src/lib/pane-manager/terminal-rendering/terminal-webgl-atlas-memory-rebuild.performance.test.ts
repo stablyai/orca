@@ -298,6 +298,53 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     vi.doUnmock('../../window-activity/window-park-visibility')
   })
 
+  it('parks while focus is inside an embedded browser page, and goes ahead once focus is back on the host page', async () => {
+    const focusin = new Set<() => void>()
+    const activeElement = { tagName: 'WEBVIEW' }
+    vi.stubGlobal('document', { hasFocus: () => true, activeElement })
+    vi.stubGlobal('window', {
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === 'focusin') {
+          focusin.add(listener)
+        }
+      },
+      removeEventListener: (_type: string, listener: () => void) => focusin.delete(listener)
+    })
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const shown = fakePane(atlas, newAtlas())
+    shown.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
+    await vi.advanceTimersByTimeAsync(QUIET + 2 * INTERVAL)
+    expect(rebuilds).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+    activeElement.tagName = 'DIV'
+    focusin.forEach((listener) => listener())
+    await vi.advanceTimersByTimeAsync(QUIET)
+    expect(rebuilds).toEqual([[shown.pane]])
+  })
+
+  it('does not strand an atlas that came due while the rebuild queue was parked', async () => {
+    const parkVisibility = { visible: false, listeners: new Set<() => void>() }
+    vi.doMock('../../window-activity/window-park-visibility', () => ({
+      getWindowParkVisible: () => parkVisibility.visible,
+      subscribeWindowParkVisibility: (onChange: () => void) => {
+        parkVisibility.listeners.add(onChange)
+        return () => parkVisibility.listeners.delete(onChange)
+      }
+    }))
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    // The queue of an earlier rebuild parks first.
+    atlas.whenTerminalWebglAtlasRebuildUnparked(() => {})
+    const late = fakePane(atlas, newAtlas())
+    late.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, late.pane)
+    parkVisibility.visible = true
+    parkVisibility.listeners.forEach((listener) => listener())
+    await vi.advanceTimersByTimeAsync(QUIET)
+    expect(rebuilds).toEqual([[late.pane]])
+    vi.doUnmock('../../window-activity/window-park-visibility')
+  })
+
   it('empties each due atlas in place before its owners are recreated', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const first = newAtlas()

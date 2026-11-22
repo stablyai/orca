@@ -6,7 +6,7 @@ import { getWindowParkVisible } from '../../window-activity/window-park-visibili
 import {
   isTerminalWebglAtlasRebuildParked,
   rebuildingTerminalWebglAtlasParkWatch,
-  terminalWebglAtlasInteractionHoldMs,
+  terminalWebglAtlasInteractionEndsAt,
   whenTerminalWebglAtlasRebuildUnparked
 } from './terminal-webgl-atlas-rebuild-interaction'
 import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
@@ -117,7 +117,7 @@ function markIfDue(atlas: GlyphAtlas): void {
 function readyAt(atlas: GlyphAtlas): number {
   const quiet = (lastOutputAt.get(atlas) ?? Number.NEGATIVE_INFINITY) + ATLAS_REBUILD_QUIET_MS
   const frameRetry = frameRetryAt.get(atlas) ?? Number.NEGATIVE_INFINITY
-  return Math.max(performance.now() + terminalWebglAtlasInteractionHoldMs(), quiet, frameRetry)
+  return Math.max(terminalWebglAtlasInteractionEndsAt(), quiet, frameRetry)
 }
 
 function forgetDue(atlas: GlyphAtlas): void {
@@ -233,8 +233,12 @@ function rebuildDueAtlases(): void {
 }
 
 function scheduleRebuild(): void {
-  // Parked while the window is hidden or unfocused: output must not restart the timer; the window coming back does.
-  if (rebuildTimer !== null || rebuildingTerminalWebglAtlasParkWatch()) {
+  if (rebuildTimer !== null) {
+    return
+  }
+  // Parked (by this scheduler or the queue): output must not restart the timer; the window coming back does.
+  if (rebuildingTerminalWebglAtlasParkWatch()) {
+    whenTerminalWebglAtlasRebuildUnparked(scheduleRebuild)
     return
   }
   // One timer, set to the earliest due atlas; output arriving later just moves that atlas's time, checked when the timer fires.
