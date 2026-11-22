@@ -72,7 +72,7 @@ describe('TerminalHost foreground agent exit watch', () => {
             foregroundKind: 'non-shell',
             processName: foreground
           }),
-          foregroundAgentPid: () => agentPid,
+          foregroundAgent: () => ({ processName: 'codex', pid: agentPid }),
           write: vi.fn(),
           resize: vi.fn(),
           kill: vi.fn(() => exitShell(0)),

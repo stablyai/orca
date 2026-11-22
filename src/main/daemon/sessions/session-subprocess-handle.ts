@@ -5,6 +5,8 @@ import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/t
 
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 
+export type ForegroundAgentIdentity = { processName: string; pid: number }
+
 export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
 
 export type SubprocessHandle = {
@@ -24,8 +26,8 @@ export type SubprocessHandle = {
   confirmForegroundProcess?(context?: { decision?: boolean }): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
   confirmShellForeground?(): Promise<boolean>
-  /** The proven pid of the cached foreground agent (Windows keeps one; POSIX reads carry it in evidence). */
-  foregroundAgentPid?(): number | null
+  /** The cached foreground agent with its proven pid, read together so a later lookup cannot pair one's name with another's pid (Windows keeps one; POSIX reads carry it in evidence). */
+  foregroundAgent?(): ForegroundAgentIdentity | null
   /** The foreground identity lookup in flight, if any. */
   pendingForegroundRefresh?(): Promise<unknown> | null
   /** Skip stdin command delivery when shell arguments already delivered it. */

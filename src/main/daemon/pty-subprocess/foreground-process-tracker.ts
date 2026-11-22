@@ -29,6 +29,7 @@ import {
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
+import type { ForegroundAgentIdentity } from '../sessions/session-subprocess-handle'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
@@ -45,7 +46,7 @@ export type PtyForegroundProcessTracker = {
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
-  cachedAgentPid(): number | null
+  cachedAgent(): ForegroundAgentIdentity | null
   pendingForegroundRefresh(): Promise<unknown> | null
 }
 
@@ -211,7 +212,10 @@ export function createPtyForegroundProcessTracker(args: {
       cachedAgentForeground = null
       startupAgentForeground = null
     },
-    cachedAgentPid: () => cachedAgentForeground?.pid ?? null,
+    cachedAgent: () =>
+      cachedAgentForeground?.pid != null
+        ? { processName: cachedAgentForeground.processName, pid: cachedAgentForeground.pid }
+        : null,
     pendingForegroundRefresh: () => foregroundRefresh,
     getForegroundProcess: (options) => {
       if (args.isDead()) {

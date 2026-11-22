@@ -29,7 +29,7 @@ describe('ForegroundExitWatches', () => {
 
   it('watches the agent a full read proved, not the wrapper that leads its process group', () => {
     // `bash -c 'codex; read'`: bash (100) leads the group and keeps waiting after codex (200) exits.
-    const source = { isAlive: true, foregroundAgentPid: () => 100 }
+    const source = { isAlive: true, foregroundAgent: () => ({ processName: 'bash', pid: 100 }) }
 
     expect(watches.noteInspection('pane', source, 'codex', 200)).toBe(true)
     expect([...watched.keys()]).toEqual([200])
@@ -40,11 +40,27 @@ describe('ForegroundExitWatches', () => {
 
   it('lets a read without a pid lean on a watch only for the agent that watch belongs to', () => {
     // Codex keeps running in the background; Claude takes the foreground and the capture fails.
-    const source = { isAlive: true, foregroundAgentPid: () => null }
+    const source = { isAlive: true, foregroundAgent: () => null }
     expect(watches.noteInspection('pane', source, 'codex', 10)).toBe(true)
 
     expect(watches.noteInspection('pane', source, 'claude')).toBe(false)
     expect(watches.noteInspection('pane', source, 'codex')).toBe(true)
+  })
+
+  it('does not pair a read’s agent with the pid of another agent a later lookup cached', () => {
+    // Windows: the read named Codex, but the lookup that landed during the child census cached Gemini.
+    const source = {
+      isAlive: true,
+      foregroundAgent: () => ({ processName: 'gemini.exe', pid: 77 })
+    }
+
+    expect(watches.noteInspection('pane', source, 'codex.exe')).toBe(false)
+    expect(watched.size).toBe(0)
+    expect(notices).toEqual(['pane'])
+    // The same disagreement does not notify again.
+    expect(watches.noteInspection('pane', source, 'codex.exe')).toBe(false)
+    expect(notices).toEqual(['pane'])
+    expect(watches.noteInspection('pane', source, 'gemini.exe')).toBe(true)
   })
 
   it('announces once an agent a lookup names after the read returned', async () => {
@@ -56,7 +72,8 @@ describe('ForegroundExitWatches', () => {
     let pending: Promise<void> | null = lookup
     const source = {
       isAlive: true,
-      foregroundAgentPid: () => agentPid,
+      foregroundAgent: () =>
+        agentPid === null ? null : { processName: 'codex.exe', pid: agentPid },
       pendingForegroundRefresh: () => pending
     }
 

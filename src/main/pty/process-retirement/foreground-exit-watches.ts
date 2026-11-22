@@ -4,7 +4,7 @@ import { watchProcessExit, type ProcessExitWatch } from './native-process-exit-w
 /** A live PTY that can name the process whose exit ends its foreground agent. */
 export type ForegroundPidSource = {
   readonly isAlive: boolean
-  foregroundAgentPid(): number | null
+  foregroundAgent(): { processName: string; pid: number } | null
   /** An identity lookup still in flight; it may name an agent the read just missed. */
   pendingForegroundRefresh?(): Promise<unknown> | null
 }
@@ -20,6 +20,8 @@ export class ForegroundExitWatches {
   private readonly lookups = new Map<string, symbol>()
   /** The agent the last proven read named; a read without a pid may lean on its watch only while it names the same agent. */
   private readonly current = new Map<string, { name: string; pid: number }>()
+  /** One re-read notice per cached pid a stale read disagreed with, so a lagging cache cannot loop. */
+  private readonly mismatchedPids = new Map<string, number>()
 
   constructor(private readonly onAgentChange?: (ptyId: string) => void) {}
 
@@ -40,7 +42,8 @@ export class ForegroundExitWatches {
     if (foreground === null) {
       return this.isWatching(ptyId)
     }
-    if (!recognizeAgentProcess(foreground)) {
+    const recognized = recognizeAgentProcess(foreground)
+    if (!recognized) {
       const wasWatching = this.isWatching(ptyId)
       this.release(ptyId)
       // The pane may still count on a notice; tell it to read again and learn it has none.
@@ -49,7 +52,16 @@ export class ForegroundExitWatches {
       }
       return false
     }
-    const pid = identifiedPid ?? source.foregroundAgentPid()
+    const cached = identifiedPid === undefined ? source.foregroundAgent() : null
+    // A lookup that landed after the read named its agent: the pid is another agent's, so read again.
+    if (cached && recognizeAgentProcess(cached.processName)?.agent !== recognized.agent) {
+      if (this.mismatchedPids.get(ptyId) !== cached.pid) {
+        this.mismatchedPids.set(ptyId, cached.pid)
+        this.onAgentChange?.(ptyId)
+      }
+      return false
+    }
+    const pid = identifiedPid ?? cached?.pid ?? null
     if (pid === null) {
       const current = this.current.get(ptyId)
       return current?.name === foreground && this.watches.get(ptyId)?.has(current.pid) === true
@@ -90,13 +102,13 @@ export class ForegroundExitWatches {
     }
     const token = Symbol(ptyId)
     this.lookups.set(ptyId, token)
-    const before = source.foregroundAgentPid()
+    const before = source.foregroundAgent()?.pid ?? null
     void pending.then(() => {
       if (this.lookups.get(ptyId) !== token) {
         return
       }
       this.lookups.delete(ptyId)
-      const pid = source.foregroundAgentPid()
+      const pid = source.foregroundAgent()?.pid ?? null
       if (
         source.isAlive &&
         pid !== null &&
@@ -121,6 +133,7 @@ export class ForegroundExitWatches {
 
   private release(ptyId: string): void {
     this.current.delete(ptyId)
+    this.mismatchedPids.delete(ptyId)
     for (const watch of this.watches.get(ptyId)?.values() ?? []) {
       watch.dispose()
     }
@@ -140,5 +153,6 @@ export class ForegroundExitWatches {
     this.reportedPids.clear()
     this.lookups.clear()
     this.current.clear()
+    this.mismatchedPids.clear()
   }
 }

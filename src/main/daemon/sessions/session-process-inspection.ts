@@ -1,5 +1,9 @@
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
-import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
+import type {
+  ChildProcessVerdictRead,
+  ForegroundAgentIdentity,
+  SubprocessHandle
+} from './session-subprocess-handle'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
 import { SessionRepaintNudge } from './session-repaint-nudge'
@@ -76,8 +80,8 @@ export abstract class SessionProcessInspection {
     return this.subprocess.pendingForegroundRefresh?.() ?? null
   }
 
-  foregroundAgentPid(): number | null {
-    return this.subprocess.foregroundAgentPid?.() ?? null
+  foregroundAgent(): ForegroundAgentIdentity | null {
+    return this.subprocess.foregroundAgent?.() ?? null
   }
 
   async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {
