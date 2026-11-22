@@ -9,7 +9,10 @@ import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/wo
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { getPRChecks } from '../client/check/get-pr-checks'
 import { getPRComments } from '../client/fetch/get-pr-comments'
-import { getWorkItemWithRepository, getWorkItemByOwnerRepo } from '../client/fetch/get-work-item'
+import {
+  getWorkItemWithRepository,
+  getWorkItemWithExactRepository
+} from '../client/fetch/get-work-item'
 import { acquire, release } from '../execution/github-operation-slots'
 
 import { resolveGitHubRepoExecution } from '../repositories/github-api-repository'
@@ -111,18 +114,15 @@ export async function getWorkItemDetails(
         repository: selectedRepository,
         issueDetails
       } = repositoryTarget
-        ? {
-            item: await getWorkItemByOwnerRepo(
-              repoPath,
-              repositoryTarget,
-              number,
-              type === 'pr' ? 'pr' : 'issue',
-              connectionId,
-              localGitOptions
-            ),
-            repository: repositoryTarget,
-            issueDetails: undefined
-          }
+        ? await getWorkItemWithExactRepository(
+            repoPath,
+            repositoryTarget,
+            number,
+            type === 'pr' ? 'pr' : 'issue',
+            connectionId,
+            localGitOptions,
+            { issueDetails: { fresh: canonical } }
+          )
         : await getWorkItemWithRepository(
             repoPath,
             number,
@@ -138,11 +138,10 @@ export async function getWorkItemDetails(
 
       // The clone selects execution; an addressed item selects every detail read.
       const resolvedRepository =
-        repositoryTarget ??
-        (item.type === 'issue'
+        item.type === 'issue' || repositoryTarget
           ? selectedRepository
           : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
-              .ownerRepo)
+              .ownerRepo
 
       if (item.type === 'issue') {
         return withWorkItemDetailsPermit(async () => {
