@@ -33,6 +33,38 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
   })
 }
 
+// Watch the authenticated control socket for failure until its permanent close handlers are armed.
+export function watchControlSocketBootstrap(socket: Socket): {
+  race: <T>(step: Promise<T>) => Promise<T>
+  connect: (socketPath: string, timeoutMs: number) => Promise<Socket>
+  stop: () => void
+} {
+  const failure = Promise.withResolvers<never>()
+  const onClose = (): void =>
+    failure.reject(new DaemonProtocolError('Control socket closed during connection'))
+  socket.on('error', failure.reject)
+  socket.on('close', onClose)
+  const race = <T>(step: Promise<T>): Promise<T> => Promise.race([step, failure.promise])
+  return {
+    race,
+    connect: (socketPath, timeoutMs) => {
+      const connecting = connectDaemonSocket(socketPath, timeoutMs)
+      return race(connecting).catch((error: unknown) => {
+        // A socket that connects after the attempt failed has no owner left to close it.
+        void connecting.then(
+          (late) => late.destroy(),
+          () => {}
+        )
+        throw error
+      })
+    },
+    stop: () => {
+      socket.off('error', failure.reject)
+      socket.off('close', onClose)
+    }
+  }
+}
+
 // Capture socket values because teardown nulls the client fields before cleanup.
 export function armDaemonSocketCloseHandlers(
   controlSocket: Socket,
