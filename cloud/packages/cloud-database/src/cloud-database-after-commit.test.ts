@@ -99,4 +99,20 @@ describe.skipIf(!postgresUrl)('afterCommit (postgres retry)', () => {
     })
     expect(ran).toEqual([2])
   })
+
+  it('runs nothing when COMMIT rolls back an aborted transaction', async () => {
+    const db = await openCloudDatabase({
+      service: 'after-commit-test',
+      schemaStatements: [],
+      databaseUrl: postgresUrl,
+      dataDir
+    })
+    opened.push(db)
+    const ran = vi.fn()
+    await db.transaction(async (transaction) => {
+      transaction.afterCommit(ran)
+      await transaction.query('SELECT 1/0').catch(() => undefined)
+    })
+    expect(ran).not.toHaveBeenCalled()
+  })
 })

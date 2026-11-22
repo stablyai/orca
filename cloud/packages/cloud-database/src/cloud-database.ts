@@ -224,7 +224,11 @@ export async function runClientTransaction<T>(
   try {
     await client.query('BEGIN')
     result = await operation(new PostgresTransaction(client, afterCommit))
-    await client.query('COMMIT')
+    // COMMIT of an aborted transaction (a caught SQL error) rolls back and reports ROLLBACK.
+    const commit = await client.query('COMMIT')
+    if (commit.command !== 'COMMIT') {
+      afterCommit.discard()
+    }
   } catch (error) {
     afterCommit.discard()
     await client.query('ROLLBACK').catch(() => undefined)
