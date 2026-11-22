@@ -5,7 +5,8 @@ import {
   botMemoryChange,
   botMemoryDate,
   editBotMemoryFact,
-  parseBotMemoryFacts
+  parseBotMemoryFacts,
+  uniqueBotMemoryLines
 } from '../../../../shared/bot-memory-lines'
 import {
   BotChat,
@@ -39,6 +40,10 @@ async function historyView(
   )
   return rows.map((row) => ({
     ...row,
+    change: {
+      added: uniqueBotMemoryLines(row.change.added),
+      removed: uniqueBotMemoryLines(row.change.removed)
+    },
     chat: 'sessionId' in row.by ? (titles.get(row.by.sessionId) ?? null) : null
   }))
 }

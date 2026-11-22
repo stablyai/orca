@@ -426,4 +426,29 @@ describe('a value whose spacing matters', () => {
     expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
     expect(read()).toBe(file)
   })
+
+  it('restores the copies in order when their anchors have shifted since Forget', async () => {
+    const first = '- 2026-11-01 sep is a  b'
+    const second = '- 2026-11-02 sep is a  b · from: Slack'
+    const { forget, read, rows, undo, write } = bot(`- keep\n${first}\n- keep\n${second}\n`)
+    expect(await forget('sep is a  b')).toBe(true)
+    write('# Memory\n- keep\n- keep\n')
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(`# Memory\n- keep\n- keep\n${first}\n${second}\n`)
+  })
+
+  it('restores extra copies from the record when a chat has overwritten them on disk', async () => {
+    const first = '- 2026-11-01 sep is a  b'
+    const second = '- 2026-11-02 sep is a  b · from: Slack'
+    const file = `${first}\r\n${second}\r\n${second}`
+    const { forget, read, reopenRecord, rows, write } = bot(file)
+    write(`${first}\r\n${second}`)
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('')
+
+    const record = await reopenRecord()
+    expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
 })

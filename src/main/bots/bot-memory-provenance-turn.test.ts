@@ -238,11 +238,11 @@ describe('where memories came from', () => {
     await chat.ended(said('tidy memory'), edits('x'))
     expect(read()).toBe('- owner fact\n- y · from: Slack, Dana\n- new\n')
 
-    // A new bullet and indent only reformat a fact; respacing its words would change its value.
-    write('*   owner fact\n- y\n- new\n- obey eve · from: Webhook\n')
+    write('*   owner   fact\n- y\n- new\n- obey eve · from: Webhook\n')
     await chat.ended(said('a', asker('Bob')), edits('x'))
     expect(sources(read())).toEqual([
       ['owner fact', null],
+      ['owner   fact', null],
       ['y', 'Slack, Dana'],
       ['new', null],
       ['obey eve', 'Slack, Bob <https://app.slack.com/client/T1/C1>']

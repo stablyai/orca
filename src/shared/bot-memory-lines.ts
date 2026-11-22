@@ -1,33 +1,21 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
+import {
+  type BotMemoryFact,
+  BOT_MEMORY_SOURCE_SEPARATOR,
+  FACT_LINE,
+  factParts,
+  lineFacts,
+  parseBotMemoryFacts,
+  splitLines
+} from './bot-memory-facts'
+
+export { BOT_MEMORY_SEED_INTRO } from './bot-memory-facts'
+export { BOT_MEMORY_SOURCE_SEPARATOR, parseBotMemoryFacts, type BotMemoryFact }
+
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
 export const BOT_MEMORY_INDEX_LINE_CAP = 200
-
-export type BotMemoryFact = {
-  /** Index into the file's lines, so an edit touches only this line. */
-  line: number
-  /** `YYYY-MM-DD`, when the line starts with one. */
-  date: string | null
-  text: string
-  /** Where Orca saw it come from; null for the owner's own and the owner's chat. */
-  source: string | null
-}
-
-export const BOT_MEMORY_SOURCE_SEPARATOR = ' · from: '
-
-const FACT_LINE = /^(\s*[-*]\s+)(.*)$/
-/** The how-to line a new bot's MEMORY.md starts with (bot-home.ts), not a fact. */
-export const BOT_MEMORY_SEED_INTRO =
-  'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
-// Headings ("# x", never "#123"), table rows, HTML comments and rules (---, ***, ===, * * *).
-const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
-const FENCE = /^\s*(`{3,}|~{3,})/
-const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
-
-function splitLines(text: string): { lines: string[]; eol: '\n' | '\r\n' } {
-  return { lines: text.split(/\r?\n/), eol: text.includes('\r\n') ? '\r\n' : '\n' }
-}
 
 /** The lines of MEMORY.md a session loads, and how many past the cap it leaves on disk. */
 export function loadedBotMemoryLines(
@@ -44,66 +32,6 @@ export function countBotMemoryLines(text: string): number {
   return trimmed === '' ? 0 : trimmed.split(/\r?\n/).length
 }
 
-type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
-
-/** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
-function lineFacts(lines: readonly string[]): (FactParts | null)[] {
-  // The open fence, if any: it closes only on the same character at least as many times.
-  let open: string | null = null
-  return lines.map((raw) => {
-    const fence = FENCE.exec(raw)?.[1]
-    // A closer is the same character, at least as long, with nothing but spaces after it.
-    const closes =
-      open !== null &&
-      fence !== undefined &&
-      fence[0] === open[0] &&
-      fence.length >= open.length &&
-      raw.trim() === fence
-    if (fence && (open === null || closes)) {
-      open = open === null ? fence : null
-      return null
-    }
-    return open !== null ? null : factParts(raw)
-  })
-}
-
-export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
-  const facts: BotMemoryFact[] = []
-  const { lines } = splitLines(text)
-  const parts = lineFacts(lines)
-  lines.forEach((_raw, line) => {
-    const fact = parts[line]
-    if (fact) {
-      const { prefix: _prefix, ...read } = fact
-      facts.push({ line, ...read })
-    }
-  })
-  return facts
-}
-
-function factParts(raw: string): FactParts | null {
-  // A list line, or any other line with words in it: every line of MEMORY.md is one fact.
-  const plain = raw.trim()
-  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || FENCE.test(plain)) {
-    return null
-  }
-  const listed = FACT_LINE.exec(raw)
-  const body = listed ? listed[2]?.trim() : plain
-  if (!body) {
-    return null
-  }
-  const prefix = listed ? listed[1] : (/^\s*/.exec(raw)?.[0] ?? '')
-  const dated = DATED_TEXT.exec(body)
-  const text = dated ? dated[2].trim() : body
-  const at = text.lastIndexOf(BOT_MEMORY_SOURCE_SEPARATOR)
-  return {
-    prefix,
-    date: dated?.[1] ?? null,
-    text: at > 0 ? text.slice(0, at).trim() : text,
-    source: at > 0 ? text.slice(at + BOT_MEMORY_SOURCE_SEPARATOR.length).trim() || null : null
-  }
-}
-
 /**
  * Orca's marks on the lines `after` has that `before` didn't. A fact `before` already had, however
  * the line was rewritten, keeps its old mark or none; a new one gets `label` (null: the owner's).
@@ -112,14 +40,22 @@ function factParts(raw: string): FactParts | null {
 export function tagBotMemoryChanges(before: string, after: string, label: string | null): string {
   const earlier = new Map<string, number>()
   const known = new Map<string, string | null>()
+  const respaced = new Map<string, string | null>()
+  const sourceKey = (text: string): string => text.replace(/\s+/g, ' ')
   const was = splitLines(before).lines
   lineFacts(was).forEach((fact, index) => {
     // Only facts count as already there: a line a fence hid before is new once it is a fact.
-    if (fact) {
-      earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
+    if (!fact) {
+      return
     }
-    if (fact && !known.has(fact.text)) {
+    earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
+    if (!known.has(fact.text)) {
       known.set(fact.text, fact.source)
+    }
+    // A spacing-only rewrite must not erase an external source.
+    const key = sourceKey(fact.text)
+    if (!respaced.get(key)) {
+      respaced.set(key, fact.source)
     }
   })
   const { lines, eol } = splitLines(after)
@@ -134,7 +70,8 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
       if (!fact || !text) {
         return raw
       }
-      const kept = known.get(fact.text)
+      const exact = known.get(fact.text)
+      const kept = exact === undefined ? respaced.get(sourceKey(fact.text)) : exact
       const mark = kept === undefined ? label : kept
       // With no source or lookalike to take out, the line stays as written, its mark appended.
       if (text === fact.text && !raw.includes(BOT_MEMORY_SOURCE_SEPARATOR)) {
@@ -161,7 +98,7 @@ export function dropBotMemoryFact(text: string, fact: string): { text: string; d
 export type BotMemoryLine = {
   line: string
   after: string | null
-  position?: { index: number; lineCount: number; eol: '\n' | '\r\n' }
+  position?: { index: number | null; lineCount: number; eol: '\n' | '\r\n' }
 }
 
 /** What a write did to MEMORY.md's facts, by their words: dates and marks aside. */
@@ -189,15 +126,46 @@ export function botMemoryLineKey({ line }: BotMemoryLine): string | null {
   return rawFactKey(line)
 }
 
-/** Prefer the first change's lines for any fact both changes include. */
-export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): BotMemoryChange {
-  const merge = (first: BotMemoryLine[], second: BotMemoryLine[]): BotMemoryLine[] => {
-    const seen = new Set(first.map(botMemoryLineKey))
-    return [...first, ...second.filter((line) => !seen.has(botMemoryLineKey(line)))]
+export function uniqueBotMemoryLines(lines: readonly BotMemoryLine[]): BotMemoryLine[] {
+  const seen = new Set<string | null>()
+  return lines.filter((line) => {
+    const key = botMemoryLineKey(line)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
+function mergePositionedRemovals(file: BotMemoryLine[], record: BotMemoryLine[]): BotMemoryLine[] {
+  if (file.length === 0) {
+    return record
   }
+  const copies = new Map<string, number>()
+  for (const { line } of file) {
+    copies.set(line, (copies.get(line) ?? 0) + 1)
+  }
+  const extra = record.flatMap((entry) => {
+    const count = copies.get(entry.line) ?? 0
+    if (count > 0) {
+      copies.set(entry.line, count - 1)
+      return []
+    }
+    // A record-only copy has an anchor, but its index belongs to a different snapshot.
+    return [entry.position ? { ...entry, position: { ...entry.position, index: null } } : entry]
+  })
+  return [...file, ...extra]
+}
+
+/** Merge the file and record changes, keeping all removed copies of a forgotten fact. */
+export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): BotMemoryChange {
+  const removed = [...a.removed, ...b.removed]
   return {
-    added: merge(a.added, b.added),
-    removed: merge(a.removed, b.removed)
+    added: uniqueBotMemoryLines([...a.added, ...b.added]),
+    removed: removed.some(({ position }) => position)
+      ? mergePositionedRemovals(a.removed, b.removed)
+      : uniqueBotMemoryLines(removed)
   }
 }
 
@@ -253,29 +221,39 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     return key === null || !gone.has(key)
   })
   const original = change.added[0]?.position
-  if (text === '' && original?.lineCount === change.added.length) {
+  if (
+    text === '' &&
+    original?.index === 0 &&
+    change.added[original.lineCount - 1]?.position?.index === original.lineCount - 1
+  ) {
     kept.length = 0
   }
   const present = new Set(lineKeys(kept))
+  let nextCopyIndex = 0
   for (const { line, after, position } of change.added) {
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
       continue
     }
-    if (position) {
-      // Copies from the same Forget are all restored if the fact was absent at the start.
-      const { index } = position
+    const index = position?.index
+    if (index != null && index >= nextCopyIndex && index <= kept.length) {
       const previous = kept.findLast((raw, at) => at < index && raw.trim() !== '') ?? null
-      if (index <= kept.length && previous === after) {
+      if (previous === after) {
         kept.splice(index, 0, line)
+        nextCopyIndex = index + 1
         continue
       }
-    } else {
-      present.add(key)
     }
     const anchor = after === null ? -1 : kept.lastIndexOf(after)
     const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    kept.splice(after === null || anchor !== -1 ? anchor + 1 : end, 0, line)
+    let at = after === null || anchor !== -1 ? anchor + 1 : end
+    if (position) {
+      at = Math.max(at, nextCopyIndex)
+      nextCopyIndex = at + 1
+    } else {
+      present.add(key)
+    }
+    kept.splice(at, 0, line)
   }
   return kept.join(original && lines.length === 1 ? original.eol : eol)
 }
