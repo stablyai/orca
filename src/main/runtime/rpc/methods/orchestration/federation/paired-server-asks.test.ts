@@ -359,14 +359,14 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     const [request] = computer.db.getUnreadMessages(DOCS_HOME)
     expect(request!.from_handle).toBe(`${ASKER} on Lab Mac`)
     const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
-    expect(record).toMatchObject({ fromBotId: null, fromPairedComputer: 'Build Box' })
+    expect(record).toMatchObject({
+      fromBotId: null,
+      fromBotName: 'Ranger',
+      fromPairedComputer: 'Build Box'
+    })
     expect(record).not.toHaveProperty('fromPairedServer')
-    const from = JSON.parse(request!.payload!).botRequest.from
-    console.log('PAIRED_SERVER_SENDER', JSON.stringify({ from, fromBotName: record.fromBotName }))
-    const expected = record.fromBotName
-      ? `${record.fromBotName} on Build Box`
-      : 'an agent on Build Box'
-    expect(from).toBe(expected)
+    const expected = 'Ranger on Build Box'
+    expect(JSON.parse(request!.payload!).botRequest.from).toBe(expected)
     // What the receiving chat is sent, and so what its "last asked" shows.
     const { body } = structuredMailMessage({
       db: computer.db,
