@@ -20119,6 +20119,7 @@
         "steerHint": "Ajan çalışmaya devam ederken şimdi gönder",
         "sendHint": "Bu mesajı şimdi gönder",
         "delete": "Sil",
+        "moreActions": "Diğer işlemler",
         "moveChanged": "Bu taşımadan önce kuyruk değişti. Mesajı yeniden sürüklemeyi deneyin.",
         "reorderHint": "Sırayı değiştirmek için sürükleyin veya Up ve Down ok tuşlarını kullanın.",
         "reorderMessage": "Mesajın sırasını değiştir",
