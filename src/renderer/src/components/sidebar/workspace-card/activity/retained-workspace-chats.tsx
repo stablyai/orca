@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
 import { closedWorkspaceChats } from '@/lib/agent-session/history/closed-workspace-chat'
 import {
   workspaceChatCatalog,
@@ -21,35 +19,45 @@ import { WorkspaceChatList } from './workspace-chat-list'
 import { waitForStructuredAgentSessionTabRetirement } from '@/runtime/native-chat/tab-retirement/structured-agent-session-host-tab-retirement'
 
 const EMPTY_TABS: readonly Tab[] = []
+let latestWorkspaceChatReopen = 0
 
 async function openWorkspaceChat(chat: WorkspaceChat): Promise<void> {
   const target = structuredAgentSessionTargetForHost(chat.executionHostId)
   if (!target) {
     return
   }
-  try {
-    await waitForStructuredAgentSessionTabRetirement(target, chat.workspaceId, chat.sessionId)
-    if (
-      activateAndRevealWorkspace(chat.workspaceId, {
-        executionHostId: chat.executionHostId,
-        providesInitialSurface: true
-      }) === false
-    ) {
-      return
-    }
-    await openDesktopStructuredSession(
-      {
-        kind: 'history',
-        structuredSession: { workspaceId: chat.workspaceId, sessionId: chat.sessionId },
-        agent: chat.agent
-      },
-      target
-    )
-  } catch {
-    toast.error(
-      translate('sidebar.workspaceChats.openFailed', 'Could not reopen this chat. Try again.')
-    )
+  const reopen = ++latestWorkspaceChatReopen
+  const activeWorkspace = useAppStore.getState().activeWorktreeId
+  const retired = await waitForStructuredAgentSessionTabRetirement(
+    target,
+    chat.workspaceId,
+    chat.sessionId
+  )
+  if (
+    reopen !== latestWorkspaceChatReopen ||
+    useAppStore.getState().activeWorktreeId !== activeWorkspace
+  ) {
+    return
   }
+  if (!retired) {
+    throw new Error('Host tab close failed before the saved chat could reopen')
+  }
+  if (
+    activateAndRevealWorkspace(chat.workspaceId, {
+      executionHostId: chat.executionHostId,
+      providesInitialSurface: true
+    }) === false
+  ) {
+    return
+  }
+  await openDesktopStructuredSession(
+    {
+      kind: 'history',
+      structuredSession: { workspaceId: chat.workspaceId, sessionId: chat.sessionId },
+      agent: chat.agent
+    },
+    target
+  )
 }
 
 export function RetainedWorkspaceChats({

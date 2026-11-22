@@ -12,12 +12,15 @@ function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionI
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
 }
 
-export async function waitForStructuredAgentSessionTabRetirement(
+export function waitForStructuredAgentSessionTabRetirement(
   target: RuntimeClientTarget,
   worktreeId: string,
   sessionId: string
-): Promise<void> {
-  await inFlightRetirements.get(retirementKey(target, worktreeId, sessionId))
+): Promise<boolean> {
+  // With no cleanup in flight, the normal opener can resolve the current host tab.
+  return (
+    inFlightRetirements.get(retirementKey(target, worktreeId, sessionId)) ?? Promise.resolve(true)
+  )
 }
 
 /**

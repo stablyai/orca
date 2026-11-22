@@ -64,6 +64,19 @@ describe('workspace chat catalog', () => {
     ])
   })
 
+  it('keeps an archived chat hidden after a delayed save from another window', () => {
+    const storage = memoryStorage()
+    const otherWindow = new WorkspaceChatCatalog(storage)
+    const catalog = new WorkspaceChatCatalog(storage)
+    otherWindow.remember(chat)
+    const key = storage.key(0)!
+
+    catalog.archive(chat)
+    catalog.acceptStorageChange(key)
+
+    expect(catalog.getSnapshot()).toEqual([])
+  })
+
   it('continues in memory when storage is unavailable and skips corrupt records', () => {
     const storage = memoryStorage()
     const catalog = new WorkspaceChatCatalog(storage)

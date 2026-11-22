@@ -60,6 +60,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function readStoredWorkspaceChats(storage: ChatStorage): Map<string, WorkspaceChat> {
+  const chats = new Map<string, WorkspaceChat>()
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index)
+    if (!key?.startsWith(STORAGE_PREFIX)) {
+      continue
+    }
+    const chat = readChat(storage.getItem(key))
+    const identity = key.slice(STORAGE_PREFIX.length)
+    if (chat && workspaceChatKey(chat) === identity) {
+      chats.set(identity, chat)
+    }
+  }
+  return chats
+}
+
 /** Closed chats retain navigation metadata, never a tab, reader or transcript. */
 export class WorkspaceChatCatalog {
   private chats = new Map<string, WorkspaceChat>()
@@ -68,17 +84,10 @@ export class WorkspaceChatCatalog {
 
   constructor(private readonly storage: ChatStorage | null) {
     try {
-      for (let index = 0; index < (storage?.length ?? 0); index++) {
-        const key = storage!.key(index)
-        if (!key?.startsWith(STORAGE_PREFIX)) {
-          continue
-        }
-        const chat = readChat(storage!.getItem(key))
-        if (chat && key === STORAGE_PREFIX + workspaceChatKey(chat)) {
-          this.chats.set(workspaceChatKey(chat), chat)
-        }
+      if (storage) {
+        this.chats = readStoredWorkspaceChats(storage)
+        this.snapshot = [...this.chats.values()]
       }
-      this.snapshot = [...this.chats.values()]
     } catch {
       // Storage may be disabled; closing still keeps chats in this window.
     }
@@ -116,18 +125,25 @@ export class WorkspaceChatCatalog {
     this.publish()
   }
 
-  acceptStorageChange(key: string | null, value: string | null): void {
-    if (key === null) {
-      this.chats.clear()
-    } else if (key.startsWith(STORAGE_PREFIX)) {
-      const identity = key.slice(STORAGE_PREFIX.length)
-      const chat = readChat(value)
-      if (chat && workspaceChatKey(chat) === identity) {
-        this.chats.set(identity, chat)
+  acceptStorageChange(key: string | null): void {
+    const { storage } = this
+    if (!storage || (key !== null && !key.startsWith(STORAGE_PREFIX))) {
+      return
+    }
+    try {
+      // The event can arrive after this window has already changed the same entry.
+      if (key === null) {
+        this.chats = readStoredWorkspaceChats(storage)
       } else {
-        this.chats.delete(identity)
+        const identity = key.slice(STORAGE_PREFIX.length)
+        const chat = readChat(storage.getItem(key))
+        if (chat && workspaceChatKey(chat) === identity) {
+          this.chats.set(identity, chat)
+        } else {
+          this.chats.delete(identity)
+        }
       }
-    } else {
+    } catch {
       return
     }
     this.publish()
@@ -155,7 +171,7 @@ export function workspaceChatCatalog(): WorkspaceChatCatalog {
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (event) => {
         if (event.storageArea === storage) {
-          catalog?.acceptStorageChange(event.key, event.newValue)
+          catalog?.acceptStorageChange(event.key)
         }
       })
     }

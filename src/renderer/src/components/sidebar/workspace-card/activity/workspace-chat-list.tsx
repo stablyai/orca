@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Archive, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,7 +17,7 @@ export function WorkspaceChatList({
   onArchive: (chat: WorkspaceChat) => void
 }) {
   const t = useTranslate()
-  const [opening, setOpening] = useState<string | null>(null)
+  const [opening, setOpening] = useState<{ key: string } | null>(null)
   if (!chats.length) {
     return null
   }
@@ -48,14 +49,25 @@ export function WorkspaceChatList({
             <button
               type="button"
               className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-2 text-left text-2xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              disabled={opening === key}
+              disabled={opening?.key === key}
               onClick={() => {
-                setOpening(key)
-                void onOpen(chat).finally(() => setOpening(null))
+                const attempt = { key }
+                setOpening(attempt)
+                void Promise.resolve()
+                  .then(() => onOpen(chat))
+                  .catch(() => {
+                    toast.error(
+                      t(
+                        'sidebar.workspaceChats.openFailed',
+                        'Could not reopen this chat. Try again.'
+                      )
+                    )
+                  })
+                  .finally(() => setOpening((current) => (current === attempt ? null : current)))
               }}
               title={chat.title}
             >
-              {opening === key ? (
+              {opening?.key === key ? (
                 <Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
               ) : (
                 <AgentTypeIcon agentType={chat.agent} size={13} />
@@ -69,7 +81,7 @@ export function WorkspaceChatList({
                   size="icon-xs"
                   className="shrink-0"
                   aria-label={`${archiveLabel}: ${chat.title}`}
-                  disabled={opening === key}
+                  disabled={opening?.key === key}
                   onClick={() => onArchive(chat)}
                 >
                   <Archive className="size-3" />
