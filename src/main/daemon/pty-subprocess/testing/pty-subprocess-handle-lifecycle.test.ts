@@ -125,6 +125,12 @@ describe('createPtySubprocess', () => {
       (await createPtySubprocess({ sessionId: 'w', cols: 80, rows: 24 })).resizeRedrawsOwnScreen
     ).toBe(true)
 
+    // A POSIX node-pty object has no `_agent` at all.
+    spawnMock.mockReturnValue(mockPtyProcess())
+    expect(
+      (await createPtySubprocess({ sessionId: 'p', cols: 80, rows: 24 })).resizeRedrawsOwnScreen
+    ).toBeUndefined()
+
     const conpty = Object.assign(mockPtyProcess(), { _agent: { _useConpty: true } })
     spawnMock.mockReturnValue(conpty)
     expect(
