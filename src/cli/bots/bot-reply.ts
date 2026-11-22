@@ -11,6 +11,7 @@ import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readReplyNotes } from './bot-reply-notes'
+import { readReplyChoices } from './bot-reply-choices'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   localFile,
@@ -102,6 +103,19 @@ type BotReplyResult = {
   reacted?: string
   reply?: ConnectorReply
   attached?: ActionResult & { files: number; posts: number; place?: string; unconfirmed?: true }
+  offered?: ActionResult & { choices: number; place?: string }
+}
+
+function formatOffered(offered: NonNullable<BotReplyResult['offered']>): string {
+  const place = offered.place ?? offered.target?.label ?? 'the thread'
+  return [
+    offered.queued
+      ? `Sent with ${offered.choices} buttons; Orca Cloud will post it to ${place}.`
+      : `Posted to ${place} with ${offered.choices} buttons.`,
+    // The agent waits on this, so it should know what a press looks like when it comes.
+    "A press comes back to you as that person's next message in this thread, with the button's label as its text.",
+    ...(offered.notices ?? [])
+  ].join('\n')
 }
 
 type ActResponse =
@@ -195,6 +209,7 @@ function refuseFlags(flags: HandlerContext['flags']): void {
 
 export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
   'bot reply': async ({ flags, client, json, cwd }) => {
+    const choices = readReplyChoices(flags)
     refuseFlags(flags)
     const caller = replyCaller()
     const text = await readMessageText(flags, cwd, false)
@@ -208,10 +223,10 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
     }
     const notes = readReplyNotes(flags)
     const sessionId = readInjectedAgentSessionId()
-    if ((emoji || paths.length > 0) && !sessionId) {
+    if ((emoji || paths.length > 0 || choices) && !sessionId) {
       throw new RuntimeClientError(
         'invalid_argument',
-        "--react and --file work only in a bot's chat."
+        "--react, --file and --choice work only in a bot's chat."
       )
     }
     // All found before anything posts, so a missing file posts nothing.
@@ -231,8 +246,13 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
       files.length > 0 && sessionId
         ? await replyWithFiles(client, sessionId, files, text)
         : undefined
+    // Buttons need the post's own id for a press to find, so they go as an act, not the reply outbox.
+    const offered =
+      choices && text && sessionId
+        ? await replyAct(client, sessionId, { text, choices, postId: newPostId() })
+        : undefined
     const replied =
-      text && files.length === 0
+      text && files.length === 0 && !offered
         ? await client
             .call<ConnectorReply>(
               'connector.reply',
@@ -247,20 +267,22 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
             )
             .catch(refusalOf)
         : undefined
-    const envelope = replied ?? attached ?? reacted
+    const envelope = replied ?? attached ?? offered ?? reacted
     if (!envelope) {
       return
     }
     const result: BotReplyResult = {
       ...(reacted && emoji ? { reacted: emoji } : {}),
       ...(replied ? { reply: replied.result } : {}),
-      ...(attached ? { attached: { ...attached.result, files: files.length } } : {})
+      ...(attached ? { attached: { ...attached.result, files: files.length } } : {}),
+      ...(offered && choices ? { offered: { ...offered.result, choices: choices.length } } : {})
     }
     printResult({ ...envelope, result }, json, (value) =>
       [
         ...(value.reacted ? [`Reacted ${value.reacted}.`] : []),
         ...(value.reply ? [formatReply(value.reply)] : []),
-        ...(value.attached ? [formatAttached(value.attached)] : [])
+        ...(value.attached ? [formatAttached(value.attached)] : []),
+        ...(value.offered ? [formatOffered(value.offered)] : [])
       ].join('\n')
     )
   }
