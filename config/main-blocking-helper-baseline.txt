@@ -783,7 +783,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-3 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # +1: Continue in Chat UI's pre-close folder check reuses validateAdoptedOpenCodeSource; its only sync step is the worker entry existsSync when the shared OpenCode SQLite worker first spawns
+5 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # per resume click: the adopted-folder read (OpenCode/Hermes via the shared SQLite worker, whose only sync step is its entry existsSync on first spawn)
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
@@ -841,7 +841,7 @@
 4 src/main/observability/bundle.ts
 4 src/main/observability/index.ts
 4 src/main/observability/local-file-sink.ts
-2 src/main/omp/omp-transcript-import.ts
+3 src/main/omp/omp-transcript-import.ts # per resume click: id lookup when the cwd buckets miss a sub-folder conversation; its existsSync runs only for a hook transcript path, which this lookup never passes
 1 src/main/opencode-usage/opencode-usage-provider.ts
 1 src/main/opencode-usage/store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
@@ -1147,6 +1147,7 @@
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
+1 src/main/runtime/agent-session/ownership/structured-agent-session-create-adoption.ts # per resume click: resolveAdoptedTranscriptFolder, whose only sync step is the SQLite worker entry existsSync on first spawn
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
