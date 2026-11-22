@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,8 @@ import {
 } from './WorktreeContextMenuSubMenus'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
+  WorktreeContextMenuPortalScope,
+  isOwnedWorktreeContextMenuPortal,
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
@@ -78,6 +81,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  const portalScope = useId()
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -95,20 +99,29 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
-        if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+        const isInside = isEventTargetInsideCurrentTarget(event.currentTarget, event.target)
+        const isOwnedPortal =
+          !isInside && isOwnedWorktreeContextMenuPortal(event.target, portalScope)
+        if (!isInside && !isOwnedPortal) {
           return
         }
-        if (shouldUseNativeContextMenu(event.target)) {
-          return
-        }
-        if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
+        if (
+          !isOwnedPortal &&
+          (shouldUseNativeContextMenu(event.target) ||
+            shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target))
+        ) {
           return
         }
         event.preventDefault()
+        if (isOwnedPortal) {
+          event.stopPropagation()
+        }
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         setDeveloperMenuRevealed(event.altKey)
-        setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
+        setContextWorktrees(
+          isOwnedPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
+        )
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
         setMenuOpenState(true)
@@ -117,7 +130,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         suppressOpeningPointerEvent(event)
       }}
     >
-      {children}
+      <WorktreeContextMenuPortalScope.Provider value={portalScope}>
+        {children}
+      </WorktreeContextMenuPortalScope.Provider>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
         <DropdownMenuTrigger asChild>
           <button

@@ -6,13 +6,20 @@ import { WorktreeCardDetailSection } from './WorktreeCardDetailSection'
 import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
 import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
+import {
+  WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR,
+  WorktreeContextMenuPortalScope
+} from '../../workspace-actions/context-menu/worktree-context-menu-policy'
 
 /** A one-line card's status and agent rows, which the line itself has no room for. */
 export function WorktreeCardLineActivity({
-  worktreeId
+  worktreeId,
+  workspaceMenuEnabled
 }: {
   worktreeId: string
+  workspaceMenuEnabled: boolean
 }): React.JSX.Element | null {
+  const menuScope = React.useContext(WorktreeContextMenuPortalScope)
   const status = useWorktreeActivityStatus(worktreeId)
   const agents = useWorktreeAgentRows(worktreeId)
   if (agents.length === 0 && status !== 'permission') {
@@ -24,7 +31,13 @@ export function WorktreeCardLineActivity({
         icon={<StatusIndicator status={status} showTooltip={false} />}
         label={getWorktreeStatusLabel(status)}
       />
-      <WorktreeCardAgents worktreeId={worktreeId} />
+      <div
+        {...{
+          [WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR]: workspaceMenuEnabled ? menuScope : undefined
+        }}
+      >
+        <WorktreeCardAgents worktreeId={worktreeId} />
+      </div>
     </WorktreeCardDetailSection>
   )
 }

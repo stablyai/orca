@@ -143,7 +143,12 @@ export function WorktreeCardIdentityHover({
       detailsAfter={
         card.compactLine || workspacePorts.length > 0 ? (
           <>
-            {card.compactLine ? <WorktreeCardLineActivity worktreeId={worktree.id} /> : null}
+            {card.compactLine ? (
+              <WorktreeCardLineActivity
+                worktreeId={worktree.id}
+                workspaceMenuEnabled={!affiliateListMode}
+              />
+            ) : null}
             {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
           </>
         ) : null
