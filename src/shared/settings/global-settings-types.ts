@@ -70,6 +70,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
+  /** Controls whether clipboard image previews are sampled for Explorer Paste hover cards. */
+  fileExplorerPasteThumbnailEnabled?: boolean
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   appIcon: AppIconId
@@ -229,6 +231,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  /** Suppresses the right-sidebar file explorer's keyboard paste confirmation. */
+  fileExplorerKeyboardPasteConfirmationDismissed?: boolean
   followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */

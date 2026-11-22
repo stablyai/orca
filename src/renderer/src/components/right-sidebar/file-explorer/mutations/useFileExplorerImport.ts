@@ -1,25 +1,32 @@
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { useTranslate } from '@/i18n/use-translate'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import {
   createOsFileDropSequence,
   useOsFileDropOwner
 } from '@/lib/files/drop/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
+import { prepareOsFileDropPaths } from '@/lib/files/drop/os-file-drop-preparation'
+import { readFileExplorerDropDir, readFileExplorerPasteDir } from './file-explorer-drop-directory'
 import {
-  describeSharedDropFailureReason,
-  describeSharedDropSkipReason
-} from '@/lib/files/drop/drop-skip-reason-copy'
+  captureExplorerClipboardRevision,
+  markExplorerPasteComplete,
+  readClipboardPastePreview,
+  readClipboardImportPaths
+} from './file-explorer-clipboard-import'
+import { importPreparedFileExplorerPaths } from './file-explorer-import-results'
+import { useFileExplorerKeyboardPasteConfirmation } from './use-file-explorer-keyboard-paste-confirmation'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import {
   captureFileExplorerOperationGuard,
   type FileExplorerOperationGuard
 } from '../navigation/file-explorer-operation-owner'
 
-export const FILE_EXPLORER_DROP_DIR_ATTRIBUTE = 'data-file-explorer-drop-dir'
+export { FILE_EXPLORER_DROP_DIR_ATTRIBUTE } from './file-explorer-drop-directory'
 
 type UseFileExplorerImportParams = {
   worktreeId: string | null
@@ -40,10 +47,21 @@ type FileExplorerDropDestination =
     }
   | { error: unknown }
 
-function readDropDir(root: HTMLElement | null, target: EventTarget | null): string | null {
-  const row =
-    target instanceof Element ? target.closest(`[${FILE_EXPLORER_DROP_DIR_ATTRIBUTE}]`) : null
-  return row && root?.contains(row) ? row.getAttribute(FILE_EXPLORER_DROP_DIR_ATTRIBUTE) : null
+type FileExplorerImportController = {
+  fileDropOwnerRef: (root: HTMLElement | null) => void
+  pasteToDirectory: (directory?: string | null) => void
+  keyboardPasteConfirmationOpen: boolean
+  cancelKeyboardPasteConfirmation: () => void
+  confirmKeyboardPasteConfirmation: (dontAskAgain: boolean) => void
+}
+
+function enqueueFileExplorerPasteDelivery(
+  sequence: { deliveryTail: Promise<void> },
+  deliver: () => Promise<void>
+): void {
+  sequence.deliveryTail = sequence.deliveryTail
+    .then(deliver)
+    .catch((error: unknown) => console.error('File explorer paste delivery failed', error))
 }
 
 export function useFileExplorerImport({
@@ -54,7 +72,7 @@ export function useFileExplorerImport({
   clearNativeDragState,
   setSelectedPath,
   operationOwner
-}: UseFileExplorerImportParams): (root: HTMLElement | null) => void {
+}: UseFileExplorerImportParams): FileExplorerImportController {
   const t = useTranslate()
   const rootRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
@@ -63,16 +81,154 @@ export function useFileExplorerImport({
   useLayoutEffect(() => {
     shownRef.current = { worktreeId, displayRootPath }
   }, [worktreeId, displayRootPath])
+
+  const importPreparedPaths = useCallback(
+    (
+      paths: string[],
+      destination: Exclude<FileExplorerDropDestination, { error: unknown }>
+    ): Promise<string[]> => {
+      return importPreparedFileExplorerPaths(paths, destination, {
+        refreshDir,
+        setSelectedPath,
+        getShownScope: () => shownRef.current,
+        t
+      })
+    },
+    [refreshDir, setSelectedPath, t]
+  )
+
+  const pasteToDirectory = useCallback(
+    (directory?: string | null): void => {
+      const root = rootRef.current
+      if (!root || !worktreeId || !worktreePath || !displayRootPath) {
+        return
+      }
+
+      const destinationDir = directory ?? displayRootPath
+      if (getRelativePathInsideRoot(destinationDir, displayRootPath) === null) {
+        return
+      }
+
+      let destination: Exclude<FileExplorerDropDestination, { error: unknown }>
+      try {
+        const guard = captureFileExplorerOperationGuard(worktreeId, operationOwner)
+        destination = {
+          worktreeId,
+          worktreePath,
+          destinationDir,
+          guard
+        }
+      } catch (error) {
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+              'Failed to import files.'
+            )
+          )
+        )
+        return
+      }
+
+      const revision = captureExplorerClipboardRevision()
+      const clipboardRead = readClipboardImportPaths().catch((error: unknown) => {
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+              'Failed to import files.'
+            )
+          )
+        )
+        return null
+      })
+
+      enqueueFileExplorerPasteDelivery(sequence, async () => {
+        try {
+          const paths = await clipboardRead
+          if (!paths || paths.length === 0) {
+            return
+          }
+          const prepared = await prepareOsFileDropPaths(paths, 'main-reader')
+          for (const failure of prepared.failures) {
+            const message = getNativeFileDropRejectionMessage(failure)
+            toast.error(message.title, { description: message.description })
+          }
+          const importedPaths = await importPreparedPaths(prepared.paths, destination)
+          if (importedPaths.length > 0) {
+            if (importedPaths.length === paths.length) {
+              markExplorerPasteComplete(revision)
+            }
+            toast.success(
+              t(
+                'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess',
+                importedPaths.length === 1 ? 'Pasted {{count}} item' : 'Pasted {{count}} items',
+                {
+                  count: importedPaths.length,
+                  defaultValue_one: 'Pasted {{count}} item'
+                }
+              ),
+              {
+                description: importedPaths.join('\n')
+              }
+            )
+          }
+        } catch (error) {
+          toast.error(
+            extractIpcErrorMessage(
+              error,
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+                'Failed to import files.'
+              )
+            )
+          )
+        }
+      })
+    },
+    [displayRootPath, importPreparedPaths, operationOwner, sequence, t, worktreeId, worktreePath]
+  )
+
+  const {
+    open: keyboardPasteConfirmationOpen,
+    request: requestKeyboardPasteConfirmation,
+    cancel: cancelKeyboardPasteConfirmation,
+    confirm: confirmKeyboardPasteConfirmation
+  } = useFileExplorerKeyboardPasteConfirmation(pasteToDirectory)
+
+  const handlePaste = useCallback(
+    (event: ClipboardEvent): void => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) {
+        return
+      }
+      const root = rootRef.current
+      if (!root || !worktreeId || !worktreePath || !displayRootPath) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const destination = readFileExplorerPasteDir(root, event.target) ?? displayRootPath
+      void readClipboardPastePreview().then((preview) => {
+        if (preview) {
+          requestKeyboardPasteConfirmation(destination)
+        }
+      })
+    },
+    [displayRootPath, requestKeyboardPasteConfirmation, worktreeId, worktreePath]
+  )
+
   const resolveDropDir = (event: DragEvent): string | null => {
     // Hidden/search files views have no worktreePath.
     if (!worktreeId || !worktreePath || !displayRootPath) {
       return null
     }
-    const dir = readDropDir(rootRef.current, event.target) ?? displayRootPath
+    const dir = readFileExplorerDropDir(rootRef.current, event.target) ?? displayRootPath
     return getRelativePathInsideRoot(dir, displayRootPath) === null ? null : dir
   }
 
-  return useOsFileDropOwner<FileExplorerDropDestination | null>(rootRef, {
+  const osFileDropOwnerRef = useOsFileDropOwner<FileExplorerDropDestination | null>(rootRef, {
     consumer: 'main-reader',
     sequence,
     canAccept: (event) => resolveDropDir(event) !== null,
@@ -101,58 +257,7 @@ export function useFileExplorerImport({
         if ('error' in destination) {
           throw destination.error
         }
-        const { destinationDir, guard } = destination
-        guard.assertCurrent()
-        const { results } = await importExternalPathsToRuntime(
-          {
-            target: guard.route.target,
-            worktreeId: destination.worktreeId,
-            worktreePath: destination.worktreePath,
-            connectionId: guard.route.connectionId,
-            expectedExecutionHostId: guard.route.expectedExecutionHostId,
-            expectedSshTargetId: guard.route.expectedSshTargetId,
-            expectedSshConnectionGeneration: guard.route.expectedSshConnectionGeneration
-          },
-          prepared.paths,
-          destinationDir,
-          { assertCurrent: guard.assertCurrent }
-        )
-
-        await refreshDir(destinationDir)
-
-        // Select the first import without full reveal; watcher refreshes could otherwise move the viewport away from the drop.
-        const imported = results.filter((r) => r.status === 'imported')
-        const skipped = results.filter((r) => r.status === 'skipped')
-        const failed = results.filter((r) => r.status === 'failed')
-
-        const shown = shownRef.current
-        if (
-          imported.length > 0 &&
-          shown.worktreeId === destination.worktreeId &&
-          getRelativePathInsideRoot(imported[0].destPath, shown.displayRootPath) !== null
-        ) {
-          setSelectedPath(imported[0].destPath)
-        }
-
-        if (failed.length > 0) {
-          toast.error(
-            t(
-              'auto.components.right.sidebar.useFileExplorerImport.importFailedCount',
-              'Failed to import {{count}} files.',
-              { count: failed.length, defaultValue_one: 'Failed to import {{count}} file.' }
-            ),
-            { description: describeSharedDropFailureReason(failed) }
-          )
-        } else if (skipped.length > 0 && imported.length === 0) {
-          toast.error(
-            t(
-              'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount',
-              'Skipped {{count}} files.',
-              { count: skipped.length, defaultValue_one: 'Skipped {{count}} file.' }
-            ),
-            { description: describeSharedDropSkipReason(skipped) }
-          )
-        }
+        await importPreparedPaths(prepared.paths, destination)
       } catch (err) {
         toast.error(
           extractIpcErrorMessage(
@@ -168,4 +273,23 @@ export function useFileExplorerImport({
       }
     }
   })
+
+  const pasteRootRef = useRef<HTMLElement | null>(null)
+  const fileDropOwnerRef = useCallback(
+    (root: HTMLElement | null) => {
+      pasteRootRef.current?.removeEventListener('paste', handlePaste, true)
+      pasteRootRef.current = root
+      osFileDropOwnerRef(root)
+      root?.addEventListener('paste', handlePaste, true)
+    },
+    [handlePaste, osFileDropOwnerRef]
+  )
+
+  return {
+    fileDropOwnerRef,
+    pasteToDirectory,
+    keyboardPasteConfirmationOpen,
+    cancelKeyboardPasteConfirmation,
+    confirmKeyboardPasteConfirmation
+  }
 }

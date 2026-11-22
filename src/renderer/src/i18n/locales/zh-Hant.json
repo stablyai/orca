@@ -700,6 +700,10 @@
           "monaco": "monaco",
           "syntax": "語法"
         }
+      },
+      "pasteThumbnail": {
+        "title": "顯示剪貼簿圖片預覽",
+        "description": "將滑鼠停留在檔案總管的「貼上」上時顯示小型圖片預覽。"
       }
     },
     "browser": {
@@ -14841,6 +14845,14 @@
             "createInProgress": "正在建立 PR...",
             "workspaceHostUnresolved": "無法解析工作區主機。請重新整理工作區後再試。",
             "branchDiscoveryFailed": "分支偵測失敗。"
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "可在外觀設定中停用縮圖。",
+            "paste": "貼上",
+            "clipboardFile": "檔案",
+            "clipboardText": "文字",
+            "clipboardImage": "圖片",
+            "clipboardImageTitle": "剪貼簿圖片"
           }
         }
       },

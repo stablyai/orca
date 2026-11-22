@@ -265,6 +265,10 @@
       "uiZoom": {
         "zoomOut": "缩小",
         "zoomIn": "放大"
+      },
+      "pasteThumbnail": {
+        "title": "显示剪贴板图片预览",
+        "description": "将鼠标悬停在文件资源管理器的“粘贴”上时显示小型图片预览。"
       }
     },
     "browser": {
@@ -15445,6 +15449,14 @@
             "createInProgress": "正在创建 PR...",
             "workspaceHostUnresolved": "无法解析工作区主机。请刷新工作区后重试",
             "branchDiscoveryFailed": "分支发现失败"
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "可在外观设置中禁用缩略图。",
+            "paste": "粘贴",
+            "clipboardFile": "文件",
+            "clipboardText": "文本",
+            "clipboardImage": "图片",
+            "clipboardImageTitle": "剪贴板图片"
           }
         }
       },

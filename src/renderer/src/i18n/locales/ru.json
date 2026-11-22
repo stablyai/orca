@@ -787,6 +787,10 @@
           "monaco": "monaco",
           "syntax": "синтаксис"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Показывать миниатюры изображений из буфера обмена",
+        "description": "Показывать миниатюру при наведении на «Вставить» в проводнике файлов."
       }
     },
     "browser": {
@@ -15488,6 +15492,14 @@
             "createInProgress": "Создание PR...",
             "workspaceHostUnresolved": "Не удалось определить сервер рабочего пространства. Обновите рабочее пространство и повторите попытку.",
             "branchDiscoveryFailed": "Не удалось обнаружить ветки."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "Миниатюру можно отключить в настройках внешнего вида.",
+            "paste": "Вставить",
+            "clipboardFile": "файл",
+            "clipboardText": "текст",
+            "clipboardImage": "изображение",
+            "clipboardImageTitle": "Изображение из буфера обмена"
           }
         }
       },

@@ -86,6 +86,7 @@ const hoverCardContentVariants = cva('', {
   variants: {
     variant: {
       default: 'w-64 p-4',
+      'clipboard-preview': 'w-fit max-w-64 p-3 text-xs ring-1 ring-foreground/15',
       'workspace-details':
         'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek',
       // A list row's details beside its panel: compact, one short fact per line.

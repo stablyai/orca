@@ -1540,6 +1540,10 @@
           "remote": "remoto",
           "gpu": "GPU"
         }
+      },
+      "pasteThumbnail": {
+        "title": "Mostrar miniaturas de imagens da área de transferência",
+        "description": "Exibe uma miniatura ao passar o mouse sobre Colar no Explorador de arquivos."
       }
     },
     "browser": {
@@ -11801,6 +11805,14 @@
             "createInProgress": "Criação do PR em andamento...",
             "workspaceHostUnresolved": "Não foi possível resolver o host do espaço de trabalho. Atualize o espaço de trabalho e tente novamente.",
             "branchDiscoveryFailed": "Falha na detecção de branches."
+          },
+          "FileExplorerPaste": {
+            "clipboardThumbnailSettingHint": "A miniatura pode ser desabilitada nas configurações de aparência.",
+            "paste": "Colar",
+            "clipboardFile": "arquivo",
+            "clipboardText": "Texto",
+            "clipboardImage": "Imagem",
+            "clipboardImageTitle": "Imagem da área de transferência"
           }
         }
       },

@@ -69,6 +69,10 @@ type UseFileExplorerTreePaneStateResult = {
   handlers: ReturnType<typeof useFileExplorerHandlers>
   nodeCommands: ReturnType<typeof useFileExplorerNodeCommands>
   fileDropOwnerRef: (root: HTMLElement | null) => void
+  pasteToDirectory: (directory?: string | null) => void
+  keyboardPasteConfirmationOpen: boolean
+  cancelKeyboardPasteConfirmation: () => void
+  confirmKeyboardPasteConfirmation: (dontAskAgain: boolean) => void
 }
 
 /** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
@@ -221,7 +225,7 @@ export function useFileExplorerTreePaneState({
     operationOwner: rootCache?.operationOwner
   })
 
-  const fileDropOwnerRef = useFileExplorerImport({
+  const fileExplorerImport = useFileExplorerImport({
     displayRootPath,
     worktreePath: visibleFilesWorktreePath,
     worktreeId: activeWorktreeId,
@@ -308,6 +312,10 @@ export function useFileExplorerTreePaneState({
     rowScrolling,
     handlers,
     nodeCommands,
-    fileDropOwnerRef
+    fileDropOwnerRef: fileExplorerImport.fileDropOwnerRef,
+    pasteToDirectory: fileExplorerImport.pasteToDirectory,
+    keyboardPasteConfirmationOpen: fileExplorerImport.keyboardPasteConfirmationOpen,
+    cancelKeyboardPasteConfirmation: fileExplorerImport.cancelKeyboardPasteConfirmation,
+    confirmKeyboardPasteConfirmation: fileExplorerImport.confirmKeyboardPasteConfirmation
   }
 }

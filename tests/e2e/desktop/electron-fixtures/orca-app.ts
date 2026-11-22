@@ -178,7 +178,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     const app = await electron.launch({
       args: [...orcaAppExtraArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       ...(slowMo > 0 ? { slowMo } : {}),
-      ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
+      ...(recordVideoDir
+        ? { recordVideo: { dir: recordVideoDir, size: { width: 1920, height: 1080 } } }
+        : {}),
       // Use development/E2E helpers inside an isolated profile; background launch policy keeps automated desktop windows hidden.
       env: {
         ...homeIsolation.env,

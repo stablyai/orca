@@ -80,7 +80,8 @@ export function FileExplorerFilesTreePane({
     rowScrolling,
     handlers,
     nodeCommands,
-    fileDropOwnerRef
+    fileDropOwnerRef,
+    pasteToDirectory
   } = paneState
   const { inlineInput, inlineInputIndex, startNew, dismissInlineInput, handleInlineSubmit } =
     inlineInputState
@@ -234,6 +235,7 @@ export function FileExplorerFilesTreePane({
           onRequestDelete={handleContextMenuDelete}
           onCollapseFolderSubtree={handleCollapseFolderSubtree}
           onFindInFolder={handleFindInFolder}
+          onPasteToDirectory={pasteToDirectory}
           onMoveDrop={handleMoveDrop}
           onDragTargetChange={setDropTargetDir}
           onDragSourceChange={setDragSourcePath}

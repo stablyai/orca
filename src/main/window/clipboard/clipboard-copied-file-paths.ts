@@ -56,6 +56,15 @@ function readMacCopiedFilePaths(clipboard: ClipboardFormatReader): string[] {
 }
 
 function readLinuxCopiedFilePaths(clipboard: ClipboardFormatReader): string[] {
+  const gnomeCopiedFiles = readBoundedText(clipboard, 'x-special/gnome-copied-files')
+  if (gnomeCopiedFiles) {
+    const [operation, ...urls] = gnomeCopiedFiles
+      .split(/\r\n|\r|\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    return operation === 'copy' ? filePathsFromUrls(urls) : []
+  }
+
   const urls = readBoundedText(clipboard, 'text/uri-list')
     .split(/\r\n|\r|\n/)
     .map((line) => line.trim())

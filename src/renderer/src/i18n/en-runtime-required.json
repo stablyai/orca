@@ -638,7 +638,9 @@
             "importFailedCount_one": "Failed to import {{count}} file.",
             "importFailedCount_other": "Failed to import {{count}} files.",
             "importSkippedCount_one": "Skipped {{count}} file.",
-            "importSkippedCount_other": "Skipped {{count}} files."
+            "importSkippedCount_other": "Skipped {{count}} files.",
+            "pasteSuccess_one": "Pasted {{count}} item",
+            "pasteSuccess_other": "Pasted {{count}} items"
           }
         }
       },
