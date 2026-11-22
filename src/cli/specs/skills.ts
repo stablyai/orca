@@ -79,9 +79,9 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
         'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +
         'Update skills does.',
       'Only copies that match what Orca ships are updated. A copy that differs from ' +
-        'Orca\u2019s, or a different skill with the same name, is skipped and is reported; ' +
-        '--force replaces it after moving the current copy, including any extra files, to a ' +
-        'backup. The result prints where each backup went.',
+        "Orca's, or a different skill with the same name, is skipped and reported. " +
+        'Pass --force to replace skipped copies where possible. Orca moves those copies, ' +
+        'including any extra files, to a backup first. Use --json for backup paths.',
       'Installs globally (all projects) by default. Use --local to install into the ' +
         'current project; it links only into agent folders the project already has.',
       'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +
@@ -108,8 +108,9 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Runs the same planner as `orca skills install`, but only at locations that already ' +
         'hold the skill; it never adds a skill, or an existing skill for another agent.',
-      'Updates each untouched copy where it is; other copies are skipped unless you ' +
-        'pass --force, which moves each one, including any extra files, to a backup first. ' +
+      'Updates each untouched copy where it is. Other copies are skipped. Pass --force ' +
+        'to replace skipped copies where possible. Orca moves those copies, including any ' +
+        'extra files, to a backup first. ' +
         'Use `orca skills install` to add a skill for a newly detected agent.',
       'Updates the global install by default. Use --local to update the current project.',
       'Use --dry-run to print what would change and the plan digest without writing.',

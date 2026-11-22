@@ -6642,7 +6642,7 @@
         },
         "SkillUpdateRow": {
           "replaceWithOrca": "Replace with Orca's copy (keeps a backup)",
-          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to a backup."
+          "replaceMovesFolder": "Moves the whole folder and any extra files to a backup."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",
@@ -14353,7 +14353,7 @@
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
-          "replaceMovesCopy": "Replacing moves the current copy, including any extra files, to a backup.",
+          "replaceMovesCopy": "Moves the current copy and any extra files to a backup.",
           "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's"
         },
         "recoverServer": {

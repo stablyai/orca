@@ -9,6 +9,9 @@ const BOT_ITEM_TITLE_HELP = "--title <text>         The item's title"
 const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
+const SKILLS_FORCE_FLAG_HELP =
+  '--force                Replace skipped copies after moving them to a backup.'
+
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
@@ -114,7 +117,11 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     host: "--host <host>          Which host's copy to show: local, ssh:<target-id>, runtime:<id>, or a host name"
   },
   'skills install': {
-    agent: '--agent <names>        Comma-separated install targets; default is detected agents'
+    agent: '--agent <names>        Comma-separated install targets; default is detected agents',
+    force: SKILLS_FORCE_FLAG_HELP
+  },
+  'skills update': {
+    force: SKILLS_FORCE_FLAG_HELP
   },
   'orchestration check': {
     format: '--format               Also render the returned rows as local text'

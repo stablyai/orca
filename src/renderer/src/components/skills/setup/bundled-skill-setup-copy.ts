@@ -124,6 +124,6 @@ export function bundledSkillSetupResultHeadline(
 export function bundledSkillReplaceMovesCopyHint(t: Translate = translate): string {
   return t(
     'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopy',
-    'Replacing moves the current copy, including any extra files, to a backup.'
+    'Moves the current copy and any extra files to a backup.'
   )
 }

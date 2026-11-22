@@ -37,7 +37,7 @@ function leave(path: string, observed: BundledSkillObserved, extra: Partial<Bund
   } satisfies BundledSkillOp
 }
 
-function rowFixture(ops: BundledSkillOp[], replaced = false) {
+function rowFixture(ops: BundledSkillOp[], replaced = false, width = 576) {
   const plan: BundledSkillPlan = {
     scope: 'global',
     homeDirectory: HOME,
@@ -46,7 +46,7 @@ function rowFixture(ops: BundledSkillOp[], replaced = false) {
   }
   const skill = summarizeBundledSkillPlan(plan).skills[0]
   return defineFixture({
-    width: 576,
+    width,
     render: () => (
       <div className="px-3">
         <SkillUpdateRow
@@ -62,6 +62,8 @@ function rowFixture(ops: BundledSkillOp[], replaced = false) {
 
 /** An older Orca release whose folder also holds agents/: the case that used to read "edited". */
 export const olderReleaseWithExtras = rowFixture([leave(SHARED, WITH_EXTRAS, {})])
+
+export const olderReleaseNarrow = rowFixture([leave(SHARED, WITH_EXTRAS, {})], false, 400)
 
 /** The same folder after Replace is checked: the dialog shows the forced plan's replace. */
 export const olderReleaseReplaceChecked = rowFixture(
@@ -83,6 +85,10 @@ export const linkCopy = rowFixture([
       reason: 'other'
     }
   )
+])
+
+export const fileCopy = rowFixture([
+  leave(SHARED, { kind: 'file', mtimeMs: 0 }, { reason: 'other' })
 ])
 
 /** A copy under a former skill name stays visible and is never offered for Replace. */

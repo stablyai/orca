@@ -134,10 +134,6 @@ function describePlanOp(op: BundledSkillOp): string {
 function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
   switch (op.status) {
     case 'done':
-      if (op.backupPath) {
-        // Why: help text names no backup folder, so the result is where the real path shows.
-        return `Old copy moved to a backup: ${op.backupPath}`
-      }
       return op.kind === 'leave' ? leaveText(op.reason) : null
     case 'changed':
       return 'Changed since it was planned; nothing was written. Run it again to re-plan.'
@@ -243,7 +239,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
     const forceHint = hasReplaceableLeave(plan)
       ? [
           '',
-          'Rerun with --force to replace a copy that was skipped. Replacing moves the current copy, including any extra files, to a backup.'
+          'Rerun with --force to replace skipped copies. They move to a backup first, with any extra files.'
         ]
       : []
 

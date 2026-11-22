@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { BundledSkillLocation } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import type { BundledSkillOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
@@ -30,6 +31,8 @@ function ChoiceLine({
   replace?: SkillReplaceToggle
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const backupDescriptionId = useId()
+  const movesFolder = location.observedKind === 'folder'
   if (!reason && !(replace && location.replaceable)) {
     return null
   }
@@ -44,6 +47,7 @@ function ChoiceLine({
         <div className="flex min-w-0 flex-col gap-0.5">
           <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
             <Checkbox
+              aria-describedby={movesFolder ? backupDescriptionId : undefined}
               checked={replace.isReplaced(location.path)}
               onCheckedChange={(checked) =>
                 replace.onReplaceChange(location.path, checked === true)
@@ -54,12 +58,11 @@ function ChoiceLine({
               "Replace with Orca's copy (keeps a backup)"
             )}
           </label>
-          {/* Why folder-only: Replace moves the object at this path, so a link's target files stay put. */}
-          {location.observedKind === 'folder' ? (
-            <span className="pl-5.5 text-xs text-muted-foreground">
+          {movesFolder ? (
+            <span id={backupDescriptionId} className="pl-5.5 text-xs text-muted-foreground">
               {t(
                 'auto.components.skills.SkillUpdateRow.replaceMovesFolder',
-                'Replacing moves the whole folder, including any extra files, to a backup.'
+                'Moves the whole folder and any extra files to a backup.'
               )}
             </span>
           ) : null}
