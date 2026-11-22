@@ -1,5 +1,6 @@
 import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { agentWorksBehindQuestion } from '../../shared/agent-status/lifecycle/agent-works-behind-question'
+import { normalizeProgramStatusFacet } from '../../shared/program-status/facet'
 import type { WslHostAwakeStatus } from './agent-awake-service'
 
 type HostConnection = { environmentId: string; state: string }
@@ -267,7 +268,8 @@ function workingHostObservedAt(tab: unknown): number | null {
             subagents: status.subagents
           })
         : null
-    if (!row || !agentWorksBehindQuestion(row)) {
+    const programStatus = normalizeProgramStatusFacet(status.programStatus)
+    if (!row || !agentWorksBehindQuestion({ ...row, programStatus })) {
       return null
     }
   }
