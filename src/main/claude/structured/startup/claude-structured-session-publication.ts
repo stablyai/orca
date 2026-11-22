@@ -25,6 +25,7 @@ import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-
 import type { ClaudeAcquisitionLaunch } from '../launch/claude-structured-acquisition-launch'
 import type { ClaudeNamingGeneration } from '../../conversation-naming/claude-naming-generation'
 import { readClaudeStartupFacts } from './claude-structured-session-startup'
+import { watchClaudeInstalledUpdate } from '../../cli-capabilities/claude-installed-update'
 
 function claudeSessionInitialization(input: {
   launch: ClaudeStructuredLaunch
@@ -188,6 +189,13 @@ export function reportClaudeOptions(
         })
       )
   ).catch(() => {})
+  watchClaudeInstalledUpdate(
+    sessionId,
+    session,
+    () => sessions.get(sessionId) === session,
+    (event) =>
+      callbacks.deliver(attempt, sessionId, () => callbacks.emit(session, input.events, event))
+  )
 }
 
 export async function publishClaudeSessionAttempt({

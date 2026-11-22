@@ -13,6 +13,7 @@ import {
 } from '../../host-access/native-chat-sign-in-account'
 import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
+import { useNativeChatProviderUpdateNotice } from './use-native-chat-provider-update-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
@@ -124,6 +125,13 @@ export function useNativeChatStructuredPaneNotices({
     useShallow((s) => readWslHostChatOfferForLaunch(s, provisionalLaunch, ownerWorktreeId))
   )
   const wslHostOfferSettingUp = useWslHostChatOfferSettingUp(wslHostOffer?.distro)
+  const providerUpdate = useNativeChatProviderUpdateNotice({
+    sessionId: props.sessionId,
+    target: props.target,
+    agent: props.agent,
+    agentLabel,
+    working: controller.isWorking
+  })
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
   const notices = structuredSessionNotices(
     {
@@ -149,6 +157,9 @@ export function useNativeChatStructuredPaneNotices({
   )
   if (hostNotice) {
     notices.push(hostNotice)
+  }
+  if (providerUpdate) {
+    notices.push(providerUpdate)
   }
   // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
   // transcript rows only say what wasn't sent.

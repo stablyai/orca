@@ -93,6 +93,8 @@ export type ClaudeStructuredLaunch = {
   resumesTranscript: boolean
   /** Version-gated flag and control support of the CLI this launch runs. */
   cliFlag: ClaudeCliFlagCheck
+  /** What this launch's command answers to `--version` now, so a replaced binary shows. */
+  cliVersion: () => Promise<string | null>
   /** Chain identity is independent of whether a transcript exists to resume. */
   continuesChain: boolean
   /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
@@ -109,7 +111,7 @@ export type ClaudeStructuredLaunchPartDeps = {
   /** Host attachment store outside the workspace, granted to the agent at launch. */
   attachmentDirectory?: string
   /** Omit version-gated flags when support cannot be checked. */
-  cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
+  cliFlags?: Pick<ClaudeCliFlagSupport, 'check' | 'version'>
   /** This host's setting for suggested next prompts, read at each spawn; absent means off. */
   promptSuggestions?: () => boolean
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
@@ -295,6 +297,7 @@ export function claudeStructuredLaunchPart(
         resumesTranscript,
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
+        cliVersion: async () => (deps.cliFlags ? deps.cliFlags.version(probeLaunch) : null),
         continuesChain,
         ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain

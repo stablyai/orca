@@ -110,6 +110,7 @@ export async function acquireClaudeSession({
           liveSession.capabilities,
           init.message
         )
+        liveSession.runningVersion = init.version ?? liveSession.runningVersion
       }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid

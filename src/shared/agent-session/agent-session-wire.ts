@@ -278,6 +278,9 @@ export type AgentSessionStatusSummary = {
   /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
    *  Absent from older hosts. */
   hostProgram?: true
+  /** The running agent is older than the one now installed; it clears once the agent stops.
+   *  Absent from older hosts. */
+  providerUpdate?: AgentSessionProviderUpdate
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
@@ -285,6 +288,8 @@ export type AgentSessionStatusSummary = {
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
 } & AgentSessionStatusPermissionFields
+
+export type AgentSessionProviderUpdate = { runningVersion: string; installedVersion: string }
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {

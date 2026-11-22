@@ -1,7 +1,8 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
   structuredAgentSessionRuntimeFallbackModel,
-  structuredAgentSessionRuntimePermission
+  structuredAgentSessionRuntimePermission,
+  structuredAgentSessionRuntimeProviderUpdate
 } from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
@@ -74,6 +75,9 @@ export function structuredAgentSessionStatusSummary({
   const fallbackModel = session.child
     ? structuredAgentSessionRuntimeFallbackModel(session.child)
     : undefined
+  const providerUpdate = session.child
+    ? structuredAgentSessionRuntimeProviderUpdate(session.child)
+    : undefined
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -100,6 +104,7 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(model ? { model } : {}),
     ...(fallbackModel ? { fallbackModel } : {}),
+    ...(providerUpdate ? { providerUpdate } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode
       ? {
@@ -214,6 +219,7 @@ export function releasedStructuredStatusSummary(
     restartResume: _restartResume,
     reportedModel: _reportedModel,
     fallbackModel: _fallbackModel,
+    providerUpdate: _providerUpdate,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

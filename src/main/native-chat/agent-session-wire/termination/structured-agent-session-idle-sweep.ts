@@ -9,6 +9,7 @@ import type { StructuredAgentSessionLogger } from '../host/structured-agent-sess
 import type { StructuredAgentSessionCurrentWorkHost } from '../observations/structured-agent-session-host-current-work'
 import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { JournalWorkAnswer } from '../../agent-session-journal/journal-work-read'
+import type { RestartAgentOutcome } from '../../../../shared/rpc-contract/structured-agent-session/restart-agent-params'
 
 type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
@@ -116,11 +117,17 @@ export class StructuredAgentSessionIdleSweep {
 
   /** Stop now what a sweep past the window would, for a finished run nobody watches; Never keeps
    *  it. `anyway` also stops a viewed or Never chat's idle agent, e.g. after an account switch. */
-  async release(sessionId: string, anyway = false): Promise<void> {
+  async release(sessionId: string, anyway = false): Promise<RestartAgentOutcome> {
+    const running = this.deps.sessions.get(sessionId)?.child
     const window = (): 0 | null => (anyway ? 0 : this.releaseWindow(sessionId))
     if (!this.deps.isDisposed() && window() === 0) {
       await this.sweepSession(sessionId, 0, window)
     }
+    if (!running) {
+      return 'not-running'
+    }
+    // A send meanwhile may already hold a new child; only the one asked about counts.
+    return this.deps.sessions.get(sessionId)?.child === running ? 'busy' : 'stopped'
   }
 
   private idleWindow(): number | null {

@@ -30,6 +30,8 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.fallbackModel === b.fallbackModel &&
+    a.providerUpdate?.runningVersion === b.providerUpdate?.runningVersion &&
+    a.providerUpdate?.installedVersion === b.providerUpdate?.installedVersion &&
     a.permissionMode === b.permissionMode &&
     a.launchPermissionMode === b.launchPermissionMode &&
     a.runningPermissionMode === b.runningPermissionMode &&

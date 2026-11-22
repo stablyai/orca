@@ -876,6 +876,7 @@ import {
 } from './structured-agent-session/agent-session-attachment-params'
 import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
+import { RestartAgentParams } from './structured-agent-session/restart-agent-params'
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
@@ -1149,6 +1150,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rename': RenameParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
+  'agentSession.restartAgent': RestartAgentParams,
   'agentSession.restartContinue': RestartResumeParams,
   'agentSession.restartLaunchSettled': RestartLaunchSettledParams,
   'agentSession.restartResumable': RestartResumableParams,

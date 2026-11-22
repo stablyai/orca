@@ -124,6 +124,19 @@ export function useStructuredAgentSessionHostProgram(
   )
 }
 
+/** A newer agent the host has installed than this chat's running one; an older host never says. */
+export function useStructuredAgentSessionProviderUpdate(
+  sessionId: string,
+  target: RuntimeClientTarget
+): AgentSessionStatusSummary['providerUpdate'] {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.providerUpdate,
+    () => undefined
+  )
+}
+
 /** Whether the host says a person's Stop is still ending the work; an older host never does. */
 export function useStructuredAgentSessionHostStopping(
   sessionId: string,

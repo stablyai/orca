@@ -33,7 +33,10 @@ import type {
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
-import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionProviderUpdate,
+  AgentSessionSlashCommand
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
@@ -138,6 +141,8 @@ export type StructuredAgentSessionOptionsReportedEvent =
     sessionId: string
     fence: number
     acquisitionGeneration: string
+    /** A newer agent is installed than this child runs; null says that no longer holds. */
+    providerUpdate?: AgentSessionProviderUpdate | null
   }
 
 export type StructuredAgentSessionLifecycleEvent =

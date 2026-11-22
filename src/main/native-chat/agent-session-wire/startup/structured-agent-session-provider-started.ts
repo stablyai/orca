@@ -13,6 +13,7 @@ import {
 } from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import {
+  noteStructuredAgentSessionProviderUpdate,
   noteStructuredAgentSessionRuntimeOptions,
   noteStructuredAgentSessionReportedOptions
 } from '../options/structured-agent-session-ran-options'
@@ -207,6 +208,7 @@ export async function settleStructuredAgentSessionOptionsReported(
     return
   }
   noteStructuredAgentSessionRuntimeOptions(child, event.reportedOptions)
+  noteStructuredAgentSessionProviderUpdate(child, event.providerUpdate)
   if (child.phase === 'starting') {
     const readiness = context.runtimeState.startupAttempts.readiness(event.sessionId, {
       generation: event.acquisitionGeneration,

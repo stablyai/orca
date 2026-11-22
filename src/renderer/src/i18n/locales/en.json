@@ -22657,6 +22657,13 @@
       },
       "dock": {
         "label": "Message box and prompts"
+      },
+      "providerUpdate": {
+        "available": "{{program}} {{installed}} is installed. This chat is still running {{running}}.",
+        "restart": "Restart chat",
+        "restarted": "Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.",
+        "busy": "{{agent}} is still working. Restart when this turn ends.",
+        "failed": "Couldn’t restart this chat."
       }
     },
     "tab": {

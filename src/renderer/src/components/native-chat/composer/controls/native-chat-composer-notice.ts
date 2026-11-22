@@ -28,7 +28,10 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   signIn?: NativeChatSignInNoticeView
   /** The host's fuller words under a sign-in notice, collapsed so the notice stays one line. */
   signInDetails?: string
-} & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
+} & (
+    | { kind: 'error' | 'attachment' | 'device' | 'update' }
+    | { kind: 'host'; tone: 'warning' | 'muted' }
+  )
 
 /** Keep external errors apart from headline; localErrorIsOrcaWords identifies already-worded renderer errors. */
 export function nativeChatNoticeFromError(

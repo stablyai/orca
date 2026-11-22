@@ -9,6 +9,8 @@ export type ClaudeInitObservation = {
   uuid: string | null
   /** Only `system/init` reports the running model. */
   model: string | null
+  /** The running CLI's own version, from `system/init`. */
+  version: string | null
   message: Record<string, unknown>
 }
 
@@ -37,6 +39,7 @@ export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObse
         providerSessionId,
         uuid: isInit ? readClaudeFrameString(message, 'uuid') : null,
         model: isInit ? readClaudeFrameString(message, 'model') : null,
+        version: isInit ? readClaudeFrameString(message, 'claude_code_version') : null,
         message
       }
     : null

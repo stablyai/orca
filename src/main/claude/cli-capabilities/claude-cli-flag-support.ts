@@ -118,6 +118,8 @@ export type ClaudeCliFlagSupport = {
     /** False consults cached facts or an existing probe without starting another. */
     startProbe?: boolean
   ) => Promise<ClaudeCliFlagFact>
+  /** The version the launch's binary answers now; `--version` runs only for a file state not yet asked. */
+  version: (launch: ClaudeCliLaunch) => Promise<string | null>
   /** Warm the version cache without waiting; failures remain retryable. */
   prewarm: (launch: ClaudeCliLaunch) => void
   /** Remember explicit flag rejection for this binary and cwd, and for the account if policy refused it. */
@@ -128,7 +130,7 @@ export type ClaudeCliFlagSupport = {
 }
 
 // Key by resolved file, mtime and cwd to handle self-updates and project-specific shims.
-async function claudeBinaryKey(command: string, cwd: string): Promise<string | null> {
+export async function claudeBinaryKey(command: string, cwd: string): Promise<string | null> {
   try {
     const target = await realpath(command)
     return `${target}\n${(await stat(target)).mtimeMs}\n${cwd}`
@@ -152,6 +154,8 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
 
 type BinaryFacts = {
   version?: string
+  /** `version` asked once already, so a binary that never answers isn't run again each turn. */
+  versionAsked?: true
   refused: Set<string>
   refusedByAccount: Map<string, Set<string>>
 }
@@ -247,6 +251,17 @@ export function createClaudeCliFlagSupport(
       // An already-running probe does not get a fresh wait budget.
       await within(running.settled, Math.min(running.startedAt + budgetMs, deadline) - deps.now())
       return answer(key, flag, launch)
+    },
+    version: async (launch) => {
+      const key = await keyOf(launch)
+      if (key === null) {
+        return null
+      }
+      if (versionOf(key) === undefined && !known.get(key)?.versionAsked) {
+        touch(key).versionAsked = true
+        await (probing.get(key) ?? probe(key, launch)).settled
+      }
+      return versionOf(key) ?? null
     },
     prewarm: (launch) => {
       void keyOf(launch).then(

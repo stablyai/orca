@@ -10,6 +10,8 @@ export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, num
   ['agentSession.sleepWorkspace', 120_000],
   // It stops an idle agent and finds the chat's transcripts in a history scan before answering.
   ['agentSession.delete', 120_000],
+  // It stops an idle agent and waits for its exit, as the idle stop does.
+  ['agentSession.restartAgent', 60_000],
   // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
   ['agentSession.mcp', 90_000],
   ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS],
