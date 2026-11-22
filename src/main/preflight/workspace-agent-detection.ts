@@ -38,7 +38,9 @@ import {
 } from './agent-detection'
 import {
   agentCommandOverrideDetectionOptions,
-  type InstalledAgentDetectionOptions
+  detectInstalledAgentInventoryWithShellPathHydration,
+  type InstalledAgentDetectionOptions,
+  type InstalledAgentInventory
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
@@ -164,6 +166,17 @@ export async function detectAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   return detectInstalledAgentsWithShellPathHydration(host.context, options)
+}
+
+/** The host's agents and the full paths to Orca's copies it would launch. */
+export async function detectAgentInventoryOnHost(
+  host: AgentDetectionHost,
+  options?: InstalledAgentDetectionOptions
+): Promise<InstalledAgentInventory> {
+  if (host.kind === 'ssh') {
+    throw new SshHostNotServedError(host.connectionId)
+  }
+  return detectInstalledAgentInventoryWithShellPathHydration(host.context, options)
 }
 
 /** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */

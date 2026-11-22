@@ -21,6 +21,8 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
+import { withManagedAgentProgram, type ManagedAgentCommands } from './managed-agent-launch-program'
+import { antigravityModelArgs } from './antigravity-resume-model-args'
 
 // Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
 const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
@@ -103,6 +105,7 @@ export function resolveAgentLaunchCommand(args: {
   suppressStartupUpdatePrompt?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  managedAgentCommands?: ManagedAgentCommands | null
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
   const command =
@@ -110,14 +113,16 @@ export function resolveAgentLaunchCommand(args: {
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
+  // Records keep the stock program: Orca's copy moves with each update, so resumes look it up again.
+  const program = withManagedAgentProgram(command, args)
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
     : []
   const prefixSuppressionArgs = args.agent === 'aider' ? [] : suppressionArgs
   const launchHead = withAgentTerminalInputArgs(
     prefixSuppressionArgs.length
-      ? `${command} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
-      : command,
+      ? `${program} ${prefixSuppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
+      : program,
     args.agent,
     args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
     args.shell
@@ -208,20 +213,6 @@ export function resolveAgentLaunchCommand(args: {
       ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
       : {})
   }
-}
-
-/** The resolved `--model <id>` (or `--model=<id>`) tokens, without any other launch option. */
-function antigravityModelArgs(tokens: readonly string[]): string[] {
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token.startsWith('--model=')) {
-      return [token]
-    }
-    if (token === '--model' && index + 1 < tokens.length) {
-      return [token, tokens[index + 1]]
-    }
-  }
-  return []
 }
 
 function insertBeforeTerminator(

@@ -37,11 +37,13 @@ export function planCodexNoDaemonLaunch(launch: LocalCodexLaunch): Promise<strin
       terminalWindowsShell: launch.shellOverride
     }) ?? 'posix'
   const parsed = tokenizeStartupCommand(command, shell)
-  const executableSpan = parsed.ok ? parsed.spans[0] : undefined
+  // PowerShell runs a quoted path, such as Orca's copy, through its call operator.
+  const head = parsed.ok && shell === 'powershell' && parsed.tokens[0] === '&' ? 1 : 0
+  const executableSpan = parsed.ok ? parsed.spans[head] : undefined
   if (!parsed.ok || !executableSpan || executableSpan.divergesFromShell) {
     return null
   }
-  const [executable, ...args] = parsed.tokens
+  const [executable, ...args] = parsed.tokens.slice(head)
   if (
     !CODEX_EXECUTABLE.test(pathWin32.basename(executable)) ||
     (shell !== 'cmd' && !isAbsolute(executable))

@@ -1,5 +1,4 @@
 import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
@@ -8,6 +7,11 @@ import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
 import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import {
+  beginAgentDetection,
+  forgetManagedAgentCommands,
+  LOCAL_MANAGED_AGENT_HOST
+} from './managed-agent-launch-commands'
 import type {
   LocalAgentRefreshOptions,
   LocalDetectedAgentState
@@ -148,14 +152,20 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
       }))
       const detectArgs = includeDisabled ? context : { ...context, enabledOnly: true }
+      const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
       const pending = window.api.preflight
-        .detectAgents(wake ? { ...detectArgs, wakeWslDistro: true } : detectArgs)
-        .then((ids) => {
-          const typed = ids.filter(isTuiAgent)
+        .detectAgents({
+          ...detectArgs,
+          ...(wake ? { wakeWslDistro: true } : {}),
+          withManagedAgentCommands: true
+        })
+        .then((reply) => {
+          const { agents: typed, keepManagedAgentCommands } = read(reply)
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
           ) {
+            keepManagedAgentCommands()
             lifecycle.refusedContextKeys.delete(contextKey)
             lifecycle.failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
@@ -261,6 +271,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       lifecycle.detectedContextKey = null
       lifecycle.legacyDetectContextKey = null
       lifecycle.legacyRefreshContextKey = null
+      forgetManagedAgentCommands((host) => host === LOCAL_MANAGED_AGENT_HOST)
       set(createEmptyLocalDetectedAgentState())
     }
   }

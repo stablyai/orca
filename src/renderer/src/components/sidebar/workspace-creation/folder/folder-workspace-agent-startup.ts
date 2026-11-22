@@ -17,6 +17,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 
 /** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
 export function getFolderWorkspaceAgentLaunchFact(
@@ -57,6 +58,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   isRemote: boolean
+  managedAgentCommands?: ManagedAgentCommands
 }): AgentStartupPlan | null {
   const inputs = resolveAgentStartupPlanInputs({
     agent: args.agent,
@@ -65,7 +67,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     sessionOptions: args.sessionOptions,
     platform: args.platform,
     shell: args.shell,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    managedAgentCommands: args.managedAgentCommands
   })
   if (args.agentEnv) {
     inputs.agentEnv = args.agentEnv

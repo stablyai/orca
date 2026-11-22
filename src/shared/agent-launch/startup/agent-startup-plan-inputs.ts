@@ -7,6 +7,7 @@ import {
 } from '../choices/tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { terminalSessionOptionInputs } from './tui-agent-launch-command'
+import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
 
 /** The settings slice a launch reads; hosts pass their whole `GlobalSettings` row. */
@@ -35,6 +36,7 @@ export type AgentStartupPlanInputs = {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs: boolean
   suppressStartupUpdatePrompt?: boolean
+  managedAgentCommands?: ManagedAgentCommands
 }
 
 /** Share settings-to-launch mapping so hosts cannot omit precedence flags and let configured args override explicit model picks. Keep host, actual PTY shell and launch overrides as parameters. */
@@ -53,6 +55,8 @@ export function resolveAgentStartupPlanInputs(args: {
   sessionOptionsYieldToAgentArgs?: boolean
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
+  /** Full paths to Orca's copies the launch host reported. */
+  managedAgentCommands?: ManagedAgentCommands | null
 }): AgentStartupPlanInputs {
   const { agent, platform, isRemote, sessionOptions } = args
   const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
@@ -83,6 +87,7 @@ export function resolveAgentStartupPlanInputs(args: {
     isRemote,
     sessionOptionsOverrideAgentArgs: false,
     ...options,
-    ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
+    ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+    ...(args.managedAgentCommands ? { managedAgentCommands: args.managedAgentCommands } : {})
   }
 }

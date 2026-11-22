@@ -11,6 +11,7 @@ import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflig
 
 import {
   assertAgentDetectionHostRunning,
+  detectAgentInventoryOnHost,
   detectAgentsOnHost,
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
@@ -63,7 +64,9 @@ export const PREFLIGHT_METHODS = [
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
       await assertAgentDetectionHostRunning(host)
-      return detectAgentsOnHost(host, hostDetectionOptions(runtime))
+      return params.withManagedAgentCommands
+        ? detectAgentInventoryOnHost(host, hostDetectionOptions(runtime))
+        : detectAgentsOnHost(host, hostDetectionOptions(runtime))
     }
   }),
   defineMethod({

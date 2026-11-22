@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store/index'
+import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { assertAntigravityReferenceTarget } from './ai-vault-antigravity-reference-target'
 import type { AiVaultSessionDragPayload } from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import { resolveAiVaultResumeStartupShell } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
@@ -86,7 +88,11 @@ function buildAiVaultResumeForWorktree(
     commandOverride: args.commandOverride,
     agentArgs: args.agentArgs,
     embedCwd,
-    clearEnvNames
+    clearEnvNames,
+    managedAgentCommands: readManagedAgentCommandsForWorktree(
+      useAppStore.getState(),
+      args.worktreeId
+    )
   })
 }
 

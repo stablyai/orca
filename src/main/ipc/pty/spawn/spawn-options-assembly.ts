@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
 import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
+import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -139,14 +140,18 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
     })
   )
+  // Before the wrappers below, which read the program it launches.
+  const startupCommand = connectionId
+    ? input.launchCommand
+    : await alignManagedAgentLaunchAtSpawn(input, shell)
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: input.launchCommand,
+    command: startupCommand,
     agent: launchAgent,
     env: input.env,
     envToDelete: input.envToDelete,
     cwd: input.cwd,
     connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
+    isFreshLaunch: !input.preAdoptedStablePane && startupCommand !== undefined,
     shell,
     ...(input.codexRuntime === 'wsl'
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }

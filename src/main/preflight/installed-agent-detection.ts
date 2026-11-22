@@ -18,8 +18,12 @@ import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tu
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
-import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { readInstalledManagedAgents } from './managed-agent-detection'
+import {
+  getTuiAgentLaunchCommand,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../shared/agent-launch/catalog/tui-agent-config'
+import { readInstalledManagedAgents, readManagedAgentCommand } from './managed-agent-detection'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
@@ -95,10 +99,23 @@ function overrideProbeCommands(
   return probes
 }
 
-export async function detectInstalledAgents(
-  context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
-): Promise<string[]> {
+/** Full paths to Orca's copies, for agents whose own CLI the host doesn't have. */
+export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
+
+export type InstalledAgentInventory = {
+  agents: string[]
+  /** Absent for a WSL guest: Orca's copies live on the host, so it reports none. */
+  managedAgentCommands?: ManagedAgentCommands
+}
+
+async function detectAgentsWithManagedCopies(
+  context: PreflightRuntimeContext | undefined,
+  options: InstalledAgentDetectionOptions | undefined
+): Promise<{
+  detected: string[]
+  managedOnly: TuiAgent[] | null
+  outsidePath: ManagedAgentCommands
+}> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   // Why: a CLI outside PATH (e.g. agy in a custom install dir) is reachable only through its override.
@@ -109,14 +126,29 @@ export async function detectInstalledAgents(
       ...[...overrides.values()].map((probe) => probe.command)
     ])
   ]
-  const found = await detectAgentCommandsOnHost(probeCommands, { context })
+  const foundOutsidePath = new Map<string, string>()
+  const found = await detectAgentCommandsOnHost(probeCommands, {
+    context,
+    outsidePath: foundOutsidePath
+  })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
-  // Orca's own copies live on this host, not in a WSL guest; terminals get their folders on PATH.
-  if (runtime !== 'wsl') {
+  // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
+  const outsidePath: ManagedAgentCommands = {}
+  for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
+    const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
+    const path = foundOutsidePath.get(program)
+    if (path && !options?.agentCmdOverrides?.[id]?.trim()) {
+      outsidePath[id] = path
+    }
+  }
+  // Orca's own copies live on this host, not in a WSL guest. Launches run them by full path.
+  const managedOnly: TuiAgent[] | null = runtime === 'wsl' ? null : []
+  if (managedOnly) {
     const enabled = new Set(commands.map((command) => command.id))
     for (const id of await readInstalledManagedAgents()) {
       if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
         detected.push(id)
+        managedOnly.push(id)
       }
     }
   }
@@ -129,7 +161,44 @@ export async function detectInstalledAgents(
       detected.push(id)
     }
   }
-  return detected
+  return { detected, managedOnly, outsidePath }
+}
+
+export async function detectInstalledAgentInventory(
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions
+): Promise<InstalledAgentInventory> {
+  const { detected, managedOnly, outsidePath } = await detectAgentsWithManagedCopies(
+    context,
+    options
+  )
+  if (!managedOnly) {
+    return { agents: detected }
+  }
+  const paths = await Promise.all(managedOnly.map(readManagedAgentCommand))
+  const managedAgentCommands: ManagedAgentCommands = { ...outsidePath }
+  managedOnly.forEach((id, index) => {
+    const path = paths[index]
+    if (path) {
+      managedAgentCommands[id] = path
+    }
+  })
+  return { agents: detected, managedAgentCommands }
+}
+
+export async function detectInstalledAgents(
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions
+): Promise<string[]> {
+  return (await detectAgentsWithManagedCopies(context, options)).detected
+}
+
+export async function detectInstalledAgentInventoryWithShellPathHydration(
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions
+): Promise<InstalledAgentInventory> {
+  await hydrateShellPathForAgentDetection(context)
+  return detectInstalledAgentInventory(context, options)
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

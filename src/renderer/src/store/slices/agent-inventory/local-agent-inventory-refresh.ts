@@ -1,4 +1,4 @@
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { beginAgentDetection, LOCAL_MANAGED_AGENT_HOST } from './managed-agent-launch-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -107,10 +107,11 @@ export function refreshLocalAgentInventory(
     }
   }))
   const refreshArgs = includeDisabled ? context : { ...context, enabledOnly: true }
+  const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
   const pending = window.api.preflight
     .refreshAgents({ ...refreshArgs, ...options })
     .then((result) => {
-      const typed = result.agents.filter(isTuiAgent)
+      const { agents: typed, keepManagedAgentCommands } = read(result)
       const published = includeDisabled
         ? filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
         : typed
@@ -118,6 +119,7 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        keepManagedAgentCommands()
         lifecycle.failedDetectContextKeys.delete(contextKey)
         lifecycle.refusedContextKeys.delete(contextKey)
         lifecycle.failedDetectContextKeys.delete(publishedContextKey)

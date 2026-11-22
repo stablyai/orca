@@ -10,6 +10,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { ManagedAgentCommands } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -24,6 +25,7 @@ type OnboardingStartupHost = {
   platform: NodeJS.Platform
   shell: AgentStartupShell | undefined
   isRemote: boolean
+  managedAgentCommands?: ManagedAgentCommands
 }
 
 export function onboardingFolderDefaultAgent(settings: GlobalSettings | null): TuiAgent | null {

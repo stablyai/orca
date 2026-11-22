@@ -28,14 +28,16 @@ const CMD_FRESH_CONFIG_FOR = 'for %! in (.) do @'
 /** Apply fresh intent to one launch command, never the saved resume configuration. */
 export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, suffix = ''): string {
   const parsed = tokenizeStartupCommand(command, shell)
-  if (!parsed.ok || parsed.spans.some((span) => span.divergesFromShell)) {
+  // PowerShell runs a quoted path, such as Orca's copy, through its call operator.
+  const head = parsed.ok && shell === 'powershell' && parsed.tokens[0] === '&' ? 1 : 0
+  if (!parsed.ok || parsed.spans.slice(head).some((span) => span.divergesFromShell)) {
     return command + suffix
   }
-  const executable = parsed.tokens[0]?.split(/[\\/]/).at(-1)?.toLowerCase()
+  const executable = parsed.tokens[head]?.split(/[\\/]/).at(-1)?.toLowerCase()
   if (!['omp', 'omp.exe', 'omp.cmd', 'omp.bat', 'omp.sh', 'omp.js'].includes(executable ?? '')) {
     return command + suffix
   }
-  let index = parsed.tokens[1] === 'launch' ? 2 : 1
+  let index = parsed.tokens[head + 1] === 'launch' ? head + 2 : head + 1
   for (; index < parsed.tokens.length; index++) {
     const token = parsed.tokens[index]
     const equals = token.indexOf('=')
