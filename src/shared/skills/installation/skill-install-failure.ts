@@ -78,8 +78,7 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   if (
     code.includes('update-required') ||
     code.includes('unsupported') ||
-    code.includes('remote-download-unavailable') ||
-    code.includes('ssh-relay-unavailable')
+    code.includes('remote-download-unavailable')
   ) {
     return { category: 'compatibility', code, retryable: false }
   }
@@ -89,6 +88,8 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
     code.includes('environment') ||
     code.includes('home-') ||
     code.includes('ingress') ||
+    // No Orca version installs over plain SSH, so updating can't fix this refusal.
+    code.includes('ssh-relay-unavailable') ||
     code.includes('name-invalid') ||
     code.includes('wsl-unavailable')
   ) {

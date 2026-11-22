@@ -6,7 +6,8 @@ import {
   markUnreadFollowUpMail,
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
-  listDispatchesWithFollowUpMail
+  listDispatchesWithFollowUpMail,
+  receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
 import {
@@ -26,6 +27,7 @@ import {
 } from './worker-follow-up'
 import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
 import { reportedWorkerOutcome } from '../worker/start/worker-start-receipt'
+import { afterWorkerStartWait } from '../worker/start/readiness/worker-start-waits'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -56,6 +58,12 @@ export function continueUnreadWorkerMail(
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
   body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
+}
+
+// A chat is handed each message whole right after this Task, one at a time.
+const CHAT_FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
 async function continueUnreadMail(
@@ -112,7 +120,9 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: FOLLOW_UP_TASK,
+            message: receivesMailWhole(plan.latest.assignee_handle)
+              ? CHAT_FOLLOW_UP_TASK
+              : FOLLOW_UP_TASK,
             takesMailOf: dispatchId
           })
         : plan
@@ -181,6 +191,8 @@ export function passHeldWorkerMail(
   const custody = custodyOf(db, followUpId)
   if (custody === 'starting') {
     runtime.withdrawStaleChatMail(lineageMailboxes)
+    // A start still waiting on its agent settles later, in the background: pass the mail on then.
+    afterWorkerStartWait(followUpId, 'held-mail', () => passHeldWorkerMail(runtime, db, followUpId))
     return
   }
   const worker = db.getWorkerDispatch(followUpId)

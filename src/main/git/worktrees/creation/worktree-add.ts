@@ -5,6 +5,7 @@ import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/win
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { gitConfigWrite } from './worktree-config-write'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
@@ -102,16 +103,16 @@ export async function persistWorktreeCreationBase(
 ): Promise<void> {
   const configKey = `branch.${branch}.base`
   try {
-    await gitExecFileAsync(['config', '--local', '--replace-all', configKey, effectiveBase], {
-      ...gitExecOptions(worktreePath, options)
-    })
+    await gitConfigWrite(
+      ['config', '--local', '--replace-all', configKey, effectiveBase],
+      worktreePath,
+      options
+    )
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
     try {
       // Clear stale lineage if replacing reused branch metadata fails.
-      await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
-        ...gitExecOptions(worktreePath, options)
-      })
+      await gitConfigWrite(['config', '--local', '--unset-all', configKey], worktreePath, options)
     } catch (unsetError) {
       console.warn(
         `addWorktree: failed to unset stale ${configKey} for ${worktreePath}`,
@@ -141,9 +142,11 @@ export async function configurePushAutoSetupRemote(
       }
     }
     if (!alreadySet) {
-      await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
-        ...gitExecOptions(worktreePath, options)
-      })
+      await gitConfigWrite(
+        ['config', '--local', 'push.autoSetupRemote', 'true'],
+        worktreePath,
+        options
+      )
     }
   } catch (error) {
     console.warn(`addWorktree: failed to set push.autoSetupRemote for ${worktreePath}`, error)
@@ -171,9 +174,11 @@ export async function trackSameNameRemoteBase(
   }
   try {
     // Git 1.8+ resolves slash-containing remote names via fetch refspecs without another probe.
-    await gitExecFileAsync(['branch', '--set-upstream-to', effectiveBase, branch], {
-      ...gitExecOptions(worktreePath, options)
-    })
+    await gitConfigWrite(
+      ['branch', '--set-upstream-to', effectiveBase, branch],
+      worktreePath,
+      options
+    )
     return true
   } catch (error) {
     console.warn(`addWorktree: failed to track ${effectiveBase} for ${branch}`, error)

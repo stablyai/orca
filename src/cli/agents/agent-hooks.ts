@@ -129,16 +129,6 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
   return true
 }
 
-/** The running app owns the live setting and removes its hooks; otherwise the profile on disk. */
-export async function persistAgentStatusHooksEnabled(
-  client: RuntimeClient,
-  enabled: boolean
-): Promise<void> {
-  if (!(await updateRunningRuntime(client, enabled))) {
-    await updateEnabledOnDisk(enabled)
-  }
-}
-
 /** Null when no runtime answers; a running app owns the live setting. */
 async function readRunningRuntimeHooksEnabled(client: RuntimeClient): Promise<boolean | null> {
   if (!(await client.getOfflineRuntimeAdmission()).reachable) {

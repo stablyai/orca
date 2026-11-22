@@ -29,9 +29,18 @@ import {
   managedOrcadHostOf,
   ORCAD_FENCED_AUTOMATION
 } from './orcad-fenced-automation'
+import { resolveBotAutomationRunTarget, type AutomationBotRunTarget } from '../bot-run-target'
+
+export type AutomationRepoRunTarget = {
+  ok: true
+  cwd: string
+  repo: Repo
+  setup?: ProjectHostSetup
+}
 
 export type AutomationRunTargetResult =
-  | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
+  | AutomationRepoRunTarget
+  | AutomationBotRunTarget
   | ({ ok: false } & AutomationRunFailure)
 
 // Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
@@ -78,7 +87,7 @@ function resolveAutomationOwnerRefusal(
 function resolveLegacyAutomationRunTarget(
   store: Store,
   automation: Automation
-): AutomationRunTargetResult {
+): AutomationRepoRunTarget | { ok: false; error: string } {
   const repoId = getAutomationLegacyRepoId(automation)
   const rows = store.getRepos().filter((entry) => entry.id === repoId)
   // Reject twin repos before getRepo or owner resolution silently selects one host.
@@ -103,7 +112,7 @@ function findLegacyAutomationRunContextStamp(
   automation: Automation,
   options: AutomationRunTargetOptions
 ): WorkspaceRunContext | null {
-  if (automation.runContext) {
+  if (automation.runContext || automation.bot) {
     return null
   }
   const legacy = resolveLegacyAutomationRunTarget(store, automation)
@@ -128,6 +137,7 @@ function findLegacyAutomationRunContextStamp(
   }
   const captured = resolveAutomationRunTarget(store, { ...automation, runContext }, options)
   return captured.ok &&
+    'repo' in captured &&
     captured.cwd === legacy.cwd &&
     getRepoExecutionHostId(captured.repo) === repoHostId
     ? runContext
@@ -160,6 +170,9 @@ export function resolveAutomationRunTarget(
   automation: Automation,
   options: AutomationRunTargetOptions = {}
 ): AutomationRunTargetResult {
+  if (automation.bot) {
+    return resolveBotAutomationRunTarget(store, automation.bot)
+  }
   const managedHost = managedOrcadHostOf(store, automation)
   if (managedHost) {
     return { ok: false, ...automationRunFailure('managedHostServer', { host: managedHost.label }) }

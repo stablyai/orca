@@ -123,17 +123,25 @@ export async function deleteHostAiVaultSessionsPermanently(
       failed += 1
     }
   }
-  if (deletedPaths.length > 0) {
-    remoteDeleteDeps.invalidateMultiHostListCache?.()
-    invalidateAiVaultSessionListCache()
-    for (const path of deletedPaths) {
-      invalidateSessionParseCacheEntry(path)
-    }
-    await (remoteDeleteDeps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)(
-      deletedPaths
-    ).catch((error) => {
-      console.warn('[ai-vault] background cache invalidation failed:', error)
-    })
-  }
+  await invalidateDeletedAiVaultSessionPaths(deletedPaths)
   return { deleted: deletedPaths.length, failed, freedBytes }
+}
+
+/** After a permanent delete: every list and parse cache, so deleted rows cannot resurrect. */
+export async function invalidateDeletedAiVaultSessionPaths(
+  deletedPaths: readonly string[]
+): Promise<void> {
+  if (deletedPaths.length === 0) {
+    return
+  }
+  remoteDeleteDeps.invalidateMultiHostListCache?.()
+  invalidateAiVaultSessionListCache()
+  for (const path of deletedPaths) {
+    invalidateSessionParseCacheEntry(path)
+  }
+  await (remoteDeleteDeps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)([
+    ...deletedPaths
+  ]).catch((error) => {
+    console.warn('[ai-vault] background cache invalidation failed:', error)
+  })
 }

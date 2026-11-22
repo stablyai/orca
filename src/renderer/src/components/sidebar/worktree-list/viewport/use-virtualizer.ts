@@ -15,11 +15,23 @@ import {
 import { getRenderRowKey } from '../listing/render-row'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
-import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../navigation/worktree-sidebar-reveal'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { getWorktreeSidebarRevealTopInset } from '../navigation/worktree-sidebar-reveal'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
+
+// Read the render window inside the TanStack adapter. The instance itself mutates in place.
+export function useSidebarRowsVirtualizer<TItemElement extends Element>(
+  options: Parameters<typeof useVirtualizer<HTMLDivElement, TItemElement>>[0]
+) {
+  const virtualizer = useVirtualizer(options)
+  return {
+    virtualizer,
+    totalSize: virtualizer.getTotalSize(),
+    virtualRows: virtualizer.getVirtualItems()
+  }
+}
 
 // Guard virtual row identity so recycled DOM nodes cannot overwrite another slot’s measured height.
 export function useWorktreeListVirtualizer(args: {
@@ -32,6 +44,9 @@ export function useWorktreeListVirtualizer(args: {
 }) {
   const { renderRows, firstHeaderIndex, scrollRef, scrollOffsetRef } = args
   const stickyHeaderIndexes = useMemo(() => getStickyHeaderIndexes(renderRows), [renderRows])
+  const hasHostHeaders = stickyHeaderIndexes.some(
+    (index) => renderRows[index]?.type === 'host-header'
+  )
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -113,7 +128,7 @@ export function useWorktreeListVirtualizer(args: {
     () => createSidebarSmoothReveal({ marks: args.programmaticScrollMarks, onRetired }),
     [args.programmaticScrollMarks, onRetired]
   )
-  const virtualizer = useVirtualizer({
+  const { virtualizer } = useSidebarRowsVirtualizer<HTMLDivElement>({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {
@@ -146,7 +161,7 @@ export function useWorktreeListVirtualizer(args: {
     overscan: 10,
     gap: WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
     // Why: the sticky group header lives inside the virtual list, so scroll math needs the same top inset as the DOM reveal.
-    scrollPaddingStart: WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
+    scrollPaddingStart: getWorktreeSidebarRevealTopInset(hasHostHeaders),
     // Why: seed scrollOffset from the ref (not 0) so the first getVirtualItems() after remount picks the right rows.
     initialOffset: () => scrollOffsetRef.current,
     scrollToFn: smoothReveal.scrollTo,

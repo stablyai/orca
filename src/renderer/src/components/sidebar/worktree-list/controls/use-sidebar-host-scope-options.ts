@@ -1,6 +1,7 @@
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
+import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
@@ -24,7 +25,7 @@ export function useSidebarHostScopeOptions(): {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const wslHostStatuses = useAppStore((s) => s.wslHostStatuses)
   const wslHostServerFilesMissing = useAppStore((s) => s.wslHostServerFiles === 'missing')
   const ephemeralVmHosts = useAppStore(selectEphemeralVmHostLifecycles)

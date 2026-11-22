@@ -28,6 +28,8 @@ export type ActionEffectsHost = {
   /** The page's workspace tabs by page id, with each url, or null when the caller may not read it. */
   tabUrls: () => Map<string, string | null>
   loadError: () => string | null
+  /** True while the page may show text the agent must never read; effects then carry no `page`. */
+  withholdsPageText: () => boolean
   /** False until this helper session has a `snapshot --delta` baseline to diff against. */
   hasDeltaBaseline: () => boolean
   forgetDeltaBaseline: () => void
@@ -151,7 +153,7 @@ async function settle(
     const replaced = current.id !== start.guestId
     const stillLoading = loading || (replaced && isLoadingMainFrame(current))
     // A replacement guest was never admitted for this caller, so only the original is read.
-    if (!replaced) {
+    if (!replaced && !host.withholdsPageText()) {
       try {
         const reply = await host.snapshotDelta()
         host.admit(current.id)

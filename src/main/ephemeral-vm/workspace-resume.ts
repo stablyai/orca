@@ -23,7 +23,7 @@ import {
   sshUserDisconnectCount
 } from '../ssh/connection/ssh-user-disconnect'
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
-import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import {
   getRemoteRuntimeSharedControlDiagnostics,

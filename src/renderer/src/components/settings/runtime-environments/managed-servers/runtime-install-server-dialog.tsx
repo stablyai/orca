@@ -5,7 +5,7 @@ import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import {
   Dialog,

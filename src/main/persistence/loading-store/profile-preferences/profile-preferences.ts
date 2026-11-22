@@ -39,6 +39,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'githubCachePersistenceDisabled'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
+  | 'githubCacheRows'
   | 'githubCacheWriteListeners'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'

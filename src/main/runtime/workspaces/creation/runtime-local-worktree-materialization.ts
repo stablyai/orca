@@ -7,20 +7,20 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { resolveWorktreeIncludePaths } from '../../../git/worktrees/content-paths/worktree-include-file'
-import { formatWorktreeIncludeCopyWarning } from '../../../ipc/worktree-include-copy-budget'
-import { getWorktreeCreationLayout } from '../../../ipc/worktree-logic'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
-import { resolveWorktreeCreateDisplayNameMeta } from '../../../ipc/worktree-display-name'
+import { formatWorktreeIncludeCopyWarning } from '../../../ipc/worktrees/linked-paths/worktree-include-copy-budget'
+import { getWorktreeCreationLayout } from '../../../ipc/worktrees/paths/worktree-logic'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
+import { resolveWorktreeCreateDisplayNameMeta } from '../../../ipc/worktrees/creation/worktree-display-name'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
-} from '../../../ipc/worktree-symlinks'
+} from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
 import { resolveWorktreeSharedDirectories } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from '../../repositories/runtime-remote-fetch-controller'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { attributedSparsePresetId } from '../../../ipc/sparse-preset-attribution'
+import { attributedSparsePresetId } from '../../../ipc/repos/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 

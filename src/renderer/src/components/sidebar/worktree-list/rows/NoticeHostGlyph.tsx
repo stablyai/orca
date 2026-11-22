@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { HostRowIcon } from '../../../host-row-icon'
+import { HostRowIcon } from '../../../host-picker/host-row-icon'
 import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   parseExecutionHostId,

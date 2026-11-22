@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
+import LinearIssueWorkspace from '@/components/task-page/linear/issue-workspace/LinearIssueWorkspace'
 import { LoaderCircle } from 'lucide-react'
 import { LinearIcon } from '@/components/task-page/task-page-localized-options'
 import { useTranslate } from '@/i18n/use-translate'

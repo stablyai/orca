@@ -6,11 +6,13 @@ import { useTranslate } from '../../../i18n/use-translate'
 
 export function useTabCreateEntrySearchResults({
   enabled,
+  excludedTabId,
   query,
   worktreeId,
   retainedResultId
 }: {
   enabled: boolean
+  excludedTabId?: string | null
   query: string
   worktreeId: string
   retainedResultId?: string | null
@@ -18,6 +20,7 @@ export function useTabCreateEntrySearchResults({
   const t = useTranslate()
   const tabSearch = useOpenTabSearch({
     enabled,
+    excludedTabId,
     query: enabled ? query : '',
     worktreeId,
     retainedResultId

@@ -308,7 +308,7 @@ async function main() {
     ;({ registerPtyHandlers } = await jiti.import(
       '../../../../src/main/ipc/pty/register-handlers.ts'
     ))
-    ;({ killAllPty } = await jiti.import('../../../../src/main/ipc/pty/kill-all.ts'))
+    ;({ killAllPty } = await jiti.import('../../../../src/main/ipc/pty/provider/kill-all.ts'))
     const { WslHookRelayManager, wslHookRelayManager } = await jiti.import(
       '../../../../src/main/agent-hooks/wsl-relay/wsl-hook-relay-manager.ts'
     )

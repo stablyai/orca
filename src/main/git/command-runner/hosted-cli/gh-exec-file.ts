@@ -188,6 +188,8 @@ export async function ghExecFileWithScopeAsync(
       if (availability) {
         await availability
       }
+      // gh holds no mutation fence, so a lost worker ends its lifetime as a termination does.
+      const reportChildEnded = lifetime?.capture()
       // gh may be a shim chain; terminate the whole tree so descendants cannot outlive the deadline.
       const { stdout, stderr } = await execFileCaptureToTermination(
         resolved.binary,
@@ -200,7 +202,8 @@ export async function ghExecFileWithScopeAsync(
           env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal,
           stdin: options.stdin,
-          onChildTerminated: lifetime?.capture(),
+          onChildTerminated: reportChildEnded,
+          workerLossEndsLifetime: true,
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
         resolved.termination

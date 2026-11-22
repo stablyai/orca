@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'

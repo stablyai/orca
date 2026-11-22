@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentDefaultSurface } from './native-chat-appearance-settings'
+import type { NativeChatDefaultSettings } from '../../agent-launch/choices/structured-native-chat-launch-route'
 
 export type NativeChatProviderChoices = Partial<Record<string, boolean>>
 
@@ -56,4 +57,22 @@ export function carriedChatUiLaunchSettings(
         )
       : {}
   }
+}
+
+// Phones start agents as chats on a headless host nobody chose for (Settings on a paired desktop can).
+export function hostNativeChatDefaults(
+  settings: NativeChatDefaultSettings & Pick<GlobalSettings, 'agentDefaultSurfaceChosen'>,
+  headless: boolean
+): NativeChatDefaultSettings | null {
+  const nativeChatProviders = normalizeNativeChatProviderChoices(settings.nativeChatProviders)
+  const agentDefaultSurface = normalizeAgentDefaultSurface(settings.agentDefaultSurface)
+  if (
+    headless &&
+    settings.agentDefaultSurfaceChosen !== true &&
+    agentDefaultSurface === 'terminal' &&
+    Object.keys(nativeChatProviders).length === 0
+  ) {
+    return null
+  }
+  return { agentDefaultSurface, nativeChatProviders }
 }

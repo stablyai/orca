@@ -19,7 +19,7 @@ import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)

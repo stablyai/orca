@@ -4,8 +4,8 @@ import { LoaderCircle, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
-import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
+import { useRepoAssigneesBySlug } from '@/lib/work-items/github/useGitHubSlugMetadata'
 import { getGitHubPRReviewerRows } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import {
   filterGitHubPRReviewerCandidates,

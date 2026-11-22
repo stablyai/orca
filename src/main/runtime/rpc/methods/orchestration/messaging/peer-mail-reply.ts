@@ -7,11 +7,15 @@ import {
   deliverPeerMail,
   peerMailMessageId,
   peerMailPairing,
+  peerMailSender,
   peerMailSenderLabel,
+  queuePeerMailReply,
   requirePeerMailServer
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
+import { botAnswerOf } from './bot-request-outcome'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -50,20 +54,21 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
-    db.enqueueFederationRelay({
-      dispatchId: conversation.conversation_id,
-      direction: 'to_home',
-      kind: 'peer_mail',
-      messageId: id,
-      payload: JSON.stringify({
+    const sender = peerMailSender(runtime, replier)
+    // The answer's record and its queued reply commit together.
+    runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {
+      queuePeerMailReply(db, conversation.conversation_id, id, {
         senderLabel,
         fromAddress: replier,
         subject,
         body: params.body,
-        threadId
+        threadId,
+        sender,
+        // Refuses a second answer to a bot request, before the original is marked read.
+        ...botAnswerOf(db, original)
       })
+      db.markAsRead([original.id], { kind: 'reply' })
     })
-    db.markAsRead([original.id])
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },
@@ -88,19 +93,25 @@ export async function replyOverPeerMail(args: {
     localParty: conversation.local_party ?? '',
     localPaneKey: conversation.local_pane_key
   })
-  await deliverPeerMail(runtime, server, current, {
+  const held = await deliverPeerMail(runtime, server, current, {
     id,
     to: route.remote_party,
     senderLabel,
     subject,
     body: params.body,
-    threadId
+    threadId,
+    sender: peerMailSender(runtime, replier)
   })
-  db.markAsRead([original.id])
+  db.markAsRead([original.id], { kind: 'reply' })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
-    { message: { id, subject }, to: original.from_handle, server: server.name },
-    () => runtime.ensureOrchestrationFederationRelay(),
-    { kind: 'federation' }
+    {
+      message: { id, subject },
+      to: original.from_handle,
+      server: server.name,
+      ...(held.length > 0 ? { warnings: held } : {})
+    },
+    () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
+    { kind: 'federation', environmentId: server.environmentId }
   )
 }

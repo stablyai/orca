@@ -9,8 +9,10 @@ import type {
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
+import { formatPoolRosterLabel } from './usage-pool-label'
 
 export type UsageSection = { label: string; window: RateLimitWindow }
 
@@ -42,8 +44,12 @@ export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): nu
 export function shortUsageLabel(
   p: ProviderRateLimits,
   section: UsageSection,
-  useRemainingDuration = false
+  useRemainingDuration = false,
+  t?: Translate
 ): string {
+  if (isGroupedUsagePool(section.window)) {
+    return formatPoolRosterLabel(section.window, p.buckets ?? [], t)
+  }
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
@@ -89,7 +95,7 @@ export function getTightestUsageSection(
       ? candidate
       : current
   )
-  return { ...tightest, label: shortUsageLabel(p, tightest, true) }
+  return { ...tightest, label: shortUsageLabel(p, tightest, true, t) }
 }
 
 export function getUsageHeadlineSection(
@@ -102,7 +108,7 @@ export function getUsageHeadlineSection(
       (section) => section.label === CURSOR_MODELS_BUCKET_NAME
     )
     if (primary) {
-      return { ...primary, label: shortUsageLabel(p, primary, true) }
+      return { ...primary, label: shortUsageLabel(p, primary, true, t) }
     }
   }
   return getTightestUsageSection(p, t, scope)
@@ -124,7 +130,7 @@ export function getTopScopedSection(
   const top = scoped.reduce((a, b) =>
     clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
   )
-  return { ...top, label: shortUsageLabel(p, top) }
+  return { ...top, label: shortUsageLabel(p, top, false, t) }
 }
 
 /** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */

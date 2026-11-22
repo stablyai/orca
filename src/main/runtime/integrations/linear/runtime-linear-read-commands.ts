@@ -2,6 +2,7 @@ import { clampLinearSearchLimit } from '../../../../shared/linear/agent-access'
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { listIssues as listLinearIssues } from '../../../linear/issues/linear-issue-listing'
 import { listMcpIssues } from '../../../linear/issues/mcp-issue-list'
+import { listProjects as listLinearProjects } from '../../../linear/projects/linear-project-queries'
 import {
   getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   listTeamsForAgent as listLinearTeamsForAgent
@@ -101,15 +102,22 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
     }
   }
 
-  async linearProjectListForAgents(params: {
-    query?: string
-    limit?: number
-    workspaceId?: (string & {}) | 'all'
-  }): Promise<LinearProjectListResult> {
-    const limit = clampLinearSearchLimit(params.limit)
+  async linearProjectListForAgents(
+    params: {
+      query?: string
+      limit?: number
+      workspaceId?: (string & {}) | 'all'
+    },
+    signal?: AbortSignal
+  ): Promise<LinearProjectListResult> {
+    // An omitted limit lists every project; an explicit one keeps its clamp.
+    const limit = params.limit === undefined ? null : clampLinearSearchLimit(params.limit)
     try {
-      const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
-      const projects = result.items.slice(0, limit).map((project) => ({
+      const result = await listLinearProjects(params.query, limit, params.workspaceId, true, {
+        signal,
+        summaryOnly: true
+      })
+      const projects = result.items.slice(0, limit ?? undefined).map((project) => ({
         id: project.id,
         name: project.name,
         ...(project.url ? { url: project.url } : {}),
@@ -122,7 +130,7 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
-      const hasMore = result.hasMore === true || result.items.length > limit
+      const hasMore = result.hasMore === true || result.items.length > projects.length
       return {
         projects,
         truncated: hasMore,
@@ -141,21 +149,27 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
     }
   }
 
-  async linearIssueListForAgents(params: {
-    filter?: LinearIssueListFilter
-    teamInput?: string
-    limit?: number
-    workspaceId?: (string & {}) | 'all'
-  }): Promise<LinearIssueListResult> {
+  async linearIssueListForAgents(
+    params: {
+      filter?: LinearIssueListFilter
+      teamInput?: string
+      limit?: number
+      workspaceId?: (string & {}) | 'all'
+    },
+    signal?: AbortSignal
+  ): Promise<LinearIssueListResult> {
     const filter = params.filter ?? 'assigned'
-    const limit = clampLinearIssueListLimit(params.limit)
+    // An omitted limit lists every match; an explicit one keeps its clamp.
+    const limit = params.limit === undefined ? null : clampLinearIssueListLimit(params.limit)
     const team = params.teamInput
       ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
       : null
     const workspaceId = team?.workspaceId ?? params.workspaceId
     try {
       const result = await listLinearIssues(filter, limit, workspaceId, {
-        teamId: team?.id
+        teamId: team?.id,
+        summaryOnly: true,
+        signal
       })
       return {
         issues: result.items.map((issue) => ({

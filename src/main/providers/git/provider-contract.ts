@@ -31,6 +31,7 @@ import type { GitProviderStatusOptions } from './status-options'
 import type { BranchSwitchCreation } from '../../../shared/git/branch-switch-target'
 import type { RuntimeGitLocalBranches } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>
@@ -67,6 +68,7 @@ export type IGitProvider = {
     compareAgainstHead?: boolean,
     oldPath?: string
   ): Promise<GitDiffResult>
+  getBlame(worktreePath: string, filePath: string, knownHeadOid?: string): Promise<GitBlameResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   resolveConflict(
     worktreePath: string,

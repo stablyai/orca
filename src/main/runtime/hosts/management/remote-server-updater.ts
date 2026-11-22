@@ -22,6 +22,7 @@ const unavailableSnapshot = (runtimeId: string): RemoteServerUpdaterSnapshot => 
   status: { state: 'idle' }
 })
 
+let configured = false
 let adapter: RemoteServerUpdaterAdapter = {
   getSnapshot: unavailableSnapshot,
   check: () => {
@@ -37,6 +38,12 @@ let adapter: RemoteServerUpdaterAdapter = {
 
 export function configureRemoteServerUpdater(next: RemoteServerUpdaterAdapter): void {
   adapter = next
+  configured = true
+}
+
+// Why: orcad never wires an updater, so it must not advertise updater.remote-control.v1.
+export function isRemoteServerUpdaterConfigured(): boolean {
+  return configured
 }
 
 export function getRemoteServerUpdaterSnapshot(runtimeId: string): RemoteServerUpdaterSnapshot {

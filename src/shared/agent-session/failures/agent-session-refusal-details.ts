@@ -209,12 +209,19 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_ownership_unknown: ConversationOwnerFacts
   agent_session_conflict: ConversationOwnerFacts
   execution_owner_reconciling: NoFacts
-  agent_session_identity_required: NoFacts
+  agent_session_identity_required: {
+    /** On `transcriptUnreadable`: the conversation ran in another folder, so no retry opens it here.
+     *  A fact, not a reason, so released clients still read the refusal as before. */
+    otherFolder?: true
+  }
   agent_session_operation_conflict: NoFacts
   agent_session_operation_expired: NoFacts
   agent_session_operation_capacity: NoFacts
   agent_session_journal_unreadable: NoFacts
-  structured_agent_session_unsupported: NoFacts
+  structured_agent_session_unsupported: {
+    /** On `hostUnsupported`: the installed release is older than chats need. Older clients drop it. */
+    agentInstallation?: AgentCliInstallationProblem
+  }
   agent_session_owner_restart_failed: NoFacts
 }
 
@@ -270,7 +277,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
       ? readAgentSessionArgumentProblem(value.argumentProblem)
       : undefined
   const agentInstallation =
-    code === 'agent_session_operation_invalid'
+    code === 'agent_session_operation_invalid' || code === 'structured_agent_session_unsupported'
       ? readAgentCliInstallationProblem(value.agentInstallation)
       : undefined
   const codexInstallation =
@@ -308,7 +315,12 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
       : {}),
     ...(agentInstallation ? { agentInstallation } : {}),
     ...(codexInstallation ? { codexInstallation } : {}),
-    ...(expiredAttachments ? { expiredAttachments } : {})
+    ...(expiredAttachments ? { expiredAttachments } : {}),
+    ...(code === 'agent_session_identity_required' &&
+    value.reason === 'transcriptUnreadable' &&
+    value.otherFolder === true
+      ? { otherFolder: true }
+      : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
   return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined

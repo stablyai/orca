@@ -5,7 +5,7 @@ import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/short
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
+import { captureAgentTabLaunchContext } from '@/lib/agent-session/launch/pane/agent-tab-launch-context'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'

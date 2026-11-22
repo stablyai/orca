@@ -177,7 +177,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
     notify = plan.requestedSurface === 'chat'
   ): StructuredAgentLaunchSettlement => {
     if (notify && !admitted) {
-      notifyExplicitChatFailure(plan.agent, reason)
+      notifyExplicitChatFailure(plan.agent, reason, args.worktreeId)
       resolveDelivery(NOT_DELIVERED_NOTIFIED)
       return { kind: 'failed', error, notified: true }
     }

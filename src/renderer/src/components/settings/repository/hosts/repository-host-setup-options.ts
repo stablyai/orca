@@ -9,7 +9,7 @@ import type {
 } from '../../../../../../shared/project/project-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '../../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import { getHostSetupUnavailableDetail } from '@/lib/workspace/creation/project-host-setup-options'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 

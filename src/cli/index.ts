@@ -16,6 +16,7 @@ import {
   resolveHostFlagEnvironmentId
 } from './hosts/execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { describeRemoteServerSelection } from './hosts/remote-server-selection'
 import { reportCliError } from './output/cli-error'
 import { RuntimeClientError } from './runtime/connection/types'
 import { cliErrorExitCode } from './output/cli-exit-code'
@@ -211,6 +212,7 @@ export async function main(
           parsed.flags.has('pairing-code') ||
           (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
           Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())),
+      remoteServer: describeRemoteServerSelection(parsed.flags),
       conciseOrchestration: parsed.commandPath[0] === 'orchestration' && !parsed.flags.has('full')
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)

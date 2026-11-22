@@ -1,6 +1,10 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { guardedSafeStorage as safeStorage } from '../../host/safe-storage-availability'
+import { getSecretStore, type SecretStore } from '../../../shared/secure-storage/secret-store'
+import {
+  OrcaCloudSessionStorageRefusedError,
+  sealedStorageRefusal
+} from './profile-cloud-session-sealing'
 import { isUnreadableError, writeSecureJsonFile } from '../../../shared/secure-storage/secure-file'
 import type {
   OrcaCloudCapabilities,
@@ -16,7 +20,11 @@ export type OrcaCloudSession = {
   expiresAt: number
   capabilities: OrcaCloudCapabilities
   organizations?: OrcaCloudOrgSummary[]
+  /** Whose tokens these are, so a profile linked to someone else never uses them. Absent on older files. */
+  identity?: OrcaCloudSessionIdentity
 }
+
+export type OrcaCloudSessionIdentity = { userId: string; cloudProfileId: string }
 
 export type OrcaCloudSessionReadResult =
   | { status: 'found'; session: OrcaCloudSession; persistence: OrcaCloudSessionPersistence }
@@ -25,9 +33,12 @@ export type OrcaCloudSessionReadResult =
   /** Unlike decrypt-failed, unreadable proves nothing and must not authorize replacement. */
   | { status: 'unreadable'; persistence: 'none'; error: string }
 
+// orcad's host-key seal gets its own tag so a data folder shared with a desktop fails clearly, not as a decrypt error.
+type SealedSessionFormat = 'electron-safe-storage-v1' | 'orcad-host-key-v1'
+
 type PersistedEncryptedSession = {
   version: 1
-  format: 'electron-safe-storage-v1'
+  format: SealedSessionFormat
   savedAt: number
   ciphertext: string
 }
@@ -74,6 +85,16 @@ function isOrcaCloudSession(value: unknown): value is OrcaCloudSession {
   if (value.organizations !== undefined && !isOrcaCloudOrganizations(value.organizations)) {
     return false
   }
+  if (
+    value.identity !== undefined &&
+    !(
+      isObject(value.identity) &&
+      typeof value.identity.userId === 'string' &&
+      typeof value.identity.cloudProfileId === 'string'
+    )
+  ) {
+    return false
+  }
   return (
     typeof value.accessToken === 'string' &&
     value.accessToken.length > 0 &&
@@ -114,18 +135,31 @@ const unsavedRotations = new Map<
   { profileId: string; userDataPath: string; session: OrcaCloudSession }
 >()
 
+function sealedSessionFormat(secrets: SecretStore): SealedSessionFormat {
+  return secrets.describeSealing?.().kind === 'host-key'
+    ? 'orcad-host-key-v1'
+    : 'electron-safe-storage-v1'
+}
+
 function writeOrcaCloudSession(
   profileId: string,
   userDataPath: string,
-  session: OrcaCloudSession
+  session: OrcaCloudSession,
+  requireSealed = false
 ): OrcaCloudSessionPersistence {
   const cacheKey = orcaCloudSessionKey(profileId, userDataPath)
-  if (safeStorage.isEncryptionAvailable()) {
+  const secrets = getSecretStore()
+  // Checked at write time: the store can change while a remote sign-in waits on the browser.
+  const refusal = requireSealed ? sealedStorageRefusal(secrets) : null
+  if (refusal) {
+    throw new OrcaCloudSessionStorageRefusedError(refusal)
+  }
+  if (secrets.isEncryptionAvailable()) {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
-      format: 'electron-safe-storage-v1',
+      format: sealedSessionFormat(secrets),
       savedAt: Date.now(),
-      ciphertext: safeStorage.encryptString(JSON.stringify(session)).toString('base64')
+      ciphertext: secrets.encryptString(JSON.stringify(session)).toString('base64')
     }
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
     rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
@@ -153,11 +187,16 @@ export function saveOrcaCloudSession(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession,
-  options: { spentOnFailure?: boolean } = {}
+  options: { spentOnFailure?: boolean; requireSealed?: boolean } = {}
 ): OrcaCloudSessionPersistence {
   const key = orcaCloudSessionKey(profileId, userDataPath)
   try {
-    const persistence = writeOrcaCloudSession(profileId, userDataPath, session)
+    const persistence = writeOrcaCloudSession(
+      profileId,
+      userDataPath,
+      session,
+      options.requireSealed
+    )
     unsavedRotations.delete(key)
     return persistence
   } catch (error) {
@@ -227,15 +266,26 @@ export function readOrcaCloudSession(
     if (parsed.version !== 1) {
       return { status: 'decrypt-failed', persistence: 'none', error: 'Unsupported session format.' }
     }
-    if (parsed.format === 'electron-safe-storage-v1') {
-      if (!safeStorage.isEncryptionAvailable()) {
+    if (parsed.format === 'electron-safe-storage-v1' || parsed.format === 'orcad-host-key-v1') {
+      const secrets = getSecretStore()
+      if (parsed.format !== sealedSessionFormat(secrets)) {
+        return {
+          status: 'decrypt-failed',
+          persistence: 'none',
+          error:
+            parsed.format === 'orcad-host-key-v1'
+              ? "This Orca account sign-in was saved by Orca's headless server. Sign in again here."
+              : 'This Orca account sign-in was saved by the Orca app. Sign in again on this server.'
+        }
+      }
+      if (!secrets.isEncryptionAvailable()) {
         return {
           status: 'decrypt-failed',
           persistence: 'none',
           error: 'OS-backed encryption is unavailable.'
         }
       }
-      const decrypted = safeStorage.decryptString(Buffer.from(parsed.ciphertext, 'base64'))
+      const decrypted = secrets.decryptString(Buffer.from(parsed.ciphertext, 'base64'))
       const session = JSON.parse(decrypted) as OrcaCloudSession
       if (!isOrcaCloudSession(session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
@@ -272,8 +322,4 @@ export function clearOrcaCloudSession(profileId: string, userDataPath: string): 
   unsavedRotations.delete(key)
   memorySessions.delete(key)
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
-}
-
-export function getOrcaCloudMemorySessionCountForTests(): number {
-  return memorySessions.size
 }

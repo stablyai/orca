@@ -37,7 +37,23 @@ export async function checkBoundMailbox(
   if (!response.ok) {
     throw new Error(response.error.message)
   }
-  return response.result as MailboxCheckResult
+  if (!isMailboxCheckResult(response.result)) {
+    throw new Error(`unexpected mailbox check result: ${JSON.stringify(response.result)}`)
+  }
+  return response.result
+}
+
+function isMailboxCheckResult(value: unknown): value is MailboxCheckResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'runId' in value &&
+    typeof value.runId === 'string' &&
+    'count' in value &&
+    typeof value.count === 'number' &&
+    'messages' in value &&
+    Array.isArray(value.messages)
+  )
 }
 
 export async function dispatchMailboxCheck(

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import GitHubItemDialog from '@/components/GitHubItemDialog'
+import GitHubItemDialog from '@/components/github-item-dialog/open-dialog/github-item-dialog'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { useAppStore } from '@/store'
 import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'

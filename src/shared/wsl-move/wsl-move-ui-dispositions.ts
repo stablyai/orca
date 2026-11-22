@@ -74,7 +74,11 @@ export const UI_STATE_DISPOSITIONS = {
     38,
     'Filters belong to the Jira host, not a moved workspace.'
   ),
-  taskResumeState: notApplicableDisposition(38)
+  taskResumeState: notApplicableDisposition(38),
+  hiddenWslMovedProjectKeys: notApplicableDisposition(
+    38,
+    'Names already-moved projects by the ids a move keeps; pruned once a project is no longer moved.'
+  )
 } as const satisfies Partial<Record<keyof PersistedUIState, WslMoveFieldDisposition>>
 
 export const UI_STATE_GLOBAL_FIELDS = [
@@ -104,6 +108,9 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'agentsHideWorkspacesFromOtherDevices',
   'agentsHideAutomationGeneratedWorkspaces',
   'agentsHideCliCreatedWorkspaces',
+  'hideBotCreatedWorkspaces',
+  'botSidebarView',
+  'botChatFolds',
   'agentsShowChildAgents',
   'agentsCompactMode',
   'agentsShowSearch',
@@ -118,6 +125,8 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'workspaceStatuses',
   'workspaceBoardOpacity',
   'workspaceBoardColumnWidth',
+  'sidebarBotsHeight',
+  'sidebarProjectsFirst',
   'syncTaskStatusFromWorkspaceBoard',
   'statusBarItems',
   'statusBarVisible',
@@ -152,11 +161,13 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'speechModelUpdateNoticeSeen',
   'claudeDiffPanelNoticeSeen',
   'claudeAccountSignInNoticeSeen',
+  'wslMovedSectionCollapsed',
   'browserDefaultUrl',
   'browserDefaultSearchEngine',
   'browserDefaultZoomLevel',
   'browserKagiSessionLink',
   'browserDevToolsDock',
+  'browserExtensionSidePanelWidth',
   'windowBounds',
   'windowMaximized',
   'windowFullScreen',
@@ -184,6 +195,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_cursorStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
   '_explorerDisplayRootMigrated',
+  '_gitBlameStatusBarDefaultAdded',
   '_grokStatusBarDefaultAdded',
   '_hostWorktreeCardPropertyDefaulted',
   '_inlineAgentsDefaultedForAllUsers',

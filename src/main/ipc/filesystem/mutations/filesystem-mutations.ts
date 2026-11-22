@@ -10,7 +10,7 @@ import {
 } from '../access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import { resolveLocalDroppedPathsForAgent } from '../../dropped-path-resolution'
+import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import type { SshMutationExpectation } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../../ssh/connection/authority/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../../filesystem/destination-serialized-local-rename'
@@ -31,9 +31,9 @@ import {
   stagedRuntimeUploadByteLength,
   stageOneSourceForRuntimeUpload
 } from '../imports/filesystem-runtime-upload-staging'
-import { streamExternalFileToRuntime } from '../../runtime-upload-file-stream'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
-import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-upload-temp-sweep'
+import { streamExternalFileToRuntime } from '../../runtime-transfers/runtime-upload-file-stream'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
+import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-transfers/runtime-upload-temp-sweep'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 

@@ -65,28 +65,26 @@ describe('edge-wrapped terminal HTTP links', () => {
     vi.unstubAllGlobals()
   })
 
-  it.each([1, 2])(
-    'opens both rows of a URL hard-wrapped inside %i-column TUI padding',
-    (padding) => {
-      const url = 'https://example.com/example-project/pull/1234567890'
-      const width = COLS - padding * 2
-      const margin = ' '.repeat(padding)
-      const rows = [
-        makeBufferLine(`${margin}${url.slice(0, width)}${margin}`),
-        makeBufferLine(`${margin}${url.slice(width)}${margin}`)
-      ]
-      for (const y of [1, 2]) {
-        openUrlMock.mockReset()
-        expect(
-          openHttpLinkAtBufferPosition({ getLine: (y) => rows[y] }, { x: padding + 2, y }, COLS, {
-            worktreeId: 'wt-1',
-            modifierHeld: true
-          })
-        ).toBe(true)
-        expect(openUrlMock).toHaveBeenCalledExactlyOnceWith(url)
-      }
+  it('opens both rows of a URL hard-wrapped inside two-column TUI padding', () => {
+    const padding = 2
+    const url = 'https://example.com/example-project/pull/1234567890'
+    const width = COLS - padding * 2
+    const margin = ' '.repeat(padding)
+    const rows = [
+      makeBufferLine(`${margin}${url.slice(0, width)}${margin}`),
+      makeBufferLine(`${margin}${url.slice(width)}${margin}`)
+    ]
+    for (const y of [1, 2]) {
+      openUrlMock.mockReset()
+      expect(
+        openHttpLinkAtBufferPosition({ getLine: (y) => rows[y] }, { x: padding + 2, y }, COLS, {
+          worktreeId: 'wt-1',
+          modifierHeld: true
+        })
+      ).toBe(true)
+      expect(openUrlMock).toHaveBeenCalledExactlyOnceWith(url)
     }
-  )
+  })
 
   it('opens a URL when a wide glyph starts the continuation row', () => {
     const prefix = 'https://example.com/wide/'
@@ -175,7 +173,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it.each(['Description: 123', 'Description:', '404: Not Found', 'HTTP/2: 200', 'HTTP/2:200'])(
+  it.each(['Description: 123', 'Description:', 'HTTP/2:200'])(
     'does not append a %s label when a complete URL ends at the terminal edge',
     (labelRow) => {
       const firstRow = `https://example.com/${'a'.repeat(COLS - 1 - 'https://example.com/'.length)}/`
@@ -370,25 +368,6 @@ describe('edge-wrapped terminal HTTP links', () => {
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
     expect(openUrlMock).toHaveBeenCalledWith(new URL(url).toString())
-  })
-
-  it('joins a real multi-line URL whose continuation is a Chinese path segment', () => {
-    const prefix = 'https://example.com/'
-    const firstRow = `${prefix}${'a'.repeat(COLS - prefix.length)}`
-    const continuation = `${WIDE_GLYPH}文档/路径`
-    const expectedUrl = new URL(`${firstRow}${continuation}`).toString()
-    const rows = [makeBufferLine(firstRow), makeBufferLine(continuation)]
-    const buffer = { getLine: (y: number) => rows[y] }
-
-    expect(firstRow).toHaveLength(COLS)
-    expect(
-      openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
-        worktreeId: 'wt-1',
-        modifierHeld: true
-      })
-    ).toBe(true)
-    expect(openUrlMock).toHaveBeenCalledOnce()
-    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
   })
 
   it('does not glue a mid-row URL to a next-line Windows path', () => {

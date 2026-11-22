@@ -215,6 +215,7 @@ export function composeCodexSessionOptionCatalog(
   }
 ): CodexSessionOptionCatalog {
   const models = structuredAgentSessionOptionModels(
+    'codex',
     applyCodexConfiguredLaunchDefaults(
       listing.models,
       listing.configured

@@ -4,7 +4,10 @@
  * the moved distro changes, as the main-side rewrite (wsl-move-rewrite-scope.ts) maps it.
  */
 import { parseWorkspaceKey } from '../workspace/identity/workspace-scope'
-import { wslUncPathToLinux } from '../file-access/wsl-paths'
+import {
+  wslMappedDriveComparisonKeyToLinux,
+  wslMoveSourcePathToLinux
+} from './wsl-mapped-drive-paths'
 import { getRepoIdFromWorktreeId, rewriteWorktreeIdPath } from '../worktree/id'
 import type { WslMovePendingRendererRewrite } from './wsl-move-renderer-rewrite-types'
 
@@ -31,13 +34,17 @@ export function wslMoveRendererRewriteScope(
     | 'destinationHostId'
     | 'destinationEnvironmentId'
     | 'scopeRootPaths'
+    | 'mappedDrives'
   >
 ): WslMoveRendererRewriteScope {
   const repoIds = new Set(move.scopeRepoIds)
   const folderIds = new Set(move.scopeFolderWorkspaceIds)
   const distro = move.distro.toLowerCase()
+  const mappedDrives = move.mappedDrives ?? []
   const hostPath = (path: string): string | null => {
-    const linux = wslUncPathToLinux(path, distro)
+    // A folded `w:/…` key lost the case Linux needs; the moved roots restore it.
+    const key = wslMappedDriveComparisonKeyToLinux(path, distro, mappedDrives, move.scopeRootPaths)
+    const linux = key ?? wslMoveSourcePathToLinux(path, distro, mappedDrives)
     if (linux !== null) {
       return linux
     }

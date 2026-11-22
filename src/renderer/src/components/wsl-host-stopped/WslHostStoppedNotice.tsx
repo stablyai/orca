@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'

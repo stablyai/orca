@@ -23,6 +23,10 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
+import {
+  withWslHostChatRecovery,
+  type WslHostChatSettingsSource
+} from './agent-launch-wsl-host-recovery'
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 
@@ -168,7 +172,8 @@ export function decideAgentLaunchMode(args: {
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -190,12 +195,13 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  return downgradeAgentLaunchModeForHost(
-    receipt,
-    await readStructuredCreateSupport(runtime, worktreeId, agent),
-    vocabulary,
-    context ? { ...context, agent } : undefined
-  )
+  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  const settlement = context ? { ...context, agent } : undefined
+  try {
+    return downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
+  } catch (error) {
+    throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
+  }
 }
 
 /** Unknown host support must fall back to a terminal. */
@@ -282,7 +288,8 @@ function unavailableLaunchMode(
 ): AgentLaunchModeReceipt {
   if (requested && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      reason
     )
   }
   return downgraded(reason, vocabulary, requested)

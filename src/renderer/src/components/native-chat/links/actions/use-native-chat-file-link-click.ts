@@ -1,5 +1,5 @@
 import { useCallback, type RefObject } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import { openDetectedFilePath } from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'

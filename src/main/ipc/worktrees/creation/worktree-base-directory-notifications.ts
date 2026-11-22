@@ -17,15 +17,12 @@ import {
   cachedWorktreePathsForScope
 } from './worktree-head-identity-cached-paths'
 import { invalidateGitStatusReads } from '../../../git/source-control/git-read-cache-invalidation'
-import {
-  notifyWorktreeGitStatusMetadataChanged,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from '../worktree-remote'
 import {
   notifyGitStatusChangedForRemoteClients,
   notifyWatchedWorktreeCatalogChanged,
   notifyWatchedWorktreeHeadsMoved
-} from '../../watched-worktree-catalog-notification'
+} from '../listing/watched-worktree-catalog-notification'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow

@@ -4,7 +4,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { getHostSettingOverride } from '../../../../../shared/execution-host/host-setting-overrides'
-import { getTranslatedExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import type { Translate } from '@/i18n/use-translate'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'

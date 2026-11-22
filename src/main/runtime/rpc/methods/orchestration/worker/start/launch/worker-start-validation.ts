@@ -1,4 +1,8 @@
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  isTuiAgentEnabled,
+  TUI_AGENT_AUTO_PICK_ORDER
+} from '../../../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
@@ -144,7 +148,16 @@ function resolveWorkerStartAgent(args: {
       : args.runtime.resolveOrchestrationAgentLauncher?.(args.agent)
     : undefined
   if (!args.terminal && !agent) {
-    throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
+    const { disabledTuiAgents } = args.runtime.getClientSettings()
+    const agents = TUI_AGENT_AUTO_PICK_ORDER.filter((id) =>
+      isTuiAgentEnabled(id, disabledTuiAgents)
+    )
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      agents.length
+        ? `${args.missingAgentMessage} Pass --agent with one of: ${agents.join(', ')}.`
+        : args.missingAgentMessage
+    )
   }
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
