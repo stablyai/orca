@@ -317,15 +317,14 @@ class LivenessCheckpoint extends ControlledCheckpoint {
   }
 }
 
-it('keeps a late busy checkpoint worker, reports it once stuck, and replaces one that stays silent', async () => {
+it('keeps a late busy checkpoint worker, reports the hand-back, and replaces one that stays silent', async () => {
   const { filename, writer } = fixture()
   writer.pragma('wal_autocheckpoint = 1000')
   const workers: LivenessCheckpoint[] = []
   const outages: JournalCheckpointOutage[] = []
-  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const owner = new JournalCheckpointOwner(writer, filename, {
     timeoutMs: 20,
-    stuckMs: 100,
     restartBaseMs: 10,
     onOutage: (outage) => outages.push(outage),
     factory: (workerData) => {
@@ -341,13 +340,12 @@ it('keeps a late busy checkpoint worker, reports it once stuck, and replaces one
   workers[0]!.busy(false)
   workers[0]!.ready()
 
-  // Busy inside a checkpoint past the deadline: the writer takes checkpoints back, and the worker is
-  // kept and reported once stuck.
+  // Busy inside a checkpoint past the deadline: the writer takes checkpoints back as an outage, and
+  // the worker is kept.
   workers[0]!.busy(true)
   writer.prepare('INSERT INTO writes VALUES(1, zeroblob(1048576))').run()
   owner.afterCommit()
   await vi.waitFor(() => expect(autocheckpoint()).toBe(1000))
-  await vi.waitFor(() => expect(warning).toHaveBeenCalled())
   expect(workers.at(-1)).toBe(workers[0])
   expect(workers[0]!.terminated).toBe(false)
   workers[0]!.busy(false)
@@ -382,7 +380,7 @@ it('hands checkpoints to the writer at the first deadline once writes are parked
   cleanup.push(() => owner.close())
   worker.busy(false)
   worker.ready()
-  // Past the bulk ceiling while the worker sits in a slow checkpoint, short of the 60 s stuck limit.
+  // Past the bulk ceiling while the worker sits in a slow checkpoint.
   writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
   worker.busy(true)
   owner.afterCommit()

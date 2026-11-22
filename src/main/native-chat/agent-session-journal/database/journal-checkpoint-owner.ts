@@ -18,8 +18,6 @@ export class JournalCheckpointOwner {
   private nextRequest = 0
   private generation = 0
   private attachedGeneration = 0
-  /** Checkpoints are with the writer while a late worker is kept; the hard WAL ceiling still holds. */
-  private handedBack = false
   private checkAgain = false
   /** WAL frames since the last reset; the writer reports it beside each commit. */
   log = 0
@@ -41,7 +39,7 @@ export class JournalCheckpointOwner {
       {
         receive: (message) => this.receive(message),
         lose: (error, cause) => this.lose(error, cause),
-        late: (stuck) => this.late(stuck),
+        late: () => this.late(),
         drained: () => this.wake()
       },
       options
@@ -62,7 +60,7 @@ export class JournalCheckpointOwner {
     // The first worker takes checkpoints at once, so a WAL left by a crash isn't checkpointed on the
     // writer; a replacement takes them only once it answers.
     if (this.worker.running) {
-      this.attach()
+      this.attach(false)
     }
   }
 
@@ -74,9 +72,6 @@ export class JournalCheckpointOwner {
     while (this.gated(urgent)) {
       await new Promise<void>((resolve) => {
         this.waiters.park(urgent, resolve)
-        if (this.handedBack) {
-          this.worker.parkedAtCeiling()
-        }
         this.request()
         this.wake()
       })
@@ -90,17 +85,13 @@ export class JournalCheckpointOwner {
   /** Also called in finally after rollback or partially successful autocommit maintenance. */
   afterCommit(): void {
     if (this.attachOwed && !this.closing && !this.writer.isTransaction) {
-      this.attach()
+      this.attach(true)
       return
     }
     if (this.closing || this.writer.isTransaction) {
       return
     }
     if (this.stopped) {
-      if (this.handedBack) {
-        this.readFrames()
-        this.wake()
-      }
       this.worker.wanted()
       return
     }
@@ -137,13 +128,10 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent = false): boolean {
-    const { stopped, unknown, blocked, log, handedBack } = this
+    const { stopped, unknown, blocked, log } = this
     const { draining } = this.worker
     const truncating = !!this.truncate
-    return journalWalGated(
-      { stopped, unknown, blocked, log, truncating, handedBack, draining },
-      urgent
-    )
+    return journalWalGated({ stopped, unknown, blocked, log, truncating, draining }, urgent)
   }
 
   private wake(): void {
@@ -151,7 +139,7 @@ export class JournalCheckpointOwner {
   }
 
   /** Takes checkpoints from the writer; a write transaction defers it to its afterCommit. */
-  private attach(): void {
+  private attach(fresh: boolean): void {
     if (this.writer.isTransaction) {
       this.attachOwed = true
       return
@@ -163,12 +151,16 @@ export class JournalCheckpointOwner {
       this.writer.pragma('wal_autocheckpoint = 0')
       this.afterCommit()
       this.attachedGeneration = this.generation
+      // After an outage the WAL file can be oversized while few frames are left: measure it anyway.
+      if (fresh && this.pending === undefined) {
+        this.request(false, true)
+      }
     } catch (error) {
       this.lose(error, 'error')
     }
   }
 
-  private request(retry = false): void {
+  private request(retry = false, fresh = false): void {
     if (this.stopped || this.writer.isTransaction) {
       return
     }
@@ -180,7 +172,7 @@ export class JournalCheckpointOwner {
       this.checkAgain = true
       return
     }
-    if (!this.gated() && this.log - this.checkpointed < 1000) {
+    if (!fresh && !this.gated() && this.log - this.checkpointed < 1000) {
       return
     }
     this.pending = ++this.nextRequest
@@ -188,7 +180,7 @@ export class JournalCheckpointOwner {
       type: 'check',
       id: this.pending,
       generation: this.generation,
-      force: this.gated(),
+      force: fresh || this.gated(),
       ...(retry && { retryAfterMs: 100 })
     })
   }
@@ -209,7 +201,7 @@ export class JournalCheckpointOwner {
     if (this.stopped) {
       // A starting or late worker answered: it takes checkpoints with fresh state.
       this.worker.unwatch()
-      this.attach()
+      this.attach(true)
       if (this.stopped) {
         return
       }
@@ -288,26 +280,24 @@ export class JournalCheckpointOwner {
    * on it, the writer takes them back until it answers. A truncate it is inside keeps them, since SQLite
    * holds the write lock for that whole call; one it hasn't started is revoked.
    */
-  private late(stuck: boolean): boolean {
+  private late(): void {
     if (this.stopped) {
-      return false
+      return
     }
     if (this.truncate?.acknowledged) {
       if (this.worker.revokeTruncate()) {
-        return true
+        return
       }
-    } else if (!stuck && this.pending === undefined && !this.gated()) {
-      return false
+    } else if (this.pending === undefined && !this.gated()) {
+      return
     }
     this.release()
-    this.handedBack = true
+    this.worker.handedBack()
     this.wake()
-    return false
   }
 
   private reset(stopped: boolean): void {
     this.stopped = stopped
-    this.handedBack = false
     this.attachOwed = false
     this.truncate = undefined
     this.pending = undefined
@@ -329,6 +319,8 @@ export class JournalCheckpointOwner {
 
   private async finishClose(): Promise<void> {
     this.closing = true
+    // A truncate the worker is inside holds SQLite's write lock: parked writes wait for its exit.
+    const truncating = this.truncate?.acknowledged === true && this.worker.revokeTruncate()
     this.reset(true)
     // Timers stop first, so no restart or deadline lands while admission is handed back.
     const retired = this.worker.close()
@@ -337,8 +329,14 @@ export class JournalCheckpointOwner {
       // Hand admission back before termination: close can arrive while the drain is waiting.
       this.restore()
     } finally {
+      if (!truncating) {
+        this.wake()
+      }
+    }
+    try {
+      await retired
+    } finally {
       this.wake()
     }
-    await retired
   }
 }

@@ -4,8 +4,6 @@ export const JOURNAL_WAL_URGENT_FRAMES = 2 * JOURNAL_WAL_BACKPRESSURE_FRAMES
 
 export type JournalWalState = {
   stopped: boolean
-  /** The writer holds checkpoints only while a late worker is kept: the hard ceiling still applies. */
-  handedBack?: boolean
   /** A retired worker may still hold a truncate's write lock. */
   draining?: boolean
   unknown: boolean
@@ -20,7 +18,7 @@ export function journalWalGated(state: JournalWalState, urgent: boolean): boolea
     return true
   }
   if (state.stopped) {
-    return !!state.handedBack && state.log >= JOURNAL_WAL_URGENT_FRAMES
+    return false
   }
   if (state.unknown || state.truncating) {
     return true

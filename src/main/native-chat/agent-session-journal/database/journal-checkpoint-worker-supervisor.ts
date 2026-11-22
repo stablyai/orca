@@ -15,9 +15,6 @@ import {
 } from './journal-checkpoint-outages'
 
 const HEALTH_TIMEOUT_MS = 5000
-// A busy worker past this many ms without a reply is stuck in a native call: it is reported as an
-// outage and kept (terminating can't interrupt that call) until it answers, errors or exits.
-const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
 // Also how long a restarted worker must stay up before its backoff starts over.
 const RESTART_MAX_MS = 60_000
@@ -32,7 +29,6 @@ export type JournalCheckpointWorkerData = {
 export type JournalCheckpointWorkerOptions = {
   factory?: (workerData: JournalCheckpointWorkerData) => WorkerRequestTransport
   timeoutMs?: number
-  stuckMs?: number
   restartBaseMs?: number
   onOutage?: (outage: JournalCheckpointOutage) => void
   now?: () => number
@@ -42,11 +38,8 @@ export type JournalCheckpointWorkerOptions = {
 export type JournalCheckpointWorkerHost<Message> = {
   receive(message: Message): void
   lose(error: unknown, cause: JournalCheckpointOutage['cause']): void
-  /**
-   * The worker is late; the owner may take checkpoints back without retiring it. True while writes stay
-   * parked on a truncate the worker is inside.
-   */
-  late(stuck: boolean): boolean
+  /** The worker is late; the owner may take checkpoints back without retiring it. */
+  late(): void
   drained(): void
 }
 
@@ -57,8 +50,8 @@ type Attached = {
   spawnedAt: number
   /** The progress word when the deadline was armed. */
   seen: number
-  busySince: number | undefined
-  stuck: boolean
+  /** Deadlines in a row that found it busy; a busy worker is looked at less often, up to once a minute. */
+  busyDeadlines: number
   /** An idle worker silent for one deadline may just be descheduled; a second makes it dead. */
   silent: boolean
 }
@@ -142,8 +135,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       liveness: word,
       spawnedAt: this.now(),
       seen: 1,
-      busySince: undefined,
-      stuck: false,
+      busyDeadlines: 0,
       silent: false,
       exited: new Promise((resolve) => {
         worker.on('exit', () => {
@@ -157,9 +149,8 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.current = attached
     worker.on('message', (message: Message) => {
       if (this.current === attached && !this.closed) {
-        attached.busySince = undefined
+        attached.busyDeadlines = 0
         attached.silent = false
-        attached.stuck = false
         this.host.receive(message)
       }
     })
@@ -227,11 +218,11 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   }
 
   /** A write waits at the WAL ceiling for a late worker: reported now, not only once it is saved. */
-  parkedAtCeiling(): void {
-    this.openOutage(
-      new Error('journal writes wait at the WAL ceiling for a late checkpoint worker'),
-      'slow'
-    )
+  /** The writer took checkpoints from a late worker: an outage until it answers, without a warning. */
+  handedBack(): void {
+    if (!this.permanent) {
+      this.outages.begin('slow')
+    }
   }
 
   recovered(): void {
@@ -246,7 +237,6 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   close(): Promise<void> {
     if (!this.closed) {
       this.closed = true
-      this.draining = false
       this.unwatch()
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
@@ -322,28 +312,19 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       }
       attached.silent = true
       // Nothing moved for a deadline: a truncate it hasn't started is revoked, a late request handed back.
-      this.host.late(false)
+      this.host.late()
       this.watch(progress)
       return
     }
     attached.silent = false
-    if (busy) {
-      const now = this.now()
-      attached.busySince ??= now
-      if (!attached.stuck && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
-        attached.stuck = true
-        this.openOutage(new Error('checkpoint worker is stuck in a native call'), 'slow')
-      }
-      const holding = this.host.late(attached.stuck)
-      if (attached.stuck) {
-        // Only its reply, error or exit ends a stuck native call; inside a truncate, writes wait on the
-        // lock, so it is looked at once a minute to release them soon after the call returns.
-        if (holding) {
-          this.watch(progress, RESTART_MAX_MS)
-        }
-        return
-      }
+    if (!busy) {
+      attached.busyDeadlines = 0
+      this.watch(progress)
+      return
     }
-    this.watch(progress)
+    // Inside a native call it can't answer; it is kept and watched, less often the longer it stays busy.
+    this.host.late()
+    const timeout = this.options.timeoutMs ?? HEALTH_TIMEOUT_MS
+    this.watch(progress, Math.min(timeout * 2 ** attached.busyDeadlines++, RESTART_MAX_MS))
   }
 }

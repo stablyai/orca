@@ -211,10 +211,11 @@ async function drain(): Promise<void> {
   }
   if (close) {
     try {
+      // The checkpoint thread has exited first, so this last write can't meet a truncate's lock.
+      await (checkpointClosing ?? checkpoint?.close())
       if (!readOnly && db) {
         tryFoldJournalTextTails(db)
       }
-      await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined
       reply({ type: 'done', id: close.id })

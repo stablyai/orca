@@ -19,8 +19,11 @@ export class JournalCheckpointOutages {
     private readonly onOutage?: (outage: JournalCheckpointOutage) => void
   ) {}
 
+  /** A loss that follows a hand-back to the writer names the outage; it keeps its start. */
   begin(cause: JournalCheckpointOutage['cause']): void {
-    this.open ??= { since: this.now(), cause }
+    if (!this.open || (this.open.cause === 'slow' && cause !== 'slow')) {
+      this.open = { since: this.open?.since ?? this.now(), cause }
+    }
   }
 
   /** Warns once until a worker recovers. */
