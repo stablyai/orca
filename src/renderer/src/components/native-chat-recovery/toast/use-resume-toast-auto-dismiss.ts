@@ -21,9 +21,16 @@ export function useResumeToastAutoDismiss(transient: boolean, onExpire: () => vo
   const [detailsOpened, setDetailsOpened] = useState(false)
   const [focusWithin, setFocusWithin] = useState(false)
   const [pointerWithin, setPointerWithin] = useState(false)
+  // Each return to the window restarts the countdown, even when the visibility signal never flipped.
+  const [focusReturns, setFocusReturns] = useState(0)
   // Sonner's timer can stay paused when Chromium still reports a focused window as hidden.
   const visible = useSyncExternalStore(subscribeWindowParkVisibility, getWindowParkVisible)
   const autoDismiss = transient && visible && !detailsOpened && !focusWithin && !pointerWithin
+  useEffect(() => {
+    const onWindowFocus = (): void => setFocusReturns((count) => count + 1)
+    window.addEventListener('focus', onWindowFocus)
+    return () => window.removeEventListener('focus', onWindowFocus)
+  }, [])
   useEffect(() => {
     if (!autoDismiss) {
       return
@@ -34,7 +41,7 @@ export function useResumeToastAutoDismiss(transient: boolean, onExpire: () => vo
       }
     }, RESUMED_TOAST_MS)
     return () => window.clearTimeout(timer)
-  }, [autoDismiss, onExpire])
+  }, [autoDismiss, onExpire, focusReturns])
   return {
     onDetailsOpened: () => setDetailsOpened(true),
     interactionHandlers: {

@@ -89,6 +89,19 @@ describe('useResumeToastAutoDismiss', () => {
     expect(reportShown()).toBe(false)
   })
 
+  it('gets a fresh five seconds each time focus returns to the window', async () => {
+    act(showReport)
+    await advance(100)
+    await advance(4000)
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    await advance(4500)
+    expect(reportShown()).toBe(true)
+    await advance(1500)
+    expect(reportShown()).toBe(false)
+  })
+
   it('stays while hovered and gets a fresh five seconds after the pointer leaves', async () => {
     act(showReport)
     await advance(100)

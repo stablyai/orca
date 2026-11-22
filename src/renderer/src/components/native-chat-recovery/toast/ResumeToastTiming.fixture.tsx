@@ -95,7 +95,7 @@ export const restoredWithStaleVisibility = defineFixture({
     const report = () =>
       frame
         .querySelector('[role=status]')
-        ?.textContent?.includes('Resumed 20 chats after the restart.')
+        ?.textContent?.includes('Resumed 20 agents after the restart.')
     await wait(300)
     if (!report()) {
       throw new Error('Expected the successful restart report to appear')
