@@ -1,6 +1,6 @@
-import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { listStyleMetrics as metrics } from '../components/list/list-style-metrics'
 
 export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
   content: { flex: 1 },
@@ -17,70 +17,17 @@ export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   hostChipActive: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.groupedSurface,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
   hostChipText: { fontSize: typography.metaSize, color: colors.textSecondary, maxWidth: 160 },
   hostChipTextActive: { color: colors.textPrimary, fontWeight: '600' },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  statusText: { fontSize: typography.metaSize, color: colors.textSecondary },
-  diagnosisCard: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.surface,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  diagnosisHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs
-  },
-  diagnosisText: { fontSize: typography.metaSize, color: colors.textPrimary, lineHeight: 18 },
-  diagnosisNext: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginTop: spacing.xs
-  },
-  privacyHint: { marginTop: spacing.sm, fontSize: 11, lineHeight: 15, color: colors.textMuted },
-  sendButton: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  sendButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
+  group: { marginBottom: spacing.lg },
+  log: {
+    backgroundColor: colors.groupedSurface,
+    borderWidth: 0,
+    borderRadius: metrics.groupRadius
   },
   emptyText: { fontSize: typography.metaSize, color: colors.textMuted, lineHeight: 18 }
 }))

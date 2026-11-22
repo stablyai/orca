@@ -30,7 +30,11 @@ import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal
 import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { ConfirmModal } from '../../../src/components/sheets/ConfirmModal'
-import { LIST_ROW_PADDING, ListRow } from '../../../src/components/list/ListGroup'
+import {
+  GroupedListScreen,
+  LIST_ROW_PADDING,
+  ListRow
+} from '../../../src/components/list/ListGroup'
 import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
@@ -224,7 +228,12 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }]}>
+    <View
+      style={[
+        settingsScreenStyles.groupedContainer,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
       <ScreenHeader
         title={t('host.edit.title', 'Edit host')}
         onBack={leave}
@@ -266,56 +275,58 @@ export default function EditHostScreen() {
             ]}
             keyboardShouldPersistTaps="handled"
           >
-            <SettingsSection first footer={fieldsNote}>
-              <HostFieldRow
-                key="name"
-                label={t('host.edit.name', 'Name')}
-                value={name}
-                onChangeText={(value) => {
-                  setName(value)
-                  setSaveError(null)
-                }}
-                // An empty name falls back to the one the host reports, which the placeholder shows.
-                placeholder={
-                  host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
-                }
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="next"
-              />
-              <HostFieldRow
-                key="address"
-                label={t('host.edit.address', 'Address')}
-                value={address}
-                onChangeText={(value) => {
-                  setAddress(value)
-                  setSaveError(null)
-                }}
-                placeholder="192.168.1.10:6768"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                keyboardType="url"
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  if (canSave) {
-                    void handleSave()
+            <GroupedListScreen>
+              <SettingsSection first footer={fieldsNote}>
+                <HostFieldRow
+                  key="name"
+                  label={t('host.edit.name', 'Name')}
+                  value={name}
+                  onChangeText={(value) => {
+                    setName(value)
+                    setSaveError(null)
+                  }}
+                  // An empty name falls back to the one the host reports, which the placeholder shows.
+                  placeholder={
+                    host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
                   }
-                }}
-              />
-            </SettingsSection>
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                />
+                <HostFieldRow
+                  key="address"
+                  label={t('host.edit.address', 'Address')}
+                  value={address}
+                  onChangeText={(value) => {
+                    setAddress(value)
+                    setSaveError(null)
+                  }}
+                  placeholder="192.168.1.10:6768"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  keyboardType="url"
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    if (canSave) {
+                      void handleSave()
+                    }
+                  }}
+                />
+              </SettingsSection>
 
-            <HostOrcaVersionSection />
+              <HostOrcaVersionSection />
 
-            <SettingsSection>
-              <ListRow
-                key="remove"
-                title={t('host.edit.removeHost', 'Remove host')}
-                destructive
-                disabled={saving}
-                onPress={() => setConfirmRemove(true)}
-              />
-            </SettingsSection>
+              <SettingsSection>
+                <ListRow
+                  key="remove"
+                  title={t('host.edit.removeHost', 'Remove host')}
+                  destructive
+                  disabled={saving}
+                  onPress={() => setConfirmRemove(true)}
+                />
+              </SettingsSection>
+            </GroupedListScreen>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
@@ -359,10 +370,6 @@ function HostFieldRow({ label, ...inputProps }: HostFieldRowProps) {
 }
 
 const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
   flex: {
     flex: 1
   },

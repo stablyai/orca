@@ -1,32 +1,10 @@
-import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const troubleshootScreenStyles = themedStyleSheet(() => ({
   scroll: {
     flex: 1
-  },
-  diagnosticButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.control,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg
-  },
-  diagnosticButtonPressed: {
-    opacity: feedback.pressedOpacity
-  },
-  diagnosticButtonDisabled: {
-    opacity: feedback.disabledOpacity
-  },
-  diagnosticButtonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
   },
   checkDetail: {
     fontSize: typography.metaSize,
@@ -35,9 +13,7 @@ export const troubleshootScreenStyles = themedStyleSheet(() => ({
   checkDetailFail: {
     color: colors.statusRed
   },
-  // On a screen, not a sheet: one step above the page, as the other screen groups are.
   group: {
-    backgroundColor: colors.bgPanel,
     marginBottom: spacing.lg
   },
   // Steps start under the issue title, past its icon.
