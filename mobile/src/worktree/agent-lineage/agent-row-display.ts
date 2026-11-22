@@ -4,7 +4,7 @@ import { agentVerdictDisplayMark } from '../../../../src/shared/agent-status/lif
 import { resolveDecayedAgentRowState } from '../../../../src/shared/agent-status/presentation/agent-row-decay-state'
 import { getAgentRowPrimaryText } from '../../../../src/shared/agent-status/presentation/agent-row-primary-text'
 import type { AgentListStatus } from '../../../../src/shared/agent-status/presentation/agent-list-status'
-import { translate } from '../../i18n/mobile-i18n'
+import { translate, type Translate } from '../../i18n/mobile-i18n'
 
 // Desktop AgentStateDot's vocabulary.
 export type AgentDotState = AgentListStatus
@@ -107,27 +107,39 @@ export function agentRowTimeAt(
   return row.stateStartedAt
 }
 
-export function formatTimeAgo(ts: number, now: number): string {
+/** "5m", "2h", "3d" in the UI language; the usage widget builds its reset countdown from these too. */
+export function formatCompactUnit(
+  count: number,
+  unit: 'minute' | 'hour' | 'day',
+  t: Translate = translate
+): string {
+  if (unit === 'minute') {
+    return count === 1
+      ? t('worktree.agentRowDisplay.minutes_one', '{{count}}m', { count })
+      : t('worktree.agentRowDisplay.minutes_other', '{{count}}m', { count })
+  }
+  if (unit === 'hour') {
+    return count === 1
+      ? t('worktree.agentRowDisplay.hours_one', '{{count}}h', { count })
+      : t('worktree.agentRowDisplay.hours_other', '{{count}}h', { count })
+  }
+  return count === 1
+    ? t('worktree.agentRowDisplay.days_one', '{{count}}d', { count })
+    : t('worktree.agentRowDisplay.days_other', '{{count}}d', { count })
+}
+
+export function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return translate('worktree.agentRowDisplay.justNow', 'just now')
+    return t('worktree.agentRowDisplay.justNow', 'just now')
   }
   const minutes = Math.max(0, Math.floor(delta / 60_000))
   if (minutes < 60) {
-    const count = minutes
-    return count === 1
-      ? translate('worktree.agentRowDisplay.minutes_one', '{{count}}m', { count })
-      : translate('worktree.agentRowDisplay.minutes_other', '{{count}}m', { count })
+    return formatCompactUnit(minutes, 'minute', t)
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    const count = hours
-    return count === 1
-      ? translate('worktree.agentRowDisplay.hours_one', '{{count}}h', { count })
-      : translate('worktree.agentRowDisplay.hours_other', '{{count}}h', { count })
+    return formatCompactUnit(hours, 'hour', t)
   }
-  const count = Math.floor(hours / 24)
-  return count === 1
-    ? translate('worktree.agentRowDisplay.days_one', '{{count}}d', { count })
-    : translate('worktree.agentRowDisplay.days_other', '{{count}}d', { count })
+  return formatCompactUnit(Math.floor(hours / 24), 'day', t)
 }

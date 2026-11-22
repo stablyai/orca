@@ -1,5 +1,5 @@
 import { View, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -18,19 +18,20 @@ import './usage-selectors'
 export function usageBarFill(
   usedPercent: number | null,
   unavailable: boolean,
-  display: UsagePercentageDisplay
+  display: UsagePercentageDisplay,
+  palette: MobilePalette = colors
 ): { shown: number | null; color: string } {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : clampUsedPercent(usedPercent)
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const color =
     unavailable || used == null
-      ? colors.textMuted
+      ? palette.textMuted
       : used >= 80
-        ? colors.statusRed
+        ? palette.statusRed
         : used >= 60
-          ? colors.statusAmber
-          : colors.statusGreen
+          ? palette.statusAmber
+          : palette.statusGreen
   // Colour follows consumption either way, so a nearly empty remainder stays red (desktop parity).
   return {
     shown: usedPercent == null ? null : getDisplayedUsagePercentage(usedPercent, display),

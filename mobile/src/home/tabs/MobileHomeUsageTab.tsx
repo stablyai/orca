@@ -28,12 +28,12 @@ import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
-import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeStats } from '../MobileHomeStats'
 import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
+import { formatUsageUpdated } from './home-usage-updated-label'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
@@ -177,13 +177,7 @@ function HostUsage(props: {
             title={PROVIDER_TITLES[section.provider]}
             first={props.first && index === 0}
             aside={
-              section.updatedAt == null
-                ? undefined
-                : now - section.updatedAt < 60_000
-                  ? t('home.usage.updatedJustNow', 'Updated just now')
-                  : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
-                      time: formatTimeAgo(section.updatedAt, now)
-                    })
+              section.updatedAt == null ? undefined : formatUsageUpdated(section.updatedAt, now, t)
             }
           />
           <View style={homeListStyles.group}>
