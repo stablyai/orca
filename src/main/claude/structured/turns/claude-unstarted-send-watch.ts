@@ -103,8 +103,15 @@ export class ClaudeUnstartedSendWatch {
         (await session.connection
           .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
           .catch(() => false))
-      // Its own lifecycle frame may have settled it while the withdrawal was in flight.
-      if (!this.live() || !session.dispatchWaiters.includes(waiter)) {
+      if (withdrawn) {
+        // Before the guard: Claude's own `cancelled` frame often settles it ahead of this answer.
+        this.withdrawn.add(waiter.replayContentKey)
+      }
+      if (
+        !this.live() ||
+        !session.dispatchWaiters.includes(waiter) ||
+        waiter.commandLifecycle === 'started'
+      ) {
         continue
       }
       neverThrowingStructuredAgentSessionLogger(this.deps.logger ?? defaultLogger).warn(
@@ -117,7 +124,6 @@ export class ClaudeUnstartedSendWatch {
         }
       )
       if (withdrawn) {
-        this.withdrawn.add(waiter.replayContentKey)
         // Proven unrun: a queued card waits again and delivery resends it.
         rejectClaudeDispatchWaiters(
           session,

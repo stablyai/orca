@@ -20,12 +20,21 @@ afterEach(() => {
 
 async function idleChat(cancelConfirms: boolean) {
   const settlements: Settlement[] = []
+  let connection!: FakeConnection
   const claude = fakeClaude({
     replayUuid: null,
-    routes: { cancel_async_message: () => cancelConfirms }
+    routes: {
+      // As captured from 2.1.280: Claude reports the withdrawn send cancelled before it answers.
+      cancel_async_message: (params) => {
+        if (cancelConfirms) {
+          lifecycle(connection, String(params?.uuid), 'cancelled')
+        }
+        return cancelConfirms
+      }
+    }
   })
   const adapter = await acquired(claude, {}, [], (settlement) => settlements.push(settlement))
-  const connection = claude.connections[0]!
+  connection = claude.connections[0]!
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   state(connection, 'idle')
   return { adapter, connection, settlements }
