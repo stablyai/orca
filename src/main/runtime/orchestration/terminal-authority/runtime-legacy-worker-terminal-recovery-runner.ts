@@ -156,6 +156,11 @@ export async function runLegacyWorkerTerminalRecovery(
       continue
     }
     ports.rollback(candidate)
+    if (ports.holdForRestartResume?.(candidate)) {
+      // Its surface and resume record are retired as for any lost terminal; the conversation reopens elsewhere.
+      ports.notifyResolution(candidate, 'exited')
+      continue
+    }
     if (!ports.reconcileMissing(candidate)) {
       deferredDispatchIds.add(candidate.dispatchId)
       continue

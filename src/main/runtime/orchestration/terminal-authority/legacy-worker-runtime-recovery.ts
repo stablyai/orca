@@ -67,6 +67,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   /** Once per start, after restored terminal authority: tell coordinators about workers that
    *  stopped while Orca was down, or that this start did not continue. */
   reportWorkerStopsAcrossRestartOnce(): Promise<void> {
+    // Restored terminals are placed: workers held for a restart resume reopen now.
+    this.terminalWorkerRestartResume.settleStartup()
     if (this.restartWorkerStopReport === null) {
       // A restoration retried after a failure passes over what it continued and left, again.
       this.structuredAgentSessionLaunchContinuation.onRetried(
@@ -116,6 +118,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         reportDeps: this.workerTurnStopReportDeps,
         reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
         reportUnconfirmedStart: (dispatchId) => this.reportUnconfirmedWorkerStart(dispatchId),
+        resuming: (dispatchId) => this.terminalWorkerRestartResume.isHeld(dispatchId),
         chats: host
           ? {
               cutByLastRun,
@@ -164,6 +167,14 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
           }
         : { surface: 'chat' }
     observeUnconfirmedWorkerStart(db, dispatchId, start, this.workerTurnStopReportDeps)
+  }
+
+  protected holdLostWorkerForRestartResume(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): boolean {
+    return this.terminalWorkerRestartResume.holdForReopen(candidate.dispatchId, () => {
+      this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport)
+    })
   }
 
   async reconcileLegacyWorkerTerminals(

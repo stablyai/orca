@@ -25,6 +25,8 @@ export type RestartWorkerStopReportDeps = {
   reportRestingPane: (paneKey: string) => Promise<void>
   /** A start whose turn was never seen begin, or that the restart cut, reported once. */
   reportUnconfirmedStart: (dispatchId: string) => Promise<void>
+  /** A terminal worker resuming after the restart reports for itself once it runs again. */
+  resuming?: (dispatchId: string) => boolean
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
   chats: {
     /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
@@ -200,8 +202,8 @@ export async function reportWorkerStopsAcrossRestart(
       visit(dispatchId, () => deps.reportUnconfirmedStart(dispatchId))
       continue
     }
-    // A stop its coordinator asked for is no news.
-    if (isWorkerStartOrStopUndecided(state)) {
+    // A stop its coordinator asked for is no news, nor is a worker resuming after the restart.
+    if (isWorkerStartOrStopUndecided(state) || deps.resuming?.(dispatchId)) {
       continue
     }
     const sessionId = dispatch.assignee_orca_session_id

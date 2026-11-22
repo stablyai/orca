@@ -66,6 +66,8 @@ export type LegacyWorkerRecoveryPorts = {
   persist: (resolutions: readonly LegacyWorkerRecoveryResolution[]) => Promise<ReadonlySet<string>>
   rollback: (candidate: LegacyWorkerRecoveryCandidate) => void
   reconcileMissing: (candidate: LegacyWorkerRecoveryCandidate) => boolean
+  /** Keeps a lost worker's Dispatch for its one restart resume; false leaves today's outcome. */
+  holdForRestartResume?: (candidate: LegacyWorkerRecoveryCandidate) => boolean
   notifyResolution: (
     candidate: LegacyWorkerRecoveryCandidate,
     resolution: 'adopted' | 'exited'
