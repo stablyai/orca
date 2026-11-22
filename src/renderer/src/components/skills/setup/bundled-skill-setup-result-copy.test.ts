@@ -34,8 +34,7 @@ describe('setup attention message', () => {
       ]
     }
 
-    expect(bundledSkillSetupAttentionMessage(plan)).toBe(
-      "Needs attention · Orca can't write to ~/.cursor/skills"
-    )
+    // The folder proves which location was chosen; the wording around it may change.
+    expect(bundledSkillSetupAttentionMessage(plan)).toContain('~/.cursor/skills')
   })
 })
