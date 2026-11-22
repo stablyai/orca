@@ -83,6 +83,9 @@ export async function acquireCodexStructuredSession(input: {
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
+    localClock:
+      acquireInput.launch?.location.executionHostId === 'local' &&
+      acquireInput.launch.location.wslDistro === null,
     sessionId,
     acquisitionId: acquisitionGeneration,
     deps,

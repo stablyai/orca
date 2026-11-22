@@ -5,7 +5,7 @@ import { readAgentSessionFailureFact } from '../../../../shared/agent-session/fa
 // Codex writes the time in its own local zone, which is this process's zone on the same host.
 const NOW = new Date(2026, 10, 22, 14, 0).getTime()
 
-function resetOf(message: string, limits = new CodexUsageLimits(() => NOW)) {
+function resetOf(message: string, limits = new CodexUsageLimits(() => NOW, true)) {
   const fact = readAgentSessionFailureFact(
     limits.failure({ error: { message, codexErrorInfo: 'usageLimitExceeded' } })
   )
@@ -38,7 +38,7 @@ it('never guesses a reset the text does not name exactly', () => {
 })
 
 it("keeps the report's reset over the text's", () => {
-  const limits = new CodexUsageLimits(() => NOW)
+  const limits = new CodexUsageLimits(() => NOW, true)
   const reported = new Date(2026, 10, 22, 16, 0).getTime()
   limits.observe('notification:account/rateLimits/updated', {
     rateLimits: {
@@ -47,4 +47,9 @@ it("keeps the report's reset over the text's", () => {
     }
   })
   expect(resetOf('You’ve hit your usage limit. Try again at 3:05 PM.', limits)).toBe(reported)
+})
+
+it("ignores the text's time when Codex runs elsewhere (WSL, SSH, a remote host)", () => {
+  const elsewhere = new CodexUsageLimits(() => NOW, false)
+  expect(resetOf('You’ve hit your usage limit. Try again at 3:05 PM.', elsewhere)).toBeUndefined()
 })

@@ -3,6 +3,9 @@ import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-lim
 import type { LegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
+import { cancelsCut } from './structured-agent-session-usage-limit-disposition'
+import { usageLimitStopWithdrawal } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import { isOptionalUsageLimitContinueCancel } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 
 const HIT: LegacyAgentSessionAccountHome = { variable: 'CODEX_HOME', path: '/homes/spent' }
 const NEXT: LegacyAgentSessionAccountHome = { variable: 'CODEX_HOME', path: '/homes/next' }
@@ -66,4 +69,12 @@ it('leaves an unknown reset unknown when the chat never moved accounts', async (
   const cut = holds.withSwitchReset('chat', CUT)
   expect(cut.resetsAt).toBeUndefined()
   expect(holds.schedulable('chat', cut, SWITCHED + 20_000)).toBe(false)
+})
+
+it("a person's Stop withdraws the continue a switch gives an unknown-reset cut", async () => {
+  const holds = await attributed(NEXT, reading({ usedPercent: 10, resetsAt: SWITCHED + 3_600_000 }))
+  // What the Stop records, read from the journal's own cut (no switch time is kept there).
+  const withdrawal = usageLimitStopWithdrawal(CUT)
+  expect(isOptionalUsageLimitContinueCancel(withdrawal)).toBe(true)
+  expect(cancelsCut(withdrawal, holds.withSwitchReset('chat', CUT))).toBe(true)
 })

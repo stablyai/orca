@@ -67,7 +67,11 @@ function record(value: unknown): Record<string, unknown> | null {
 export class CodexUsageLimits {
   private snapshot: CodexAccountRateLimits = {}
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    /** Codex's text names a time in its own zone: read it only when that zone is this machine's. */
+    private readonly localClock = false
+  ) {}
 
   /** Consume usage reports without journaling them as generic frames. */
   observe(kind: string, payload: unknown): boolean {
@@ -159,7 +163,8 @@ export class CodexUsageLimits {
     const resetsAt =
       (resets.length > 0 && resets.length === spent.length
         ? usageLimitResetsAt(Math.max(...resets), this.now())
-        : undefined) ?? codexUsageLimitResetFromText(text, this.now())
+        : undefined) ??
+      (this.localClock ? codexUsageLimitResetFromText(text, this.now()) : undefined)
     return window || resetsAt
       ? { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
       : null
