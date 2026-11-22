@@ -5,7 +5,6 @@ import { withReceiptNext } from '../receipt-next-text'
 import { formatWorkerStart } from '../workers/worker-output'
 import {
   WORKER_FOLLOW_UP_VIEW,
-  isLiveWorkerStart,
   type WorkerFollowUpReceipt
 } from '../workers/worker-start-agent-view'
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
@@ -154,7 +153,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       }
       return
     }
-    if ('delivery' in result.result && !isLiveWorkerStart(result.result)) {
+    if ('delivery' in result.result && result.result.state !== 'ready') {
       process.exitCode = 1
     }
     const rendered =

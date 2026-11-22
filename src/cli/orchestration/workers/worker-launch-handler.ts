@@ -91,7 +91,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     }).catch(async (error: unknown) => {
       throw await explainOlderRuntimeRunRequired(client, error)
     })
-    if (!isLiveWorkerStart(result.result)) {
+    if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
     const keepOpenState =
