@@ -117,7 +117,16 @@ function usageFor(account: SampleAccount, weeklyOnly = false): ProviderRateLimit
     weekly: account.weekly === null ? null : weeklyWindow(account.weekly, account.resetsInDays),
     updatedAt: NOW - 60_000,
     error: account.weekly === null ? (account.error ?? 'Not signed in') : null,
-    status: account.weekly === null ? 'error' : 'ok'
+    status: account.weekly === null ? 'error' : 'ok',
+    usageMetadata: account.error
+      ? {
+          authFailureAccount: {
+            accountId: account.id,
+            runtime: account.wslDistro ? 'wsl' : 'host',
+            wslDistro: account.wslDistro ?? null
+          }
+        }
+      : undefined
   }
 }
 

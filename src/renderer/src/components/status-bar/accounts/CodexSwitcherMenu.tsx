@@ -19,6 +19,7 @@ import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { getCodexStatusRuntimeKey } from './status-bar-runtime-targets'
 
 export function CodexSwitcherMenu({
   codex,
@@ -64,8 +65,28 @@ export function CodexSwitcherMenu({
   } = useCodexSwitcherController(codex, ownerUsage)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
-  const activeSignInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
-  const canSignInLocally = !hasActiveRuntimeEnvironment && activeTarget?.id != null
+  const signInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
+  const authFailureAccount = codex.usageMetadata?.authFailureAccount
+  const authFailureMatchesActive =
+    authFailureAccount !== undefined &&
+    activeTarget !== undefined &&
+    authFailureAccount.accountId === activeTarget.id &&
+    getCodexStatusRuntimeKey(authFailureAccount) ===
+      getCodexStatusRuntimeKey(activeTarget.runtimeTarget)
+  // Settings can expose a new selection before usage clears the outgoing account's result.
+  const outdatedAuthFailure = signInRequired && authFailureAccount && !authFailureMatchesActive
+  const displayedCodex: ProviderRateLimits = outdatedAuthFailure
+    ? {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: 0,
+        status: 'fetching',
+        error: null
+      }
+    : codex
+  const activeSignInRequired = signInRequired && !outdatedAuthFailure
+  const canSignInLocally = !hasActiveRuntimeEnvironment && authFailureMatchesActive
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
       ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
@@ -76,7 +97,7 @@ export function CodexSwitcherMenu({
       !hasActiveRuntimeEnvironment &&
       target.id !== null &&
       (target.active
-        ? activeSignInRequired
+        ? activeSignInRequired && canSignInLocally
         : isUnavailableInactiveUsage(limits) ||
           (limits?.status === 'error' && isCodexUsageSignInRequired(limits)))
     return { target, inactiveUsage, showSignInAction }
@@ -126,7 +147,12 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active) {
-      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
+      return (
+        <AccountUsageGauge
+          limits={displayedCodex}
+          isFetching={displayedCodex.status === 'fetching'}
+        />
+      )
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -138,7 +164,7 @@ export function CodexSwitcherMenu({
 
   return (
     <ProviderDetailsMenu
-      provider={codex}
+      provider={displayedCodex}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(
@@ -160,7 +186,7 @@ export function CodexSwitcherMenu({
           : undefined
       }
       panelFooter={
-        !activeSignInRequired && resetCreditCount !== null ? (
+        !signInRequired && resetCreditCount !== null ? (
           <CodexResetCredits
             resetCreditCount={resetCreditCount}
             resetCreditExpiry={resetCreditExpiry}
@@ -211,7 +237,7 @@ export function CodexSwitcherMenu({
           : {})}
       />
       {/* Why: restarting sessions onto a login that needs signing in again would break them. */}
-      {open && !activeSignInRequired ? <CodexRestartStatusPrompt /> : null}
+      {open && !signInRequired ? <CodexRestartStatusPrompt /> : null}
       {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
       {rosterKnown ? (
         <AccountSwitchSection

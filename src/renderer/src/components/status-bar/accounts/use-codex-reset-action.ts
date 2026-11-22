@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   buildActiveCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -42,6 +43,7 @@ export function useCodexResetAction(
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const consumeLocalResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
+  const signInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
 
   // Why: scope the host's spend to the account and offer this menu shows.
   const hostScope =
@@ -58,6 +60,13 @@ export function useCodexResetAction(
       mountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (signInRequired) {
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }, [signInRequired])
 
   useEffect(() => {
     if (!menuOpen || !hostEnvironmentId) {
@@ -77,7 +86,7 @@ export function useCodexResetAction(
   }, [menuOpen, hostEnvironmentId])
 
   const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
-    if (isRedeemingReset) {
+    if (signInRequired || isRedeemingReset) {
       return
     }
     setIsRedeemingReset(true)
@@ -92,6 +101,9 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
+    if (signInRequired) {
+      return
+    }
     if (
       skipResetConfirm ||
       (hostEnvironmentId !== null && hasUnansweredHostCodexReset(hostEnvironmentId))
@@ -106,7 +118,7 @@ export function useCodexResetAction(
   }
 
   const handleConfirmReset = async (): Promise<void> => {
-    if (isRedeemingReset) {
+    if (signInRequired || isRedeemingReset) {
       return
     }
     if (skipFutureResetConfirm) {
@@ -135,7 +147,7 @@ export function useCodexResetAction(
     handleConfirmReset,
     handleResetMenuSelect,
     isRedeemingReset,
-    resetConfirmOpen,
+    resetConfirmOpen: resetConfirmOpen && !signInRequired,
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm

@@ -43,13 +43,11 @@ export function isCodexUsageSignInRequired(limits: {
   usageMetadata?: { failureKind?: string; unverifiableOwner?: boolean }
 }): boolean {
   const { error, usageMetadata } = limits
-  if (
-    limits.provider !== 'codex' ||
-    !error ||
-    usageMetadata?.failureKind ||
-    usageMetadata?.unverifiableOwner
-  ) {
+  if (limits.provider !== 'codex' || !error || usageMetadata?.unverifiableOwner) {
     return false
+  }
+  if (usageMetadata?.failureKind) {
+    return usageMetadata.failureKind === 'stale-token'
   }
   return (
     isCodexAuthError(error) ||
