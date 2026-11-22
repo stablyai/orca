@@ -11,6 +11,7 @@ import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/n
 import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
 export function botAgentLabel(agent: TerminalAgent): string {
@@ -24,6 +25,14 @@ const IS_WINDOWS = navigator.userAgent.includes('Windows')
 /** A bot's home, shown from the user's home rather than as a full path. */
 export function botFolderDisplay(folder: string, windows = IS_WINDOWS): string {
   return windows ? `%USERPROFILE%\\.orca\\bots\\${folder}` : `~/.orca/bots/${folder}`
+}
+
+/** A bot chat its agent refused, as native chat words it. Its host calls itself this computer, so
+ *  `hostName` names the runtime the bot runs on as this reader does. */
+export function botRefusalText(refusal: AgentSessionRefusalReference, hostName?: string): string {
+  return agentSessionWriteNoticeText(
+    agentSessionStartRefusalParts(agentSessionRefusalFailure(refusal), hostName ? { hostName } : {})
+  )
 }
 
 export function botErrorMessage(error: unknown): string {
@@ -43,20 +52,12 @@ export function botErrorMessage(error: unknown): string {
       'Its folder has unsaved editor changes. Save or close them, then delete again.'
     )
   }
-  // A chat the agent refused to open names why, as native chat words it.
   const refusal = readAgentSessionErrorRefusal(error)
   if (refusal) {
-    // The bot's host calls itself this computer; name it as this reader does.
-    const target = error instanceof RuntimeRpcCallError ? error.target : undefined
-    return agentSessionWriteNoticeText(
-      agentSessionStartRefusalParts(
-        agentSessionRefusalFailure(refusal),
-        target
-          ? {
-              hostName: structuredAgentSessionTargetPlace(useAppStore.getState(), target, translate)
-            }
-          : {}
-      )
+    const host = error instanceof RuntimeRpcCallError ? error.target : undefined
+    return botRefusalText(
+      refusal,
+      host && structuredAgentSessionTargetPlace(useAppStore.getState(), host, translate)
     )
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')
