@@ -6,11 +6,12 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
 import type { FakeFrame } from '../process/testing/acp-scripted-agent.test-support'
 import { FakeAcpChild } from '../process/testing/acp-scripted-connection.test-fixture'
-import { startExternalAcpLauncher } from './external-acp-launcher.mjs'
+import { runExternalAcpLauncher, startExternalAcpLauncher } from './external-acp-launcher.mjs'
 import { validateExternalAcpProfile } from './external-acp-profile.mjs'
 
 const roots: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -245,4 +246,32 @@ it('returns an invalid-request error for null and non-object frames', async () =
   input.write('null\n')
   expect(JSON.parse(await answer)).toMatchObject({ id: null, error: { code: -32600 } })
   input.destroy()
+})
+
+it('uses the managed native exit classification for a requested close', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-launcher-exit-code-'))
+  roots.push(root)
+  const input = new PassThrough()
+  const output = new PassThrough()
+  let native: FakeAcpChild
+  const previousExitCode = process.exitCode
+  try {
+    await runExternalAcpLauncher(profile(root), {
+      input,
+      output,
+      tokenOverride: 'fixture-token',
+      createConnection: (launch, connectionOptions) => {
+        native = new FakeAcpChild(launch, connectionOptions)
+        const notifyExit = native.onExit.bind(native)
+        native.onExit = (listener) => {
+          return notifyExit((exit) => listener(exit, true))
+        }
+        return native
+      }
+    })
+    native!.exit()
+    await vi.waitFor(() => expect(process.exitCode).toBe(0))
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })

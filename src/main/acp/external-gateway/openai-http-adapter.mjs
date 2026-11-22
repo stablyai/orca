@@ -172,6 +172,9 @@ async function* openAiEventStream(upstream) {
         const length = boundary.index + boundary[0].length
         const raw = pending.slice(0, length)
         pending = pending.slice(length)
+        if (Buffer.byteLength(raw) > MAX_SSE_EVENT_BYTES) {
+          throw new GatewayProtocolError(502, 'External ACP upstream event is too large')
+        }
         yield* genAiEventsFromOpenAiSse(raw)
       }
       if (Buffer.byteLength(pending) > MAX_SSE_EVENT_BYTES) {

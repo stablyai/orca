@@ -322,9 +322,16 @@ it('forwards an upstream text event before the generation completes', async () =
     const response = await post(bridge, 'pi')
     reader = response.body!.getReader()
     const fallback = setTimeout(releaseGeneration, 1000)
-    const first = await reader.read()
+    const decoder = new TextDecoder()
+    let firstText = ''
+    while (!/\r?\n\r?\n/.test(firstText)) {
+      const next = await reader.read()
+      if (next.done) {
+        throw new Error('first event did not complete')
+      }
+      firstText += decoder.decode(next.value, { stream: true })
+    }
     clearTimeout(fallback)
-    const firstText = new TextDecoder().decode(first.value)
     expect(firstText).toContain('first')
     expect(firstText).not.toContain('second')
     releaseGeneration()
@@ -432,4 +439,39 @@ it('fails malformed requests and reports cancellation without keeping retry work
   await expect(turn).rejects.toThrow()
   expect(fetchImpl).not.toHaveBeenCalled()
   await bridge.close()
+})
+
+it('bounds complete events without rejecting several small events in one chunk', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-external-http-complete-limit-'))
+  roots.push(root)
+  const event = `data: {"choices":[{"delta":{"content":"${'x'.repeat(1_048_577)}"}}]}\r\n\r\n`
+  const bridge = await startExternalGatewayBridge(fixture(root), {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async () => new Response(event, { status: 200 })
+  })
+  try {
+    const response = await post(bridge, 'pi')
+    expect(response.status).toBe(502)
+  } finally {
+    await bridge.close()
+  }
+
+  const batchRoot = await mkdtemp(join(tmpdir(), 'orca-external-http-event-batch-'))
+  roots.push(batchRoot)
+  const batch = Array.from(
+    { length: 9000 },
+    (_, index) =>
+      `data: {"choices":[{"delta":{"content":"${index === 8999 ? 'last-small-event' : 'x'.repeat(96)}"}}]}`
+  ).join('\r\n\r\n')
+  const batchBridge = await startExternalGatewayBridge(fixture(batchRoot), {
+    getToken: async () => 'fixture-token',
+    fetchImpl: async () => new Response(batch, { status: 200 })
+  })
+  try {
+    const response = await post(batchBridge, 'pi')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('last-small-event')
+  } finally {
+    await batchBridge.close()
+  }
 })

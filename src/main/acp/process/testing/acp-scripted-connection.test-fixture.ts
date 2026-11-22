@@ -20,7 +20,11 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   readonly spawned = Promise.resolve()
   stderr = ''
   processTreeUnproven = false
-  private exitListeners: ((exit: ProviderProcessExit) => void)[] = []
+  private exitListeners: ((
+    exit: ProviderProcessExit,
+    requested?: boolean,
+    lost?: Error
+  ) => void)[] = []
   private closing = false
   private lostWith: Error | undefined
   private exitedWith: ProviderProcessExit | null = null
@@ -49,7 +53,7 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   get exited() {
     return this.exitedWith !== null
   }
-  onExit(listener: (exit: ProviderProcessExit) => void): void {
+  onExit(listener: (exit: ProviderProcessExit, requested?: boolean, lost?: Error) => void): void {
     if (this.exitedWith) {
       listener(this.exitedWith)
     } else {

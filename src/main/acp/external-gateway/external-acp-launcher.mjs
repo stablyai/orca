@@ -258,11 +258,11 @@ export async function startExternalAcpLauncher(profile, options = {}) {
   return { close, connection, bridge }
 }
 
-export async function runExternalAcpLauncher(profile) {
-  const launcher = await startExternalAcpLauncher(profile)
-  launcher.connection.onExit((_error, { expected }) => {
+export async function runExternalAcpLauncher(profile, options = {}) {
+  const launcher = await startExternalAcpLauncher(profile, options)
+  launcher.connection.onExit((_exit, requested) => {
     void launcher.close().finally(() => {
-      process.exitCode = expected ? 0 : 1
+      process.exitCode = requested ? 0 : 1
     })
   })
   process.once('SIGINT', () => void launcher.close().finally(() => process.exit(0)))
