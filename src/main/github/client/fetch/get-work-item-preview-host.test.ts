@@ -69,6 +69,7 @@ vi.mock('../../repositories/github-api-repository-remote-probe', async (importOr
   )
 )
 import { getWorkItemByOwnerRepo } from './get-work-item'
+import { getGitHubIssueLinkMetadata } from '../../workspace-links/github-issue-link-metadata'
 
 import {
   installIndependentCheckFixtures,
@@ -81,7 +82,7 @@ const metadataRequests = vi.fn()
 const unexpectedChecks: string[][] = []
 afterEach(() => expect(unexpectedChecks).toEqual([]))
 
-describe('GitHub GraphQL rate-limit guard', () => {
+describe('GitHub work item link routing', () => {
   beforeEach(() => {
     resetGraphQLRateLimitGuardMocks(clientMocks)
     installIndependentCheckFixtures(clientMocks, metadataRequests, unexpectedChecks)
@@ -120,5 +121,44 @@ describe('GitHub GraphQL rate-limit guard', () => {
       getWorkItemByOwnerRepo('/repo-root', other, 7, 'pr', undefined, {}, { preview: true })
     ).resolves.toMatchObject({ title: 'Tools PR' })
     expect(metadataRequests.mock.calls[0]?.[0]).toEqual(['api', 'repos/other/tools/pulls/7'])
+  })
+
+  it('reads issue link metadata from the linked repository on the configured host', async () => {
+    const configured = { owner: 'acme', repo: 'widgets', host: 'github.example.test' }
+    const linked = { owner: 'other', repo: 'tools', host: 'github.example.test' }
+    const issue = {
+      number: 7,
+      title: 'Fix the tools installer',
+      url: 'https://github.example.test/other/tools/issues/7'
+    }
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [configured],
+      headRepo: configured
+    })
+    metadataRequests.mockImplementation(async (args: string[]) => {
+      if (args[1] !== 'graphql' || !args.includes('owner=other') || !args.includes('repo=tools')) {
+        throw new Error('Unrecognized issue repository')
+      }
+      return {
+        stdout: JSON.stringify({
+          data: { repository: { issue: args.includes('number=7') ? issue : null } }
+        })
+      }
+    })
+
+    await expect(
+      getGitHubIssueLinkMetadata('/repo-root', 7, undefined, {}, linked)
+    ).resolves.toEqual({
+      number: 7,
+      title: 'Fix the tools installer',
+      url: 'https://github.example.test/other/tools/issues/7'
+    })
+    expect(metadataRequests.mock.calls[0]?.[1]).toMatchObject({ host: 'github.example.test' })
+    await expect(
+      getGitHubIssueLinkMetadata('/repo-root', 8, undefined, {}, linked)
+    ).resolves.toBeNull()
+    await expect(
+      getGitHubIssueLinkMetadata('/repo-root', 7, undefined, {}, { ...linked, host: 'github.com' })
+    ).resolves.toBeNull()
   })
 })
