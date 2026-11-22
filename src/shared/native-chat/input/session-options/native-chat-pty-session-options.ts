@@ -4,14 +4,16 @@ import type { AgentType } from '../../../agent-status/contracts/agent-status-typ
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,
-  SessionOptionValue
+  SessionOptionValue,
+  SessionOptionValueSource
 } from '../native-chat-session-options'
 import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-commands'
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
-  setTrackedSessionOption
+  setTrackedSessionOption,
+  type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import {
   readNativeChatSessionOptionCache,
@@ -191,9 +193,8 @@ export function createNativeChatPtySessionOptions(
       }
     },
     reportSessionOptions: (values, forNewModel) => {
-      const switches = typeof values.model === 'string' && values.model !== record.model?.value
-      const reported = switches && forNewModel ? { ...forNewModel, ...values } : values
       const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
+      const reported = { ...carriedValues(record, values, forNewModel), ...values }
       const offered = offeredValues(activeModels(), targetModel, reported)
       if (applyNativeChatReportedSessionOptions(record, offered)) {
         publish()
@@ -207,6 +208,27 @@ export function createNativeChatPtySessionOptions(
     contextWindowTokens: (modelId) =>
       models.find((model) => model.id === modelId)?.contextWindowTokens ?? null
   }
+}
+
+/** Known values describe the reported model where the session switches to it, or where it already
+ *  runs it (a chip pick just confirmed) without a value the user chose. */
+function carriedValues(
+  record: NativeChatSessionOptionRecord,
+  values: Record<string, SessionOptionValue>,
+  forNewModel: Record<string, SessionOptionValue> | undefined
+): Record<string, SessionOptionValue> {
+  if (!forNewModel || typeof values.model !== 'string') {
+    return {}
+  }
+  const switches = values.model !== record.model?.value
+  const tracked = record.valuesByModel[values.model]
+  return Object.fromEntries(
+    Object.entries(forNewModel).filter(([id]) => switches || !isUserChoice(tracked?.[id]?.source))
+  )
+}
+
+function isUserChoice(source: SessionOptionValueSource | undefined): boolean {
+  return source === 'applied' || source === 'dispatched'
 }
 
 /** Keeps the reported values the receiving model offers; a hook can name a model the user already

@@ -76,3 +76,11 @@ it('checks a reported effort against the model the session switched to, not the 
   report('claude-haiku-5-5', 'max')
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
 })
+
+it('shows the live effort on a model picked in the chip once the session confirms it', async () => {
+  const { surface, report, shown } = chip('status-report-confirmed-pick')
+  report('claude-opus-5-5', 'max')
+  await surface.setOption('model', 'sonnet')
+  report('claude-sonnet-5-5', 'max')
+  expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
+})
