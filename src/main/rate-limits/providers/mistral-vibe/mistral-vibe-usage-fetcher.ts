@@ -9,6 +9,7 @@ import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import { classifyThrownUsageRequestError } from '../usage-request-failure-kind'
 import { parseUsageRetryAfterMs } from '../usage-retry-after'
 import {
+  isJsonRecord,
   readMistralVibeCredential,
   type MistralVibeCredential,
   type MistralVibeCredentialRead
@@ -47,18 +48,11 @@ function resetDescription(resetsAt: number | null): string | null {
 
 /** Map `/v1/billing/budget`; a missing or zero allowance means the plan has no Vibe Code budget. */
 export function mapMistralVibeBudgetResponse(data: unknown): ProviderRateLimits {
-  const budget =
-    typeof data === 'object' && data !== null
-      ? (data as { vibe_budget?: unknown }).vibe_budget
-      : undefined
-  if (typeof budget !== 'object' || budget === null) {
+  const budget = isJsonRecord(data) ? data.vibe_budget : undefined
+  if (!isJsonRecord(budget)) {
     return result('unavailable', 'No Mistral Vibe budget on this account')
   }
-  const {
-    usage_percentage: usage,
-    initial_budget: initial,
-    reset_at: resetAt
-  } = budget as Record<string, unknown>
+  const { usage_percentage: usage, initial_budget: initial, reset_at: resetAt } = budget
   if (typeof usage !== 'number' || !Number.isFinite(usage)) {
     return result('error', 'Mistral Vibe usage response was invalid', { failureKind: 'parse' })
   }

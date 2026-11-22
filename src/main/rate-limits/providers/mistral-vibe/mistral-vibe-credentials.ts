@@ -32,6 +32,10 @@ export type MistralVibeCredentialRead =
   | { status: 'error'; error: string }
   | { status: 'ok'; credential: MistralVibeCredential }
 
+export function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export function getMistralVibeHome(env: NodeJS.ProcessEnv = process.env): string {
   const override = env.VIBE_HOME?.trim()
   return override ? override : join(homedir(), '.vibe')
@@ -194,24 +198,22 @@ export function parseMistralVibeOidcTokens(raw: string): MistralVibeCredential |
   } catch {
     return null
   }
-  if (typeof value !== 'object' || value === null) {
+  if (!isJsonRecord(value)) {
     return null
   }
-  const record = value as Record<string, unknown>
-  const idToken = record.id_token
+  const idToken = value.id_token
   if (typeof idToken !== 'string' || idToken.length === 0) {
     return null
   }
-  const tenant = record.tenant as Record<string, unknown> | null | undefined
+  const tenant = value.tenant
   if (
-    typeof tenant !== 'object' ||
-    tenant === null ||
+    !isJsonRecord(tenant) ||
     typeof tenant.organization_id !== 'string' ||
     typeof tenant.workspace_id !== 'string'
   ) {
     return { kind: 'oidc-without-tenant' }
   }
-  const expiresAt = record.id_token_expires_at
+  const expiresAt = value.id_token_expires_at
   return {
     kind: 'oidc',
     session: {

@@ -29,6 +29,7 @@ function credentialSourceLabel(source: string | undefined, t: Translate): string
       return t('accounts.mistralVibe.source.keyring', 'API key saved by Vibe in the system keyring')
     case 'oidc':
       return t('accounts.mistralVibe.source.oidc', 'Vibe browser sign-in')
+    case undefined:
     default:
       return null
   }
@@ -41,13 +42,9 @@ export function MistralVibeAccountsSection(): React.JSX.Element {
   const usage = useAppStore((s) => s.rateLimits.mistralVibe)
   const [refreshing, setRefreshing] = useState(false)
 
-  const handleRefreshUsage = async (): Promise<void> => {
+  const handleRefreshUsage = (): void => {
     setRefreshing(true)
-    try {
-      await refreshRateLimits()
-    } finally {
-      setRefreshing(false)
-    }
+    void refreshRateLimits().finally(() => setRefreshing(false))
   }
 
   const failureKind = usage?.usageMetadata?.failureKind
@@ -123,8 +120,8 @@ export function MistralVibeAccountsSection(): React.JSX.Element {
             variant="outline"
             size="xs"
             disabled={refreshing}
-            onClick={() => void handleRefreshUsage()}
-            className="shrink-0 gap-1"
+            onClick={handleRefreshUsage}
+            className="shrink-0"
           >
             {refreshing ? (
               <Loader2 className="size-3 animate-spin" />
@@ -146,9 +143,7 @@ export function MistralVibeAccountsSection(): React.JSX.Element {
             className="py-3"
           >
             <div className="flex items-center gap-2 text-xs">
-              <Badge variant="secondary" className="tabular-nums">
-                {Math.round(monthly.usedPercent)}%
-              </Badge>
+              <Badge variant="secondary">{Math.round(monthly.usedPercent)}%</Badge>
               {monthly.resetDescription ? (
                 <span className="text-muted-foreground">
                   {t('accounts.mistralVibe.resets', 'Resets {{when}}', {
