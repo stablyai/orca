@@ -23,7 +23,12 @@ export type CodexSharedLeaseHost = {
   readonly pid: number | undefined
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
-  claim: (threadId: string, lease: CodexSharedServerLease, opened?: boolean) => void
+  claim: (
+    threadId: string,
+    lease: CodexSharedServerLease,
+    opened?: boolean,
+    history?: boolean
+  ) => void
   /** This chat's queue grew or shrank by these bytes, or it may have started waiting (0). */
   backlog: (lease: CodexSharedServerLease, deltaBytes: number) => void
   /** Answers a server request no chat will take, so Codex doesn't wait on it. */
@@ -53,6 +58,9 @@ export type CodexSharedLeaseHost = {
 /** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
 export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly threads = new Set<string>()
+  /** Threads this server has loaded (opened, or sent a frame for); a helper named only in history
+   *  never ran here, so a close sends it nothing. */
+  readonly liveThreads = new Set<string>()
   /** Tags every command this chat's threads run (CODEX_SHARED_LEASE_ENV). */
   readonly id = randomUUID()
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
@@ -128,7 +136,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     return sendCodexLeaseRequest(this, method, params, options)
   }
 
-  claim = (threadId: string, opened?: boolean): void => this.host.claim(threadId, this, opened)
+  claim = (threadId: string, opened?: boolean, history?: boolean): void =>
+    this.host.claim(threadId, this, opened, history)
   heldByOther = (threadId: string): boolean => this.host.router.heldByOther(threadId, this)
   unclaim = (threadId: string): void => this.host.router.unclaim(threadId, this)
 

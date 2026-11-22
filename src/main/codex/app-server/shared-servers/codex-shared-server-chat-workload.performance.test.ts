@@ -44,4 +44,22 @@ describe('shared Codex chat close without the launcher (Linux)', () => {
     expect(await environReadsForOneClose(200)).toBe(200 + 1)
     expect(await environReadsForOneClose(2_000)).toBe(2_000 + 1)
   })
+
+  it('shares one environment reading across chats closing at once', async () => {
+    proc.pids = Array.from({ length: 200 }, (_, index) => BASE_PID + index + 1)
+    proc.environReads = 0
+    vi.useFakeTimers()
+    vi.spyOn(process, 'kill').mockReturnValue(true)
+    const closes = Array.from({ length: 10 }, (_, index) =>
+      stopCodexLeaseTaggedProcesses(
+        SERVER_PID,
+        index === 0 ? 'lease-a' : `lease-${index}`,
+        undefined,
+        'linux'
+      )
+    )
+    await vi.runAllTimersAsync()
+    await Promise.all(closes)
+    expect(proc.environReads).toBe(200 + 1)
+  })
 })

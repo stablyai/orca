@@ -1,5 +1,9 @@
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import {
+  forEachWithConcurrency,
+  mapSettledWithConcurrency
+} from '../../../../shared/concurrency/map-with-concurrency'
+import {
   codexLeaseProcessesStillTagged,
   scanCodexLeaseProcesses
 } from './codex-shared-lease-process-scan'
@@ -12,6 +16,8 @@ import {
 import { CODEX_SHARED_LEASE_ENV } from './codex-shared-server-lease-requests'
 
 const SWEEP_SETTLE_MS = 1_000
+/** Requests one close keeps in flight on the shared pipe. */
+const CLOSE_RPC_CONCURRENCY = 8
 
 export type CodexSharedServerProcessSweep = (
   serverPid: number,
@@ -50,8 +56,8 @@ export async function unsubscribeCodexThreads(
   threads: readonly string[],
   timeoutMs: number
 ): Promise<boolean> {
-  const results = await Promise.allSettled(
-    threads.map((threadId) => rpc.request('thread/unsubscribe', { threadId }, { timeoutMs }))
+  const results = await mapSettledWithConcurrency(threads, CLOSE_RPC_CONCURRENCY, (threadId) =>
+    rpc.request('thread/unsubscribe', { threadId }, { timeoutMs })
   )
   return results.every(
     (result) => result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
@@ -67,31 +73,25 @@ async function stopListedTerminals(input: {
 }): Promise<boolean | null> {
   try {
     // A thread whose listing failed doesn't stop the others' known terminals from being stopped.
-    const settled = await Promise.allSettled(
-      input.threads.map((threadId) =>
-        listCodexThreadBackgroundTerminals(input.rpc, threadId, input.timeoutMs)
-      )
+    const settled = await mapSettledWithConcurrency(
+      input.threads,
+      CLOSE_RPC_CONCURRENCY,
+      (threadId) => listCodexThreadBackgroundTerminals(input.rpc, threadId, input.timeoutMs)
     )
     const unchecked = settled.some((result) => result.status === 'rejected')
     const listed = settled.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : []
     )
     if (listed.some((terminals) => terminals === null)) {
-      await Promise.all(
-        input.threads.map((threadId) =>
-          input.rpc
-            .request(
-              'thread/backgroundTerminals/clean',
-              { threadId },
-              { timeoutMs: input.timeoutMs }
-            )
-            .catch((error: unknown) => {
-              if (!isCodexAppServerUnsupportedError(error)) {
-                throw error
-              }
-            })
-        )
-      )
+      await forEachWithConcurrency(input.threads, CLOSE_RPC_CONCURRENCY, async (threadId) => {
+        await input.rpc
+          .request('thread/backgroundTerminals/clean', { threadId }, { timeoutMs: input.timeoutMs })
+          .catch((error: unknown) => {
+            if (!isCodexAppServerUnsupportedError(error)) {
+              throw error
+            }
+          })
+      })
       return null
     }
     const terminals = listed.flatMap((terminals) => terminals ?? [])

@@ -73,13 +73,16 @@ export class CodexSharedServerRouter {
 
   /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
    *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
-  claim(threadId: string, lease: CodexSharedServerLease, opened = false): void {
+  claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
       previous.threads.delete(threadId)
     }
     this.owners.set(threadId, lease)
     lease.threads.add(threadId)
+    if (!history) {
+      lease.liveThreads.add(threadId)
+    }
     // A chat that let this thread go no longer stops its turns: they are the new owner's now.
     for (const other of this.leases()) {
       if (other !== lease) {
@@ -88,6 +91,7 @@ export class CodexSharedServerRouter {
     }
     this.retired.delete(threadId)
     for (const frame of this.unrouted.take(threadId)) {
+      lease.liveThreads.add(threadId)
       // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.
       if (frame.kind === 'notification') {
         this.discover(frame.method, frame.params)
@@ -184,6 +188,7 @@ export class CodexSharedServerRouter {
     }
     const owner = this.owners.get(threadId)
     if (owner) {
+      owner.liveThreads.add(threadId)
       owner.deliver(frame)
       return
     }

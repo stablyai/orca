@@ -120,7 +120,15 @@ export function fakeCodex(
           handlers.onNotification?.('thread/started', { thread: { id } })
           result = { thread: { id } }
         } else if (method === 'thread/resume') {
-          result = { thread: { id: params?.threadId } }
+          // History naming helpers that ran on an earlier server.
+          const helpers = typeof params?.historyHelpers === 'number' ? params.historyHelpers : 0
+          const items = Array.from({ length: helpers }, (_, index) => ({
+            type: 'collabAgentToolCall',
+            id: `spawn-${index}`,
+            tool: 'spawnAgent',
+            receiverThreadIds: [`helper-${index}`]
+          }))
+          result = { thread: { id: params?.threadId, ...(helpers ? { turns: [{ items }] } : {}) } }
         } else if (method === 'turn/interrupt' && interrupt !== 'ignored') {
           const end = () =>
             handlers.onNotification?.('turn/completed', {

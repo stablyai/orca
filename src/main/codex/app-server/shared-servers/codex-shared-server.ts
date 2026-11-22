@@ -105,8 +105,13 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.physical
   }
 
-  claim(threadId: string, lease: CodexSharedServerLease, opened?: boolean): void {
-    this.router.claim(threadId, lease, opened)
+  claim(
+    threadId: string,
+    lease: CodexSharedServerLease,
+    opened?: boolean,
+    history?: boolean
+  ): void {
+    this.router.claim(threadId, lease, opened, history)
   }
 
   backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
@@ -221,7 +226,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
     // Only now do the chat's threads stop routing to it; their late frames are refused.
     this.leases.delete(lease)
-    const owned = this.router.release(lease)
+    // A helper named only in history never loaded here: nothing to list, stop or unsubscribe.
+    const owned = this.router.release(lease).filter((threadId) => lease.liveThreads.has(threadId))
     // Threads that opened after the chat left are let go here, and their commands stopped below.
     const abandonedGone = (await Promise.all(lease.abandoning)).every(Boolean)
     // Turns ending doesn't end the commands they started; the chat's own are stopped alone. Each

@@ -103,6 +103,25 @@ const readOwnLinuxProcesses = coalescedReading(async () => {
   return processes
 })
 
+/** Concurrent closes share one process reading, so they share its tag reading too: one environment
+ *  read per process however many chats close at once. */
+const allTagReadings = new WeakMap<
+  ReadonlyMap<number, LinuxProcess>,
+  Promise<Map<number, string | null | typeof UNREADABLE_TAG>>
+>()
+
+function readAllTags(
+  processes: ReadonlyMap<number, LinuxProcess>,
+  envName: string
+): Promise<Map<number, string | null | typeof UNREADABLE_TAG>> {
+  let reading = allTagReadings.get(processes)
+  if (!reading) {
+    reading = readLinuxTags([...processes.keys()], envName)
+    allTagReadings.set(processes, reading)
+  }
+  return reading
+}
+
 async function readLinuxTags(
   pids: readonly number[],
   envName: string
@@ -149,7 +168,7 @@ async function scanLinux(
   if (launcher === null) {
     // Tagged processes can still be found and stopped, but a command that cleared its environment
     // and was orphaned to init is indistinguishable from any other process.
-    const tags = await readLinuxTags([...processes.keys()], envName)
+    const tags = await readAllTags(processes, envName)
     const unreadable = [...tags].flatMap(([pid, tag]) => (tag === UNREADABLE_TAG ? [pid] : []))
     const entries = [...tags].flatMap(([pid, tag]) =>
       tag === UNREADABLE_TAG ? [] : [[pid, tag] as const]

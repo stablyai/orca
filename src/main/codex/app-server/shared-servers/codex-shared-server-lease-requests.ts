@@ -30,7 +30,7 @@ export type CodexLeaseRequestOwner = {
   /** Threads a resume of this chat's has reopened; a failed resume never undoes one of these. */
   readonly resumedThreads: Set<string>
   /** `opened`: by the reply to a thread open, which may find the thread's early frames dropped. */
-  claim: (threadId: string, opened?: boolean) => void
+  claim: (threadId: string, opened?: boolean, history?: boolean) => void
   heldByOther: (threadId: string) => boolean
   /** Drops this chat's own claim on a thread it failed to open. */
   unclaim: (threadId: string) => void
@@ -113,7 +113,7 @@ export async function sendCodexLeaseRequest(
         }
         if (CARRIES_HISTORY.has(method) && owner.open && !callerGone) {
           for (const child of codexChildThreadIdsInHistory(result)) {
-            owner.claim(child)
+            owner.claim(child, false, true)
           }
         }
         const turnId = turnThreadId ? codexTurnId(result) : null
