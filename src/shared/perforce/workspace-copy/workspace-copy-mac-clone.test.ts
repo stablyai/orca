@@ -1,9 +1,27 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { planMacClone } from './workspace-copy-mac-clone'
+
+const listing = vi.hoisted(() => {
+  const hook: { after?: (dir: string) => Promise<void> } = {}
+  return hook
+})
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readdir: async (dir: string, options: { withFileTypes: true }) => {
+      const entries = await actual.readdir(dir, options)
+      await listing.after?.(dir)
+      return entries
+    }
+  }
+})
 
 let base: string
 
@@ -12,6 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  listing.after = undefined
   await rm(base, { recursive: true, force: true })
 })
 
@@ -52,5 +71,27 @@ describe('planMacClone', () => {
       }
     ])
     expect(existsSync(join(destination, 'Game', 'Library'))).toBe(true)
+  })
+
+  it('refuses a listed folder that is swapped for a link before it is walked', async () => {
+    const source = join(base, 'ws')
+    const game = join(source, 'Game')
+    const outside = join(base, 'outside')
+    await mkdir(join(game, 'Temp'), { recursive: true })
+    await mkdir(outside)
+    await writeFile(join(outside, 'secret'), 'not part of the workspace')
+    listing.after = async (dir) => {
+      if (dir === source) {
+        await rm(game, { recursive: true })
+        await symlink(outside, game, 'junction')
+      }
+    }
+
+    await expect(
+      planMacClone(source, join(base, 'ws.wt', 'one'), {
+        folders: [join(game, 'Temp')],
+        files: []
+      })
+    ).rejects.toThrow('stopped being a folder')
   })
 })

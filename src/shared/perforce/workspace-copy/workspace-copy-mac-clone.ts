@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat, utimes } from 'node:fs/promises'
+import { lstat, mkdir, readdir, stat, utimes } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { TreeCopyResult, TreeExclusions } from './workspace-copy-types'
@@ -54,6 +54,10 @@ export async function planMacClone(
   const pending: [string, string][] = [[source, destination]]
   for (let next = pending.shift(); next; next = pending.shift()) {
     const [from, to] = next
+    // Why: readdir follows a link, so a folder swapped for one after its listing would pull in an outside tree.
+    if (from !== source && !(await lstat(from)).isDirectory()) {
+      throw new Error(`${from} stopped being a folder while the copy was planned`)
+    }
     await mkdir(to, { recursive: true })
     plan.folders.push(next)
     const sources: string[] = []
