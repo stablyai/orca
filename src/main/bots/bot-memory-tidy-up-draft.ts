@@ -160,12 +160,6 @@ export function checkTidyUpDraft(
     added: diff.added,
     removed: diff.removed.filter(({ line }) => !undated.has(keyOf(line) ?? ''))
   }
-  // Past the cap, any shrink helps: the next night carries on from there. Measured on the change,
-  // which keeps undated lines the draft left out.
-  const lines = countBotMemoryLines(applyBotMemoryChange(before, change))
-  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
-    return { refused: TIDY_UP_FAILURES.tooLong }
-  }
   const filed = keysOf(filedLines)
   const archived = change.removed.filter(({ line }) => !filed.has(keyOf(line) ?? ''))
   const facts = parseBotMemoryFacts(before).length
@@ -181,7 +175,14 @@ export function checkTidyUpDraft(
       return key === null ? [] : [[key, line] as const]
     })
   )
-  return { plan: { change, kept, topics, filed, replaced: keysOf(draft.replaced) } }
+  const plan = { change, kept, topics, filed, replaced: keysOf(draft.replaced) }
+  // Past the cap, any shrink helps: the next night carries on from there. Measured on what the
+  // writer would make of it, which keeps undated lines and merges repeated facts.
+  const lines = countBotMemoryLines(applyBotMemoryChange(before, writerChange(plan, before)))
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
+    return { refused: TIDY_UP_FAILURES.tooLong }
+  }
+  return { plan }
 }
 
 /**
@@ -197,6 +198,17 @@ export function tidyUpChangeFor(plan: TidyUpPlan, file: string): BotMemoryChange
   if (plan.groups && !liveGroupsMatch(plan.groups, file)) {
     throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
   }
+  const change = writerChange(plan, file)
+  const lines = countBotMemoryLines(applyBotMemoryChange(file, change))
+  // A change that shortens a file already past the cap still helps.
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines > countBotMemoryLines(file)) {
+    throw new TidyUpRefused(TIDY_UP_FAILURES.tooLong)
+  }
+  return change
+}
+
+/** The plan's change on `file`: a fact the file states more than once is merged into the draft's line. */
+function writerChange(plan: TidyUpPlan, file: string): BotMemoryChange {
   const removing = keysOf(plan.change.removed.map(({ line }) => line))
   const seen = new Map<string, number>()
   const anchors = new Map<string, string | null>()
@@ -218,13 +230,7 @@ export function tidyUpChangeFor(plan: TidyUpPlan, file: string): BotMemoryChange
       ? [{ line, after: anchors.get(key) ?? null }]
       : []
   })
-  const change = mergeBotMemoryChanges(plan.change, { added: repeated, removed: repeated })
-  const lines = countBotMemoryLines(applyBotMemoryChange(file, change))
-  // A change that shortens a file already past the cap still helps.
-  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines > countBotMemoryLines(file)) {
-    throw new TidyUpRefused(TIDY_UP_FAILURES.tooLong)
-  }
-  return change
+  return mergeBotMemoryChanges(plan.change, { added: repeated, removed: repeated })
 }
 
 /** Each memory/ file the change writes, by name, with the lines it gets: a line MEMORY.md loses

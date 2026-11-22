@@ -67,4 +67,11 @@ describe('nightly memory tidy-up over the line cap', () => {
     expect(outcome).toEqual({ error: TIDY_UP_FAILURES.tooLong, alerted: false })
     expect(file).toBe(undated)
   })
+
+  it('applies a draft that keeps each repeated fact once', async () => {
+    const twice = memoryOf([...range(0, 140), ...range(0, 140)])
+    const { outcome, file } = await tidy(twice, memoryOf(range(0, 140)))
+    expect(outcome).not.toHaveProperty('error')
+    expect(file.trimEnd().split('\n')).toHaveLength(140)
+  })
 })
