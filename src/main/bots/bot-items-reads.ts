@@ -1,6 +1,7 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
 import type { BotItemLinkKind, BotItemStatus } from '../../shared/bots/bot-items'
+import type { BotChatItemFacts } from '../../shared/bots/bot-chat-auto-close'
 import {
   eventRecordOf,
   integer,
@@ -85,6 +86,27 @@ export class BotItemsReads extends BotItemsTables {
       )
       .map(itemRecordOf)
     return { items, counts }
+  }
+
+  /** Each of the bot's chats that drove an item: how many, how many not done or canceled (a status a
+   *  newer Orca adds counts as open), and the latest close. */
+  chatItemFacts(botId: string): Record<string, BotChatItemFacts> {
+    const facts: Record<string, BotChatItemFacts> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT chat_id, COUNT(*) AS total,
+           SUM(CASE WHEN status IN ('done', 'canceled') THEN 0 ELSE 1 END) AS open,
+           MAX(closed_at) AS last_closed
+         FROM items WHERE owner_bot_id = ? GROUP BY chat_id`
+      )
+      .all(botId)) {
+      facts[text(row, 'chat_id')] = {
+        total: Number(row.total ?? 0),
+        open: Number(row.open ?? 0),
+        lastClosedAt: optionalInteger(row, 'last_closed')
+      }
+    }
+    return facts
   }
 
   /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */

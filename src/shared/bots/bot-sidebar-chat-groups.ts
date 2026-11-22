@@ -2,9 +2,19 @@ import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './
 
 export type BotSidebarChatGroup<T> = { chat: BotChatTreeChat; workspaces: T[] }
 
-/** The chats the sidebar lists: only those with an open tab; an older host doesn't say, so its open chats all list. */
-export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
-  return chats.filter((chat) => !chat.closed && chat.tab !== false)
+/** The chats the sidebar lists: only those with an open tab; an older host doesn't say, so its open chats all list.
+ *  With `keepAutoClosedAfter`, a chat Orca closed since then stays listed, so it can be reopened there. */
+export function botSidebarListedChats(
+  chats: readonly BotChatTreeChat[],
+  keepAutoClosedAfter?: number
+): BotChatTreeChat[] {
+  return chats.filter(
+    (chat) =>
+      (!chat.closed && chat.tab !== false) ||
+      (keepAutoClosedAfter !== undefined &&
+        chat.closed &&
+        (chat.autoClosedAt ?? 0) > keepAutoClosedAfter)
+  )
 }
 
 /** The sidebar's chats (those with an open tab) in the panel's order, each with the bot workspaces its
@@ -12,9 +22,10 @@ export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotCha
 export function groupBotWorkspacesByChat<T extends { id: string }>(
   chats: readonly BotChatTreeChat[],
   workspaces: readonly T[],
-  workspaceChats: Readonly<Record<string, string>>
+  workspaceChats: Readonly<Record<string, string>>,
+  keepAutoClosedAfter?: number
 ): BotSidebarChatGroup<T>[] {
-  const open = botSidebarListedChats(chats)
+  const open = botSidebarListedChats(chats, keepAutoClosedAfter)
   const listed = [
     ...open.filter((chat) => chat.origin === 'home'),
     ...open.filter((chat) => chat.origin !== 'home')

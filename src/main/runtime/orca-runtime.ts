@@ -72,7 +72,7 @@ import {
   type PeerServerAnswerStatus
 } from './orchestration/federation/peer-mail/peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
-import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
+import { installBotChatRuntime } from '../bots/bot-chat-auto-close-runtime'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -215,7 +215,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
-    this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
+    installBotChatRuntime(this, () => this.store?.listAutomations?.() ?? [])
     syncPRAutoRefreshCadence(this.store)
   }
 

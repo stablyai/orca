@@ -77,8 +77,15 @@ export function buildBotSidebarTree<T extends { id: string }>(input: {
   /** "Show more" steps taken per chat id. */
   stepsOf: (chatId: string) => number
   activeLineId: string | null
+  /** A chat Orca closed since then stays listed, last, so it can be reopened from its row. */
+  keepAutoClosedAfter?: number
 }): BotSidebarTree<T> {
-  const groups = groupBotWorkspacesByChat(input.chats, input.workspaces, input.workspaceChats)
+  const groups = groupBotWorkspacesByChat(
+    input.chats,
+    input.workspaces,
+    input.workspaceChats,
+    input.keepAutoClosedAfter
+  )
   const liveIds = botLiveWorkspaceIds(input.chats)
   const chats = groups.map(({ chat, workspaces }): BotSidebarChatView<T> => {
     const foldable = workspaces.length > 0

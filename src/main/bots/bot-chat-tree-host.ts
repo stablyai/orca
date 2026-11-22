@@ -2,7 +2,11 @@
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
-import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
+import type {
+  BotChatTreeChat,
+  BotChatTreeRead,
+  BotChatTreeWorker
+} from '../../shared/bots/bot-chat-tree'
 import {
   botChatTreeDispatchIds,
   buildBotChatTree,
@@ -30,6 +34,7 @@ import {
 } from './bot-activity-host'
 import type { BotChatTreeParams } from '../../shared/rpc-contract/bots-params'
 import type { Bot } from '../../shared/bot-types'
+import type { BotChatAutoClose } from './bot-chat-auto-close'
 
 export type BotChatTreeHost = BotActivityHost & {
   /** The chat records, which live in the chat host that opens lazily. */
@@ -41,6 +46,7 @@ export type BotChatTreeHost = BotActivityHost & {
   agentListVerdicts?: () => Readonly<Record<string, AgentListVerdict>> | undefined
   /** Keeps each bot's base between reads; without it, every read scans every record on the host. */
   index?: Pick<BotChatTreeIndex, 'base'>
+  autoClose?: Pick<BotChatAutoClose, 'view' | 'autoClosedAt'>
 }
 
 function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatTreeWorker {
@@ -126,7 +132,8 @@ export async function readBotChatTreeParts(
       inputs.links.flatMap((link) =>
         link.bot?.kind === 'bot' && link.seenAt === null ? [rootOf(link.sessionId)] : []
       )
-    )
+    ),
+    ...(host.autoClose ? { autoClose: chatAutoCloseOf(host.autoClose, bot.id) } : {})
   })
   const placed = placeBotChatDispatches(chats, build.placement.dispatches())
   const page =
@@ -194,6 +201,17 @@ export function readSharedBotChatTree(
     : readBotChatTree(host, params)
 }
 
+function chatAutoCloseOf(
+  autoClose: NonNullable<BotChatTreeHost['autoClose']>,
+  botId: string
+): (chatId: string) => Pick<BotChatTreeChat, 'autoClose' | 'autoClosedAt'> {
+  return (chatId) => {
+    const view = autoClose.view(botId, chatId)
+    const closedAt = autoClose.autoClosedAt(botId, chatId)
+    return { ...(view ? { autoClose: view } : {}), ...(closedAt ? { autoClosedAt: closedAt } : {}) }
+  }
+}
+
 export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTreeHost {
   return {
     ...runtimeBotActivityHost(runtime),
@@ -206,7 +224,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
       readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true }),
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
-    ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {})
+    ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {}),
+    ...(runtime.botChatAutoClose ? { autoClose: runtime.botChatAutoClose } : {})
   }
 }
 

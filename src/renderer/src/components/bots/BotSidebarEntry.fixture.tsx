@@ -402,3 +402,17 @@ export const runListed = runFixture(false)
 
 /** Opened from a notification: the same row, selected in place. */
 export const runOpen = runFixture(true)
+
+/** Side chats whose items are all done or canceled: counting, paused, and one Orca closed, still
+ *  listed with its Reopen; one closed by hand drops off the list. */
+const side = (id: string, title: string, extra: Partial<BotChatTreeChat>) =>
+  chat(id, title, 'side', {}, extra)
+const SOON = { phase: 'counting', closesAt: NOW + 2 * 60_000 } as const
+const CLOSED_BY_ORCA = { closed: true, closedAt: NOW - HOUR / 4, autoClosedAt: NOW - HOUR / 4 }
+export const autoClose = fixtureFor([
+  chat('home', 'Home Chat', 'home', {}, { tab: true, lastActiveAt: NOW - HOUR / 6 }),
+  side('side-soon', 'Share dialog copy fix', { tab: true, autoClose: SOON }),
+  side('side-paused', 'Relay reconnect flake', { tab: true, autoClose: { phase: 'held' } }),
+  side('side-closed', 'Zip import parser', CLOSED_BY_ORCA),
+  side('side-by-hand', 'Draft the release notes', { closed: true, closedAt: NOW - HOUR })
+])

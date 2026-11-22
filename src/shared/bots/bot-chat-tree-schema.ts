@@ -74,6 +74,15 @@ const chatSchema = z.looseObject({
   turnDone: salvagedOptional('turnDone', z.looseObject({ paneKey: z.string(), at: z.number() })),
   closed: z.boolean(),
   closedAt: salvagedOptional('closedAt', z.number()),
+  autoClose: salvagedOptional(
+    'autoClose',
+    z.discriminatedUnion('phase', [
+      z.looseObject({ phase: z.literal('counting'), closesAt: z.number() }),
+      z.looseObject({ phase: z.literal('held') }),
+      z.looseObject({ phase: z.literal('kept') })
+    ])
+  ),
+  autoClosedAt: salvagedOptional('autoClosedAt', z.number()),
   tab: salvagedOptional('tab', z.boolean()),
   unseen: salvagedOptional('unseen', z.boolean()),
   run: salvagedOptional(

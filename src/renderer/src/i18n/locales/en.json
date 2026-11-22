@@ -29111,7 +29111,7 @@
       "kindAutomation": "Automation run",
       "kindSide": "Side chat",
       "waiting": "Waiting for you",
-      "closedOn": "closed {{date}}",
+      "closedAt": "Closed · {{time}}",
       "sayHi": "Say hi to {{name}}",
       "untitled": "New chat",
       "unread": "Unread",
@@ -29150,7 +29150,18 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "autoClose": {
+        "counting": "All items here are done or canceled. History is kept · Closes at {{time}} (in {{count}} min)",
+        "held": "Closing paused while this chat is open or has an unsent message.",
+        "kept": "Kept open until new work finishes.",
+        "keepOpen": "Keep open",
+        "closeNow": "Close now",
+        "soon": "Closing soon",
+        "paused": "Closing paused",
+        "closedByOrca": "Closed by Orca · {{time}} · Reopen",
+        "reopen": "Reopen"
+      }
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29304,7 +29315,8 @@
           "linkedMany": "{{chat}} linked {{count}} links to {{items}}",
           "linked": "{{chat}} linked {{link}} to {{items}}"
         },
-        "anotherChat": "Another chat"
+        "anotherChat": "Another chat",
+        "fromClosedChat": "From {{chat}} (closed)"
       },
       "chatFallback": "Chat",
       "comment": {

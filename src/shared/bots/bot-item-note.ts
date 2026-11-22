@@ -36,6 +36,8 @@ export type AgentJournalBotItemNoteItem = {
   noteId: string
   by: BotItemNoteBy
   entries: BotItemNoteEntry[]
+  /** Mail for this chat that landed in Home because Orca had closed it; Home offers to reopen it. */
+  closedChat?: { chatId: string; title: string | null }
 }
 
 /** A note as a chat draws it: with the quick changes folded into it (`run`, oldest first, itself

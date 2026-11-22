@@ -236,6 +236,16 @@ export const BotChatsSeen = z.object({ sessionIds: z.array(z.string().min(1)).ma
 /** The bot's Chat: open it (created on first use), or reset it to a new conversation. */
 export const BotChat = z.object({ botId: requiredString('Missing bot id') })
 
+/** A bot chat's auto-close, named by any session of its lineage on the bot's host. */
+export const BotChatAutoCloseTarget = z.object({ sessionId: requiredString('Missing session id') })
+
+/** A desktop window has the chat open or an unsent message in it (`hold`), or no longer does. */
+export const BotChatAutoCloseHold = z.object({
+  sessionId: requiredString('Missing session id'),
+  holder: requiredString('Missing holder'),
+  hold: z.boolean()
+})
+
 /** New Home Chat. `orca bot new-chat` from a bot's own chat names it by that chat instead. */
 export const BotChatReset = z.object({
   botId: OptionalString,

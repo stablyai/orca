@@ -12,6 +12,7 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'linkedDispatchRefs',
   'list',
   'needsYou',
+  'chatItemFacts',
   'viewRows',
   'latestEventId',
   'owedMail'

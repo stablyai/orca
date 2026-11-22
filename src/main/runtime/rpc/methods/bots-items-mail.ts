@@ -43,6 +43,19 @@ function noteBy(
   return { kind: 'chat', chatId: chat.id, title: chat.title, ...home }
 }
 
+/** The item's chat, when Orca closed it and its mail went to Home instead: Home's note names it and
+ *  offers to reopen it. */
+function closedChatOf(
+  runtime: OrcaRuntimeService,
+  owed: BotItemMail
+): { chatId: string; title: string | null } | undefined {
+  const item = owed.changes[0]?.item
+  if (!item || runtime.botChatAutoClose?.autoClosedAt(owed.ownerBotId, owed.chatId) == null) {
+    return undefined
+  }
+  return { chatId: owed.chatId, title: runtime.botItems.owningChat(item).title }
+}
+
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
 export async function sendBotItemMail(
   runtime: OrcaRuntimeService,
@@ -103,6 +116,9 @@ export async function sendBotItemMail(
     ...change,
     links: views.get(change.item.uid)?.links
   }))
-  appendBotItemNote(sessionId, botItemNote(`m${owed.id}`, by, changes))
+  appendBotItemNote(
+    sessionId,
+    botItemNote(`m${owed.id}`, by, changes, chat ? undefined : closedChatOf(runtime, owed))
+  )
   return true
 }

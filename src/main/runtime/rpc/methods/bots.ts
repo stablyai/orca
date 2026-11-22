@@ -31,6 +31,7 @@ import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
 import { BOT_KICKOFF_METHODS } from './bots-kickoff'
+import { BOT_CHAT_AUTO_CLOSE_METHODS } from './bots-chat-auto-close'
 import { namedOrCallerBot } from './bots-caller-bot'
 import { releaseDeletedBotLinks } from './bots-home-release'
 import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-outcome'
@@ -262,6 +263,7 @@ export const BOT_METHODS = [
     }
   }),
   ...BOT_KICKOFF_METHODS,
+  ...BOT_CHAT_AUTO_CLOSE_METHODS,
   defineMethod({
     name: 'bots.chat.reset',
     permission: 'workspace',

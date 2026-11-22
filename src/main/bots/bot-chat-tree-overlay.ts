@@ -18,6 +18,8 @@ export function overlayBotChats(
     tabTitles: ReadonlyMap<string, string>
     tabbed: ReadonlySet<string>
     unseen: ReadonlySet<string>
+    /** Each chat's countdown and when Orca closed it, from the host's auto-close. */
+    autoClose?: (chatId: string) => Pick<BotChatFacts, 'autoClose' | 'autoClosedAt'>
   }
 ): BotChatFacts[] {
   const shown = chats.filter((chat) => !chat.empty || live.tabbed.has(chat.chatId))
@@ -41,7 +43,8 @@ export function overlayBotChats(
         ...(chat.closed ? { closedAt: chat.lastActiveAt } : {}),
         ...(chat.preview ? { preview: chat.preview } : {}),
         tab: live.tabbed.has(chat.chatId),
-        ...(live.unseen.has(chat.chatId) ? { unseen: true } : {})
+        ...(live.unseen.has(chat.chatId) ? { unseen: true } : {}),
+        ...live.autoClose?.(chat.chatId)
       }
     }),
     ...terminalRunChats(inputs.runs, inputs.automationById, live.rowByPaneKey)

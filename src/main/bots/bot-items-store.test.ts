@@ -180,6 +180,23 @@ describe('bot items store', () => {
     expect(store.owedMail(0)).toEqual({ mails: [], through: null })
   })
 
+  it('tells each chat how many items it drove and how many are not done or canceled', () => {
+    const store = open()
+    const a = store.add(input({ title: 'A' }), owner).uid
+    const b = store.add(input({ title: 'B' }), owner).uid
+    store.add(input({ title: 'C', chatId: 'chat-side' }), otherChat)
+    store.add(input({ title: 'Theirs', ownerBotId: 'bot-b', chatId: 'chat-b' }), stranger)
+
+    store.ownerStatus({ uids: [a], to: 'canceled', reason: 'Handed to someone else' }, ownerActor)
+    store.ownerStatus({ uids: [b], to: 'done' }, ownerActor)
+
+    const facts = store.chatItemFacts('bot-a')
+    expect(Object.keys(facts).toSorted()).toEqual(['chat-home', 'chat-side'])
+    expect(facts['chat-home']).toMatchObject({ total: 2, open: 0 })
+    expect(facts['chat-home']?.lastClosedAt).toEqual(expect.any(Number))
+    expect(facts['chat-side']).toEqual({ total: 1, open: 1, lastClosedAt: null })
+  })
+
   it("owes one mail per owner action and chat: a bulk move, or a question's answer and move", () => {
     const store = open()
     const a = store.add(input({ title: 'A' }), owner).uid

@@ -26388,7 +26388,6 @@
       "kindAutomation": "自动化运行",
       "kindSide": "支线聊天",
       "waiting": "等待你处理",
-      "closedOn": "已于 {{date}} 关闭",
       "sayHi": "向 {{name}} 打个招呼",
       "unread": "未读",
       "fold": "折叠 {{name}}",

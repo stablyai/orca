@@ -24,8 +24,21 @@ import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
 import { openBotSession } from './bot-session-open'
+import { reopenBotChat } from './bot-chat-reopen'
+import { botChatCloseRowText } from './bot-chat-auto-close-copy'
+import { BotChatReopenMenu } from './BotChatReopenMenu'
+import { useNow, useNowSnapshot } from '@/lib/window-activity/use-now'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+
+/** How long a chat Orca closed stays in the sidebar. */
+const AUTO_CLOSED_LISTED_MS = 24 * 60 * 60_000
+const LISTED_CLOCK_MS = 60_000
+const HOUR_MS = 60 * 60_000
+
+/** The listing's cutoff moves once an hour, so the list re-reads hourly rather than every minute. */
+const autoClosedCutoff = (now: number): number =>
+  Math.floor(now / HOUR_MS) * HOUR_MS - AUTO_CLOSED_LISTED_MS
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
 export function BotSidebarChats({
@@ -52,7 +65,12 @@ export function BotSidebarChats({
   const { chats, workspaceChats } = tree
   // Only this bot's chats' folds, so a fold anywhere else re-renders nothing here.
   // Only the chats it lists, keyed once per chat list, not on every store write the selector runs for.
-  const listed = useMemo(() => botSidebarListedChats(chats), [chats])
+  // A chat Orca closed stays listed for a day, last, with its Reopen; read once per chat list.
+  const keepAutoClosedAfter = useNowSnapshot(LISTED_CLOCK_MS, autoClosedCutoff)
+  const listed = useMemo(
+    () => botSidebarListedChats(chats, keepAutoClosedAfter),
+    [chats, keepAutoClosedAfter]
+  )
   const foldKeys = useMemo(
     () => listed.map((chat) => botChatFoldKey(bot.hostId, bot.id, chat.chatId)),
     [listed, bot.hostId, bot.id]
@@ -66,9 +84,10 @@ export function BotSidebarChats({
       workspaceChats,
       foldOf: (chatId) => foldById.get(chatId),
       stepsOf: (chatId) => steps[chatId] ?? 0,
-      activeLineId: activeLine?.id ?? null
+      activeLineId: activeLine?.id ?? null,
+      keepAutoClosedAfter
     })
-  }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
+  }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine, keepAutoClosedAfter])
   // A reveal of a worker line under a folded chat opens that chat, once per request.
   const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
@@ -161,13 +180,16 @@ function BotSidebarChat({
   const { active, toggle } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
-  const trailing = trailingText(t, view.trailing)
+  const now = useNow(LISTED_CLOCK_MS, chat.closed)
+  const trailing = botChatCloseRowText(t, chat, now) ?? trailingText(t, view.trailing)
   // A press only switches to the chat; only the chevron shows or hides its workers.
   const pressRow = (event: { detail: number; repeat?: boolean }): void => {
     if (event.detail > 1 || event.repeat) {
       return
     }
-    if (chat.origin === 'home') {
+    if (chat.closed && chat.autoClosedAt) {
+      reopenBotChat(bot, chat.chatId)
+    } else if (chat.origin === 'home') {
       void openBotHomeTab(bot)
     } else {
       openBotSession(bot, chat.chatId)
@@ -177,41 +199,43 @@ function BotSidebarChat({
   return (
     <div className="flex flex-col gap-1">
       {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
-      <div
-        role="button"
-        data-bot-sidebar-chat={chat.chatId}
-        aria-label={[label, trailing].filter(Boolean).join(' · ')}
-        // The chat whose tab is in front reads as the current row, as the open workspace's does.
-        aria-current={active ? 'true' : undefined}
-        tabIndex={0}
-        aria-expanded={foldable ? open : undefined}
-        className={cn(
-          'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'bg-sidebar-accent'
-        )}
-        onClick={pressRow}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            pressRow(event)
-          }
-        }}
-      >
-        <BotChatStatusSlot chat={chat} />
-        <span
+      <BotChatReopenMenu bot={bot} chat={chat}>
+        <div
+          role="button"
+          data-bot-sidebar-chat={chat.chatId}
+          aria-label={[label, trailing].filter(Boolean).join(' · ')}
+          // The chat whose tab is in front reads as the current row, as the open workspace's does.
+          aria-current={active ? 'true' : undefined}
+          tabIndex={0}
+          aria-expanded={foldable ? open : undefined}
           className={cn(
-            'min-w-0 flex-1 truncate text-foreground',
-            (chat.unread || active) && 'font-semibold'
+            'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            active && 'bg-sidebar-accent'
           )}
+          onClick={pressRow}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              pressRow(event)
+            }
+          }}
         >
-          {title}
-        </span>
-        <BotChatRowEnd
-          text={trailing}
-          fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
-          className="max-w-[60%]"
-        />
-      </div>
+          <BotChatStatusSlot chat={chat} />
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-foreground',
+              (chat.unread || active) && 'font-semibold'
+            )}
+          >
+            {title}
+          </span>
+          <BotChatRowEnd
+            text={trailing}
+            fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
+            className="max-w-[60%]"
+          />
+        </div>
+      </BotChatReopenMenu>
       {open ? (
         <div className="ml-3 flex flex-col gap-1">
           <AttachedWorktreeCards

@@ -74,6 +74,7 @@
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts
 1 src/renderer/src/app-shell/storage/use-app-session-persistence.ts
 1 src/renderer/src/components/bots/google/GoogleAccountReadiness.tsx
+1 src/renderer/src/components/bots/use-bot-chat-auto-close.ts # why: hold-lease heartbeat (10 s) that runs only while this window holds a chat with a countdown and stops with the hold; the host lets a lapsed lease restart the countdown
 1 src/renderer/src/components/bots/use-bot-tidy-up.ts
 1 src/renderer/src/components/browser-pane/host-guest/viewport/browser-client-page-position-driver.ts
 1 src/renderer/src/components/contextual-tours/use-contextual-tour.ts

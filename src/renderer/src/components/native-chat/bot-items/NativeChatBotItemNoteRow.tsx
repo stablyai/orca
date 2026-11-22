@@ -15,6 +15,7 @@ import { openBotItem } from '@/components/bots/items/bot-item-open'
 import { BotItemCommentImages } from '@/components/bots/items/BotItemCommentImages'
 import { findBotByWorkspace, useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { openBotSession } from '@/components/bots/bot-session-open'
+import { reopenBotChat } from '@/components/bots/bot-chat-reopen'
 import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -252,6 +253,34 @@ function Lines({ note, at }: { note: BotItemNoteView; at?: number }): React.JSX.
   )
 }
 
+/** Mail for a chat Orca closed lands here: the note names that chat and reopens it in place. */
+function ClosedChatLine({
+  chat
+}: {
+  chat: NonNullable<BotItemNoteView['closedChat']>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const name = chat.title || t('bots.items.chat.anotherChat', 'Another chat')
+  return (
+    <p className="pl-6 text-xs text-muted-foreground">
+      {t('bots.items.chat.fromClosedChat', 'From {{chat}} (closed)', { chat: name })}
+      {' · '}
+      <button
+        type="button"
+        className="text-xs text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => {
+          const bot = findBotByWorkspace(readBots(), useAppStore.getState().activeWorktreeId)
+          if (bot) {
+            reopenBotChat(bot, chat.chatId)
+          }
+        }}
+      >
+        {t('bots.chats.autoClose.reopen', 'Reopen')}
+      </button>
+    </p>
+  )
+}
+
 export function NativeChatBotItemNoteRow({
   note,
   timestamp
@@ -264,11 +293,13 @@ export function NativeChatBotItemNoteRow({
     return (
       <div className="flex flex-col gap-1">
         <Lines note={note} at={note.at ?? timestamp} />
+        {note.closedChat ? <ClosedChatLine chat={note.closedChat} /> : null}
       </div>
     )
   }
   const line = botItemNoteRunLine(note.run, t)
-  return (
+  const closedChat = note.closedChat ?? note.run.find((change) => change.closedChat)?.closedChat
+  const row = (
     <NativeChatEventRow
       icon={<ListTodo className="size-3.5" aria-hidden />}
       label={lineLabel(line)}
@@ -285,5 +316,13 @@ export function NativeChatBotItemNoteRow({
     >
       <LineWords line={line} allChips onAllChips={() => {}} />
     </NativeChatEventRow>
+  )
+  return closedChat ? (
+    <div className="flex flex-col gap-1">
+      {row}
+      <ClosedChatLine chat={closedChat} />
+    </div>
+  ) : (
+    row
   )
 }

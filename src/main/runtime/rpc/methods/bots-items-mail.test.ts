@@ -125,6 +125,28 @@ describe("the item chat's note for another chat's write", () => {
     expect(db.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
     expect(notes.append).not.toHaveBeenCalled()
   })
+
+  it('names the chat Orca closed in Home’s note, so Home can reopen it; a chat closed by hand is not named', async () => {
+    mailbox.closed = true
+    const db = freshDb()
+    const runtime = runtimeOf(db, { [CHAT]: 'Share dialog fix' })
+    const autoClosed = new Set([CHAT])
+    Object.assign(runtime, {
+      botChatAutoClose: {
+        autoClosedAt: (_botId: string, chatId: string) => (autoClosed.has(chatId) ? 5 : null)
+      }
+    })
+    await sendBotItemMail(runtime, owed())
+    expect(db.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
+    expect(notes.append).toHaveBeenCalledWith(
+      'home-chat',
+      expect.objectContaining({ closedChat: { chatId: CHAT, title: 'Share dialog fix' } })
+    )
+
+    autoClosed.clear()
+    await sendBotItemMail(runtimeOf(freshDb(), { [CHAT]: 'Share dialog fix' }), owed())
+    expect(notes.append.mock.calls[1]?.[1]).not.toHaveProperty('closedChat')
+  })
 })
 
 describe('item mail', () => {

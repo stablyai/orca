@@ -53,6 +53,7 @@ export const BOT_JOURNAL_ITEM_BODIES = [
         status: z.string().min(1),
         event: z.string().min(1)
       })
-    )
+    ),
+    closedChat: z.object({ chatId: z.string().min(1), title: z.string().nullable() }).optional()
   })
 ] as const

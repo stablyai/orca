@@ -20,12 +20,15 @@ type Change = {
 export function botItemNote(
   noteId: string,
   by: BotItemNoteBy,
-  changes: readonly Change[]
+  changes: readonly Change[],
+  closedChat?: AgentJournalBotItemNoteItem['closedChat']
 ): AgentJournalBotItemNoteItem | null {
   const entries = changes.flatMap(
     ({ event, item, links }) => botItemNoteEntry(event, item, links) ?? []
   )
-  return entries.length > 0 ? { kind: 'bot-item-note', noteId, by, entries } : null
+  return entries.length > 0
+    ? { kind: 'bot-item-note', noteId, by, entries, ...(closedChat ? { closedChat } : {}) }
+    : null
 }
 
 /** Draws a note in `sessionId`'s chat, when this host runs it. */

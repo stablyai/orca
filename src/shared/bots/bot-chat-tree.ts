@@ -1,5 +1,6 @@
 // A bot's chats with the workers each one started nested under it: the Activity panel's and sidebar's one list.
 import { isBotGroupMemberSession } from './bot-group'
+import type { BotChatAutoCloseView } from './bot-chat-auto-close'
 
 /** What a chat row's icon shows: Home Chat, an outside thread's mark, an automation or a side chat. */
 export type BotChatOrigin = 'home' | 'slack' | 'linear' | 'github' | 'automation' | 'side'
@@ -44,6 +45,10 @@ export type BotChatTreeChat = {
   turnDone?: { paneKey: string; at: number }
   closed: boolean
   closedAt?: number
+  /** Every item it drove is done or canceled: counting down to close, paused, or kept open. */
+  autoClose?: BotChatAutoCloseView
+  /** Orca closed it, then; its row reopens the same chat. */
+  autoClosedAt?: number
   /** Its tab is open on the bot's host; absent from an older host. */
   tab?: boolean
   /** A thread the bot started on its own that the owner has not opened yet. */

@@ -327,3 +327,36 @@ function usageLimitFixture(auto: boolean) {
 
 export const usageLimitWaiting = usageLimitFixture(false)
 export const usageLimitContinues = usageLimitFixture(true)
+
+// Side chats whose items are all done or canceled: counting, paused, closed by Orca and by hand.
+const AUTO_CLOSE_CHATS = [
+  home,
+  chat('soon', 'Share dialog copy fix', {
+    tab: true,
+    lastActiveAt: now - 2 * min,
+    autoClose: { phase: 'counting', closesAt: now + 2 * min }
+  }),
+  chat('paused', 'Relay reconnect flake', {
+    tab: true,
+    lastActiveAt: now - 3 * min,
+    autoClose: { phase: 'held' }
+  }),
+  chat('by-orca', 'Zip import parser', {
+    closed: true,
+    closedAt: now - 15 * min,
+    autoClosedAt: now - 15 * min,
+    lastActiveAt: now - 15 * min
+  }),
+  chat('by-hand', 'Draft the release notes', {
+    closed: true,
+    closedAt: now - 60 * min,
+    lastActiveAt: now - 60 * min
+  })
+]
+
+export const autoClose = defineFixture({
+  width: 350,
+  store: chatsTab('working'),
+  setup: stubBotPanel(ACTIVITY, bot, AUTO_CLOSE_CHATS),
+  render: () => <BotPanelFrame />
+})

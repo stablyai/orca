@@ -46,6 +46,7 @@ import { googleSetupRuns } from '../google/google-setup-runs'
 import { onBotToolSignInChanged } from '../bots/bot-tool-sign-in-changed'
 import { onBotToolCredentialEnded } from '../bots/bot-tool-credential-ended'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
+import { botChatAutoCloseTurn, type BotChatAutoClose } from '../bots/bot-chat-auto-close-session'
 import type { BotChatTreeIndex } from '../bots/bot-chat-tree-index'
 import { pairedBotRosterCache } from '../bots/paired-bot-rosters'
 import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
@@ -274,6 +275,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         lookAround: this.lookAround,
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
+        chatTurn: (sessionId, phase) => botChatAutoCloseTurn(this, sessionId, phase),
         recentChats: (botId, sessionId, message) =>
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
@@ -323,6 +325,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({
     emit: (scope) => {
+      // A chat whose items all closed may close: read once per notice, not per item write.
+      void this.botChatAutoClose?.itemsChanged(scope)
       this.notifier?.botsChanged?.(scope)
       this.emitClientEvent({ type: 'botsChanged', ...scope })
     },
@@ -333,6 +337,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Each bot's chats-tree base between reads, kept from the record store's and database's own
    *  changes; set once the runtime is built (bot-chat-tree-host). */
   botChatTreeIndex: BotChatTreeIndex | null = null
+
+  /** Closes a bot side chat whose items are all done or canceled; set by the runtime. */
+  botChatAutoClose: BotChatAutoClose | null = null
 
   // Setup cards in every window and phone re-read the bot's Google setup run on this notice.
   protected readonly stopGoogleSetupNotices = googleSetupRuns().onChange(() =>
