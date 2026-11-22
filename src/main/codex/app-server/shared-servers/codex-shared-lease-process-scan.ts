@@ -33,9 +33,35 @@ export async function scanCodexLeaseProcesses(
   watcherPid?: number
 ): Promise<CodexLeaseProcessScan | null> {
   if (platform === 'linux') {
-    return scanLinux(envName, serverPid, watcherPid)
+    return sharedLinuxScan(envName, serverPid, watcherPid)
   }
   return null
+}
+
+/** One scan per server for every chat closing on it at once; each still starts after its request. */
+const linuxScans = new Map<string, () => Promise<CodexLeaseProcessScan | null>>()
+
+function sharedLinuxScan(
+  envName: string,
+  serverPid: number,
+  watcherPid: number | undefined
+): Promise<CodexLeaseProcessScan | null> {
+  const key = `${envName}\0${serverPid}\0${watcherPid ?? ''}`
+  let scan = linuxScans.get(key)
+  if (!scan) {
+    scan = coalescedReading(() => scanLinux(envName, serverPid, watcherPid))
+    linuxScans.set(key, scan)
+  }
+  const reading = scan()
+  const own = scan
+  void reading
+    .catch(() => {})
+    .then(() => {
+      if (linuxScans.get(key) === own) {
+        linuxScans.delete(key)
+      }
+    })
+  return reading
 }
 
 function byTag(entries: readonly (readonly [number, string | null])[]) {

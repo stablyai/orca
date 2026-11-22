@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 /** `others` unrelated processes of this user, plus a shared server and one of its chat's commands. */
-async function fileReadsForOneClose(others: number, launcher: boolean): Promise<number> {
+async function fileReadsForCloses(others: number, launcher: boolean, closes = 1): Promise<number> {
   host.rows = [
     ...(launcher ? [{ pid: LAUNCHER_PID, parent: 1, name: 'orca-provider-e', env: '' }] : []),
     { pid: SERVER_PID, parent: launcher ? LAUNCHER_PID : 1, name: 'codex', env: '' },
@@ -55,7 +55,11 @@ async function fileReadsForOneClose(others: number, launcher: boolean): Promise<
   ]
   host.fileReads = 0
   vi.useFakeTimers()
-  const stopped = codexLeaseProcessesGone(SERVER_PID, 'a', undefined, 'linux')
+  const stopped = Promise.all(
+    Array.from({ length: closes }, (_, index) =>
+      codexLeaseProcessesGone(SERVER_PID, `lease-${index}`, undefined, 'linux')
+    )
+  )
   await vi.runAllTimersAsync()
   await stopped
   return host.fileReads
@@ -63,12 +67,17 @@ async function fileReadsForOneClose(others: number, launcher: boolean): Promise<
 
 describe('shared Codex chat close (Linux)', () => {
   it("reads only the server's own processes, however many the host runs", async () => {
-    const atN = await fileReadsForOneClose(200, true)
-    expect(await fileReadsForOneClose(2_000, true)).toBe(atN)
+    const atN = await fileReadsForCloses(200, true)
+    expect(await fileReadsForCloses(2_000, true)).toBe(atN)
+  })
+
+  it('shares one reading between chats closing on one server at once', async () => {
+    const one = await fileReadsForCloses(200, true)
+    expect(await fileReadsForCloses(200, true, 40)).toBeLessThanOrEqual(one * 2)
   })
 
   it('reads no process file without the launcher, since nothing there can prove the close', async () => {
-    expect(await fileReadsForOneClose(200, false)).toBe(0)
-    expect(await fileReadsForOneClose(2_000, false)).toBe(0)
+    expect(await fileReadsForCloses(200, false)).toBe(0)
+    expect(await fileReadsForCloses(2_000, false)).toBe(0)
   })
 })
