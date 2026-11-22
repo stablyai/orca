@@ -23,7 +23,11 @@ import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { PageDialogLayer, usePageDialogs } from '../platform/page-dialogs/PageDialogLayer'
-import { PageHeaderLayer, useShellPageHeader } from './page-header/PageHeaderLayer'
+import {
+  PageHeaderLayer,
+  useOverlaidHeaderHeight,
+  useShellPageHeader
+} from './page-header/PageHeaderLayer'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
@@ -141,11 +145,13 @@ export function MobileWebShellScreen({
   const readySessionId = state.kind === 'ready' ? state.sessionId : null
   const pageHeader = useShellPageHeader(overlay ? null : readySessionId, backClaimed)
   const headerShown = pageHeader.header !== null
+  const overlaidHeaderHeight = useOverlaidHeaderHeight()
   const pageFold = usePageFoldDivision()
   // The stack header and the banner each take the status-bar strip from the page.
   const pageInsets = pageSafeAreaInsets({
     insets: pageFold.safeAreaInsets,
-    topCovered: noticeShown || headerShown
+    topCovered: noticeShown || headerShown,
+    overlaidTop: headerShown ? overlaidHeaderHeight : undefined
   })
   const keyRail = useShellKeyRail({ sessionId: readySessionId, overlay, routeGrants })
   const {

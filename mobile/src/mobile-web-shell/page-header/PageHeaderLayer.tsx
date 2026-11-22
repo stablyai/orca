@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { Platform } from 'react-native'
+import { HeaderHeightContext } from 'expo-router/react-navigation'
 import { Stack, useFocusEffect, useNavigation, usePreventRemove, useRoute } from 'expo-router'
 import { runAfterMenuDismiss } from '../../components/menu/run-after-menu-dismiss'
 import {
@@ -15,7 +17,17 @@ import {
 import { pageHeaderSymbol } from './page-header-symbols'
 
 const HEADER_HIDDEN = { headerShown: false } as const
-const BACK_SYMBOL = pageHeaderSymbol('ChevronLeft')
+// iOS's back chevron; Material's top app bar navigates up with an arrow.
+const BACK_SYMBOL = {
+  ios: pageHeaderSymbol('ChevronLeft')?.ios ?? 'chevron.left',
+  android: 'arrow_back'
+}
+
+/** iOS 26 draws the stack header as glass over the screen, so the page must clear it; Android lays the page below. */
+export function useOverlaidHeaderHeight(): number | undefined {
+  const height = useContext(HeaderHeightContext)
+  return Platform.OS === 'ios' && height ? height : undefined
+}
 
 type Held = { sessionId: string | null; key: string; header: BridgePageHeader | null }
 
@@ -152,7 +164,11 @@ export function PageHeaderLayer({
         : [],
     [backLabel, ownBack, send]
   )
-  const options = useMemo(() => ({ headerBackVisible: header?.back === true }), [header?.back])
+  // One back only: the stack's own, or ours where the stack has none to show.
+  const options = useMemo(
+    () => ({ headerBackVisible: header?.back === true && !ownBack }),
+    [header?.back, ownBack]
+  )
   if (header === null) {
     return <Stack.Screen options={HEADER_HIDDEN} />
   }

@@ -51,13 +51,15 @@ export function measuredPageSafeAreaInsets(
 }
 
 // Give pages window insets like native screens, except status-bar space already consumed by the shell banner.
+// A header the page scrolls under (iOS 26 glass) covers `overlaidTop` instead.
 export function pageSafeAreaInsets(input: {
   insets: BridgeSafeAreaInsets
   topCovered: boolean
+  overlaidTop?: number
 }): BridgeSafeAreaInsets {
   const { insets } = input
   return {
-    top: input.topCovered ? 0 : insets.top,
+    top: input.overlaidTop ?? (input.topCovered ? 0 : insets.top),
     right: insets.right,
     bottom: insets.bottom,
     left: insets.left
