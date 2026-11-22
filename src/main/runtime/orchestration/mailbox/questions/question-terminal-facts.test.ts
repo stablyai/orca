@@ -13,14 +13,15 @@ describe("a terminal taker's pending wake", () => {
   let db: OrchestrationDb
   let takesInput: boolean
 
-  const reads: Omit<QuestionPartyReads, 'chatRunning'> & Pick<QuestionPartyReads, 'chatRunning'> = {
+  let paneKeys: string[]
+  const reads: QuestionPartyReads = {
     liveSession: (root) => root,
     chatRunning: async () => false,
     chatReceiving: () => null,
     chatHandingOver: () => false,
     terminal: (handle) =>
       handle === HANDLE
-        ? { ptyId: 'pty-1', paneKeys: [], asking: false, takesInput, working: false }
+        ? { ptyId: 'pty-1', paneKeys, asking: false, takesInput, working: false }
         : null,
     terminalHandingOver: () => false
   }
@@ -28,6 +29,7 @@ describe("a terminal taker's pending wake", () => {
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
     takesInput = true
+    paneKeys = []
   })
   afterEach(() => db.close())
 
@@ -84,5 +86,19 @@ describe("a terminal taker's pending wake", () => {
     db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b', runId: run.id })
     db.rememberRunCoordinatorHandle(run.id, HANDLE)
     expect(await told()).toEqual([id])
+  })
+
+  it('holds the question for a Run it coordinates, whose rows in its own mailbox are routed to it and typed', async () => {
+    takenQuestion()
+    paneKeys = ['tab-1:11111111-1111-4111-8111-111111111111']
+    const run = db.createRun({
+      objective: 'o',
+      coordinatorHandle: HANDLE,
+      coordinatorPaneKey: paneKeys[0],
+      coordinatorOrcaSessionId: null
+    })
+    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b' })
+    db.db.prepare('UPDATE messages SET run_id = ? WHERE subject = ?').run(run.id, 'r')
+    expect(await told()).toEqual([])
   })
 })
