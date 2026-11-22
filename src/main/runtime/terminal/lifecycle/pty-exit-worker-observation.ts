@@ -1,4 +1,5 @@
 import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
+import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   type TerminalExitCause,
   describeTerminalExitCause,
@@ -11,6 +12,7 @@ import {
 } from '../../orchestration/workers/lifecycle/worker-exit-observation'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { WorkerGone } from '../../orchestration/workers/turn-stops/worker-presence-report'
+import { retireCoordinatorPaneRuns } from '../../orchestration/db/runs/retired-coordinator-runs'
 
 /** A worker's terminal ending or losing its agent, told to the Dispatch it runs. */
 export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurfaceReads {
@@ -45,6 +47,28 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
       return
     }
     fail()
+  }
+
+  /** A coordinator terminal that ended with nothing left in its pane: its Runs have no reader. */
+  protected retireExitedCoordinatorRuns(
+    surfaces: readonly { paneKey: string | null }[],
+    ptyId: string,
+    exitIncarnationId: PtyIncarnationId | undefined
+  ): void {
+    const db = this._orchestrationDb
+    if (!db) {
+      return
+    }
+    for (const { paneKey } of surfaces) {
+      if (!paneKey || this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+        continue
+      }
+      try {
+        retireCoordinatorPaneRuns(db, paneKey)
+      } catch (error) {
+        console.warn('[orchestration] could not retire an ended terminal from its Runs', error)
+      }
+    }
   }
 
   private observeWorkerTerminalExit(

@@ -17,7 +17,7 @@ import type { DeletedChatConversation } from './deleted-chats'
 import { getStructuredAgentSessionHost } from '../agent-session-wire/host/structured-agent-session-registry'
 import { withdrawClientAsksOf } from '../../runtime/orchestration/federation/client-asks/client-ask-queue'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
-import { retireChatRuns } from '../../runtime/orchestration/db/runs/retired-chat-runs'
+import { retireChatRuns } from '../../runtime/orchestration/db/runs/retired-coordinator-runs'
 
 type ChatHost = NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>
 
