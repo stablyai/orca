@@ -7,12 +7,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotAppBrandLogo, hasBotAppBrand } from '../apps/BotAppBrandLogo'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../../../shared/bots/bot-templates'
-import {
-  botTemplateEventWords,
-  botTemplateScheduleWords,
-  botTemplateSkillLine,
-  botTemplateSkillName
-} from '../../../../../shared/bots/bot-template-text'
+import { botTemplatePartWords } from '../../../../../shared/bots/bot-template-text'
 
 export function BotTemplateComesWithHeading(): React.JSX.Element {
   const t = useTranslate()
@@ -73,45 +68,37 @@ function Row({
 export function BotTemplateComesWith({ template }: { template: BotTemplate }): React.JSX.Element {
   const t = useTranslate()
   const muted = (text: string) => <span className="text-muted-foreground">{text}</span>
+  const words = botTemplatePartWords(template, t)
   return (
     <ul>
-      {template.skills.map((skill) => {
-        const name = botTemplateSkillName(skill, t)
-        return (
-          <Row
-            key={skill}
-            // The folder name reads as code; a translated name reads as words.
-            mono={name === skill}
-            icon={<BookOpen className="size-4" />}
-            title={name}
-            line={botTemplateSkillLine(skill, t)}
-          />
-        )
-      })}
-      {template.schedules.map((schedule) => {
-        const words = botTemplateScheduleWords(template, schedule, t)
-        return (
-          <Row
-            key={schedule.id}
-            icon={<Clock className="size-4" />}
-            title={words.when}
-            line={words.what}
-            state={muted(t('bots.templates.stateOff', 'Off'))}
-          />
-        )
-      })}
-      {template.events.map((event) => {
-        const parts = botTemplateEventWords(template, event, t)
-        return (
-          <Row
-            key={event.id}
-            icon={<Zap className="size-4" />}
-            title={parts.trigger}
-            line={parts.action}
-            state={muted(t('bots.templates.stateFirstChat', 'First chat'))}
-          />
-        )
-      })}
+      {words.skills.map(({ skill, name, line }) => (
+        <Row
+          key={skill}
+          // The folder name reads as code; a translated name reads as words.
+          mono={name === skill}
+          icon={<BookOpen className="size-4" />}
+          title={name}
+          line={line}
+        />
+      ))}
+      {words.schedules.map((schedule) => (
+        <Row
+          key={schedule.id}
+          icon={<Clock className="size-4" />}
+          title={schedule.when}
+          line={schedule.what}
+          state={muted(t('bots.templates.stateOff', 'Off'))}
+        />
+      ))}
+      {words.events.map((event) => (
+        <Row
+          key={event.id}
+          icon={<Zap className="size-4" />}
+          title={event.trigger}
+          line={event.action}
+          state={muted(t('bots.templates.stateFirstChat', 'First chat'))}
+        />
+      ))}
       {template.connectors.map((kind) => (
         <Row
           key={kind}

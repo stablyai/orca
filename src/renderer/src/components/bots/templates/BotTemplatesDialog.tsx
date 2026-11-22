@@ -35,12 +35,8 @@ import {
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../../../shared/bots/bot-templates'
-import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../../../shared/bots/bot-template-view'
-import { botTemplateText } from '../../../../../shared/bots/bot-template-text'
+import { botTemplateGroups, botTemplateMatches } from '../../../../../shared/bots/bot-template-view'
+import { botTemplateBotName, botTemplateText } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateDetail } from './BotTemplateDetail'
 import { BotTemplateRow } from './BotTemplateRow'
 import { botTemplateCategoryLabel } from './bot-template-labels'
@@ -364,7 +360,7 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
           proposal={
             creating.template
               ? templateProposal(creating.template, {
-                  name: freeBotName(creating.template.name, botNames)
+                  name: botTemplateBotName(creating.template, botNames, t)
                 })
               : undefined
           }

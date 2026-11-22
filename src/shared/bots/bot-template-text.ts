@@ -1,7 +1,7 @@
 // Built-in template words as the template pages show them, in the UI language, under named keys
 // (`bots.templates.<id>.<field>`). Bots made from a template keep the English: display words only.
 import { BOT_TEMPLATES, type BotTemplate, type BotTemplateSkill } from './bot-templates'
-import { BOT_TEMPLATE_SKILL_LINES, botTemplateEventParts } from './bot-template-view'
+import { BOT_TEMPLATE_SKILL_LINES, botTemplateEventParts, freeBotName } from './bot-template-view'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
@@ -152,5 +152,34 @@ function translatedSkillName(skill: BotTemplateSkill, t: Translate): string {
       return t('bots.templateSkills.incidentTimeline', 'incident-timeline')
     case 'workspace-hygiene':
       return t('bots.templateSkills.workspaceHygiene', 'workspace-hygiene')
+  }
+}
+
+/** A new bot's name from a template: the name the UI shows, free among `taken`. A non-Latin name
+ *  still makes a valid folder (botFolderName falls back), so it is created once under this name. */
+export function botTemplateBotName(
+  template: BotTemplate,
+  taken: readonly string[],
+  t: Translate
+): string {
+  return freeBotName(botTemplateWord(template, 'name', t), taken)
+}
+
+/** A template's skills, automations and schedules as the pages list them, in the UI language. */
+export function botTemplatePartWords(template: BotTemplate, t: Translate) {
+  return {
+    skills: template.skills.map((skill) => ({
+      skill,
+      name: botTemplateSkillName(skill, t),
+      line: botTemplateSkillLine(skill, t)
+    })),
+    events: template.events.map((event) => ({
+      id: event.id,
+      ...botTemplateEventWords(template, event, t)
+    })),
+    schedules: template.schedules.map((schedule) => ({
+      id: schedule.id,
+      ...botTemplateScheduleWords(template, schedule, t)
+    }))
   }
 }

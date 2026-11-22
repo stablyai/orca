@@ -22,12 +22,12 @@ import {
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../src/shared/bots/bot-templates'
+import { botTemplateGroups, botTemplateMatches } from '../../../src/shared/bots/bot-template-view'
 import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../src/shared/bots/bot-template-view'
-import { botTemplateText, botTemplateWord } from '../../../src/shared/bots/bot-template-text'
+  botTemplateBotName,
+  botTemplateText,
+  botTemplateWord
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
@@ -67,7 +67,9 @@ export function MobileBotTemplatesSheet(props: {
   )
   const pick = (template: BotTemplate) => {
     props.onPick({
-      proposal: templateProposal(template, { name: freeBotName(template.name, props.botNames) }),
+      proposal: templateProposal(template, {
+        name: botTemplateBotName(template, props.botNames, t)
+      }),
       origin: t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
         template: botTemplateWord(template, 'name', t)
       })

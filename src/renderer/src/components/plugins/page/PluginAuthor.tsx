@@ -148,7 +148,9 @@ export function PluginMoreFromAuthor({
         >
           <PluginRowArt entry={plugin} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{plugin.name}</span>
+            <span className="block truncate text-sm font-medium">
+              {pluginDisplayText(plugin.name, plugin.official, t)}
+            </span>
             {plugin.description ? (
               <span className="block truncate text-xs text-muted-foreground">
                 {pluginDisplayText(plugin.description, plugin.official, t)}
