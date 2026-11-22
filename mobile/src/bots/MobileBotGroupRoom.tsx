@@ -241,6 +241,16 @@ export function MobileBotGroupRoom({
         hostOutage={outage}
       />
       <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
+      {/* Above the composer, not its placeholder: a saved draft would hide that. */}
+      {postsOnComputer ? (
+        <Text style={styles.notice}>
+          {t(
+            'bots.groups.remotePostOnComputer',
+            'To post in a group with bots on other computers, use {{host}}.',
+            { host: hostName }
+          )}
+        </Text>
+      ) : null}
       <MobileNativeChatComposer
         value={draft}
         onChangeText={setDraft}
@@ -249,15 +259,7 @@ export function MobileBotGroupRoom({
         getSendCompletionGeneration={() => 0}
         getComposerEditGeneration={composerDraft.getEditGeneration}
         agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
-        placeholder={
-          postsOnComputer
-            ? t(
-                'bots.groups.remotePostOnComputer',
-                'To post in a group with bots on other computers, use {{host}}.',
-                { host: hostName }
-              )
-            : t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')
-        }
+        placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
         disabled={!connected || postsOnComputer}
         roomMentions={roomMentions}
         roomReplies={
