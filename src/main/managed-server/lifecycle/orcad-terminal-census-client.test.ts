@@ -76,6 +76,19 @@ describe('managed orcad terminal census client', () => {
     ['loss of contact', () => mocks.send.mockRejectedValue(new Error('socket closed'))]
   ])('reads %s as unverifiable, never as zero', async (_label, arrange) => {
     arrange()
-    await expect(collect(active)).resolves.toEqual(unverifiable)
+    // toStrictEqual: an unanswered census must not carry the answered marker.
+    await expect(collect(active)).resolves.toStrictEqual(unverifiable)
+  })
+
+  it('marks only a census the server answered, even one that cannot count', async () => {
+    answerWith([ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY], {
+      ok: true,
+      result: { ...unverifiable, inProcessSessions: 0 }
+    })
+    await expect(collect(active)).resolves.toEqual({
+      ...unverifiable,
+      inProcessSessions: 0,
+      answered: true
+    })
   })
 })

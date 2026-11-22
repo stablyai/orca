@@ -39,7 +39,9 @@ import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
 import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
-import { MobileBotToolsPage, MobileBotToolsRow } from './tools/MobileBotToolsPage'
+import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
+import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
+import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 
 /** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
 export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
@@ -61,6 +63,7 @@ export function MobileBotSettingsTab(props: {
   home: BotSettingsHome
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
+  onOpenFile?: (path: string) => void
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -87,21 +90,13 @@ export function MobileBotSettingsTab(props: {
   const tidyUp = useMobileBotTidyUp(props.client, bot.id, props.routeBot.reads, props.showToast)
   const access = props.accessRequests
   const lookAround = lookAroundSupported(bot.agent) ? props.upNext : null
+  const sharing = useMobileBotSharingSettings(props, offlineBanner)
   const backToSettings = {
     label: t('bots.lookAround.back', 'Back to Settings'),
     onPress: closePage
   }
 
-  const errorMessage = (error: unknown): string =>
-    isHostNotConnectedError(error)
-      ? t('bots.items.write.offline', '{{host}} is offline.', { host: props.hostName })
-      : error instanceof Error && error.message === 'bot_name_taken'
-        ? t('bots.settings.nameTaken', 'Another bot already has that name.')
-        : error instanceof Error && error.message === 'bot_avatar_invalid'
-          ? t('bots.picture.invalid', 'That picture could not be used. Pick a PNG or JPG image.')
-          : error instanceof Error
-            ? error.message
-            : t('bots.saveFailed', 'Couldn’t save')
+  const errorMessage = (error: unknown) => botSaveErrorMessage(error, props.hostName)
 
   const save = async (updates: BotUpdateParams['updates']): Promise<boolean> => {
     if (!props.client) {
@@ -126,6 +121,7 @@ export function MobileBotSettingsTab(props: {
     }
   }
   const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
     if (!props.client) {
@@ -172,8 +168,9 @@ export function MobileBotSettingsTab(props: {
     }
   }
 
-  if (connectors.page) {
-    return connectors.page
+  const hookPage = connectors.page ?? sharing.page ?? knows.page
+  if (hookPage) {
+    return hookPage
   }
 
   if (deleting) {
@@ -323,23 +320,17 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-  if (page === 'tools') {
-    return <MobileBotToolsPage {...props} bot={bot} onBack={closePage} />
-  }
   if (page === 'who-can-ask') {
     return (
       <MobileBotWhoCanAskPage
+        {...props}
         bot={accessBot}
-        client={props.client}
         access={access}
-        online={props.online}
         locked={locked}
         banner={offlineBanner}
         onBack={backToSettings}
         save={save}
-        applyBot={applyBot}
         setSaving={setSaving}
-        showToast={props.showToast}
       />
     )
   }
@@ -399,6 +390,7 @@ export function MobileBotSettingsTab(props: {
           : null
       }
       accessRequests={access?.requests.length ?? 0}
+      memoryTopics={knows.memoryTopics}
       open={setPage}
       setActive={(active) => void save({ paused: !active })}
       setNotification={(key, on) =>
@@ -406,7 +398,8 @@ export function MobileBotSettingsTab(props: {
       }
       onDelete={() => setDeleting(true)}
       connectorsRow={connectors.row}
-      accessRows={<MobileBotToolsRow {...props} bot={bot} onOpen={() => setPage('tools')} />}
+      accessRows={knows.accessRows}
+      sharing={sharing.row}
       header={
         <>
           {props.onBack ? (

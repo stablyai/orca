@@ -222,6 +222,73 @@ describe('mail to a bot on a paired server', () => {
     await expect(botReply(request!.id, 'again')).rejects.toThrow('already answered')
   })
 
+  it('files a request under its conversation before the bot is woken for it', async () => {
+    const linkedAtWake: (string | null)[] = []
+    vi.spyOn(b.runtime, 'notifyMessageArrived').mockImplementation((to) => {
+      for (const mail of b.db.getUnreadMessages(to)) {
+        linkedAtWake.push(b.db.getPeerMailMessage(mail.id)?.conversation_id ?? null)
+      }
+    })
+    await send({ type: 'question' })
+
+    expect(linkedAtWake).toHaveLength(1)
+    expect(linkedAtWake[0]).toMatch(/^peerconv_/)
+  })
+
+  it('records an answer only with its reply, so a failed reply can be sent again', async () => {
+    await send({ type: 'question' })
+    const [request] = b.db.getUnreadMessages(DOCS_HOME)
+    vi.spyOn(b.db, 'markAsRead').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    await expect(botReply(request!.id, 'docs/install.md')).rejects.toThrow('disk full')
+    expect(b.db.getBotRequestOutcome(request!.id)).toBeNull()
+
+    await botReply(request!.id, 'docs/install.md')
+    expect((await pulledByAsker()).body).toBe('docs/install.md')
+  })
+
+  it('records a local answer only with its reply mail', async () => {
+    const admitted = b.db.admitBotRequest({
+      rootKey: 'local-question',
+      fromBotId: null,
+      toBotId: 'docs',
+      purpose: 'question',
+      depth: 1,
+      record: JSON.stringify({
+        fromBotId: null,
+        fromBotName: null,
+        toBotId: 'docs',
+        toBotName: 'Docs',
+        purpose: 'question',
+        depth: 1,
+        askers: [{ kind: 'owner' }],
+        request: 'Where is the install guide?'
+      }),
+      message: {
+        from: ASKER,
+        to: DOCS_HOME,
+        subject: 'Where is the install guide?',
+        type: 'question'
+      }
+    })
+    const id = admitted.kind === 'sent' ? admitted.message.id : ''
+    vi.spyOn(b.db, 'markAsRead').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    await expect(botReply(id, 'docs/install.md')).rejects.toThrow('disk full')
+    expect(b.db.getBotRequestOutcome(id)).toBeNull()
+    expect(b.db.getAllMessagesForHandle(ASKER)).toEqual([])
+
+    await botReply(id, 'docs/install.md')
+    expect(b.db.getBotRequestOutcome(id)).toBe('answered')
+    expect(b.db.getAllMessagesForHandle(ASKER).map((mail) => mail.body)).toEqual([
+      'docs/install.md'
+    ])
+  })
+
   it("refuses an --on miss as today, without the server's own --on hint", async () => {
     const server = { name: 'Laptop', on: 'Laptop' }
     const entry = {

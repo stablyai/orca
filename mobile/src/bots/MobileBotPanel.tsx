@@ -325,7 +325,12 @@ export function MobileBotPanel(props: {
   const pageNode =
     page === 'settings' ? (
       <View style={styles.page}>
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          // A search page's first tap on a result selects it, not just closes the keyboard.
+          keyboardShouldPersistTaps="handled"
+        >
           <MobileBotSettingsTab
             onBack={{
               label: t('bots.panel.backTo', 'Back to {{name}}', { name: bot.name }),
@@ -339,6 +344,7 @@ export function MobileBotPanel(props: {
             home={props.home}
             accessRequests={props.accessRequests}
             onAskInChat={props.onStartSuggestion}
+            onOpenFile={(path) => props.onOpenFile(path, showToast)}
             upNext={upNext}
           />
         </ScrollView>

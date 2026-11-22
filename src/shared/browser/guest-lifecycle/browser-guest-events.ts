@@ -11,9 +11,11 @@ export type BrowserPermissionDeniedEvent = {
 /**
  * The last main-frame request step Orca saw for an uncommitted load: none (`no-request-seen`),
  * inside Orca's own request checks (`held`), or handed on to the network (`sent`), where it waits
- * for a socket, a connection or the server's response.
+ * for a socket, a connection or the server's response. Without a header listener, `held` can't
+ * tell whether the request already went on. `unobserved`: the session had no page-request listener
+ * when the load started, so no step could be seen.
  */
-export type BrowserLoadStallPhase = 'no-request-seen' | 'held' | 'sent'
+export type BrowserLoadStallPhase = 'unobserved' | 'no-request-seen' | 'held' | 'sent'
 
 export type BrowserLoadStall = {
   phase: BrowserLoadStallPhase

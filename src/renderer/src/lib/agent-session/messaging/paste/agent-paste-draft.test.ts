@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pasteDraftWhenAgentReady, sendBracketedPasteToRunningAgent } from './agent-paste-draft'
+import { shellReplacedAgentInPty } from './agent-exited-shell-check'
 import {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -114,7 +115,27 @@ describe('pasteDraftWhenAgentReady', () => {
     vi.useRealTimers()
   })
 
-  it('replays buffered Codex output during PTY binding before the primary drain', async () => {
+  function foregroundOnlyRead(foregroundKind: 'shell' | 'non-shell', processName: string) {
+    return {
+      foregroundProcess: processName,
+      hasChildProcesses: true,
+      foregroundObservation: {
+        ptyId: 'pty-1',
+        ptyIncarnationId: 'inc-1',
+        authorityGeneration: 'gen-1',
+        observationEpoch: 1,
+        capturedAgeMs: 0,
+        verdict: 'observed',
+        source: 'pty-master',
+        foregroundKind,
+        processName
+      }
+    }
+  }
+
+  async function startCodexWithReplayedComposer(
+    callbacks: { onTimeout?: () => void; onAgentExited?: () => void } = {}
+  ): Promise<boolean> {
     testState.appState.ptyIdsByTabId = {}
     testState.replayPreHandlerPtyData.mockImplementation(
       (_ptyId: string, observer: (data: string) => void) => {
@@ -126,7 +147,8 @@ describe('pasteDraftWhenAgentReady', () => {
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'codex',
-      submit: true
+      submit: true,
+      ...callbacks
     })
 
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
@@ -134,9 +156,76 @@ describe('pasteDraftWhenAgentReady', () => {
       subscriber(testState.appState)
     }
     await flushMicrotasks()
+    return promise
+  }
 
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
+  async function launchCodexWithReplayedComposer(
+    callbacks: { onTimeout?: () => void; onAgentExited?: () => void } = {}
+  ): Promise<boolean> {
+    const promise = startCodexWithReplayedComposer(callbacks)
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+    return promise
+  }
+
+  it('replays buffered Codex output during PTY binding before the primary drain', async () => {
+    const promise = startCodexWithReplayedComposer()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS - 1)
+
+    // The paste does not wait out the foreground read's deadline.
+    expect(testState.sendRuntimePtyInputVerified.mock.calls).toEqual([['pty-1', PASTED_ISSUE_URL]])
+    await vi.advanceTimersByTimeAsync(1 + CODEX_SUBMIT_RETRY_DELAY_MS)
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
+    expect(testState.inspectRuntimeTerminalProcess).toHaveBeenCalledWith('pty-1', {
+      foregroundOnly: true
+    })
+  })
+
+  it('reports instead of submitting a launch prompt when only the shell is in front', async () => {
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue(foregroundOnlyRead('shell', 'zsh'))
+    const onTimeout = vi.fn()
+    const onAgentExited = vi.fn()
+
+    await expect(launchCodexWithReplayedComposer({ onTimeout, onAgentExited })).resolves.toBe(false)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(onAgentExited).toHaveBeenCalledTimes(1)
+    expect(onTimeout).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a wrapper script runs a non-shell child',
+      async () => foregroundOnlyRead('non-shell', 'bash')
+    ],
+    ['inspection fails', () => Promise.reject(new Error('inspect failed'))],
+    [
+      'the host has no fenced foreground read',
+      async () => ({ foregroundProcess: 'bash', hasChildProcesses: false })
+    ]
+  ])(
+    'still submits when %s, since only a shell alone in front proves the agent exited',
+    async (_, inspect) => {
+      testState.inspectRuntimeTerminalProcess.mockImplementation(inspect)
+
+      await expect(launchCodexWithReplayedComposer()).resolves.toBe(true)
+      expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
+    }
+  )
+
+  it('never asks a remote runtime for a foreground read it cannot fence', async () => {
+    testState.isRemoteRuntimePtyId.mockReturnValue(true)
+
+    await expect(shellReplacedAgentInPty('remote:env@@pty-1')).resolves.toBe(false)
+    expect(testState.inspectRuntimeTerminalProcess).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting on a slow foreground read and submits', async () => {
+    testState.inspectRuntimeTerminalProcess.mockReturnValue(new Promise(() => {}))
+    const promise = startCodexWithReplayedComposer()
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1 + POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
   })

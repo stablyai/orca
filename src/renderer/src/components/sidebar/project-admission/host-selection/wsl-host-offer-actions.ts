@@ -117,8 +117,25 @@ export async function acceptWslHostOffer(
     return refusal
   }
   const added = await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
-  deps.moveAddedProject(offer, added)
+  const folderAdded = folderAddedAfterConfirmation(added)
+  if (!folderAdded) {
+    deps.moveAddedProject(offer, added)
+    return null
+  }
+  // A plain folder exists only once the user confirms "Open as Folder"; cancelling moves nothing.
+  void folderAdded.then((repo) => {
+    if (repo) {
+      deps.moveAddedProject(offer, { repo })
+    }
+  })
   return null
+}
+
+function folderAddedAfterConfirmation(added: unknown): Promise<unknown> | null {
+  if (typeof added !== 'object' || added === null || !('folderAdded' in added)) {
+    return null
+  }
+  return added.folderAdded instanceof Promise ? added.folderAdded : null
 }
 
 /** Adds the project as before, and never offers again. */
