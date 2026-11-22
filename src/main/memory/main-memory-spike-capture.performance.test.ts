@@ -14,11 +14,12 @@ import {
 } from './main-memory-spike-capture'
 
 const MINUTE = 60_000
-const records: { name?: string; attributes?: Record<string, unknown> }[] = []
+type SpanRecord = { name?: string; attributes?: Record<string, unknown> }
+const records: SpanRecord[] = []
 const counts = vi.fn(() => ({ openChats: 3, terminals: 2 }))
 
 beforeEach(() => {
-  setActiveSink({ push: (record) => records.push(record as never), flush() {}, close() {} })
+  setActiveSink({ push: (record: SpanRecord) => records.push(record), flush() {}, close() {} })
   setMainMemorySpikeCounts(counts)
 })
 
