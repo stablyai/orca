@@ -599,21 +599,24 @@
   --notice-outline-edge: transparent;
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
-  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 20%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
-  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* Body copy under a notice title; app themes raise it until it reads at 4.5:1 on the surface. */
+  --notice-description: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  --notice-shadow: 0 16px 40px -8px rgb(0 0 0 / 0.28), 0 3px 8px rgb(0 0 0 / 0.12);
   /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
   --bot-home-banner-shadow:
     0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }
 
 .dark {
-  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
-  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
+  /* Why 15%: 1.4:1 against the dark chat and editor canvas (#1e1e1e) so a toast can't blend in. */
+  --notice-surface: color-mix(in srgb, var(--foreground) 15%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 22%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
   --notice-shadow:
-    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
-    inset 0 1px 0 rgb(255 255 255 / 0.06);
+    0 18px 48px -8px rgb(0 0 0 / 0.7), 0 4px 12px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
   --bot-home-banner-shadow:
     0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
 }
@@ -742,13 +745,20 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+  color: var(--popover-foreground);
+  font-weight: 500;
   line-height: 1.35;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
-  /* Match custom JSX toast descriptions’ 80% body-copy opacity. */
-  color: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  color: var(--notice-description);
   line-height: 1.45;
+}
+
+/* Why: custom JSX toast bodies paint text-popover-foreground/80; route them through the same
+   readable description color as Sonner descriptions so app themes can't sink them below 4.5:1. */
+[data-sonner-toaster] .text-popover-foreground\/80 {
+  color: var(--notice-description);
 }
 
 /* Visible toasts absorb backdrop clicks; Toaster gates actions while a modal owns the pointer lock. */
