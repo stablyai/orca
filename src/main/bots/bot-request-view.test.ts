@@ -29,6 +29,8 @@ const record = (overrides: Partial<BotRequestRecord> = {}): BotRequestRecord => 
   askers: [nora('public_channel')],
   request: 'update the install docs',
   conversation: { source: 'slack', externalId: 'T1:C1:1712.0001:UBOT' },
+  // Sent on the Slack thread's own turn, which its chat answers there.
+  askedInConversation: 'ranger-thread',
   ...overrides
 })
 
@@ -102,7 +104,11 @@ describe('what the sender reads', () => {
   })
 
   it("never has the owner's own chat read a handed-over answer twice", () => {
-    const owners = record({ askers: [{ kind: 'owner' }], conversation: null })
+    const owners = record({
+      askers: [{ kind: 'owner' }],
+      conversation: null,
+      askedInConversation: undefined
+    })
     expect(botRequestView(owners, 'msg_3').answerAppears).toBe(
       "Ranger's conversation, where your owner reads it"
     )
@@ -115,8 +121,16 @@ describe('what the sender reads', () => {
     expect(botRequestUnansweredText({ ...owners, purpose: 'question' }, 'ended')).toMatch(
       /couldn't take it/
     )
-    const mixed = record({ askers: [{ kind: 'owner' }, nora('direct_message')] })
-    expect(botAnswerView(mixed, false).next).toMatch(/^Pass this answer on/)
+  })
+
+  it('shows the answer on its card in a chat read in Orca, whoever asked there', () => {
+    // A teammate's request that woke the Home Chat, which sends a handoff on.
+    const fromHome = record({ conversation: null, askedInConversation: undefined })
+    expect(botRequestView(fromHome, 'msg_4').answerAppears).toBe(
+      "Ranger's conversation, where your owner reads it"
+    )
+    expect(botRequestSentNext(fromHome)).toMatch(/sees its answer here on its own card/)
+    expect(botAnswerView(fromHome, false).next).toMatch(/^Your owner already sees this answer/)
   })
 
   it('never has a group room member repeat an answer the room shows, or redo a handoff', () => {

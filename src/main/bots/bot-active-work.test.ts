@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { botActiveWorkSection, joinedTurnSections, type TurnSectionsMemo } from './bot-active-work'
-import { type BotActiveWorkReads, createBotActiveWorkReader } from './bot-active-work-read'
+import {
+  type BotActiveWorkReads,
+  createBotActiveWorkReader,
+  readBotActiveWork
+} from './bot-active-work-read'
 
 type Item = Parameters<typeof botActiveWorkSection>[0][number]
 const item = (number: number, status: 'needs_you' | 'working', lastActivityAt: number): Item => ({
@@ -148,22 +152,10 @@ describe("a bot's Active work reads", () => {
   type Fake = Item
   const record = (number: number, at: number): Fake => item(number, 'needs_you', at)
   const reads = (overrides: Partial<BotActiveWorkReads<Fake>> = {}): BotActiveWorkReads<Fake> => ({
-    askers: async () => [{ kind: 'owner' }],
     items: async () => ({ items: [], counts: {} }),
     views: async (items) => [...items],
     workers: async () => [],
     ...overrides
-  })
-
-  it("reads nothing for a turn that isn't the owner's, and keeps nothing for later", async () => {
-    let read = 0
-    const reader = createBotActiveWorkReader()
-    const teammate = reads({
-      askers: async () => [{ kind: 'unknown' }],
-      workers: async () => (read++, [])
-    })
-    expect(await reader('b1', teammate, 1_000)).toBeNull()
-    expect(read).toBe(0)
   })
 
   it('rejects a failed read so the turn keeps what it had, and reads again next time', async () => {
@@ -173,28 +165,27 @@ describe("a bot's Active work reads", () => {
         throw new Error('down')
       }
     })
-    await expect((await reader('b1', failing, 1_000))?.section).rejects.toThrow('down')
-    expect((await (await reader('b1', reads(), 2_000))?.section)?.key).toBe('[]')
+    await expect(reader('b1', failing, 1_000)).rejects.toThrow('down')
+    expect((await reader('b1', reads(), 2_000)).key).toBe('[]')
   })
 
   it('reads every waiting item, past 500 too, so the oldest wait is shown and the rest counted', async () => {
     const waiting = Array.from({ length: 501 }, (_, i) => record(i + 1, 10_000 - i))
     const reader = createBotActiveWorkReader()
-    const section = await (
-      await reader(
-        'b1',
-        reads({
-          items: async (status, limit, cursor) => {
-            if (status === 'working') {
-              return { items: [], counts: {} }
-            }
-            const from = cursor ? waiting.findIndex((r) => r.number === cursor.number) + 1 : 0
-            return { items: waiting.slice(from, from + limit), counts: { needs_you: 501 } }
+    const section = await reader(
+      'b1',
+      reads({
+        items: async (status, limit, cursor) => {
+          if (status === 'working') {
+            return { items: [], counts: {} }
           }
-        }),
-        1_000
-      )
-    )?.section
+          const from = cursor ? waiting.findIndex((r) => r.number === cursor.number) + 1 : 0
+          return { items: waiting.slice(from, from + limit), counts: { needs_you: 501 } }
+        }
+      }),
+      1_000
+    )
+
     const lines = section?.text.split('\n') ?? []
     expect(lines[2]).toBe('#501 needs you: "Item 501"')
     expect(lines.some((line) => line.startsWith('(489 more:'))).toBe(true)
@@ -253,5 +244,20 @@ describe('the Active work key', () => {
       []
     )
     expect(renamed.key).not.toBe(before.key)
+  })
+})
+
+describe("a turn of a teammate's chat", () => {
+  it("is told the bot's running workers, so it doesn't start the same job again", async () => {
+    const runtime = {
+      botItems: {
+        store: () => ({ list: async () => ({ items: [], counts: {} }) }),
+        views: async () => []
+      },
+      botWork: { list: async () => [worker('ctx_docs', 'working')] }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies what the read uses.
+    const section = await readBotActiveWork(runtime as never, 'b1')
+    expect(section.text).toContain('dispatch:ctx_docs')
   })
 })

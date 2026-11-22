@@ -1,6 +1,5 @@
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
@@ -53,11 +52,7 @@ export function botStructuredSessionWiring(deps: {
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
-  recentChats?: (
-    botId: string,
-    sessionId: string,
-    message: AgentJournalMessageItem
-  ) => Promise<BotRecentChatsSection | null>
+  recentChats?: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions an owner chat left unanswered; null on other turns. */
   unansweredQuestionNote?: (sessionId: string) => Promise<string | null>
   /** A bot's chats on this host, each with whether it takes mail, as `sessionId` asks. */

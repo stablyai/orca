@@ -16,27 +16,6 @@ export function quietBotResultText(message: string): string {
   return message.replace(QUIET_ENDING, '').trimEnd()
 }
 
-// The trailing marker and its opening dressing, once QUIET_ENDING says the message ends with it.
-const TRAILING_MARKER = new RegExp(`([\`*_]*)${BOT_QUIET_MARKER}[\`*_.!]*\\s*$`)
-const HAS_WORD = /[\p{L}\p{N}]/u
-
-/** What a bot's quiet message says to someone who addressed it, or null when it says nothing. Each
- *  trailing marker goes (`Answer NO_REPLY NO_REPLY` says "Answer"), but not a quoted mention after
- *  words on its line (Use \`NO_REPLY\`), which is part of the answer. A rest with no letter or digit
- *  (`> NO_REPLY`, `- NO_REPLY`) was only the marker's dressing, so the message stays quiet. */
-export function addressedBotWords(message: string): string | null {
-  let words = message.trimEnd()
-  while (isQuietBotResult(words)) {
-    const match = TRAILING_MARKER.exec(words)
-    const rest = match ? words.slice(0, match.index) : ''
-    if (match?.[1]?.includes('`') && HAS_WORD.test(rest.slice(rest.lastIndexOf('\n') + 1))) {
-      break
-    }
-    words = rest.trimEnd()
-  }
-  return HAS_WORD.test(words) ? words : null
-}
-
 export type QuietBotAnswerRow = {
   /** An assistant row in a bot's chat. */
   botAnswer: boolean

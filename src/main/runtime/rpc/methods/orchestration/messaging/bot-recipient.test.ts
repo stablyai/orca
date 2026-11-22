@@ -61,14 +61,17 @@ describe('mail to a bot', () => {
   let sent: ReturnType<typeof setupBotMail>['sent']
   let reply: ReturnType<typeof setupBotMail>['reply']
   let publishTab: ReturnType<typeof setupBotMail>['publishTab']
+  let conversationTurn: ReturnType<typeof setupBotMail>['conversationTurn']
 
   beforeEach(() => {
-    ;({ db, runtime, bots, send, sent, reply, publishTab } = setupBotMail(h))
+    ;({ db, runtime, bots, send, sent, reply, publishTab, conversationTurn } = setupBotMail(h))
   })
   afterEach(() => h.cleanup())
 
   it("lands a teammate's request in the bot's Home Chat, with Orca's record of who asked", async () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
+    // Sent on the Slack thread's own turn, which answers there, not on a card.
+    conversationTurn.mockReturnValue(true)
     const receipt = await sent(RANGER_THREAD, { to: 'bot:docs', type: 'handoff' })
     expect(receipt.message).toMatchObject({
       to_handle: `orca_session_id:${DOCS_CHAT}`,
@@ -169,6 +172,22 @@ describe('mail to a bot', () => {
       botRequest: { toBotName: 'Docs', refusal: 'bot_paused' }
     })
     expect(cards.at(-1)?.body).not.toHaveProperty('botRequest.messageId')
+  })
+
+  it("cards a teammate's request sent from a chat read in Orca, not a thread's own turn", async () => {
+    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
+    const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
+    expect(cards).toEqual([
+      {
+        sessionId: RANGER_THREAD,
+        body: expect.objectContaining({
+          botRequest: expect.objectContaining({
+            purpose: 'question',
+            messageId: receipt.message.id
+          })
+        })
+      }
+    ])
   })
 
   it('refuses missing or unsupported mail types, and refuses mail while bots are off', async () => {

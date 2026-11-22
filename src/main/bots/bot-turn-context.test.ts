@@ -552,8 +552,8 @@ describe('a bot chat turn context', () => {
       undefined,
       undefined,
       undefined,
-      async (botId, sessionId, message) => {
-        asked.push([botId, sessionId, message.asker?.userId])
+      async (botId, sessionId) => {
+        asked.push([botId, sessionId])
         return now
       }
     )
@@ -574,7 +574,7 @@ describe('a bot chat turn context', () => {
     const first = await context.plan('s1', slack)
     expect(first?.text).toBe('[Other chats a]')
     expect(first?.note).toBeUndefined()
-    expect(asked).toEqual([['bot-1', 's1', 'U0SAM']])
+    expect(asked).toEqual([['bot-1', 's1']])
     // Not taken: the next turn carries it again.
     expect((await context.plan('s1', slack))?.text).toBe('[Other chats a]')
     ;(await context.plan('s1', slack))?.given(TAKEN)

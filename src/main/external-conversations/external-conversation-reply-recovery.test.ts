@@ -432,7 +432,7 @@ describe('recovery of a bot’s answer to its owner’s DM', () => {
     }
   }
 
-  it('decides as the live fill does: the DM gets the words before the marker, a thread stays quiet', async () => {
+  it('decides as the live fill does: the marker silences the DM and a thread alike', async () => {
     const answer = "I started fixes for Neil's items.\n\nNO_REPLY"
     const f = fixture(
       {
@@ -448,11 +448,9 @@ describe('recovery of a bot’s answer to its owner’s DM', () => {
       }
     )
     await f.recovery.boot()
-    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'quiet' })
-    expect(f.rows[0]?.fill).not.toHaveProperty('prose')
-    expect(f.rows[1]?.fill).toMatchObject({
-      outcome: 'answered',
-      prose: "I started fixes for Neil's items."
-    })
+    for (const filled of [f.rows[0]?.fill, f.rows[1]?.fill]) {
+      expect(filled).toMatchObject({ outcome: 'quiet' })
+      expect(filled).not.toHaveProperty('prose')
+    }
   })
 })

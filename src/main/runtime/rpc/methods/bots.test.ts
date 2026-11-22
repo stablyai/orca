@@ -16,14 +16,11 @@ import { makeAccessRequest } from '../../../../shared/bots/bot-access-request.te
 
 const started = vi.hoisted((): { bots: unknown[] } => ({ bots: [] }))
 const chats = vi.hoisted(() => {
-  const latest: Record<string, unknown> = { kind: 'message', role: 'user' }
   return {
     reset: vi.fn(async (_botId: string) => 'home-2'),
     send: vi.fn(async (_botId: string, _text: string, _origin?: string) => {}),
     // The bot whose home each session lives in.
-    homes: new Map<string, string>(),
-    // The Home Chat's latest message body.
-    latest
+    homes: new Map<string, string>()
   }
 })
 vi.mock('../../../bots/bot-chat-session', async (importOriginal) => ({
@@ -35,7 +32,7 @@ vi.mock('../../../bots/bot-chat-session', async (importOriginal) => ({
   runtimeBotChats: () => ({ reset: chats.reset, sendToChat: chats.send }),
   requireStructuredHost: async () => ({
     journalReads: async () => {
-      const items = [{ itemId: 'm1', body: { blocks: [], ...chats.latest } }]
+      const items = [{ itemId: 'm1', body: { blocks: [], kind: 'message', role: 'user' } }]
       return {
         promptItem: async () => items[0],
         operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } })
@@ -583,10 +580,10 @@ describe('bots.chat.reset (New Home Chat)', () => {
       ['thread-1', 'b1']
     ])
     chats.reset.mockClear()
-    chats.latest = { kind: 'message', role: 'user' }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, the conversation seam's delivered turns and the runtime id; the Chat reset is mocked.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots and the runtime id; the Chat reset is mocked.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      // Whether the caller's turn is a connector delivery (the owner's Slack DM, say).
       getExternalConversationSeam: () => ({ deliveredTurn: () => delivered }),
       bots: { assertEnabled: () => {}, list: () => [bot] }
     } as unknown as OrcaRuntimeService
@@ -602,31 +599,21 @@ describe('bots.chat.reset (New Home Chat)', () => {
     expect(chats.reset).toHaveBeenCalledWith('b1')
   })
 
-  it('starts one from the Home Chat on a turn its owner typed', async () => {
-    const dispatcher = resetRuntime()
+  it('starts one from the Home Chat on a turn a connector delivered', async () => {
+    const dispatcher = resetRuntime(true)
     expect(
       await dispatcher.dispatch(request('bots.chat.reset', { callerSessionId: 'home-1' }))
     ).toMatchObject({ ok: true, result: { sessionId: 'home-2' } })
     expect(chats.reset).toHaveBeenCalledWith('b1')
   })
 
-  it.each([
-    ['a thread or run', 'thread-1', false],
-    ['a connector message in the Home Chat', 'home-1', true]
-  ])('refuses %s', async (_, callerSessionId, delivered) => {
-    const dispatcher = resetRuntime(delivered)
-    expect(
-      await dispatcher.dispatch(request('bots.chat.reset', { botId: 'b1', callerSessionId }))
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('owner') } })
-    expect(chats.reset).not.toHaveBeenCalled()
-  })
-
-  it('refuses an automation run in the Home Chat', async () => {
+  it("refuses another of the bot's chats", async () => {
     const dispatcher = resetRuntime()
-    chats.latest = { kind: 'message', role: 'user', memorySource: 'Webhook deploys' }
     expect(
-      await dispatcher.dispatch(request('bots.chat.reset', { callerSessionId: 'home-1' }))
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('owner') } })
+      await dispatcher.dispatch(
+        request('bots.chat.reset', { botId: 'b1', callerSessionId: 'thread-1' })
+      )
+    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('Home Chat') } })
     expect(chats.reset).not.toHaveBeenCalled()
   })
 

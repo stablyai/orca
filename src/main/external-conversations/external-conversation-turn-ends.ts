@@ -2,7 +2,7 @@ import { answersThroughOutbox } from '../../shared/agent-session/journal/journal
 // The ends of chat turns their conversation didn't ask for: one adopted for its prompt tells how it
 // went and never what it said; an Orca-typed turn of a chat posting to Slack posts its reply too.
 import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { addressedBotWords, isQuietBotResult } from '../../shared/bot-quiet-result'
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import type { ChatNews } from './external-conversation-chat'
 import type { ConversationEvent } from './external-conversation-events'
 import { connectorFailure } from './external-conversation-failure'
@@ -11,8 +11,6 @@ import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
-import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
-import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 export type { SlackMirrorTurn } from './slack-mirror'
 
 export type ChatTurnEnd = {
@@ -189,25 +187,6 @@ export async function endRepliedTurn(
   return 'told'
 }
 
-/** The words a legacy turn end posts (`reply`: botTurnReply's). A bot's quiet message says there is
- *  nothing to tell, except to its owner's DM the turn answered (ownerDmAnswer) while no outbox row
- *  may post the answer too. Only a chat with no reply outbox at all ends `not-covered` with such
- *  stamps (an installed host always has one, so this never runs beside a fill): with no rows, there
- *  is no second post to make. */
-export function legacyTurnWords(
-  turn: EndedChatTurn,
-  link: ExternalConversationLink,
-  replied: Exclude<RepliedTurnEnd, 'told'>,
-  reply: string | undefined
-): string | null {
-  const message = turn.lastAssistantMessage
-  const words =
-    replied === 'not-covered' && message && ownerDmAnswer(link, turn)
-      ? connectorReplyWords(message, { bot: Boolean(link.bot), addressed: true })
-      : null
-  return words ?? reply ?? null
-}
-
 /** A failed turn's reason, as its end carries it. */
 export function turnFailure(
   end: ChatTurnEnd,
@@ -218,25 +197,15 @@ export function turnFailure(
     : {}
 }
 
-/** Whether the turn's journal stamps prove it answered this conversation (for its owner only). */
-function stampsName(
-  turn: EndedChatTurn,
-  link: ExternalConversationLink,
-  ownerOnly = false
-): boolean {
+/** Whether the turn's journal stamps prove it answered this conversation. */
+function stampsName(turn: EndedChatTurn, link: ExternalConversationLink): boolean {
   return Boolean(
     turn.stamps?.some(
       (stamp) =>
         stamp.conversation.source === link.source &&
-        stamp.conversation.externalId === link.externalId &&
-        (!ownerOnly || stamp.ownerAsked)
+        stamp.conversation.externalId === link.externalId
     )
   )
-}
-
-/** Its owner's Slack DM the turn answered, by its stamps: the marker can't silence words there. */
-function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boolean {
-  return isSlackDirectMessage(link) && stampsName(turn, link, true)
 }
 
 const COALESCED_QUIET_REPLY =
@@ -254,8 +223,7 @@ export function botTurnReply(
     return message
   }
   const providerTurnCount = end.news.mergedTurnCount ?? 1
-  // Words to its owner's DM post themselves (outbox or legacy end): no reply was dropped.
-  if (providerTurnCount <= 1 || (ownerDmAnswer(link, turn) && addressedBotWords(message))) {
+  if (providerTurnCount <= 1) {
     return undefined
   }
   // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.

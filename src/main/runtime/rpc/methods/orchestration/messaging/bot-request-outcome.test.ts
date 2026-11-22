@@ -54,7 +54,9 @@ const record: BotRequestRecord = {
     }
   ],
   request: 'update the docs',
-  conversation: { source: 'slack', externalId: 'T1:C1:1712.1:UBOT' }
+  conversation: { source: 'slack', externalId: 'T1:C1:1712.1:UBOT' },
+  // Sent on the Slack thread's own turn.
+  askedInConversation: '11111111-1111-4111-8111-111111111111'
 }
 
 describe('how a bot request ends', () => {
