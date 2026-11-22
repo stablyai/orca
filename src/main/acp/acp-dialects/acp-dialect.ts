@@ -202,8 +202,6 @@ export type AcpDialect = {
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
-  /** Its listing offers efforts the running model may lack, so an unlisted one refuses the send. */
-  confirmsEffortAtSend?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   /** Requests that name no session; they belong to the chat's own. */
