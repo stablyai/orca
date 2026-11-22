@@ -10,17 +10,29 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import { nativeChatAgentPresenceNotices } from './native-chat-agent-presence-notices'
 import { useTranslate } from '@/i18n/use-translate'
+import { useNativeChatAgentRestart } from './use-native-chat-agent-restart'
 
 /** An exited agent pauses sending and working state; the notices say why and what changed. */
 export function useNativeChatAgentPresenceStatus(args: {
   paneKey: string
   agent: AgentType
   sessionId: string | null
+  transcriptPath: string | null
   onShowTerminal?: () => void
 }): { exited: boolean; notices: readonly NativeChatComposerNotice[] } {
-  const { paneKey, agent, sessionId, onShowTerminal } = args
+  const { paneKey, agent, sessionId, transcriptPath, onShowTerminal } = args
   const { presence, dismissRestart } = useNativeChatAgentPresence(paneKey, sessionId)
   const t = useTranslate()
+  const resumeSessionId = presence.exit?.sessionId ?? presence.restartFrom?.sessionId ?? sessionId
+  const restart = useNativeChatAgentRestart({
+    paneKey,
+    agent,
+    sessionId: resumeSessionId,
+    // The chat's own transcript names only the session it shows.
+    transcriptPath: resumeSessionId === sessionId ? transcriptPath : null,
+    exited: presence.exit !== null,
+    onRestartedRunning: dismissRestart
+  })
   const notices = useMemo(
     () =>
       nativeChatAgentPresenceNotices({
@@ -29,9 +41,10 @@ export function useNativeChatAgentPresenceStatus(args: {
         sessionId,
         onShowTerminal,
         onDismissRestart: dismissRestart,
+        restart,
         t
       }),
-    [presence, agent, sessionId, onShowTerminal, dismissRestart, t]
+    [presence, agent, sessionId, onShowTerminal, dismissRestart, restart, t]
   )
   return { exited: presence.exit !== null, notices }
 }

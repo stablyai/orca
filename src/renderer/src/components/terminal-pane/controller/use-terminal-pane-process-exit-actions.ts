@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { registerPaneAgentRestartExecutor } from '@/lib/agent-session/resume/pane-agent-restart'
 import { usePaneAccountRestartStartup } from '../account-restart/use-pane-account-restart-startup'
 import { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import { useExitedPaneActions } from '../process-exit/use-exited-pane-actions'
@@ -99,6 +101,20 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     savedLayout,
     tabId
   })
+
+  // A chat's Resume or Start new session restarts its pane in place, as an account switch does.
+  useEffect(
+    () =>
+      registerPaneAgentRestartExecutor(tabId, (leafId, startup) => {
+        const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === leafId)
+        if (!pane) {
+          return false
+        }
+        handleRestartPane(pane.id, startup, { focus: false })
+        return true
+      }),
+    [handleRestartPane, managerRef, tabId]
+  )
 
   useReadyPaneAccountRestarts({
     consumePendingPaneAccountRestart,

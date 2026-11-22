@@ -1,4 +1,8 @@
 import type {
+  PaneAgentRestartReply,
+  PaneAgentRestartRequest
+} from '../../../shared/native-chat/agent-presence/pane-agent-restart-contract'
+import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../shared/file-access/runtime-editor-file-open'
@@ -135,6 +139,19 @@ export const uiTerminalAndSessionTabsApi = {
   },
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply): void => {
     ipcRenderer.send('ui:terminalPaneRevealReply', reply)
+  },
+  onRequestPaneAgentRestart: (
+    callback: (data: PaneAgentRestartRequest & { requestId: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: PaneAgentRestartRequest & { requestId: string }
+    ) => callback(data)
+    ipcRenderer.on('terminal:requestPaneAgentRestart', listener)
+    return () => ipcRenderer.removeListener('terminal:requestPaneAgentRestart', listener)
+  },
+  replyPaneAgentRestart: (reply: PaneAgentRestartReply): void => {
+    ipcRenderer.send('terminal:paneAgentRestartReply', reply)
   },
   onAgentLaunchPaneVerdict: (
     callback: (data: AgentLaunchPaneVerdictEvent) => void

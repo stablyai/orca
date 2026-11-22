@@ -88,6 +88,7 @@ export function NativeChatResolvedView({
     paneKey,
     agent,
     sessionId,
+    transcriptPath: transcriptPath ?? null,
     onShowTerminal: onSwitchToTerminal
   })
   // Use the live session’s reconciled lifecycle for every working-state consumer; an exited agent works on nothing.

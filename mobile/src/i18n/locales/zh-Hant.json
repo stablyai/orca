@@ -737,7 +737,19 @@
     "agentPresence": {
       "exited": "{{agent}} 已不在此終端機中執行。已暫停傳送，以免內容被輸入到 Shell 中。",
       "restartedNewSession": "{{agent}} 已在新的工作階段中重新啟動。先前的訊息不在其上下文中。",
-      "runningAgain": "{{agent}} 已重新執行。"
+      "runningAgain": "{{agent}} 已重新執行。",
+      "resumeSession": "繼續工作階段",
+      "startNewSession": "開始新的工作階段",
+      "resumePreviousSession": "繼續先前的工作階段",
+      "resuming": "正在繼續 {{agent}}…",
+      "starting": "正在啟動新的 {{agent}} 工作階段…",
+      "failed": {
+        "noResume": "Orca 在此終端機中沒有可繼續的 {{agent}} 工作階段。請改為開始新的工作階段。",
+        "heldElsewhere": "另一個終端機已在執行此 {{agent}} 工作階段。",
+        "paneUnavailable": "此終端機未在你電腦上的 Orca 視窗中開啟，因此無法在其中重新啟動 {{agent}}。",
+        "noLaunchCommand": "Orca 無法在此建立啟動 {{agent}} 的命令。",
+        "didNotStart": "{{agent}} 未能啟動。請檢查終端機後再試一次。"
+      }
     }
   },
   "common": {

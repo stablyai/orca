@@ -737,7 +737,19 @@
     "agentPresence": {
       "exited": "{{agent}}이(가) 이 터미널에서 더 이상 실행되지 않습니다. 셸에 입력되지 않도록 보내기를 일시 중지했습니다.",
       "restartedNewSession": "{{agent}}이(가) 새 세션에서 다시 시작되었습니다. 이전 메시지는 컨텍스트에 포함되지 않습니다.",
-      "runningAgain": "{{agent}}이(가) 다시 실행 중입니다."
+      "runningAgain": "{{agent}}이(가) 다시 실행 중입니다.",
+      "resumeSession": "세션 재개",
+      "startNewSession": "새 세션 시작",
+      "resumePreviousSession": "이전 세션 재개",
+      "resuming": "{{agent}}을(를) 재개하는 중…",
+      "starting": "새 {{agent}} 세션을 시작하는 중…",
+      "failed": {
+        "noResume": "이 터미널에는 재개할 {{agent}} 세션이 없습니다. 대신 새 세션을 시작하세요.",
+        "heldElsewhere": "다른 터미널에서 이미 이 {{agent}} 세션을 실행 중입니다.",
+        "paneUnavailable": "이 터미널이 컴퓨터의 Orca 창에서 열려 있지 않아 {{agent}}을(를) 다시 시작할 수 없습니다.",
+        "noLaunchCommand": "여기에서 {{agent}}을(를) 시작할 명령을 만들 수 없습니다.",
+        "didNotStart": "{{agent}}이(가) 시작되지 않았습니다. 터미널을 확인한 후 다시 시도하세요."
+      }
     }
   },
   "common": {

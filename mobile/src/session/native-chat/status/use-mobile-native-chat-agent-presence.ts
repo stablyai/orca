@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { nativeChatTerminalAgentRunningRead } from '../../../terminal/session/mobile-session-terminal-operations'
+import type { MobileNativeChatAgentRestart } from './use-mobile-native-chat-agent-restart'
 import {
   NATIVE_CHAT_AGENT_PRESENT,
   nextNativeChatAgentPresence,
@@ -15,6 +16,9 @@ const UNSEEN_AGENT_GONE_READS = 2
 export type MobileNativeChatAgentPresence = {
   presence: NativeChatAgentPresence
   dismissRestart: () => void
+  /** Asks the host again now, e.g. while a restart waits for the agent. */
+  readNow: () => void
+  restart?: MobileNativeChatAgentRestart
 }
 
 /** Asks the host whether an agent still runs in a terminal chat's pane, while the chat is shown. */
@@ -35,6 +39,7 @@ export function useMobileNativeChatAgentPresence(args: {
     sessionIdRef.current = args.sessionId
   }, [args.sessionId])
   const readsRef = useRef({ terminal, seenRunning: false, goneReads: 0 })
+  const readNowRef = useRef<() => void>(() => {})
   const [trackedTerminal, setTrackedTerminal] = useState(terminal)
   if (trackedTerminal !== terminal) {
     setTrackedTerminal(terminal)
@@ -83,10 +88,12 @@ export function useMobileNativeChatAgentPresence(args: {
         })
       )
     }
+    readNowRef.current = () => void read()
     void read()
     const timer = setInterval(() => void read(), AGENT_PRESENCE_POLL_MS)
     return () => {
       disposed = true
+      readNowRef.current = () => {}
       clearInterval(timer)
     }
   }, [client, terminal, active, statusKey])
@@ -96,5 +103,6 @@ export function useMobileNativeChatAgentPresence(args: {
       setPresence((current) => (current.restartFrom ? { ...current, restartFrom: null } : current)),
     []
   )
-  return useMemo(() => ({ presence, dismissRestart }), [presence, dismissRestart])
+  const readNow = useCallback(() => readNowRef.current(), [])
+  return useMemo(() => ({ presence, dismissRestart, readNow }), [presence, dismissRestart, readNow])
 }

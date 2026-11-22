@@ -7,10 +7,19 @@ import {
   isNativeChatRestartNewConversation,
   type NativeChatAgentPresence
 } from '../../../../../src/shared/native-chat/agent-presence/native-chat-agent-presence'
+import type { MobileNativeChatAgentRestart } from './use-mobile-native-chat-agent-restart'
+import { mobileNativeChatAgentRestartFailureText } from './mobile-native-chat-agent-restart-copy'
+
+export type MobileNativeChatAgentNoticeAction = {
+  label: string
+  onPress: () => void
+  primary?: boolean
+  disabled?: boolean
+}
 
 export type MobileNativeChatAgentNotice = {
   text: string
-  action: { label: string; onPress: () => void } | null
+  actions: MobileNativeChatAgentNoticeAction[]
 }
 
 /** The line above the composer for an agent that exited from, or came back to, the chat's terminal. */
@@ -20,38 +29,79 @@ export function mobileNativeChatAgentNotice(args: {
   sessionId: string | null
   onShowTerminal: (() => void) | undefined
   onDismissRestart: () => void
+  restart?: MobileNativeChatAgentRestart
   t: Translate
 }): MobileNativeChatAgentNotice | null {
-  const { presence, t } = args
+  const { presence, restart, t } = args
   const agent = formatAgentTypeLabel(args.agent)
+  const phase = restart?.phase ?? { kind: 'idle' }
+  const failure =
+    phase.kind === 'failed' ? mobileNativeChatAgentRestartFailureText(phase.reason, agent, t) : null
+  const restarting = phase.kind === 'restarting'
   if (presence.exit) {
-    return {
-      // The host's presence read carries no exit code, so the phone names none.
-      text: t(
-        'chat.agentPresence.exited',
-        '{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.',
-        { agent }
-      ),
-      action: args.onShowTerminal
-        ? {
+    const showTerminal = args.onShowTerminal
+      ? [
+          {
             label: t('session.nativeChatToggleAction.switchToTerminalView', 'Switch to terminal'),
             onPress: args.onShowTerminal
           }
-        : null
+        ]
+      : []
+    const resume = {
+      label: t('chat.agentPresence.resumeSession', 'Resume session'),
+      onPress: () => restart?.restart('resume'),
+      primary: true,
+      disabled: restarting
+    }
+    const fresh = {
+      label: t('chat.agentPresence.startNewSession', 'Start new session'),
+      onPress: () => restart?.restart('fresh'),
+      primary: !restart?.canResume,
+      disabled: restarting
+    }
+    return {
+      text: restarting
+        ? phase.mode === 'resume'
+          ? t('chat.agentPresence.resuming', 'Resuming {{agent}}…', { agent })
+          : t('chat.agentPresence.starting', 'Starting a new {{agent}} session…', { agent })
+        : (failure ??
+          // The host's presence read carries no exit code, so the phone names none.
+          t(
+            'chat.agentPresence.exited',
+            '{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.',
+            { agent }
+          )),
+      actions: restart
+        ? [...(restart.canResume ? [resume] : []), fresh, ...showTerminal]
+        : showTerminal
     }
   }
   if (!presence.restartFrom) {
     return null
   }
+  const newConversation = isNativeChatRestartNewConversation(presence.restartFrom, args.sessionId)
   return {
-    text: isNativeChatRestartNewConversation(presence.restartFrom, args.sessionId)
-      ? t(
-          'chat.agentPresence.restartedNewSession',
-          '{{agent}} restarted in a new session. Earlier messages are not part of its context.',
-          { agent }
-        )
-      : t('chat.agentPresence.runningAgain', '{{agent}} is running again.', { agent }),
-    action: { label: t('common.ok', 'OK'), onPress: args.onDismissRestart }
+    text:
+      failure ??
+      (newConversation
+        ? t(
+            'chat.agentPresence.restartedNewSession',
+            '{{agent}} restarted in a new session. Earlier messages are not part of its context.',
+            { agent }
+          )
+        : t('chat.agentPresence.runningAgain', '{{agent}} is running again.', { agent })),
+    actions: [
+      ...(newConversation && restart?.canResume
+        ? [
+            {
+              label: t('chat.agentPresence.resumePreviousSession', 'Resume previous session'),
+              onPress: () => restart.restart('resume'),
+              disabled: restarting
+            }
+          ]
+        : []),
+      { label: t('common.ok', 'OK'), onPress: args.onDismissRestart }
+    ]
   }
 }
 
@@ -77,6 +127,7 @@ export function useMobileNativeChatAgentNotice(
               ? () => setTabView(activeSessionTabId, 'terminal')
               : undefined,
             onDismissRestart: tracked.dismissRestart,
+            restart: tracked.restart,
             t
           })
         : null,

@@ -8,7 +8,7 @@ import { useMobileNativeChatSendError } from './native-chat/composer/delivery/us
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
 import { mobileNativeChatOverlayInputLockReason } from './native-chat/status/mobile-native-chat-overlay-lock-reason'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
-import { useMobileNativeChatAgentPresence } from './native-chat/status/use-mobile-native-chat-agent-presence'
+import { useMobileNativeChatTrackedAgent } from './native-chat/status/use-mobile-native-chat-agent-restart'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import { withMobileNativeChatAgentPresence } from './native-chat/status/mobile-native-chat-agent-exit-controller'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
@@ -71,8 +71,9 @@ export function useMobileSessionNativeChatDictation(
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = baseNativeChatController
   const agentStatus = activeSessionTab?.type === 'terminal' ? activeSessionTab.agentStatus : null
-  const nativeChatAgentPresence = useMobileNativeChatAgentPresence({
+  const nativeChatAgentPresence = useMobileNativeChatTrackedAgent({
     client,
+    agent: baseNativeChatController.nativeChatAgent,
     terminal: activeSessionTab?.type === 'terminal' ? activeHandle : null,
     active: showNativeChat && connState === 'connected',
     statusKey: `${agentStatus?.state ?? ''}:${agentStatus?.providerSession?.id ?? ''}`,

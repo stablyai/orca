@@ -743,7 +743,19 @@
     "agentPresence": {
       "exited": "{{agent}} artık bu terminalde çalışmıyor. Kabuğa bir şey yazılmaması için gönderme duraklatıldı.",
       "restartedNewSession": "{{agent}} yeni bir oturumda yeniden başladı. Önceki mesajlar bağlamının parçası değil.",
-      "runningAgain": "{{agent}} yeniden çalışıyor."
+      "runningAgain": "{{agent}} yeniden çalışıyor.",
+      "resumeSession": "Oturumu sürdür",
+      "startNewSession": "Yeni oturum başlat",
+      "resumePreviousSession": "Önceki oturumu sürdür",
+      "resuming": "{{agent}} sürdürülüyor…",
+      "starting": "Yeni bir {{agent}} oturumu başlatılıyor…",
+      "failed": {
+        "noResume": "Orca'nın bu terminalde sürdürebileceği bir {{agent}} oturumu yok. Bunun yerine yeni bir oturum başlatın.",
+        "heldElsewhere": "Bu {{agent}} oturumu zaten başka bir terminalde çalışıyor.",
+        "paneUnavailable": "Bu terminal bilgisayarınızda bir Orca penceresinde açık değil, bu yüzden {{agent}} burada yeniden başlatılamaz.",
+        "noLaunchCommand": "Orca, {{agent}} başlatmak için bir komut oluşturamadı.",
+        "didNotStart": "{{agent}} başlamadı. Terminali kontrol edip yeniden deneyin."
+      }
     }
   },
   "common": {

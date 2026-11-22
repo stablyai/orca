@@ -1,6 +1,7 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import {
+  terminalAgentRestartSchema,
   terminalAgentRunningSchema,
   terminalComposerDraftSchema,
   terminalSendAcceptedSchema
@@ -26,6 +27,17 @@ export const nativeChatTerminalAgentRunningRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-agent-running', terminalAgentRunningSchema)
+  })
+)
+
+// The host's window restarts the pane's agent in place; the phone never types the command.
+export const nativeChatTerminalAgentRestart = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.native-chat-agent-restart',
+    method: 'terminal.restartAgent',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-agent-restart', terminalAgentRestartSchema)
   })
 )
 

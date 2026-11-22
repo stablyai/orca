@@ -799,7 +799,19 @@
     "agentPresence": {
       "exited": "{{agent}} não está mais em execução neste terminal. O envio está pausado para que nada seja digitado no shell.",
       "restartedNewSession": "{{agent}} reiniciou em uma nova sessão. As mensagens anteriores não fazem parte do contexto dela.",
-      "runningAgain": "{{agent}} está em execução novamente."
+      "runningAgain": "{{agent}} está em execução novamente.",
+      "resumeSession": "Retomar sessão",
+      "startNewSession": "Iniciar nova sessão",
+      "resumePreviousSession": "Retomar sessão anterior",
+      "resuming": "Retomando {{agent}}…",
+      "starting": "Iniciando uma nova sessão de {{agent}}…",
+      "failed": {
+        "noResume": "O Orca não tem nenhuma sessão de {{agent}} para retomar neste terminal. Inicie uma nova sessão.",
+        "heldElsewhere": "Outro terminal já está executando esta sessão de {{agent}}.",
+        "paneUnavailable": "Este terminal não está aberto em uma janela do Orca no seu computador, então {{agent}} não pode ser reiniciado nele.",
+        "noLaunchCommand": "O Orca não conseguiu criar um comando para iniciar {{agent}} aqui.",
+        "didNotStart": "{{agent}} não iniciou. Verifique o terminal e tente novamente."
+      }
     }
   },
   "common": {
