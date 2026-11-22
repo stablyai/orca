@@ -4,11 +4,14 @@ import {
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody
+  readClaudeStatusLineForm,
+  readClaudeStatusLineRateLimits
 } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { readClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -16,14 +19,14 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
-import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
+import { AgentHookServerClaudeStatusLineModel } from './server-claude-statusline-model'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
 import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
-export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
+export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStatusLineModel {
   private readonly startup = new AgentHookStartup()
 
   start(options?: HookServerStartOptions): Promise<void> {
@@ -57,6 +60,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     }
     if (!isCurrent()) {
       return
+    }
+    if (this.endpointDir) {
+      void this.restoreClaudeAgentViews(join(this.endpointDir, 'claude-agent-views.json'))
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -103,8 +109,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          const { durable, observed, ...reply } = this.claudeAgentViews.receive(body, {
+            sameMachine: this.claudeViewMayGoQuiet(body)
+          })
+          // Acknowledged only once saved, so a quit before the save cannot strand an idle Claude;
+          // without the flag the mod registers again and keeps checking in.
+          const saved = (durable || observed) && (await this.claudeAgentViews.saved())
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          res.end(JSON.stringify(saved ? { ...reply, durable, observed } : reply))
           return
         }
         await this.initializeStatusHookOwner()
@@ -114,9 +126,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
-          const statusLineEvent = parseClaudeStatusLineBody(body)
-          if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+          const form = readClaudeStatusLineForm(body)
+          if (form) {
+            const statusLineEvent = readClaudeStatusLineRateLimits(form)
+            if (statusLineEvent) {
+              this.onClaudeStatusLine?.(statusLineEvent)
+            }
+            const modelReport = readClaudeStatusLineModel(form)
+            if (modelReport) {
+              this.applyClaudeStatusLineModel(modelReport)
+            }
           }
           res.writeHead(204)
           res.end()
@@ -218,7 +237,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
-    this.claudeAgentViews.clear()
+    this.claudeAgentViews.close()
     this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {

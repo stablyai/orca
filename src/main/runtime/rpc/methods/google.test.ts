@@ -40,12 +40,13 @@ function googleRuntime(bots: Bot[]) {
       enabled: () => true,
       assertEnabled: () => {},
       list: () => bots,
-      update: async (botId: string, patch: Partial<Bot>) => {
-        updates.push({ botId, patch })
+      update: async (botId: string, edit: Partial<Bot> | ((bot: Bot) => Partial<Bot>)) => {
         const bot = bots.find((entry) => entry.id === botId)
         if (!bot) {
           throw new Error('bot_not_found')
         }
+        const patch = typeof edit === 'function' ? edit(bot) : edit
+        updates.push({ botId, patch })
         Object.assign(bot, patch)
         return bot
       }
@@ -137,6 +138,46 @@ describe('google.* owner-only changes', () => {
     })
     await dispatcher.dispatch(request('google.bot.set', { botId: 'b1', on: false }), OWNER)
     expect(bots[0]?.google).toBe(false)
+  })
+
+  it('keeps Google off when Who can ask changed after the caller confirmed', async () => {
+    const bots = [
+      makeTestBot({
+        id: 'b1',
+        name: 'Scout',
+        members: [{ id: 'U2', name: 'Nora', source: 'slack' }]
+      })
+    ]
+    const { dispatcher } = googleRuntime(bots)
+    expect(
+      await dispatcher.dispatch(
+        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: [] }),
+        OWNER
+      )
+    ).toMatchObject({ ok: false })
+    expect(
+      await dispatcher.dispatch(
+        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: ['slack::U9'] }),
+        OWNER
+      )
+    ).toMatchObject({ ok: false })
+    expect(
+      await dispatcher.dispatch(
+        request('google.bot.set', {
+          botId: 'b1',
+          on: true,
+          confirmedAskers: ['slack::U2', 'slack::U2']
+        }),
+        OWNER
+      )
+    ).toMatchObject({ ok: false })
+    expect(bots[0]?.google).not.toBe(true)
+    expect(
+      await dispatcher.dispatch(
+        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: ['slack::U2'] }),
+        OWNER
+      )
+    ).toMatchObject({ ok: true, result: { bot: { google: true } } })
   })
 
   it('takes the Google toggle only through google.bot.set, never bots.update', () => {

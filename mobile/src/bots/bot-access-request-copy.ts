@@ -59,11 +59,8 @@ export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail
   )
 }
 
-function accessRequestPlace(request: ConnectorAccessRequest): string {
-  const connector = CONNECTOR_SOURCE_NAMES[request.source]
-  return request.workspaceName
-    ? botAccessCopy('place', { connector, workspace: request.workspaceName })
-    : connector
+function accessPlace(connector: string, workspace: string | null): string {
+  return workspace ? botAccessCopy('place', { connector, workspace }) : connector
 }
 
 /** Who the connector says they are, without a real name that only repeats their name. */
@@ -76,7 +73,12 @@ function uniqueRequestIdentity(request: ConnectorAccessRequest): string {
 
 /** Under the person's name: who the connector says they are, and where they asked. */
 export function accessRequestLine(request: ConnectorAccessRequest): string {
-  return [uniqueRequestIdentity(request), accessRequestPlace(request)].filter(Boolean).join(' · ')
+  return [
+    uniqueRequestIdentity(request),
+    accessPlace(CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName || null)
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** One fact row of the access decision, as the desktop's confirm lists it; `warn` rows read red. */
@@ -87,39 +89,63 @@ export type AccessDecisionRow = {
   connector?: BotAccessConnector
 }
 
+/** Who would get access, from where: a request's asker, or the people picked to add. */
+export type PhoneAccessGrant = {
+  /** identity: who the connector says they are, when asked from a request. */
+  people: readonly { id: string; name: string; identity?: string }[]
+  connector: BotAccessConnector
+  workspace: string | null
+}
+
+export function accessRequestGrant(request: ConnectorAccessRequest): PhoneAccessGrant {
+  return {
+    people: [
+      {
+        id: request.requester.id,
+        name: accessRequestPerson(request),
+        identity: uniqueRequestIdentity(request)
+      }
+    ],
+    connector: request.source,
+    workspace: request.workspaceName || null
+  }
+}
+
 /** The desktop's "Give access" confirm: its title, who and where, the warning line in its tone, and
  *  what they reach, one line each. The bot runs on the computer, not this phone. */
 export function accessDecisionCopy(
-  request: ConnectorAccessRequest,
+  grant: PhoneAccessGrant,
   bot: PhoneAccessBot
 ): {
   title: string
+  /** Whom the rows are about: the one person's first name, or "they". */
   firstName: string
   who: string
   warning: string
   tone: 'high' | 'medium'
   rows: AccessDecisionRow[]
 } {
-  const person = accessRequestPerson(request)
-  const firstName =
-    botAccessGrantFacts({
-      botName: bot.name,
-      people: [{ id: request.requester.id, name: person }],
-      connector: CONNECTOR_SOURCE_NAMES[request.source],
-      workspace: request.workspaceName || null
-    }).firstName ?? person
+  const connector = CONNECTOR_SOURCE_NAMES[grant.connector]
+  const { person, firstName, names, count, identity } = botAccessGrantFacts({
+    botName: bot.name,
+    people: grant.people,
+    connector,
+    workspace: grant.workspace
+  })
   // Without a handle, the full name, since the title shows only the first.
-  const who = uniqueRequestIdentity(request) || (person !== firstName ? person : '')
+  const who = person ? identity || (person !== firstName ? person : '') : names.join(', ')
   const { tone, rows } = botAccessConfirm({
     permission: botStartingPermission(bot, null),
-    connector: request.source,
+    connector: grant.connector,
     // Unknown counts, as on the desktop: the phone can't read which Google areas are on.
     google: bot.google === true
   })
   return {
-    title: botAccessCopy('titleOne', { person: firstName, name: bot.name }),
-    firstName,
-    who: [who, accessRequestPlace(request)].filter(Boolean).join(' · '),
+    title: firstName
+      ? botAccessCopy('titleOne', { person: firstName, name: bot.name })
+      : botAccessCopy('titleMany', { count, name: bot.name }),
+    firstName: firstName ?? 'they',
+    who: [who, accessPlace(connector, grant.workspace)].filter(Boolean).join(' · '),
     warning: botAccessCopy(
       'confirmWarning',
       botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
@@ -134,7 +160,12 @@ export function accessDecisionCopy(
         case 'may-skip-approvals':
           return { kind: row.kind, text: botAccessCopy('confirmMaySkipApprovals'), warn: true }
         case 'approves':
-          return { kind: row.kind, text: botAccessCopy('confirmApproveOne', { person: firstName }) }
+          return {
+            kind: row.kind,
+            text: firstName
+              ? botAccessCopy('confirmApproveOne', { person: firstName })
+              : botAccessCopy('confirmApproveMany')
+          }
         case 'google':
           return { kind: row.kind, text: botAccessCopy('confirmGoogle') }
         case 'connector':

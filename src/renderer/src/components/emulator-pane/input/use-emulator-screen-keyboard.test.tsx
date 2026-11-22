@@ -11,6 +11,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn()
 
 const scrcpyKeyboard = {
   sendKey: vi.fn(),
+  sendHidKey: vi.fn(),
   sendText: vi.fn(async () => true),
   pasteText: vi.fn(async () => true)
 }
@@ -55,11 +56,20 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function press(init: { key: string; altKey?: boolean; ctrlKey?: boolean; altGraph?: boolean }) {
+function press(init: {
+  key: string
+  code?: string
+  shiftKey?: boolean
+  altKey?: boolean
+  ctrlKey?: boolean
+  altGraph?: boolean
+}) {
   const event = new KeyboardEvent('keydown', {
     bubbles: true,
     cancelable: true,
     key: init.key,
+    code: init.code ?? '',
+    shiftKey: init.shiftKey ?? false,
     altKey: init.altKey ?? false,
     ctrlKey: init.ctrlKey ?? false
   })
@@ -85,6 +95,24 @@ describe('Android emulator pane keys', () => {
 
     expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['ş'], ['中'], ['€']])
     expect(scrcpyKeyboard.sendKey).toHaveBeenCalledWith('backspace', false)
+  })
+
+  it('presses keys whose character matches a US keyboard on the hardware keyboard, and types the rest', () => {
+    press({ key: 'Enter' })
+    press({ key: 'a', code: 'KeyA' })
+    press({ key: ':', code: 'Semicolon', shiftKey: true })
+    // German QWERTZ: the US Y key types "z"; Turkish Q: the US ; key types "ş".
+    press({ key: 'z', code: 'KeyY' })
+    press({ key: 'ş', code: 'Semicolon' })
+    press({ key: 'Backspace', code: 'Backspace' })
+
+    expect(scrcpyKeyboard.sendHidKey.mock.calls).toEqual([
+      [{ usage: 0x04, shift: false, text: 'a' }],
+      [{ usage: 0x33, shift: true, text: ':' }],
+      [{ usage: 0x2a, shift: false, button: 'backspace' }]
+    ])
+    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['z'], ['ş']])
+    expect(scrcpyKeyboard.sendKey).not.toHaveBeenCalled()
   })
 
   it('sends text a host input method committed, once, as text', () => {

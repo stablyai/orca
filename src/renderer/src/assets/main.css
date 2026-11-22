@@ -260,6 +260,8 @@
   --chat-composer-border-mix: 11%;
   --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
+  /* Why: unitless so each markdown surface multiplies it by its own font size; zoom keeps characters per line. */
+  --markdown-reading-measure-em: 60;
   --card: #fff;
   --card-foreground: #0a0a0a;
   /* Why: another product's logo is drawn for a white backdrop in both themes. */
@@ -2249,8 +2251,16 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner[data-animation-offscreen],
-.loading-spinner[data-animation-offscreen] {
+.loading-spinner[data-animation-offscreen],
+[data-animation-offscreen] .stale-review-shimmer {
   animation: none;
+}
+
+/* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
+[data-row-offscreen] .animate-spin,
+[data-row-offscreen] .animate-pulse,
+[data-row-offscreen] .shimmer:not(.shimmer-once) {
+  animation-play-state: paused;
 }
 
 /* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
@@ -4368,6 +4378,11 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   50% {
     opacity: 1;
   }
+}
+
+/* The descendant pause above doesn't reach pseudo-elements. */
+[data-animation-offscreen] .browser-agent-cursor-layer::before {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

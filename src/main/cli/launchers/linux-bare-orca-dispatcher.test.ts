@@ -96,44 +96,48 @@ describe('installLinuxBareOrcaDispatcher', () => {
     await expect(readFile(result.dispatcherPath, 'utf8')).resolves.toBe(foreignContent)
   })
 
-  it('preserves a foreign dispatcher created while AppImage extraction is in flight', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-    const appImagePath = join(homePath, 'Orca.AppImage')
-    const cacheRootPath = join(homePath, 'cache')
-    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
-    await mkdir(homePath, { recursive: true })
-    await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
-    let reportStarted!: () => void
-    let releaseExtraction!: () => void
-    const started = new Promise<void>((resolve) => {
-      reportStarted = resolve
-    })
-    const released = new Promise<void>((resolve) => {
-      releaseExtraction = resolve
-    })
+  // The stable launcher endpoint is a file symlink, which Windows only permits elevated.
+  it.skipIf(process.platform === 'win32')(
+    'preserves a foreign dispatcher created while AppImage extraction is in flight',
+    async () => {
+      const { homePath, resourcesPath } = await makeFixture()
+      const appImagePath = join(homePath, 'Orca.AppImage')
+      const cacheRootPath = join(homePath, 'cache')
+      const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+      await mkdir(homePath, { recursive: true })
+      await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+      let reportStarted!: () => void
+      let releaseExtraction!: () => void
+      const started = new Promise<void>((resolve) => {
+        reportStarted = resolve
+      })
+      const released = new Promise<void>((resolve) => {
+        releaseExtraction = resolve
+      })
 
-    const installation = installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath,
-      appImagePath,
-      appImageCacheRootPath: cacheRootPath,
-      appImageExtractRunner: async (_path, cwd) => {
-        await writePayload(cwd)
-        reportStarted()
-        await released
-      }
-    })
-    await started
-    await mkdir(dirname(dispatcherPath), { recursive: true })
-    await writeFile(dispatcherPath, '#!/bin/sh\necho foreign\n', { mode: 0o755 })
-    releaseExtraction()
+      const installation = installLinuxBareOrcaDispatcher({
+        resourcesPath,
+        homePath,
+        appImagePath,
+        appImageCacheRootPath: cacheRootPath,
+        appImageExtractRunner: async (_path, cwd) => {
+          await writePayload(cwd)
+          reportStarted()
+          await released
+        }
+      })
+      await started
+      await mkdir(dirname(dispatcherPath), { recursive: true })
+      await writeFile(dispatcherPath, '#!/bin/sh\necho foreign\n', { mode: 0o755 })
+      releaseExtraction()
 
-    await expect(installation).resolves.toMatchObject({
-      state: 'skipped-foreign',
-      target: null
-    })
-    await expect(readFile(dispatcherPath, 'utf8')).resolves.toBe('#!/bin/sh\necho foreign\n')
-  })
+      await expect(installation).resolves.toMatchObject({
+        state: 'skipped-foreign',
+        target: null
+      })
+      await expect(readFile(dispatcherPath, 'utf8')).resolves.toBe('#!/bin/sh\necho foreign\n')
+    }
+  )
 })
 
 async function writePayload(cwd: string): Promise<void> {

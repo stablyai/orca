@@ -112,6 +112,31 @@ export const botActivityRead = bindDeferredRpcOperation(
   })
 )
 
+/** The update that stops one person asking the bot. */
+export function memberRemoval(member: BotMember) {
+  return {
+    removeMember: {
+      id: member.id,
+      source: botMemberSource(member),
+      ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
+    }
+  }
+}
+
+/** Takes each person off with its own removeMember, which every host applies to its current roster (a stale roster would restore someone revoked elsewhere), then saves `updates`; stops at the first failed save. */
+export async function saveRemovingMembers<U extends object>(
+  save: (updates: U | ReturnType<typeof memberRemoval>) => Promise<boolean>,
+  members: readonly BotMember[],
+  updates: U
+): Promise<boolean> {
+  for (const member of members) {
+    if (!(await save(memberRemoval(member)))) {
+      return false
+    }
+  }
+  return save(updates)
+}
+
 /** Keep only me: one removal each, on the host, so a concurrent edit is kept and an older host
  *  takes it. Resolves to the names of whoever couldn't be removed. */
 export async function removeEveryoneWhoCanAsk(
@@ -121,17 +146,12 @@ export async function removeEveryoneWhoCanAsk(
 ): Promise<string[]> {
   const failed: string[] = []
   for (const member of bot.members) {
-    const removeMember = {
-      id: member.id,
-      source: botMemberSource(member),
-      ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
-    }
     try {
       onBot(
         botUpdate.interpret(
           await botUpdate.request(
             client,
-            { botId: bot.id, updates: { removeMember } },
+            { botId: bot.id, updates: memberRemoval(member) },
             { failWhenDisconnected: true }
           )
         ).bot

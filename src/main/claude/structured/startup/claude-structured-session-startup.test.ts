@@ -84,5 +84,35 @@ describe('Claude host-awaited open', () => {
     expect(errorRows(appendItem)).toHaveLength(0)
   })
 
+  it('adds initialize descriptors to a stream catalog that arrived first', async () => {
+    const claude = fakeClaude({
+      holdInit: true,
+      initCommands: [{ name: 'pro-mode', description: 'Pro mode', argumentHint: '<task>' }]
+    })
+    const { adapter } = adapterFor(claude)
+    const acquisition = await adapter.acquire({ ...ACQUIRE, events: recordingJournalSink() })
+    const open = adapter.open({
+      sessionId: 'session-1',
+      fence: 7,
+      acquisitionGeneration: acquisition.acquisitionGeneration,
+      signal: new AbortController().signal
+    })
+    const connection = claude.connections[0]!
+    claudeFrame(connection, {
+      type: 'system',
+      subtype: 'init',
+      slash_commands: ['anthropic-skills:pro-mode'],
+      skills: ['anthropic-skills:pro-mode']
+    })
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'anthropic-skills:pro-mode', kind: 'skill' }
+    ])
+    connection.initialization.resolve()
+    await open
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'pro-mode', kind: 'skill', description: 'Pro mode', argumentHint: '<task>' }
+    ])
+  })
+
   // SDK-typed shape; ordering constructed
 })

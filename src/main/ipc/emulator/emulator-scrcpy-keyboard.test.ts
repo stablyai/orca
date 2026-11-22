@@ -97,4 +97,40 @@ describe('emulator:scrcpyKeyboard', () => {
     expect(paste.readUInt32BE(10)).toBe(4) // UTF-8 bytes of şğ
     vi.useRealTimers()
   })
+
+  it('presses keys on a UHID keyboard it creates once, and types them as text without one', async () => {
+    vi.useFakeTimers()
+    scrcpyVideoRegistry.register('serial-2', () => {})
+    scrcpyVideoRegistry.attachControl('serial-2', {
+      videoSize: () => ({ width: 600, height: 1280 }),
+      sendControl,
+      uhidKeyboard: true
+    })
+    const key = (deviceId: string, usage: number, shift: boolean, text: string) =>
+      sendKeyboard({ deviceId, hid: { usage, shift }, text })
+
+    // The first key creates the keyboard, and input waits while Android registers it.
+    const first = key('serial-2', 0x04, false, 'a')
+    const second = key('serial-2', 0x33, true, ':')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendControl).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(250)
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true])
+    // No UHID keyboard on this device: the same key falls back to typed text.
+    await expect(key('serial-1', 0x04, false, 'b')).resolves.toBe(true)
+    scrcpyVideoRegistry.stop('serial-2')
+    vi.useRealTimers()
+
+    const messages = sendControl.mock.calls.map(([message]) => message)
+    expect(messages.map((message) => message.readUInt8(0))).toEqual([12, 13, 13, 13, 13, 1])
+    // UHID_CREATE: keyboard id 1, then a report descriptor that opens a keyboard collection.
+    expect(messages[0].readUInt16BE(1)).toBe(1)
+    expect([...messages[0].subarray(5, 9)]).toEqual([0x05, 0x01, 0x09, 0x06])
+    // UHID_INPUT: modifier byte (left Shift), reserved byte, then the key; the release clears it.
+    const report = (message: Buffer) => [...message.subarray(5)]
+    expect(report(messages[1])).toEqual([0, 0, 0x04, 0, 0, 0, 0, 0])
+    expect(report(messages[2])).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
+    expect(report(messages[3])).toEqual([0x02, 0, 0x33, 0, 0, 0, 0, 0])
+    expect(messages[5].subarray(5).toString('utf8')).toBe('b')
+  })
 })

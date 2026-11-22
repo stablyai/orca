@@ -54,6 +54,8 @@ export async function inspectRuntimeTerminalProcess(
     scanChildProcesses?: boolean
     steadyState?: boolean
     jobMembershipOnly?: boolean
+    /** Local/daemon panes only: a fresh, terminal-scoped read of the PTY's foreground group. */
+    foregroundOnly?: boolean
   }
 ): Promise<RuntimeTerminalProcessInspection> {
   const owner = getRemoteRuntimePtyOwner(ptyId)

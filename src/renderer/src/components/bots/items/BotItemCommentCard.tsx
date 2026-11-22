@@ -28,6 +28,7 @@ import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-a
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionLines } from './BotItemQuestionLines'
+import { BOT_ITEM_COMMENT_ATTRIBUTE } from './bot-item-comment-reveal'
 import {
   botItemHeldAnswersScope,
   type BotItemQuickReplyActions
@@ -80,9 +81,6 @@ type CommentEntry = Pick<
   'event' | 'replyTo' | 'answers' | 'byOrder'
 > & { waiting?: boolean }
 
-/** Marks a card so a jump can find and focus it. */
-export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
-
 export function BotItemCommentCard({
   bot,
   item,
@@ -130,6 +128,8 @@ export function BotItemCommentCard({
           // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
           // tint alone lost the card's edge on the page.
           'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
+          // Shown from "Replying to": a full ring and tint, easing out as it ends.
+          'data-[flash=on]:bg-foreground/8 data-[flash=on]:ring-2 data-[flash=on]:ring-ring data-[flash=fading]:transition-[box-shadow,background-color] data-[flash=fading]:duration-600 dark:data-[flash=on]:bg-foreground/8',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}

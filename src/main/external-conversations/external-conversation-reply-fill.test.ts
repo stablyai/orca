@@ -33,6 +33,7 @@ it('fills only the rows its continuation claimed, under the cut group’s own he
         row('d3', { cut, claimMessageId: 'continue-2' }),
         row('d4', { cut })
       ],
+      readOwed: async () => [],
       fillOutcomes: async (batch) => {
         fills.push(...batch)
         return true

@@ -197,6 +197,56 @@ describe('RelayControlOrigin two-path failover', () => {
     )
   })
 
+  it('sends the resumed control a token renewed while it was still connecting', async () => {
+    const { primary, primaryControl, alternates, origin, onClose } = await setup({ alternates: 1 })
+    const [alternate] = alternates
+    primary.answersPings = false
+    // The renewal lands after the alternate's hello carried the old token, before its hello-ack:
+    // the connecting control cannot take an auth-refresh yet.
+    alternate.beforeHelloAck = async () => {
+      origin.refreshAuthorization('renewed-token')
+    }
+
+    await vi.advanceTimersByTimeAsync(36_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    await untilLoopback(() => expect(alternate.authRefreshes).toEqual(['renewed-token']))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('dials a later alternate with a token renewed after the resume began', async () => {
+    const { primary, primaryControl, alternates, origin } = await setup({ alternates: 2 })
+    const [silent, alternate] = alternates
+    primary.answersPings = false
+    silent.behaviour = 'silent'
+
+    // The resume is under way on the first alternate when the renewal lands; that attempt times out.
+    const silentConnection = silent.nextConnection()
+    await vi.advanceTimersByTimeAsync(36_000)
+    await silentConnection
+    origin.refreshAuthorization('renewed-token')
+    await vi.advanceTimersByTimeAsync(20_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    expect(alternate.dialTokens).toEqual(['renewed-token'])
+    expect(alternate.authRefreshes).toEqual([])
+  })
+
+  it('sends no extra auth-refresh when the token did not change while connecting', async () => {
+    const { primary, primaryControl, alternates, origin } = await setup({ alternates: 1 })
+    const [alternate] = alternates
+    primary.answersPings = false
+
+    await vi.advanceTimersByTimeAsync(36_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    origin.refreshAuthorization('later-token')
+    await untilLoopback(() => expect(alternate.authRefreshes).toEqual(['later-token']))
+  })
+
   it('retires the old control itself when the edge’s 4408 has not arrived', async () => {
     const { primary, primarySocket, primaryControl, alternates, origin, onClose } = await setup({
       alternates: 1

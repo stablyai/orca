@@ -48,7 +48,12 @@ function sessions(
       chatId === 'side-chat' ? { sessionId: 'side-chat-after-clear' } : null
     ),
     startSession: vi.fn(async () => 'new-session'),
-    nameSession: vi.fn(async () => undefined)
+    nameSession: vi.fn(async () => undefined),
+    sendToGroupRoom: vi.fn(async (_bot: unknown, sessionId: string) => ({
+      sessionId,
+      clientMessageId: 'room-op',
+      fingerprint: 'f'
+    }))
   }
   return { deps, sessions: botAutomationSessions(deps) }
 }
@@ -91,6 +96,18 @@ describe('botAutomationSessions', () => {
       'has no chat chat:closed-chat that takes mail'
     )
     expect(deps.chats.sendToSession).toHaveBeenCalledTimes(1)
+    expect(deps.chats.sendToChat).not.toHaveBeenCalled()
+  })
+
+  it("runs in a group room by the bot's member session there, never its Home Chat", async () => {
+    const { deps, sessions: chats } = sessions()
+    await chats.sendToBotChat(bot, 'bot-group-member-1', 'Check progress', undefined, true)
+    expect(deps.sendToGroupRoom).toHaveBeenCalledExactlyOnceWith(
+      bot,
+      'bot-group-member-1',
+      'Check progress',
+      undefined
+    )
     expect(deps.chats.sendToChat).not.toHaveBeenCalled()
   })
 

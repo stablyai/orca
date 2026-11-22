@@ -1,22 +1,27 @@
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
-import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import {
   JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
   type JournalConnectorReplyFill,
   type JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
-import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import {
+  connectorReplyTurnOutcome,
+  type ConnectorReplyStamp
+} from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
+import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 
 export type EndedTurnReplies = {
   sessionId: string
   turnItemId: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
-  stamps: readonly AgentJournalConnectorDelivery[]
+  stamps: readonly ConnectorReplyStamp[]
   /** The turn's opening message: a continuation fills only the rows its admission claimed. */
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
@@ -29,8 +34,32 @@ export type EndedTurnReplies = {
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
- *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time. */
-export type FilledTurn = { covered: ReadonlySet<string>; paused: boolean; resumesAt?: number }
+ *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time.
+ *  `answered`: those its rows answer with words, so nothing there needs a stand-in reply. */
+export type FilledTurn = {
+  covered: ReadonlySet<string>
+  paused: boolean
+  resumesAt?: number
+  answered?: ReadonlySet<string>
+}
+
+/** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
+ *  owner proof of a row a continuation claimed, whose own stamps carry none, across a pause or a
+ *  restart alike. */
+export type AskedByOwner = (sessionId: string, messageId: string) => Promise<boolean>
+
+/** AskedByOwner over a chat's journal: the asker of the send that admitted the row, or, for a
+ *  queued card's row (whose id is the card's), of the send the card was handed over as. */
+export function journalAskedByOwner(
+  reads: (
+    sessionId: string
+  ) => Promise<Pick<AgentSessionJournalReads, 'submissionBody'> | undefined>
+): AskedByOwner {
+  return async (sessionId, messageId) => {
+    const body = await (await reads(sessionId))?.submissionBody(messageId, { family: true })
+    return body?.asker?.role === 'owner'
+  }
+}
 
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
 export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTurn>
@@ -40,6 +69,8 @@ export type UsageLimitPause = (
   turn: EndedTurnReplies,
   rows: readonly JournalConnectorReplyRow[]
 ) => Promise<false | { resumesAt?: number }>
+
+const ANSWERED_TURNS_KEPT = 64
 
 const keyOf = (account: string, deliveryId: string): string => `${account}\0${deliveryId}`
 
@@ -51,19 +82,38 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
 export function conversationReplyFill(
   journal: () => ConnectorReplyJournal | null,
   filled: () => void,
-  pause?: UsageLimitPause
+  pause?: UsageLimitPause,
+  askedByOwner?: AskedByOwner
 ): ConversationReplyFill {
+  // The conversations each recent turn answered with words. Recovery and the live end fill through
+  // this one function, and a sent row is deleted, so the live end of a turn recovery already
+  // answered still knows (its rows may be gone by then). In memory, bounded: one process's turns.
+  const answeredByTurn = new Map<string, ReadonlySet<string>>()
+  const remember = (key: string, answered: ReadonlySet<string>) => {
+    answeredByTurn.delete(key)
+    answeredByTurn.set(key, answered)
+    for (const oldest of answeredByTurn.keys()) {
+      if (answeredByTurn.size <= ANSWERED_TURNS_KEPT) {
+        break
+      }
+      answeredByTurn.delete(oldest)
+    }
+  }
   return async (turn) => {
     const store = journal()
     if (!store || turn.stamps.length === 0) {
       return { covered: new Set(), paused: false }
     }
     const order = new Map<string, number>()
+    const ownerAsked = new Set<string>()
     for (const stamp of turn.stamps) {
       for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
         const key = keyOf(stamp.account, deliveryId)
         if (!order.has(key)) {
           order.set(key, order.size)
+        }
+        if (stamp.ownerAsked) {
+          ownerAsked.add(key)
         }
       }
     }
@@ -74,11 +124,6 @@ export function conversationReplyFill(
           (order.get(keyOf(a.account, a.deliveryId)) ?? 0) -
           (order.get(keyOf(b.account, b.deliveryId)) ?? 0)
       )
-    const { outcome, prose } = connectorReplyTurnOutcome({
-      outcome: turn.outcome,
-      prose: turn.prose,
-      bot: turn.bot
-    })
     // The group's head keys its answer: its earliest stamp per conversation, filled or sent or not,
     // so a partial fill or a deleted row never moves the key.
     const answers = new Map<string, string>()
@@ -98,14 +143,50 @@ export function conversationReplyFill(
       (row) => !row.fill && (claimedHere(row) || (row.claimMessageId === undefined && !row.cut))
     )
     const paused =
-      outcome === 'failed' && turn.failure?.category === 'usage_limit' && own.length > 0
+      turn.outcome === 'failure' && turn.failure?.category === 'usage_limit' && own.length > 0
         ? await pause?.(turn, own)
         : false
     if (paused) {
       return { covered, paused: true, ...paused }
     }
+    // The owner's DM rows the stamps don't mark (a continuation's claim names no asker): their
+    // admitting message says who sent them. Read only when the marker could silence them.
+    const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
+    for (const row of markerMayQuiet ? own : []) {
+      const key = keyOf(row.account, row.deliveryId)
+      if (
+        isSlackDirectMessage(row.conversation) &&
+        !ownerAsked.has(key) &&
+        (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false))
+      ) {
+        ownerAsked.add(key)
+      }
+    }
     const fills: JournalConnectorReplyFill[] = []
+    // Rows an earlier fill (recovery's, say) already answered for this same turn count too.
+    const turnKey = `${turn.sessionId}\0${turn.turnItemId}`
+    const answered = new Set([
+      ...(answeredByTurn.get(turnKey) ?? []),
+      ...rows
+        .filter(
+          (row) => row.fill?.outcome === 'answered' && row.fill.turnItemId === turn.turnItemId
+        )
+        .map((row) => row.conversation.externalId)
+    ])
     for (const row of own) {
+      // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
+      // fills here too); a member's DM, or a thread, keeps today's silence.
+      const { outcome, prose } = connectorReplyTurnOutcome({
+        outcome: turn.outcome,
+        prose: turn.prose,
+        bot: turn.bot,
+        addressed:
+          isSlackDirectMessage(row.conversation) &&
+          ownerAsked.has(keyOf(row.account, row.deliveryId))
+      })
+      if (outcome === 'answered') {
+        answered.add(row.conversation.externalId)
+      }
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
@@ -124,6 +205,9 @@ export function conversationReplyFill(
     if (await store.fillOutcomes(fills)) {
       filled()
     }
-    return { covered, paused: false }
+    if (answered.size > 0) {
+      remember(turnKey, answered)
+    }
+    return { covered, paused: false, answered }
   }
 }

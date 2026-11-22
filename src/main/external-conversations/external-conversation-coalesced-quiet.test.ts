@@ -36,6 +36,7 @@ import type { ConversationEvent, ConversationSnapshot } from './external-convers
 import { HOST_CLOCK, type ExternalConversationHost } from './external-conversation-host'
 import { harness, installedChats } from './external-conversation-seam.test-fixture'
 import { WORKTREE } from './external-conversation.test-fixture'
+import { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import type { ConversationKey } from './external-conversation-types'
 
 // Reproduction: worker status at 16:25:51 holds the answer's completion until NO_REPLY at 16:25:54.
@@ -220,6 +221,23 @@ async function providerTurn(
   await host.flushStreamedEvents(HOST_TEST_SESSION)
 }
 
+/** Holds status publications' reads until released, as a busy host does when the next turn starts
+ *  first; other reads run so the host can still take sends. */
+function holdStatusReads(): () => void {
+  const read = StructuredAgentSessionJournalProjections.prototype.readSql
+  let release = () => {}
+  const released = new Promise<void>((resolve) => (release = resolve))
+  vi.spyOn(StructuredAgentSessionJournalProjections.prototype, 'readSql').mockImplementation(
+    async function (this: StructuredAgentSessionJournalProjections, ...args) {
+      if (args[3]) {
+        await released
+      }
+      return read.apply(this, args)
+    }
+  )
+  return release
+}
+
 const ended = (events: (ConversationEvent | ConversationSnapshot)[]) =>
   events.filter(
     (event): event is Extract<ConversationEvent, { kind: 'turn-ended' }> =>
@@ -276,6 +294,46 @@ it('posts one constant fallback for the 16:25:51 / 16:25:54 coalesced quiet comp
       lastAssistantMessage: 'I replied but the message may not have reached you. Please ask again.'
     }
   ])
+})
+
+it('merges a held answer whose end no status read saw before the next turn started', async () => {
+  const { chats, completions } = await botChat()
+  const linked = linkedBot(chats)
+  const asked = await askFromThread(linked)
+  let mail = ''
+  let release = () => {}
+  await providerTurn('turn-a', asked, [ANSWER], {
+    running: async () => {
+      mail = await sendMail()
+      release = holdStatusReads()
+    }
+  })
+  await providerTurn('turn-b', mail, ['NO_REPLY'], { running: async () => release() })
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(completions).toMatchObject([{ turnId: 'turn-b', mergedTurnCount: 2 }])
+  expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
+    'I replied but the message may not have reached you. Please ask again.'
+  )
+})
+
+it('posts the fallback when the dropped answer sits behind more held turns than the scan reads', async () => {
+  const { chats } = await botChat()
+  const linked = linkedBot(chats)
+  let sent = await askFromThread(linked)
+  for (let turn = 0; turn < 10; turn += 1) {
+    let mail = ''
+    await providerTurn(`turn-${turn}`, sent, [turn === 0 ? ANSWER : 'NO_REPLY'], {
+      running: async () => {
+        mail = await sendMail()
+      }
+    })
+    sent = mail
+  }
+  await providerTurn('last', sent, ['NO_REPLY'])
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
+    'I replied but the message may not have reached you. Please ask again.'
+  )
 })
 
 const quietLogs = () =>

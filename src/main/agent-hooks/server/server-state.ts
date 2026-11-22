@@ -42,6 +42,7 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
+import type { TerminalModelWait } from './server-model-wait'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
 import { cliWriterTopology } from './cli-writer-observation'
@@ -58,6 +59,10 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
      *  where the host gives none (remote, Windows), so a command mark stands as on main. */
     confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
+    /** The pane's agent ended, proven: its process gone, its shell alone, or its own end hook. */
+    agentExited?(paneKey: string): void
+    /** Claude waited on its model this long with no hook; true keeps the stopwatch running. */
+    modelWaitElapsed?(paneKey: string, wait: TerminalModelWait): Promise<boolean>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean

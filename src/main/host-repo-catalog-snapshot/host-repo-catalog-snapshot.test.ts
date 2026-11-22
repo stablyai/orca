@@ -61,14 +61,20 @@ function profile(savedSnapshots: Record<string, unknown> = {}) {
   directories.push(directory)
   const databasePath = join(directory, 'profile-state.db')
   const profileId = 'host-repo-catalog'
-  new ProfileStateSqliteAuthority(databasePath, profileId).writeSerializedState(
-    Buffer.from(
-      JSON.stringify({
-        ...getDefaultPersistedState(directory),
-        hostRepoCatalogSnapshots: savedSnapshots
-      })
+  // Each Store closes its own authority on freeze; the seed's open handle would block rmSync on Windows.
+  const seed = new ProfileStateSqliteAuthority(databasePath, profileId)
+  try {
+    seed.writeSerializedState(
+      Buffer.from(
+        JSON.stringify({
+          ...getDefaultPersistedState(directory),
+          hostRepoCatalogSnapshots: savedSnapshots
+        })
+      )
     )
-  )
+  } finally {
+    seed.close()
+  }
   const open = () => {
     const store = new Store({
       dataFile: join(directory, 'orca-data.json'),

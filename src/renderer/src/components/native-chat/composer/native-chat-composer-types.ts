@@ -15,6 +15,8 @@ export type NativeChatRoomMention = {
   key?: string
   /** The bot it is, where its chats can be opened from its row. */
   id?: string
+  /** Stable identity for "recently mentioned", so a rename keeps its place. */
+  recentKey?: string
   icon: React.ReactNode
   /** A second line, such as what a bot is for; `@` matches it too. */
   detail?: string

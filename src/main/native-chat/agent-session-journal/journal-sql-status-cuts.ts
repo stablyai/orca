@@ -11,6 +11,7 @@ import {
   type NativeChatOrcaStopCut
 } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import { agentJournalSubmissionReturnedToCard } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -19,6 +20,15 @@ import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   type HostUsageLimitCut
 } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
+
+/** A refused send its queued card took back is not a request; only user rows need the lookup. */
+function returnedToCard(state: JournalSqlStatusContext, item: JournalStatusItem['item']): boolean {
+  if (item.body.kind !== 'message' || item.body.role !== 'user') {
+    return false
+  }
+  const send = state.inputForItem(item.itemId)
+  return send !== undefined && agentJournalSubmissionReturnedToCard(send)
+}
 
 /** Merge only the two request-boundary families; command exclusions use current point lookups. */
 function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
@@ -45,7 +55,7 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
       turn && (!user || compareJournalStatusPositions(turn.position, user.position) >= 0)
     const candidate: JournalStatusItem = useTurn ? turn! : user!
     const item = candidate.item
-    if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
+    if (!isStructuredAgentSessionNonRequestRow(item, commands) && !returnedToCard(state, item)) {
       if (item.body.kind === 'message' && item.body.role === 'user') {
         return null
       }
@@ -159,7 +169,8 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
       if (
         compareJournalStatusPositions(candidate.position, currentPosition) >= 0 ||
         openerKeys.has(candidate.item.itemId) ||
-        isStructuredAgentSessionNonRequestRow(candidate.item, commands)
+        isStructuredAgentSessionNonRequestRow(candidate.item, commands) ||
+        returnedToCard(state, candidate.item)
       ) {
         continue
       }
