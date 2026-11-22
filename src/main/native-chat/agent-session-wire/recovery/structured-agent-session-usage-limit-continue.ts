@@ -250,11 +250,9 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
-  /** The account a cut hit is the one its turn's runtime launched under, when the record names it. */
   private attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
-    const launched = this.deps.host.store.getRecord(id)?.launchedAccount
-    const home = launched && launched.fence === cut.fence ? launched.accountHome : null
-    return this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
+    const hit = { cut: identity(cut), fence: cut.fence }
+    return this.holds.attribute(id, this.deps.host, hit, this.deps.now())
   }
 
   private async deferUnchangedCut(id: string, cut: Cut, at: number): Promise<void> {
@@ -290,7 +288,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(id)
       return
     }
-    const witness = this.holds.attributionWitness(id)
+    const binding = this.holds.attributionBinding(id)
     const at = this.deps.now()
     const attempt: Attempt = {
       identity: identity(cut),
@@ -311,7 +309,7 @@ export class StructuredAgentSessionUsageLimitContinue {
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            !this.holds.witnessHolds(id, this.deps.host, witness) ||
+            !this.holds.bindingHolds(id, this.deps.host, binding) ||
             !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()
