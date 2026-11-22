@@ -53,6 +53,7 @@ const SETTINGS_NAV_TARGETS = [
   'bots',
   'orca-account',
   'linear',
+  'plane',
   'setup-guide',
   'servers',
   'mobile',

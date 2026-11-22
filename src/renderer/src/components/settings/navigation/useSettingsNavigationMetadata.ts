@@ -10,6 +10,7 @@ import {
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
+import { usePlaneProviderConnected } from '@/hooks/usePlaneProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
@@ -65,6 +66,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled = !isWebClient,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    isPlaneConnected = false,
     repos,
     bots = [],
     projectGroups,
@@ -82,6 +84,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    isPlaneConnected?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     bots?: readonly Bot[]
@@ -119,6 +122,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    isPlaneConnected,
     repos,
     bots,
     projectGroups,
@@ -163,6 +167,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const isPlaneConnected = usePlaneProviderConnected()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -207,6 +212,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           mobileEmulatorCreationEnabled,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          isPlaneConnected,
           repos,
           bots,
           projectGroups,
@@ -230,6 +236,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      isPlaneConnected,
       repos,
       bots,
       projectGroups,
