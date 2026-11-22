@@ -23347,7 +23347,8 @@
       "1524825c2c": "Alternar tablero de espacios de trabajo",
       "d286d1ab85": "Borrar título del panel",
       "botItemPrevious": "Elemento anterior",
-      "botItemNext": "Elemento siguiente"
+      "botItemNext": "Elemento siguiente",
+      "notificationsOpenLatest": "Abrir la notificación más reciente"
     },
     "group": {
       "global": "Global",

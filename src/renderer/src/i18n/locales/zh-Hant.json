@@ -22633,7 +22633,8 @@
       "1524825c2c": "顯示或隱藏工作區看板",
       "d286d1ab85": "清除窗格標題",
       "botItemPrevious": "上一個項目",
-      "botItemNext": "下一個項目"
+      "botItemNext": "下一個項目",
+      "notificationsOpenLatest": "開啟最新通知"
     },
     "group": {
       "global": "全域",

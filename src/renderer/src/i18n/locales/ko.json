@@ -25596,7 +25596,8 @@
       "1524825c2c": "워크스페이스 보드 전환",
       "d286d1ab85": "창 제목 지우기",
       "botItemPrevious": "이전 항목",
-      "botItemNext": "다음 항목"
+      "botItemNext": "다음 항목",
+      "notificationsOpenLatest": "최신 알림 열기"
     },
     "group": {
       "global": "글로벌",

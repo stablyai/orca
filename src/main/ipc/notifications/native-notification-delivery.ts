@@ -18,6 +18,7 @@ import {
   trackNotificationDisplay
 } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
+import { forgetOpenableNotifications, registerOpenableNotification } from './openable-notifications'
 import { getTrustedUIRendererWindow } from '../ui'
 import {
   cancelPendingDesktopNotification,
@@ -43,11 +44,14 @@ export function deliverNativeNotification(
       closeDesktopNotification(previous.notification)
       previous.release()
     }
+    // A replacement without a reveal target registers no route, so retire the old one here.
+    forgetOpenableNotifications([args.notificationId])
   }
 
   // Retain the notification and click handler through display lifetime.
   let clickHandler: (() => void) | null = null
   let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+  let unregisterOpenable: (() => void) | null = null
   const displayConfirmation = args.requireDisplayConfirmation
     ? trackNotificationDisplay(notification)
     : undefined
@@ -77,6 +81,7 @@ export function deliverNativeNotification(
   failedHandler = (_event, error) => {
     // Release immediately on macOS delivery/signing failure instead of waiting for retention expiry.
     logNativeNotificationFailure(args.source, error)
+    unregisterOpenable?.()
     // Feed permission-card fallback evidence.
     recordNotificationDeliveryOutcome('failed')
     release()
@@ -90,8 +95,7 @@ export function deliverNativeNotification(
   // Repo-less folder/floating workspaces still bind clicks through their pane target.
   const repoId = worktreeId?.includes('::') ? getRepoIdFromWorktreeId(worktreeId) : null
   if (worktreeId && (repoId !== null || paneTarget)) {
-    clickHandler = () => {
-      release()
+    const revealTarget = (): void => {
       const win = getTrustedUIRendererWindow()
       if (!win || win.isDestroyed()) {
         return
@@ -124,7 +128,28 @@ export function deliverNativeNotification(
         scrollToBottomIfOutputSinceLastView: true
       })
     }
+    clickHandler = () => {
+      unregisterOpenable?.()
+      release()
+      revealTarget()
+    }
     notification.on('click', clickHandler)
+    // The open-latest shortcut acts as a click and also removes the banner from the OS list.
+    unregisterOpenable = registerOpenableNotification(
+      () => {
+        closeDesktopNotification(notification)
+        release()
+        revealTarget()
+      },
+      {
+        id: args.notificationId,
+        paneKey: args.paneKey,
+        origin: args.structuredOrigin,
+        worktreeId: args.worktreeId,
+        executionHost: args.executionHost,
+        workspaceExecutionHostId: args.workspaceExecutionHostId
+      }
+    )
   }
 
   const submitted = showDesktopNotification(notification, displayConfirmation?.start)
@@ -132,6 +157,7 @@ export function deliverNativeNotification(
   if (displayConfirmation) {
     return displayConfirmation.result.then((displayed) => {
       if (!displayed) {
+        unregisterOpenable?.()
         release()
         return { delivered: false, reason: 'not-displayed' }
       }

@@ -23125,7 +23125,8 @@
       "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
       "d286d1ab85": "Bereichstitel leeren",
       "botItemPrevious": "Vorheriges Element",
-      "botItemNext": "Nächstes Element"
+      "botItemNext": "Nächstes Element",
+      "notificationsOpenLatest": "Neueste Benachrichtigung öffnen"
     },
     "group": {
       "global": "Global",

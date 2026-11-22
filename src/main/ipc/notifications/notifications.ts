@@ -18,6 +18,11 @@ import { setTrayAttention } from '../../tray/system-tray'
 import { isMainWindowVisible } from '../../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import {
+  forgetAcknowledgedOpenableNotifications,
+  forgetOpenableNotifications,
+  type OpenableNotificationPaneRead
+} from './openable-notifications'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
 import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
@@ -154,6 +159,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       return { dismissed: 0 }
     }
     const retired = announced.takeAcknowledged(acknowledgement, executionHost)
+    forgetAcknowledgedOpenableNotifications(acknowledgement, executionHost, retired)
     if (executionHost) {
       runtime?.retireNotificationAttention?.(acknowledgement, executionHost)
     }
@@ -199,6 +205,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       )) {
         retired.set(id, { id })
       }
+      const paneReads: OpenableNotificationPaneRead[] = []
       for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
         if (typeof paneKey !== 'string') {
           continue
@@ -206,6 +213,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         const read = Array.isArray(reads)
           ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
           : undefined
+        paneReads.push({ paneKey, read })
         const entries = announced.take(paneKey, read)
         for (const entry of entries) {
           retired.set(entry.id, entry)
@@ -214,6 +222,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           runtime?.retireNotificationAttention?.({ reads: [read] }, read.executionHost)
         }
       }
+      forgetOpenableNotifications(retired.keys(), paneReads)
       return {
         dismissed: retireAnnouncements(
           [...retired.values()],
@@ -256,6 +265,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     recordAnnounced: (request) => {
       if (request.notificationId && (request.paneKey || request.worktreeId)) {
         if (announced.wasRead(request)) {
+          // Read while its banner was in flight: retire the open route with the announcement.
+          forgetOpenableNotifications([request.notificationId])
           retireAnnouncements([
             {
               id: request.notificationId,
