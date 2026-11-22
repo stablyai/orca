@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { UserRound, X } from 'lucide-react'
+import { Bot, UserRound, X } from 'lucide-react'
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotConnectorPaged } from './bot-connector-page'
@@ -82,13 +82,23 @@ function memberAvatarUrl(member: BotMember): string | null {
   return member.avatarUrl ?? null
 }
 
-/** A person with access: their picture, else their initials. */
+/** A person with access: their picture, else their initials; an app without one, a bot icon. */
 export function BotMemberAvatar({ member }: { member: BotMember }): React.JSX.Element {
   return (
     <ConnectorAvatar
       avatarUrl={memberAvatarUrl(member)}
       name={memberName(member)}
       className="size-full"
+      fallback={
+        member.kind === 'app' ? (
+          <span
+            aria-hidden
+            className="flex size-full items-center justify-center rounded-full bg-muted text-muted-foreground"
+          >
+            <Bot className="size-3" />
+          </span>
+        ) : undefined
+      }
     />
   )
 }

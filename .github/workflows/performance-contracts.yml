@@ -9,11 +9,6 @@ on:
     paths:
       # Ready PRs already run every contract on Linux in the full unit suite; this adds macOS and Windows.
       - 'src/**/*.performance.test.*'
-      # Older contracts named in vitest.performance.config.ts, without the suffix.
-      - 'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx'
-      - 'src/main/codex-usage/codex-rollout-file-lifetime.test.ts'
-      - 'src/main/codex-usage/scanner-incremental-append.test.ts'
-      - 'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts'
       - '.github/workflows/performance-contracts.yml'
       - 'config/vitest.performance.config.ts'
       - 'config/oxlint-performance-audit.json'
@@ -21,8 +16,6 @@ on:
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/**/*.performance.test.*'
       - 'tests/tools/**/*.performance.test.*'
-      - 'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs'
-      - 'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 
 permissions:
   contents: read

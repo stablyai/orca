@@ -261,13 +261,13 @@ export class RelayControlClient {
       return
     }
     this.state = 'active'
+    this.liveness.start()
+    this.connectResolve?.(ack.data)
+    this.clearConnectPromise()
     if (this.renewedWhileConnecting) {
       this.sendActive({ type: 'auth-refresh', relayJwt: this.renewedWhileConnecting })
       this.renewedWhileConnecting = null
     }
-    this.liveness.start()
-    this.connectResolve?.(ack.data)
-    this.clearConnectPromise()
   }
 
   private sendActive(payload: Record<string, unknown>): void {

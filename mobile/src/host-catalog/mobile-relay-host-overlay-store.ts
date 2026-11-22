@@ -105,7 +105,3 @@ export async function removeMobileRelayHostRoutings(hostIds: readonly string[]):
     return next.length === overlays.length ? overlays : next
   })
 }
-
-export function resetMobileRelayHostOverlayStoreForTests(): void {
-  overlayMutation = Promise.resolve()
-}

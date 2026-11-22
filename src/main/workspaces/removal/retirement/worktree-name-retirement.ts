@@ -115,10 +115,6 @@ export function getRemoteRetirementNamespaceKey(
 const COLLISION_KEY_CACHE_MAX = 512
 const collisionKeyCache = new Map<string, string>()
 
-export function resetRetirementCollisionKeyCacheForTests(): void {
-  collisionKeyCache.clear()
-}
-
 /** Repos share retirements when their workspace names would occupy the same path. */
 async function getRetirementCollisionKey(
   repo: Repo,

@@ -24,7 +24,8 @@ export abstract class SessionProcessInspection {
 
   /** Redraws the program without input by moving only the PTY, never the grid attaches read. */
   requestRepaint(): void {
-    if (this.isAlive) {
+    // WinPTY redraws its own scraped screen on a resize, so its bytes would not be the program's paint.
+    if (this.isAlive && this.subprocess.resizeRedrawsOwnScreen !== true) {
       this.repaintNudge.request(
         () => this.getAppliedSize(),
         (cols, rows) => this.subprocess.resize(cols, rows),

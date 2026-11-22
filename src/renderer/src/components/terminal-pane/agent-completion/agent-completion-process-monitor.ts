@@ -21,7 +21,6 @@ import {
 export function createAgentCompletionProcessMonitor({
   options,
   state,
-  identityScope,
   pendingTitle,
   establishAgentEvidence,
   clearAgentRunEvidence,
@@ -55,16 +54,6 @@ export function createAgentCompletionProcessMonitor({
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExit = null
-    const replayIdentity = identityScope.getLast()
-    if (
-      !state.lastForegroundAgent &&
-      state.processSession > 0 &&
-      !identityScope.hasUnconsumedStampedTail() &&
-      replayIdentity?.source === 'hook' &&
-      replayIdentity.agentIdentity === process.agent
-    ) {
-      identityScope.deleteLast()
-    }
     if (state.lastForegroundAgent?.agent !== process.agent) {
       if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
         if (
@@ -179,7 +168,6 @@ export function createAgentCompletionProcessMonitor({
                 requestStartedAtMonotonic,
                 options,
                 state,
-                identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
                 scheduleNextPoll,

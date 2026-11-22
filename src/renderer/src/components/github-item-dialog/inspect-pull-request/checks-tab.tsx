@@ -5,6 +5,7 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from '
 import { LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import {
   createGitHubChecksTabState,
@@ -338,13 +339,13 @@ export function ChecksTab({
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <SummaryIcon
-            className={cn(
-              'size-4 shrink-0',
-              summaryColor,
-              overallCounts.pending > 0 && overallCounts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {overallCounts.pending > 0 && overallCounts.failing === 0 ? (
+            <SpinnerFrame>
+              <SummaryIcon className={cn('block size-4', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('size-4 shrink-0', summaryColor)} />
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
             {countChips.length > 1 && (

@@ -4,7 +4,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItem } from '../../../../shared/bots/bot-items'
-import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import {
   botItemsByDispatch,
   botNeedChat,
@@ -19,6 +18,7 @@ import { botAutomationCardRows, botNextRun } from './bot-automation-card'
 import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
+import type { StoppedForSignIn } from './BotNeedRow'
 import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
 import {
   useBotItemsShownList,
@@ -38,7 +38,7 @@ type MemberRead = {
   list: BotItemsShownList
   /** Its asks in the filter's chats, keys made unique across members. */
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   /** Its whole Needs you count, as its own Items tab badge says it. */
   needsYou: number
   working: number
@@ -82,9 +82,13 @@ const MemberReader = memo(function MemberReader({
   const stoppedForSignIn = useMemo(
     () =>
       filter.chatIds === null
-        ? botNow.stoppedForSignIn.map((row) => ({ ...row, key: `${bot.id}:${row.key}` }))
+        ? botNow.stoppedForSignIn.map((row) => ({
+            ...row,
+            key: `${bot.id}:${row.key}`,
+            hostId: bot.hostId
+          }))
         : [],
-    [filter.chatIds, botNow.stoppedForSignIn, bot.id]
+    [filter.chatIds, botNow.stoppedForSignIn, bot.id, bot.hostId]
   )
   const { state, retry } = items
   const { working } = botNow
@@ -168,6 +172,17 @@ export function botGroupNeedsYouOutside(counts: {
   return counts.scoped && counts.loaded ? Math.max(0, counts.whole - counts.shown) : 0
 }
 
+// Each read's seen marks by bot id, built the first time a list asks (so not while an item is open).
+const seenIndexes = new WeakMap<readonly MemberRead[], Map<string, string | null>>()
+function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
+  let index = seenIndexes.get(reads)
+  if (!index) {
+    index = new Map(reads.map((read) => [read.bot.id, read.seenEventId]))
+    seenIndexes.set(reads, index)
+  }
+  return index
+}
+
 /** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
 function memberClosed(read: MemberRead): {
   closed: BotItem[]
@@ -195,7 +210,7 @@ export type BotGroupItems = {
   /** Loaded items, the filter's bots only; Needs you only applied. */
   shown: readonly BotItem[]
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   itemOf: (dispatchId: string) => BotItem | null
   needBot: (need: BotNeedView) => Bot
   botOf: (item: BotItem) => Bot
@@ -244,6 +259,11 @@ export function useBotGroupItems(
   const shownReads = useMemo(
     () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
+  )
+  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range.
+  const seenOf = useCallback(
+    (item: BotItem): string => seenIndexOf(shownReads).get(item.owner.botId) ?? '',
+    [shownReads]
   )
   const ready =
     shownReads.length === members.filter((bot) => filter.botIds?.includes(bot.id) ?? true).length &&
@@ -365,8 +385,7 @@ export function useBotGroupItems(
       const owner = pagedOwners.current.get(uid)
       return botByUid.get(uid) ?? (owner ? (botById.get(owner) ?? null) : null)
     },
-    seenOf: (item) =>
-      shownReads.find((read) => read.bot.id === item.owner.botId)?.seenEventId ?? '',
+    seenOf,
     // Only a list of some chats leaves asks out; the whole-bot count minus what it shows.
     outside: botGroupNeedsYouOutside({
       scoped: filter.chatIds !== null,
