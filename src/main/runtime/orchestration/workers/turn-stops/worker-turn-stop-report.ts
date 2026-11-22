@@ -155,7 +155,7 @@ export function sendWorkerReport(
   return sent
 }
 
-type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
+export type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
 
 /** Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox. */
 function mailWorkerReport(
@@ -200,25 +200,35 @@ function relayWorkerReport(
   { id, subject, payload }: WorkerReportMail,
   deps: WorkerTurnStopReportDeps
 ): true {
+  const body = describeStop(stop, {
+    task: attachment.task_id,
+    taskId: attachment.task_id,
+    dispatchId: attachment.dispatch_id,
+    coordinatorApprovals: deps.coordinatorApprovals?.() === true
+  })
+  return relayWorkerMail(db, attachment, { id, from: stop.from, subject, body, payload })
+}
+
+/** Queues worker mail for its Run home, which imports it into the coordinator's Run and wakes it. */
+export function relayWorkerMail(
+  db: OrchestrationDb,
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'>,
+  mail: WorkerReportMail & { from: string; body: string; notice?: true }
+): true {
   db.enqueueFederationRelay({
     dispatchId: attachment.dispatch_id,
     direction: 'to_home',
     kind: 'escalation',
-    messageId: id,
+    messageId: mail.id,
     payload: JSON.stringify({
-      from: stop.from,
-      subject,
-      body: describeStop(stop, {
-        task: attachment.task_id,
-        taskId: attachment.task_id,
-        dispatchId: attachment.dispatch_id,
-        coordinatorApprovals: deps.coordinatorApprovals?.() === true
-      }),
-      type: 'escalation',
-      priority: 'high',
+      from: mail.from,
+      subject: mail.subject,
+      body: mail.body,
+      type: mail.notice ? 'status' : 'escalation',
+      priority: mail.notice ? 'normal' : 'high',
       threadId: null,
       // Relayed payloads travel as strings, as a worker's own `send` relays them.
-      payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
+      payload: JSON.stringify({ taskId: attachment.task_id, ...mail.payload })
     })
   })
   return true
