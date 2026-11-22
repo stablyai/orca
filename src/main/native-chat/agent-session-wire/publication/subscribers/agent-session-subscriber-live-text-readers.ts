@@ -192,6 +192,17 @@ export class LiveTextViewerShows {
   }
 }
 
+/** Whether an empty publication would let go of anything this reader was sent: a row awaiting
+ *  its base is kept until its save, so a reader holding only those has nothing to deliver. */
+export function letsGoOfLiveRows(subscriber: Subscriber): boolean {
+  for (const itemId of subscriber.liveSent?.keys() ?? []) {
+    if (subscriber.holdsTextBase?.(itemId) !== false) {
+      return true
+    }
+  }
+  return false
+}
+
 /** A row whose stream ended is saved whole, so what was last sent of it is let go. */
 export function forgetEndedLiveRows(
   subscriber: Subscriber,

@@ -160,8 +160,8 @@ export class AgentSessionSubscribers {
       const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets, shown) : []
       const live = { journal, fence, items, hostNow: this.now() }
       // Checked per subscriber, in case ending one ends another mid fan-out. Nothing to send and
-      // nothing sent before to let go of means no delivery at all.
-      const due = (target: Subscriber) => items.length > 0 || (target.liveSent?.size ?? 0) > 0
+      // nothing sent before it could let go of (a row awaiting its base stays) means no delivery.
+      const due = (target: Subscriber) => items.length > 0 || liveText.letsGoOfLiveRows(target)
       targets.forEach((t) => this.isActive(t) && due(t) && this.lanes.of(t).liveText(live))
     }
   }

@@ -1,4 +1,3 @@
-import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from './agent-session-subscribe-input'
@@ -6,6 +5,11 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
+import { hostWorkFields } from './agent-session-subscriber-host-work'
+export {
+  rememberSubscriberHostWork,
+  type SubscriberHostWork
+} from './agent-session-subscriber-host-work'
 import {
   forgetEndedLiveRows,
   noteShortenedRow,
@@ -16,6 +20,7 @@ import {
 } from './agent-session-subscriber-live-text-readers'
 export {
   liveTextFor,
+  letsGoOfLiveRows,
   LiveTextViewerShows,
   noteLiveTextReadersChanged,
   shownViewer,
@@ -36,45 +41,16 @@ import {
 import { BOUNDED_FRAME_ROW_BYTES } from '../history/agent-session-bounded-frame-item'
 import { jsonBytes } from '../history/json-string-shortening'
 import { sizedPageBytes, sizedRowBytes, wholeRowForm } from '../history/journal-row-json-bytes'
+import {
+  CHAT_LIVE_TEXT_SUBSCRIBER_BYTES,
+  heldBytesOf
+} from '../../../retention/subscriber-live-text-cap'
 
-type BatchEvent = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
-/** Host facts a row-carrying batch must restate, or the client clears them. */
-export type SubscriberHostWork = Pick<BatchEvent, 'latestTurn' | 'working' | 'actionablePromptIds'>
 /** A live row as built and as this subscriber was sent it, with the sent form's JSON size. */
 export type SubscriberLiveRow = {
   source: AgentJournalRenderItem
   sent: AgentJournalRenderItem
   bytes: number
-}
-
-/** What the client holds for the host facts after this frame, by the reducer's restatement rule. */
-export function rememberSubscriberHostWork(
-  subscriber: Subscriber,
-  event: AgentSessionSubscribeEvent
-): void {
-  if (event.type === 'snapshot' || event.type === 'reset') {
-    const { latestTurn, working, actionablePromptIds } = event.page
-    subscriber.hostWork = { latestTurn, working, actionablePromptIds }
-    return
-  }
-  if (event.type !== 'batch') {
-    return
-  }
-  const { items, removedItemIds, submissions } = event.batch
-  const restates = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  const prior = subscriber.hostWork ?? {}
-  const field = <K extends keyof SubscriberHostWork>(key: K): SubscriberHostWork[K] =>
-    restates || event[key] !== undefined ? event[key] : prior[key]
-  subscriber.hostWork = {
-    latestTurn: field('latestTurn'),
-    working: field('working'),
-    actionablePromptIds: field('actionablePromptIds')
-  }
-}
-
-function hostWorkFields(subscriber: Subscriber): Partial<SubscriberHostWork> {
-  const work = subscriber.hostWork ?? {}
-  return Object.fromEntries(Object.entries(work).filter(([, value]) => value !== undefined))
 }
 
 function bodyText(item: AgentJournalRenderItem): string | null {
@@ -241,12 +217,14 @@ export function followPageWithLiveText(
   journal: AgentSessionJournal,
   hostNow: number
 ): Promise<void> {
-  return subscriber.boundedFrames
+  const items = subscriber.boundedFrames ? liveTextOf(port, subscriber) : []
+  // Past the cap a live publication would refuse, the save carries the text instead.
+  return items.length > 0 && heldBytesOf(items) <= CHAT_LIVE_TEXT_SUBSCRIBER_BYTES
     ? publishSubscriberLiveText(port, {
         sessionId: subscriber.sessionId,
         journal,
         fence: subscriber.fence,
-        items: liveTextOf(port, subscriber),
+        items,
         subscribers: [subscriber],
         hostNow
       })
