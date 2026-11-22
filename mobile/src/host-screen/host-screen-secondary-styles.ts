@@ -15,45 +15,45 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm
   },
-  // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
+  // A project's line: inset like the rows' text column, ruled off from the rows under it.
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset,
-    paddingRight: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 6
+    gap: spacing.sm,
+    minHeight: 44,
+    marginTop: spacing.xl - spacing.xxs,
+    marginHorizontal: WORKTREE_ROW_LAYOUT.indicatorInset,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
   },
-  sectionChevron: {
-    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
+  sectionHeaderFirst: {
+    marginTop: spacing.xs
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    flexShrink: 1
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   sectionCount: {
-    fontSize: 13,
+    flexShrink: 0,
+    fontSize: 15,
+    fontWeight: '500',
     color: colors.textMuted,
-    marginLeft: 6
+    fontVariant: ['tabular-nums']
+  },
+  sectionSpacer: {
+    flex: 1
   },
   // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
-    marginLeft: spacing.sm
+    marginLeft: spacing.xs
   },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: WORKTREE_ROW_LAYOUT.textInset
+    marginLeft: WORKTREE_ROW_LAYOUT.textInset,
+    marginRight: WORKTREE_ROW_LAYOUT.indicatorInset
   },
   filterModalSubtitle: {
     fontSize: typography.metaSize,

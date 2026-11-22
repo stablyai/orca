@@ -1011,7 +1011,9 @@
     },
     "worktreeListRow": {
       "children_one": "{{count}} child",
-      "children_other": "{{count}} children"
+      "children_other": "{{count}} children",
+      "terminals_one": "{{count}} terminal",
+      "terminals_other": "{{count}} terminals"
     }
   },
   "dictation": {

@@ -27,6 +27,16 @@ const dotColors = (): Record<
   idle: 'rgba(115,115,115,0.4)'
 })
 export const AGENT_WORKING_COLOR = '#eab308'
+/** The dot's colour for a state word written in text; idle and lost contact read as muted text. */
+export function agentStateTextColor(state: AgentDotState): string {
+  if (state === 'working' || state === 'monitoring') {
+    return AGENT_WORKING_COLOR
+  }
+  if (state === 'unverifiable' || state === 'idle') {
+    return colors.textMuted
+  }
+  return dotColors()[state]
+}
 /** The dot's box, so rows can line text up past it. */
 export const AGENT_STATE_DOT_SIZE = 10
 

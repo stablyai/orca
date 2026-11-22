@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { DisclosureChevron } from '../../components/list/DisclosureChevron'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
-import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Section } from '../../worktree/workspace-list/workspace-list-types'
@@ -25,6 +24,8 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
   pending: boolean
   groupByRepo: boolean
   repoLook: RepoLook | null | undefined
+  /** No header sits above it, so it sits closer to the page title. */
+  first: boolean
   onToggle: (collapseKey: string) => void
 }) {
   useMobileColorScheme()
@@ -39,37 +40,30 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
       <Pressable
         style={({ pressed }) => [
           styles.sectionHeader,
+          props.first && styles.sectionHeaderFirst,
           props.projectGroupDepth
-            ? {
-                paddingLeft:
-                  WORKTREE_ROW_LAYOUT.indicatorInset +
-                  projectGroupHeaderIndent(props.projectGroupDepth)
-              }
+            ? { paddingLeft: projectGroupHeaderIndent(props.projectGroupDepth) }
             : null,
           pressed && { backgroundColor: colors.translucentFill }
         ]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: !props.collapsed }}
+        aria-expanded={!props.collapsed}
         onPress={() => props.onToggle(props.collapseKey)}
       >
-        <View style={styles.sectionChevron}>
-          <DisclosureChevron expanded={!props.collapsed} collapsedDeg={0} expandedDeg={90}>
-            <ChevronRight size={12} color={colors.textMuted} />
-          </DisclosureChevron>
-        </View>
-        {props.icon === 'pin' && (
-          <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-        )}
+        {props.icon === 'pin' && <Pin size={16} color={colors.textMuted} />}
         {props.groupByRepo && props.isProjectGroup ? (
-          <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+          <FolderTree size={16} color={colors.textSecondary} />
         ) : props.groupByRepo ? (
-          <View style={styles.sectionRepoIcon}>
-            <MobileRepoIcon
-              repoIcon={props.repoLook?.icon ?? null}
-              size={14}
-              color={props.repoLook?.color ?? colors.textSecondary}
-            />
-          </View>
+          <MobileRepoIcon
+            repoIcon={props.repoLook?.icon ?? null}
+            size={16}
+            color={props.repoLook?.color ?? colors.textSecondary}
+          />
         ) : null}
-        <Text style={styles.sectionTitle}>{props.title}</Text>
+        <Text style={styles.sectionTitle} numberOfLines={1}>
+          {props.title}
+        </Text>
         <Text style={styles.sectionCount}>{props.count}</Text>
         {props.pending && (
           <ActivityIndicator
@@ -78,6 +72,10 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
             style={styles.sectionPendingSpinner}
           />
         )}
+        <View style={styles.sectionSpacer} />
+        <DisclosureChevron expanded={!props.collapsed} collapsedDeg={0} expandedDeg={90}>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </DisclosureChevron>
       </Pressable>
       {pendingCreations}
     </>

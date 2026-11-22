@@ -3,16 +3,15 @@ import { colors, feedback, radii, spacing, typography } from '../../theme/mobile
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
+const TITLE_LINE_HEIGHT = 20
+const ROW_PADDING_VERTICAL = 10
+
 export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
-    borderLeftColor: 'transparent'
+    paddingVertical: ROW_PADDING_VERTICAL,
+    paddingHorizontal: WORKTREE_ROW_LAYOUT.indicatorInset
   },
   // The desktop's paused bot: its row and workspaces at 60%.
   worktreeRowDimmed: {
@@ -21,25 +20,16 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // The active row already wears bgPanel, so its press needs a wash that reads over it.
-  worktreeRowActivePressed: {
-    backgroundColor: colors.translucentFill
-  },
-  // Match desktop focused-worktree card with raised fill and left accent.
-  worktreeRowActive: {
-    backgroundColor: colors.bgPanel,
-    // Use desktop active-tab neutral accent, not blue.
-    borderLeftColor: colors.textSecondary
-  },
+  // The status glyph (12 pt) centred on the title's 20 pt line.
   indicatorCol: {
     width: WORKTREE_ROW_LAYOUT.indicatorWidth,
-    alignItems: 'center',
-    paddingTop: 6,
-    marginRight: spacing.sm,
-    gap: 4
+    alignItems: 'flex-start',
+    paddingTop: (TITLE_LINE_HEIGHT - 12) / 2,
+    gap: spacing.xs
   },
   unreadBell: {
-    marginTop: 2
+    marginTop: 2,
+    marginLeft: 1
   },
   worktreeMain: {
     flex: 1
@@ -47,16 +37,46 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   worktreeNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: 6,
+    minHeight: TITLE_LINE_HEIGHT
   },
   worktreeName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: TITLE_LINE_HEIGHT,
+    fontWeight: '400',
     color: colors.textPrimary,
     flexShrink: 1
   },
+  // The repo's own checkout: present, but quieter than the work around it.
+  worktreeNameMain: {
+    color: colors.textSecondary
+  },
   worktreeNameUnread: {
-    fontWeight: '700'
+    fontWeight: '600'
+  },
+  time: {
+    marginLeft: 'auto',
+    paddingLeft: spacing.sm,
+    fontSize: 13,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  detail: {
+    marginTop: spacing.xxs,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.textMuted
+  },
+  moreAgents: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 30
+  },
+  moreAgentsText: {
+    fontSize: 14,
+    color: colors.textMuted
   },
   textReadOnly: {
     opacity: 0.5
@@ -64,14 +84,11 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
   prBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radii.pill
+    gap: 3
   },
   prNumber: {
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.textSecondary
   },
   // Why: matches the desktop's compact repo chip, a small framed icon ahead of the title.
@@ -155,10 +172,5 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
     fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '600'
-  },
-  terminalCount: {
-    marginLeft: 'auto',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
   }
 }))

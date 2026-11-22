@@ -124,8 +124,9 @@ export function HostWorkspaceList({
   const renderSectionHeader = useCallback(
     ({ section }: { section: Section }) => {
       const collapseKey = section.collapseKey ?? section.key
+      const first = section.key === sections[0]?.key
       return (
-        bots.header(section, collapsedGroups, pendingCollapseKeys, toggleCollapsed) ?? (
+        bots.header(section, collapsedGroups, pendingCollapseKeys, toggleCollapsed, first) ?? (
           <HostSectionHeader
             title={section.title}
             icon={section.icon}
@@ -138,12 +139,14 @@ export function HostWorkspaceList({
             pending={pendingCollapseKeys.has(collapseKey)}
             groupByRepo={groupBy === 'repo'}
             repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
+            first={first}
             onToggle={toggleCollapsed}
           />
         )
       )
     },
     [
+      sections,
       collapsedGroups,
       sectionCounts,
       pendingCollapseKeys,

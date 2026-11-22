@@ -65,6 +65,20 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
+/** A lone agent's line on its workspace row ("Claude finished"); null for a state its word says better. */
+export function agentStatePhrase(agent: string, state: AgentDotState): string | null {
+  switch (state) {
+    case 'working':
+      return translate('worktree.agentRowDisplay.phraseWorking', '{{agent}} is working', { agent })
+    case 'done':
+      return translate('worktree.agentRowDisplay.phraseDone', '{{agent}} finished', { agent })
+    case 'idle':
+      return translate('worktree.agentRowDisplay.phraseIdle', '{{agent}} is idle', { agent })
+    default:
+      return null
+  }
+}
+
 /** The row's label when it leads with a forked chat's name: that name and what follows it. */
 export function agentDisplayForkedLead(
   row: RuntimeWorktreeAgentRow,

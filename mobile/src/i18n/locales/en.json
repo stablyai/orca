@@ -1132,6 +1132,9 @@
       "unconfirmed": "Couldn’t confirm",
       "idle": "Idle",
       "unverifiable": "No recent update",
+      "phraseWorking": "{{agent}} is working",
+      "phraseDone": "{{agent}} finished",
+      "phraseIdle": "{{agent}} is idle",
       "stopping": "Stopping…",
       "justNow": "just now",
       "minutes_one": "{{count}}m",
@@ -1562,7 +1565,12 @@
       "child": "Child",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
-      "unsavedName": "Unsaved name: {{name}}"
+      "unsavedName": "Unsaved name: {{name}}",
+      "terminals_one": "{{count}} terminal",
+      "terminals_other": "{{count}} terminals",
+      "defaultBranch": "Default branch",
+      "openOnDesktop": "Open on desktop",
+      "agentCount": "{{count}} agents"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -1656,7 +1664,8 @@
       "showChildAgents_other": "Show {{count}} child agents",
       "hideIdleChildren": "Hide {{count}} idle child agents",
       "showIdleChildren": "Show {{count}} idle child agents",
-      "idleChildCount": "{{count}} idle"
+      "idleChildCount": "{{count}} idle",
+      "showMoreAgents": "Show {{count}} more"
     },
     "diffReviewFilesSheet": {
       "title": "Files",

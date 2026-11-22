@@ -1,5 +1,6 @@
 import { ActivityIndicator, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
+import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { SectionPendingCreation } from '../../worktree/workspace-list/workspace-list-types'
@@ -32,28 +33,25 @@ const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent'
+    paddingVertical: 10,
+    paddingHorizontal: WORKTREE_ROW_LAYOUT.indicatorInset
   },
   indicator: {
-    width: 20,
-    alignItems: 'center',
-    marginRight: spacing.sm
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
+    alignItems: 'flex-start'
   },
   main: {
     flex: 1
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 20,
     color: colors.textSecondary
   },
   meta: {
-    marginTop: 2,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
+    marginTop: spacing.xxs,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.textMuted
   }
 }))

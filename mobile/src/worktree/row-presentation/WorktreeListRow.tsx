@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch, Monitor } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
@@ -30,6 +30,7 @@ import { HostContextPill } from './HostContextPill'
 import { HostKindIcon } from '../../components/icons/HostKindIcon'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WorktreeAgentList } from '../agent-lineage/presentation/WorktreeAgentList'
+import { WorktreeAgentLatestTime } from '../agent-lineage/presentation/WorktreeAgentLatestTime'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
 import { worktreeListRowStyles as styles } from './worktree-list-row-styles'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
@@ -122,6 +123,29 @@ function WorktreeListRowComponent({
   const showMetaRow =
     cardDetails.metaRow &&
     (lineageDepth > 0 || showHostBadge || showRepoInMetaRow || cardDetails.identity)
+  const agents = item.agents ?? []
+  // A bot's worker line stays one line; the desktop drops agent lists there too.
+  const showAgents = !view.botWorkspace && cardDetails.inlineAgents && agents.length > 0
+  const terminals =
+    item.liveTerminalCount > 0
+      ? item.liveTerminalCount === 1
+        ? t('components.worktreeListRow.terminals_one', '{{count}} terminal', {
+            count: item.liveTerminalCount
+          })
+        : t('components.worktreeListRow.terminals_other', '{{count}} terminals', {
+            count: item.liveTerminalCount
+          })
+      : undefined
+  const detail = view.botWorkspace
+    ? null
+    : [
+        item.isMainWorktree
+          ? t('components.worktreeListRow.defaultBranch', 'Default branch')
+          : undefined,
+        terminals
+      ]
+        .filter(Boolean)
+        .join(' · ')
   // Agent rows take their own taps, so they share the card's long-press menu.
   const openActions = onLongPress
     ? () => {
@@ -162,9 +186,8 @@ function WorktreeListRowComponent({
       style={({ pressed }) => [
         styles.worktreeRow,
         indent > 0 && { paddingLeft: spacing.lg + indent },
-        item.isActive && styles.worktreeRowActive,
         view.dimmed && styles.worktreeRowDimmed,
-        pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
+        pressed && styles.worktreeRowPressed
       ]}
       disabled={isReadOnly}
       onPress={() => onPress(item)}
@@ -204,18 +227,14 @@ function WorktreeListRowComponent({
               <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
             </View>
           )}
-          {lineAgent ? (
-            <BotLineAgentLogos
-              agent={lineAgent}
-              ringColor={item.isActive ? colors.bgPanel : colors.bgBase}
-            />
-          ) : null}
+          {lineAgent ? <BotLineAgentLogos agent={lineAgent} ringColor={colors.bgBase} /> : null}
           {lineAgent && lineAgent.others > 0 ? (
             <BotLineAgentMore others={lineAgent.others} needsYou={lineAgent.othersNeedYou} />
           ) : null}
           <Text
             style={[
               styles.worktreeName,
+              item.isMainWorktree && styles.worktreeNameMain,
               item.unread && styles.worktreeNameUnread,
               isReadOnly && styles.textReadOnly
             ]}
@@ -223,10 +242,17 @@ function WorktreeListRowComponent({
           >
             {item.displayName || item.repo}
           </Text>
+          {item.isActive ? (
+            <Monitor
+              size={13}
+              color={colors.textMuted}
+              accessibilityLabel={t('components.worktreeListRow.openOnDesktop', 'Open on desktop')}
+            />
+          ) : null}
           {/* A bot's worker line has no room for PR marks; the desktop drops them there too. */}
           {!view.botWorkspace && cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <PrStateIcon state={prState} size={10} color={prColor} />
+              <PrStateIcon state={prState} size={11} color={prColor} />
               <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
@@ -243,9 +269,7 @@ function WorktreeListRowComponent({
               ...(view.botWorkspace ? { gitLabMR: false } : {})
             }}
           />
-          {item.liveTerminalCount > 0 ? (
-            <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
-          ) : null}
+          {showAgents ? <WorktreeAgentLatestTime agents={agents} /> : null}
         </View>
         {showMetaRow && (
           <View style={styles.worktreeMetaRow}>
@@ -282,16 +306,21 @@ function WorktreeListRowComponent({
         )}
         {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
         {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}
-        {!view.botWorkspace && cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
+        {showAgents ? (
           <WorktreeAgentList
-            agents={item.agents}
+            agents={agents}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}
             onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}
             onAgentLongPress={openActions}
             fullList={agentActivityDisplayMode === 'full'}
+            terminals={terminals}
           />
+        ) : detail ? (
+          <Text style={styles.detail} numberOfLines={1}>
+            {detail}
+          </Text>
         ) : null}
         {count > 0 && onToggleLineage ? (
           <Pressable

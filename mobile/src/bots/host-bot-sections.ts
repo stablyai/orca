@@ -146,14 +146,8 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ({ drawn: entry }) => entry.activity
   ).map(({ drawn: entry }) => entry)
   const searching = inputs.search.trim().length > 0
-  const lines = searching
-    ? []
-    : [
-        ...(total === 0 && newBotHostId
-          ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
-          : []),
-        ...endLines
-      ]
+  // With no bots the header's + says enough; only a computer it can't reach gets a line.
+  const lines = searching ? [] : endLines
   return {
     sections: [
       {

@@ -21,11 +21,13 @@ export function MobileBotsSectionHeader({
   collapsed: savedCollapsed,
   pending,
   onToggle,
-  onNew
+  onNew,
+  first
 }: {
   section: Section
   collapsed: boolean
   pending: boolean
+  first: boolean
   onToggle: () => void
   onNew: (() => void) | null
 }) {
@@ -38,7 +40,7 @@ export function MobileBotsSectionHeader({
   const preview = collapsedBotPreview(facts, botPreviewCapacity(width, facts.length))
   const label = t('bots.section.title', 'Bots')
   return (
-    <View style={styles.header}>
+    <View style={[hostScreenStyles.sectionHeader, first && hostScreenStyles.sectionHeaderFirst]}>
       <Pressable
         onPress={onToggle}
         disabled={!canCollapse}
@@ -56,20 +58,11 @@ export function MobileBotsSectionHeader({
             working: preview.working
           }
         )}
-        style={({ pressed }) => [
-          hostScreenStyles.sectionHeader,
-          styles.toggle,
-          pressed && styles.togglePressed
-        ]}
+        style={({ pressed }) => [styles.toggle, pressed && styles.togglePressed]}
       >
-        <View style={hostScreenStyles.sectionChevron}>
-          {canCollapse ? (
-            <DisclosureChevron expanded={!collapsed} collapsedDeg={0} expandedDeg={90}>
-              <ChevronRight size={12} color={colors.textMuted} />
-            </DisclosureChevron>
-          ) : null}
-        </View>
-        <Text style={hostScreenStyles.sectionTitle}>{label}</Text>
+        <Text style={hostScreenStyles.sectionTitle} numberOfLines={1}>
+          {label}
+        </Text>
         <View
           style={[styles.preview, collapsed && styles.previewFaces]}
           onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
@@ -93,7 +86,9 @@ export function MobileBotsSectionHeader({
               ) : null}
             </View>
           ) : (
-            <Text style={styles.count}>{section.count ?? facts.length}</Text>
+            <Text style={[hostScreenStyles.sectionCount, styles.count]}>
+              {section.count ?? facts.length}
+            </Text>
           )}
         </View>
         {pending ? (
@@ -102,6 +97,11 @@ export function MobileBotsSectionHeader({
             color={colors.textMuted}
             style={hostScreenStyles.sectionPendingSpinner}
           />
+        ) : null}
+        {canCollapse ? (
+          <DisclosureChevron expanded={!collapsed} collapsedDeg={0} expandedDeg={90}>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </DisclosureChevron>
         ) : null}
       </Pressable>
       {onNew ? (
@@ -112,7 +112,7 @@ export function MobileBotsSectionHeader({
           hitSlop={spacing.sm}
           style={({ pressed }) => [styles.add, pressed && pressedStyle]}
         >
-          <Plus size={16} color={colors.textSecondary} />
+          <Plus size={18} color={colors.textMuted} />
         </Pressable>
       ) : null}
     </View>
@@ -159,13 +159,18 @@ function Pip({ signal }: { signal: BotPreviewSignal }) {
 }
 
 const styles = themedStyleSheet(() => ({
-  header: { flexDirection: 'row', alignItems: 'center' },
-  toggle: { flex: 1, minWidth: 0 },
+  toggle: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
   togglePressed: { backgroundColor: colors.translucentFill },
   preview: {
     flex: 1,
     minWidth: 0,
-    marginLeft: 6,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden'
@@ -193,14 +198,9 @@ const styles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.bgBase
   },
-  count: { alignSelf: 'flex-start', fontSize: 13, color: colors.textMuted },
-  // The section header's vertical padding puts + on the title's line; 44 pt wide from the edge.
-  add: {
-    paddingTop: spacing.lg,
-    paddingBottom: 6,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.lg
-  },
+  count: { alignSelf: 'flex-start' },
+  // 44 pt tall like the header, ending at the rows' edge.
+  add: { minHeight: 44, justifyContent: 'center', paddingLeft: spacing.md },
   end: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md },
   // A bot row's picture (32) and its gap.
   endUnderRows: { paddingLeft: spacing.lg + 32 + spacing.md },
