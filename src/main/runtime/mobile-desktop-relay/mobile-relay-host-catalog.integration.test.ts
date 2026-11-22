@@ -24,7 +24,12 @@ import {
 } from '../rpc/server/runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
-import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProjectGroup
+} from '../construction/test-context/runtime-store-partial-fixture'
+import * as detection from '../../preflight/workspace-agent-detection'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()
@@ -70,10 +75,10 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     for (const cleanup of cleanups.splice(0).toReversed()) {
       await cleanup()
     }
+    vi.restoreAllMocks()
   })
 
-  async function startRuntime() {
-    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
+  async function startRuntime(runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))) {
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-relay-hosts-')),
@@ -118,8 +123,8 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
     }
   }
 
-  async function startTopology() {
-    const box = await startRuntime()
+  async function startTopology(ownerRuntime?: OrcaRuntimeService) {
+    const box = await startRuntime(ownerRuntime)
     const old = await startRuntime()
     const desktop = await startRuntime()
     const servers = new Map<string, { name: string; pairing: PairingOffer; capable: boolean }>([
@@ -189,8 +194,83 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       return z.object({ ok: z.literal(true), result: z.unknown() }).parse(await replies.next(id))
         .result
     }
-    return { box, contact, phoneCall }
+    return { box, contact, phoneCall, session, replies }
   }
+
+  it.each(['repo-1::/tmp/worktree-a', 'folder:hub'])(
+    'reads owner agents for a relayed host-qualified workspace %s',
+    async (worktreeId) => {
+      const owner = new OrcaRuntimeService(
+        partialRuntimeStore({
+          ...makeStore(),
+          getFolderWorkspaces: () => [
+            storeFolderWorkspace({ id: 'hub', projectGroupId: 'group', folderPath: '/tmp/hub' })
+          ],
+          getProjectGroups: () => [storeProjectGroup({ id: 'group' })],
+          getSettings: () => ({
+            agentCmdOverrides: { codex: '/owner/codex' },
+            disabledTuiAgents: ['gemini'],
+            defaultTuiAgent: 'codex'
+          })
+        })
+      )
+      vi.spyOn(detection, 'detectAgentsOnHost').mockImplementation(async (_host, options) =>
+        options?.agentCmdOverrides?.codex === '/owner/codex' ? ['codex'] : ['claude']
+      )
+      vi.spyOn(detection, 'refreshAgentsOnHost').mockImplementation(async (_host, options) => ({
+        agents: options?.agentCmdOverrides?.codex === '/owner/codex' ? ['codex'] : ['claude'],
+        addedPathSegments: [],
+        shellHydrationOk: true,
+        pathSource: 'sync_seed_only',
+        pathFailureReason: 'none'
+      }))
+      const { session, replies } = await startTopology(owner)
+      for (const method of [
+        'preflight.installedAgents',
+        'preflight.detectAgents',
+        'preflight.refreshAgents'
+      ]) {
+        for (const [executionHost, worktreeHostId] of [
+          ['runtime:box', 'runtime:box'],
+          ['runtime:box', ' runtime:b%6Fx '],
+          [' runtime:b%6Fx ', 'runtime:box'],
+          ['runtime:box', 'local'],
+          ['runtime:box', 'runtime:other']
+        ]) {
+          const id = `${method}:${executionHost}:${worktreeHostId}`
+          sendEncryptedWsRequest(session, {
+            id,
+            method,
+            executionHost,
+            params: { worktreeId, worktreeHostId }
+          })
+          const response = await replies.next(id)
+          if (worktreeHostId === 'runtime:other') {
+            expect(response).toMatchObject({
+              ok: false,
+              error:
+                worktreeId === 'folder:hub' && method !== 'preflight.installedAgents'
+                  ? { code: 'runtime_error', message: 'worktree_execution_host_unresolved' }
+                  : { code: 'selector_not_found' }
+            })
+          } else {
+            expect(response).toMatchObject({
+              ok: true,
+              result:
+                method === 'preflight.detectAgents'
+                  ? ['codex']
+                  : {
+                      agents: ['codex'],
+                      ...(method === 'preflight.installedAgents'
+                        ? { settings: { disabledTuiAgents: ['gemini'], defaultTuiAgent: 'codex' } }
+                        : {})
+                    }
+            })
+          }
+        }
+      }
+    }
+  )
 
   it('lists rows live through the desktop, then its last rows once a server is unreachable', async () => {
     const { box, contact, phoneCall } = await startTopology()

@@ -3,6 +3,7 @@ import {
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX } from '../../../shared/source-control/ai/generation/commit-message-host-key'
 import {
   pickCommitMessageGenerationSettings,
@@ -30,6 +31,24 @@ export function rewriteRelayedPhoneRequest(
   const forwarded = Object.fromEntries(
     Object.entries(parsed).filter(([field]) => !STRIPPED_ENVELOPE_FIELDS.has(field))
   )
+  if (
+    typeof parsed.executionHost === 'string' &&
+    isRecord(parsed.params) &&
+    typeof parsed.params.worktreeId === 'string' &&
+    parsed.params.worktreeId.length > 0 &&
+    typeof parsed.params.worktreeHostId === 'string'
+  ) {
+    const target = parseRoutableExecutionHostId(parsed.executionHost)
+    const workspaceHost = parseRoutableExecutionHostId(parsed.params.worktreeHostId)
+    if (
+      target?.kind === 'runtime' &&
+      workspaceHost?.kind === 'runtime' &&
+      target.environmentId === workspaceHost.environmentId
+    ) {
+      // The receiving runtime names its own workspaces local, regardless of the desktop's alias.
+      forwarded.params = { ...parsed.params, worktreeHostId: 'local' }
+    }
+  }
   return JSON.stringify(requestId === undefined ? forwarded : { ...forwarded, id: requestId })
 }
 
