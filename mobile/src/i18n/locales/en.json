@@ -5454,7 +5454,8 @@
       "soulAndMemory": "Soul and memory",
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
-      "none": "None"
+      "none": "None",
+      "readFailed": "Couldn’t load"
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
