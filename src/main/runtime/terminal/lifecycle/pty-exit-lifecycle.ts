@@ -319,7 +319,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       options.hostLost !== true &&
       options.paneRespawning !== true
     ) {
-      this.retireExitedCoordinatorRuns(exitedSurfaces, ptyId, exitIncarnationId)
+      // The panes read before retirement too: a pane with no issued handle, or one main's close
+      // already dropped, leaves no exited surface.
+      const exitedPanes = new Set([...exitPaneKeys, ...exitedSurfaces.map((s) => s.paneKey)])
+      this.retireExitedCoordinatorRuns(exitedPanes, ptyId, exitIncarnationId)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

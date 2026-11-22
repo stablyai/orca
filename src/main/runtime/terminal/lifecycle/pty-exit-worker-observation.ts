@@ -51,15 +51,16 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
 
   /** A coordinator terminal that ended with nothing left in its pane: its Runs have no reader. */
   protected retireExitedCoordinatorRuns(
-    surfaces: readonly { paneKey: string | null }[],
+    paneKeys: Iterable<string | null>,
     ptyId: string,
     exitIncarnationId: PtyIncarnationId | undefined
   ): void {
-    const db = this._orchestrationDb
+    // A restored terminal can end before anything opened the database its Runs are in.
+    const db = this.getExistingOrchestrationDb()
     if (!db) {
       return
     }
-    for (const { paneKey } of surfaces) {
+    for (const paneKey of paneKeys) {
       if (!paneKey || this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
         continue
       }

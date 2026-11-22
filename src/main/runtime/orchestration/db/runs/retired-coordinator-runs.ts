@@ -12,9 +12,14 @@ function retireCoordinatorRuns(
   db: OrchestrationDb,
   coordinator: OrchestrationCoordinatorKey
 ): void {
-  runLifecycleWriteTransaction(db.db, 'retire_coordinator_runs', () => {
+  const changed = runLifecycleWriteTransaction(db.db, 'retire_coordinator_runs', () =>
     db.unbindOtherRunsForCoordinator(coordinator, '')
-  })
+  )
+  if (changed.length > 0) {
+    db.crewChanges.notify(
+      Object.assign(new Set(['topology'] as const), { trafficAddresses: new Set(changed) })
+    )
+  }
 }
 
 export function retireCoordinatorChatRuns(db: OrchestrationDb, sessionId: string): void {

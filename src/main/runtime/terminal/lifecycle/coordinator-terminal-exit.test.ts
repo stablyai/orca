@@ -6,6 +6,7 @@ import { dropReaderlessRunQuestions } from '../../orchestration/db/questions/rea
 
 const LEAF = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const PANE = `tab_c:${LEAF}`
+const OTHER_LEAF = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 describe("a Run whose coordinator's terminal ended", () => {
   let db: OrchestrationDb
@@ -72,7 +73,7 @@ describe("a Run whose coordinator's terminal ended", () => {
   it('reads again once run-use binds the Run to a new terminal', async () => {
     await runtime.onPtyExit('pty-c', 0)
     expect(getQuestionTaker(db, ask())).toBe('dropped:no-reader')
-    db.bindRun({ runId, coordinatorHandle: 'term_n', coordinatorPaneKey: `tab_n:${LEAF}` })
+    db.bindRun({ runId, coordinatorHandle: 'term_n', coordinatorPaneKey: `tab_n:${OTHER_LEAF}` })
     expect(getQuestionTaker(db, ask())).toBeNull()
   })
 })
