@@ -135,6 +135,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       ...sortStampSummaryFields(worktree),
       ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
       ...(worktree.creatorProvenance ? { creatorProvenance: worktree.creatorProvenance } : {}),
+      // Voice start_agent resumes a worktree with the agent that ran there before.
+      ...(worktree.createdWithAgent ? { createdWithAgent: worktree.createdWithAgent } : {}),
       linkedIssue: worktree.linkedIssue,
       linkedPR,
       linkedLinearIssue: meta?.linkedLinearIssue ?? null,
@@ -194,6 +196,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       ...sortStampSummaryFields(worktree),
       ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
       ...(worktree.creatorProvenance ? { creatorProvenance: worktree.creatorProvenance } : {}),
+      ...(worktree.createdWithAgent ? { createdWithAgent: worktree.createdWithAgent } : {}),
       linkedIssue: worktree.linkedIssue ?? null,
       linkedPR: null,
       linkedLinearIssue: worktree.linkedLinearIssue ?? null,

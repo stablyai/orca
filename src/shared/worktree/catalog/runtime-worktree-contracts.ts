@@ -6,6 +6,7 @@ import type {
   AgentWorkingMode
 } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { ProgramStatusFacet } from '../../program-status/facet'
 import type { AgentListVerdict } from '../../agent-status/presentation/agent-list-status'
 import type {
@@ -131,6 +132,9 @@ export type RuntimeWorktreePsSummary = {
   comment: string
   isPinned: boolean
   isActive: boolean
+  /** The agent this worktree was created with, when known. Optional on the wire: old hosts
+   *  never send it; readers treat absent as unknown and fall back to the default agent. */
+  createdWithAgent?: TuiAgent
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
