@@ -11,7 +11,8 @@ import {
   type NativeMenuProps
 } from './native-menu-items'
 
-// Group-scoped, so ID-less submenus that share a label in different groups stay apart.
+// Scoped by the caller's group position (before empty groups drop out), so ID-less submenus that
+// share a label stay apart even when an earlier group empties while one is open.
 function submenuKeyOf(groupIndex: number, item: MenuSubmenu): string {
   return `${groupIndex}/${item.id ?? item.label}`
 }
@@ -23,17 +24,16 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
   // The key, not the object: its actions must come from the current groups, which can change while open.
   const [submenuKey, setSubmenuKey] = useState<string | null>(null)
   const visible = visibleMenuGroups(groups)
+  const submenus = new Map<MenuSubmenu, string>()
+  groups.forEach((group, groupIndex) => {
+    for (const item of group.filter(Boolean)) {
+      if (isMenuSubmenu(item)) {
+        submenus.set(item, submenuKeyOf(groupIndex, item))
+      }
+    }
+  })
   const submenu =
-    submenuKey === null
-      ? undefined
-      : visible
-          .flatMap((group, groupIndex) =>
-            group.filter(
-              (item): item is MenuSubmenu =>
-                isMenuSubmenu(item) && submenuKeyOf(groupIndex, item) === submenuKey
-            )
-          )
-          .at(0)
+    submenuKey === null ? undefined : [...submenus].find(([, key]) => key === submenuKey)?.[0]
   const changeOpen = (next: boolean) => {
     setOpen(next)
     if (!next) {
@@ -43,7 +43,7 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
   }
   const drawn: (readonly ActionSheetAction[])[] = submenu
     ? [submenu.actions]
-    : visible.map((group, groupIndex) =>
+    : visible.map((group) =>
         group.map((item) =>
           isMenuSubmenu(item)
             ? {
@@ -52,7 +52,7 @@ export function DrawnMenu({ groups, children, onOpenChange, style, testID }: Nat
                 status: item.value,
                 skipAutoClose: true,
                 renderIcon: () => <ChevronRight size={16} color={colors.textMuted} />,
-                onPress: () => setSubmenuKey(submenuKeyOf(groupIndex, item))
+                onPress: () => setSubmenuKey(submenus.get(item) ?? null)
               }
             : item
         )
