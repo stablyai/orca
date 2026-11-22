@@ -19690,7 +19690,6 @@
         "listLabel": "排隊的訊息",
         "alreadySent": "此訊息已傳送。",
         "withdrawnHold": "在傳送前已停止",
-        "pausedSendFailed": "無法傳送。點按傳送以重試。",
         "paused": "已暫停",
         "resume": "繼續",
         "fromSender": "來自",

@@ -21516,7 +21516,6 @@
         "listLabel": "Mensagens na fila",
         "alreadySent": "Esta mensagem já foi enviada.",
         "withdrawnHold": "Interrompida antes do envio",
-        "pausedSendFailed": "Não foi possível enviar — pressione Enviar para tentar novamente.",
         "paused": "Pausada",
         "resume": "Retomar",
         "fromSender": "De",

@@ -20121,7 +20121,6 @@
         "listLabel": "Kuyruktaki mesajlar",
         "alreadySent": "Bu mesaj zaten gönderildi.",
         "withdrawnHold": "Gönderilmeden önce durduruldu",
-        "pausedSendFailed": "Gönderilemedi — tekrar denemek için Gönder'e basın.",
         "paused": "Duraklatıldı",
         "resume": "Devam et",
         "fromSender": "Gönderen",

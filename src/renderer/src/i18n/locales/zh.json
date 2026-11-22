@@ -20523,7 +20523,6 @@
         "showFullMessage": "显示完整消息",
         "showLess": "收起",
         "withdrawnHold": "在发送前已停止",
-        "pausedSendFailed": "无法发送，点按发送以重试",
         "paused": "已暂停",
         "resume": "继续",
         "fromSender": "来自",

@@ -19216,7 +19216,6 @@
         "showFullMessage": "전체 메시지 보기",
         "showLess": "접기",
         "withdrawnHold": "전송 전에 중지됨",
-        "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
         "paused": "일시 중지됨",
         "resume": "재개",
         "fromSender": "보낸 사람:",

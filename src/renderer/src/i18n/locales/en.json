@@ -21804,7 +21804,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",

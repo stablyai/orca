@@ -19994,7 +19994,6 @@
         "listLabel": "Nachrichten in der Warteschlange",
         "alreadySent": "Diese Nachricht wurde bereits gesendet.",
         "withdrawnHold": "Vor dem Senden gestoppt",
-        "pausedSendFailed": "Senden fehlgeschlagen — zum Wiederholen auf „Senden“ drücken.",
         "paused": "Pausiert",
         "resume": "Fortsetzen",
         "fromSender": "Von",
