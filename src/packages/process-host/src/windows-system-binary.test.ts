@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { resolveSpawn } from './spawn-resolution'
 import {
   resolveWindowsComSpec,
   windowsPowerShellPath,
@@ -46,4 +47,16 @@ it('resolves ComSpec in any casing, then builds cmd.exe from the install root', 
   expect(resolveWindowsComSpec({ COMSPEC: '  ', WINDIR: 'F:\\W' }, {})).toBe(
     'F:\\W\\System32\\cmd.exe'
   )
+})
+
+// The shim fallback builds its cmd.exe command line from the resolved ComSpec, so a casing miss
+// here would spawn a bare `cmd.exe` from PATH instead of the installed command processor.
+it('spawn resolution reads ComSpec in any casing and skips blank values', () => {
+  expect(
+    resolveSpawn({ program: 'C:\\missing.cmd', env: { COMSPEC: 'D:\\custom\\cmd.exe' } }, 'win32')
+      .file
+  ).toBe('D:\\custom\\cmd.exe')
+  expect(
+    resolveSpawn({ program: 'C:\\missing.cmd', env: { comspec: '  E:\\cmd.exe  ' } }, 'win32').file
+  ).toBe('E:\\cmd.exe')
 })
