@@ -26,7 +26,10 @@ import {
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
-import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import {
+  type OpenedWorktreeDeleteTarget,
+  useWorktreeContextMenuCommands
+} from './use-worktree-context-menu-commands'
 import { selectWorkspaceShowsUnread } from '../../workspace-card/slots/worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
@@ -72,7 +75,11 @@ export function useWorktreeContextMenuModel({
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
-  const [menuOpen, setMenuOpen] = useState(false)
+  // Delete stays tied to the checkout that opened the menu, including after a same-key replacement.
+  const [openedDeleteTarget, setOpenedDeleteTarget] = useState<OpenedWorktreeDeleteTarget | null>(
+    null
+  )
+  const menuOpen = openedDeleteTarget !== null
   // Capture Option/Alt at menu open so Developer visibility cannot move items under the pointer.
   const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -221,14 +228,25 @@ export function useWorktreeContextMenuModel({
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
-      setMenuOpen(open)
+      setOpenedDeleteTarget(
+        open
+          ? {
+              worktree: {
+                id: worktree.id,
+                instanceId: worktree.instanceId,
+                hostId: worktree.hostId
+              },
+              folderWorkspaceId
+            }
+          : null
+      )
       if (!open) {
         // Why: the reveal is per-open, so a later plain right-click can't inherit it.
         setDeveloperMenuRevealed(false)
       }
       onOpenChange?.(open)
     },
-    [onOpenChange]
+    [folderWorkspaceId, onOpenChange, worktree.hostId, worktree.id, worktree.instanceId]
   )
 
   useEffect(() => {
@@ -282,10 +300,10 @@ export function useWorktreeContextMenuModel({
     batchDeleteWorktrees,
     createGroupDialogActiveRef,
     createProjectGroup,
-    folderWorkspaceId,
     isMultiContext,
     moveProjectToGroup,
     onAssignWorkspaceStatus,
+    openedDeleteTarget,
     openModal,
     repo,
     scopeRef,

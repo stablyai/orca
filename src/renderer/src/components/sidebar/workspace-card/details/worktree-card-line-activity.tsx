@@ -19,8 +19,7 @@ export function WorktreeCardLineActivity({
   workspaceMenuEnabled
 }: {
   worktreeId: string
-  /** The card's host; local and remote copies can share a workspace ID, so the rows must name it. */
-  executionHostId?: ExecutionHostId
+  executionHostId: ExecutionHostId
   workspaceMenuEnabled: boolean
 }): React.JSX.Element | null {
   const menuScope = React.useContext(WorktreeContextMenuPortalScope)

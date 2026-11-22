@@ -95,15 +95,17 @@ export function shouldUseNativeContextMenu(target: EventTarget | null): boolean 
   return closestContextMenuElement(target, `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`) !== null
 }
 
+/** A right-click on an agent row that this menu's owner rendered into a portal, such as its details hover. */
 export function isOwnedWorktreeContextMenuPortal(
   target: EventTarget | null,
   scopeId: string
 ): boolean {
-  return (
-    closestContextMenuElement(target, `[${WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR}]`)?.getAttribute(
-      WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR
-    ) === scopeId
-  )
+  const scope = closestContextMenuElement(target, `[${WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR}]`)
+  if (scope?.getAttribute(WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR) !== scopeId) {
+    return false
+  }
+  const row = closestContextMenuElement(target, '.agent-disclosure-row')
+  return row !== null && scope.contains(row)
 }
 
 export function shouldIgnoreNestedWorktreeContextMenuScope(

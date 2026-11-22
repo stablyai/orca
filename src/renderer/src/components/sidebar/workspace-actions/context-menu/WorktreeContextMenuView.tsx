@@ -93,38 +93,42 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       onSleepSubtree={handleSleepSubtree}
     />
   )
+  function openContextMenu(event: React.MouseEvent<HTMLDivElement>, fromPortal = false): void {
+    event.preventDefault()
+    contextMenuOpenedAtRef.current = Date.now()
+    window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+    setDeveloperMenuRevealed(event.altKey)
+    setContextWorktrees(
+      fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
+    )
+    const bounds = event.currentTarget.getBoundingClientRect()
+    setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+    setMenuOpenState(true)
+  }
   return (
     <div
       ref={scopeRef}
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
-        const isInside = isEventTargetInsideCurrentTarget(event.currentTarget, event.target)
-        const isOwnedPortal =
-          !isInside && isOwnedWorktreeContextMenuPortal(event.target, portalScope)
-        if (!isInside && !isOwnedPortal) {
-          return
-        }
         if (
-          !isOwnedPortal &&
-          (shouldUseNativeContextMenu(event.target) ||
-            shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target))
+          !isEventTargetInsideCurrentTarget(event.currentTarget, event.target) ||
+          shouldUseNativeContextMenu(event.target) ||
+          shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)
         ) {
           return
         }
-        event.preventDefault()
-        if (isOwnedPortal) {
+        openContextMenu(event)
+      }}
+      onContextMenu={(event) => {
+        // Portaled rows let the hover's selected-text Copy handler capture first.
+        if (
+          !event.defaultPrevented &&
+          isOwnedWorktreeContextMenuPortal(event.target, portalScope)
+        ) {
           event.stopPropagation()
+          openContextMenu(event, true)
         }
-        contextMenuOpenedAtRef.current = Date.now()
-        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-        setDeveloperMenuRevealed(event.altKey)
-        setContextWorktrees(
-          isOwnedPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
-        )
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
-        setMenuOpenState(true)
       }}
       onClickCapture={(event) => {
         suppressOpeningPointerEvent(event)
