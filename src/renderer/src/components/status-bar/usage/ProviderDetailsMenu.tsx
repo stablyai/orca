@@ -30,6 +30,7 @@ export function ProviderDetailsMenu({
   trigger,
   accountLabel,
   panelFooter,
+  usageSignInHint,
   variant = 'default'
 }: {
   provider: ProviderRateLimits | null
@@ -45,6 +46,7 @@ export function ProviderDetailsMenu({
   trigger?: React.ReactElement
   accountLabel?: string
   panelFooter?: React.ReactNode
+  usageSignInHint?: string
   variant?: 'default' | 'account'
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -71,6 +73,7 @@ export function ProviderDetailsMenu({
               p={provider}
               accountLabel={accountLabel}
               footer={panelFooter}
+              usageSignInHint={usageSignInHint}
               usagePercentageDisplay={usagePercentageDisplay}
               inMenu
             />

@@ -65,6 +65,7 @@ export function CodexSwitcherMenu({
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const activeSignInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
+  const canSignInLocally = !hasActiveRuntimeEnvironment && activeTarget?.id != null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
       ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
@@ -145,6 +146,13 @@ export function CodexSwitcherMenu({
         'Open Codex details and account switcher'
       )}
       variant="account"
+      usageSignInHint={
+        activeSignInRequired
+          ? canSignInLocally
+            ? t('accounts.codex.usageSignInMessage', 'Sign in to see usage.')
+            : t('accounts.codex.usageSignInSettingsMessage', 'Open Settings → Accounts to sign in.')
+          : undefined
+      }
       accountLabel={
         rosterKnown
           ? (activeTarget?.label ??
@@ -209,7 +217,7 @@ export function CodexSwitcherMenu({
         <AccountSwitchSection
           heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
           targets={selectedGroup?.targets ?? []}
-          panelShowsActiveAccount
+          panelShowsActiveAccount={!(activeSignInRequired && canSignInLocally)}
           onOpenSettings={() => {
             openSettingsTarget({
               pane: 'accounts',

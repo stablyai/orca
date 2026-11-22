@@ -9,6 +9,8 @@ import type {
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { useAppStore } from '@/store'
+import { Toaster } from '@/components/ui/sonner'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import {
@@ -135,6 +137,20 @@ function managed(account: SampleAccount): CodexManagedAccount {
   }
 }
 
+function FixtureSwitcher(props: React.ComponentProps<typeof CodexSwitcherMenu>) {
+  const rateLimits = useAppStore((state) => state.rateLimits)
+  if (props.ownerUsage.owner.target.kind !== 'local' || !rateLimits?.codex) {
+    return <CodexSwitcherMenu {...props} />
+  }
+  return (
+    <CodexSwitcherMenu
+      {...props}
+      codex={rateLimits.codex}
+      ownerUsage={{ ...props.ownerUsage, rateLimits }}
+    />
+  )
+}
+
 function switcherFixture(
   accounts: SampleAccount[],
   asSubmenu = false,
@@ -205,7 +221,8 @@ function switcherFixture(
             }
           }
         : {}),
-      fetchInactiveCodexAccountUsage: async () => {}
+      fetchInactiveCodexAccountUsage: async () => {},
+      fetchSettings: async () => {}
     },
     setup: () => {
       // Settings already carry the roster; the web bridge has no local account IPC to answer.
@@ -231,7 +248,7 @@ function switcherFixture(
           <DropdownMenu defaultOpen modal={false}>
             <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
             <DropdownMenuContent>
-              <CodexSwitcherMenu
+              <FixtureSwitcher
                 codex={codex}
                 ownerUsage={ownerUsage}
                 asSubmenu
@@ -240,8 +257,9 @@ function switcherFixture(
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <CodexSwitcherMenu codex={codex} ownerUsage={ownerUsage} />
+          <FixtureSwitcher codex={codex} ownerUsage={ownerUsage} />
         )}
+        <Toaster />
       </div>
     ),
     interact: async (frame) => {
@@ -289,16 +307,13 @@ export const pairedHostWithWsl = switcherFixture(
   true
 )
 
-export const revokedActiveSignIn = switcherFixture(
-  [
-    {
-      ...BASE_ACCOUNTS[0],
-      weekly: null,
-      error:
-        'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={ "error": { "message": "Encountered invalidated oauth token for user, failing request", "type": null, "code": "token_revoked", "param": null }, "status": 401 }'
-    },
-    ...BASE_ACCOUNTS.slice(1, 5)
-  ],
-  false,
-  true
-)
+const revokedUsageError =
+  'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={ "error": { "message": "Encountered invalidated oauth token for user, failing request", "type": null, "code": "token_revoked", "param": null }, "status": 401 }'
+const revokedAccounts = [
+  { ...BASE_ACCOUNTS[0], weekly: null, error: revokedUsageError },
+  ...BASE_ACCOUNTS.slice(1, 5),
+  { ...BASE_ACCOUNTS[5], error: revokedUsageError }
+]
+
+export const revokedActiveSignIn = switcherFixture(revokedAccounts, false, true)
+export const revokedRemoteSignIn = switcherFixture(revokedAccounts, false, false, false, true)

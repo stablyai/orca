@@ -136,11 +136,9 @@ function ErrorMessage({
       : (label ?? genericRefreshLabel)
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      <div className={detailClass} title={detail}>
-        {message}
-      </div>
+      {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
     </div>
   )
 }
@@ -242,7 +240,8 @@ export function ProviderPanel({
   showResetCredits = true,
   usagePercentageDisplay = 'used',
   embedded = false,
-  headerAction
+  headerAction,
+  usageSignInHint
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
@@ -253,6 +252,7 @@ export function ProviderPanel({
   embedded?: boolean
   /** Rendered at the right of the provider name line, e.g. the Used/Left column toggle. */
   headerAction?: React.ReactNode
+  usageSignInHint?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
@@ -305,7 +305,7 @@ export function ProviderPanel({
         <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
-            message={getProviderUsageErrorMessage(p, t)}
+            message={usageSignInHint ?? getProviderUsageErrorMessage(p, t)}
             detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />

@@ -14,10 +14,8 @@ describe('isCodexUsageSignInRequired', () => {
     const usage = { provider: 'codex', error: REVOKED_LOGIN_ERROR }
     const translate = (_key: string, fallback: string): string => fallback
     expect(isCodexUsageSignInRequired(usage)).toBe(true)
-    expect(getProviderUsageStatusLabel(usage, translate)).toBe('Sign in again')
-    expect(getProviderUsageErrorMessage(usage, translate)).toBe(
-      'This Codex sign-in is no longer valid. Sign in again to see usage.'
-    )
+    expect(getProviderUsageStatusLabel(usage, translate)).toBe('Signed out')
+    expect(getProviderUsageErrorMessage(usage, translate)).toBe('Signed out')
   })
 
   it.each([

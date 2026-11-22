@@ -124,7 +124,7 @@ export function getProviderUsageStatusLabel(
   }
   // Why before the rate-limit check: Codex wraps a revoked login as "failed to fetch codex rate limits".
   if (isCodexUsageSignInRequired(p)) {
-    return t('accounts.codex.usageSignInLabel', 'Sign in again')
+    return t('accounts.codex.usageSignInLabel', 'Signed out')
   }
   // MiniMax signals credential expiry in its payload, so generic refresh-failure copy is misleading.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
@@ -230,10 +230,7 @@ export function getProviderUsageErrorMessage(
     }
   }
   if (isCodexUsageSignInRequired(p)) {
-    return t(
-      'accounts.codex.usageSignInMessage',
-      'This Codex sign-in is no longer valid. Sign in again to see usage.'
-    )
+    return getProviderUsageStatusLabel(p, t)
   }
   if (isUsageRateLimitError(p)) {
     return formatRateLimitUserFacingError(p.error, t) || p.error
