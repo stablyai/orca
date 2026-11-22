@@ -24,7 +24,7 @@ import {
 import { defaultProjectGroupNameForPath } from '../dialog/add-repo-dialog-types'
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 import type { NestedProjectReporter } from './useAddRepoNestedReviewState'
-import type { PausedLocalPathAdd } from '../dialog/add-repo-local-path-batch'
+import { reportAfterGitRepoReady } from './report-after-git-repo-ready'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -194,22 +194,20 @@ export function useAddRepoNestedImportFlow({
               : 'local_folder_picker'
           // Why: the close inside onGitRepoReady resets review, so take the reporter first and
           // report after, letting the move open once the dialog closed, as for a plain repo add.
-          const reportProject = takeNestedProjectReporter()
-          let added: PausedLocalPathAdd | null = null
-          try {
-            await onGitRepoReady(
-              repo.id,
-              source,
-              completionOwnerOptions.executionHostId,
-              mode === 'group' && result.group
-                ? { importedProjectGroupId: result.group.id }
-                : undefined
-            )
+          await reportAfterGitRepoReady(
+            takeNestedProjectReporter(),
+            () =>
+              onGitRepoReady(
+                repo.id,
+                source,
+                completionOwnerOptions.executionHostId,
+                mode === 'group' && result.group
+                  ? { importedProjectGroupId: result.group.id }
+                  : undefined
+              ),
             // Every imported repo starts checked, so a new group is not split across hosts.
-            added = { repo, imported: importedRepoIds.map((id) => ({ kind: 'repo', id })) }
-          } finally {
-            reportProject?.(added)
-          }
+            { repo, imported: importedRepoIds.map((id) => ({ kind: 'repo', id })) }
+          )
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {
