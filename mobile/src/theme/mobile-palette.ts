@@ -13,6 +13,10 @@ export const darkPalette: MobilePalette = {
   // The desktop's sidebar and secondary.
   sheetSurface: '#171717',
   sheetGroup: '#262626',
+  // The screen and sheet groups' tokens, as before grouped screens had their own.
+  groupedBackground: '#0a0a0a',
+  groupedSurface: '#262626',
+  disclosureTint: '#898989',
   translucentFill: 'rgba(120, 120, 128, 0.36)',
   // --chat-composer-surface painted over --chat-canvas, and --chat-composer-border.
   composerSurface: '#1f1f1f',
@@ -66,6 +70,9 @@ export const lightPalette: MobilePalette = {
   // Light inverts it: a grey sheet under white groups, as iOS does.
   sheetSurface: '#f5f5f5',
   sheetGroup: '#ffffff',
+  groupedBackground: '#ffffff',
+  groupedSurface: '#ffffff',
+  disclosureTint: '#696969',
   translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',

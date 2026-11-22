@@ -13,6 +13,11 @@ export type MobileChromeColors = {
   /** Sheets sit a step above the screen, their groups a step above the sheet. */
   readonly sheetSurface: string
   readonly sheetGroup: string
+  /** A screen of grouped lists (settings), and its groups. */
+  readonly groupedBackground: string
+  readonly groupedSurface: string
+  /** A row's trailing chevron. */
+  readonly disclosureTint: string
   /** A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group. */
   readonly translucentFill: string
   /** The composer box over the chat, its hairline, and its buttons. */

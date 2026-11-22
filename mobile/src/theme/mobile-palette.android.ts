@@ -14,6 +14,10 @@ export const darkPalette: MobilePalette = {
   // surfaceContainerLow (the bottom sheet) and surfaceContainerHigh.
   sheetSurface: '#1a1b20',
   sheetGroup: '#282a2f',
+  // surface under surfaceContainerHigh cards; onSurfaceVariant for trailing icons.
+  groupedBackground: '#121318',
+  groupedSurface: '#282a2f',
+  disclosureTint: '#c5c6d0',
   // onSurface at the 12% state-layer opacity.
   translucentFill: 'rgba(226, 226, 233, 0.12)',
   // surfaceContainerHigh, outlineVariant, surfaceContainerHighest
@@ -66,6 +70,9 @@ export const lightPalette: MobilePalette = {
   borderSubtle: '#c5c6d0',
   sheetSurface: '#f4f3fa',
   sheetGroup: '#e8e7ef',
+  groupedBackground: '#faf8ff',
+  groupedSurface: '#e8e7ef',
+  disclosureTint: '#44464f',
   translucentFill: 'rgba(26, 27, 32, 0.12)',
   composerSurface: '#e8e7ef',
   composerBorder: '#c5c6d0',

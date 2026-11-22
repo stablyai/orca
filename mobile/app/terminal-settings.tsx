@@ -34,6 +34,7 @@ import {
 import { TerminalFontPreview } from '../src/terminal/preferences/settings/TerminalFontPreview'
 import { getResponsiveLayoutMetrics } from '../src/layout/responsive-layout-metrics'
 import { themedStyleSheet } from '../src/theme/themed-styles'
+import { GroupedListScreen } from '../src/components/list/ListGroup'
 import { NATIVE_SCREEN_HEADER } from '../src/components/nav-bar/ScreenHeader'
 import {
   SettingsEmptyRow,
@@ -233,7 +234,7 @@ export default function TerminalSettingsScreen() {
   return (
     <GestureHandlerRootView style={settingsScreenStyles.container}>
       <SafeAreaView
-        style={settingsScreenStyles.container}
+        style={settingsScreenStyles.groupedContainer}
         edges={NATIVE_SCREEN_HEADER ? [] : ['top']}
       >
         <SettingsNavBar
@@ -256,54 +257,56 @@ export default function TerminalSettingsScreen() {
               scrollContentHeight.value = height
             }}
           >
-            {wide ? null : <View style={styles.previewSlot}>{preview}</View>}
-            <TerminalFontSection
-              settings={fontSettings}
-              onOpenFontPicker={() => setFontPickerOpen(true)}
-            />
-
-            <SettingsSection
-              title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
-              separatorInset={LIST_LEADING_INSET}
-              footer={t(
-                'app.terminalSettings.leaveAppDescription',
-                "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
-              )}
-            >
-              {hosts.length === 0 ? (
-                <SettingsEmptyRow key="empty">
-                  {t(
-                    'app.terminalSettings.noPairedDesktops',
-                    'No paired desktops yet. Pair one to control terminal behavior.'
-                  )}
-                </SettingsEmptyRow>
-              ) : (
-                hosts.map((host) => (
-                  <HostFitRow
-                    key={host.id}
-                    client={hostClientsById.get(host.id) ?? null}
-                    hostName={host.name}
-                    ms={hostMs[host.id]}
-                    onPress={() => setPickerHostId(host.id)}
-                  />
-                ))
-              )}
-            </SettingsSection>
-
-            <TerminalShortcutSettings
-              scrollRef={scrollRef}
-              scrollOffsetY={scrollOffsetY}
-              scrollContentHeight={scrollContentHeight}
-              onDragActiveChange={handleDragActiveChange}
-            />
-
-            <SettingsSection>
-              <ListRow
-                key="resetFont"
-                title={t('app.terminalSettings.resetFont', 'Reset font settings')}
-                onPress={fontSettings.reset}
+            <GroupedListScreen>
+              {wide ? null : <View style={styles.previewSlot}>{preview}</View>}
+              <TerminalFontSection
+                settings={fontSettings}
+                onOpenFontPicker={() => setFontPickerOpen(true)}
               />
-            </SettingsSection>
+
+              <SettingsSection
+                title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
+                separatorInset={LIST_LEADING_INSET}
+                footer={t(
+                  'app.terminalSettings.leaveAppDescription',
+                  "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
+                )}
+              >
+                {hosts.length === 0 ? (
+                  <SettingsEmptyRow key="empty">
+                    {t(
+                      'app.terminalSettings.noPairedDesktops',
+                      'No paired desktops yet. Pair one to control terminal behavior.'
+                    )}
+                  </SettingsEmptyRow>
+                ) : (
+                  hosts.map((host) => (
+                    <HostFitRow
+                      key={host.id}
+                      client={hostClientsById.get(host.id) ?? null}
+                      hostName={host.name}
+                      ms={hostMs[host.id]}
+                      onPress={() => setPickerHostId(host.id)}
+                    />
+                  ))
+                )}
+              </SettingsSection>
+
+              <TerminalShortcutSettings
+                scrollRef={scrollRef}
+                scrollOffsetY={scrollOffsetY}
+                scrollContentHeight={scrollContentHeight}
+                onDragActiveChange={handleDragActiveChange}
+              />
+
+              <SettingsSection>
+                <ListRow
+                  key="resetFont"
+                  title={t('app.terminalSettings.resetFont', 'Reset font settings')}
+                  onPress={fontSettings.reset}
+                />
+              </SettingsSection>
+            </GroupedListScreen>
           </Animated.ScrollView>
           {wide ? (
             <View style={styles.widePreview}>

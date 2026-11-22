@@ -6,7 +6,12 @@ import {
   ScreenHeader,
   type ScreenHeaderProps
 } from '../components/nav-bar/ScreenHeader'
-import { ListGroup, LIST_ROW_PADDING, SectionHeader } from '../components/list/ListGroup'
+import {
+  GroupedListScreen,
+  ListGroup,
+  LIST_ROW_PADDING,
+  SectionHeader
+} from '../components/list/ListGroup'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -38,7 +43,7 @@ export function SettingsScreen({
   const insets = useSafeAreaInsets()
   return (
     <SafeAreaView
-      style={settingsScreenStyles.container}
+      style={settingsScreenStyles.groupedContainer}
       edges={NATIVE_SCREEN_HEADER ? [] : ['top']}
     >
       <ScreenHeader title={title} onBack={onBack} actions={actions} largeTitle={largeTitle} />
@@ -51,7 +56,7 @@ export function SettingsScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {children}
+        <GroupedListScreen>{children}</GroupedListScreen>
       </ScrollView>
       {overlays}
     </SafeAreaView>
@@ -118,6 +123,7 @@ export function SettingsEmptyRow({ children }: { children: ReactNode }) {
 
 export const settingsScreenStyles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
+  groupedContainer: { flex: 1, backgroundColor: colors.groupedBackground },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   fill: { flexGrow: 1 },
   untitledGap: { marginTop: spacing.lg },

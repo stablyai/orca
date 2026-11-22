@@ -14,6 +14,10 @@ export const darkPalette: MobilePalette = {
   // Elevated systemGroupedBackground and secondarySystemGroupedBackground.
   sheetSurface: '#1c1c1e',
   sheetGroup: '#2c2c2e',
+  // systemGroupedBackground, secondarySystemGroupedBackground, tertiaryLabel
+  groupedBackground: '#000000',
+  groupedSurface: '#1c1c1e',
+  disclosureTint: 'rgba(235, 235, 245, 0.3)',
   // systemFill
   translucentFill: 'rgba(120, 120, 128, 0.36)',
   // secondarySystemBackground, separator, systemGray5
@@ -74,6 +78,9 @@ export const lightPalette: MobilePalette = {
   // systemGroupedBackground and secondarySystemGroupedBackground.
   sheetSurface: '#f2f2f7',
   sheetGroup: '#ffffff',
+  groupedBackground: '#f2f2f7',
+  groupedSurface: '#ffffff',
+  disclosureTint: 'rgba(60, 60, 67, 0.3)',
   // systemFill
   translucentFill: 'rgba(120, 120, 128, 0.2)',
   // systemBackground, separator, systemGray6
