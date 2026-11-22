@@ -35,6 +35,13 @@ describe('bot mentions in the phone field', () => {
     )
   })
 
+  it('removes the whole token when part of its name is selected and deleted', () => {
+    const draft = `${TOKEN}!`
+    expect(
+      draftAfterFieldEdit(draft, botMentionDisplay(draft), '@ra!', { start: 19, end: 19 })
+    ).toEqual({ draft: '!', caret: 0 })
+  })
+
   it('puts text typed inside the name after the token', () => {
     const draft = `${TOKEN} hi`
     expect(draftAfterFieldEdit(draft, botMentionDisplay(draft), '@Noxra hi', at(19))).toEqual({

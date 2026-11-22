@@ -92,7 +92,11 @@ export function useBotMentionField(value: string) {
       end: shownOffset(display, pending.end)
     },
     onSelectionChange: (shown: Selection): void => {
-      selection.current = draftSelection(display, shown)
+      // Not widened over a token: the edit that follows is read against the text as shown.
+      selection.current = {
+        start: draftOffset(display, shown.start),
+        end: draftOffset(display, shown.end)
+      }
       setCursor(selection.current.end)
       setPending(null)
     },
@@ -103,7 +107,8 @@ export function useBotMentionField(value: string) {
   }
 }
 
-// Another text's selection stays as it is: dictation then lands at the draft's end.
+// A selection into a token takes the whole token, as typing over it would; another text's selection
+// stays as it is, and dictation then lands at the draft's end.
 function draftAnchor(
   display: BotMentionDisplay,
   source: string,

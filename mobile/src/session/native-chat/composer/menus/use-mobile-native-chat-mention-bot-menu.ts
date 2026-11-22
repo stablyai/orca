@@ -100,6 +100,9 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
         return null
       case 'bot-chat':
         setDrill(null)
+        if (row.bot.paused) {
+          return null
+        }
         // Another bot's Home Chat is the bot alone; the chat's own bot's is picked by id.
         return row.chat.home && !row.bot.own
           ? botMentionToken(row.bot)

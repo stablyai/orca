@@ -87,13 +87,14 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
       // Only the latest read of a bot's chats lands; an older reply never replaces it.
       const asked = (latest.current.get(botId) ?? 0) + 1
       latest.current.set(botId, asked)
+      const key = readKey(callerSessionId, botId)
       const settle = (read: MentionBotChats) => {
         if (latest.current.get(botId) === asked) {
-          setReads((current) => new Map(current).set(botId, read))
+          setReads((current) => new Map(current).set(key, read))
         }
       }
       // Rows already read stay while they are read again, so the list never blanks.
-      if (reads.get(botId)?.status !== 'ready') {
+      if (reads.get(key)?.status !== 'ready') {
         settle({ status: 'loading' })
       }
       void botChatsRead
@@ -114,11 +115,20 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   return useMemo(
     () =>
       listsBots
-        ? { bots, chatPicks, chats: (botId: string) => reads.get(botId), readChats }
+        ? {
+            bots,
+            chatPicks,
+            chats: (botId: string) => reads.get(readKey(callerSessionId, botId)),
+            readChats
+          }
         : undefined,
-    [listsBots, bots, chatPicks, reads, readChats]
+    [listsBots, bots, chatPicks, reads, readChats, callerSessionId]
   )
 }
+
+// A chat read as another chat (the composer moved to it) marks that one as itself, so each is kept apart.
+const readKey = (callerSessionId: string | undefined, botId: string) =>
+  `${callerSessionId ?? ''}\n${botId}`
 
 /** The chats a pick can name now, the Home Chat first, then the newest. */
 function offeredChats(rows: readonly BotChatRow[]): BotChatRow[] {
