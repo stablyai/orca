@@ -1,11 +1,13 @@
 import { AlertCircle, CircleArrowUp, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatActionButton } from './NativeChatActionButton'
 import { NativeChatSignInRow } from '../../host-access/NativeChatSignInRow'
 import { NativeChatDetailsDisclosure } from '../../messages/diagnostics/NativeChatProviderDetails'
+import { useDeferredPending } from '../../mcp/use-deferred-pending'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 /** Keep the live region mounted so screen readers announce the first notice; show errors first. */
@@ -56,15 +58,29 @@ export function NativeChatPromptSlotNotices({
 
 function NoticeAction({
   status,
+  pending,
   ...action
 }: NonNullable<NativeChatComposerNotice['action']>): React.JSX.Element {
-  return status ? (
+  const spinning = useDeferredPending(pending === true)
+  const button = <NativeChatActionButton {...action} disabled={action.disabled || pending} />
+  const lead =
+    pending === undefined ? (
+      status
+    ) : (
+      <>
+        {status}
+        <span className="flex size-3.5 items-center text-muted-foreground">
+          {spinning ? <LoadingSpinner className="size-3.5" /> : null}
+        </span>
+      </>
+    )
+  return lead ? (
     <span className="flex shrink-0 items-center gap-1.5">
-      {status}
-      <NativeChatActionButton {...action} />
+      {lead}
+      {button}
     </span>
   ) : (
-    <NativeChatActionButton {...action} />
+    button
   )
 }
 

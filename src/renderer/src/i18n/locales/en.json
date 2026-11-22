@@ -22660,9 +22660,11 @@
       },
       "providerUpdate": {
         "available": "{{program}} {{installed}} is installed. This chat is still running {{running}}.",
+        "availableWhileWorking": "{{program}} {{installed}} is installed. This chat is still running {{running}} and can restart when this turn ends.",
         "restart": "Restart chat",
         "restarted": "Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.",
-        "busy": "{{agent}} is still working. Restart when this turn ends.",
+        "notRunning": "Your next message starts {{program}} {{installed}} and continues this conversation.",
+        "busy": "{{agent}} still has work open in this chat, so it kept running. Try again when it finishes.",
         "failed": "Couldn’t restart this chat."
       }
     },

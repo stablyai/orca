@@ -38,21 +38,27 @@ export function useNativeChatProviderUpdateNotice({
   const [wasWorking, setWasWorking] = useState(working)
   if (working !== wasWorking) {
     setWasWorking(working)
-    // A new turn retires the last answer: the confirmation has done its job, and Busy is stale.
-    if (working) {
-      setRestart(null)
-    }
+    // A turn starting or ending outdates the last answer, and one still on its way.
+    setRestart(null)
   }
   const program = agentPermissionSettingsSourceName(agent)
   if (restart?.phase === 'answered' && restart.outcome !== 'busy') {
+    const installed = { program, installed: restart.installedVersion }
     return {
       key: 'provider-update',
       kind: 'update',
-      text: t(
-        'components.native-chat.providerUpdate.restarted',
-        'Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.',
-        { program, installed: restart.installedVersion }
-      ),
+      text:
+        restart.outcome === 'stopped'
+          ? t(
+              'components.native-chat.providerUpdate.restarted',
+              'Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.',
+              installed
+            )
+          : t(
+              'components.native-chat.providerUpdate.notRunning',
+              'Your next message starts {{program}} {{installed}} and continues this conversation.',
+              installed
+            ),
       onDismiss: () => setRestart(null)
     }
   }
@@ -61,22 +67,25 @@ export function useNativeChatProviderUpdateNotice({
   }
   const run = (): void => {
     const { installedVersion } = update
-    setRestart({ phase: 'restarting' })
+    const pressed: Restart = { phase: 'restarting' }
+    setRestart(pressed)
+    // Only the press still on screen takes the answer; a retired or newer one drops it.
+    const settle = (next: Restart) =>
+      mountedRef.current && setRestart((current) => (current === pressed ? next : current))
     callStructuredAgentSession<{ outcome: RestartAgentOutcome }>(
       target,
       'agentSession.restartAgent',
       { sessionId }
     ).then(
-      ({ outcome }) =>
-        mountedRef.current && setRestart({ phase: 'answered', outcome, installedVersion }),
-      (error: unknown) => mountedRef.current && setRestart({ phase: 'failed', error })
+      ({ outcome }) => settle({ phase: 'answered', outcome, installedVersion }),
+      (error: unknown) => settle({ phase: 'failed', error })
     )
   }
-  const available = t(
-    'components.native-chat.providerUpdate.available',
-    '{{program}} {{installed}} is installed. This chat is still running {{running}}.',
-    { program, installed: update.installedVersion, running: update.runningVersion }
-  )
+  const versions = {
+    program,
+    installed: update.installedVersion,
+    running: update.runningVersion
+  }
   const content =
     restart?.phase === 'failed'
       ? nativeChatNoticeFromError(
@@ -87,19 +96,32 @@ export function useNativeChatProviderUpdateNotice({
         ? {
             text: t(
               'components.native-chat.providerUpdate.busy',
-              '{{agent}} is still working. Restart when this turn ends.',
+              '{{agent}} still has work open in this chat, so it kept running. Try again when it finishes.',
               { agent: agentLabel }
             )
           }
-        : { text: available }
+        : {
+            text: working
+              ? t(
+                  'components.native-chat.providerUpdate.availableWhileWorking',
+                  '{{program}} {{installed}} is installed. This chat is still running {{running}} and can restart when this turn ends.',
+                  versions
+                )
+              : t(
+                  'components.native-chat.providerUpdate.available',
+                  '{{program}} {{installed}} is installed. This chat is still running {{running}}.',
+                  versions
+                )
+          }
   return {
     key: 'provider-update',
-    kind: 'update',
+    kind: restart?.phase === 'failed' ? 'error' : 'update',
     ...content,
     action: {
       label: t('components.native-chat.providerUpdate.restart', 'Restart chat'),
       onClick: run,
-      disabled: working || restart?.phase === 'restarting'
+      disabled: working,
+      pending: restart?.phase === 'restarting'
     },
     onDismiss: () => setDismissed(update.installedVersion)
   }

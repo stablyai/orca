@@ -22,6 +22,8 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
     primary?: boolean
     /** Shown before the button, e.g. a failed run's chip. */
     status?: React.ReactNode
+    /** Running now: the button greys at once, and a spinner shows in a reserved slot if it lasts. */
+    pending?: boolean
   }
   onDismiss?: () => void
   /** A not-signed-in notice: one neutral line whose own button signs in. */
