@@ -76,7 +76,8 @@ export function useMobileBotGroupItemOpeners({
       }
     },
     /** `current`: false once the view that asked is gone, so a late lookup opens nothing. */
-    worker: (worker: BotChatTreeWorker, current: () => boolean) =>
+    worker: (worker: BotChatTreeWorker, current: () => boolean) => {
+      chatOpener.cancel()
       openBotItemWorker(worker, {
         client,
         loaded: [],
@@ -96,5 +97,6 @@ export function useMobileBotGroupItemOpeners({
         current,
         showToast
       })
+    }
   }
 }
