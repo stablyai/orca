@@ -1,28 +1,187 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { expect, type Page } from '@stablyai/playwright-test'
+import { join, relative } from 'node:path'
+import { expect, type Locator, type Page } from '@stablyai/playwright-test'
 import type { KeybindingActionId } from '../../src/shared/keybindings/types'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/manifest/plugin-schema-field-docs'
 import { test } from './desktop/electron-fixtures/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
-import {
-  cleanupMarkdownFixture,
-  createMarkdownFixture,
-  getActiveWorktreeContext,
-  openMarkdownFixture,
-  waitForRichMarkdownEditor
-} from './editor/markdown/markdown-editor-fixture'
-import { disablePluginSystem, enableDevPlugins, openRepoFile } from './plugins/plugin-smoke'
-import {
-  focusInGuest,
-  ISOLATED_FRAMES_E2E,
-  pluginGuest,
-  readInGuest
-} from './plugins/plugin-frame-guest'
+
+const ISOLATED_FRAMES_E2E = { orcaAppExtraEnv: { ORCA_PLUGIN_ISOLATED_FRAMES: '1' } }
 
 test.use(ISOLATED_FRAMES_E2E)
 test.use({ launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
+
+type ActiveWorktreeContext = {
+  worktreeId: string
+  rootPath: string
+}
+
+async function getActiveWorktreeContext(page: Page): Promise<ActiveWorktreeContext> {
+  return page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    const state = store.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      throw new Error('No active worktree is selected')
+    }
+    const worktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((entry) => entry.id === worktreeId)
+    if (!worktree) {
+      throw new Error(`Active worktree was not found in store: ${worktreeId}`)
+    }
+    return { worktreeId, rootPath: worktree.path }
+  })
+}
+
+async function createMarkdownFixture(
+  context: ActiveWorktreeContext,
+  initialMarkdown: string
+): Promise<string> {
+  const directory = join(context.rootPath, 'markdown-modes')
+  await mkdir(directory, { recursive: true })
+  const filePath = join(directory, `view-commands-${Date.now()}.md`)
+  await writeFile(filePath, initialMarkdown, 'utf8')
+  return filePath
+}
+
+async function openMarkdownFixture(
+  page: Page,
+  context: ActiveWorktreeContext,
+  filePath: string
+): Promise<{ filePath: string }> {
+  const relativePath = relative(context.rootPath, filePath)
+  await page.evaluate(
+    ({ filePath, relativePath, worktreeId }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().openFile({
+        filePath,
+        relativePath,
+        worktreeId,
+        language: 'markdown',
+        mode: 'edit'
+      })
+    },
+    { filePath, relativePath, worktreeId: context.worktreeId }
+  )
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const store = window.__store
+          if (!store) {
+            return null
+          }
+          const state = store.getState()
+          const file = state.openFiles.find((entry) => entry.id === state.activeFileId)
+          return file?.filePath ?? null
+        }),
+      { timeout: 5_000, message: `Active editor file did not become ${filePath}` }
+    )
+    .toBe(filePath)
+
+  return { filePath }
+}
+
+async function waitForRichMarkdownEditor(page: Page): Promise<Locator> {
+  const editor = page.locator('.rich-markdown-editor')
+  await expect(editor).toBeVisible({ timeout: 25_000 })
+  return editor
+}
+
+async function enableDevPlugins(page: Page, paths: string[]): Promise<void> {
+  await page.evaluate(async (devPluginPaths) => {
+    const settings = await window.api.settings.set({ pluginSystemEnabled: true, devPluginPaths })
+    window.__store?.setState({ settings })
+    for (const plugin of await window.api.plugins.refresh()) {
+      if (plugin.isDev && plugin.status === 'pending' && plugin.consentFingerprint) {
+        await window.api.plugins.consent({
+          pluginKey: plugin.pluginKey,
+          reviewedFingerprint: plugin.consentFingerprint,
+          decision: 'approve'
+        })
+      }
+    }
+  }, paths)
+}
+
+async function disablePluginSystem(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const settings = await window.api.settings.set({
+      pluginSystemEnabled: false,
+      devPluginPaths: []
+    })
+    window.__store?.setState({ settings })
+    await window.api.plugins.refresh()
+  })
+}
+
+async function openRepoFile(page: Page, repoPath: string, name: string): Promise<void> {
+  await page.evaluate(
+    ({ name, filePath }) => {
+      const state = window.__store?.getState()
+      if (!state?.activeWorktreeId) {
+        throw new Error('no active worktree')
+      }
+      state.openFile({
+        filePath,
+        relativePath: name,
+        worktreeId: state.activeWorktreeId,
+        language: 'plaintext',
+        mode: 'edit'
+      })
+    },
+    { name, filePath: join(repoPath, name) }
+  )
+}
+
+function pluginGuest(page: Page, title: string): Locator {
+  return page.locator(`webview[title="${title}"]`)
+}
+
+async function evalInGuest<T>(guest: Locator, source: string): Promise<T> {
+  const result: T = await guest.evaluate(
+    (webview: Electron.WebviewTag, script: string) => webview.executeJavaScript(script),
+    source
+  )
+  return result
+}
+
+async function readInGuest<T>(guest: Locator, source: string): Promise<T | null> {
+  try {
+    return await evalInGuest<T>(guest, source)
+  } catch {
+    return null
+  }
+}
+
+async function focusInGuest(guest: Locator, selector: string): Promise<void> {
+  const target = `document.querySelector(${JSON.stringify(selector)})`
+  await expect
+    .poll(async () => {
+      try {
+        await guest.evaluate((webview: Electron.WebviewTag) => webview.focus())
+        await evalInGuest(guest, `${target}?.focus()`)
+        const hostFocused = await guest.evaluate(
+          (webview: Electron.WebviewTag) => webview.ownerDocument.activeElement === webview
+        )
+        return (
+          hostFocused && (await evalInGuest<boolean>(guest, `document.activeElement === ${target}`))
+        )
+      } catch {
+        return false
+      }
+    })
+    .toBe(true)
+}
 
 type EditorCommandActionId = Extract<
   KeybindingActionId,
@@ -121,14 +280,8 @@ test.describe('configurable editor view commands', () => {
     registerPostElectronShutdownCleanup
   }, testInfo) => {
     const context = await getActiveWorktreeContext(orcaPage)
-    const filePath = await createMarkdownFixture(
-      context,
-      'markdown-modes',
-      'view-commands',
-      testInfo.workerIndex,
-      '# View commands\n\nInitial content.\n'
-    )
-    registerPostElectronShutdownCleanup(() => cleanupMarkdownFixture(filePath))
+    const filePath = await createMarkdownFixture(context, '# View commands\n\nInitial content.\n')
+    registerPostElectronShutdownCleanup(() => rm(filePath, { force: true }))
     await setCommandBinding(orcaPage, TOGGLE_CHANGES, ['Mod+Alt+Shift+F8'])
     await setCommandBinding(orcaPage, CYCLE_VIEW, ['Mod+Alt+Shift+F9'])
     const activeFile = await openMarkdownFixture(orcaPage, context, filePath)
