@@ -10,6 +10,7 @@ import { persistFreshPaneBinding } from '../pane/fresh-pane-binding'
 import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
+import { ptyIncarnationById } from '../provider/ownership-state'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** A lane's pane binding for its new process, saved before the spawn is acknowledged. */
@@ -26,6 +27,7 @@ export type PtySpawnPaneBinding = {
 export async function savePtySpawnPaneBinding(
   state: {
     accountRestartOperation?: AccountRestartOperation
+    args?: { signal?: AbortSignal }
     result: PtySpawnResult
     provider: IPtyProvider
     replacedPaneOwner?: ReplacedPaneOwner | null
@@ -36,6 +38,13 @@ export async function savePtySpawnPaneBinding(
 ): Promise<void> {
   const restart = state.accountRestartOperation
   if (restart) {
+    if (state.args?.signal?.aborted) {
+      await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime)
+      if (ptyIncarnationById.get(state.result.id) === state.result.incarnationId) {
+        restart.outcomeUnknown = true
+      }
+      throw new Error('client_disconnected')
+    }
     binding = {
       ...binding,
       accountRestart: restart.condition,

@@ -126,7 +126,10 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     result
   })
   // Inventory cannot infer background/reattached PTYs from mounted views.
-  deps.sendPtySpawnedToRenderer(result.id)
+  const restartCallerDisconnected = state.accountRestartOperation && args.signal?.aborted
+  if (!restartCallerDisconnected) {
+    deps.sendPtySpawnedToRenderer(result.id)
+  }
   deps.options?.onCodexHomePtySpawned?.({
     id: result.id,
     codexHomePath: state.selectedCodexHomePath,
@@ -143,6 +146,9 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
+  if (restartCallerDisconnected) {
+    throw new Error('client_disconnected')
+  }
   return { kind: 'committed', result: input.response }
 }
 

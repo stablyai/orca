@@ -256,11 +256,13 @@ export async function shutdownLocalPty(
   }
   const pending = ptyShutdownOperations.get(id)
   if (pending) {
-    if (opts.immediate === true) {
-      opts.authorize?.()
+    if (opts.authorize) {
+      // The existing stop owns its signal schedule.
+      opts.authorize()
+    } else if (opts.immediate === true) {
       pending.immediate = true
       if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
-        requestTrackedPtyShutdown(id, pending.proc, true, opts.authorize)
+        requestTrackedPtyShutdown(id, pending.proc, true)
       }
     }
     await pending.promise

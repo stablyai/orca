@@ -55,6 +55,7 @@ export type PtySpawnCommitState = {
     | 'launchAgent'
     | 'resumeProviderSession'
     | 'onResumeOutcome'
+    | 'signal'
     | 'telemetry'
   >
   result: PtySpawnResult

@@ -47,7 +47,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
     store: ctx.deps.store,
     claudeAuth: ctx.claudeAuth
   })
-  ctx.spawnOptions = launch.spawnOptions
+  ctx.spawnOptions = { ...launch.spawnOptions, signal: args.signal }
   if (args.wslPassiveRestore === true) {
     ctx.spawnOptions.wslPassiveRestore = true
   }

@@ -19,6 +19,21 @@ class FinalCheckpointOnlyAdapter extends DaemonPtyAdapter {
   protected override scheduleCheckpointTimer(): void {}
 }
 
+class AmbiguousKillReplyAdapter extends FinalCheckpointOnlyAdapter {
+  loseKillReply(dispatched: Promise<void>): void {
+    const request = this.client.request.bind(this.client)
+    vi.spyOn(this.client, 'request').mockImplementation(async (...args) => {
+      const reply = request(...args)
+      if (args[0] !== 'kill') {
+        return reply
+      }
+      void reply.catch(() => {})
+      await dispatched
+      throw new Error('kill reply lost')
+    })
+  }
+}
+
 async function start(
   Provider = DaemonPtyAdapter,
   { protocolVersion, withHistory = true }: { protocolVersion?: number; withHistory?: boolean } = {}
@@ -150,6 +165,35 @@ describe('DaemonPtyAdapter fenced restart retirement', () => {
       readFileSync(join(historyTree(created.id), 'checkpoint.json'), 'utf8')
     )
     expect(checkpoint.snapshotAnsi).toContain('output after refused restart')
+  })
+
+  it('restores the verified checkpoint after a matching exit follows an ambiguous stop', async () => {
+    const provider = await start(AmbiguousKillReplyAdapter)
+    const created = await spawn(provider)
+    const dispatched = Promise.withResolvers<void>()
+    vi.mocked(subprocess.forceKill).mockImplementation(() => dispatched.resolve())
+    if (!(provider instanceof AmbiguousKillReplyAdapter)) {
+      throw new Error('Expected the ambiguous reply fixture')
+    }
+    provider.loseKillReply(dispatched.promise)
+    subprocess._simulateData('restore after the late exit\r\n')
+    await expect(
+      provider.killFenced({
+        ...checkedRequest(created.id, created.incarnationId),
+        keepHistory: true
+      })
+    ).resolves.toEqual({ outcome: 'refused', reason: 'unverifiable' })
+    const exited = Promise.withResolvers<void>()
+    const unsubscribe = provider.onExit(({ id, incarnationId }) => {
+      if (id === created.id && incarnationId === created.incarnationId) {
+        exited.resolve()
+      }
+    })
+    onTestFinished(unsubscribe)
+    subprocess._simulateExit(0)
+    await exited.promise
+    const replacement = await spawn(provider, created.id)
+    expect(replacement.coldRestore?.scrollback).toContain('restore after the late exit')
   })
 
   it('keeps a v62 daemon terminal alive when account restart operations are unsupported', async () => {

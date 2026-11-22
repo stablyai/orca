@@ -16,11 +16,6 @@ import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from '../wsl/daemo
 import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
 
 export abstract class DaemonPtySessionRetirement extends DaemonPtySessionControl {
-  private readonly fencedHistoryStops = new Map<
-    string,
-    { incarnationId: string; preserve: () => void }
-  >()
-
   protected override clearExitedSessionState(
     id: string,
     code: number,
@@ -92,44 +87,50 @@ export abstract class DaemonPtySessionRetirement extends DaemonPtySessionControl
         if (!verifyExitOnly) {
           authorize?.()
         }
-        if (preserve) {
+        const priorHistoryStop = this.fencedHistoryStops.get(id)
+        const samePriorHistoryStop = priorHistoryStop?.incarnationId === expectedIncarnationId
+        if (preserve && !samePriorHistoryStop) {
           this.fencedHistoryStops.set(id, { incarnationId: expectedIncarnationId, preserve })
         }
-        try {
-          const result = await this.client.request<unknown>('kill', {
-            sessionId: id,
-            immediate: true,
-            expectedIncarnationId,
-            requireNoAgentOwner,
-            requireUnattached,
-            ...(verifyExitOnly ? { verifyExitOnly: true as const } : {})
-          })
-          if (
-            !isPtyFencedTerminationOutcome(result) ||
-            (verifyExitOnly && result.outcome === 'ended')
-          ) {
-            return { outcome: 'refused', reason: 'unverifiable' }
-          }
-          if (verifyExitOnly && result.outcome === 'already_exited') {
-            authorize?.()
-          }
-          const currentIncarnationId = this.sessionIncarnations.get(id)
-          if (
-            (result.outcome === 'ended' || result.outcome === 'already_exited') &&
-            (incarnationBeforeKill === undefined ||
-              incarnationBeforeKill === expectedIncarnationId) &&
-            (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
-          ) {
-            const historyStop = this.fencedHistoryStops.get(id)
-            this.fencedHistoryStops.delete(id)
-            historyStop?.preserve()
-            // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
-            await this.completeShutdownWithHistoryLock(id, { keepHistory: request.keepHistory })
-          }
-          return result
-        } finally {
+        const result = await this.client.request<unknown>('kill', {
+          sessionId: id,
+          immediate: true,
+          expectedIncarnationId,
+          requireNoAgentOwner,
+          requireUnattached,
+          ...(verifyExitOnly ? { verifyExitOnly: true as const } : {})
+        })
+        if (
+          !isPtyFencedTerminationOutcome(result) ||
+          (verifyExitOnly && result.outcome === 'ended')
+        ) {
+          return { outcome: 'refused', reason: 'unverifiable' }
+        }
+        if (verifyExitOnly && result.outcome === 'already_exited') {
+          authorize?.()
+        }
+        if (
+          result.outcome === 'refused' &&
+          result.reason !== 'unverifiable' &&
+          (!samePriorHistoryStop || result.reason === 'replaced') &&
+          this.fencedHistoryStops.get(id)?.incarnationId === expectedIncarnationId
+        ) {
           this.fencedHistoryStops.delete(id)
         }
+        const currentIncarnationId = this.sessionIncarnations.get(id)
+        if (
+          (result.outcome === 'ended' || result.outcome === 'already_exited') &&
+          (incarnationBeforeKill === undefined ||
+            incarnationBeforeKill === expectedIncarnationId) &&
+          (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
+        ) {
+          const historyStop = this.fencedHistoryStops.get(id)
+          this.fencedHistoryStops.delete(id)
+          historyStop?.preserve()
+          // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
+          await this.completeShutdownWithHistoryLock(id, { keepHistory: request.keepHistory })
+        }
+        return result
       })
     }
     try {

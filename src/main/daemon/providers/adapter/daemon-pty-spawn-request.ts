@@ -52,6 +52,19 @@ export type DaemonPtySpawnContext = {
 }
 
 export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
+  protected readonly fencedHistoryStops = new Map<
+    string,
+    { incarnationId: string; preserve: () => void }
+  >()
+
+  protected recordSpawnedIncarnation(id: string, incarnationId?: string): void {
+    const pending = this.fencedHistoryStops.get(id)
+    if (pending && incarnationId && pending.incarnationId !== incarnationId) {
+      this.fencedHistoryStops.delete(id)
+    }
+    this.ptyInventory.spawned(id, incarnationId)
+  }
+
   protected abstract takeSnapshotAndCheckpoint(
     sessionId: string,
     opts: {

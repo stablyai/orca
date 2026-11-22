@@ -510,3 +510,63 @@ it('reports an uncertain restart after a live binding commits but registration l
     outcome: 'unknown'
   })
 })
+
+it.each(['provider', 'binding'] as const)(
+  'handles document cancellation during the restart %s',
+  async (phase) => {
+    const provider = localRestartProvider()
+    const { store } = await fixture()
+    const args = await emptyRestartPane(store)
+    const controller = new AbortController()
+    const held = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const result = { id: 'cancelled-restart-pty', incarnationId: 'cancelled-restart-incarnation' }
+    const spawn = vi.spyOn(provider, 'spawn').mockImplementation(async () => {
+      if (phase === 'provider') {
+        held.resolve()
+        await release.promise
+      }
+      return result
+    })
+    const shutdown = vi.spyOn(provider, 'shutdown').mockResolvedValue(undefined)
+    if (phase === 'binding') {
+      const persist = store.persistPtyBinding.bind(store)
+      vi.spyOn(store, 'persistPtyBinding').mockImplementationOnce(async (...binding) => {
+        held.resolve()
+        await release.promise
+        return persist(...binding)
+      })
+    }
+    const deps = rendererRestartDeps({ ...makeRuntimePtySpawnTestDeps(), store })
+    const pending = runPtyIpcSpawn(deps, { ...args, signal: controller.signal }).catch(
+      (error: unknown) => error
+    )
+    try {
+      await Promise.race([
+        held.promise,
+        pending.then(() => {
+          throw new Error('restart did not reach the held operation')
+        })
+      ])
+      expect(spawn.mock.calls[0]?.[0].signal).toBe(controller.signal)
+      controller.abort()
+    } finally {
+      release.resolve()
+    }
+    const receipt = accountRestartErrorReceipt(await pending)
+    const bound =
+      store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
+    if (phase === 'provider') {
+      expect(bound).toBeUndefined()
+      expect(shutdown).toHaveBeenCalledWith(result.id, {
+        immediate: true,
+        expectedIncarnationId: result.incarnationId
+      })
+      expect(receipt?.outcome).toBe('terminal')
+    } else {
+      expect(bound).toBe(result.id)
+      expect(shutdown).not.toHaveBeenCalled()
+      expect(receipt?.outcome).toBe('unknown')
+    }
+  }
+)
