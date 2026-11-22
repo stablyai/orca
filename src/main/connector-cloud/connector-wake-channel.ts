@@ -96,9 +96,10 @@ export class ConnectorWakeChannel {
     )
   }
 
-  /** The next poll's hold, once one is owed; null once the client should long-poll instead. */
-  async nextPoll(signal: AbortSignal): Promise<ConnectorWakePoll | null> {
-    while (!signal.aborted && this.active) {
+  /** The next poll's hold, once one is owed; null once the client should long-poll instead, or
+   *  once `stale` (its hello was replaced or dropped; `recheck` says so). */
+  async nextPoll(signal: AbortSignal, stale: () => boolean): Promise<ConnectorWakePoll | null> {
+    while (!signal.aborted && this.active && !stale()) {
       const now = Date.now()
       if (this.open && this.owed) {
         const holdMs = this.owed === 'wake' ? WAKE_POLL_HOLD_MS : 0
@@ -112,6 +113,11 @@ export class ConnectorWakeChannel {
       await this.waitForChange(Math.max(1, until - now), signal)
     }
     return null
+  }
+
+  /** Something `nextPoll`'s `stale` reads changed. */
+  recheck(): void {
+    this.notify()
   }
 
   stop(): void {
@@ -152,7 +158,12 @@ export class ConnectorWakeChannel {
       .catch(() => null)
       .then((token) => {
         this.dialing = false
-        if (this.offered !== offer || this.refused || this.stopped || this.socket) {
+        if (this.refused || this.stopped || this.socket) {
+          return
+        }
+        // A newer hello's offer came while this token was fetched: dial for that one instead.
+        if (this.offered !== offer) {
+          this.dial(renewed)
           return
         }
         if (!token) {
@@ -303,19 +314,29 @@ export class ConnectorWakePolls {
     this.channel?.requestPoll()
   }
 
+  /** The client dropped its hello: a poll waiting under it ends, so the next cycle says hello. */
+  helloDropped(): void {
+    this.channel?.recheck()
+  }
+
   /**
-   * The next poll's holdMs once it is due: undefined to hold as before (no open socket); null when
-   * stopped or another hello replaced `helloRev` meanwhile, whose first poll goes next cycle.
+   * The next poll's holdMs once it is due: undefined to hold as before (no open socket); null with
+   * no hello, or when stopped or another hello replaced `helloRev` meanwhile (it polls next cycle).
    */
   async hold(
-    helloRev: number,
+    helloRev: number | null,
     currentRev: () => number | null,
     signal: AbortSignal
   ): Promise<number | undefined | null> {
     const { channel } = this
+    if (helloRev === null) {
+      return null
+    }
     let holdMs: number | undefined
     if (channel?.active) {
-      const turn = this.polledRev === helloRev ? await channel.nextPoll(signal) : { holdMs: 0 }
+      const stale = (): boolean => currentRev() !== helloRev
+      const turn =
+        this.polledRev === helloRev ? await channel.nextPoll(signal, stale) : { holdMs: 0 }
       if (signal.aborted || currentRev() !== helloRev) {
         return null
       }

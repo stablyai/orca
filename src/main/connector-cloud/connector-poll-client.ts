@@ -106,6 +106,7 @@ export class ConnectorPollClient {
           return null
         }
         this.helloRev = null
+        this.wake.helloDropped()
         return this.backoff(failure)
       }
     })
@@ -218,12 +219,9 @@ export class ConnectorPollClient {
       return connectorStop(refused) ?? this.backoff(refused)
     }
     const { helloRev } = this
-    // Stopped during the hello.
-    if (helloRev === null) {
-      return null
-    }
+    // Stopped during the hello (null), or a wake-channel wait that ended without a poll.
     const holdMs = await this.wake.hold(helloRev, () => this.helloRev, this.stopped.signal)
-    if (holdMs === null) {
+    if (helloRev === null || holdMs === null) {
       return null
     }
     const polledAt = Date.now()
@@ -353,6 +351,7 @@ export class ConnectorPollClient {
     // That hello is no longer current, e.g. a retired client's late one landed after it: say hello again.
     if (sent.status === 409 && this.helloRev === helloRev) {
       this.helloRev = this.snapshots.drop('post-409')
+      this.wake.helloDropped()
     }
     const stop = connectorStop(sent)
     if (stop) {

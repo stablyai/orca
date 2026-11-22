@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import { base, pollClientHarness, settle } from './connector-poll-client.test-fixture'
+import { FAKE_BOT } from './fake-connector-seam.test-fixture'
 
 const h = pollClientHarness()
 const OFFER = { wakeUrl: 'wss://wake.test/v1/connector/wake', safetyPollMs: 180_000 }
@@ -81,6 +82,19 @@ describe('connector wake client', () => {
     await settle()
     expect(h.fake.acks).toContainEqual({ deliveryId: 'd1', step: 'received' })
     expect(polls().at(-1)).toEqual({ v: 1, helloRev: 1, holdMs: 0 })
+    client.stop()
+  })
+
+  it('a changed hello polls under it at once, not at the safety poll', async () => {
+    const { client, machine } = await onWake()
+    const before = polls().length
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle(1_000)
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(polls()).toHaveLength(before + 1)
+    expect(polls().at(-1)).toEqual({ v: 1, helloRev: 2, holdMs: 0 })
+    expect(h.wake.dialed).toHaveLength(1)
     client.stop()
   })
 
