@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeIntroducer,
+  describeIntroducers,
   isMissingSha,
   lintableFiles,
   parseGithubDiagnostics,
@@ -81,7 +82,20 @@ describe('main-push changed-file lint', () => {
     expect(describeIntroducer({ sha, pull: null, author: 'octocat' })).toBe(
       'commit 465241f6d0 by @octocat (no PR found)'
     )
-    expect(describeIntroducer(null)).toMatch(/^unknown/)
+    expect(describeIntroducer({ sha, pull: null, author: null, pullLookupFailed: true })).toBe(
+      'commit 465241f6d0 (PR lookup failed)'
+    )
+  })
+
+  it('attributes directly only when one commit in the push changed the file', () => {
+    const first = { sha: '1111111111aaaa', pull: 1, author: 'a' }
+    const second = { sha: '2222222222bbbb', pull: 2, author: 'b' }
+    expect(describeIntroducers([first])).toBe('#1 by @a (1111111111)')
+    expect(describeIntroducers([second, first])).toBe(
+      'one of #2 by @b (2222222222), #1 by @a (1111111111) (2 commits in this push changed the file)'
+    )
+    expect(describeIntroducers([])).toMatch(/^unknown/)
+    expect(describeIntroducers(undefined)).toMatch(/^unknown/)
   })
 
   it('renders a failure table naming the offending file, rule and PR', () => {
@@ -99,7 +113,7 @@ describe('main-push changed-file lint', () => {
           message: 'File has too many lines (402).'
         }
       ],
-      introducers: new Map([[PANE, { sha: '465241f6d0738aaaa', pull: 47119, author: 'octocat' }]])
+      introducers: new Map([[PANE, [{ sha: '465241f6d0738aaaa', pull: 47119, author: 'octocat' }]]])
     })
     expect(summary).toContain('### Main-push lint failed')
     expect(summary).toContain(

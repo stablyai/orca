@@ -29,6 +29,7 @@ jobs:
       # PR checks lint against an older main, so lint what each push changed and name the PR that crossed a limit.
       - name: Lint files this push changed
         if: '!cancelled()'
+        timeout-minutes: 5
         env:
           BEFORE_SHA: ${{ github.event.before }}
           PUSH_FORCED: ${{ github.event.forced }}

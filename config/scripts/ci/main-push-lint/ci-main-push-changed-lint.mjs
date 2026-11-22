@@ -11,6 +11,9 @@ const execFileAsync = promisify(execFile)
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 // Keep each oxlint command line well under Windows and Linux argument limits.
 const FILES_PER_OXLINT_RUN = 200
+// Attribution is best effort; the lint verdict never waits on it for long.
+const ATTRIBUTION_BUDGET_MS = 90_000
+const API_REQUEST_TIMEOUT_MS = 15_000
 const EMPTY_TREE_SHA = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 // The extensions oxlint lints; ignorePatterns in .oxlintrc.json still apply to explicit paths.
 const OXLINT_EXTENSION = /\.(?:[cm]?[jt]sx?|vue|astro|svelte)$/
@@ -73,15 +76,26 @@ export function pullNumberFromSubject(subject) {
   return match ? Number(match[1]) : null
 }
 
+const ATTRIBUTION_UNAVAILABLE = 'unknown (PR lookup unavailable; see the step log)'
+
 export function describeIntroducer(introducer) {
-  if (!introducer) {
-    return 'unknown (PR lookup unavailable; see the step log)'
-  }
   const author = introducer.author ? ` by @${introducer.author}` : ''
   const commit = introducer.sha.slice(0, 10)
-  return introducer.pull
-    ? `#${introducer.pull}${author} (${commit})`
-    : `commit ${commit}${author} (no PR found)`
+  if (introducer.pull) {
+    return `#${introducer.pull}${author} (${commit})`
+  }
+  return `commit ${commit}${author} (${introducer.pullLookupFailed ? 'PR lookup failed' : 'no PR found'})`
+}
+
+// One commit in the push changed the file: it crossed the limit. Several: any of them may have.
+export function describeIntroducers(introducers) {
+  if (!introducers || introducers.length === 0) {
+    return ATTRIBUTION_UNAVAILABLE
+  }
+  if (introducers.length === 1) {
+    return describeIntroducer(introducers[0])
+  }
+  return `one of ${introducers.map(describeIntroducer).join(', ')} (${introducers.length} commits in this push changed the file)`
 }
 
 export function renderSummary({ base, head, files, diagnostics, introducers }) {
@@ -91,7 +105,7 @@ export function renderSummary({ base, head, files, diagnostics, introducers }) {
   }
   const rows = diagnostics.map(
     (diagnostic) =>
-      `| \`${diagnostic.file}:${diagnostic.line}\` | \`${diagnostic.rule}\` | ${diagnostic.message.replaceAll('|', '\\|')} | ${describeIntroducer(introducers.get(diagnostic.file))} |`
+      `| \`${diagnostic.file}:${diagnostic.line}\` | \`${diagnostic.rule}\` | ${diagnostic.message.replaceAll('|', '\\|')} | ${describeIntroducers(introducers.get(diagnostic.file))} |`
   )
   return [
     '### Main-push lint failed',
@@ -181,7 +195,7 @@ async function runOxlint(files, root) {
   return { failed, output }
 }
 
-async function githubApi(path, env) {
+async function githubApi(path, env, deadline) {
   const token = env.GH_TOKEN || env.GITHUB_TOKEN
   const response = await fetch(
     `${env.GITHUB_API_URL ?? 'https://api.github.com'}/repos/${env.GITHUB_REPOSITORY}/${path}`,
@@ -191,7 +205,7 @@ async function githubApi(path, env) {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28'
       },
-      signal: AbortSignal.timeout(30_000)
+      signal: AbortSignal.any([AbortSignal.timeout(API_REQUEST_TIMEOUT_MS), deadline])
     }
   )
   if (!response.ok) {
@@ -200,34 +214,71 @@ async function githubApi(path, env) {
   return response.json()
 }
 
-// The latest commit to touch a file at head is the one that took it over the limit.
-async function findIntroducer(file, head, env) {
-  const [commit] = await githubApi(
-    `commits?sha=${head}&path=${encodeURIComponent(file)}&per_page=1`,
-    env
-  )
-  if (!commit) {
+// The commits this push added, or null when GitHub cannot list them all.
+async function pushCommitShas(base, head, env, deadline) {
+  const comparison = await githubApi(`compare/${base}...${head}`, env, deadline)
+  if (comparison.total_commits > comparison.commits.length) {
     return null
   }
-  const pulls = await githubApi(`commits/${commit.sha}/pulls`, env).catch(() => [])
+  return new Set(comparison.commits.map((commit) => commit.sha))
+}
+
+async function describeCommit(commit, env, deadline) {
+  let pulls = []
+  let pullLookupFailed = false
+  try {
+    pulls = await githubApi(`commits/${commit.sha}/pulls`, env, deadline)
+  } catch (error) {
+    pullLookupFailed = true
+    process.stderr.write(`Could not list the PRs for ${commit.sha}: ${error.message}\n`)
+  }
   const pull = pulls.find((candidate) => candidate.merged_at) ?? pulls[0]
   const subject = commit.commit?.message?.split('\n')[0]
   return {
     sha: commit.sha,
     pull: pull?.number ?? pullNumberFromSubject(subject),
-    author: pull?.user?.login ?? commit.author?.login ?? null
+    author: pull?.user?.login ?? commit.author?.login ?? null,
+    pullLookupFailed
   }
 }
 
-async function findIntroducers(files, head, env) {
+// Only commits inside this push can have crossed the limit; earlier ones passed this check.
+async function findFileIntroducers(file, head, pushShas, env, deadline) {
+  // Main is linear, so the push's commits to this file are the newest entries in its history.
+  const history = await githubApi(
+    `commits?sha=${head}&path=${encodeURIComponent(file)}&per_page=${Math.min(100, pushShas.size)}`,
+    env,
+    deadline
+  )
+  const commits = history.filter((commit) => pushShas.has(commit.sha))
+  return Promise.all(commits.map((commit) => describeCommit(commit, env, deadline)))
+}
+
+async function findIntroducers(files, base, head, env) {
   const introducers = new Map()
   if (!env.GITHUB_REPOSITORY) {
     process.stderr.write('GITHUB_REPOSITORY is unset, so failures are not attributed to a PR.\n')
     return introducers
   }
+  // Bound attribution so the diagnostics are always reported well inside the job timeout.
+  const deadline = AbortSignal.timeout(ATTRIBUTION_BUDGET_MS)
+  let pushShas
+  try {
+    pushShas = await pushCommitShas(base, head, env, deadline)
+  } catch (error) {
+    process.stderr.write(`Could not list this push's commits: ${error.message}\n`)
+  }
+  if (!pushShas) {
+    process.stderr.write('The push commits are unknown, so failures are not attributed to a PR.\n')
+    return introducers
+  }
   for (const file of files) {
+    if (deadline.aborted) {
+      process.stderr.write(`Attribution budget spent; ${file} is not attributed.\n`)
+      continue
+    }
     try {
-      introducers.set(file, await findIntroducer(file, head, env))
+      introducers.set(file, await findFileIntroducers(file, head, pushShas, env, deadline))
     } catch (error) {
       process.stderr.write(`Could not attribute ${file}: ${error.message}\n`)
     }
@@ -263,14 +314,21 @@ export async function main({ env = process.env, root = process.cwd() } = {}) {
     }
     return 1
   }
+  // Log the errors before attribution, so they survive even if the lookups are cut short.
+  for (const diagnostic of diagnostics) {
+    process.stdout.write(
+      `${diagnostic.file}:${diagnostic.line}:${diagnostic.col} ${diagnostic.rule} ${diagnostic.message}\n`
+    )
+  }
   const introducers = await findIntroducers(
     [...new Set(diagnostics.map((diagnostic) => diagnostic.file))],
+    base,
     head,
     env
   )
   for (const diagnostic of diagnostics) {
     const location = `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col}`
-    const text = `${diagnostic.message} Introduced by ${describeIntroducer(introducers.get(diagnostic.file))}.`
+    const text = `${diagnostic.message} Introduced by ${describeIntroducers(introducers.get(diagnostic.file))}.`
     process.stdout.write(
       `::error ${location},title=${escapeAnnotationProperty(diagnostic.rule)}::${escapeAnnotationData(text)}\n`
     )
