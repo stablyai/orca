@@ -51,6 +51,11 @@ export const CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS = 10_000
 /** Reads a version an earlier check or prewarm already learned. */
 export const CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS = 250
 
+// A file state that gave no version is asked again after this, doubling up to the cap: a one-off
+// failure (a slow first run) recovers, and a wrapper that never prints Claude's version stays cheap.
+const CLAUDE_VERSION_RETRY_MS = 60_000
+const CLAUDE_VERSION_RETRY_MAX_MS = 60 * 60_000
+
 // Only an explicit unknown-option or managed-settings refusal proves flag rejection.
 const UNKNOWN_OPTION_DIAGNOSTIC = /unknown option '(--[a-z][a-z0-9-]*)'/
 // Lists every refused item, e.g. `--plugin-dir, --agents, plugins (initialize request), CLAUDE_CODE_PLUGIN_DIRS are`.
@@ -118,7 +123,8 @@ export type ClaudeCliFlagSupport = {
     /** False consults cached facts or an existing probe without starting another. */
     startProbe?: boolean
   ) => Promise<ClaudeCliFlagFact>
-  /** The version the launch's binary answers now; `--version` runs only for a file state not yet asked. */
+  /** The version the launch's binary answers now. `--version` runs for a new file state, and after a
+   *  miss again once its backoff passes; a caller during a run waits for that run. */
   version: (launch: ClaudeCliLaunch) => Promise<string | null>
   /** Warm the version cache without waiting; failures remain retryable. */
   prewarm: (launch: ClaudeCliLaunch) => void
@@ -130,7 +136,7 @@ export type ClaudeCliFlagSupport = {
 }
 
 // Key by resolved file, mtime and cwd to handle self-updates and project-specific shims.
-export async function claudeBinaryKey(command: string, cwd: string): Promise<string | null> {
+async function claudeBinaryKey(command: string, cwd: string): Promise<string | null> {
   try {
     const target = await realpath(command)
     return `${target}\n${(await stat(target)).mtimeMs}\n${cwd}`
@@ -154,8 +160,8 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
 
 type BinaryFacts = {
   version?: string
-  /** `version` asked once already, so a binary that never answers isn't run again each turn. */
-  versionAsked?: true
+  /** When `version` last asked without an answer, and how many times in a row. */
+  versionMiss?: { at: number; count: number }
   refused: Set<string>
   refusedByAccount: Map<string, Set<string>>
 }
@@ -202,6 +208,14 @@ export function createClaudeCliFlagSupport(
   }
   const versionOf = (key: string): string | undefined =>
     known.has(key) ? touch(key).version : undefined
+  const versionRetryDue = (key: string): boolean => {
+    const miss = known.get(key)?.versionMiss
+    return (
+      !miss ||
+      deps.now() - miss.at >=
+        Math.min(CLAUDE_VERSION_RETRY_MS * 2 ** (miss.count - 1), CLAUDE_VERSION_RETRY_MAX_MS)
+    )
+  }
   const answer = (key: string, flag: ClaudeCliFlag, launch: ClaudeCliLaunch): ClaudeCliFlagFact => {
     const facts = known.get(key)
     if (
@@ -257,10 +271,12 @@ export function createClaudeCliFlagSupport(
       if (key === null) {
         return null
       }
-      if (versionOf(key) === undefined && !known.get(key)?.versionAsked) {
-        touch(key).versionAsked = true
-        await (probing.get(key) ?? probe(key, launch)).settled
+      if (versionOf(key) === undefined && !probing.has(key) && versionRetryDue(key)) {
+        const count = (known.get(key)?.versionMiss?.count ?? 0) + 1
+        touch(key).versionMiss = { at: deps.now(), count }
+        probe(key, launch)
       }
+      await probing.get(key)?.settled
       return versionOf(key) ?? null
     },
     prewarm: (launch) => {
