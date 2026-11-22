@@ -153,6 +153,8 @@ export function refreshWorkerDockActivity(
     return byPane.get(pane)
   }
   const sessionFor = createSessionWorkerLivenessReader(db, (pane) => {
+    // A structured worker's status lives at its session's derived pane, not its minted assignee pane.
+    panes?.add(pane)
     const status = statusOf(pane)
     return status
       ? mintFleetAgentStatusEvidence(status, { kind: 'unresolved', reason: 'pane_not_bound' })
