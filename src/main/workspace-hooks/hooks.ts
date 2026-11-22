@@ -1,18 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { access } from 'node:fs/promises'
 import { join } from 'node:path'
-import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
-import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
-import { scopeHooksToRepoKind } from '../../shared/folder-workspaces/folder-workspace-hooks'
 import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
-import { MAX_ORCA_YAML_BYTES } from '../../shared/workspace-setup/orca-yaml-file-limit'
 import { resolveHookCommandSourcePolicy } from '../../shared/workspace-setup/hooks/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars, type HookWorkspaceIdentity } from './setup-hook-env-vars'
 import { applyHostHookOrcaCliEnv, wslHookOrcaCliEnv } from './hook-orca-cli-env'
-import { iterateLfScriptLines } from './setup-runner-script-text'
 import { promptGuardShellEnv } from '../git/command-runner/git-environment/git-process-env'
 import { dropIncoherentCondaActivationEnv } from '../pty/shell-startup/conda-activation-env'
 import { toLinuxPath } from '../../shared/file-access/wsl-paths'
@@ -105,7 +98,7 @@ function getHookShell(): string | undefined {
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
-function orcaYamlPath(repoPath: string): string {
+export function orcaYamlPath(repoPath: string): string {
   return windowsFsPath(join(repoPath, 'orca.yaml'))
 }
 
@@ -125,62 +118,6 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
 
 export function hasHooksFile(repoPath: string): boolean {
   return existsSync(orcaYamlPath(repoPath))
-}
-
-// Unknown keys suggest a newer config format; let the UI offer an update.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set([
-  'scripts',
-  'setupAgentStartupPolicy',
-  'issueCommand',
-  'defaultTabs',
-  'environmentRecipes',
-  'worktree'
-])
-
-function hasUnrecognizedOrcaYamlKeys(content: string): boolean {
-  for (const line of iterateLfScriptLines(content)) {
-    // A bare key: is valid YAML when its block value follows on the next line.
-    const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
-    if (match != null && !RECOGNIZED_ORCA_YAML_KEYS.has(match[1])) {
-      return true
-    }
-  }
-  return false
-}
-
-// Settings checks multiple repos at once. Keep libuv workers free for unrelated I/O.
-const hookInspectionSlots = new PrioritySemaphore(2)
-
-export async function inspectWorkspaceHooks(
-  repo: Pick<WorkspaceHookOwner, 'path' | 'kind'>,
-  background?: boolean
-) {
-  const yamlPath = orcaYamlPath(repo.path)
-  const release = await hookInspectionSlots.acquire(background ? 1 : 0)
-  let content: string
-  try {
-    const { buffer } = await readNodeFileWithinLimit(yamlPath, MAX_ORCA_YAML_BYTES, {
-      regularFileOnly: true
-    })
-    content = buffer.toString('utf-8')
-  } catch (error) {
-    const hasHooks =
-      !isDefinitiveAbsence(error) &&
-      (await access(yamlPath).then(
-        () => true,
-        () => false
-      ))
-    return { hasHooks, hooks: null, mayNeedUpdate: false }
-  } finally {
-    release()
-  }
-
-  const hooks = scopeHooksToRepoKind(repo, parseOrcaYaml(content))
-  return {
-    hasHooks: true,
-    hooks,
-    mayNeedUpdate: !hooks && hasUnrecognizedOrcaYamlKeys(content)
-  }
 }
 
 export function getEffectiveHooks(
