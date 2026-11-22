@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import { ActivityThreadVirtualRow } from './activity-thread-virtual-row'
 
@@ -13,7 +13,7 @@ const thread: AgentPaneThread = {
   paneTitle: 'Inspect activity',
   worktree,
   repo: null,
-  tab: makeTerminalTab({ id: 'terminal', worktreeId: worktree.id }),
+  tab: makeTab({ id: 'terminal', worktreeId: worktree.id, title: 'Activity tab' }),
   agentType: 'codex',
   currentAgentState: null,
   currentAgentEntry: null,
