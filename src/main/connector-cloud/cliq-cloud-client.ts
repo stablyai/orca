@@ -9,8 +9,8 @@ import {
 } from '../../shared/connector-bot-cliq-contract'
 import type { BotSlackResult } from '../../shared/connector-bot-slack-contract'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
-import { answer } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
+import { answer } from './connector-cloud-answer'
 import type { ConnectorResult } from './connector-cloud-request'
 
 // Creating a Cliq bot makes several Zoho calls in a row.
