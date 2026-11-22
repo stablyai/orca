@@ -30,6 +30,7 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  identifyForegroundAgent: (ptyId: string) => Promise<string | null>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
 }

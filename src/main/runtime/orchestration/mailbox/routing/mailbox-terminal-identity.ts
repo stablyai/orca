@@ -3,7 +3,6 @@ import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
-import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import { selectLatestReportedAgentStatusRow } from '../../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { isCurrentCommandReport } from '../../../terminal/input/terminal-command-paint'
 import { hookReportedAgentStatus } from '../../../terminal/wait/hook-reported-agent-status'
@@ -48,18 +47,25 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
   /** A live title that names a status rules; otherwise the agent's own hook report is its live status. */
   protected readMailboxAgentStatus(
     pty: RuntimePtyWorktreeRecord
-  ): Pick<OrchestrationMailboxTerminal, 'lastAgentStatus' | 'lastAgentStatusObservedLive'> {
+  ): Pick<
+    OrchestrationMailboxTerminal,
+    'lastAgentStatus' | 'lastAgentStatusObservedLive' | 'hookReport'
+  > {
     const { lastAgentStatus, lastAgentStatusObservedLive } = pty
-    const hookStatus =
+    const report =
       lastAgentStatusObservedLive && lastAgentStatus !== null
         ? null
         : this.readHookReportedAgentStatus(pty)
-    return hookStatus
-      ? { lastAgentStatus: hookStatus, lastAgentStatusObservedLive: true }
+    return report
+      ? {
+          lastAgentStatus: report.status,
+          lastAgentStatusObservedLive: true,
+          hookReport: { agent: report.agent, reportedAt: report.reportedAt }
+        }
       : { lastAgentStatus, lastAgentStatusObservedLive }
   }
 
-  private readHookReportedAgentStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
+  private readHookReportedAgentStatus(pty: RuntimePtyWorktreeRecord) {
     const join = this.readHookRowJoinForPty(pty.ptyId)
     return hookReportedAgentStatus({
       row: join ? selectLatestReportedAgentStatusRow(join) : null,
@@ -67,7 +73,10 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
       agent: this.getPaneTerminalAgent(pty.ptyId),
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(pty.ptyId),
       titleObservedAt: pty.lastAgentStatusObservedLive ? pty.lastOscTitleEpochMs : null,
-      isCurrentReport: (reportedAt) => isCurrentCommandReport(pty, reportedAt)
+      isCurrentReport: (reportedAt) => isCurrentCommandReport(pty, reportedAt),
+      foregroundDisprovedAt: this.orchestrationMailboxPointerDelivery.hookReportDisprovedAt(
+        pty.ptyId
+      )
     })
   }
 

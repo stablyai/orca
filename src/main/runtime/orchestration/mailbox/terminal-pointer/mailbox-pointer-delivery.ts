@@ -7,6 +7,7 @@ import {
 } from './mailbox-pointer-eligibility'
 import {
   isMailboxTerminalTakingInput,
+  type HookAgentReport,
   type OrchestrationMailboxTerminal
 } from '../routing/mailbox-owner'
 import {
@@ -32,6 +33,8 @@ function pointerEnterDelayMs(): number {
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   private readonly coldParkedPtys = new Set<string>()
+  private readonly reporterProbeMailboxes = new Map<string, Set<string>>()
+  private readonly disprovedHookReportAt = new Map<string, number>()
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -56,6 +59,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       mailboxHandle: string
       reservedTypes?: ReadonlySet<string>
       skipAbsenceProbe?: boolean
+      reporterInForeground?: boolean
     }
   ): void {
     const db = this.deps.getDb()
@@ -132,6 +136,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
+    // A shell in front would run the pointer as a command, so a hook report needs its agent in front.
+    if (terminal.hookReport && !options.reporterInForeground) {
+      this.deliverOnceReporterInForeground(ptyId, terminal.hookReport, mailboxHandle)
+      return
+    }
     // Every path stages here, async retries included: type only for a mailbox this terminal still owns.
     if (
       this.deps.mailboxOwner.resolve(terminal, mailboxHandle, { routeDirectMail: false }) !==
@@ -161,6 +170,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   retirePty(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
+    this.disprovedHookReportAt.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
     if (flight) {
       noteQuestionEdge({ kind: 'pane', ptyId })
@@ -215,6 +225,46 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   clearPtyColdParked(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
+  }
+
+  /** When a foreground read last showed another process in front of a hook report's agent: reports
+   *  made by then no longer count as live status, so the gate shuts until the agent reports again. */
+  hookReportDisprovedAt(ptyId: string): number | undefined {
+    return this.disprovedHookReportAt.get(ptyId)
+  }
+
+  private deliverOnceReporterInForeground(
+    ptyId: string,
+    report: HookAgentReport,
+    mailboxHandle: string
+  ): void {
+    const waiting = this.reporterProbeMailboxes.get(ptyId)
+    if (waiting) {
+      waiting.add(mailboxHandle)
+      return
+    }
+    const mailboxes = new Set([mailboxHandle])
+    this.reporterProbeMailboxes.set(ptyId, mailboxes)
+    void this.deps
+      .identifyForegroundAgent(ptyId)
+      .catch(() => null)
+      .then((agent) => {
+        this.reporterProbeMailboxes.delete(ptyId)
+        const current = agent === report.agent ? this.deps.getTerminal(ptyId) : null
+        if (!current) {
+          // A shell, another program or no answer: retire the report rather than guess.
+          const disproved = this.disprovedHookReportAt.get(ptyId) ?? -1
+          this.disprovedHookReportAt.set(ptyId, Math.max(disproved, report.reportedAt))
+          return
+        }
+        for (const probed of mailboxes) {
+          this.deliver(current, {
+            mailboxHandle: probed,
+            skipAbsenceProbe: true,
+            reporterInForeground: true
+          })
+        }
+      })
   }
 
   private redeliverAfterProbe(ptyId: string, mailboxHandle: string): void {

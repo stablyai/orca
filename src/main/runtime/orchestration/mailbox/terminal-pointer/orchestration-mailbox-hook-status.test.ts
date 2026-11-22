@@ -20,12 +20,13 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 
 /** An agent with its terminal title turned off reports its status only by hook. */
-async function titlelessCodexWithMail() {
+async function titlelessCodexWithMail(foregroundProcess = 'codex') {
   const rows: AgentStatusIpcPayload[] = []
   const listeners = new Set<(paneKey: string) => void>()
   const db = createDatabase('orca-mailbox-hook-status-')
   const harness = await createRuntime(db, {
     launchAgent: 'codex',
+    foregroundProcess,
     getAgentStatusSnapshot: () => rows,
     subscribeAgentStatusRowChanges: (listener) => {
       listeners.add(listener)
@@ -86,6 +87,17 @@ describe('mail to an agent that reports status only by hook', () => {
     await runtime.serializeMainTerminalBuffer(PTY_ID)
 
     report({ state: 'done', agentType: 'codex' }, reportedAt)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(pointerCount(write)).toBe(0)
+    db.close()
+  })
+
+  it('never types into a shell left in front by an agent that exited without reporting it', async () => {
+    vi.useFakeTimers()
+    const { write, report, db } = await titlelessCodexWithMail('zsh')
+
+    report({ state: 'done', agentType: 'codex' })
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(pointerCount(write)).toBe(0)

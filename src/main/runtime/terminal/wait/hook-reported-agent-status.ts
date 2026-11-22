@@ -14,7 +14,9 @@ export function hookReportedAgentStatus(read: {
   /** A title seen after the report (a shell retitling its prompt) means the agent left. */
   titleObservedAt: number | null
   isCurrentReport: (reportedAt: number) => boolean
-}): AgentStatus | null {
+  /** A foreground read since showed another process in front of the report's agent. */
+  foregroundDisprovedAt: number | undefined
+}): { status: AgentStatus; agent: string; reportedAt: number } | null {
   const { row } = read
   // A replayed report is restamped on receipt; its evidence time is when the agent said it.
   const reportedAt = row ? (row.evidenceObservedAt ?? row.receivedAt) : 0
@@ -26,10 +28,13 @@ export function hookReportedAgentStatus(read: {
     (read.agent !== null && row.agentType !== read.agent) ||
     reportedAt < (read.respawnedAt ?? -1) ||
     reportedAt < (read.titleObservedAt ?? -1) ||
-    !read.isCurrentReport(reportedAt)
+    !read.isCurrentReport(reportedAt) ||
+    reportedAt <= (read.foregroundDisprovedAt ?? -1)
   ) {
     return null
   }
   const turn = hookLeadTurnState(row)
-  return turn === null ? null : turn === 'done' ? 'idle' : turn
+  return turn === null
+    ? null
+    : { status: turn === 'done' ? 'idle' : turn, agent: row.agentType ?? '', reportedAt }
 }

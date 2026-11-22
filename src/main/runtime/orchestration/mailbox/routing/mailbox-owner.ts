@@ -10,7 +10,12 @@ export type OrchestrationMailboxTerminal = {
   paneKeys: readonly string[]
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
+  /** Set when the status is the agent's own hook report: mail is typed only while that agent is in front. */
+  hookReport?: HookAgentReport
 }
+
+/** The agent behind a hook-reported status and when it reported. */
+export type HookAgentReport = { agent: string; reportedAt: number }
 
 /** An agent at rest or mid-turn takes typed mail: agents queue or steer text sent during a turn. */
 export function agentStatusTakesTypedInput(status: AgentStatus | null): boolean {
