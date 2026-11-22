@@ -55,12 +55,12 @@ export async function outfitSheetsOnDemand(manifest, bundleDir) {
   const sheets = (await readdir(OUTFIT_SHEET_DIR)).filter((name) => name.endsWith('.webp'))
   const onDemand = []
   for (const name of sheets) {
-    const sha256 = sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name)))
-    const asset = manifest.assets.find((entry) => entry.path === `assets/${sha256}.webp`)
+    const file = contentAssetName(sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name))), 'webp')
+    const asset = manifest.assets.find((entry) => entry.path === `assets/${file}`)
     if (!asset) {
       fail(`outfit sheet ${name} is not its own image in the bundle, so it was inlined or dropped`)
     }
-    if (!document.includes(sha256)) {
+    if (!document.includes(file)) {
       onDemand.push({ name, byteLength: asset.byteLength })
     }
   }
