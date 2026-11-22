@@ -21,7 +21,7 @@ export function terminalCreateDeduplicationOptions(params: CreateParams) {
   }
   // Alternate selectors are resolved to the same workspace before the deduplicator compares intent.
   const { worktree: _worktree, clientMutationId: _mutation, ...intent } = params
-  return { wslUserAct: true, accountRestart: intent }
+  return { wslUserAct: true, accountRestart: { ...intent, accountRestart: params.accountRestart } }
 }
 
 export function isAccountRestartRpcCall(method: string, params: unknown): boolean {

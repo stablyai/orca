@@ -1,4 +1,5 @@
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { TerminalCreateRestartIntent } from '../identity/remote-runtime-terminal-create-idempotency'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -52,7 +53,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
     ) => Promise<RuntimeTerminalCreate>,
-    options: { wslUserAct?: boolean; accountRestart?: object } = {}
+    options: { wslUserAct?: boolean; accountRestart?: TerminalCreateRestartIntent } = {}
   ): Promise<RuntimeTerminalCreate> {
     // Restart reconciliation requires the pane's owner snapshot, not handle inventory.
     if (options.accountRestart && reconcileExisting) {

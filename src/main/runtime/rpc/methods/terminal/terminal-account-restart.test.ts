@@ -1,10 +1,30 @@
 import { expect, it, vi } from 'vitest'
+import type { TerminalCreateRestartIntent } from '../../../terminal/identity/remote-runtime-terminal-create-idempotency'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { TERMINAL_METHODS } from './terminal'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 const PTY_ID = 'repo-1::/tmp/wt@@1a2b3c4d'
+const restartIntent = {
+  accountRestart: {
+    requestId: 'request-1',
+    attemptId: 'attempt-1',
+    hostEpoch: 'host-epoch',
+    pane: {
+      worktreeId: WORKTREE_ID,
+      tabId: 'original',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      tabCreatedAt: 1
+    },
+    expected: {
+      kind: 'endpoint',
+      ptyId: PTY_ID,
+      incarnationId: 'original-shell',
+      bindingGeneration: 7
+    }
+  }
+} satisfies TerminalCreateRestartIntent
 
 it('never creates while reconciling an absent account-restart mutation', async () => {
   const runtime = new OrcaRuntimeService()
@@ -23,7 +43,7 @@ it('never creates while reconciling an absent account-restart mutation', async (
       'account-restart:request:attempt',
       true,
       spawn,
-      { accountRestart: { attemptId: 'attempt-1' } }
+      { accountRestart: restartIntent }
     )
   ).rejects.toThrow('terminal_account_restart_outcome_unknown')
   expect(spawn).not.toHaveBeenCalled()
@@ -188,7 +208,7 @@ it('uses separate in-flight results and handles for creates and account restarts
       worktreeId: WORKTREE_ID,
       title: 'restart'
     }),
-    { accountRestart: { attemptId: 'attempt-1' } }
+    { accountRestart: restartIntent }
   )
   finishOrdinary.resolve()
   const [created, restarted] = await Promise.all([ordinary, restart])
@@ -211,14 +231,7 @@ it('shares only matching in-flight restart intent for the same request and attem
   const result = { handle: 'original-new-terminal', worktreeId: WORKTREE_ID, title: null }
   const otherSpawn = vi.fn(async () => result)
   const workspace = `id:${WORKTREE_ID}`
-  const mutationId = '["restart-request","first-attempt"]'
-  const intent = {
-    accountRestart: {
-      hostEpoch: 'host-epoch',
-      pane: { tabId: 'original' },
-      expected: { incarnationId: 'original-shell', bindingGeneration: 7 }
-    }
-  }
+  const mutationId = '["request-1","attempt-1"]'
   const first = runtime.dedupeTerminalCreate(
     'device-1',
     workspace,
@@ -229,7 +242,7 @@ it('shares only matching in-flight restart intent for the same request and attem
       await release.promise
       return result
     },
-    { accountRestart: intent }
+    { accountRestart: restartIntent }
   )
   await entered.promise
   const replay = runtime.dedupeTerminalCreate(
@@ -239,7 +252,7 @@ it('shares only matching in-flight restart intent for the same request and attem
     false,
     otherSpawn,
     {
-      accountRestart: structuredClone(intent)
+      accountRestart: structuredClone(restartIntent)
     }
   )
   const conflicting = runtime.dedupeTerminalCreate(
@@ -250,7 +263,10 @@ it('shares only matching in-flight restart intent for the same request and attem
     otherSpawn,
     {
       accountRestart: {
-        accountRestart: { ...intent.accountRestart, pane: { tabId: 'other-pane' } }
+        accountRestart: {
+          ...restartIntent.accountRestart,
+          pane: { ...restartIntent.accountRestart.pane, tabId: 'other-pane' }
+        }
       }
     }
   )

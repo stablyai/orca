@@ -1,13 +1,21 @@
 import { isDeepStrictEqual } from 'node:util'
+import type { output } from 'zod'
+import type { TerminalCreateParams } from '../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TerminalCreateOperationKind } from './remote-runtime-terminal-create-identity'
 
 const DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES = 4_096
 
+export type TerminalCreateRestartIntent = Omit<
+  output<typeof TerminalCreateParams>,
+  'worktree' | 'clientMutationId' | 'accountRestart'
+> & { accountRestart: AccountRestartCondition }
+
 export class RemoteRuntimeTerminalCreateIdempotency {
   private readonly inFlight = new Map<
     string,
-    { promise: Promise<RuntimeTerminalCreate>; restartIntent?: object }
+    { promise: Promise<RuntimeTerminalCreate>; restartIntent?: TerminalCreateRestartIntent }
   >()
 
   constructor(private readonly maxInFlight = DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES) {}
@@ -18,7 +26,7 @@ export class RemoteRuntimeTerminalCreateIdempotency {
     clientMutationId: string,
     create: () => Promise<RuntimeTerminalCreate>,
     kind: TerminalCreateOperationKind = 'create',
-    restartIntent?: object
+    restartIntent?: TerminalCreateRestartIntent
   ): Promise<RuntimeTerminalCreate> {
     const key = JSON.stringify([kind, clientIdentity, worktreeId, clientMutationId])
     const existing = this.inFlight.get(key)
