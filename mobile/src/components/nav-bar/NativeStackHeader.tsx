@@ -94,18 +94,17 @@ export function NativeStackHeader({
       headerShown: true,
       title,
       headerLargeTitle: largeTitle,
-      ...(customTitle
-        ? {
-            headerTitle: () => (
-              <NativeHeaderTitle
-                title={title}
-                subtitle={subtitle}
-                onPress={onTitlePress}
-                accessibilityHint={titleHint}
-              />
-            )
-          }
-        : {})
+      // Set either way: the stack merges options, so a custom title would outlive the header that set it.
+      headerTitle: customTitle
+        ? () => (
+            <NativeHeaderTitle
+              title={title}
+              subtitle={subtitle}
+              onPress={onTitlePress}
+              accessibilityHint={titleHint}
+            />
+          )
+        : title
     }),
     [options, title, largeTitle, customTitle, subtitle, onTitlePress, titleHint]
   )

@@ -52,5 +52,9 @@ export function MobileAgentSessionHistoryIcon({
 /** The glyph as a menu icon; phones show the matching platform symbol. */
 export const AgentSessionHistoryMenuIcon: AppIcon = Object.assign(
   MobileAgentSessionHistoryIcon as unknown as LucideIcon,
-  { nativeSymbol: { ios: 'square.on.circle', android: 'category' } }
+  {
+    // The name a web-shell page sends; the shell finds these symbols under it.
+    displayName: 'AgentSessionHistory',
+    nativeSymbol: { ios: 'square.on.circle', android: 'category' }
+  }
 )

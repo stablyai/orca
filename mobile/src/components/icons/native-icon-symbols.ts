@@ -1,6 +1,8 @@
 // Lucide names the app uses, plus a few role names over a Lucide glyph: [SF Symbol (iOS 16.4+), Material Symbol, filled SF Symbol for `fill`].
 export const NATIVE_ICON_SYMBOLS = {
   ALargeSmall: ['textformat.size', 'format_size'],
+  // Orca's own glyph (desktop's Tabler category icon), named so web-shell pages can send it.
+  AgentSessionHistory: ['square.on.circle', 'category'],
   Activity: ['waveform.path.ecg', 'monitor_heart'],
   AlarmClock: ['alarm', 'alarm', 'alarm.fill'],
   AlarmClockOff: ['alarm', 'alarm_off', 'alarm.fill'],
