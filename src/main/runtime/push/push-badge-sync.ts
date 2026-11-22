@@ -28,6 +28,8 @@ export class PushBadgeSync {
   private seq = 0
   /** The count the gateway holds for each registration. */
   private readonly accepted = new Map<string, number>()
+  /** Re-registered during the current send, so its answer must not count as delivered. */
+  private readonly reregistered = new Set<string>()
   private timer: { cancel: () => void; dueAt: number } | null = null
   private running = false
   private dirty = false
@@ -62,6 +64,7 @@ export class PushBadgeSync {
   /** A phone (re)registered: a badge push it missed while offline is gone, so send the count again. */
   noteRegistered(registrationId: string): void {
     this.accepted.delete(registrationId)
+    this.reregistered.add(registrationId)
     this.request()
   }
 
@@ -88,19 +91,22 @@ export class PushBadgeSync {
       return
     }
     this.running = true
-    let retry = false
+    let next: 'done' | 'retry' | 'paused' = 'done'
     try {
-      retry = await this.sendChangedCount()
+      next = await this.sendChangedCount()
     } catch (error) {
       console.warn('[push] Failed to send the unread badge count:', error)
-      retry = true
+      next = 'retry'
     } finally {
       this.running = false
     }
     if (this.dirty) {
       this.dirty = false
       this.request()
-    } else if (retry) {
+    }
+    if (next === 'paused') {
+      this.request(this.pausedUntil - Date.now())
+    } else if (next === 'retry') {
       this.request(this.retryDelayMs)
       this.retryDelayMs = Math.min(this.retryDelayMs * 2, BADGE_RETRY_MAX_MS)
     } else {
@@ -108,11 +114,14 @@ export class PushBadgeSync {
     }
   }
 
-  /** Returns true when a registration still lacks the current count and a retry may land it. */
-  private async sendChangedCount(): Promise<boolean> {
+  private async sendChangedCount(): Promise<'done' | 'retry' | 'paused'> {
     const now = Date.now()
-    if (this.stopped || now < this.pausedUntil) {
-      return false
+    this.reregistered.clear()
+    if (this.stopped) {
+      return 'done'
+    }
+    if (now < this.pausedUntil) {
+      return 'paused'
     }
     const live = this.registry
       .listDevices()
@@ -126,7 +135,7 @@ export class PushBadgeSync {
       }
     }
     if (live.length === 0) {
-      return false
+      return 'done'
     }
     const count = this.runtime.countUnreadWorkspaces()
     const stale = live.filter(
@@ -153,20 +162,22 @@ export class PushBadgeSync {
       if (!result.ok) {
         if (result.reason === 'rejected') {
           this.pausedUntil = now + BADGE_REFUSED_PAUSE_MS
-          return false
+          return 'paused'
         }
         retry = true
         continue
       }
       for (const entry of result.results) {
         if (entry.status === 'queued') {
-          this.accepted.set(entry.registrationId, count)
+          if (!this.reregistered.has(entry.registrationId)) {
+            this.accepted.set(entry.registrationId, count)
+          }
         } else if (entry.status !== 'dead') {
           retry = true
         }
       }
       dropDeadPushRegistrations(this.registry, batch, result.results)
     }
-    return retry
+    return retry ? 'retry' : 'done'
   }
 }

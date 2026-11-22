@@ -41,7 +41,8 @@ export async function sendHostBadge(
   notification: PushNotification & { badge: number }
 ): Promise<PushSendResult[]> {
   const owned = await deps.devices.findOwned(hostFingerprint, registrationIds)
-  const admitted = await deps.deliveryStore.admitBadge(hostFingerprint)
+  const live = [...owned.values()].some((device) => !device.dead)
+  const admitted = live && (await deps.deliveryStore.admitBadge(hostFingerprint))
   return await Promise.all(
     registrationIds.map(async (registrationId): Promise<PushSendResult> => {
       const device = owned.get(registrationId)
