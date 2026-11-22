@@ -36,9 +36,13 @@ export type ShellPageHeader = {
   /** What the page asked the shell to draw, for the document now shown; null draws none. */
   header: BridgePageHeader | null
   report: (header: BridgePageHeader | null) => void
-  /** Wraps a navigation the page itself asked for, so a removal it causes is not a Back to hand back to it. */
+  /**
+   * Wraps a navigation the page itself asked for, so a removal it causes is not a Back to hand back
+   * to it. `moved` says from its result whether it went anywhere.
+   */
   leaving: <TArgs extends unknown[], TResult>(
-    navigate: (...args: TArgs) => TResult
+    navigate: (...args: TArgs) => TResult,
+    moved: (result: TResult) => boolean
   ) => (...args: TArgs) => TResult
   backClaimed: boolean
   left: { readonly current: boolean }
@@ -61,6 +65,7 @@ export function useShellPageHeader(
     },
     [sessionId]
   )
+  const navigation = useNavigation()
   const left = useRef(false)
   // Back on this screen: a push the page asked for left it in place.
   useFocusEffect(
@@ -72,10 +77,23 @@ export function useShellPageHeader(
     header: held.sessionId === sessionId ? held.header : null,
     report,
     leaving:
-      (navigate) =>
+      (navigate, moved) =>
       (...args) => {
+        const was = left.current
         left.current = true
-        return navigate(...args)
+        const result = navigate(...args)
+        if (!moved(result)) {
+          left.current = was
+          return result
+        }
+        // A move that lands on this screen (new params for it) keeps it focused, and its Back the page's.
+        const stop = navigation.addListener('state', () => {
+          stop()
+          if (navigation.isFocused()) {
+            left.current = false
+          }
+        })
+        return result
       },
     backClaimed,
     left

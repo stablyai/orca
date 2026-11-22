@@ -201,7 +201,7 @@ export function MobileWebShellScreen({
     }
     const onStack = rootState ? nativeStackReturn(rootState, href) : null
     if (onStack === 'current') {
-      return
+      return 'current' as const
     }
     if (onStack) {
       navigation.dispatch({
@@ -299,13 +299,13 @@ export function MobileWebShellScreen({
         documentFailed: () => reportShellFailure('document-load-failed')
       })
     },
-    onNavigate: pageHeader.leaving(openPageRoute),
+    onNavigate: pageHeader.leaving(openPageRoute, (result) => result !== 'current'),
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.
     onHaptic: playPageHaptic,
     // The page has one history entry; only the native stack can handle Back.
-    onNavigateBack: pageHeader.leaving(popShellStack),
+    onNavigateBack: pageHeader.leaving(popShellStack, (outcome) => outcome === 'popped'),
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
