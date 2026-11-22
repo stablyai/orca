@@ -151,6 +151,11 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
               agentSessionInstallCommand('qwen-code', process.platform) ??
               'npm install -g @qwen-code/qwen-code@latest'
           })
+  },
+  // `devin update` needs a terminal: without one it exits 130 before checking.
+  devin: {
+    latest: () => ({ kind: 'acp-registry', id: 'devin' }),
+    plan: () => ({ runnable: false, command: 'devin update' })
   }
 }
 
