@@ -1,6 +1,6 @@
 // The open item's place and ↑ ↓ to the previous and next item, in the comment box's tool row. An item with
 // no box (deleted, or not read yet) gets a row of the box's shape at the bottom, so the arrows stay put.
-import { useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -12,6 +12,9 @@ import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 export type BotItemStepDirection = 'previous' | 'next'
+
+/** Whether the arrows wait on a read: the comment box holds as it is, so their spinner stays in view. */
+export const BotItemSteppingContext = createContext(false)
 
 /** The arrow for `direction`: its attribute marks it for focus moves across a step. */
 export function botItemStepArrow(

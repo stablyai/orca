@@ -6,6 +6,7 @@ import {
   type KeyboardRedirectEvent
 } from '@/components/native-chat/composer/focus/native-chat-typing-redirect'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 
 type BotItemTypingEvent = KeyboardRedirectEvent & {
   keyCode?: number
@@ -23,14 +24,34 @@ function picksChoice(key: string, pane: HTMLElement | null): boolean {
   return Number(key) <= Number(card?.dataset.nativeChatQuestionOptions ?? 0)
 }
 
-/** The open item's pane key handler: sends a typed character to `comment` when it should go there. */
+/** The platform's paste chord (Cmd+V on macOS, Ctrl+V elsewhere; Shift for plain text), from no field. */
+function pastesHere(event: BotItemTypingEvent): boolean {
+  const mac = getShortcutPlatform() === 'darwin'
+  const target = event.target
+  return (
+    event.key.toLowerCase() === 'v' &&
+    !event.altKey &&
+    (mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
+    !(
+      target instanceof Element &&
+      target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+    )
+  )
+}
+
+/** The open item's pane key handler: sends a typed character to `comment` when it should go there, and
+ *  a paste: the box takes focus before it lands, so the paste goes in (and the box opens) as typed. */
 export function typeIntoBotItemComment(
   event: BotItemTypingEvent,
   pane: HTMLElement | null,
-  comment: { type: (text: string) => void } | null
+  comment: { type: (text: string) => void; focusEnd?: () => void } | null
 ): void {
   // Portaled menus and dialogs bubble here through React; only keys from this pane count.
   const inPane = event.target instanceof Node && pane?.contains(event.target) === true
+  if (inPane && !isImeOwnedKeyboardEvent(event) && pastesHere(event)) {
+    comment?.focusEnd?.()
+    return
+  }
   if (
     !inPane ||
     event.altKey ||
