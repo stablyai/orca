@@ -135,13 +135,14 @@ function describeNextStep(
   if (stop.settled === 'failed') {
     // A Task Orca put back to ready starts afresh; --retry-of takes only a failed or blocked one.
     const start = `orchestration worker-start --task ${taskId}${taskReady ? '' : ` --retry-of ${dispatchId}`}`
+    if (stop.reason === 'never-ready') {
+      return [
+        `Its Dispatch is closed as failed. A retry (your Orca CLI's \`${start}\`, with the same placement and agent) starts a new agent, which helps when this one launch hung. If its screen below shows a sign-in, trust or other prompt, or this machine is overloaded, the retry stops at the same place, so tell the user instead.`,
+        `Its terminal is left open so you can look; close it with \`orchestration worker-release --dispatch ${dispatchId}\`.`
+      ]
+    }
     return [
-      `Its Dispatch is closed as failed. Start it again with your Orca CLI's \`${start}\` and the same placement and agent, or tell the user.`,
-      ...(stop.reason === 'never-ready'
-        ? [
-            `Its terminal is left open so you can look; close it with \`orchestration worker-release --dispatch ${dispatchId}\`.`
-          ]
-        : [])
+      `Its Dispatch is closed as failed. Start it again with your Orca CLI's \`${start}\` and the same placement and agent, or tell the user.`
     ]
   }
   if (stop.restartsOnMail) {
@@ -152,8 +153,8 @@ function describeNextStep(
   if (stop.reason === 'start-blocked') {
     const by = stop.blockedStart ? ` by ${new Date(stop.blockedStart.readyBy).toISOString()}` : ''
     return [
-      `Tell the user to answer it in that terminal. Orca types the brief once the agent is ready and you're told when it reports; if it isn't ready${by}, the start fails and you're told then. Don't start this task again.`,
-      `To give up now, stop it with your Orca CLI's \`orchestration worker-stop --dispatch ${dispatchId}\`.`
+      `Tell the user what it shows and ask them to answer it in that terminal; a new start would stop at the same screen. Orca types the brief once the agent is ready and you're told when it reports. If it isn't ready${by}, the start fails and you're told then. Meanwhile, carry on with other work or end your turn.`,
+      `If the user doesn't want to, stop it with your Orca CLI's \`orchestration worker-stop --dispatch ${dispatchId}\`.`
     ]
   }
   if (stop.reason === 'start-unconfirmed') {

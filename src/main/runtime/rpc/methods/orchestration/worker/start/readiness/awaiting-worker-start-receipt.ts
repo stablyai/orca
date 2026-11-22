@@ -47,7 +47,7 @@ export async function continueWorkerStartInBackground(
       `orca orchestration worker-stop --dispatch ${dispatchId} --json`
     ],
     next: blockedReason
-      ? `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent is waiting on a screen only a person can answer (${blockedReason}); you'll get a separate message saying so. Orca types the task in once the agent is ready, and fails the start if it isn't ready ${by}. Don't start this task again; end your turn.`
-      : `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent isn't ready yet. Orca types the task in once it is, and you're told when it reports; if it isn't ready ${by}, the start fails and you're told then. Don't start this task again; end your turn.`
+      ? `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent is waiting on a screen only a person can answer (${blockedReason}); you'll get a separate message with that screen. Orca types the task in once the agent is ready, and fails the start if it isn't ready ${by}. Carry on with other work or end your turn; a new start would stop at the same screen.`
+      : `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent isn't ready yet. Orca types the task in once it is, and you're told when it reports; if it isn't ready ${by}, the start fails and you're told then. Carry on with other work or end your turn; starting this task again would run it twice. If you think this launch has hung, because its screen (\`orca terminal read --terminal ${terminalHandle} --screen\`) shows something a fresh start would fix, stop it with \`orca orchestration worker-stop --dispatch ${dispatchId}\` and retry it with \`orca orchestration worker-start --task ${args.taskId} --retry-of ${dispatchId}\`.`
   }
 }

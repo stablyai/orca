@@ -126,7 +126,7 @@ describe('a worker start whose agent is not ready in time', () => {
 
     expect(state).toBe('starting')
     expect(next).toContain(`Dispatch ${dispatchId}`)
-    expect(next).toContain("Don't start this task again")
+    expect(next).toContain('starting this task again would run it twice')
     expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('starting')
     expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
 
