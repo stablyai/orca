@@ -20,6 +20,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   pi: 'Pi',
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
+  'gentle-shell': 'gentle-shell',
   qoder: 'Qoder CLI',
   'qoder-cn': 'Qoder CLI China',
   gemini: 'Gemini',
