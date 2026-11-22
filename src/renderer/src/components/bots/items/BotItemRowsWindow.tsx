@@ -30,7 +30,6 @@ import {
 import {
   focusBotItemBackRow,
   rowFocusControl,
-  endEntryTarget,
   groupFocusLeft,
   plainTab,
   rowTabTarget,
@@ -464,7 +463,7 @@ export function BotItemRowsWindow({
         <div
           className="-mt-0.5"
           tabIndex={focusWithin ? -1 : 0}
-          onFocus={(event) => setTarget(endEntryTarget(event, items, tabStop))}
+          onFocus={() => setTarget({ uid: items[count - 1]!.uid, at: count - 1, edge: 'last' })}
         />
       )}
     </>

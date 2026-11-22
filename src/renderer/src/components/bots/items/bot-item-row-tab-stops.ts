@@ -84,18 +84,6 @@ export function groupFocusLeft(event: React.FocusEvent<HTMLElement>): 'within' |
   return to !== null || fromMenu ? 'page' : 'kept'
 }
 
-/** The row the end-of-group entry hands focus to: Shift+Tab from below enters the last row at its end;
- *  Tab from nothing (after a click inside the group) goes on from the group's Tab stop row. */
-export function endEntryTarget(
-  event: React.FocusEvent<HTMLElement>,
-  items: readonly BotItem[],
-  tabStop: number
-): { uid: string; at: number; edge: BotItemRowEdge } {
-  const fromNothing = event.relatedTarget === null
-  const at = fromNothing ? tabStop : items.length - 1
-  return { uid: items[at]!.uid, at, edge: fromNothing ? 'first' : 'last' }
-}
-
 /** Back's row: focused (its title, or the row itself while its controls are off) and scrolled to. Back
  *  is a command, not navigation: Esc would otherwise draw Chromium's keyboard ring here. */
 export function focusBotItemBackRow(row: HTMLElement | null | undefined, onRow = false): void {

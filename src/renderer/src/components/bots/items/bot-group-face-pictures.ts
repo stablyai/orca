@@ -71,6 +71,10 @@ function createFacePictures(): BotGroupFacePictures {
   let stopWatching: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
   let closed = false
+  // A scroll over the panel while the window is marked hidden: after macOS display wake Chromium can keep
+  // it so with nothing but wheel input (which a hidden window never gets) to say otherwise.
+  let scrolledWhileHidden = false
+  const windowShown = (): boolean => getWindowParkVisible() || scrolledWhileHidden
   let retained: readonly (BotRef & Pick<Bot, 'avatar'>)[] = []
 
   const wait = (picture: Picture, offline: boolean): void => {
@@ -101,9 +105,13 @@ function createFacePictures(): BotGroupFacePictures {
       liveHosts = readLiveBotHostIds()
       const stopHosts = subscribeToBotChanges(onHosts)
       const stopVisibility = subscribeWindowParkVisibility(onVisibility)
+      document.addEventListener('wheel', onWheel, { capture: true, passive: true })
       stopWatching = () => {
         stopHosts()
         stopVisibility()
+        document.removeEventListener('wheel', onWheel, { capture: true })
+        // Unwatched, a real hide would go unseen: the next scroll proves it again.
+        scrolledWhileHidden = false
       }
     } else if ((waitingCount === 0 || closed) && stopWatching) {
       stopWatching()
@@ -131,7 +139,7 @@ function createFacePictures(): BotGroupFacePictures {
       return
     }
     const offline = hostOffline(picture)
-    if (offline || !getWindowParkVisible()) {
+    if (offline || !windowShown()) {
       wait(picture, offline)
       return
     }
@@ -174,9 +182,20 @@ function createFacePictures(): BotGroupFacePictures {
   }
 
   function onVisibility(): void {
+    // A real visibility change speaks for itself again.
+    scrolledWhileHidden = false
     if (!getWindowParkVisible()) {
       return
     }
+    eachWaiting(admit)
+    syncWatching()
+  }
+
+  function onWheel(): void {
+    if (scrolledWhileHidden || getWindowParkVisible()) {
+      return
+    }
+    scrolledWhileHidden = true
     eachWaiting(admit)
     syncWatching()
   }
