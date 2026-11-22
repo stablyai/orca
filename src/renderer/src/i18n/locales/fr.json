@@ -19709,7 +19709,17 @@
         "skip": "Ignorer",
         "sending": "Envoi…",
         "terminalRequired": "Répondez à cette question OMP dans le terminal.",
-        "openTerminal": "Répondre dans le terminal"
+        "openTerminal": "Répondre dans le terminal",
+        "recommended": "Recommandé",
+        "stepAnswered": "{{value0}}, répondue",
+        "stepOf": "{{value0}} sur {{value1}}",
+        "answered": "Répondue",
+        "title": "Question",
+        "previous": "Question précédente",
+        "nextQuestion": "Question suivante",
+        "back": "Retour",
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",
@@ -20009,7 +20019,11 @@
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "couldNotSend": "Envoi impossible",
+        "retry": "Réessayer",
+        "showLessRows": "Afficher moins",
+        "moreRows": "+{{value0}} de plus"
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -20276,6 +20290,9 @@
       },
       "splitRight": "Diviser à droite",
       "splitDown": "Diviser vers le bas",
+      "dock": {
+        "label": "Zone de message et demandes"
+      },
       "automationSaved": {
         "openFullPage": "Ouvrir la page"
       },

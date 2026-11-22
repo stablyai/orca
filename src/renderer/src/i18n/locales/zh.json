@@ -20207,7 +20207,17 @@
         "skip": "跳过",
         "sending": "正在发送…",
         "terminalRequired": "在终端中回答这个 OMP 问题",
-        "openTerminal": "在终端中回答"
+        "openTerminal": "在终端中回答",
+        "recommended": "推荐",
+        "stepAnswered": "{{value0}}，已回答",
+        "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
+        "answered": "已回答",
+        "title": "问题",
+        "previous": "上一个问题",
+        "nextQuestion": "下一个问题",
+        "back": "返回",
+        "skipAndSubmit": "跳过并提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "此请求需要更新版本的 Orca",
@@ -20531,6 +20541,10 @@
         "queued": "已排队",
         "clearAll": "全部清除",
         "imageCount": "{{count}} 张图片",
+        "couldNotSend": "无法发送",
+        "retry": "重试",
+        "showLessRows": "收起",
+        "moreRows": "还有 {{value0}} 条",
         "editReturned": "你编辑的内容已放入聊天输入框",
         "commandsUnsupported": "排队的消息中无法保存命令"
       },
@@ -20807,6 +20821,9 @@
       "splitDown": "向下拆分",
       "newRowsAnnouncement": "你离开期间有新消息",
       "newRowsMarker": "新消息",
+      "dock": {
+        "label": "消息框和提示"
+      },
       "editDeliveryNotice": "编辑",
       "signIn": {
         "title": "登录 {{agent}} 即可开始聊天"

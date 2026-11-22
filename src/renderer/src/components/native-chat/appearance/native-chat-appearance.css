@@ -127,3 +127,77 @@
     --composer-gutter: calc(var(--spacing) * 4);
   }
 }
+
+/* Whatever scrolls in a question card (a long question, its options, or the whole body in a short pane) fades at
+   the bottom while more lies below, and the footer casts a rule and shadow over it; both clear
+   at the end of the scroll. The dock itself fades the same way once it scrolls. */
+@property --native-chat-scroll-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes native-chat-scroll-fade {
+  from {
+    --native-chat-scroll-fade: calc(var(--spacing) * 14);
+  }
+  to {
+    --native-chat-scroll-fade: 0px;
+  }
+}
+
+@keyframes native-chat-scroll-shadow {
+  from {
+    box-shadow:
+      0 calc(var(--spacing) * -2) calc(var(--spacing) * 3) calc(var(--spacing) * -2)
+        color-mix(in srgb, black 60%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--foreground) 14%, transparent);
+  }
+  to {
+    box-shadow: none;
+  }
+}
+
+.native-chat-question-card-surface {
+  timeline-scope: --native-chat-question-options, --native-chat-question-body;
+}
+
+.native-chat-question-card-options,
+.native-chat-question-card-question,
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-body,
+[data-native-chat-dock-fit~='dock'] [data-native-chat-dock] {
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - min(var(--native-chat-scroll-fade), 35%)),
+    transparent
+  );
+  animation: native-chat-scroll-fade linear both;
+}
+
+.native-chat-question-card-options {
+  scroll-timeline: --native-chat-question-options block;
+  animation-timeline: --native-chat-question-options;
+}
+
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-body {
+  scroll-timeline: --native-chat-question-body block;
+  animation-timeline: --native-chat-question-body;
+}
+
+[data-native-chat-dock-fit~='dock'] [data-native-chat-dock] {
+  animation-timeline: scroll(self);
+}
+
+/* A long question scrolls in its own box; it fades only while more of it lies below. */
+.native-chat-question-card-question {
+  animation-timeline: scroll(self);
+}
+
+.native-chat-question-card-footer {
+  animation: native-chat-scroll-shadow linear both;
+  animation-timeline: --native-chat-question-options;
+}
+
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-footer {
+  animation-timeline: --native-chat-question-body;
+}

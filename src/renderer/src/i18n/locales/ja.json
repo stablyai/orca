@@ -19979,7 +19979,17 @@
         "skip": "スキップ",
         "sending": "送信中…",
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
-        "openTerminal": "ターミナルで回答する"
+        "openTerminal": "ターミナルで回答する",
+        "recommended": "おすすめ",
+        "stepAnswered": "{{value0}}、回答済み",
+        "stepOf": "{{value0}} / {{value1}}",
+        "answered": "回答済み",
+        "title": "質問",
+        "previous": "前の質問",
+        "nextQuestion": "次の質問",
+        "back": "戻る",
+        "skipAndSubmit": "スキップして送信",
+        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",
@@ -20279,7 +20289,11 @@
         "moveChanged": "移動の前にキューが変更されました。もう一度メッセージをドラッグしてください。",
         "reorderHint": "ドラッグするか、上下の矢印キーを使って並べ替えます。",
         "reorderMessage": "メッセージを並べ替え",
-        "imageCount": "画像 {{count}} 枚"
+        "imageCount": "画像 {{count}} 枚",
+        "couldNotSend": "送信できませんでした",
+        "retry": "再試行",
+        "showLessRows": "表示を減らす",
+        "moreRows": "+{{value0}} 件"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -20596,6 +20610,9 @@
       },
       "splitRight": "右に分割",
       "splitDown": "下に分割",
+      "dock": {
+        "label": "メッセージ欄とプロンプト"
+      },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
         "argumentHint": "<question>",

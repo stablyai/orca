@@ -66,10 +66,7 @@ export function queuedMessageCardCaption(
               'components.native-chat.queuedMessages.pausedSendFailedWaiting',
               "Couldn't send — press Send to retry once the agent finishes."
             )
-          : t(
-              'components.native-chat.queuedMessages.pausedSendFailed',
-              "Couldn't send — press Send to retry."
-            )
+          : t('components.native-chat.queuedMessages.couldNotSend', "Couldn't send")
       }
       return t('components.native-chat.queuedMessages.paused', 'Paused')
     case 'sending':
@@ -156,6 +153,7 @@ export function NativeChatQueuedMessageCard({
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
+  const failed = attention && caption !== null
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
   const isMac = isMacPlatform()
@@ -189,22 +187,25 @@ export function NativeChatQueuedMessageCard({
             type="button"
             variant={showsSteerShortcut ? 'queued-head-steer' : 'chat-tool'}
             size="xs"
+            data-queued-message-send
             onClick={onSteer}
             disabled={steerHeld || busy}
           >
             <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
-              {sendNow.steers ? (
+              {failed && drag?.grip ? (
+                <AlertCircle className="size-3 text-destructive" />
+              ) : sendNow.steers ? (
                 <CornerDownRight className="size-3" />
               ) : (
                 <Send className="size-3" />
               )}
             </NativeChatPendingIcon>
-            {sendNow.label}
+            {failed ? t('components.native-chat.queuedMessages.retry', 'Retry') : sendNow.label}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
           <span className="flex items-center gap-2">
-            <span>{sendNow.hint}</span>
+            <span>{failed ? caption : sendNow.hint}</span>
             {showsSteerShortcut ? (
               <ShortcutKeyCombo keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']} />
             ) : null}
@@ -274,11 +275,11 @@ export function NativeChatQueuedMessageCard({
           )}
           {caption ? (
             <p
-              className={
-                returned
-                  ? 'truncate text-xs text-destructive'
-                  : 'truncate text-xs text-muted-foreground'
-              }
+              className={cn(
+                'truncate text-xs',
+                returned ? 'text-destructive' : 'text-muted-foreground',
+                failed && !card.waitsForAgent && '@max-[400px]:sr-only'
+              )}
             >
               {attention && drag?.grip ? (
                 <AlertCircle
