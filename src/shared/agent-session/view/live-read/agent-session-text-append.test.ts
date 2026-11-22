@@ -51,6 +51,26 @@ function sentItems(event: AgentSessionSubscribeEvent): unknown[] {
 }
 
 describe('agent session text appends', () => {
+  it('lets go of its bases once a turn ends, sending the next reply text whole', () => {
+    const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
+    const read = createAgentSessionTextAppendReader({})
+    const turnEnd: AgentJournalRenderItem = {
+      itemId: 'turn-1',
+      revision: 2,
+      sequence: 3,
+      observedAt: 1000,
+      body: { kind: 'turn', turnId: 't1', state: 'completed' }
+    }
+    for (const event of [snapshot, batch(4, [reply('Hel', 1)]), batch(5, [turnEnd])]) {
+      read(send(event))
+    }
+    expect(send.holdsBase('reply-1')).toBe(false)
+    const next = send(batch(6, [reply('Hello', 2)]))
+    expect(sentItems(next)).toEqual([reply('Hello', 2)])
+    // The reader, which still holds its base, takes the whole row.
+    expect(sentItems(read(next)!)).toEqual([reply('Hello', 2)])
+  })
+
   it('sends a growing reply whole once, then only its new text until a snapshot', () => {
     const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
     send(snapshot)

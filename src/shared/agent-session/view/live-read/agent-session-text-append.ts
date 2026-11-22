@@ -83,6 +83,10 @@ function isFinished(item: AgentJournalRenderItem): boolean {
     : body.kind === 'message' && body.completedAt !== undefined
 }
 
+function endsTurn(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'turn' && item.body.state !== 'running'
+}
+
 function isTextAppendItem(item: AgentJournalRenderItem): item is AgentSessionTextAppendItem {
   if (!('textAppend' in item)) {
     return false
@@ -116,6 +120,7 @@ function textAppendStream(
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
 ): ((event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null) & {
   holds: (itemId: string) => boolean
+  release: () => void
 } {
   const bases = new Map<string, string>()
   let epoch: string | null = null
@@ -163,7 +168,10 @@ function textAppendStream(
     }
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
-  return Object.assign(stream, { holds: (itemId: string) => bases.has(itemId) })
+  return Object.assign(stream, {
+    holds: (itemId: string) => bases.has(itemId),
+    release: () => bases.clear()
+  })
 }
 
 /** Host side, wrapping a stream's emit after every other projection: text that extends what this
@@ -182,9 +190,19 @@ export function sendingTextAppends<R>(
       textAppend: { from: base.length, text: text.slice(base.length) }
     } satisfies AgentSessionTextAppendItem
   })
-  return Object.assign((event: AgentSessionSubscribeEvent) => emit(send(event) ?? event), {
-    holdsBase: send.holds
-  })
+  return Object.assign(
+    (event: AgentSessionSubscribeEvent) => {
+      const sent = emit(send(event) ?? event)
+      // A finished turn's replies no longer grow, and a final reply carries no completion mark, so
+      // the sender lets go of every base then. Only the sender may: a row without a base goes whole,
+      // which any reader takes, while a reader missing a base its sender holds could not.
+      if (event.type === 'batch' && event.batch.items.some(endsTurn)) {
+        send.release()
+      }
+      return sent
+    },
+    { holdsBase: send.holds }
+  )
 }
 
 /** Client side: whole items back from appends; null when an append does not start where this
