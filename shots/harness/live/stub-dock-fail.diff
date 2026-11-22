@@ -1,0 +1,29 @@
+diff --git a/tests/e2e/fixtures/structured-claude-stub.cjs b/tests/e2e/fixtures/structured-claude-stub.cjs
+index e499e0d1b39..cfe7cb484a3 100644
+--- a/tests/e2e/fixtures/structured-claude-stub.cjs
++++ b/tests/e2e/fixtures/structured-claude-stub.cjs
+@@ -73,6 +73,24 @@ function startTurn(frame) {
+   write({ ...frame, isReplay: true })
+   runPromptCommands(promptText(frame.message))
+   const prompt = JSON.stringify(frame.message ?? '')
++  if (prompt.includes('dock-fail')) {
++    const task = { type: 'system', session_id: sessionId, task_id: 'dock-fail-1' }
++    write({
++      ...task,
++      subtype: 'task_started',
++      uuid: randomUUID(),
++      task_type: 'local_bash',
++      is_backgrounded: true,
++      description: 'Verify the journal'
++    })
++    write({
++      ...task,
++      subtype: 'task_notification',
++      uuid: randomUUID(),
++      status: 'failed',
++      summary: 'Verification exited with code 1.'
++    })
++  }
+   const slow = prompt.includes('slow')
+   const pluginUi = prompt.includes('plugin-ui')
+   if (prompt.includes('plugin-focus')) {

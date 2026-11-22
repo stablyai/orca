@@ -1,0 +1,40 @@
+{
+  "windows": [
+    {
+      "visible": false,
+      "focused": false
+    }
+  ],
+  "userData": "<tmp>/orca-e2e-userdata-5uOYUB",
+  "appHome": "<tmp>/orca-e2e-userdata-5uOYUB/home",
+  "before": "fca38e20-a0c0-4700-b966-2638554d3004",
+  "tabAfterClear": "fca38e20-a0c0-4700-b966-2638554d3004",
+  "recordsAfterClear": "fca38e20-a0c0-4700-b966-2638554d3004||0",
+  "after": "fca38e20-a0c0-4700-b966-2638554d3004",
+  "header": "1 failed",
+  "row": "commandFailednowVerify the journalVerification exited with code 1.Show",
+  "lead": "",
+  "rowsViaLive": [
+    {
+      "source": "fca38e20-a0c0-4700-b966-2638554d3004",
+      "id": "[\"provider\",\"02b28ad5-40d3-42ea-9c74-8bbf6c4f385e\",{\"invocationId\":\"dock-fail-1\",\"generation\":1}]"
+    }
+  ],
+  "rowsViaRoot": [
+    {
+      "source": "fca38e20-a0c0-4700-b966-2638554d3004",
+      "id": "[\"provider\",\"02b28ad5-40d3-42ea-9c74-8bbf6c4f385e\",{\"invocationId\":\"dock-fail-1\",\"generation\":1}]"
+    }
+  ],
+  "afterClear": 0,
+  "restore": {
+    "id": "desktop-ipc",
+    "ok": true,
+    "result": {
+      "acknowledged": false
+    },
+    "_meta": {
+      "runtimeId": "2f62ae71-9f2b-4d7a-a1c3-7b58cccf1af0"
+    }
+  }
+}

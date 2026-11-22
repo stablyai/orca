@@ -1,84 +1,95 @@
-# Sticky workers dock: rebase + gates + shots (M4 Air)
+# Sticky workers dock: UX-I2 and C2 fixes (M4 Air)
 
-- Branch: AmethystLiang/sticky-workers-design (stablyai/orca)
-- Old head: 3927ce3bdca4 → **new head: 9e12bb2fea083d30b4b4fdd8ad969ae3b9beb32b** (pushed with --force-with-lease)
-- **Main: 43d36831ba2e24ec1f7986f0acafdd28e25c7814** (rebased three times as main moved: b51f439 → 82d219f → 43d3683)
-- Worktree on this machine: (local worktree on the M4 Air)
-- No PR opened.
+- Branch: AmethystLiang/sticky-workers-design (stablyai/orca). No PR yet.
+- Old head: 9e12bb2fea08 → **new head: 351f0c995d53**, pushed with `--force-with-lease`.
+- Rebased onto main **4c0cc636577**. Main had started to conflict, but only in `config/main-blocking-helper-baseline.txt`: main added a `paired-server-ask-decisions.ts` row next to the dock rows. I kept both, in path order.
+- New commits on top of the rebased branch:
+  - `38632ed6366`: the UX-I2 fixes.
+  - `351f0c995d5`: the C2 fixes.
 
-## Conflicts resolved
+All evidence comes from seeded fixtures or a hidden, isolated e2e build driven by the stub Claude. No real Orca instance, desktop, account or user data was used.
 
-Main's #46786 ("test: cut the suite to the tests that guard real invariants") deleted several files that the branch had edited. Main's deletions were kept in every case:
-- `use-structured-native-chat-subagents.performance.test.tsx` and `use-native-chat-crew.performance.test.tsx`: the branch's commit 2197adfe1f9 only touched these two files, so it became empty and was skipped.
-- `structured-agent-session-newer-content-host.test.ts`, `orca-runtime-test-scenario-builders.spec.ts`, `crew-read-model.test.ts`, `runtime-orchestration-sender-names.test.ts`, `orchestration-worker-mode-opacity.test.ts`: the branch's changes to these were 1-line fixture fields, plus a 17/14-line update to the newer-content-host test.
+## UX-I2 findings
 
-Content conflicts:
-- `src/renderer/src/i18n/locales/en.json`: kept main's `native-chat.dock.label` and the branch's `workerDock` block side by side.
-- `NativeChatComposerPane.tsx`: took main's `NativeChatComposerRoomProvider` structure and re-applied the branch's `dock={dock}` and `{...nativeChatDictationFieldProps(dictation)}`.
-- `NativeChatStructuredSession.tsx`: took main's `NativeChatDockTranscript` and `NativeChatDock` layout. In main's ordering, `{subagents.strip}` plus `NativeChatPartyWorkerApprovalStack` are replaced by `{composerShown ? null : subagents.dock}`, and the composer gets `dock={subagents.dock}`.
-- `config/main-blocking-helper-baseline.txt`: kept main's peer-mail rows (`paired-server-changes.ts`, `peer-questions-out.ts`) and dropped the branch's stale `peer-mail-relay.ts` row, which main had moved. The dock rows were added in path order.
+1. **HIGH: the newest ask is shown in full.** The top needs-attention row is now a _lead row_ with its own layout:
+   - First line: name, state label in the state colour, and time.
+   - Below it: the worker's full question (the open approval's summary title) in up to 3 lines. A failed lead row shows its title and reason instead.
+   - Then a **Show** button, which opens the worker or result exactly as clicking a row does.
 
-Post-rebase fixes (commit 630c8bf6383):
-- `NativeChatApprovalCard.tsx` hit max-lines (413 > 400) once main's growth and the dock's `placement: 'dock'` were combined. The card's detail-clamp `useLayoutEffect` moved unchanged into `prompts/use-native-chat-approval-detail-clamp.ts`.
-- There was an import cycle between `worker-dock-activity.ts` and `worker-dock-read.ts`. Activity now imports `workerDockSession` from `./worker-dock-source`, the module that defines it, instead of through `worker-dock-read`'s re-export.
-- **Removed the e2e capture harness**: `tests/e2e/agents/native-chat/sticky-workers-capture.spec.ts` plus its 4 `sticky-workers-*.test-fixture.ts` files, and the 16-line `sticky-roster/mixed` addition to `tests/e2e/fixtures/structured-claude-stub.cjs`. It imported `../session-fixtures/structured-claude-stub`, which #46786 deleted, so it failed the e2e typecheck ratchet. It was a measurement harness, not a golden journey. **Reviewer decision point:** restore it from 3927ce3 if wanted, but that also means bringing back the deleted stub.
+   The other rows stay one line. The roster's height budget grows by the lead row's extra height, so the compact rows below it still show. The full question is also in the lead row's tooltip.
+   - At 720 px, ORCA-20's question fits on one line, untruncated.
+   - At 390 px it takes 2 lines; at 320 px, 3 lines.
+   - A longer question clamps at 3 lines (see the long-list shots).
 
-Commit 9e12bb2fea0 sets the narrow fixtures to 390 px and adds `botHomeChatNarrowFolded`.
+2. **MED: the folded header now carries urgency.** I chose the icon swap: when the needs-you count is above 0, the header's robot icon becomes the amber "?" state icon (`text-chat-warning`, the Waiting token) in both themes. With nothing needing you, the robot stays (live shots 1, 2 and 4: "1 failed" keeps the robot). Count parts no longer break inside themselves ("1 failed" stays whole at 320 px).
+3. **MED: the floating button never covers Send.** A visible structured chat's message box now registers with the floating button's existing keep-clear registry (`useKeepFloatingTerminalTriggerClear`, as on the item page's comment box). The button therefore moves off the box from any saved or default position. The proof renders the **real** `NativeChatComposerField`, with its Send button, plus the real `FloatingTerminalToggleButton`, with the browser window set to 390 or 320 px (`window/*.png`, `window/window-width-report.json`):
 
-## Gates (final head unless noted)
+   | case                                                                                | window | button top–bottom | Send top–bottom | overlap |
+   | ----------------------------------------------------------------------------------- | ------ | ----------------- | --------------- | ------- |
+   | default position                                                                    | 390    | 72–108            | 773–805         | none    |
+   | default position                                                                    | 320    | 72–108            | 773–805         | none    |
+   | saved position right on Send (it would cover Send: `savedSpotWouldCoverSend: true`) | 390    | moved to 367–403  | 773–805         | none    |
+   | same, dock folded                                                                   | 320    | moved to 627–663  | 773–805         | none    |
 
-| Gate | Result |
-|---|---|
-| `pnpm typecheck` | PASS (exit 0, 0 TS errors) |
-| `pnpm lint` (full, 49 steps) | PASS for the branch. On the final head, 47/49 passed outright. The 2 failures (oxlint, check:code-quality:changed) were only my untracked ad hoc harness files under shots/; after moving them out, both steps re-ran green. On the first rebased head, lint failed on the 3 branch issues fixed above, plus main's own `mobile/src/bots/MobileBotSettingsTab.tsx` max-lines (401), which main has since fixed. |
-| Focused dock tests (9 files: dock/*.test.ts, worker-dock-methods, NativeChatBackgroundTasksStatus, WorkerDockRow, worker-dock-feed, worker-dock-scroll-anchor, structured-session-background-tasks-view) | PASS 26/26 |
-| Recovery test `structured-agent-session-newer-content-host.test.ts` | **Deleted on main by #46786**, so it no longer exists in the tree. I ran the branch's copy ad hoc against the rebased code, temporarily restoring its two deleted fixtures (`structured-agent-session-host.test-fixture.ts`, `...-recovery-capsule.test-fixture.ts`) from 3927ce3: PASS 1/1 in 13.3 s, a real pass and not a timeout. All three files were removed again and nothing was committed. |
-| Deleted render-count perf tests (subagents strip + crew strip, branch versions) | Ran ad hoc the same way: PASS 4/4; not committed. |
-| `pnpm check:changed` | PASS: 43/43 checks, including unit tests, main-blocking-helper-ratchet, main-blocking-api-ratchet and e2e-typecheck-ratchet |
+- **Optional item:** at narrow widths, "Status changed" is now right-aligned with the time column.
 
-`config/main-blocking-api-baseline*` is untouched; the only config diff vs main is the 5 helper-baseline rows below. `worker-dock-activity.ts` has no row.
+## C2 findings
 
-## Baseline rows (config/main-blocking-helper-baseline.txt)
+- **C2-1 (P2):** provider failures are now stored and invalidated under `workerDockSourceOfSession(subject.sessionId)`, the chat's /clear root.
+  - Test: `worker-dock-source.test.ts` › "keeps a provider failure from after /clear in the root chat dock until its Clear". It uses the real reconcile path, reports from the cleared-into session, shows the failure via both the root and live parties, and clears it. It **fails with the fix reverted**.
+- **C2-2 (P2, perf):** `workerDockActivitySource` now owns the subscription. A status-row change on a pane that isn't one of the dock's own ready workers' panes costs a `Set.has`. An own pane's change costs one per-pane status read and a signature compare (state, state start, host, fresh), and wakes only if that signature changed.
+  - The refresh after a real change reads only the candidate panes, through the new `runtime.readAgentStatusOfPanes`. That is the same filtering as `getAgentStatusSnapshotFn`, built from the existing per-pane read. The activity code's runtime type no longer includes the every-pane snapshot.
+  - `session-worker-liveness` now accepts a per-pane reader as well as an array.
+  - Test: `worker-dock-read.test.ts` › "does no SELECT and no every-pane snapshot for a heartbeat that changes nothing shown". It runs 50 own heartbeats plus 50 unrelated-pane changes through the real `subscribeWorkerDock` producer: **0 SQL statements prepared, 0 emits, 50 single-pane reads**. A real running→idle change then emits. Without the signature check the same test sees 50 SELECTs, so it fails.
+- **C2-3 (P2):** a cold seed is marked done only after its read succeeds. A failed seed runs again on the next park-visibility change or the next visible mount, and an in-flight set prevents duplicates.
+  - Test: `worker-dock-feed.test.tsx` › "seeds a source again after a failed cold read, and never after one that succeeded". It **fails on the old code**.
+- **C2-4 (P2):** the new `NativeChatStructuredDock` reads the chat's pinned approvals and renders the dock frame whenever there is work, a crew, **or an open worker prompt**. The strip appears only with work or a crew.
+  - It shares the per-party approval stream that the transcript's approval timeline already opens, so it adds no stream.
+  - Test: `NativeChatStructuredDock.test.tsx`. The now-unused `NativeChatPartyWorkerApprovalStack` was removed.
+- **P3:** the backfill prepares its statement once. `retainProviderFailures` notifies only when a row was inserted, and also prepares once per batch.
+- **Perf contract:** `use-structured-native-chat-subagents.performance.test.tsx` is re-landed unchanged from 3927ce3 and passes (the strip renders once over 50 session updates). The crew render-count test was re-run ad hoc and passes 3/3; it is not committed.
 
-```
-1 src/main/runtime/orchestration/db/schema/worker-dock-schema.ts # one backfill transaction when the worker dock tables are first installed at database open; later dock facts are written by triggers inside lifecycle statements that were already synchronous
-1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
-1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
-3 src/main/runtime/orchestration/dock/worker-dock-read-snapshot.ts # one consistent read transaction (BEGIN, never IMMEDIATE) per dock read: the cold seed of a visible unknown source, subscribe, a lifecycle or visible activity change of this chat's own workers, or a roster window the user loads; unrelated wakes skip it by version and hidden chats never read
-1 src/main/runtime/orchestration/dock/worker-dock-read.ts # the dock reads described for worker-dock-read-snapshot.ts, through that one helper
-```
-They follow main's `N path # why` format, and the counts are current: the ratchet passes on the final head.
+## Live run: seeded e2e build, isolated profile, hidden
 
-## Perf counts (ad hoc harness in a local scratch directory, not committed)
+This was an ad hoc, uncommitted spec on the repo's electron-headless Playwright harness, with `ORCA_BACKGROUND_LAUNCH=1`, a temp profile and HOME, and a seeded temp repo. The stub `structured-claude-stub.cjs` got a `dock-fail` prompt that emits a background `local_bash` task and then `task_notification status: failed`. The spec and the stub diff are in `harness/live/`. The run started from an `env -i` allow-listed environment with no tokens or keys, and left no processes behind.
 
-Main side: a real in-memory `OrchestrationDb` with N ready workers for chat A and 3 workers for an unrelated chat B. There is one `subscribeWorkerDock` producer for A, with the same pane-filtered status subscription that `worker-dock-methods.ts` uses. SQL is counted through `prepare`/`exec` spies, and row writes through `total_changes()`.
+- Window: `visible: false, focused: false` throughout.
+- Steps: hello → `/clear` ("Context cleared") → `dock-fail` → the header reads "1 failed" → open the dock: the lead row shows command · Failed · "Verify the journal" · "Verification exited with code 1." · Show (live-1, live-2).
+- Clear (×): the dock frame is gone (live-3).
+- Restore: `orchestration.workerDockAcknowledge acknowledged:false` returns ok, and "1 failed" is back (live-4). Provider failures have no "Show in dock again" button; that button exists only on worker results. This RPC is the one the button uses.
+- **Finding:** in this build, `/clear` of a structured chat keeps its Orca session and only swaps the provider session under it (one record, no `replacementSessionId`). So the live run proves the in-place clear plus failure plus clear/restore path. The `replacementSessionId` lineage that C2-1 fixes, as in a bot Home Chat, is covered by the unit test above, not by this run.
 
-| N workers | 100 bare crew wakes | chat B worker fails | 100 unrelated-pane status changes | 50 own heartbeats (no visible change) | own running→idle |
-|---|---|---|---|---|---|
-| 0 | 0 SQL, 0 refresh, 0 emit | 0 SQL | 0 SQL | 0 SQL | 0 SQL |
-| 2 | 0 / 0 / 0 | 0 SQL | 0 SQL | 50 indexed SELECTs, 0 row writes, 0 emits | 1 read (9 stmts, BEGIN/COMMIT read txn), 0 row writes, 1 emit |
-| 20 | 0 / 0 / 0 | 0 SQL | 0 SQL | same: 50 SELECTs, 0 writes, 0 emits | same |
-| 200 | 0 / 0 / 0 | 0 SQL | 0 SQL | same: 50 SELECTs, 0 writes, 0 emits | same |
+## Gates (final head 351f0c995d53, after the rebase)
 
-All status listeners are released on unsubscribe (0 left).
+| Gate                                                                                         | Result                                                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Focused dock tests: dock/_, worker-dock-methods, tasks/_, subagents/*, background-tasks-view | PASS, 11 files, 31 tests                                                                                                                    |
+| `pnpm tc:node`, `pnpm tc:web`                                                                | PASS                                                                                                                                        |
+| oxlint on changed files                                                                      | PASS                                                                                                                                        |
+| `pnpm check:changed`                                                                         | **PASS, 43/43**, including unit tests, main-blocking-helper-ratchet, main-blocking-api-ratchet, max-lines-ratchet and e2e-typecheck-ratchet |
 
-Renderer: 200 chats with worker presence. A hidden pane makes 0 subscribes and 0 reads, and a parked window makes 0 subscribes and 0 reads. A visible control makes 200 subscribes and 200 seed reads, which proves the harness detects RPCs.
+Baseline: the only config diff from main is the same 5 `main-blocking-helper-baseline.txt` dock rows. Counts and `# why` notes are unchanged, and the ratchet passes. The activity module has no row.
 
-From the code:
-- An unrelated wake costs one in-memory `workerDockSources.version()` lookup per open producer; that class never reads SQLite.
-- An unrelated status change costs one `Set.has`.
-- Hidden or parked chats get `noopSubscribe`; a source with no workers gets no feed; the cold seed fires once per source, only while visible.
-- Status churn: 0 writes. The existing committed test proves 200 heartbeats plus a visible change cause 0 writes.
+## Perf, from the code
 
-Gap: an own-worker heartbeat with no visible change still costs 1 indexed SELECT (`worker_dock_source_state`) plus an in-memory loop over the ready workers, while the chat is visible. That is work, though not a write.
+- **Unrelated wakes do 0 work.** A crew wake compares `workerDockSources.version(source)` in memory, with no SQL. An unrelated pane's status change is one `Set.has`.
+- **Hidden chats do 0 work.** `dock` is null unless the pane is visible, so a hidden chat has no subscribe, no read, no approvals hook and no keep-clear registration. The cold seed runs only while visible and window-park visible.
+- **Status churn makes 0 writes.** Activity stays in memory; the existing "keeps agent-status churn of a running worker out of the database" test still passes. An own-worker heartbeat with no visible change now does 0 SELECTs and 0 every-pane snapshots (C2-2 test). That closes the earlier report's gap of 1 SELECT per heartbeat.
+- **New renderer work only in visible chats:**
+  - The message box's keep-clear registration: one ResizeObserver plus a childList MutationObserver, which fire only on layout changes.
+  - The lead flag, computed inside the existing items memo.
 
-## Fixture shots (seeded component fixture only; no Orca instance, desktop or user data)
+## Shots
 
-Fixture `native-chat/tools/tasks/dock/NativeChatWorkerDock`: a bot Home Chat with ORCA-18 and ORCA-19 running and ORCA-20 waiting on you, rendered at scale 2. Directory: shots/ (on the M4 worktree)
-
-- native-chat__tools__tasks__dock__NativeChatWorkerDock--botHomeChatFolded.{light,dark}.png (720 px, folded)
-- native-chat__tools__tasks__dock__NativeChatWorkerDock--botHomeChatOpen.{light,dark}.png (720 px, unfolded)
-- native-chat__tools__tasks__dock__NativeChatWorkerDock--botHomeChatNarrowFolded.{light,dark}.png (390 px, folded)
-- native-chat__tools__tasks__dock__NativeChatWorkerDock--botHomeChatNarrowOpen.{light,dark}.png (390 px, unfolded; ORCA-18 sits below "More below")
-
-Gap: the fixture's composer is a placeholder shell, not the real `NativeChatComposerField`, and these are component shots, not the full chat pane.
+- `fixture/`: component fixture `native-chat/tools/tasks/dock/NativeChatWorkerDock` at scale 2, in light and dark. It includes a Failed row (ORCA-21).
+  - `botHomeChatFolded` / `botHomeChatOpen`: 720 px.
+  - `botHomeChatNarrowFolded` / `botHomeChatNarrowOpen`: 390 px.
+  - `botHomeChatSmallFolded` / `botHomeChatSmallOpen`: 320 px.
+  - `longListMidScroll` (720) / `longListNarrowMidScroll` (390): 14 workers scrolled halfway. The header stays pinned and rows rest whole.
+  - `composer*`: the same fixtures in the runner's fixed 1280-px window, so the floating button sits off-frame; use `window/` for that proof.
+- `window/`: the same fixtures with the browser window at the fixture width.
+  - `composerDefault390`, `composerOverSend390`, `composerDefault320`, `composerOverSend320`.
+  - `longListMidScroll`, `longListNarrowMidScroll`.
+  - `window-width-report.json`: rects for Send and the button; for the long lists, 1 scrolling element in the dock (no nested scrollbar), no row sliced at the roster's edges, and the scrollTop.
+- `live/`: the four cropped live captures and `live-report.json` (temp paths redacted).
+- `harness/`: `capture.mjs`, the window-width capture script; `live/` holds the ad hoc spec and the stub diff.

@@ -1,0 +1,306 @@
+[
+  {
+    "fixture": "composerDefault390",
+    "theme": "light",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": {
+      "left": 323,
+      "top": 773,
+      "right": 355,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 330,
+      "top": 72,
+      "right": 366,
+      "bottom": 108
+    },
+    "sendCovered": false,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 0,
+    "headerTop": 412,
+    "dockTop": 412,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerDefault390",
+    "theme": "dark",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": {
+      "left": 323,
+      "top": 773,
+      "right": 355,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 330,
+      "top": 72,
+      "right": 366,
+      "bottom": 108
+    },
+    "sendCovered": false,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 0,
+    "headerTop": 412,
+    "dockTop": 412,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerOverSend390",
+    "theme": "light",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": {
+      "left": 323,
+      "top": 773,
+      "right": 355,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 336,
+      "top": 367,
+      "right": 372,
+      "bottom": 403
+    },
+    "sendCovered": false,
+    "savedSpot": {
+      "left": 336,
+      "top": 786,
+      "right": 372,
+      "bottom": 822
+    },
+    "savedSpotWouldCoverSend": true,
+    "rosterScrollTop": 0,
+    "headerTop": 412,
+    "dockTop": 412,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerOverSend390",
+    "theme": "dark",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": {
+      "left": 323,
+      "top": 773,
+      "right": 355,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 336,
+      "top": 367,
+      "right": 372,
+      "bottom": 403
+    },
+    "sendCovered": false,
+    "savedSpot": {
+      "left": 336,
+      "top": 786,
+      "right": 372,
+      "bottom": 822
+    },
+    "savedSpotWouldCoverSend": true,
+    "rosterScrollTop": 0,
+    "headerTop": 412,
+    "dockTop": 412,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerDefault320",
+    "theme": "light",
+    "viewport": 320,
+    "innerWidth": 320,
+    "send": {
+      "left": 253,
+      "top": 773,
+      "right": 285,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 260,
+      "top": 72,
+      "right": 296,
+      "bottom": 108
+    },
+    "sendCovered": false,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 0,
+    "headerTop": 393,
+    "dockTop": 393,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerDefault320",
+    "theme": "dark",
+    "viewport": 320,
+    "innerWidth": 320,
+    "send": {
+      "left": 253,
+      "top": 773,
+      "right": 285,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 260,
+      "top": 72,
+      "right": 296,
+      "bottom": 108
+    },
+    "sendCovered": false,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 0,
+    "headerTop": 393,
+    "dockTop": 393,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "composerOverSend320",
+    "theme": "light",
+    "viewport": 320,
+    "innerWidth": 320,
+    "send": {
+      "left": 253,
+      "top": 773,
+      "right": 285,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 266,
+      "top": 627,
+      "right": 302,
+      "bottom": 663
+    },
+    "sendCovered": false,
+    "savedSpot": {
+      "left": 266,
+      "top": 786,
+      "right": 302,
+      "bottom": 822
+    },
+    "savedSpotWouldCoverSend": true,
+    "rosterScrollTop": null,
+    "headerTop": 672,
+    "dockTop": 672,
+    "scrollingElementsInDock": 0,
+    "rowSlicedAtRosterEdge": null,
+    "errors": []
+  },
+  {
+    "fixture": "composerOverSend320",
+    "theme": "dark",
+    "viewport": 320,
+    "innerWidth": 320,
+    "send": {
+      "left": 253,
+      "top": 773,
+      "right": 285,
+      "bottom": 805
+    },
+    "toggle": {
+      "left": 266,
+      "top": 627,
+      "right": 302,
+      "bottom": 663
+    },
+    "sendCovered": false,
+    "savedSpot": {
+      "left": 266,
+      "top": 786,
+      "right": 302,
+      "bottom": 822
+    },
+    "savedSpotWouldCoverSend": true,
+    "rosterScrollTop": null,
+    "headerTop": 672,
+    "dockTop": 672,
+    "scrollingElementsInDock": 0,
+    "rowSlicedAtRosterEdge": null,
+    "errors": []
+  },
+  {
+    "fixture": "longListNarrowMidScroll",
+    "theme": "light",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": null,
+    "toggle": null,
+    "sendCovered": null,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 336,
+    "headerTop": 101,
+    "dockTop": 101,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "longListNarrowMidScroll",
+    "theme": "dark",
+    "viewport": 390,
+    "innerWidth": 390,
+    "send": null,
+    "toggle": null,
+    "sendCovered": null,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 336,
+    "headerTop": 101,
+    "dockTop": 101,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "longListMidScroll",
+    "theme": "light",
+    "viewport": 720,
+    "innerWidth": 720,
+    "send": null,
+    "toggle": null,
+    "sendCovered": null,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 228,
+    "headerTop": 81,
+    "dockTop": 81,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  },
+  {
+    "fixture": "longListMidScroll",
+    "theme": "dark",
+    "viewport": 720,
+    "innerWidth": 720,
+    "send": null,
+    "toggle": null,
+    "sendCovered": null,
+    "savedSpot": null,
+    "savedSpotWouldCoverSend": null,
+    "rosterScrollTop": 228,
+    "headerTop": 81,
+    "dockTop": 81,
+    "scrollingElementsInDock": 1,
+    "rowSlicedAtRosterEdge": false,
+    "errors": []
+  }
+]
