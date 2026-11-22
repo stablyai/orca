@@ -43,12 +43,14 @@ export class AcpStructuredOptions {
       | 'builtinCommands'
       | 'skillDescription'
       | 'fastConfigId'
+      | 'thinkingConfigId'
       | 'interactionModes'
     > = {}
   ) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
-  private configOptions: SessionConfigOption[] = []
+  /** As the agent last reported them; replace through `adoptConfigOptions`. */
+  configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
@@ -95,9 +97,10 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
-      // Each model has its own effort and Fast defaults, so both are written again.
+      // Each model has its own effort, thinking and Fast defaults, so all are written again.
       this.appliedInput.delete('effort')
       this.appliedInput.delete('fastMode')
+      this.appliedInput.delete('thinking')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
@@ -218,9 +221,11 @@ export class AcpStructuredOptions {
   }
 
   write(key: string, value: string): AcpOptionWrite | null {
-    if (key === 'fastMode') {
-      const fast = this.fastOption()
-      return fast ? { method: 'config', configId: fast.id, value } : null
+    if (key === 'fastMode' || key === 'thinking') {
+      const option = this.idSelect(
+        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
+      )
+      return option ? { method: 'config', configId: option.id, value } : null
     }
     if (key === 'model') {
       const option = this.select('model')
@@ -276,7 +281,7 @@ export class AcpStructuredOptions {
         confirmed
       }
     }
-    return withFastModeOption(menu, this.fastOption())
+    return withFastModeOption(menu, this.idSelect(this.dialect.fastConfigId))
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
@@ -335,12 +340,8 @@ export class AcpStructuredOptions {
     return acpEffortOption(this.configOptions)
   }
 
-  private fastOption(): SelectOption | null {
-    const id = this.dialect.fastConfigId
-    if (!id) {
-      return null
-    }
-    const option = this.configOptions.find((entry) => entry.id === id)
+  private idSelect(id: string | undefined): SelectOption | null {
+    const option = id ? this.configOptions.find((entry) => entry.id === id) : undefined
     return option && isSelect(option) ? option : null
   }
 

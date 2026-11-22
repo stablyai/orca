@@ -501,7 +501,16 @@ it('imports history from the separate original after interruption, taking the cu
     ])
     original.close()
     originalClosed = true
-    rmSync(originalFilename)
+    // As retirement does, readers let go of the original before it goes; Windows refuses otherwise.
+    const lease = await pool.recycleSourceReaders()
+    if (!lease) {
+      throw new Error('source readers were busy')
+    }
+    try {
+      rmSync(originalFilename)
+    } finally {
+      pool.releaseSourceReaders(lease)
+    }
     expect(await conversions.ensure('session')).toBe('current-original')
     expect(maintain(db, { kind: 'import-discard', sessionId: 'session' })).toEqual({
       more: false,

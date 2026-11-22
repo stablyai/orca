@@ -166,7 +166,7 @@ export function _resetConptyStartupTrustForTest(): void {
 type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
 
 // node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.
-function runsOnWinpty(proc: pty.IPty): boolean {
+export function runsOnWinpty(proc: pty.IPty): boolean {
   const pane: NodePtyWindowsPane = proc
   return pane._agent?._useConpty === false
 }

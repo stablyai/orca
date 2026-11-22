@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -9,6 +9,9 @@ import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/acti
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { BotItemActivityList } from './BotItemActivityList'
+
+import { TooltipProvider } from '@/components/ui/tooltip'
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: TooltipProvider })
 
 const ASKER = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
 const OWNER = { kind: 'owner' } as const
@@ -133,6 +136,52 @@ it("posts a quick reply as the owner's comment, and Alt-click puts it in the box
   expect(actions.send).toHaveBeenCalledExactlyOnceWith('Go ahead')
   expect(actions.edit).toHaveBeenCalledExactlyOnceWith('Wait')
   expect(actions.type).toHaveBeenCalledOnce()
+})
+
+it('tags the comment that asks Needs you while the item waits on it, and only that one', () => {
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'readable copy' }
+  })
+  const events: BotItemEvent[] = [
+    { id: 'e1', kind: 'commented', actor: ASKER, data: { text: 'Started on it.' }, at: 100 },
+    ...WAITING
+  ]
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={events}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }}
+    />
+  )
+
+  const [plain, asking] = screen.getAllByRole('article')
+  expect(asking!.textContent).toContain('Needs you')
+  expect(plain!.textContent).not.toContain('Needs you')
+})
+
+it('tags a question asked in prose Needs you too, while it is the item’s question', () => {
+  const events: BotItemEvent[] = [
+    {
+      id: 'e2',
+      kind: 'commented',
+      actor: ASKER,
+      data: { text: 'Hold mail while paused?' },
+      at: 200
+    },
+    { id: 'e3', kind: 'status', actor: ASKER, data: { from: 'working', to: 'needs_you' }, at: 200 }
+  ]
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Hold mail while paused?' }
+  })
+  const { rerender } = render(<BotItemActivityList bot={BOT} item={item} events={events} />)
+
+  expect(screen.getByRole('article').textContent).toContain('Needs you')
+
+  rerender(<BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />)
+  expect(screen.getByRole('article').textContent).not.toContain('Needs you')
 })
 
 it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {

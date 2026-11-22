@@ -14,6 +14,7 @@ import { normalizeSourceControlGroupOrder } from '../../../../shared/source-cont
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -139,6 +140,7 @@ export class RuntimeClientSettingsController {
       // Resolved, so a phone can tell a reported value from an older host's absence.
       nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
       hostNotifications: projectHostNotificationSettings(settings.notifications),
+      trackerAccountHost: getSettingsFocusedExecutionHostId(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -178,7 +180,8 @@ export class RuntimeClientSettingsController {
               process.platform
             )
           : {}),
-        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
+        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {}),
+        ...(updates.agentDefaultSurface !== undefined ? { agentDefaultSurfaceChosen: true } : {})
       },
       { notifyListeners: true }
     )

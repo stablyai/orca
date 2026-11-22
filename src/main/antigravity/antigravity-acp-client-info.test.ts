@@ -88,7 +88,8 @@ it('uses the legacy client identity when listing models from the older managed s
       throw new Error('unused')
     },
     deleteSession: async () => ({}),
-    close: async () => {}
+    close: async () => true,
+    onExit: () => {}
   }))
   const probe = createAcpModelCatalogProbe(MANAGED, {
     resolveEnvironment: async () => ({ PATH: '' }),

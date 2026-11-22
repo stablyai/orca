@@ -811,9 +811,9 @@ it('persists a downgrade across a clock rollback and restart', async () => {
   }
 })
 
-it('upgrades a v49 database with only this slice’s additive catalog table', async () => {
+it('upgrades a v50 database with only this slice’s additive catalog table', async () => {
   db.db.exec('DROP TABLE worker_placement_catalogs')
-  db.db.pragma('user_version = 49')
+  db.db.pragma('user_version = 50')
   db.close()
   db = new OrchestrationDb(path)
   owner = new WorkerPlacementCatalogOwner(db, transport())

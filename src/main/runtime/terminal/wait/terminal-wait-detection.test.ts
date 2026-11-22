@@ -318,3 +318,50 @@ describe('isMuseReadyPromptPreview', () => {
     expect(isMuseReadyPromptPreview(waitText)).toBe(false)
   })
 })
+
+// Captured from Claude Code 2.1.330 with a fresh config and no credentials.
+const CLAUDE_FIRST_RUN_SCREENS = [
+  {
+    name: 'theme picker',
+    lines: [
+      ' Let’s get started.',
+      ' Choose the text style that looks best with your terminal',
+      ' To change this later, run /theme',
+      ' ❯ ✔ Auto (match terminal)',
+      '     Dark mode',
+      '     Light mode',
+      '     Dark mode (colorblind-friendly)',
+      '     Light mode (colorblind-friendly)',
+      '     Dark mode (ANSI colors only)',
+      '     Light mode (ANSI colors only)',
+      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+      '  1  function greet() {',
+      '  2 -  console.log("Hello, World!");',
+      '  2 +  console.log("Hello, Claude!");',
+      '  3  }',
+      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+      '  Syntax theme: Monokai Extended (ctrl+t to disable)'
+    ],
+    reason: 'agent-interactive-prompt'
+  },
+  {
+    name: 'login method menu',
+    lines: [
+      'Welcome to Claude Code v2.1.330',
+      ' Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.',
+      ' Select login method:',
+      ' ❯ 1. Claude account with subscription · Individual, Team, or Enterprise',
+      '   2. Anthropic Console account · API usage billing',
+      '   3. 3rd-party platform · Bedrock, Microsoft Foundry, Google Vertex AI'
+    ],
+    reason: 'agent-interactive-prompt'
+  }
+] as const
+
+describe('Claude first-run screens a person must answer', () => {
+  for (const screen of CLAUDE_FIRST_RUN_SCREENS) {
+    it(`blocks on its ${screen.name}`, () => {
+      expect(detectTerminalWaitBlockedReason(screen.lines.join('\n'))).toBe(screen.reason)
+    })
+  }
+})

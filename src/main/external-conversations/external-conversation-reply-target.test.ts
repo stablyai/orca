@@ -49,3 +49,34 @@ it('names none when the turn was opened by another conversation, or by no delive
     replyTargetOf({ link, workspace: { worktreeId: 'w' } }, 100, null).answerDeliveryId
   ).toBeUndefined()
 })
+
+it('names a continuation’s first claimed request for its own conversation', () => {
+  const stamp = (externalId: string, deliveryId: string) => ({
+    account: 'account-a',
+    conversation: { source: 'slack', externalId },
+    deliveryId
+  })
+  const continuation: AgentJournalRenderItem = {
+    itemId: 'continue-1',
+    revision: 1,
+    sequence: 2,
+    observedAt: 2,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'continue' }],
+      connectorClaim: {
+        cutTurnId: 'turn-1',
+        cutKind: 'restart',
+        origin: [
+          stamp('slack:T1:C2:9.9', 'd0'),
+          stamp(link.externalId, 'd2'),
+          stamp(link.externalId, 'd3')
+        ]
+      }
+    }
+  }
+  expect(
+    replyTargetOf({ link, workspace: { worktreeId: 'w' } }, 100, continuation).answerDeliveryId
+  ).toBe('d2')
+})

@@ -9,6 +9,9 @@ import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
 import { MobileBotGroupMembers } from './MobileBotGroupMembers'
+import { MobileBotsReorderSheet } from './MobileBotsReorderSheet'
+import type { ListedHostBots } from './host-bot-listing'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
 import { botCreateMenuActions, botGroupMenuActions } from './bot-group-menu-actions'
 
 export type MobileBotGroupEditor = {
@@ -28,6 +31,17 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
   const { client, hostId, router, hostCapabilities } = controller
   const supported = hostCapabilities?.includes(BOTS_GROUPS_RUNTIME_CAPABILITY) === true
   const [newBot, setNewBot] = useState<{ open: () => void; botCount: number } | null>(null)
+  const [reordering, setReordering] = useState(false)
+  // Groups are the paired computer's, and Manual is its sort: a drag orders its bots and groups.
+  const local = controller.bots.find(
+    (listing): listing is ListedHostBots =>
+      listing.kind === 'listed' && listing.hostId === LOCAL_EXECUTION_HOST_ID
+  )
+  // Unread groups (a failed read) would leave their places out of the order, so wait for them.
+  const canReorder =
+    local?.view.sortBy === 'manual' &&
+    local.groups !== undefined &&
+    local.bots.length + local.groups.length > 1
   const [actions, setActions] = useState<BotGroup | null>(null)
   const [editing, setEditing] = useState<BotGroup | 'new' | null>(null)
   // The members sheet picks from the host's full bots, read only when it opens.
@@ -56,8 +70,16 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
           botCount: newBot?.botCount ?? 0,
           hostLabel: controller.state.hostName,
           onNewBot: () => newBot?.open(),
-          onNewGroup: () => edit('new')
+          onNewGroup: () => edit('new'),
+          onReorder: canReorder ? () => setReordering(true) : null
         })}
+      />
+      <MobileBotsReorderSheet
+        // Leaving Manual on the computer ends the drag, as the desktop drags only in Manual.
+        visible={reordering && canReorder}
+        onClose={() => setReordering(false)}
+        client={client}
+        listing={local ?? null}
       />
       <ActionSheetModal
         visible={actions !== null}

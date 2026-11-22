@@ -11,8 +11,24 @@ const NEW_INDEXES = [
   'idx_dispatch_contexts_origin',
   'idx_dispatch_creator_orca_session_id',
   'idx_dispatch_creator_pane_key',
-  'idx_bot_requests_send'
+  'idx_bot_requests_send',
+  'idx_bot_requests_awaiting',
+  'idx_question_threads_awaiting',
+  'idx_remote_owned_questions_awaiting',
+  'idx_dispatch_contexts_for_message',
+  'idx_peer_questions_out_awaiting'
 ]
+const TAKE_COLUMNS = [
+  ['bot_requests', 'taken_by'],
+  ['bot_requests', 'awaiting'],
+  ['question_threads', 'taken_by'],
+  ['question_threads', 'awaiting'],
+  ['question_threads', 'told'],
+  ['remote_owned_questions', 'taken_by'],
+  ['remote_owned_questions', 'awaiting'],
+  ['remote_owned_questions', 'ended'],
+  ['dispatch_contexts', 'for_message_id']
+] as const
 const BOT_TABLES = [
   'bot_requests',
   'bot_request_outcomes',
@@ -53,6 +69,7 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
+      expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'origin_ref')).toBe(true)
       expect(db.hasColumn('bot_requests', 'send_key')).toBe(true)
@@ -83,6 +100,23 @@ describe('v47-v48 bot dispatch migrations', () => {
     raw.pragma('user_version = 46')
     raw.close()
   }
+
+  it('adds who took each question to a v49 database and keeps its rows', () => {
+    const path = dbPath()
+    const taskId = seedWithDispatch(path)
+    const raw = new Database(path)
+    for (const index of NEW_INDEXES.slice(4)) {
+      raw.exec(`DROP INDEX IF EXISTS ${index}`)
+    }
+    for (const [table, column] of TAKE_COLUMNS) {
+      raw.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
+    }
+    raw.exec('DROP TABLE peer_questions_out')
+    raw.pragma('user_version = 49')
+    raw.close()
+
+    expectCurrentSchema(path, taskId)
+  })
 
   it('opens a fresh database with bot dispatch support, and again unchanged', () => {
     const path = dbPath()

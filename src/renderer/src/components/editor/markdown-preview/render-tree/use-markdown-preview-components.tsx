@@ -14,6 +14,7 @@ import {
   getMarkdownPreviewBlockRange,
   hasMarkdownPreviewNestedBlock
 } from '../review/markdown-preview-block-model'
+import { cn } from '@/lib/class-names'
 import { preventMiddleButtonDefault } from '@/components/tab-bar/strip/middle-button-default-guard'
 import {
   handleMarkdownPreviewLinkAuxClick,
@@ -102,6 +103,7 @@ const annotatedBlockComponents = {
   },
   li: function MarkdownPreviewListItem({ node, children, ...props }) {
     const {
+      activeAnnotationBlockKey,
       getMarkdownCommentsForRange,
       handleAnnotatedMarkdownBlockClick,
       renderAnnotationControls
@@ -127,13 +129,14 @@ const annotatedBlockComponents = {
         </li>
       )
     }
-    const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
     return (
       <li {...props}>
         <div
-          className={`markdown-annotation-list-block ${
-            hasReviewNotes ? 'has-review-notes' : ''
-          }`.trim()}
+          className={cn(
+            'markdown-annotation-list-block',
+            getMarkdownCommentsForRange(range).length > 0 && 'has-review-notes',
+            activeAnnotationBlockKey === blockKey && 'is-adding-note'
+          )}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
           data-annotation-block-key={blockKey}

@@ -167,9 +167,10 @@ async function readAntigravityUsage(
     )
 
   let run: AgyRun
+  const wslDistro = wsl?.wslDistro
   if (wsl) {
-    // Background quota polling must not start stopped distros.
-    if (!(await isWslDistroRunningForBackgroundWork(wsl.wslDistro))) {
+    // Background quota polling must not start stopped distros; run only in the distro gated here.
+    if (!wslDistro || !(await isWslDistroRunningForBackgroundWork(wslDistro))) {
       return unavailable(
         `Antigravity usage is not available while ${wslLabel} is not running.`,
         'cli-unavailable',
@@ -178,7 +179,7 @@ async function readAntigravityUsage(
     }
     run = (args, timeoutMs) =>
       runWslProcess({
-        distro: wsl.wslDistro ?? undefined,
+        distro: wslDistro,
         loginPath: 'preferred',
         program: command,
         args,

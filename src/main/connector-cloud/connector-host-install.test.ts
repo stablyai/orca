@@ -27,13 +27,16 @@ vi.mock('./connector-token-mint', () => ({
   }
 }))
 // Host work with its own tests; here only that the installer starts it.
-const started = vi.hoisted(() => ({ webhooks: 0, accessWatch: 0 }))
+const started = vi.hoisted(() => ({ webhooks: 0, accessWatch: 0, botsWritten: 0 }))
 vi.mock('../webhooks/webhook-host-service', () => ({
   WebhookHostService: class {
     start = async () => {
       started.webhooks++
     }
     changed = () => {}
+    botsWritten = () => {
+      started.botsWritten++
+    }
     stop = () => {}
     pausing = () => false
     onConfirmed = () => {}
@@ -72,8 +75,14 @@ function fakeHost() {
   const bot = makeTestBot({ slack: { appId: 'A1', teamId: 'T1' } })
   let connector: ConnectorCloud | null = null
   const listeners: ((event: RuntimeClientEvent) => void)[] = []
-  const host: { webhooks: unknown; runtime: OrcaRuntimeService; store: Store } = {
+  const host: {
+    webhooks: unknown
+    botsWritten: (() => void)[]
+    runtime: OrcaRuntimeService
+    store: Store
+  } = {
     webhooks: null,
+    botsWritten: [],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer reads only these runtime members; the host work it starts is mocked above.
     runtime: {
       setConnectorCloud: (next: ConnectorCloud | null) => {
@@ -88,7 +97,10 @@ function fakeHost() {
       notifyBotsChanged: () => {},
       readMachineName: () => 'Studio Mac',
       machineNameReady: async () => {},
-      onBotsWritten: () => () => {},
+      onBotsWritten: (listener: () => void) => {
+        host.botsWritten.push(listener)
+        return () => {}
+      },
       bots: { enabled: () => true },
       botWork: {}
     } as unknown as OrcaRuntimeService,
@@ -111,6 +123,7 @@ beforeEach(() => {
   cloud.mintedFrom = []
   started.webhooks = 0
   started.accessWatch = 0
+  started.botsWritten = 0
   vi.stubGlobal('fetch', cloud.fake.fetch)
 })
 
@@ -143,7 +156,10 @@ describe('installConnectorHost', () => {
       expect(said.hostName).toBe('Studio Mac')
       expect(new Set(cloud.mintedFrom)).toEqual(new Set([userDataPath]))
       expect(host.webhooks).not.toBeNull()
-      expect(started).toEqual({ webhooks: 1, accessWatch: 1 })
+      expect(started).toEqual({ webhooks: 1, accessWatch: 1, botsWritten: 0 })
+      // A bot write refiles its hooks between the ledger files.
+      host.botsWritten.forEach((listener) => listener())
+      expect(started.botsWritten).toBe(1)
     }
   )
 })
