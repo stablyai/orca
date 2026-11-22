@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useBots } from '@/lib/bot-catalog'
 import { botRefKey, callBotRpc, isSameBot, type BotRef } from '@/lib/bot-hosts'
-import { COMPOSIO_SESSION_MCP_URL } from '../../../../shared/composio/composio-apps'
+import { isBotAppTool } from '../../../../shared/bots/bot-connector-entries'
 import type { BotOwnTool, BotToolProblem, BotTools } from '../../../../shared/bot-tools'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -177,11 +177,6 @@ const LOADING: BotToolsView = { status: 'loading' }
  * never starting one (badges, counts). none: the tools alone (Add to <bot>).
  */
 export type BotToolsCheck = 'check' | 'apps' | 'finished' | 'none'
-
-/** URL servers other than Composio's own, which is drawn as its apps. */
-export function isBotAppTool(tool: BotOwnTool): boolean {
-  return (tool.remote || tool.signIn !== undefined) && !COMPOSIO_SESSION_MCP_URL.test(tool.detail)
-}
 
 /** An app whose state its agent's CLI reports; one Orca signs in to has its own, and isn't checked. */
 const checkedApp = (tool: BotOwnTool): boolean => isBotAppTool(tool) && tool.remote

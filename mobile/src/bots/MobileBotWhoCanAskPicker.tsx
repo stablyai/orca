@@ -9,6 +9,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from '../settings/settings-screen-frame'
+import { memberMark } from './MobileBotWhoCanAsk'
 import type { WhoCanAskConnector, WhoCanAskFound } from './who-can-ask-connectors'
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -57,11 +58,13 @@ function useMemberSearch(
 const matches = (name: string, needle: string): boolean =>
   needle === '' || name.toLowerCase().includes(needle)
 
-// Saved as the desktop saves it: a found person's picture is kept, their handle isn't.
+// Saved as the desktop saves it: a found person's picture is kept, their handle isn't; an app is
+// marked so, so it draws as one.
 const asMember = (found: Found, connector: WhoCanAskConnector): BotMember => ({
   id: found.id,
   name: found.name,
   ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),
+  ...(found.app ? { kind: 'app' as const } : {}),
   ...connector.stamp
 })
 
@@ -112,6 +115,7 @@ export function MobileBotWhoCanAskPicker(props: {
     return (
       <ListRow
         key={member.id}
+        leading={memberMark(member)}
         title={member.name || member.id}
         subtitle={handleLine(member.name, handle)}
         selected={on}
@@ -182,6 +186,7 @@ export function MobileBotWhoCanAskPicker(props: {
             {withAccess.map((member) => (
               <ListRow
                 key={member.id}
+                leading={memberMark(member)}
                 title={member.name || member.id}
                 subtitle={handleLine(member.name, handles.get(member.id))}
                 value={canAsk}
