@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Pause } from 'lucide-react'
+import { Monitor, Moon, Pause } from 'lucide-react'
 import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
@@ -30,7 +30,11 @@ const SORT_DESCRIPTIONS: Partial<Record<BotSidebarSortBy, () => string>> = {
 }
 
 /** The Bots header's options: how the section orders its bots and what it leaves out. */
-export function BotSidebarOptionsMenu(): React.JSX.Element {
+export function BotSidebarOptionsMenu({
+  groupByComputer
+}: {
+  groupByComputer?: { enabled: boolean; onChange: (enabled: boolean) => void }
+}): React.JSX.Element {
   const t = useTranslate()
   const view = useAppStore((s) => s.botSidebarView)
   const setView = useAppStore((s) => s.setBotSidebarView)
@@ -39,7 +43,10 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
   const choices = BOT_SIDEBAR_SORT_CHOICES.map(({ id }) => ({
     id,
     label: SORT_LABELS[id](),
-    description: SORT_DESCRIPTIONS[id]?.() ?? null
+    description:
+      id === 'manual' && groupByComputer?.enabled
+        ? t('bots.computerView.manual', 'Turn off Group by computer to drag bots.')
+        : (SORT_DESCRIPTIONS[id]?.() ?? null)
   }))
   return (
     <SidebarOptionsPopover
@@ -61,6 +68,14 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
         value={view.sortBy}
         onChange={(sortBy) => setView({ sortBy })}
       />
+      {groupByComputer ? (
+        <FilterToggleRow
+          icon={<Monitor className="size-3.5" />}
+          label={t('bots.computerView.group', 'Group by computer')}
+          checked={groupByComputer.enabled}
+          onChange={groupByComputer.onChange}
+        />
+      ) : null}
       <DropdownMenuSeparator />
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-[11px] font-semibold text-muted-foreground">

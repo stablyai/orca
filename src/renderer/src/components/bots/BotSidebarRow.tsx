@@ -16,6 +16,7 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   BotAvatarStatusBadge,
@@ -116,6 +117,24 @@ export function BotSidebarRow({
           onKeyDown={(event) => {
             // The unread bell is a button of its own.
             if (event.target instanceof Element && event.target.closest('button')) {
+              return
+            }
+            if (
+              (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) &&
+              !isEditableTarget(event.target)
+            ) {
+              event.preventDefault()
+              if (!event.repeat) {
+                const { left, bottom } = event.currentTarget.getBoundingClientRect()
+                event.currentTarget.dispatchEvent(
+                  new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: left,
+                    clientY: bottom
+                  })
+                )
+              }
               return
             }
             if (event.key === 'Enter' || event.key === ' ') {

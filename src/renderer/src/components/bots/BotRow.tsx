@@ -1,6 +1,6 @@
 import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Monitor, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -46,6 +46,7 @@ type BotRowProps = {
   fold?: BotRowFold | null
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
+  onChooseComputer?: () => void
 }
 
 export function BotRow({
@@ -54,7 +55,8 @@ export function BotRow({
   isActive,
   onOpen,
   fold = null,
-  dragHandle = false
+  dragHandle = false,
+  onChooseComputer
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
   const details = useBotRowDetails(bot, home)
@@ -151,6 +153,12 @@ export function BotRow({
             <Settings className="size-3.5" />
             {t('bots.row.settings', 'Bot settings…')}
           </ContextMenuItem>
+          {onChooseComputer ? (
+            <ContextMenuItem onSelect={onChooseComputer}>
+              <Monitor className="size-3.5" />
+              {t('bots.computerView.choose', 'Show under computer…')}
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuItem
             disabled={offline}
             onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}

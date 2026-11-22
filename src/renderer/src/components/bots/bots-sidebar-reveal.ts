@@ -49,7 +49,7 @@ export function useBotsSidebarReveal(
   listShown: boolean,
   entries: readonly { id: string; home: { id: string } }[],
   /** Runs as a request starts: a search hiding the list ends, so the revealed row shows. */
-  beforeReveal: () => void
+  beforeReveal: (entryId: string) => void
 ): BotsRevealContextValue {
   const [request, setRequest] = useState<BotsRevealRequest | null>(null)
   const live = useRef<LiveRequest | null>(null)
@@ -210,7 +210,7 @@ export function useBotsSidebarReveal(
       if (target.section !== 'bots') {
         return
       }
-      beforeRevealRef.current()
+      beforeRevealRef.current(target.entryKey)
       const store = useAppStore.getState()
       const toUnfold = new Set<string>([BOTS_GROUP_KEY])
       const wanted = wantedDepth(target)

@@ -29563,6 +29563,19 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "computerView": {
+      "choose": "Show under computer…",
+      "assign": "Show under computer",
+      "assignDescription": "Choose where {{botName}} appears in the Bots sidebar. The bot still runs on its current computer.",
+      "computer": "Computer",
+      "runLocation": "Where the bot runs",
+      "custom": "Another computer…",
+      "name": "Computer name",
+      "save": "Save",
+      "manual": "Turn off Group by computer to drag bots.",
+      "group": "Group by computer",
+      "groupChats": "Group chats"
     }
   },
   "plugins": {

@@ -46,7 +46,8 @@ function focusIsNowhere(): boolean {
 export function useBotSidebarSearch({
   listRef,
   savedEntries,
-  onOpenBot
+  onOpenBot,
+  unfoldComputer
 }: {
   listRef: React.RefObject<HTMLDivElement | null>
   savedEntries: readonly (
@@ -54,6 +55,7 @@ export function useBotSidebarSearch({
     | { kind: 'group'; id: string }
   )[]
   onOpenBot: () => void
+  unfoldComputer: (entryId: string) => void
 }): BotSidebarSearchState {
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -91,6 +93,7 @@ export function useBotSidebarSearch({
       // Closing takes the field and results away; move focus to the row only if it would go with them.
       const moveFocus = focusIsNowhere() || !!regionRef.current?.contains(document.activeElement)
       flushSync(() => {
+        unfoldComputer(entryId)
         const { collapsedGroups, toggleCollapsedGroup } = useAppStore.getState()
         if (collapsedGroups.has(BOTS_GROUP_KEY)) {
           toggleCollapsedGroup(BOTS_GROUP_KEY)
@@ -110,7 +113,7 @@ export function useBotSidebarSearch({
         getList: () => listRef.current
       })
     },
-    [listRef]
+    [listRef, unfoldComputer]
   )
 
   const select = useCallback(
