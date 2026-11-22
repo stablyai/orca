@@ -237,7 +237,8 @@ export async function startLocalWorker(args: {
     const placement = placed
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
-    const handOver = async (): Promise<unknown> => {
+    // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
+    const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -271,7 +272,7 @@ export async function startLocalWorker(args: {
         launchReceipt: placement.launch,
         mode,
         timeoutMs,
-        readinessDeadline: Math.max(readinessDeadline, Date.now() + timeoutMs),
+        readinessDeadline: deliveryDeadline,
         effects,
         terminalRevealWarning: placement.warning,
         onStage

@@ -342,7 +342,7 @@ const CLAUDE_FIRST_RUN_SCREENS = [
       ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
       '  Syntax theme: Monokai Extended (ctrl+t to disable)'
     ],
-    reason: 'agent-startup-menu-prompt'
+    reason: 'agent-interactive-prompt'
   },
   {
     name: 'login method menu',
@@ -354,7 +354,7 @@ const CLAUDE_FIRST_RUN_SCREENS = [
       '   2. Anthropic Console account · API usage billing',
       '   3. 3rd-party platform · Bedrock, Microsoft Foundry, Google Vertex AI'
     ],
-    reason: 'agent-sign-in-prompt'
+    reason: 'agent-interactive-prompt'
   }
 ] as const
 

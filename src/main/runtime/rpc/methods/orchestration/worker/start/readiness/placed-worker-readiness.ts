@@ -34,7 +34,7 @@ export async function handOverWhenReady(
       Parameters<typeof continueWorkerStartInBackground>[0],
       'runId' | 'taskId' | 'launch' | 'mode'
     >
-    handOver: () => Promise<unknown>
+    handOver: (deliveryDeadline?: number) => Promise<unknown>
     onHandedOver: (outcome: unknown) => void
     fail: (error: unknown, failedStage?: string) => Promise<unknown>
   }
@@ -62,7 +62,8 @@ export async function handOverWhenReady(
         : undefined,
     handOver: async (ready) => {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait: ready })
-      args.onHandedOver(await args.handOver().catch((error: unknown) => args.fail(error)))
+      const handedOver = args.handOver(Date.now() + args.timeoutMs)
+      args.onHandedOver(await handedOver.catch((error: unknown) => args.fail(error)))
     },
     fail: async (error, failedStage) => {
       await args.fail(error, failedStage)

@@ -22,7 +22,7 @@
         "find": { "lastOf": "syntax theme:" },
         "after": { "all": [{ "regex": "ctrl\\+t\\s*to\\s*(?:disable|enable)" }] }
       },
-      "answer": { "state": "blocked", "reason": "agent-startup-menu-prompt" }
+      "answer": { "state": "blocked", "reason": "agent-interactive-prompt" }
     },
     {
       "id": "theme_picker_heading",
@@ -32,7 +32,7 @@
         "find": { "lastOf": "choose the text style that looks best" },
         "after": { "all": [{ "contains": "dark mode" }] }
       },
-      "answer": { "state": "blocked", "reason": "agent-startup-menu-prompt" }
+      "answer": { "state": "blocked", "reason": "agent-interactive-prompt" }
     },
     {
       "id": "login_method_menu",
@@ -47,7 +47,7 @@
           ]
         }
       },
-      "answer": { "state": "blocked", "reason": "agent-sign-in-prompt" }
+      "answer": { "state": "blocked", "reason": "agent-interactive-prompt" }
     }
   ],
   "rules": [

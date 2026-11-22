@@ -28,6 +28,12 @@ export function workerStartReadyDeadlineMs(): number {
   return Number.isFinite(override) && override > 0 ? override : READY_DEADLINE_MS
 }
 
+/** The deadline as a person reads it. */
+export function deadlineText(): string {
+  const ms = workerStartReadyDeadlineMs()
+  return ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`
+}
+
 /** One wait per Dispatch, in this runtime only: a restart ends it (see settleRestartCutWorkerStart). */
 const waits = new Map<string, AbortController>()
 
@@ -77,7 +83,9 @@ export type AwaitingWorkerStart = {
 }
 
 /** Moves the start to its awaiting stage and watches on; the caller returns at once. */
-export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): { readyBy: number } {
+export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): {
+  readyBy: number | null
+} {
   start.db.recordWorkerStage({ dispatchId: start.dispatchId, stage: WORKER_AWAITING_AGENT_STAGE })
   const controller = new AbortController()
   waits.get(start.dispatchId)?.abort()
@@ -93,8 +101,8 @@ export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): { read
         waits.delete(start.dispatchId)
       }
     })
-  // A gated launch's clock starts when Setup ends; until then the receipt can only bound it from now.
-  return { readyBy: (gated ? Date.now() : start.launchedAt) + workerStartReadyDeadlineMs() }
+  // A gated launch's clock starts when Setup ends, so no time can be promised yet.
+  return { readyBy: gated ? null : start.launchedAt + workerStartReadyDeadlineMs() }
 }
 
 async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boolean) {
@@ -130,9 +138,23 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
     if (blocked) {
       // A screen only a person answers changes only when they do: each repaint gets one tail read,
       // and the full wait starts again only once that screen is gone.
-      do {
-        await nextOutput(runtime, terminalHandle, ptyId(), signal, deadline)
-      } while (awaiting() && Date.now() < deadline && (await stillBlocked(start)))
+      // Armed before each check, so a repaint during the check (or the report before it) is not missed.
+      while (awaiting() && Date.now() < deadline) {
+        const checked = new AbortController()
+        const repaint = nextOutput(
+          runtime,
+          terminalHandle,
+          ptyId(),
+          AbortSignal.any([signal, checked.signal]),
+          deadline
+        )
+        if (!(await stillBlocked(start))) {
+          checked.abort()
+          await repaint
+          break
+        }
+        await repaint
+      }
     }
     if (!awaiting()) {
       return
@@ -193,12 +215,10 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   if (worker?.state !== 'starting' || worker.stage !== WORKER_AWAITING_AGENT_STAGE) {
     return
   }
-  const ms = workerStartReadyDeadlineMs()
-  const within = ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`
   const failed = db.failWorkerStart(
     dispatchId,
     'agent_readiness',
-    `Its agent wasn't ready within ${within}, so Orca never typed its brief.`
+    `Its agent wasn't ready within ${deadlineText()}, so Orca never typed its brief.`
   )
   reportNeverReadyWorkerStart(db, failed, screen, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)

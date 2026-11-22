@@ -4,6 +4,7 @@ import type { OrchestrationWorkerLaunchReceipt } from '../launch/worker-launch-p
 import type { WorkerEffect } from '../placement/worker-placement-topology'
 import {
   awaitWorkerAgentInBackground,
+  deadlineText,
   type AwaitingWorkerStart
 } from './worker-start-background-readiness'
 import { WORKER_AWAITING_AGENT_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
@@ -23,14 +24,15 @@ export async function continueWorkerStartInBackground(
   const { dispatchId, terminalHandle, blockedReason } = args
   const awaited = awaitWorkerAgentInBackground(args)
   const screen = await readWorkerStartScreen(args.runtime, terminalHandle)
-  const readyBy = new Date(awaited.readyBy).toISOString()
+  const readyBy = awaited.readyBy === null ? null : new Date(awaited.readyBy).toISOString()
+  const by = readyBy ? `by ${readyBy}` : `within ${deadlineText()} of Setup ending`
   return {
     runId: args.runId,
     taskId: args.taskId,
     dispatchId,
     state: 'starting',
     stage: WORKER_AWAITING_AGENT_STAGE,
-    readyBy,
+    ...(readyBy ? { readyBy } : {}),
     ...(blockedReason ? { blockedReason } : {}),
     setup: args.setup,
     launch: args.launch,
@@ -45,7 +47,7 @@ export async function continueWorkerStartInBackground(
       `orca orchestration worker-stop --dispatch ${dispatchId} --json`
     ],
     next: blockedReason
-      ? `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent is waiting on a screen only a person can answer (${blockedReason}); you'll get a separate message saying so. Orca types the task in once the agent is ready, and fails the start if it isn't by ${readyBy}. Don't start this task again; end your turn.`
-      : `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent isn't ready yet. Orca types the task in once it is, and you're told when it reports; if it isn't ready by ${readyBy}, the start fails and you're told then. Don't start this task again; end your turn.`
+      ? `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent is waiting on a screen only a person can answer (${blockedReason}); you'll get a separate message saying so. Orca types the task in once the agent is ready, and fails the start if it isn't ready ${by}. Don't start this task again; end your turn.`
+      : `Worker ${terminalHandle} (Dispatch ${dispatchId}) is live, but its agent isn't ready yet. Orca types the task in once it is, and you're told when it reports; if it isn't ready ${by}, the start fails and you're told then. Don't start this task again; end your turn.`
   }
 }
