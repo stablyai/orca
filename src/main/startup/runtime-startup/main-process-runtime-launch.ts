@@ -21,6 +21,7 @@ import { getDesktopRelayStatus } from '../cloud-startup/main-process-relay-statu
 import { startMainProcessRelayService } from '../cloud-startup/main-process-relay-startup'
 import { getServeOptions } from '../serve-launch/serve-options'
 import { getBundledWebClientRoot, printServeReady } from '../serve-launch/main-process-serve'
+import { startAgentcookieSessionSync } from './main-process-agentcookie-sync'
 import {
   bindTerminalRuntimeStartupServices,
   handleCodexHomePtySpawned,
@@ -254,6 +255,7 @@ async function launchDesktopMode(
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
+  startAgentcookieSessionSync()
   // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
   startMainProcessRelayService(runtimeRpc)
   connectMainProcessConnectorCloud()

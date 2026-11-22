@@ -13,6 +13,7 @@ import type { RelayHost } from '../runtime/mobile-cloud-relay/relay-host-install
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AutomationService } from '../automations/automation-service'
+import type { AgentcookieSessionSync } from '../browser/cookies/sync/agentcookie-session-sync'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
 import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
@@ -55,6 +56,7 @@ export class DesktopCore {
   repoMaintenanceShutdown: Promise<void> = Promise.resolve()
   watcherShutdownDone = false
   automations: AutomationService | null = null
+  agentcookieSync: AgentcookieSessionSync | null = null
   pluginService: PluginService | null = null
   pluginKillListService: PluginKillListService | null = null
   pluginInstallStatsService: PluginInstallStatsService | null = null

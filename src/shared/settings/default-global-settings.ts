@@ -317,6 +317,11 @@ export function buildDefaultSettings(args: {
     commitMessageAi: getDefaultCommitMessageAiSettings(),
     sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: args.voice,
-    voiceDictationModeDefaultedToAuto: true
+    voiceDictationModeDefaultedToAuto: true,
+    agentcookieSyncEnabled: false,
+    agentcookieBinaryPath: null,
+    agentcookieDetected: false,
+    agentcookieLastSyncAt: null,
+    agentcookieLastImportedCount: null
   }
 }
