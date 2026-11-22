@@ -151,7 +151,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
               narrow ? (compact ? 'contents' : 'flex-col') : 'flex-1 items-baseline'
             )}
           >
-            <span className="max-w-30 truncate text-sm font-medium">{row.name}</span>
+            <span className="max-w-30 shrink-0 truncate text-sm font-medium">{row.name}</span>
             <span
               className={cn(
                 'min-w-0 text-sm',
