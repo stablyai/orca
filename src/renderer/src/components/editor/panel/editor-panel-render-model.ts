@@ -42,6 +42,8 @@ type EditorPanelRenderModelParams = {
   markdownDefaultViewMode?: MarkdownDefaultViewMode
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
+  /** F7/Shift+F7 can cross into an adjacent worktree file at the change boundary. */
+  hasWorktreeDiffNavigation?: boolean
   canOpenWorkspaceFileBrowser: boolean
   /** Enabled plugins' editors for this file, in priority order. */
   customEditors?: readonly ActivePluginCustomEditor[]
@@ -58,6 +60,7 @@ export function getEditorPanelRenderModel({
   markdownDefaultViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
+  hasWorktreeDiffNavigation = false,
   canOpenWorkspaceFileBrowser,
   customEditors = [],
   customEditorChoice
@@ -230,6 +233,8 @@ export function getEditorPanelRenderModel({
   return {
     isSingleDiff,
     isDiffSurface: isSingleDiff || isChangesMode,
+    isChangesMode,
+    hasWorktreeDiffNavigation,
     isCombinedDiff,
     worktreeEntries,
     resolvedLanguage,

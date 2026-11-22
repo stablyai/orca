@@ -32,6 +32,8 @@ type EditorPanelHeaderProps = {
   copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
+  /** F7/Shift+F7 and the arrows can cross into an adjacent worktree file at the change boundary. */
+  hasWorktreeDiffNavigation: boolean
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
@@ -69,6 +71,7 @@ export function EditorPanelHeader({
   copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
+  hasWorktreeDiffNavigation,
   isMarkdown,
   isCsv,
   isNotebook,
@@ -113,7 +116,7 @@ export function EditorPanelHeader({
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
   )
-  const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
+  const { canNavigate, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
 
@@ -232,6 +235,10 @@ export function EditorPanelHeader({
                   )}
             </TooltipContent>
           </Tooltip>
+        </TooltipProvider>
+      )}
+      {(isDiffSurface || hasWorktreeDiffNavigation) && (
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -242,7 +249,7 @@ export function EditorPanelHeader({
                   'auto.components.editor.EditorPanelHeader.2076ecfc9c',
                   'Previous change'
                 )}
-                disabled={changeCount === 0}
+                disabled={!canNavigate}
               >
                 <ArrowUp size={14} />
               </button>
@@ -265,7 +272,7 @@ export function EditorPanelHeader({
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 onClick={goToNextDiff}
                 aria-label={t('auto.components.editor.EditorPanelHeader.631dab0df3', 'Next change')}
-                disabled={changeCount === 0}
+                disabled={!canNavigate}
               >
                 <ArrowDown size={14} />
               </button>

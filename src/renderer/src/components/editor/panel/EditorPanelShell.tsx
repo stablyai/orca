@@ -1,4 +1,4 @@
-import { Suspense, type JSX, type Ref } from 'react'
+import { Suspense, useCallback, useEffect, useState, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -13,8 +13,20 @@ import { getUntitledFileRoot } from './untitled-rename/untitled-file-rename-path
 import { useTranslate } from '@/i18n/use-translate'
 import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { installMonacoDiffChangeNavigationShortcut } from '../commands/editor-shortcuts'
+import { useDiffNavigation } from '../diff/review/diff-navigation-context'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
+
+function assignPanelRef(ref: Ref<HTMLDivElement>, node: HTMLDivElement | null): void {
+  if (typeof ref === 'function') {
+    ref(node)
+    return
+  }
+  if (ref) {
+    ref.current = node
+  }
+}
 
 type EditorPanelShellProps = {
   panelRef: Ref<HTMLDivElement>
@@ -95,14 +107,48 @@ export function EditorPanelShell({
   onRenameConfirm,
   markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
+  const [rootNode, setRootNode] = useState<HTMLDivElement | null>(null)
+  const { goToNextDiff, goToPreviousDiff } = useDiffNavigation()
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      assignPanelRef(panelRef, node)
+      setRootNode(node)
+    },
+    [panelRef]
+  )
+
+  useEffect(() => {
+    // Why: binary and no-text worktree files mount no Monaco diff editor, so the panel root carries F7/Shift+F7 instead.
+    if (!rootNode || !model.hasWorktreeDiffNavigation || model.isChangesMode) {
+      return
+    }
+    return installMonacoDiffChangeNavigationShortcut({
+      getContainerDomNode: () => rootNode,
+      navigate: (direction) => {
+        if (direction === 'next') {
+          goToNextDiff()
+        } else {
+          goToPreviousDiff()
+        }
+      }
+    })
+  }, [
+    goToNextDiff,
+    goToPreviousDiff,
+    model.hasWorktreeDiffNavigation,
+    model.isChangesMode,
+    rootNode
+  ])
+
   return (
-    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+    <div ref={setRootRef} className="flex flex-col flex-1 min-w-0 min-h-0">
       {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
         <EditorPanelHeader
           activeFile={activeFile}
           copiedPathVisible={copiedPathVisible}
           isSingleDiff={model.isSingleDiff}
           isDiffSurface={model.isDiffSurface}
+          hasWorktreeDiffNavigation={model.hasWorktreeDiffNavigation}
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
@@ -152,7 +198,7 @@ export function EditorPanelShell({
           customEditor={model.activeCustomEditor}
           mdViewMode={model.mdViewMode}
           inlineMarkdownRenderState={model.inlineMarkdownRenderState}
-          isChangesMode={model.isDiffSurface && !model.isSingleDiff}
+          isChangesMode={model.isChangesMode}
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={onContentChange}
