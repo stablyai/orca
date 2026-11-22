@@ -1,9 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { CodexAccountService } from '../../codex-accounts/service'
-import { registerRateLimitHandlers } from '../../ipc/rate-limits'
-import { rateLimitsApi } from '../../../preload/api/agent-usage/rate-limits-bridge'
 import type {
   ProviderRateLimits,
   RateLimitState
@@ -11,8 +8,7 @@ import type {
 import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
 import { RateLimitService } from './rate-limit-service'
 
-const { handlers, unavailable } = vi.hoisted(() => ({
-  handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
+const { unavailable } = vi.hoisted(() => ({
   unavailable:
     (provider: ProviderRateLimits['provider']) => async (): Promise<ProviderRateLimits> => ({
       provider,
@@ -24,22 +20,6 @@ const { handlers, unavailable } = vi.hoisted(() => ({
     })
 }))
 
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => {
-      handlers.set(channel, listener)
-    }
-  },
-  ipcRenderer: {
-    invoke: async (channel: string, ...args: unknown[]) => {
-      const listener = handlers.get(channel)
-      if (!listener) {
-        throw new Error(`No handler registered for ${channel}`)
-      }
-      return listener({}, ...args)
-    }
-  }
-}))
 vi.mock('../providers/claude/claude-active-usage-fetch', () => ({
   fetchActiveClaudeRateLimits: unavailable('claude')
 }))
@@ -80,7 +60,6 @@ vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async 
 vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
 
 afterEach(() => {
-  handlers.clear()
   vi.useRealTimers()
 })
 
@@ -113,15 +92,13 @@ it('publishes local usage without a window activation and limits repeated owner 
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach uses only the window methods above.
   service.attach(window as unknown as BrowserWindow)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the invoked handler does not use Codex account services.
-  registerRateLimitHandlers(service, {} as CodexAccountService)
 
   try {
     expect((await service.refresh()).gemini?.session?.usedPercent).toBe(10)
 
     usedPercent = 60
     vi.setSystemTime(start + 360_000)
-    await expect(rateLimitsApi.refreshOnOwnerReturn()).resolves.toBeUndefined()
+    await expect(service.refreshOnOwnerReturn()).resolves.toBeUndefined()
     expect((await service.getState()).gemini?.session?.usedPercent).toBe(60)
     await vi.waitFor(() => expect(published?.gemini?.session?.usedPercent).toBe(60))
 
@@ -129,28 +106,28 @@ it('publishes local usage without a window activation and limits repeated owner 
     // An unwatched return stamps the interval while leaving the stale reading eligible for refresh.
     focused = false
     vi.setSystemTime(start + 720_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     focused = true
     vi.setSystemTime(start + 780_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     expect((await service.getState()).gemini?.session?.usedPercent).toBe(60)
 
     vi.setSystemTime(start + 1_020_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     expect((await service.getState()).gemini?.session?.usedPercent).toBe(80)
 
     usedPercent = 90
     focused = false
     vi.setSystemTime(start + 1_680_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     focused = true
     vi.setSystemTime(start + 1_380_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     expect((await service.getState()).gemini?.session?.usedPercent).toBe(90)
 
     usedPercent = 95
     vi.setSystemTime(start + 1_680_000)
-    await rateLimitsApi.refreshOnOwnerReturn()
+    await service.refreshOnOwnerReturn()
     expect((await service.getState()).gemini?.session?.usedPercent).toBe(95)
   } finally {
     service.stop()
