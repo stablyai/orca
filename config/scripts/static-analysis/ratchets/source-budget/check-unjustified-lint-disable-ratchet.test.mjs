@@ -19,3 +19,15 @@ describe('countUnjustifiedDisables', () => {
     expect(countUnjustifiedDisables(source)).toBe(expected)
   })
 })
+
+describe('countUnjustifiedDisables script kind', () => {
+  const generic = 'const id = <T>(x: T) => x;\n// eslint-disable-next-line no-console\nf()'
+
+  it('reads <T>(x) as a generic in .ts, so the directive after it counts', () => {
+    expect(countUnjustifiedDisables(generic, 'src/a.ts')).toBe(1)
+  })
+
+  it('reads the same text as JSX in .tsx, which swallows the directive', () => {
+    expect(countUnjustifiedDisables(generic, 'src/a.tsx')).toBe(0)
+  })
+})

@@ -17,14 +17,8 @@ export function isScannedPath(rel) {
 }
 
 // Comment text only: a directive-looking string, template or regex literal is not one.
-function commentTexts(sourceText) {
-  const ast = ts.createSourceFile(
-    'file.tsx',
-    sourceText,
-    ts.ScriptTarget.Latest,
-    false,
-    ts.ScriptKind.TSX
-  )
+function commentTexts(sourceText, relPath) {
+  const ast = ts.createSourceFile(relPath, sourceText, ts.ScriptTarget.Latest, false)
   const seen = new Set()
   const texts = []
   const collect = (ranges) => {
@@ -47,12 +41,13 @@ function commentTexts(sourceText) {
 }
 
 // A directive is justified when ` -- <reason>` follows the rule list.
-export function countUnjustifiedDisables(sourceText) {
+// relPath picks the script kind from its extension (`<T>(x)` is a generic in .ts, JSX in .tsx); defaults to TSX.
+export function countUnjustifiedDisables(sourceText, relPath = 'file.tsx') {
   if (!DIRECTIVE_WORD.test(sourceText)) {
     return 0
   }
   let count = 0
-  for (const comment of commentTexts(sourceText)) {
+  for (const comment of commentTexts(sourceText, relPath)) {
     for (const [, rest] of comment.matchAll(DISABLE_DIRECTIVE)) {
       const reason = rest
         .split('*/')[0]
@@ -69,7 +64,7 @@ export function countUnjustifiedDisables(sourceText) {
 export function collectUnjustifiedDisableCounts(root = process.cwd()) {
   const counts = new Map()
   for (const [rel, source] of readTrackedSources(root, SCAN_PATHSPECS, isScannedPath)) {
-    const count = countUnjustifiedDisables(source)
+    const count = countUnjustifiedDisables(source, rel)
     if (count > 0) {
       counts.set(rel, count)
     }
