@@ -614,6 +614,15 @@
   --notice-surface: color-mix(in srgb, var(--foreground) 15%, var(--popover));
   --notice-border: color-mix(in srgb, var(--popover-foreground) 22%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  /* Why: the lifted surface now matches the palette's accent and sits above its muted fill, so hover
+     and muted panels step up from the surface (as app themes do) and muted text reads on them. */
+  --notice-accent: color-mix(in srgb, var(--foreground) 16%, var(--notice-surface));
+  --notice-muted: var(--notice-secondary);
+  --notice-muted-foreground: color-mix(
+    in srgb,
+    var(--popover-foreground) 72%,
+    var(--notice-surface)
+  );
   --notice-shadow:
     0 18px 48px -8px rgb(0 0 0 / 0.7), 0 4px 12px rgb(0 0 0 / 0.35),
     inset 0 1px 0 rgb(255 255 255 / 0.08);
