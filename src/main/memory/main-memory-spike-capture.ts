@@ -10,7 +10,7 @@ import { readWorkerThreadMemoryData } from '../worker-threads/worker-thread-diag
  */
 export const MAIN_MEMORY_SPIKE_RISE_MB = 300
 export const MAIN_MEMORY_SPIKE_WINDOW_MS = 2 * 60_000
-/** Interval timers fire a few ms late, so the sample from two ticks ago is just past the window. */
+/** Ticks fire late (more so on a busy main), so the sample from two ticks ago can be just past the window. */
 const SAMPLE_LATENESS_SLACK_MS = 30_000
 export const MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS = 60 * 60_000
 const MB = 2 ** 20
@@ -46,25 +46,33 @@ export function observeMainMemorySample(
   ) {
     recent.shift()
   }
-  let baselineMB = mainMB
+  let baseline: Sample = { atMs: nowMs, mb: mainMB }
   for (const sample of recent) {
-    baselineMB = Math.min(baselineMB, sample.mb)
+    if (sample.mb < baseline.mb) {
+      baseline = sample
+    }
   }
   recent.push({ atMs: nowMs, mb: mainMB })
   if (
-    mainMB - baselineMB < MAIN_MEMORY_SPIKE_RISE_MB ||
+    mainMB - baseline.mb < MAIN_MEMORY_SPIKE_RISE_MB ||
     nowMs - lastCaptureAtMs < MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS ||
     !hasActiveTraceSink()
   ) {
     return
   }
   lastCaptureAtMs = nowMs
-  void captureMainMemorySpike({ mainMB, baselineMB, processMetrics })
+  void captureMainMemorySpike({
+    mainMB,
+    baselineMB: baseline.mb,
+    baselineAgeMs: nowMs - baseline.atMs,
+    processMetrics
+  })
 }
 
 async function captureMainMemorySpike(trigger: {
   mainMB: number
   baselineMB: number
+  baselineAgeMs: number
   processMetrics: Details
 }): Promise<void> {
   const span = startSpan('memory.main-spike', {
@@ -72,7 +80,7 @@ async function captureMainMemorySpike(trigger: {
       mainWorkingSetMB: trigger.mainMB,
       baselineWorkingSetMB: trigger.baselineMB,
       riseMB: trigger.mainMB - trigger.baselineMB,
-      windowMs: MAIN_MEMORY_SPIKE_WINDOW_MS,
+      baselineAgeMs: trigger.baselineAgeMs,
       ...trigger.processMetrics
     }
   })

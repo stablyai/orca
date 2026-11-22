@@ -59,7 +59,11 @@ it('compares against the sample from two late-firing ticks ago', async () => {
   observeMainMemorySample(1300, 5 * MINUTE + 3, {})
   await settle()
   expect(records).toHaveLength(1)
-  expect(records[0].attributes).toMatchObject({ baselineWorkingSetMB: 1000, riseMB: 300 })
+  expect(records[0].attributes).toMatchObject({
+    baselineWorkingSetMB: 1000,
+    baselineAgeMs: 120_003,
+    riseMB: 300
+  })
 })
 
 it('writes one record for a spike and none for another within the hour', async () => {
