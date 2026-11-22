@@ -51,6 +51,8 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touching = useRef(false)
   const [titleHeight, setTitleHeight] = useState(FALLBACK_TITLE_HEIGHT)
+  // For a bar that takes a title, not an opacity: the shell's native header on a page.
+  const [barTitleShown, setBarTitleShown] = useState(false)
 
   useEffect(
     () => () => {
@@ -83,10 +85,11 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
         useNativeDriver: Platform.OS !== 'web',
         listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
           offsetRef.current = event.nativeEvent.contentOffset.y
+          setBarTitleShown(offsetRef.current > titleHeight / 2)
           scheduleSettle()
         }
       }),
-    [scheduleSettle, scrollY]
+    [scheduleSettle, scrollY, titleHeight]
   )
 
   // Touch events reach the list on native and in the page's WebView alike; drag callbacks don't on web.
@@ -121,6 +124,7 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
   const reset = useCallback(() => {
     offsetRef.current = 0
     scrollY.setValue(0)
+    setBarTitleShown(false)
   }, [scrollY])
 
   const barTitleOpacity = useMemo(
@@ -142,7 +146,15 @@ export function useCollapsingTitle(scrollTo: (offset: number) => void) {
     [scrollY, titleHeight]
   )
 
-  return { onScroll, touchHandlers, onTitleLayout, reset, barTitleOpacity, barDividerOpacity }
+  return {
+    onScroll,
+    touchHandlers,
+    onTitleLayout,
+    reset,
+    barTitleOpacity,
+    barDividerOpacity,
+    barTitleShown
+  }
 }
 
 const styles = themedStyleSheet(() => ({

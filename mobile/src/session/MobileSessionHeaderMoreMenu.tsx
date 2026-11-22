@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import {
   ALargeSmall,
   Columns2,
@@ -10,23 +9,16 @@ import {
 } from '../components/icons/app-icons'
 import { AgentSessionHistoryMenuIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
-import { NativeMenu } from '../components/menu/NativeMenu'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
-type Props = {
-  controller: MobileSessionController
-  /** A narrow sideways header also moves source control and New tab in here. */
+/** The ⋯ menu's sections, for the drawn menu and for the shell's native header alike. */
+export function useSessionMoreMenuGroups(
+  controller: MobileSessionController,
   actionsCollapsed: boolean
-  /** The ⋯ button; call `openMenu` from its press. */
-  children: (openMenu: () => void) => ReactNode
-}
-
-export function MobileSessionHeaderMoreMenu({ controller, actionsCollapsed, children }: Props) {
-  useMobileColorScheme()
+): (readonly ActionSheetAction[])[] {
   const t = useMobileTranslation()
   const {
     isFolderWorkspaceRoute,
@@ -162,12 +154,5 @@ export function MobileSessionHeaderMoreMenu({ controller, actionsCollapsed, chil
         ]
       : [])
   ]
-  return (
-    <NativeMenu
-      groups={[panels, view, tabs]}
-      onOpenChange={setShowHeaderMoreActions}
-    >
-      {children}
-    </NativeMenu>
-  )
+  return [panels, view, tabs]
 }

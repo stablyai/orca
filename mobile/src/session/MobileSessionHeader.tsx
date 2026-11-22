@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
+  GitBranch,
   ListChecks,
   MoreHorizontal,
   PanelLeftOpen
@@ -11,7 +12,8 @@ import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
+import { useSessionMoreMenuGroups } from './MobileSessionHeaderMoreMenu'
+import { NativeMenu } from '../components/menu/NativeMenu'
 import { MobileBotItemsStrip } from '../bots/items/MobileBotItemsStrip'
 import { MobileSourceControlButton } from './MobileSourceControlButton'
 import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
@@ -26,6 +28,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { usePageHeaderClaim } from '../platform/page-header/page-header-claim'
 
 export function MobileSessionHeader({
   controller,
@@ -91,6 +94,54 @@ export function MobileSessionHeader({
       actionsCollapsed={actionsCollapsed}
     />
   ) : null
+  const title = routeBot
+    ? routeBot.bot.name
+    : worktreeName || t('session.header.terminalTitle', 'Terminal')
+  const leave = () => {
+    if (!details.closeFirst()) {
+      requestLeaveSession()
+    }
+  }
+  const itemsLabel =
+    itemsInBar && routeBot.needsYou > 0
+      ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
+          count: routeBot.needsYou
+        })
+      : t('session.header.items', 'Items')
+  const moreLabel = t('session.header.moreActions', 'More session actions')
+  const moreGroups = useSessionMoreMenuGroups(controller, actionsCollapsed)
+  // Sideways or beside the sidebar the tabs share the bar, so it stays the page's own.
+  const native = usePageHeaderClaim(
+    tabsInTopBar || layout.isWideLayout
+      ? null
+      : {
+          title,
+          onBack: leave,
+          actions: [
+            ...(itemsInBar
+              ? [
+                  {
+                    id: 'items',
+                    icon: ListChecks,
+                    label: itemsLabel,
+                    onPress: () => openBotPanel({ tab: 'items' })
+                  }
+                ]
+              : []),
+            ...(sourceControlInBar
+              ? [
+                  {
+                    id: 'sourceControl',
+                    icon: GitBranch,
+                    label: t('session.header.openSourceControl', 'Open source control'),
+                    onPress: () => handlePanelTap('sourceControl')
+                  }
+                ]
+              : []),
+            { id: 'more', icon: MoreHorizontal, label: moreLabel, menu: moreGroups }
+          ]
+        }
+  )
   const leading = (
     <>
       {revealSidebar ? (
@@ -104,22 +155,14 @@ export function MobileSessionHeader({
         accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
         icon={ChevronLeft}
         ref={details.backRef}
-        onPress={() => {
-          if (!details.closeFirst()) {
-            requestLeaveSession()
-          }
-        }}
+        onPress={leave}
       />
     </>
   )
   const titleBlock =
     !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
       <MobileSessionTitleBlock
-        title={
-          routeBot
-            ? routeBot.bot.name
-            : worktreeName || t('session.header.terminalTitle', 'Terminal')
-        }
+        title={title}
         leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
         connState={presentedConnState}
         details={details}
@@ -138,13 +181,7 @@ export function MobileSessionHeader({
       {itemsInBar ? (
         <NavBarButton
           active={botPanel !== null}
-          accessibilityLabel={
-            routeBot.needsYou > 0
-              ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
-                  count: routeBot.needsYou
-                })
-              : t('session.header.items', 'Items')
-          }
+          accessibilityLabel={itemsLabel}
           icon={ListChecks}
           badge={{ count: routeBot.needsYou, color: colors.agentQuestion }}
           onPress={() => openBotPanel({ tab: 'items' })}
@@ -158,18 +195,18 @@ export function MobileSessionHeader({
           onPress={() => handlePanelTap('sourceControl')}
         />
       ) : null}
-      <MobileSessionHeaderMoreMenu controller={controller} actionsCollapsed={actionsCollapsed}>
+      <NativeMenu groups={moreGroups} onOpenChange={controller.setShowHeaderMoreActions}>
         {(openMenu) => (
           <NavBarButton
             active={
               activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')
             }
-            accessibilityLabel={t('session.header.moreActions', 'More session actions')}
+            accessibilityLabel={moreLabel}
             icon={MoreHorizontal}
             onPress={openMenu}
           />
         )}
-      </MobileSessionHeaderMoreMenu>
+      </NativeMenu>
     </>
   )
   return (
@@ -204,6 +241,11 @@ export function MobileSessionHeader({
               {tabStrip}
               <View style={barStyles.group}>{trailing}</View>
             </>
+          ) : native ? (
+            // The shell's bar holds the title; the status line with Reconnect shows here while it matters.
+            showConnectionRetry || connectionEscalated ? (
+              <View style={barStyles.statusRow}>{titleBlock}</View>
+            ) : null
           ) : (
             <NavBar
               leading={leading}
@@ -232,6 +274,10 @@ const barStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginHorizontal: spacing.xs
+  },
+  statusRow: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs
   },
   // The session chrome already draws the background and the line under the tabs.
   inChrome: {

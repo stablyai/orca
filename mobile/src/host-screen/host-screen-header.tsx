@@ -12,7 +12,7 @@ import {
 } from '../components/icons/app-icons'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
-import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
+import { NavBar, NavBarRefreshLine, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { NativeMenu } from '../components/menu/NativeMenu'
@@ -31,6 +31,7 @@ import {
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { usePageHeaderClaim } from '../platform/page-header/page-header-claim'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
@@ -162,42 +163,64 @@ export function HostScreenHeader({
     hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`)),
     hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }))
   ]
+  const moreActionsLabel = t('hostScreen.hostScreenHeader.moreActions', 'More actions')
+  // The status line stays under the in-content title; the sidebar beside a session keeps its own bar.
+  const native = usePageHeaderClaim(
+    embedded
+      ? null
+      : {
+          title: hostDisplay.title,
+          titleVisible: collapsingTitle?.barTitleShown ?? true,
+          onBack: actions.leaveHost,
+          actions: [
+            {
+              id: 'more',
+              icon: MoreHorizontal,
+              label: moreActionsLabel,
+              menu: [navigationGroup, hostGroup]
+            }
+          ]
+        }
+  )
   return (
     <>
-      <NavBar
-        leading={
-          <>
-            <NavBarButton
-              icon={ChevronLeft}
-              accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
-              onPress={actions.leaveHost}
-            />
-            {embedded && onHideSidebar ? (
+      {native && showRefreshLine ? <NavBarRefreshLine /> : null}
+      {native ? null : (
+        <NavBar
+          leading={
+            <>
               <NavBarButton
-                icon={PanelLeftClose}
-                accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
-                onPress={onHideSidebar}
+                icon={ChevronLeft}
+                accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
+                onPress={actions.leaveHost}
               />
-            ) : null}
-          </>
-        }
-        title={hostDisplay.title}
-        subtitle={<HostConnectionStatus controller={controller} />}
-        refreshing={showRefreshLine}
-        titleOpacity={collapsingTitle?.barTitleOpacity}
-        dividerOpacity={collapsingTitle?.barDividerOpacity}
-        trailing={
-          <NativeMenu groups={[navigationGroup, hostGroup]}>
-            {(openMenu) => (
-              <NavBarButton
-                icon={MoreHorizontal}
-                accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-                onPress={openMenu}
-              />
-            )}
-          </NativeMenu>
-        }
-      />
+              {embedded && onHideSidebar ? (
+                <NavBarButton
+                  icon={PanelLeftClose}
+                  accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
+                  onPress={onHideSidebar}
+                />
+              ) : null}
+            </>
+          }
+          title={hostDisplay.title}
+          subtitle={<HostConnectionStatus controller={controller} />}
+          refreshing={showRefreshLine}
+          titleOpacity={collapsingTitle?.barTitleOpacity}
+          dividerOpacity={collapsingTitle?.barDividerOpacity}
+          trailing={
+            <NativeMenu groups={[navigationGroup, hostGroup]}>
+              {(openMenu) => (
+                <NavBarButton
+                  icon={MoreHorizontal}
+                  accessibilityLabel={moreActionsLabel}
+                  onPress={openMenu}
+                />
+              )}
+            </NativeMenu>
+          }
+        />
+      )}
       {listsBots ? (
         <HostSharedLinksSheet
           controller={controller}

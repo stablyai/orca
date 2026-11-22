@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft, RefreshCw, User } from '../components/icons/app-icons'
+import { User } from '../components/icons/app-icons'
 import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
@@ -39,8 +39,7 @@ import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
 import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { MobileAccountsHeader } from './MobileAccountsHeader'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
@@ -320,25 +319,13 @@ export function MobileAccountsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={() => router.back()}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
-        title={t('accounts.screen.title', 'Accounts')}
-        subtitle={hostName || undefined}
-        refreshing={showRefreshLine}
-        trailing={
-          <NavBarButton
-            icon={refreshing ? RefreshingIcon : RefreshCw}
-            onPress={() => void refresh()}
-            disabled={!client || refreshing || connState !== 'connected'}
-            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
-          />
-        }
+      <MobileAccountsHeader
+        hostName={hostName}
+        refreshing={refreshing}
+        showRefreshLine={showRefreshLine}
+        refreshDisabled={!client || refreshing || connState !== 'connected'}
+        onRefresh={() => void refresh()}
+        onBack={() => router.back()}
       />
 
       <ScrollView
@@ -402,8 +389,4 @@ export function MobileAccountsScreen() {
       />
     </SafeAreaView>
   )
-}
-
-function RefreshingIcon({ color }: { color?: string }) {
-  return <ActivityIndicator size="small" color={color} />
 }
