@@ -1,6 +1,7 @@
-// `orca bot create --offer`: a bot proposes a new bot, and Orca puts a card in its chat. Nothing is
-// created until the owner presses Create bot on it.
+// `orca bot create --offer`: a bot, or an agent in the owner's own chat, proposes a new bot, and Orca
+// puts a card in that chat. Nothing is created until the owner presses Create bot on it.
 import { randomUUID } from 'node:crypto'
+import { isBotAgent, type BotAgent } from '../../../../shared/bot-types'
 import { parseBotAvatar, randomMascotAvatar } from '../../../../shared/bot-avatar'
 import { botCreateOfferBody } from '../../../../shared/bots/bot-proposal'
 import { BotCreateOfferRequest } from '../../../../shared/rpc-contract/bots-params'
@@ -10,6 +11,17 @@ import { refuseBotGroupRoomCard } from '../../../bots/bot-group-session-access'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { defineMethod, InvalidArgumentError } from '../core'
 
+// Partial test hosts may omit deps, as botOfSession allows.
+type ChatLookup = {
+  deps?: { store: { getConversation: (id: string) => { provider: string } | null | undefined } }
+}
+
+/** The agent a chat runs on, when a bot can run on it too. */
+function chatAgentOf(host: ChatLookup, sessionId: string): BotAgent | undefined {
+  const provider = host.deps?.store.getConversation(sessionId)?.provider
+  return provider && isBotAgent(provider) ? provider : undefined
+}
+
 export const BOT_CREATE_OFFER_METHOD = defineMethod({
   name: 'bots.createOffer',
   permission: 'workspace',
@@ -17,10 +29,11 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
   handler: async ({ callerSessionId, ...proposal }, { runtime, pairedDeviceId }) => {
     runtime.bots.assertEnabled()
     // A session id names a chat only on its own host.
-    const bot = pairedDeviceId === undefined ? botOfSession(runtime.bots, callerSessionId) : null
-    if (!bot) {
-      throw new InvalidArgumentError("Run this from a bot's chat.")
+    if (pairedDeviceId !== undefined) {
+      throw new InvalidArgumentError('Run this from a chat in Orca.')
     }
+    // Null in the owner's own chat: the card still only proposes, and the owner creates the bot.
+    const bot = botOfSession(runtime.bots, callerSessionId)
     if (runtime.lookAround.botOfLook(callerSessionId)) {
       throw new InvalidArgumentError(LOOK_AROUND_REFUSAL)
     }
@@ -38,6 +51,7 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
     if (!host || !destination) {
       throw new InvalidArgumentError('Run this from your chat in Orca.')
     }
+    const chatAgent = bot ? undefined : chatAgentOf(host, callerSessionId)
     const mascot = parseBotAvatar(randomMascotAvatar(null))
     const offeredAt = Date.now()
     const offerId = randomUUID()
@@ -46,12 +60,12 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
       {
         body: botCreateOfferBody(
           {
-            botId: bot.id,
+            ...(bot ? { botId: bot.id } : chatAgent ? { agent: chatAgent } : {}),
             offerId,
             proposal: { ...proposal, ...(mascot?.kind === 'mascot' ? { mascot: mascot.id } : {}) },
             offeredAt
           },
-          bot.name
+          bot?.name ?? null
         ),
         messageId: `bot-create-offer:${offerId}`
       },

@@ -27,6 +27,16 @@ export function botOfferCreation<Store extends OfferStore, Origin>(
   /** The card's bot, made and recorded together, or the one it already made (null once deleted). */
   const accept = (input: BotOfferCreateInput, origin?: Origin) =>
     deps.queue(async (store): Promise<BotOfferCreated> => {
+      if (!input.fromOffer.botId) {
+        const made = store.getBots().find((bot) => bot.fromOfferId === input.fromOffer.offerId)
+        if (made) {
+          return { bot: made, existing: true }
+        }
+        const bot = await deps.makeBot(store, input, origin)
+        store.saveBot(bot)
+        await deps.saved(store)
+        return { bot, existing: false }
+      }
       const proposer = store.getBots().find((bot) => bot.id === input.fromOffer.botId)
       if (!proposer) {
         throw new Error('bot_not_found')
@@ -54,7 +64,9 @@ export function botOfferCreation<Store extends OfferStore, Origin>(
   /** Reopens a card whose bot was rolled back; an owner's later delete keeps the card answered. */
   const reopen = (fromOffer: FromOffer, botId: string) =>
     deps.queue(async (store) => {
-      const proposer = store.getBots().find((bot) => bot.id === fromOffer.botId)
+      const proposer = fromOffer.botId
+        ? store.getBots().find((bot) => bot.id === fromOffer.botId)
+        : undefined
       if (proposer) {
         store.saveBot({
           ...proposer,
@@ -72,7 +84,7 @@ export function botOfferCreation<Store extends OfferStore, Origin>(
     origin?: Origin,
     install?: (bot: Bot) => Promise<Bot>
   ): Promise<BotOfferCreated> => {
-    const key = `${input.fromOffer.botId}\n${input.fromOffer.offerId}`
+    const key = `${input.fromOffer.botId ?? ''}\n${input.fromOffer.offerId}`
     const pending = creating.get(key)
     if (pending) {
       return pending.then((made) => ({ ...made, existing: true }))

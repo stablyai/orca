@@ -7,7 +7,7 @@ import type {
 } from '../agent-session/journal/agent-session-journal-types'
 import type { BotCreateParams } from '../rpc-contract/bots-params'
 import { isBotMascotId, mascotAvatar } from '../bot-avatar'
-import { type Bot, type BotAgent, BotNameSchema } from '../bot-types'
+import { BOT_AGENTS, type Bot, type BotAgent, BotNameSchema } from '../bot-types'
 import {
   BOT_CONNECTOR_NAMES,
   type BotTemplate,
@@ -168,8 +168,10 @@ export function proposalSoul(name: string, seed: BotProposalSeed): string {
 export const BOT_CREATE_OFFER_PRESENTATION = 'bot-create-offer'
 
 export const BotCreateOfferSchema = z.object({
-  /** The bot that proposed it. */
-  botId: z.string().min(1),
+  /** The bot that proposed it; absent when an agent in the owner's own chat proposed it. */
+  botId: z.string().min(1).optional(),
+  /** Without a proposing bot: the chat's agent, which the new bot runs on. */
+  agent: z.enum(BOT_AGENTS).optional(),
   /** This card's own id: creating from it, directly or through Edit, records the new bot against it. */
   offerId: z.string().min(1),
   proposal: BotProposalSchema,
@@ -179,17 +181,17 @@ export const BotCreateOfferSchema = z.object({
 export type BotCreateOffer = z.infer<typeof BotCreateOfferSchema>
 
 /** The line a client that can't draw the card shows instead. */
-export function botCreateOfferText(offer: BotCreateOffer, botName: string): string {
+export function botCreateOfferText(offer: BotCreateOffer, botName: string | null): string {
   const { name, purpose, worktrees } = offer.proposal
   const takes = worktrees?.length
     ? ` It would take over ${worktrees.map((entry) => entry.name).join(', ')}.`
     : ''
-  return `${botName} suggests a new bot, ${name}: ${purpose}${takes} Create it from New bot in Orca.`
+  return `${botName ?? 'This chat'} suggests a new bot, ${name}: ${purpose}${takes} Create it from New bot in Orca.`
 }
 
 export function botCreateOfferBody(
   offer: BotCreateOffer,
-  botName: string
+  botName: string | null
 ): AgentJournalPlainStatusItem & { botCreateOffer: BotCreateOffer } {
   return {
     kind: 'status',
@@ -208,18 +210,22 @@ export function botCreateOfferOf(body: AgentJournalItemBody): BotCreateOffer | n
   return parsed.success ? parsed.data : null
 }
 
-/** Where the card stands: accepted (by its id, on the proposing bot's record, so a rename or an edited
- *  name never loses it), its name taken by a bot that is there now, or open. */
+/** Where the card stands: accepted (by its id, on the proposing bot's record or, without one, on the new
+ *  bot's, so a rename or an edited name never loses it), its name taken by a bot there now, or open. */
 export function botCreateOfferState(
   offer: Pick<BotCreateOffer, 'offerId' | 'proposal'>,
-  proposer: Pick<Bot, 'acceptedOffers'>,
-  bots: readonly Pick<Bot, 'id' | 'name'>[]
+  proposer: Pick<Bot, 'acceptedOffers'> | null,
+  bots: readonly Pick<Bot, 'id' | 'name' | 'fromOfferId'>[]
 ):
   | { kind: 'open' }
   | { kind: 'created'; botId: string }
   | { kind: 'deleted' }
   | { kind: 'nameTaken' } {
-  const accepted = proposer.acceptedOffers?.find((entry) => entry.offerId === offer.offerId)
+  const accepted = proposer
+    ? proposer.acceptedOffers?.find((entry) => entry.offerId === offer.offerId)
+    : bots
+        .filter((bot) => bot.fromOfferId === offer.offerId)
+        .map((bot) => ({ offerId: offer.offerId, botId: bot.id }))[0]
   if (accepted) {
     return bots.some((bot) => bot.id === accepted.botId)
       ? { kind: 'created', botId: accepted.botId }

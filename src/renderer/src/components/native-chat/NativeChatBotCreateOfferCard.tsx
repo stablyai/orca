@@ -14,6 +14,7 @@ import { BOT_MASCOT_URLS } from '../bots/bot-mascots'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NewBotDialog } from '../bots/NewBotDialog'
 import { isBotMascotId } from '../../../../shared/bot-avatar'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botCreateOfferState,
@@ -86,6 +87,9 @@ const PIECES: Record<keyof typeof COPY, (t: Translate, values?: BotCardCopyValue
   origin: (t, values) => t('components.native-chat.botCreateOffer.origin', COPY.origin, values),
   originTemplate: (t, values) =>
     t('components.native-chat.botCreateOffer.originTemplate', COPY.originTemplate, values),
+  originChat: (t) => t('components.native-chat.botCreateOffer.originChat', COPY.originChat),
+  originTemplateChat: (t, values) =>
+    t('components.native-chat.botCreateOffer.originTemplateChat', COPY.originTemplateChat, values),
   watches: (t) => t('components.native-chat.botCreateOffer.watches', COPY.watches),
   does: (t) => t('components.native-chat.botCreateOffer.does', COPY.does),
   reports: (t) => t('components.native-chat.botCreateOffer.reports', COPY.reports),
@@ -148,14 +152,15 @@ function OfferCard({
   messageId
 }: {
   offer: BotCreateOffer
-  proposer: Bot
+  /** Null when an agent in the owner's own chat proposed it: no Not now, and the bot is made here. */
+  proposer: Bot | null
   bots: readonly Bot[]
   messageId: string
 }): React.JSX.Element {
   const t = useTranslate()
   const say = sayWith(t)
   useTranslation()
-  const answering = useNativeChatOffer(proposer.id, messageId)
+  const answering = useNativeChatOffer(proposer?.id ?? '', messageId)
   const { proposal } = offer
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -167,18 +172,22 @@ function OfferCard({
   const toggle = useRef<HTMLButtonElement>(null)
   const state = botCreateOfferState(offer, proposer, bots)
   const created = state.kind === 'created' ? bots.find((bot) => bot.id === state.botId) : undefined
-  const fromOffer = { botId: proposer.id, offerId: offer.offerId }
+  const fromOffer = proposer
+    ? { botId: proposer.id, offerId: offer.offerId }
+    : { offerId: offer.offerId }
+  const hostId = proposer?.hostId ?? LOCAL_EXECUTION_HOST_ID
+  const agent = proposer?.agent ?? offer.agent ?? 'claude'
   const taken = useTakenOver(created, proposal.worktrees)
   const view = botCreateOfferView(offer, state, created, taken, say)
   const Chevron = open ? ChevronUp : ChevronDown
 
   const create = (): void => {
     setCreating(true)
-    // The new bot runs on the agent its proposer runs on, which the owner already uses.
+    // The new bot runs on the agent its proposer (or the chat) runs on, which the owner already uses.
     void createBot(
-      proposer.hostId,
-      proposalCreateParams(proposal, proposer.agent, {
-        templatePackages: botHostHas(proposer.hostId, BOTS_TEMPLATES_RUNTIME_CAPABILITY),
+      hostId,
+      proposalCreateParams(proposal, agent, {
+        templatePackages: botHostHas(hostId, BOTS_TEMPLATES_RUNTIME_CAPABILITY),
         fromOffer
       })
     )
@@ -228,7 +237,7 @@ function OfferCard({
             </NativeChatCardActions>
           ) : view.open === null ? undefined : (
             <NativeChatOfferActions
-              offer={answering}
+              offer={proposer ? answering : { dismissed: true, dismiss: () => {} }}
               start={
                 view.open.actions === 'rename' ? undefined : (
                   <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
@@ -281,8 +290,8 @@ function OfferCard({
           onOpenChange={setEditing}
           proposal={proposal}
           fromOffer={fromOffer}
-          offerHostId={proposer.hostId}
-          origin={botCreateOfferOrigin(proposal, proposer.name, say)}
+          offerHostId={hostId}
+          origin={botCreateOfferOrigin(proposal, proposer?.name ?? null, say)}
         />
       ) : null}
     </div>
@@ -300,6 +309,9 @@ export function NativeChatBotCreateOfferCard({
   fallback: string
 }): React.JSX.Element {
   const bots = useBots()
+  if (!offer.botId) {
+    return <OfferCard offer={offer} proposer={null} bots={bots} messageId={messageId} />
+  }
   const proposer = bots.find((entry) => entry.id === offer.botId)
   if (!proposer) {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>

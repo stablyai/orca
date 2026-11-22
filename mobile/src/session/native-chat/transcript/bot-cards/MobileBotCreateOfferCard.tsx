@@ -94,13 +94,13 @@ export function MobileBotCreateOfferCard({
   const say = mobileBotCreateOfferSay(t)
   const host = useMobileBotCardHost()
   const client = host?.client ?? null
-  const proposer = useHostBotById(offer.botId)
+  const proposer = useHostBotById(offer.botId ?? '')
   const bots = useHostBotsEntry(host?.hostKey ?? null)?.bots ?? NO_BOTS
   const takesTemplates = useRouteCapability(BOTS_TEMPLATES_RUNTIME_CAPABILITY)
   const [open, setOpen] = useMobileNativeChatDisclosure(`bot-create-card:${cardId}`, false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const answer = useMobileBotOfferAnswer(offer.botId, cardId)
+  const answer = useMobileBotOfferAnswer(offer.botId ?? '', cardId)
   const state = proposer ? botCreateOfferState(offer, proposer, bots) : null
   const created = state?.kind === 'created' ? bots.find((bot) => bot.id === state.botId) : undefined
   const taken = useTakenOver(client, created?.folderWorkspaceId, offer.proposal.worktrees)

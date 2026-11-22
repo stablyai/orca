@@ -187,3 +187,25 @@ export const notNow = defineFixture({
   setup: stub([{ ...atlas, offerAnswers: [{ cardId: 'offer-0', dismissed: true }] }]),
   render: () => <Cards offers={[cutter]} />
 })
+
+// Proposed by an agent in the owner's own chat, before they have any bot: no Not now, no proposer.
+export const ownChat = defineFixture({
+  width: 640,
+  setup: stub([]),
+  render: () => (
+    <Cards
+      offers={[
+        {
+          offerId: 'offer-own-chat',
+          offeredAt: 1000,
+          agent: 'claude',
+          proposal: {
+            name: 'Chief',
+            purpose: 'The only bot its owner talks to: keeps one queue and routes work.',
+            mascot: 'H1'
+          }
+        }
+      ]}
+    />
+  )
+})

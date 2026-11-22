@@ -26,7 +26,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['worktree'],
     notes: [
       ...BOT_NOTES,
-      "Run it from a bot's chat when your owner asks for a new bot, or work fits no bot `orca bot list` shows. Nothing is created until they press Create bot (or Edit it first); a Not now comes back as a message.",
+      "Run it from a chat in Orca (a bot's, or your owner's own when they have no bot yet) when your owner asks for a new bot, or work fits no bot `orca bot list` shows. Nothing is created until they press Create bot (or Edit it first); in a bot's chat a Not now comes back as a message.",
       '--purpose becomes the first line of its SOUL.md, written before its first turn; it starts by reading and reporting only. --template takes a built-in template id (pr-review, release, support…; a wrong id lists them all) and fills --name, --purpose, --watches, --does and --reports when you leave them out.',
       "--worktree takes id:<id> or name:<workspace name>, as `orca worktree ps` shows them; the new bot's first turn takes each over. Repeat it for several."
     ]

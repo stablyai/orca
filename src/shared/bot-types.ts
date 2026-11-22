@@ -217,6 +217,9 @@ export const BotSchema = z.object({
     .array(z.object({ offerId: z.string().min(1), botId: z.string().min(1) }))
     .optional()
     .catch(undefined),
+  /** The card it was created from when no bot proposed it (an agent in the owner's own chat did), so
+   *  that card reads Created and can't create a second one. Older hosts drop it. */
+  fromOfferId: z.string().min(1).optional().catch(undefined),
   /** What its owner answered on its offer cards, by card. */
   offerAnswers: z.array(BotOfferAnswerSchema).optional().catch(undefined),
   /** Workspaces on a paired computer its owner handed it: their store holds the link, so Activity

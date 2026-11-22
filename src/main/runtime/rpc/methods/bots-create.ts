@@ -29,7 +29,7 @@ export const BOT_CREATE_METHOD = defineMethod({
     if (fromShare) {
       bot = await createBotFromShare(botShareCreateDeps(runtime), { ...params, fromShare })
     } else if (fromOffer) {
-      if (!runtime.bots.list().some((entry) => entry.id === fromOffer.botId)) {
+      if (fromOffer.botId && !runtime.bots.list().some((entry) => entry.id === fromOffer.botId)) {
         throw new InvalidArgumentError('The bot that proposed this bot is gone.')
       }
       // A template offer is still made once per card, its package installed in that same step.

@@ -20,12 +20,11 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
   })
 }))
 
-function offerDispatcher() {
-  const scout = makeTestBot({ id: 'b1', name: 'Scout' })
+function offerDispatcher(bots: Bot[] = [makeTestBot({ id: 'b1', name: 'Scout' })]) {
   cards.length = 0
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    bots: { assertEnabled: () => {}, list: () => [scout] },
+    bots: { assertEnabled: () => {}, list: () => bots },
     lookAround: { botOfLook: () => null, botOfTidyUp: () => null }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, runtime.lookAround and the runtime id, which the stub provides.
@@ -62,5 +61,21 @@ describe('orca bot create --offer', () => {
       result: { offered: false }
     })
     expect(cards).toEqual([])
+  })
+
+  it("puts the card in the owner's own chat when no bot runs there", async () => {
+    const dispatcher = offerDispatcher([])
+    expect(await dispatcher.dispatch(offer('owner-chat'))).toMatchObject({
+      ok: true,
+      result: { offered: true }
+    })
+    expect(cards).toEqual([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          text: expect.stringMatching(/^This chat suggests a new bot, Triage:/),
+          botCreateOffer: expect.not.objectContaining({ botId: expect.anything() })
+        })
+      })
+    ])
   })
 })

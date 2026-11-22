@@ -74,7 +74,9 @@ export const BotCreate = z.object({
   /** What the new bot is for, from a template or a proposal: seeded into its SOUL.md before its first turn. */
   seed: BotProposalSeedSchema.optional(),
   /** The bot-create card the owner accepted: the proposing bot and that card's id. */
-  fromOffer: z.object({ botId: z.string().min(1), offerId: z.string().min(1) }).optional(),
+  fromOffer: z
+    .object({ botId: z.string().min(1).optional(), offerId: z.string().min(1) })
+    .optional(),
   /** A built-in template the owner reviewed: the host applies its own catalog's package, keeping only the
    *  `skills` the owner left ticked. An id the host doesn't have makes the bot from `seed` alone. */
   fromTemplate: z

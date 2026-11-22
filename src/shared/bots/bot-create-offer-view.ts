@@ -31,6 +31,8 @@ export const BOT_CREATE_OFFER_COPY = {
   open: 'Open',
   origin: 'Proposed by {{bot}}',
   originTemplate: 'From {{template}}, proposed by {{bot}}',
+  originChat: 'Proposed in this chat',
+  originTemplateChat: 'From {{template}}, proposed in this chat',
   watches: 'Watches',
   does: 'Does',
   reports: 'Reports',
@@ -142,10 +144,14 @@ export function botCreateOfferView(
 /** Who proposed the bot, on its Edit sheet. */
 export function botCreateOfferOrigin(
   proposal: BotProposal,
-  proposerName: string,
+  /** Null when an agent in the owner's own chat proposed it. */
+  proposerName: string | null,
   say: BotCreateOfferSay
 ): string {
   const template = botTemplate(proposal.templateId)
+  if (proposerName === null) {
+    return template ? say('originTemplateChat', { template: template.name }) : say('originChat')
+  }
   return template
     ? say('originTemplate', { template: template.name, bot: proposerName })
     : say('origin', { bot: proposerName })

@@ -34,6 +34,7 @@ export function newBotRecord(
     chatSessionId: null,
     firstRun: true,
     ...(input.importFrom ? { importedFrom: importedFrom(input.importFrom) } : {}),
+    ...(input.fromOffer && !input.fromOffer.botId ? { fromOfferId: input.fromOffer.offerId } : {}),
     linear: null,
     github: null,
     createdAt: now,

@@ -63,7 +63,7 @@ async function worktreesOf(client: RuntimeClient, selectors: string[]): Promise<
 async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
   const callerSessionId = readInjectedAgentSessionId()
   if (!callerSessionId) {
-    throw new RuntimeClientError('invalid_argument', "Run this from a bot's chat.")
+    throw new RuntimeClientError('invalid_argument', 'Run this from a chat in Orca.')
   }
   const templateId = getOptionalStringFlag(flags, 'template')
   const template = templateId === undefined ? null : botTemplate(templateId)

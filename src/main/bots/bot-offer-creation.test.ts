@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
-import { botOfferCreation } from './bot-offer-creation'
+import { botOfferCreation, type BotOfferCreateInput } from './bot-offer-creation'
+import { newBotRecord } from './bot-new-record'
 
 /** The bots queue over an in-memory store, as the controller runs it. */
-function offerHost() {
+function offerHost(
+  makeBot: (input: BotOfferCreateInput, n: number) => Bot = (input, n) =>
+    makeTestBot({ id: `made-${n}`, name: input.name })
+) {
   const saved = new Map<string, Bot>([['atlas', makeTestBot({ id: 'atlas', name: 'Atlas' })]])
   const store = {
     getBots: () => [...saved.values()],
@@ -18,7 +22,7 @@ function offerHost() {
       tail = run.catch(() => undefined)
       return run
     },
-    makeBot: async (_store, input) => makeTestBot({ id: `made-${++made}`, name: input.name }),
+    makeBot: async (_store, input) => makeBot(input, ++made),
     saved: async () => {}
   })
   return { create, saved, store }
@@ -59,5 +63,20 @@ describe('bot offer creation', () => {
     expect(first).toEqual({ bot: expect.objectContaining({ updatedAt: -1 }), existing: false })
     expect(second).toEqual({ bot: first.bot, existing: true })
     expect(store.getBots().map((bot) => bot.name)).toEqual(['Atlas', 'Release'])
+  })
+
+  it("makes one bot per card from the owner's own chat, also on a later Create", async () => {
+    const { create, store } = offerHost((input, n) => ({
+      ...newBotRecord(input, 0),
+      id: `made-${n}`,
+      folder: input.name,
+      folderWorkspaceId: ''
+    }))
+    const ownChat = { offerId: 'offer-2' }
+    const first = await create({ name: 'Scout', fromOffer: ownChat })
+    const again = await create({ name: 'Scout', fromOffer: ownChat })
+    expect(first).toEqual({ bot: expect.objectContaining({ id: 'made-1' }), existing: false })
+    expect(again).toEqual({ bot: first.bot, existing: true })
+    expect(store.getBots().map((bot) => bot.name)).toEqual(['Atlas', 'Scout'])
   })
 })

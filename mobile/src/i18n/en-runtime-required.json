@@ -259,6 +259,8 @@
         "open": "Open",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
+        "originChat": "Proposed in this chat",
+        "originTemplateChat": "From {{template}}, proposed in this chat",
         "rename": "Rename",
         "reports": "Reports",
         "takesOver": "Takes over",

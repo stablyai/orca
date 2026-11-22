@@ -57,7 +57,8 @@ const legacyHandoffOffer = z.object({
 })
 
 export const storedBotCreateOffer = z.object({
-  botId: z.string(),
+  botId: text,
+  agent: text,
   offerId: z.string(),
   proposal: z.object({
     name: z.string(),

@@ -22236,6 +22236,8 @@
         "create": "Create bot",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "origin": "Proposed by {{bot}}",
+        "originChat": "Proposed in this chat",
+        "originTemplateChat": "From {{template}}, proposed in this chat",
         "createdAskedOne": "Created · asked to take over 1 workspace",
         "createdAskedMany": "Created · asked to take over {{count}} workspaces",
         "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
