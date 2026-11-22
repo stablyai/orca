@@ -98,7 +98,12 @@ export function PairedServerAskCardView({
   const local = bots.find((bot) =>
     isSameBot(bot, { hostId: LOCAL_EXECUTION_HOST_ID, id: card.botId })
   )
-  const server = useBotHostLabels([serverHost]).get(serverHost) || card.from.sender?.computer || ''
+  // This computer's own name for the server: what it reports about itself could name another.
+  const label = useBotHostLabels([serverHost]).get(serverHost)
+  const server =
+    card.serverName ||
+    label ||
+    t('components.native-chat.pairedServerAsk.thisServer', 'this server')
   const from = pairedAskSenderName(card)
   const to = local?.name ?? card.botId
   const pill = (label: string, avatar: React.ReactNode) => (

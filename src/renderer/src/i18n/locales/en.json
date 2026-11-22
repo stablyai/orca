@@ -22627,6 +22627,7 @@
         "always": "Always allow {{server}}",
         "deny": "Deny",
         "once": "Allow once",
+        "thisServer": "this server",
         "title": "{{from}} wants to message {{to}} on this computer",
         "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
       },

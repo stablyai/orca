@@ -9,7 +9,11 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { botClientMentionToken, botMentionToken } from '../../../../shared/bots/bot-mention-context'
+import {
+  botClientMentionToken,
+  botMentionToken,
+  botMentionTokens
+} from '../../../../shared/bots/bot-mention-context'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -48,7 +52,8 @@ export function useBotChatComposerRoom(
   hostId: ExecutionHostId | null,
   /** Where the chat's host reads chat picks, its bot's own chats list under it. */
   selfChats = false,
-  /** The chat's session: picking an agent here in a paired server's chat introduces it to that chat. */
+  /** The chat's session: sending a message that names an agent here in a paired server's chat
+   *  introduces it to that chat. */
   sessionId: string | null = null
 ): NativeChatBotChatRoom | undefined {
   const t = useTranslate()
@@ -122,10 +127,22 @@ export function useBotChatComposerRoom(
         }
         const server = hostId ? botMentionServer(hostId) : null
         if (clientInstallation && server && sessionId && isOnThisComputer(bot)) {
-          introduceToServerChat(server, sessionId, bot.id)
           return botClientMentionToken(bot, clientInstallation)
         }
         return botMentionToken(bot, undefined, botMentionServer(bot.hostId) ?? undefined)
+      },
+      // Sent, not picked: a draft deleted unsent introduces no one.
+      sent: (text: string) => {
+        const server = hostId ? botMentionServer(hostId) : null
+        if (!clientInstallation || !server || !sessionId) {
+          return
+        }
+        for (const mention of botMentionTokens(text)) {
+          const bot = listed.find((entry) => entry.id === mention.id && isOnThisComputer(entry))
+          if (bot && mention.client === clientInstallation) {
+            introduceToServerChat(server, sessionId, bot.id)
+          }
+        }
       },
       placeholder: t(
         'bots.chat.mentionPlaceholder',
@@ -138,8 +155,8 @@ export function useBotChatComposerRoom(
 const isOnPairedServer = (bot: Bot): boolean => botMentionServer(bot.hostId) !== null
 const isOnThisComputer = (bot: Bot): boolean => bot.hostId === LOCAL_EXECUTION_HOST_ID
 
-/** Picking an agent here in a paired server's chat lets that chat's agents ask it, each ask still
- *  waiting on a person's answer; recorded on this computer only. */
+/** Sending a message that names an agent here in a paired server's chat lets that chat's agents ask
+ *  it, each ask still waiting on a person's answer; recorded on this computer only. */
 function introduceToServerChat(environmentId: string, sessionId: string, botId: string): void {
   callRuntimeRpc(ownBotHost().target, 'pairedServerAsks.introduce', {
     environmentId,

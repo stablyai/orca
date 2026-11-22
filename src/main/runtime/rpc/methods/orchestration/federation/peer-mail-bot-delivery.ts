@@ -17,7 +17,7 @@ export async function deliverPeerMailToBot(
   senderSnapshot: string | undefined,
   /** Mail a server this Orca dials queued for it: its conversation names that server, and
    *  `alsoOnAdmitted` commits with the request's admission. */
-  pulled?: { environmentId: string; alsoOnAdmitted: () => void }
+  pulled?: { environmentId: string; serverName: string; alsoOnAdmitted: () => void }
 ): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
   // The label is no party here, so the request reads as the owner's own.
@@ -82,6 +82,7 @@ export async function deliverPeerMailToBot(
         routing: { run: undefined },
         messageId: params.messageId,
         senderSnapshot,
+        ...(pulled ? { fromPairedServer: pulled.serverName } : {}),
         // Its reply and any notice go back over this conversation, linked before the bot is woken.
         onAdmitted: link
       }

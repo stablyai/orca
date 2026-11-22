@@ -21,12 +21,14 @@ export const PairedServerAllowancesParams = z.object({ botId: ID })
 
 export const PairedServerAllowParams = z.object({ botId: ID, environmentId: ID })
 
-export const PairedServerDisallowParams = z.object({ botId: ID, serverInstallationId: ID })
+export const PairedServerDisallowParams = z.object({ botId: ID, serverKey: ID })
 
 /** A waiting card: an agent on a paired server asked an agent here, and a person answers it. */
 export const PairedServerAskCard = z.object({
   messageId: z.string(),
   environmentId: z.string(),
+  /** The server's name in this computer's own catalog; absent from older hosts. */
+  serverName: z.string().nullish(),
   botId: z.string(),
   /** The agent's name and Home chat, where a phone shows the card; absent from older hosts. */
   botName: z.string().nullish(),

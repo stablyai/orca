@@ -6,6 +6,7 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { isPersonCaller } from '../orchestration/access/worker-approval-access'
 import { pairedServerAsksFor } from '../../../orchestration/federation/paired-server-asks/paired-server-asks-pull'
 import { decidePairedServerAsk } from '../../../orchestration/federation/paired-server-asks/paired-server-ask-decisions'
+import { safeJson } from '../../../orchestration/federation/paired-server-asks/paired-server-ask-import'
 import {
   allowServer,
   listPairedServerAsks,
@@ -33,8 +34,8 @@ function requirePerson(ctx: RpcContext, what: string): void {
   }
 }
 
-/** The server's installation id, which these choices are kept by; refused while it can't be read. */
-async function serverInstallationId(ctx: RpcContext, environmentId: string): Promise<string> {
+/** The server's key, which these choices are kept by; refused while it can't be read. */
+async function serverKey(ctx: RpcContext, environmentId: string): Promise<string> {
   const asks = await pairedServerAsksFor(
     ctx.runtime,
     ctx.runtime.getOrchestrationDb(),
@@ -47,7 +48,27 @@ async function serverInstallationId(ctx: RpcContext, environmentId: string): Pro
       { effectsApplied: false }
     )
   }
-  return asks.serverInstallationId
+  return asks.serverKey
+}
+
+/** Each server's name as this computer's own catalog has it, never as the server reports it. */
+async function serverNames(
+  ctx: RpcContext,
+  environmentIds: readonly string[]
+): Promise<Map<string, string | null>> {
+  const names = await Promise.all(
+    [...new Set(environmentIds)].map(
+      async (environmentId) =>
+        [
+          environmentId,
+          await ctx.runtime
+            .resolveOrchestrationWorkerServer(environmentId)
+            .then((server) => server.name)
+            .catch(() => null)
+        ] as const
+    )
+  )
+  return new Map(names)
 }
 
 export const PAIRED_SERVER_ASKS_METHODS = [
@@ -58,7 +79,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     handler: async (params, ctx) => {
       requirePerson(ctx, 'introduce an agent here to a server chat')
       recordIntroduction(ctx.runtime.getOrchestrationDb(), {
-        serverInstallationId: await serverInstallationId(ctx, params.environmentId),
+        serverKey: await serverKey(ctx, params.environmentId),
         rootSession: params.rootSession,
         botId: params.botId,
         environmentId: params.environmentId
@@ -71,32 +92,38 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     name: 'pairedServerAsks.list',
     permission: 'workspace',
     params: PairedServerAskListParams,
-    handler: (params, ctx) => {
+    handler: async (params, ctx) => {
+      const rows = listPairedServerAsks(ctx.runtime.getOrchestrationDb(), { state: 'card' }).filter(
+        (row) => params.botId === undefined || row.bot_id === params.botId
+      )
+      const names = await serverNames(
+        ctx,
+        rows.map((row) => row.environment_id)
+      )
       // The agent's Home chat, where a phone shows its cards inline.
       const botOf = new Map(ctx.runtime.bots.list().map((bot) => [bot.id, bot]))
       return {
-        cards: listPairedServerAsks(ctx.runtime.getOrchestrationDb(), { state: 'card' })
-          .filter((row) => params.botId === undefined || row.bot_id === params.botId)
-          .flatMap((row) => {
-            const ask = ClientAskPayload.safeParse(JSON.parse(row.payload))
-            if (!ask.success) {
-              return []
+        cards: rows.flatMap((row) => {
+          const ask = ClientAskPayload.safeParse(safeJson(row.payload))
+          if (!ask.success) {
+            return []
+          }
+          return [
+            {
+              messageId: row.message_id,
+              environmentId: row.environment_id,
+              serverName: names.get(row.environment_id) ?? null,
+              botId: row.bot_id,
+              botName: botOf.get(row.bot_id)?.name ?? null,
+              botChatSessionId: botOf.get(row.bot_id)?.chatSessionId ?? null,
+              rootSession: row.root_session,
+              from: { label: ask.data.senderLabel, sender: ask.data.sender ?? null },
+              subject: ask.data.subject,
+              body: ask.data.body ?? '',
+              createdAt: row.created_at
             }
-            return [
-              {
-                messageId: row.message_id,
-                environmentId: row.environment_id,
-                botId: row.bot_id,
-                botName: botOf.get(row.bot_id)?.name ?? null,
-                botChatSessionId: botOf.get(row.bot_id)?.chatSessionId ?? null,
-                rootSession: row.root_session,
-                from: { label: ask.data.senderLabel, sender: ask.data.sender ?? null },
-                subject: ask.data.subject,
-                body: ask.data.body ?? '',
-                createdAt: row.created_at
-              }
-            ]
-          })
+          ]
+        })
       }
     }
   }),
@@ -124,7 +151,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     handler: async (params, ctx) => {
       requirePerson(ctx, 'let a paired server ask an agent here')
       allowServer(ctx.runtime.getOrchestrationDb(), {
-        serverInstallationId: await serverInstallationId(ctx, params.environmentId),
+        serverKey: await serverKey(ctx, params.environmentId),
         botId: params.botId,
         environmentId: params.environmentId
       })
@@ -138,11 +165,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     params: PairedServerDisallowParams,
     handler: (params, ctx) => {
       requirePerson(ctx, 'change which paired servers may ask an agent here')
-      removeServerAllowance(
-        ctx.runtime.getOrchestrationDb(),
-        params.serverInstallationId,
-        params.botId
-      )
+      removeServerAllowance(ctx.runtime.getOrchestrationDb(), params.serverKey, params.botId)
       return { removed: true }
     }
   })

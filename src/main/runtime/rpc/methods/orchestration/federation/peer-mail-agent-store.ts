@@ -21,6 +21,8 @@ export async function storePeerMailForAgent<R>(
     /** The server this Orca dials that opened the conversation, for mail it pulled. */
     environmentId?: string
     senderSnapshot: string | undefined
+    /** Whether the resolved recipient may take it; otherwise it is dropped with a warning. */
+    admits?: (to: string) => boolean
   },
   landedAgain: () => R | null
 ): Promise<R | null> {
@@ -44,6 +46,12 @@ export async function storePeerMailForAgent<R>(
       `${recipient.message} Nothing was delivered.`,
       NOTHING_DELIVERED
     )
+  }
+  if (params.admits && !params.admits(recipient.to) && !params.admits(to)) {
+    console.warn(
+      `[orchestration] Dropped ${params.messageId} for ${to}: it took no part in that conversation`
+    )
+    return null
   }
   const paneKey = runtime.getLiveTerminalPaneKey(recipient.to)
   if (paneKey && db.findActiveRemoteAttachmentForPane(paneKey)) {

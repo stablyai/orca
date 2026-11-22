@@ -101,9 +101,7 @@ export async function refreshPairedServerAsks(
   holder.asksStale = false
   holder.asksFrom = supportKey(pairing, knownServerAsksSupport(runtime, server))
   const same =
-    next &&
-    holder.asks?.pairing === next.pairing &&
-    holder.asks.serverInstallationId === next.serverInstallationId
+    next && holder.asks?.pairing === next.pairing && holder.asks.serverKey === next.serverKey
   if (same) {
     return
   }
@@ -136,12 +134,15 @@ async function beginPairedServerAsks(
   }
 }
 
+/** The loop stops taking asks under this session: the server hears it, so sends there fail as
+ *  offline at once rather than when its pull times out. */
 export function endPairedServerAsks(
   runtime: OrcaRuntimeService,
   asks: PairedServerAsks | null | undefined
 ): void {
   if (asks && activeOf(runtime).get(asks.environmentId) === asks) {
     activeOf(runtime).delete(asks.environmentId)
+    void leavePairedServer(runtime, asks)
   }
 }
 
@@ -168,17 +169,14 @@ export function afterPairedServerPull(
   asks: PairedServerAsks | null | undefined
 ): void {
   if (asks) {
-    void admitPairedServerAsks(runtime, asks.environmentId, asks.pairing)
+    void admitPairedServerAsks(runtime, asks.environmentId)
     void flushPairedServerReturns(runtime, asks)
   }
 }
 
-/** An approved card is admitted now by the loop that knows the server's pairing. */
+/** An approved card is admitted now, connected or not. */
 export function admitPairedServerAsksNow(runtime: OrcaRuntimeService, environmentId: string): void {
-  const asks = activeOf(runtime).get(environmentId)
-  if (asks) {
-    void admitPairedServerAsks(runtime, environmentId, asks.pairing)
-  }
+  void admitPairedServerAsks(runtime, environmentId)
 }
 
 /** At startup, and when a pairing is verified: a capable server this computer hasn't announced
@@ -214,6 +212,8 @@ export function watchPairedServers(
   transport: OrchestrationEnvironmentTransport,
   pullOnce: (environmentId: string) => void
 ): () => void {
+  // Approved before a restart: admitted now, not at the server's next answer.
+  void admitPairedServerAsks(runtime)
   void announcePairedServers(runtime, transport, pullOnce)
   return (
     transport.onEnvironmentVerified?.(

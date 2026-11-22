@@ -27,7 +27,7 @@ import { botMentionServer } from '../bot-mention-server'
 import { useBotHostLabels } from '../use-bot-host-label'
 
 const Allowances = z.object({
-  servers: z.array(z.object({ serverInstallationId: z.string(), environmentId: z.string() }))
+  servers: z.array(z.object({ serverKey: z.string(), environmentId: z.string() }))
 })
 type Allowance = z.infer<typeof Allowances>['servers'][number]
 
@@ -179,7 +179,7 @@ export function BotPairedServersWhoCanAsk({ bot }: { bot: Bot }): React.JSX.Elem
         <ul className="rounded-[10px] bg-foreground/[0.035] p-1">
           {servers.map((server) => (
             <li
-              key={server.serverInstallationId}
+              key={server.serverKey}
               className="group flex min-h-8 items-center gap-2 rounded-md px-2 text-sm"
             >
               <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -194,7 +194,7 @@ export function BotPairedServersWhoCanAsk({ bot }: { bot: Bot }): React.JSX.Elem
                   })}
                   onClick={() =>
                     change('pairedServerAsks.disallow', {
-                      serverInstallationId: server.serverInstallationId
+                      serverKey: server.serverKey
                     })
                   }
                 >
