@@ -6,27 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
-import { SLACK_CONFIG_REFRESH_TOKEN_PREFIX } from '../../../../../shared/connector-bot-slack-contract'
+import {
+  SLACK_CONFIG_REFRESH_TOKEN_PREFIX,
+  slackConfigTokenKind
+} from '../../../../../shared/connector-bot-slack-contract'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 // Where Slack lists "Your App Configuration Tokens".
 const SLACK_APPS_URL = 'https://api.slack.com/apps'
-
-// Slack shows two tokens side by side; the access token is the one Orca can't keep using.
-const SLACK_CONFIG_ACCESS_TOKEN_PREFIX = 'xoxe.xoxp-'
-const TOKEN_SHAPE = /^[\w.-]+$/
-
-/** What copied or pasted text is, when it is one of Slack's two configuration tokens. */
-export function slackConfigTokenKind(text: string): 'refresh' | 'access' | null {
-  const value = text.trim()
-  if (!TOKEN_SHAPE.test(value)) {
-    return null
-  }
-  if (value.startsWith(SLACK_CONFIG_ACCESS_TOKEN_PREFIX)) {
-    return 'access'
-  }
-  return value.startsWith(SLACK_CONFIG_REFRESH_TOKEN_PREFIX) ? 'refresh' : null
-}
 
 /** Paste a workspace's configuration refresh token; it is cleared the moment it is sent. Slack's
  *  page opens on the host, so the token is made with that computer's own Slack login. */

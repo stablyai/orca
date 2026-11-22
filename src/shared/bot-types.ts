@@ -111,7 +111,9 @@ export const BotMemberSchema = z.object({
   /** The service's workspace the id belongs to: a Linear workspace, or a Slack team. A Slack entry without one is in the bot's first Slack workspace. */
   workspaceId: z.string().min(1).optional(),
   /** The service's picture of them, as it gave it when they were added; Slack's only. */
-  avatarUrl: optionalConnectorAvatarUrl
+  avatarUrl: optionalConnectorAvatarUrl,
+  /** `app`: another Slack app's bot user, not a person. Absent for a person; an unknown kind reads as absent, so a newer one never voids the bot. */
+  kind: z.literal('app').optional().catch(undefined)
 })
 
 export const BotNotificationsSchema = z.object({

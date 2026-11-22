@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useContext, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
@@ -16,6 +16,8 @@ import { getDiskBaselineSignature } from '../../../../../../shared/file-write/di
 import { writeEditorSave } from '../../save/queue/editor-save-disk-precondition'
 import { withEditorFileWriteLock } from '../../save/queue/editor-file-write-lock'
 import { editorPathHoldKey } from '../../autosave/editor-autosave-holds'
+import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { confirmEditorUtf8Conversion } from '../../save/commands/editor-file-save-attempt'
 
 export function useCombinedDiffSectionSave({
   file,
@@ -35,18 +37,18 @@ export function useCombinedDiffSectionSave({
   const runSectionSave = useCallback(
     async (
       sectionKey: string,
-      mode: 'overwrite' | undefined,
+      mode: 'overwrite' | 'convert' | undefined,
       operation: NonNullable<DiffSection['operation']>
-    ) => {
+    ): Promise<'not-utf8' | undefined> => {
       // Why by key: rows can be rebuilt while a save waits; a gone section is not saved.
       const index = sectionsRef.current.findIndex((s) => s.key === sectionKey)
       const section = sectionsRef.current[index]
       if (!section || section.operation !== operation) {
-        return
+        return undefined
       }
       const modifiedEditor = modifiedEditorsRef.current.get(index)
       if (!modifiedEditor && !section.dirty) {
-        return
+        return undefined
       }
 
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
@@ -68,7 +70,7 @@ export function useCombinedDiffSectionSave({
         )
       if (loaded === undefined && mode !== 'overwrite') {
         markConflict()
-        return
+        return undefined
       }
       try {
         operation.assertCurrent()
@@ -86,19 +88,24 @@ export function useCombinedDiffSectionSave({
                 : {
                     kind: 'guarded',
                     signature: getDiskBaselineSignature(loaded),
-                    allowMissing: false
+                    allowMissing: false,
+                    // Why: text without U+FFFD decoded losslessly, so only U+FFFD needs the host's byte check.
+                    requireLosslessUtf8: mode !== 'convert' && loaded.includes('\uFFFD')
                   }
             )
           }
         )
         if (!writeResult.ok) {
+          if (writeResult.diskConflict === 'not-utf8') {
+            return 'not-utf8'
+          }
           markConflict()
-          return
+          return undefined
         }
         try {
           operation.assertCurrent()
         } catch {
-          return
+          return undefined
         }
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
@@ -106,7 +113,7 @@ export function useCombinedDiffSectionSave({
           (s) => s.key === sectionKey && s.operation === operation
         )
         if (savedIndex === -1) {
-          return
+          return undefined
         }
         writtenBySectionRef.current.set(sectionKey, { operation, content })
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, savedIndex))
@@ -143,10 +150,12 @@ export function useCombinedDiffSectionSave({
       } catch (err) {
         console.error('Save failed:', err)
       }
+      return undefined
     },
     [file.filePath, sectionsRef, setSectionHeights, setSections]
   )
 
+  const confirm = useContext(ConfirmationDialogContext)
   // Build each precondition after that section’s prior save settles.
   const sectionSaveChainsRef = useRef(new Map<string, Promise<void>>())
   const handleSectionSave = useCallback(
@@ -158,9 +167,16 @@ export function useCombinedDiffSectionSave({
         return Promise.resolve()
       }
       const chains = sectionSaveChainsRef.current
-      const next = (chains.get(key) ?? Promise.resolve()).then(() =>
-        runSectionSave(key, mode, operation)
-      )
+      const next = (chains.get(key) ?? Promise.resolve()).then(async () => {
+        // Why: conversion can't be undone, so ask like the editor does; no dialog host means refuse.
+        if (
+          (await runSectionSave(key, mode, operation)) === 'not-utf8' &&
+          confirm &&
+          (await confirmEditorUtf8Conversion(confirm, section.path))
+        ) {
+          await runSectionSave(key, 'convert', operation)
+        }
+      })
       const tracked = next.finally(() => {
         if (chains.get(key) === tracked) {
           chains.delete(key)
@@ -170,7 +186,7 @@ export function useCombinedDiffSectionSave({
       chains.set(key, tracked)
       return tracked
     },
-    [runSectionSave, sectionsRef]
+    [confirm, runSectionSave, sectionsRef]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

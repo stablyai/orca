@@ -160,7 +160,7 @@ export function MobileBotGroupRoom({
   }
   const memberFaces = (group?.members ?? []).flatMap((member) => {
     const bot = bots.find((bot) => bot.id === member.botId)
-    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot, undefined) }] : []
+    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
   })
   const visibleMessages = visibleBotGroupMessages(botGroupRoomOrder(data?.messages ?? []), sessions)
   return (
@@ -230,7 +230,8 @@ export function MobileBotGroupRoom({
                   role: 'user',
                   blocks: botGroupOwnerMessageBlocks(message),
                   timestamp: message.createdAt,
-                  source: 'transcript'
+                  source: 'transcript',
+                  ...(message.automationRun ? { automationRun: message.automationRun } : {})
                 }}
               />
             ) : (

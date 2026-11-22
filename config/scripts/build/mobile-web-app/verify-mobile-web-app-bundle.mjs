@@ -6,6 +6,7 @@ import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import { contentAssetName } from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
@@ -38,7 +39,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
 // 11 MiB (2026-11-21): the phone parity round's last pages (connectors, automations, memory, sharing) need
 // about 200 KiB more; a size pass follows the round.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 11 * 1024 * 1024
+// 10.90625 MiB: that pass took the page to 11,252,196 bytes (2026-11-22). The fence drops by the 94 KiB saved
+// and keeps the 180 KiB main had left, so the parity follow-ups in flight fit as before.
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.90625 * 1024 * 1024
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.
@@ -60,7 +63,7 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
     .filter((asset) =>
       APPROVED_TERMINAL_FONTS.some(
         ([sha256, byteLength]) =>
-          asset.path === `assets/${sha256}.woff2` &&
+          asset.path === `assets/${contentAssetName(sha256, 'woff2')}` &&
           asset.sha256 === sha256 &&
           asset.contentType === 'font/woff2' &&
           asset.byteLength === byteLength
