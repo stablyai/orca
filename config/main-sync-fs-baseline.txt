@@ -53,7 +53,7 @@
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/cookies/sources/browser-cookie-safari-import.ts
-5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
+4 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
 1 src/main/browser/downloads/browser-download-destination.ts
 2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
