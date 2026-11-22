@@ -6,7 +6,6 @@ import {
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
-import type { RpcClient } from '../rpc/rpc-client-contract'
 
 // The Relay supervisor owns the route set; the existing direct fallback only acts when direct is reconnecting.
 export class MobileSupervisorDirectRoutes {
@@ -21,37 +20,23 @@ export class MobileSupervisorDirectRoutes {
   ) {}
 
   learn(path: 'lan' | 'tailscale', endpoint: string): void {
-    if (path === 'lan' ? this.learnLan(endpoint) : this.learnTailnet(endpoint)) {
-      this.onLearned(path)
+    if (
+      !this.deps.openDirectEndpoint ||
+      (path === 'tailscale' && this.deps.directPath === 'tailscale')
+    ) {
+      return
     }
+    const key = path === 'lan' ? 'lanEndpoint' : 'tailnetEndpoint'
+    if (this.endpoints[key] === endpoint) {
+      return
+    }
+    this.endpoints = { ...this.endpoints, [key]: endpoint }
+    this.updateFallback()
+    this.onLearned(path)
   }
 
   hasRecoveryFallback(): boolean {
     return this.fallback !== null
-  }
-
-  private learnTailnet(endpoint: string): boolean {
-    if (!this.deps.openTailnetDirect || this.deps.directPath === 'tailscale') {
-      return false
-    }
-    if (this.endpoints.tailnetEndpoint === endpoint) {
-      return false
-    }
-    this.endpoints = { ...this.endpoints, tailnetEndpoint: endpoint }
-    this.updateFallback()
-    return true
-  }
-
-  private learnLan(endpoint: string): boolean {
-    if (!this.deps.openLanDirect) {
-      return false
-    }
-    if (this.endpoints.lanEndpoint === endpoint) {
-      return false
-    }
-    this.endpoints = { ...this.endpoints, lanEndpoint: endpoint }
-    this.updateFallback()
-    return true
   }
 
   candidates(path: MobileConnectionPath) {
@@ -77,23 +62,15 @@ export class MobileSupervisorDirectRoutes {
 
   private updateFallback(): void {
     this.fallback?.stop()
-    const routes =
-      this.deps.directPath === 'lan'
-        ? this.endpoints.tailnetEndpoint && this.deps.openTailnetDirect
-          ? (path: 'lan' | 'tailscale'): RpcClient =>
-              path === 'lan'
-                ? this.endpoints.lanEndpoint
-                  ? this.deps.openLanDirect!(this.endpoints.lanEndpoint)
-                  : this.deps.openDirect()
-                : this.deps.openTailnetDirect!(this.endpoints.tailnetEndpoint!)
-          : null
-        : this.endpoints.lanEndpoint && this.deps.openLanDirect
-          ? (path: 'lan' | 'tailscale'): RpcClient =>
-              path === 'tailscale'
-                ? this.deps.openDirect()
-                : this.deps.openLanDirect!(this.endpoints.lanEndpoint!)
-          : null
-    this.fallback = routes ? new MobileDirectTailnetFallback(this.logical, routes) : null
+    const routes = this.candidates('relay')
+    const lan = routes.find((candidate) => candidate.path === 'lan')
+    const tailnet = routes.find((candidate) => candidate.path === 'tailscale')
+    this.fallback =
+      lan && tailnet
+        ? new MobileDirectTailnetFallback(this.logical, (path) =>
+            path === 'lan' ? lan.open() : tailnet.open()
+          )
+        : null
     this.fallback?.start()
     this.fallback?.setForeground(this.isForeground())
   }

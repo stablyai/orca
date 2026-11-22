@@ -11,9 +11,8 @@ import type { ConnectionLogSink } from '../../diagnostics/connection/connection-
 
 export type MobileEndpointSupervisorDependencies = {
   openDirect: () => RpcClient
-  /** Authenticated with the same paired host identity as the primary direct path. */
-  openTailnetDirect?: (endpoint: string) => RpcClient
-  openLanDirect?: (endpoint: string) => RpcClient
+  /** Every discovered address uses the original pairing credentials and pinned desktop key. */
+  openDirectEndpoint?: (endpoint: string) => RpcClient
   directPath: Exclude<MobileConnectionPath, 'relay'>
   directProbeTimeoutMs: number
   /** The stored direct endpoint can never answer (link-local), so never probe a return to it. */

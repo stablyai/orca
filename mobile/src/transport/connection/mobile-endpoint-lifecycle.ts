@@ -59,23 +59,19 @@ export function startMobileEndpointLifecycle(
       return
     }
     tailnetFallback?.stop()
-    const backup = primaryPath === 'lan' ? currentTailnetEndpoint : currentLanEndpoint
-    if (!backup) {
+    const lan = currentLanEndpoint ?? (primaryPath === 'lan' ? initialHost.endpoint : undefined)
+    const tailnet =
+      currentTailnetEndpoint ?? (primaryPath === 'tailscale' ? initialHost.endpoint : undefined)
+    if (!lan || !tailnet) {
       tailnetFallback = null
       return
     }
     tailnetFallback = new MobileDirectTailnetFallback(
       logical,
       (path) =>
-        connect(
-          path === 'lan'
-            ? (currentLanEndpoint ?? (primaryPath === 'lan' ? initialHost.endpoint : backup))
-            : (currentTailnetEndpoint ??
-                (primaryPath === 'tailscale' ? initialHost.endpoint : backup)),
-          initialHost.deviceToken,
-          initialHost.publicKeyB64,
-          { onLog }
-        ),
+        connect(path === 'lan' ? lan : tailnet, initialHost.deviceToken, initialHost.publicKeyB64, {
+          onLog
+        }),
       true
     )
     tailnetFallback.start()
@@ -195,9 +191,8 @@ function createSupervisor(
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    openTailnetDirect: (endpoint) =>
+    openDirectEndpoint: (endpoint) =>
       connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    openLanDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
     directUnavailable: skipsDirectEndpoint(host),

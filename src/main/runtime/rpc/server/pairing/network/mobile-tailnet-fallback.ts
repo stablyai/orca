@@ -28,30 +28,6 @@ export function selectAuthenticatedMobileTailnetEndpoint(
   return addresses.size === 1 ? `ws://${[...addresses][0]}:${port}/` : undefined
 }
 
-export async function discoverAuthenticatedMobileTailnetEndpoint(
-  boundHost: string | null,
-  transports: readonly RpcTransport[]
-): Promise<string | undefined> {
-  if (boundHost !== WS_BIND_HOST_ALL_INTERFACES) {
-    return undefined
-  }
-  const transport = transports.find(
-    (entry): entry is WebSocketTransport => entry instanceof WebSocketTransport
-  )
-  if (!transport) {
-    return undefined
-  }
-  try {
-    return selectAuthenticatedMobileTailnetEndpoint(
-      // Why: only non-bridge tailnet addresses qualify, so skip the Windows PowerShell default-route probe.
-      await getPairingNetworkInterfaces(boundHost, async () => null),
-      transport.resolvedPort
-    )
-  } catch {
-    return undefined
-  }
-}
-
 // A private address is a useful LAN candidate only when it is unambiguous. Bridge and VPN
 // routes can otherwise select an address the phone will never reach.
 export function selectAuthenticatedMobileLanEndpoint(

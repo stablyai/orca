@@ -13,7 +13,7 @@ const RECONNECT_GRACE_MS = 2_000
 // A burst of nudges (Android can fire several network-change events at once) must not become a burst of dials.
 const MIN_NUDGE_GAP_MS = 3_000
 
-// Fail over in either direction using only addresses from the authenticated pairing.
+// All candidate addresses were learned from the authenticated desktop or initial pairing.
 export class MobileDirectTailnetFallback {
   private stopped = false
   private foreground = true

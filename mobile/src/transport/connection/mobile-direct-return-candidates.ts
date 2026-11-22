@@ -14,10 +14,10 @@ export function mobileDirectReturnCandidates(
   endpoints: LearnedDirectEndpoints
 ): DirectCandidate[] {
   const lan: DirectCandidate | null =
-    endpoints.lanEndpoint && deps.openLanDirect
+    endpoints.lanEndpoint && deps.openDirectEndpoint
       ? {
           path: 'lan',
-          open: () => deps.openLanDirect!(endpoints.lanEndpoint!),
+          open: () => deps.openDirectEndpoint!(endpoints.lanEndpoint!),
           timeoutMs: 4_000
         }
       : deps.directPath === 'lan' && !deps.directUnavailable
@@ -26,10 +26,10 @@ export function mobileDirectReturnCandidates(
   const tailnet: DirectCandidate | null =
     deps.directPath === 'tailscale' && !deps.directUnavailable
       ? { path: 'tailscale', open: deps.openDirect, timeoutMs: deps.directProbeTimeoutMs }
-      : endpoints.tailnetEndpoint && deps.openTailnetDirect
+      : endpoints.tailnetEndpoint && deps.openDirectEndpoint
         ? {
             path: 'tailscale',
-            open: () => deps.openTailnetDirect!(endpoints.tailnetEndpoint!),
+            open: () => deps.openDirectEndpoint!(endpoints.tailnetEndpoint!),
             timeoutMs: 12_000
           }
         : null
