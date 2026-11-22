@@ -91,6 +91,8 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
     ipcRenderer.invoke('browser:respondPagePrompt', response),
+  openStreamedExternalAppLink: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke('browser:openStreamedExternalAppLink', url),
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }

@@ -213,6 +213,9 @@ export function createHarness() {
     syncViewport: async () => {},
     askJavaScriptDialog: (dialog, signal) =>
       new Promise((answer) => dialogAsks.push({ dialog, signal, answer })),
+    askPagePrompt: () => new Promise(() => {}),
+    openExternalAppLink: async () => false,
+    reportPagePromptFailed: () => {},
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},

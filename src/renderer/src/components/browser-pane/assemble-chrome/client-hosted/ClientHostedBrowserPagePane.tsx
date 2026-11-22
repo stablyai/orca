@@ -17,7 +17,7 @@ import { attachBrowserClientPageToViewport } from '../../host-guest/client-pages
 import { useBrowserClientHostedPopupNotices } from '../../navigate/browser-client-hosted-popup-notices'
 import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
-import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
+import { ClientHostedBrowserPageStandIn } from './client-hosted-browser-page-stand-in'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
@@ -38,7 +38,6 @@ import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-bro
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
 import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from '../../navigate/browser-page-deferred-navigation'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
@@ -390,16 +389,16 @@ export function ClientHostedBrowserPagePane(props: Props) {
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {initialization.unavailable ? (
-            <ClientHostedBrowserUnavailableNotice
-              runtimeEnvironmentId={runtimeEnvironmentId}
-              worktreeId={worktreeId}
-              reopenUrl={browserTab.url}
-              placementHostClientId={browserHostClientId}
-            />
-          ) : initialization.showNewTab ? (
-            <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
-          ) : null}
+          <ClientHostedBrowserPageStandIn
+            unavailable={initialization.unavailable}
+            showNewTab={initialization.showNewTab}
+            runtimeEnvironmentId={runtimeEnvironmentId}
+            worktreeId={worktreeId}
+            browserPageId={browserTab.id}
+            reopenUrl={browserTab.url}
+            placementHostClientId={browserHostClientId}
+            onOpenUrl={navigateToUrl}
+          />
         </div>
         {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}
       </div>
