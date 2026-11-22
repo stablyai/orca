@@ -300,6 +300,7 @@ export function useWorktreeContextMenuModel({
     batchDeleteWorktrees,
     createGroupDialogActiveRef,
     createProjectGroup,
+    folderWorkspaceId,
     isMultiContext,
     moveProjectToGroup,
     onAssignWorkspaceStatus,

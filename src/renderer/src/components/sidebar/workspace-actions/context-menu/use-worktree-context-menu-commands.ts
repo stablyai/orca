@@ -45,6 +45,7 @@ export function useWorktreeContextMenuCommands(args: {
   batchDeleteWorktrees: readonly Worktree[]
   createGroupDialogActiveRef: React.MutableRefObject<boolean>
   createProjectGroup: ReturnType<typeof useAppStore.getState>['createProjectGroup']
+  folderWorkspaceId: string | null
   getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
