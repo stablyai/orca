@@ -2,38 +2,43 @@ import {
   PLUGIN_IMAGE_RULES,
   type PluginImageKind
 } from '../../../shared/plugins/images/plugin-image-fields'
-import { pluginRelativePathSchema } from '../../../shared/plugins/manifest/plugin-manifest-fields'
+import {
+  PLUGIN_IMAGE_MIME,
+  readPluginImageHeader
+} from '../../../shared/plugins/images/plugin-image-format'
+import type { PluginImageReference } from '../../../shared/plugins/images/plugin-image-url'
 import { validateCatalogImage, type CatalogImage } from '../catalog/plugin-catalog-image-extraction'
 import type { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-repository'
-import type {
-  PluginMarketplaceCachedSnapshot,
-  PluginMarketplaceStore
+import {
+  snapshotRepositorySlot,
+  type PluginMarketplaceCachedSnapshot,
+  type PluginMarketplaceStore
 } from '../catalog/plugin-marketplace-store'
 import type { PluginImageCache } from './plugin-image-cache'
+import type { CheckedPluginImage } from './plugin-image-read'
 
 const IMAGE_BATCH_SIZE = 6
-const FAILURE_RETRY_MS = 3 * 60_000
-const MAX_FAILED_LOOKUPS = 1024
 
-type ImageLocation = {
-  sourceId: string
-  commit: string
-  image: CatalogImage
+type CatalogReference = Extract<PluginImageReference, { kind: 'catalog' }>
+type PendingImage = {
+  snapshot: PluginMarketplaceCachedSnapshot
+  path: string
   kind: PluginImageKind
+  image: Pick<CatalogImage, 'sha256' | 'width' | 'height'>
+  signal: AbortSignal
+  finish: (asset: CheckedPluginImage | null) => void
 }
-type PendingImage = { hash: string; finish: () => void; locations: ImageLocation[] }
 
-/** Coalesces visible image requests into local Git batches; no network recovery is permitted here. */
+function imageKey(
+  kind: PluginImageKind,
+  image: Pick<CatalogImage, 'path' | 'sha256' | 'width' | 'height'>
+): string {
+  return JSON.stringify([image.path, image.sha256, kind, image.width, image.height])
+}
+
 export class PluginCatalogImageOnDemand {
-  private readonly inFlight = new Map<string, Promise<void>>()
-  private readonly failures = new Map<string, number>()
-  private readonly locations = new WeakMap<
-    PluginMarketplaceCachedSnapshot,
-    Map<string, ImageLocation[]>
-  >()
-  private readonly pending: PendingImage[] = []
-  private scheduled = false
-  private reading = false
+  private readonly locations = new WeakMap<PluginMarketplaceCachedSnapshot, Map<string, boolean>>()
+  private readonly queues = new Map<string, PendingImage[]>()
 
   constructor(
     private readonly options: {
@@ -43,68 +48,41 @@ export class PluginCatalogImageOnDemand {
     }
   ) {}
 
-  ensureCached(hash: string): Promise<void> {
-    if (!/^[0-9a-f]{64}$/.test(hash) || (this.failures.get(hash) ?? 0) > Date.now()) {
-      return Promise.resolve()
+  async read(reference: CatalogReference, signal: AbortSignal): Promise<CheckedPluginImage | null> {
+    const { sourceId, commit, path } = reference.location
+    const sources = await this.options.store.listSources()
+    if (signal.aborted || !sources.some((source) => source.id === sourceId)) {
+      return null
     }
-    const existing = this.inFlight.get(hash)
-    if (existing) {
-      return existing
+    const snapshot = await this.options.store.readSnapshot(sourceId)
+    if (signal.aborted || snapshot?.marketplaceCommit !== commit) {
+      return null
     }
-    const task = this.options.cache
-      .get(hash)
-      .catch(() => null)
-      .then((cached) => {
-        if (cached) {
-          return
-        }
-        return new Promise<void>((finish) => {
-          this.pending.push({ hash, finish, locations: [] })
-          this.schedule()
-        })
-      })
-      .finally(() => {
-        if (this.inFlight.get(hash) === task) {
-          this.inFlight.delete(hash)
-        }
-      })
-    this.inFlight.set(hash, task)
-    return task
-  }
-
-  private schedule(): void {
-    if (this.scheduled || this.reading || this.pending.length === 0) {
-      return
+    const image = { ...reference.image, path, sha256: reference.sha256 }
+    const locations = this.locations.get(snapshot) ?? this.indexSnapshot(snapshot)
+    const key = imageKey(image.kind, image)
+    if (!locations.has(key)) {
+      return null
     }
-    this.scheduled = true
-    setTimeout(() => {
-      this.scheduled = false
-      void this.readBatch()
-    }, 0)
-  }
-
-  private async locate(jobs: PendingImage[]): Promise<void> {
-    for (const source of await this.options.store.listSources()) {
-      const snapshot = await this.options.store.readSnapshot(source.id).catch(() => null)
-      if (!snapshot || !/^[0-9a-f]{40}$/.test(snapshot.marketplaceCommit)) {
-        continue
-      }
-      const locations = this.locations.get(snapshot) ?? this.indexSnapshot(snapshot)
-      for (const job of jobs) {
-        job.locations.push(...(locations.get(job.hash) ?? []))
+    if (locations.get(key)) {
+      const cached = await this.options.cache.get(image.sha256)
+      if (cached) {
+        return cached
       }
     }
+    const asset = await this.queue({ snapshot, path, kind: image.kind, image, signal })
+    if (asset) {
+      locations.set(key, true)
+    }
+    return asset
   }
 
-  private indexSnapshot(snapshot: PluginMarketplaceCachedSnapshot): Map<string, ImageLocation[]> {
-    const locations = new Map<string, ImageLocation[]>()
+  private indexSnapshot(snapshot: PluginMarketplaceCachedSnapshot): Map<string, boolean> {
+    const locations = new Map<string, boolean>()
     const add = (kind: PluginImageKind, image: CatalogImage | undefined): void => {
-      if (!image || !pluginRelativePathSchema.safeParse(image.path).success) {
-        return
+      if (image) {
+        locations.set(imageKey(kind, image), false)
       }
-      const matches = locations.get(image.sha256) ?? []
-      matches.push({ sourceId: snapshot.sourceId, commit: snapshot.marketplaceCommit, kind, image })
-      locations.set(image.sha256, matches)
     }
     for (const entry of snapshot.marketplace.plugins) {
       if (!('releases' in entry)) {
@@ -122,77 +100,95 @@ export class PluginCatalogImageOnDemand {
     return locations
   }
 
-  private async readBatch(): Promise<void> {
-    this.reading = true
-    const jobs = this.pending.splice(0, IMAGE_BATCH_SIZE)
-    const accepted = new Set<string>()
-    try {
-      await this.locate(jobs)
-      while (jobs.some((job) => !accepted.has(job.hash) && job.locations.length > 0)) {
-        const groups = new Map<
-          string,
-          { location: ImageLocation; uses: { job: PendingImage; location: ImageLocation }[] }
-        >()
-        for (const job of jobs) {
-          if (accepted.has(job.hash)) {
-            continue
-          }
-          const location = job.locations.shift()
-          if (!location) {
-            continue
-          }
-          const key = `${location.sourceId}:${location.commit}`
-          const group = groups.get(key) ?? { location, uses: [] }
-          group.uses.push({ job, location })
-          groups.set(key, group)
+  private queue(input: Omit<PendingImage, 'finish'>): Promise<CheckedPluginImage | null> {
+    const {
+      snapshot: { sourceId },
+      signal
+    } = input
+    if (signal.aborted) {
+      return Promise.resolve(null)
+    }
+    return new Promise((resolve) => {
+      const pending = this.queues.get(sourceId) ?? []
+      const onAbort = () => {
+        const index = pending.indexOf(job)
+        if (index !== -1) {
+          pending.splice(index, 1)
         }
-        await Promise.all(
-          [...groups.values()].map(async ({ location, uses }) => {
-            const paths = new Map<string, number>()
-            for (const use of uses) {
-              paths.set(
-                use.location.image.path,
-                Math.max(
-                  paths.get(use.location.image.path) ?? 0,
-                  PLUGIN_IMAGE_RULES[use.location.kind].maxBytes
-                )
-              )
-            }
-            const files = await this.options.repositories
-              .readImages(location.sourceId, location.commit, paths)
-              .catch(() => new Map<string, Buffer>())
-            for (const use of uses) {
-              const bytes = files.get(use.location.image.path)
-              if (
-                bytes &&
-                validateCatalogImage(bytes, use.location.image, use.location.kind) &&
-                (await this.options.cache.put(bytes).catch(() => null))
-              ) {
-                accepted.add(use.job.hash)
-              }
-            }
-          })
-        )
+        finish(null)
+      }
+      const finish = (asset: CheckedPluginImage | null) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(asset)
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      const job = { ...input, finish }
+      pending.push(job)
+      if (!this.queues.has(sourceId)) {
+        this.queues.set(sourceId, pending)
+        setTimeout(() => void this.drain(sourceId, pending), 0)
+      }
+    })
+  }
+
+  private async drain(sourceId: string, queue: PendingImage[]): Promise<void> {
+    while (queue.length > 0) {
+      const snapshot = queue[0]!.snapshot
+      const jobs: PendingImage[] = []
+      while (queue[0]?.snapshot === snapshot && jobs.length < IMAGE_BATCH_SIZE) {
+        const job = queue.shift()!
+        if (!job.signal.aborted) {
+          jobs.push(job)
+        }
+      }
+      if (jobs.length) {
+        await this.readBatch(snapshot, jobs)
+      }
+    }
+    this.queues.delete(sourceId)
+  }
+
+  private async readBatch(
+    snapshot: PluginMarketplaceCachedSnapshot,
+    jobs: PendingImage[]
+  ): Promise<void> {
+    const controller = new AbortController()
+    const onAbort = () => {
+      if (jobs.every((job) => job.signal.aborted)) {
+        controller.abort()
+      }
+    }
+    const paths = new Map<string, number>()
+    for (const job of jobs) {
+      job.signal.addEventListener('abort', onAbort, { once: true })
+      paths.set(job.path, Math.max(paths.get(job.path) ?? 0, PLUGIN_IMAGE_RULES[job.kind].maxBytes))
+    }
+    try {
+      const files = await this.options.repositories.readImages(
+        snapshot.sourceId,
+        snapshot.marketplaceCommit,
+        paths,
+        controller.signal,
+        snapshotRepositorySlot(snapshot)
+      )
+      for (const job of jobs) {
+        const bytes = files.get(job.path)
+        if (job.signal.aborted || !bytes) {
+          continue
+        }
+        const info = readPluginImageHeader(bytes)
+        if (typeof info !== 'string' && validateCatalogImage(bytes, job.image, job.kind)) {
+          await this.options.cache.put(bytes).catch(() => null)
+          job.finish({ bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] })
+        }
       }
     } catch {
-      // A broken catalog must leave other cards usable and permit a later retry.
+      // A failed local read can be retried by the next request.
     } finally {
-      for (const [hash, until] of this.failures) {
-        if (until <= Date.now()) {
-          this.failures.delete(hash)
-        }
-      }
       for (const job of jobs) {
-        if (!accepted.has(job.hash)) {
-          if (this.failures.size >= MAX_FAILED_LOOKUPS) {
-            this.failures.delete(this.failures.keys().next().value!)
-          }
-          this.failures.set(job.hash, Date.now() + FAILURE_RETRY_MS)
-        }
-        job.finish()
+        job.signal.removeEventListener('abort', onAbort)
+        job.finish(null)
       }
-      this.reading = false
-      this.schedule()
     }
   }
 }

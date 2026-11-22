@@ -1,23 +1,30 @@
-import { rm } from 'node:fs/promises'
+import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  isReusableCatalogRepository,
   pinRetainedPluginGitCommit,
   readRetainedPluginGitCommit
 } from './plugin-catalog-git-repository'
 import {
   PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN,
+  snapshotRepositorySlot,
+  type CatalogRepositorySlot,
+  type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
 import { readCatalogImageBlobs } from './plugin-catalog-blob-reader'
 
 const CATALOG_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 
-/** Serializes readers with refresh/pruning so a snapshot's objects cannot disappear mid-read. */
 export class PluginCatalogRepositoryStore {
-  private readonly pending = new Map<string, Promise<unknown>>()
+  private readonly mutations = new Map<string, Promise<unknown>>()
+  private readonly readers = new Map<string, Set<Promise<unknown>>>()
   private readonly root: string
 
-  constructor(pluginsDataDir: string) {
+  constructor(
+    pluginsDataDir: string,
+    private readonly maxDownloadBytes = CATALOG_DOWNLOAD_MAX_BYTES
+  ) {
     this.root = join(pluginsDataDir, 'catalog-repositories')
   }
 
@@ -29,54 +36,116 @@ export class PluginCatalogRepositoryStore {
   }
 
   private async serial<T>(sourceId: string, run: () => Promise<T>): Promise<T> {
-    const previous = this.pending.get(sourceId) ?? Promise.resolve()
+    const previous = this.mutations.get(sourceId) ?? Promise.resolve()
     const next = previous.catch(() => undefined).then(run)
-    this.pending.set(sourceId, next)
+    this.mutations.set(sourceId, next)
     try {
       return await next
     } finally {
-      if (this.pending.get(sourceId) === next) {
-        this.pending.delete(sourceId)
+      if (this.mutations.get(sourceId) === next) {
+        this.mutations.delete(sourceId)
       }
     }
   }
 
   refresh<T>(
     source: PluginMarketplaceRegisteredSource,
-    read: (repository: string, commit: string) => Promise<T>,
-    publishedCommit?: string
-  ): Promise<{ commit: string; value: T }> {
-    return this.serial(source.id, () =>
-      readRetainedPluginGitCommit(
+    published: PluginMarketplaceCachedSnapshot | null,
+    save: (repository: string, commit: string, slot: CatalogRepositorySlot) => Promise<T>
+  ): Promise<T> {
+    return this.serial(source.id, async () => {
+      const directory = this.directory(source.id)
+      const currentSlot = snapshotRepositorySlot(published)
+      const current = join(directory, currentSlot)
+      const reusable = await isReusableCatalogRepository(
+        current,
+        source.source.url,
+        published?.marketplaceCommit
+      )
+      const slot =
+        reusable || !published
+          ? currentSlot
+          : currentSlot === 'repository'
+            ? 'replacement'
+            : 'repository'
+      const repository = join(directory, slot)
+      const { commit, value } = await readRetainedPluginGitCommit(
         {
           url: source.source.url,
           ref: source.source.ref,
-          directory: this.directory(source.id),
-          maxDownloadBytes: CATALOG_DOWNLOAD_MAX_BYTES,
-          publishedCommit
+          repository,
+          maxDownloadBytes: this.maxDownloadBytes,
+          reusable,
+          publishedCommit: published?.marketplaceCommit
         },
-        read
+        async (commit) => ({ commit, value: await save(repository, commit, slot) })
       )
-    )
+      try {
+        // Readers already using the previous snapshot get to finish before its objects are pruned.
+        await this.waitForReaders(source.id)
+        await pinRetainedPluginGitCommit(repository, commit)
+        await rm(join(directory, slot === 'repository' ? 'replacement' : 'repository'), {
+          recursive: true,
+          force: true
+        })
+      } catch (error) {
+        console.warn('[plugins] could not prune retained catalog repository:', error)
+      }
+      return value
+    })
   }
 
-  publish(sourceId: string, commit: string): Promise<void> {
-    return this.serial(sourceId, () => pinRetainedPluginGitCommit(this.directory(sourceId), commit))
-  }
-
-  readImages(
+  async readImages(
     sourceId: string,
     commit: string,
-    paths: ReadonlyMap<string, number>
+    paths: ReadonlyMap<string, number>,
+    signal?: AbortSignal,
+    slot: CatalogRepositorySlot = 'repository'
   ): Promise<Map<string, Buffer>> {
-    return this.serial(sourceId, () =>
-      readCatalogImageBlobs(join(this.directory(sourceId), 'repository'), commit, paths)
+    const repository = join(this.directory(sourceId), slot)
+    const read = readCatalogImageBlobs(repository, commit, paths, signal)
+    const active = this.readers.get(sourceId) ?? new Set()
+    this.readers.set(sourceId, active)
+    active.add(read)
+    try {
+      return await read
+    } finally {
+      active.delete(read)
+      if (active.size === 0) {
+        this.readers.delete(sourceId)
+      }
+    }
+  }
+
+  async sweep(sources: Promise<readonly PluginMarketplaceRegisteredSource[]>): Promise<void> {
+    const registered = new Set((await sources).map((source) => source.id))
+    const folders = await readdir(this.root).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error
+      }
+      return []
+    })
+    await Promise.all(
+      folders
+        .filter(
+          (folder) => PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN.test(folder) && !registered.has(folder)
+        )
+        .map((folder) =>
+          this.remove(folder).catch((error: unknown) => {
+            console.warn('[plugins] could not remove orphaned catalog repository:', error)
+          })
+        )
     )
   }
 
   remove(sourceId: string): Promise<void> {
-    return this.serial(sourceId, () =>
-      rm(this.directory(sourceId), { recursive: true, force: true })
-    )
+    return this.serial(sourceId, async () => {
+      await this.waitForReaders(sourceId)
+      await rm(this.directory(sourceId), { recursive: true, force: true })
+    })
+  }
+
+  private async waitForReaders(sourceId: string): Promise<void> {
+    await Promise.allSettled(this.readers.get(sourceId) ?? [])
   }
 }

@@ -16,6 +16,7 @@ import {
 import {
   marketplaceSourceId,
   PluginMarketplaceStore,
+  type CatalogRepositorySlot,
   type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
@@ -48,10 +49,9 @@ type MarketplaceFetcher = (
 export class PluginMarketplaceService {
   private readonly store: PluginMarketplaceStore
   private readonly repositories: PluginCatalogRepositoryStore | null
-  private readonly fetcher: MarketplaceFetcher
-  private readonly getKillListEntry: (
-    pluginKey: string
-  ) => (PluginKillListEntry & PluginBlockNotice) | null
+  private readonly fetcher?: MarketplaceFetcher
+  private readonly repositorySweep?: Promise<void>
+  private readonly getKillListEntry: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
   private readonly hostVersion: string | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
   private readonly removingSources = new Set<string>()
@@ -77,14 +77,10 @@ export class PluginMarketplaceService {
       options.repositories ??
       (options.fetcher ? null : new PluginCatalogRepositoryStore(options.pluginsDataDir))
     this.repositories = repositories
-    this.fetcher =
-      options.fetcher ??
-      (async (source) =>
-        fetchPluginMarketplace(source, {
-          repositories: repositories!,
-          publishedCommit: (await this.store.readSnapshot(source.id).catch(() => null))
-            ?.marketplaceCommit
-        }))
+    this.fetcher = options.fetcher
+    this.repositorySweep = repositories?.sweep(this.store.listSources()).catch((error: unknown) => {
+      console.warn('[plugins] could not sweep retained catalog repositories:', error)
+    })
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
     this.teamPolicy = new PluginMarketplaceTeamPolicy(options.getTeamCapabilities)
     this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
@@ -128,17 +124,15 @@ export class PluginMarketplaceService {
       source: parsedSource,
       addedAt: Date.now()
     }
-    const fetched = await this.fetcher(candidate)
-    validateMarketplaceProvenance(candidate, fetched)
-    if (!this.teamPolicy.allows(parsedSource)) {
-      throw new Error('This plugin catalog is turned off by your team.')
-    }
-    const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
     try {
-      const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
-      await this.publishRepository(registered.id, snapshot.marketplaceCommit)
-      this.sourceErrors.delete(registered.id)
-      return pluginMarketplaceSourceState(registered, snapshot, undefined, this.teamPolicy)
+      const snapshot = await this.refreshSnapshot(candidate, () => {
+        if (!this.teamPolicy.allows(parsedSource)) {
+          throw new Error('This plugin catalog is turned off by your team.')
+        }
+        return existing ?? this.store.addSource(parsedSource, candidate.addedAt)
+      })
+      this.sourceErrors.delete(candidate.id)
+      return pluginMarketplaceSourceState(candidate, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       if (!existing) {
         await this.store.removeSource(sourceId).catch(() => undefined)
@@ -162,10 +156,11 @@ export class PluginMarketplaceService {
     }
     this.removingSources.add(sourceId)
     try {
+      await this.repositorySweep
       await this.refreshChains.get(sourceId)?.catch(() => undefined)
       const removed = await this.store.removeSource(sourceId)
+      await this.repositories?.remove(sourceId)
       if (removed) {
-        await this.repositories?.remove(sourceId)
         this.sourceErrors.delete(sourceId)
         if (this.officialSeedRequested) {
           // Recover the managed source when a full profile frees a slot, without restart.
@@ -272,10 +267,7 @@ export class PluginMarketplaceService {
       throw new Error(`unknown marketplace source: ${sourceId}`)
     }
     try {
-      const fetched = await this.fetcher(source)
-      validateMarketplaceProvenance(source, fetched)
-      const snapshot = await this.store.writeSnapshot({ source, ...fetched })
-      await this.publishRepository(source.id, snapshot.marketplaceCommit)
+      const snapshot = await this.refreshSnapshot(source)
       this.sourceErrors.delete(source.id)
       return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     } catch (error) {
@@ -313,10 +305,25 @@ export class PluginMarketplaceService {
     await this.communitySeed.settled()
   }
 
-  private async publishRepository(sourceId: string, commit: string): Promise<void> {
-    await this.repositories?.publish(sourceId, commit).catch((error: unknown) => {
-      console.warn('[plugins] could not prune retained catalog repository:', error)
-    })
+  private async refreshSnapshot(
+    source: PluginMarketplaceRegisteredSource,
+    register: () =>
+      | PluginMarketplaceRegisteredSource
+      | Promise<PluginMarketplaceRegisteredSource> = () => source
+  ): Promise<PluginMarketplaceCachedSnapshot> {
+    const save = async (
+      fetched: PluginMarketplaceFetchResult,
+      catalogRepository?: CatalogRepositorySlot
+    ) => {
+      validateMarketplaceProvenance(source, fetched)
+      return this.store.writeSnapshot({ source: await register(), ...fetched, catalogRepository })
+    }
+    if (this.fetcher) {
+      return save(await this.fetcher(source))
+    }
+    await this.repositorySweep
+    const published = await this.store.readSnapshot(source.id).catch(() => null)
+    return fetchPluginMarketplace(source, { repositories: this.repositories!, published }, save)
   }
 
   private listingFromEntry(

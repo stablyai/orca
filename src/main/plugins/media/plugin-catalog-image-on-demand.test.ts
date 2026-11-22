@@ -6,7 +6,10 @@ import type {
   PluginCatalogImages,
   PluginImageKind
 } from '../../../shared/plugins/images/plugin-image-fields'
-import { pluginShaImageUrl } from '../../../shared/plugins/images/plugin-image-url'
+import {
+  pluginShaImageUrl,
+  type PluginCatalogImageIdentity
+} from '../../../shared/plugins/images/plugin-image-url'
 import { PluginMarketplaceStore } from '../catalog/plugin-marketplace-store'
 import { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-repository'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
@@ -27,6 +30,7 @@ async function imageCatalog(
     bytes?: Buffer
     kind?: PluginImageKind
     declared?: { sha256?: string; width?: number }
+    releaseCount?: number
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-catalog-image-'))
@@ -49,33 +53,69 @@ async function imageCatalog(
         id: 'acme.picture',
         categories: ['themes'],
         source: source.source,
-        releases: [
-          {
-            version: '1.0.0',
-            minimumOrca: '1.4.0',
-            execution: 'data' as const,
-            commit: 'a'.repeat(40),
-            contentHash: 'b'.repeat(64),
-            images
-          }
-        ]
+        releases: Array.from({ length: options.releaseCount ?? 1 }, (_, index) => ({
+          version: `1.0.${index}`,
+          minimumOrca: '1.4.0',
+          execution: 'data' as const,
+          commit: 'a'.repeat(40),
+          contentHash: 'b'.repeat(64),
+          images
+        }))
       }
     ]
   }
   await store.writeSnapshot({ source, marketplaceCommit: 'c'.repeat(40), marketplace })
   const cache = new PluginImageCache(join(root, 'images'))
-  const readImages = vi.fn(async () => new Map([[image.path, bytes]]))
+  const readImages = vi.fn<PluginCatalogRepositoryStore['readImages']>(
+    async () => new Map([[image.path, bytes]])
+  )
   const resolver = new PluginCatalogImageOnDemand({ cache, store, repositories: { readImages } })
   const handler = createPluginImageRequestHandler({
     cache,
-    ensureCatalogImage: (hash) => resolver.ensureCached(hash),
+    readCatalogImage: (reference, signal) => resolver.read(reference, signal),
     findValidPlugin: () => null,
     findApprovedPlugin: () => null
   })
-  return { root, bytes, image, cache, source, store, marketplace, resolver, handler, readImages }
+  const request = (
+    input: {
+      commit?: string
+      path?: string
+      sourceId?: string
+      fetchedAt?: number
+      signal?: AbortSignal
+    } = {}
+  ) =>
+    new Request(
+      pluginShaImageUrl(
+        image.sha256,
+        {
+          kind: kind as PluginCatalogImageIdentity['kind'],
+          width: image.width,
+          height: image.height
+        },
+        {
+          sourceId: input.sourceId ?? source.id,
+          commit: input.commit ?? 'c'.repeat(40),
+          path: input.path ?? image.path,
+          fetchedAt: input.fetchedAt ?? 0
+        }
+      ),
+      { signal: input.signal }
+    )
+  return {
+    root,
+    bytes,
+    image,
+    cache,
+    source,
+    store,
+    marketplace,
+    resolver,
+    handler,
+    readImages,
+    request
+  }
 }
-
-const request = (hash: string) => new Request(pluginShaImageUrl(hash))
 
 describe('on-demand catalog image protocol', () => {
   it('serves a cold image from the retained Git commit and caches it without network', async () => {
@@ -117,12 +157,12 @@ describe('on-demand catalog image protocol', () => {
     })
     const handler = createPluginImageRequestHandler({
       cache: fixture.cache,
-      ensureCatalogImage: (hash) => resolver.ensureCached(hash),
+      readCatalogImage: (reference, signal) => resolver.read(reference, signal),
       findValidPlugin: () => null,
       findApprovedPlugin: () => null
     })
 
-    const response = await handler(request(fixture.image.sha256))
+    const response = await handler(fixture.request({ commit }))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('image/png')
@@ -133,7 +173,7 @@ describe('on-demand catalog image protocol', () => {
     expect(network).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
     await repositories.remove(fixture.source.id)
-    const cached = await handler(request(fixture.image.sha256))
+    const cached = await handler(fixture.request({ commit }))
     expect(cached.status).toBe(200)
     expect(Buffer.from(await cached.arrayBuffer())).toEqual(fixture.bytes)
   })
@@ -145,17 +185,99 @@ describe('on-demand catalog image protocol', () => {
     { name: 'oversized cover', bytes: pngImageBytes(1600, 1000, 1024 * 1024 + 1) }
   ])('refuses $name without caching bytes', async (input) => {
     const fixture = await imageCatalog(input)
-    const response = await fixture.handler(request(fixture.image.sha256))
+    const response = await fixture.handler(fixture.request())
     expect(response.status).toBe(404)
-    expect(await fixture.cache.get(fixture.image.sha256)).toBeNull()
+    expect(
+      await fixture.cache.get(catalogImageFixture('actual.png', fixture.bytes).sha256)
+    ).toBeNull()
   })
 
   it('returns 404 and caches nothing when the bounded local read times out', async () => {
     const fixture = await imageCatalog()
     fixture.readImages.mockRejectedValue(new Error('Git timed out'))
-    const response = await fixture.handler(request(fixture.image.sha256))
+    const response = await fixture.handler(fixture.request())
     expect(response.status).toBe(404)
-    expect(await fixture.cache.get(fixture.image.sha256)).toBeNull()
+    expect(
+      await fixture.cache.get(catalogImageFixture('actual.png', fixture.bytes).sha256)
+    ).toBeNull()
+  })
+
+  it('checks a missing file once even if 32 releases declare it', async () => {
+    const fixture = await imageCatalog({ releaseCount: 32 })
+    fixture.readImages.mockResolvedValue(new Map())
+
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
+    expect(fixture.readImages).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a failed read after republishing the same commit', async () => {
+    const fixture = await imageCatalog()
+    fixture.readImages.mockResolvedValueOnce(new Map())
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
+
+    await fixture.store.writeSnapshot({
+      source: fixture.source,
+      marketplaceCommit: 'c'.repeat(40),
+      marketplace: fixture.marketplace,
+      fetchedAt: 10
+    })
+
+    expect((await fixture.handler(fixture.request({ fetchedAt: 10 }))).status).toBe(200)
+  })
+
+  it('does not use a warm hash to satisfy a different catalog path', async () => {
+    const fixture = await imageCatalog()
+    const other = await fixture.store.addSource({ ...fixture.source.source, ref: 'release' })
+    const marketplace = structuredClone(fixture.marketplace)
+    marketplace.plugins[0]!.releases[0]!.images.cover!.path = 'missing.png'
+    await fixture.store.writeSnapshot({
+      source: other,
+      marketplaceCommit: 'c'.repeat(40),
+      marketplace
+    })
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+
+    expect(
+      (await fixture.handler(fixture.request({ sourceId: other.id, path: 'missing.png' }))).status
+    ).toBe(404)
+    expect((await fixture.handler(fixture.request({ sourceId: other.id }))).status).toBe(404)
+  })
+
+  it('serves another catalog while a read is blocked and cancels the abandoned Git batch', async () => {
+    const fixture = await imageCatalog()
+    const other = await fixture.store.addSource({ ...fixture.source.source, ref: 'release' })
+    await fixture.store.writeSnapshot({
+      source: other,
+      marketplaceCommit: 'c'.repeat(40),
+      marketplace: fixture.marketplace
+    })
+    const started = Promise.withResolvers<AbortSignal>()
+    const release = Promise.withResolvers<Map<string, Buffer>>()
+    fixture.readImages.mockImplementationOnce(async (_source, _commit, _paths, signal) => {
+      signal!.addEventListener('abort', () => release.resolve(new Map()), { once: true })
+      started.resolve(signal!)
+      return release.promise
+    })
+    const controller = new AbortController()
+    const first = fixture.handler(fixture.request({ signal: controller.signal }))
+    const signal = await started.promise
+    try {
+      const second = fixture.handler(fixture.request({ sourceId: other.id }))
+      const response = await Promise.race([
+        second,
+        new Promise<never>((_, reject) => {
+          const timer = setTimeout(() => reject(new Error('catalogs shared a read queue')), 5000)
+          timer.unref()
+        })
+      ])
+      expect(response).toMatchObject({ status: 200 })
+      controller.abort()
+      expect(signal.aborted).toBe(true)
+      expect((await first).status).toBe(404)
+    } finally {
+      controller.abort()
+      release.resolve(new Map())
+    }
   })
 
   it.each([

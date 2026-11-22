@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { PluginHostImage } from '../../../../../shared/plugins/images/plugin-image-url'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
+import { retryPluginCatalogImage } from '../presentation/retry-plugin-catalog-image'
 
 /** The header's app-icon tile: the plugin's verified icon, else what kind of plugin it is. */
 export function PluginPageIcon({
@@ -17,8 +18,13 @@ export function PluginPageIcon({
   }
   return (
     <img
+      key={icon.url}
       src={icon.url}
-      onError={() => setFailedIcon(icon.url)}
+      onError={(event) => {
+        if (!retryPluginCatalogImage(event.currentTarget)) {
+          setFailedIcon(icon.url)
+        }
+      }}
       alt=""
       width={64}
       height={64}

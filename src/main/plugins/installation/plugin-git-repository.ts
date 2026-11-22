@@ -98,9 +98,8 @@ export async function runBoundedPluginGitDownload(
   cwd: string,
   repository: string,
   maxBytes: number,
-  existingBytes = 0
+  measureBytes = () => pluginGitRepositoryBytes(repository)
 ): Promise<void> {
-  const limit = maxBytes + existingBytes
   const controller = new AbortController()
   let exceeded = false
   let measuring = false
@@ -109,13 +108,16 @@ export async function runBoundedPluginGitDownload(
       return
     }
     measuring = true
-    void pluginGitRepositoryBytes(repository)
-      .then((bytes) => {
-        if (bytes > limit && !controller.signal.aborted) {
-          exceeded = true
-          controller.abort()
-        }
-      })
+    void measureBytes()
+      .then(
+        (bytes) => {
+          if (bytes > maxBytes && !controller.signal.aborted) {
+            exceeded = true
+            controller.abort()
+          }
+        },
+        () => undefined
+      )
       .finally(() => {
         measuring = false
       })
@@ -130,7 +132,7 @@ export async function runBoundedPluginGitDownload(
   } finally {
     clearInterval(timer)
   }
-  if ((await pluginGitRepositoryBytes(repository)) > limit) {
+  if (exceeded || (await measureBytes()) > maxBytes) {
     throw new Error('plugin repository exceeds the download size limit')
   }
 }

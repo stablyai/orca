@@ -1,160 +1,216 @@
-import { lstat, mkdir, rm } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   isAllowedPluginGitUrl,
   PLUGIN_COMMIT_PATTERN
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
-  pluginGitCloneArgs,
   pluginGitConfigArgs,
   pluginGitFetchCommitArgs
 } from '../../../shared/plugins/installation/plugin-git-arguments'
-import {
-  pluginGitRepositoryBytes,
-  runBoundedPluginGitDownload,
-  runPluginGit
-} from '../installation/plugin-git-repository'
+import { runBoundedPluginGitDownload, runPluginGit } from '../installation/plugin-git-repository'
+import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
 
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
 const CATALOG_SNAPSHOT_REF = 'refs/orca/snapshot'
 const CATALOG_FETCHED_REF = 'refs/orca/fetched'
 
-/** Reuses a shallow catalog repository; the published snapshot remains pinned during refresh. */
+function catalogGit(repository: string, args: string[]): Promise<string> {
+  return runPluginGit(
+    [
+      ...pluginGitConfigArgs(join(repository, 'no-hooks')),
+      '--git-dir',
+      join(repository, '.git'),
+      ...args
+    ],
+    repository
+  )
+}
+
+export async function isReusableCatalogRepository(
+  repository: string,
+  url: string,
+  publishedCommit?: string
+): Promise<boolean> {
+  if (!(await lstat(join(repository, '.git')).catch(() => null))?.isDirectory()) {
+    return false
+  }
+  try {
+    await catalogGit(repository, ['fsck', '--no-dangling'])
+    if (publishedCommit) {
+      await catalogGit(repository, ['cat-file', '-e', `${publishedCommit}^{commit}`])
+    }
+    return (
+      (await catalogGit(repository, ['config', '--local', '--get', 'remote.origin.url'])) === url
+    )
+  } catch {
+    return false
+  }
+}
+
 export async function readRetainedPluginGitCommit<T>(
   input: {
     url: string
     ref: string
-    directory: string
+    repository: string
     maxDownloadBytes: number
+    reusable: boolean
     publishedCommit?: string
   },
-  read: (repository: string, commit: string) => Promise<T>
-): Promise<{ commit: string; value: T }> {
+  read: (commit: string) => Promise<T>
+): Promise<T> {
   if (!isAllowedPluginGitUrl(input.url)) {
     throw new Error('plugin Git URL must use HTTPS or SSH')
   }
-  if (input.publishedCommit && !SHA1_COMMIT_PATTERN.test(input.publishedCommit)) {
-    throw new Error('invalid published catalog commit')
-  }
-  const repository = join(input.directory, 'repository')
-  const hooks = join(input.directory, 'no-hooks')
-  const config = pluginGitConfigArgs(hooks)
-  let reusable = false
-  const exists = await lstat(join(repository, '.git')).then(
-    (entry) => entry.isDirectory(),
-    () => false
-  )
-  if (exists) {
-    try {
-      await runPluginGit([...config, 'fsck', '--no-dangling'], repository)
-      reusable =
-        (await runPluginGit(
-          [...config, 'config', '--local', '--get', 'remote.origin.url'],
-          repository
-        )) === input.url
-      if (input.publishedCommit) {
-        await runPluginGit(
-          [...config, 'cat-file', '-e', `${input.publishedCommit}^{commit}`],
-          repository
-        )
-      }
-    } catch {
-      reusable = false
-    }
-  }
-  await mkdir(input.directory, { recursive: true })
+  const { repository } = input
+  const gitDir = join(repository, '.git')
+  const config = pluginGitConfigArgs(join(repository, 'no-hooks'))
   const ref = input.ref.trim()
-  if (PLUGIN_COMMIT_PATTERN.test(ref) && !SHA1_COMMIT_PATTERN.test(ref)) {
+  const exactCommit = SHA1_COMMIT_PATTERN.test(ref)
+  if (PLUGIN_COMMIT_PATTERN.test(ref) && !exactCommit) {
     throw new Error('SHA-256 plugin repositories are not supported')
   }
-  const exactCommit = SHA1_COMMIT_PATTERN.test(ref)
-  if (!exactCommit) {
-    await runPluginGit([...config, 'check-ref-format', '--branch', ref], input.directory)
+  if (input.reusable && input.publishedCommit) {
+    await pinRetainedPluginGitCommit(repository, input.publishedCommit)
   }
-  if (!reusable) {
-    await rm(input.directory, { recursive: true, force: true })
-    await mkdir(hooks, { recursive: true })
-    if (exactCommit) {
-      await mkdir(repository)
+
+  if (!input.reusable) {
+    await rm(repository, { recursive: true, force: true })
+  }
+  let download: Awaited<ReturnType<typeof trackCatalogDownload>> | undefined
+  try {
+    if (!input.reusable) {
+      await mkdir(repository, { recursive: true })
       await runPluginGit([...config, 'init', '--quiet', '--template='], repository)
-      await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
-    } else {
-      await runBoundedPluginGitDownload(
-        [...config, ...pluginGitCloneArgs(input.url, ref, repository)],
-        input.directory,
-        repository,
-        input.maxDownloadBytes
-      )
+      await catalogGit(repository, ['remote', 'add', 'origin', input.url])
+      await catalogGit(repository, ['config', '--unset-all', 'remote.origin.fetch'])
     }
-    await runPluginGit(
-      [...config, 'config', '--unset-all', 'remote.origin.fetch'],
-      repository
-    ).catch(() => undefined)
-  }
-  if (reusable && input.publishedCommit) {
-    await pinRetainedPluginGitCommit(input.directory, input.publishedCommit)
-  }
-  if (reusable || exactCommit) {
-    // The published pack remains available while the candidate is downloading.
-    const existingBytes = reusable ? await pluginGitRepositoryBytes(repository) : 0
+    download = await trackCatalogDownload(gitDir)
+    const remoteRef = exactCommit ? ref : await resolveCatalogRemoteRef(repository, ref)
     await runBoundedPluginGitDownload(
-      [...config, '--git-dir', join(repository, '.git'), ...pluginGitFetchCommitArgs(ref)],
+      [...config, '--git-dir', gitDir, ...pluginGitFetchCommitArgs(remoteRef)],
       repository,
       repository,
       input.maxDownloadBytes,
-      existingBytes
+      download.bytes
     )
-  }
-  const commit = await runPluginGit(
-    ['rev-parse', '--verify', `${reusable || exactCommit ? 'FETCH_HEAD' : 'HEAD'}^{commit}`],
-    repository
-  )
-  if (!SHA1_COMMIT_PATTERN.test(commit)) {
-    throw new Error('Git resolved an invalid catalog commit identity')
-  }
-  if (SHA1_COMMIT_PATTERN.test(ref) && commit !== ref) {
-    throw new Error('Git fetched a different commit than requested')
-  }
-  await runPluginGit([...config, 'update-ref', CATALOG_FETCHED_REF, commit], repository)
-  if (!reusable) {
-    await runPluginGit([...config, 'update-ref', '--no-deref', 'HEAD', commit], repository)
-    const refs = await runPluginGit(
-      ['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/', 'refs/tags/'],
-      repository
-    )
-    for (const name of refs.split('\n').filter(Boolean)) {
-      await runPluginGit([...config, 'update-ref', '-d', name], repository)
+    const commit = await catalogGit(repository, ['rev-parse', '--verify', 'FETCH_HEAD^{commit}'])
+    if (!SHA1_COMMIT_PATTERN.test(commit) || (exactCommit && commit !== ref)) {
+      throw new Error('Git resolved an invalid catalog commit identity')
     }
+    await catalogGit(repository, ['update-ref', CATALOG_FETCHED_REF, commit])
+    return await read(commit)
+  } catch (error) {
+    if (input.reusable && download) {
+      await catalogGit(repository, ['update-ref', '-d', CATALOG_FETCHED_REF])
+      await download.rollback()
+    } else if (!input.reusable) {
+      await rm(repository, { recursive: true, force: true })
+    }
+    throw error
   }
-  return { commit, value: await read(repository, commit) }
 }
 
-export async function pinRetainedPluginGitCommit(directory: string, commit: string): Promise<void> {
+async function resolveCatalogRemoteRef(repository: string, ref: string): Promise<string> {
+  if (!ref || ref === 'HEAD') {
+    return 'HEAD'
+  }
+  const branch = `refs/heads/${ref}`
+  const tag = `refs/tags/${ref}`
+  await catalogGit(repository, ['check-ref-format', branch])
+  const refs = await catalogGit(repository, ['ls-remote', '--refs', 'origin', branch, tag])
+  const names = new Set(refs.split('\n').map((line) => line.split('\t')[1]))
+  if (names.has(branch)) {
+    return branch
+  }
+  if (names.has(tag)) {
+    return tag
+  }
+  throw new Error('catalog ref was not found on the remote')
+}
+
+async function trackCatalogDownload(gitDir: string) {
+  const objects = join(gitDir, 'objects')
+  const listObjects = async (): Promise<Set<string>> => {
+    const files = new Set<string>()
+    for (const entry of await readdir(objects, { withFileTypes: true })) {
+      const path = join(objects, entry.name)
+      if (entry.isDirectory()) {
+        for (const child of await readdir(path)) {
+          files.add(join(path, child))
+        }
+      } else {
+        files.add(path)
+      }
+    }
+    return files
+  }
+  const baseline = await listObjects()
+  const newFiles = async () => [...(await listObjects())].filter((path) => !baseline.has(path))
+  const state = await Promise.all(
+    ['shallow', 'FETCH_HEAD'].map(async (name) => {
+      const path = join(gitDir, name)
+      const previous = await readFile(path, 'utf8').catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') {
+          throw error
+        }
+        return null
+      })
+      return { path, previous }
+    })
+  )
+  return {
+    bytes: async () => {
+      const sizes = await Promise.all(
+        (await newFiles()).map((path) =>
+          lstat(path).then(
+            (stat) => stat.size,
+            () => 0
+          )
+        )
+      )
+      return sizes.reduce((total, size) => total + size, 0)
+    },
+    rollback: async () => {
+      await Promise.all(
+        state.map(({ path, previous }) =>
+          previous === null ? rm(path, { force: true }) : writePluginFileAtomically(path, previous)
+        )
+      )
+      await Promise.all(
+        ['shallow.lock', 'FETCH_HEAD.lock'].map((name) => rm(join(gitDir, name), { force: true }))
+      )
+      await Promise.all((await newFiles()).map((path) => rm(path, { force: true })))
+    }
+  }
+}
+
+export async function pinRetainedPluginGitCommit(
+  repository: string,
+  commit: string
+): Promise<void> {
   if (!SHA1_COMMIT_PATTERN.test(commit)) {
     throw new Error('invalid catalog commit')
   }
-  const repository = join(directory, 'repository')
-  const config = pluginGitConfigArgs(join(directory, 'no-hooks'))
-  const refs = await runPluginGit(
-    [
+  const refs = (
+    await catalogGit(repository, [
       'for-each-ref',
       '--format=%(refname) %(objectname)',
       CATALOG_SNAPSHOT_REF,
       CATALOG_FETCHED_REF
-    ],
-    repository
-  )
-  const superseded = refs.split('\n').some((ref) => ref && !ref.endsWith(` ${commit}`))
-  const pinned = refs.split('\n').includes(`${CATALOG_SNAPSHOT_REF} ${commit}`)
+    ])
+  ).split('\n')
+  const superseded = refs.some((ref) => ref && !ref.endsWith(` ${commit}`))
+  const pinned = refs.includes(`${CATALOG_SNAPSHOT_REF} ${commit}`)
   if (!pinned || superseded) {
-    await runPluginGit([...config, 'update-ref', CATALOG_SNAPSHOT_REF, commit], repository)
-    await runPluginGit([...config, 'update-ref', '--no-deref', 'HEAD', commit], repository)
+    await catalogGit(repository, ['update-ref', CATALOG_SNAPSHOT_REF, commit])
+    await catalogGit(repository, ['update-ref', '--no-deref', 'HEAD', commit])
   }
-  if (refs.includes(`${CATALOG_FETCHED_REF} `)) {
-    await runPluginGit([...config, 'update-ref', '-d', CATALOG_FETCHED_REF], repository)
+  if (refs.some((ref) => ref.startsWith(`${CATALOG_FETCHED_REF} `))) {
+    await catalogGit(repository, ['update-ref', '-d', CATALOG_FETCHED_REF])
   }
   if (superseded) {
-    await runPluginGit([...config, 'reflog', 'expire', '--expire=now', '--all'], repository)
-    await runPluginGit([...config, '-c', 'pack.threads=2', 'gc', '--prune=now'], repository)
+    await catalogGit(repository, ['reflog', 'expire', '--expire=now', '--all'])
+    await catalogGit(repository, ['-c', 'pack.threads=2', 'gc', '--prune=now'])
   }
 }

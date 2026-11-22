@@ -1,4 +1,5 @@
 import { offlineGitEnv } from '../../git/command-runner/git-environment/git-process-env'
+import { join } from 'node:path'
 import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-fields'
 import { pluginRelativePathSchema } from '../../../shared/plugins/manifest/plugin-manifest-fields'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
@@ -15,7 +16,7 @@ export type CatalogLoadState = {
   /** Paths whose Git listing or read failed; batched passes treat them as absent. */
   failed: Set<string>
   memo: CatalogBufferMemo
-  readOptions?: { timeout: number; env?: NodeJS.ProcessEnv }
+  readOptions?: { timeout: number; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
 }
 
 /** A regular file's size and, when it fit the largest requested limit, its bytes; null when absent. */
@@ -77,11 +78,21 @@ async function listCatalogPaths(
   paths: string[],
   listed: Map<string, ListedBlob>,
   failed: Set<string>,
-  readOptions: { timeout: number; env?: NodeJS.ProcessEnv }
+  readOptions: NonNullable<CatalogLoadState['readOptions']>
 ): Promise<void> {
   try {
     const listing = await gitExecFileAsyncBuffer(
-      ['--literal-pathspecs', 'ls-tree', '-l', '-z', commit, '--', ...paths],
+      [
+        '--git-dir',
+        join(repository, '.git'),
+        '--literal-pathspecs',
+        'ls-tree',
+        '-l',
+        '-z',
+        commit,
+        '--',
+        ...paths
+      ],
       {
         cwd: repository,
         ...readOptions,
@@ -110,7 +121,7 @@ async function readCatalogRound(
   reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[],
   files: Map<string, CatalogFile>,
   failed: Set<string>,
-  readOptions: { timeout: number; env?: NodeJS.ProcessEnv }
+  readOptions: NonNullable<CatalogLoadState['readOptions']>
 ): Promise<true> {
   const options = { cwd: repository, ...readOptions }
   if (reads.length === 0) {
@@ -118,11 +129,14 @@ async function readCatalogRound(
   }
   try {
     const objects = [...new Map(reads.map((read) => [read.object, read])).values()]
-    const batch = await gitExecFileAsyncBuffer(['cat-file', '--batch'], {
-      ...options,
-      stdin: objects.map((read) => `${read.object}\n`).join(''),
-      maxBuffer: objects.reduce((total, read) => total + read.size + 128, 0)
-    })
+    const batch = await gitExecFileAsyncBuffer(
+      ['--git-dir', join(repository, '.git'), 'cat-file', '--batch'],
+      {
+        ...options,
+        stdin: objects.map((read) => `${read.object}\n`).join(''),
+        maxBuffer: objects.reduce((total, read) => total + read.size + 128, 0)
+      }
+    )
     const contents = readPluginGitBatchBlobs(batch.stdout, objects)
     for (const read of reads) {
       files.set(read.path, { size: read.size, bytes: contents.get(read.object) ?? null })
@@ -159,7 +173,8 @@ function gitTreePath(path: string): string {
 export async function readCatalogImageBlobs(
   repository: string,
   commit: string,
-  paths: ReadonlyMap<string, number>
+  paths: ReadonlyMap<string, number>,
+  signal?: AbortSignal
 ): Promise<Map<string, Buffer>> {
   if (!/^[0-9a-f]{40}$/.test(commit)) {
     return new Map()
@@ -179,7 +194,8 @@ export async function readCatalogImageBlobs(
     memo: createCatalogBufferMemo(),
     readOptions: {
       timeout: 10_000,
-      env: offlineGitEnv()
+      env: offlineGitEnv(),
+      signal
     }
   }
   await loadCatalogFiles(repository, commit, requests, state)

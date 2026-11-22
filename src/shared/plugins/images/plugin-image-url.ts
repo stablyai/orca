@@ -1,3 +1,5 @@
+import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
+
 /** Plugin images reach the renderer only through this scheme, served by main from bytes it has
  *  verified; the renderer never loads a plugin or catalog image from anywhere else. */
 export const PLUGIN_IMAGE_SCHEME = 'orca-plugin-image'
@@ -8,9 +10,22 @@ export type PluginCatalogImageIdentity = {
   height: number
 }
 
+export type PluginCatalogImageLocation = {
+  sourceId: string
+  commit: string
+  path: string
+  fetchedAt: number
+}
+
 export type PluginImageReference =
   /** Bytes main verified and cached by hash (catalog images, preview images). */
   | { kind: 'sha'; sha256: string; image?: PluginCatalogImageIdentity }
+  | {
+      kind: 'catalog'
+      sha256: string
+      image: PluginCatalogImageIdentity
+      location: PluginCatalogImageLocation
+    }
   /** An image an installed plugin declares, pinned to the installed content hash. */
   | { kind: 'installed'; pluginKey: string; contentHash: string; slot: string }
 
@@ -22,9 +37,27 @@ export type PluginHostImages = {
   screenshots?: (PluginHostImage & { caption?: string; theme?: 'light' | 'dark' })[]
 }
 
-export function pluginShaImageUrl(sha256: string, image?: PluginCatalogImageIdentity): string {
+export function pluginShaImageUrl(
+  sha256: string,
+  image?: PluginCatalogImageIdentity,
+  location?: PluginCatalogImageLocation
+): string {
   const url = `${PLUGIN_IMAGE_SCHEME}://sha/${sha256}`
-  return image ? `${url}?kind=${image.kind}&width=${image.width}&height=${image.height}` : url
+  if (!image) {
+    return url
+  }
+  const query = new URLSearchParams({
+    kind: image.kind,
+    width: String(image.width),
+    height: String(image.height)
+  })
+  if (location) {
+    query.set('source', location.sourceId)
+    query.set('commit', location.commit)
+    query.set('path', location.path)
+    query.set('fetchedAt', String(location.fetchedAt))
+  }
+  return `${url}?${query}`
 }
 
 /** `slot` is `icon`, `cover`, `screenshot-<index>`, a contribution's icon: `editor-<index>`
@@ -67,7 +100,27 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     ) {
       return null
     }
-    return { kind: 'sha', sha256: parts[0] ?? '', image: { kind, width, height } }
+    const sha256 = parts[0]!
+    const image = { kind, width, height } satisfies PluginCatalogImageIdentity
+    const sourceId = parsed.searchParams.get('source')
+    if (sourceId === null) {
+      return { kind: 'sha', sha256, image }
+    }
+    const commit = parsed.searchParams.get('commit')
+    const path = parsed.searchParams.get('path')
+    const fetchedAt = Number(parsed.searchParams.get('fetchedAt'))
+    if (
+      !/^[0-9a-f]{32}$/.test(sourceId) ||
+      !commit ||
+      !/^[0-9a-f]{40}$/.test(commit) ||
+      !path ||
+      !pluginRelativePathSchema.safeParse(path).success ||
+      !Number.isFinite(fetchedAt) ||
+      fetchedAt < 0
+    ) {
+      return null
+    }
+    return { kind: 'catalog', sha256, image, location: { sourceId, commit, path, fetchedAt } }
   }
   const [key, contentHash, slot] = parts
   if (

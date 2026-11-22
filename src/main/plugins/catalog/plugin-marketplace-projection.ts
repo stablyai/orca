@@ -88,7 +88,10 @@ const DETAIL_KEYS = [
 ] as const satisfies readonly (keyof PluginCatalogListingDetails & keyof PluginCatalogRelease)[]
 
 /** Catalog images as the renderer loads them: hash-addressed, verified, never hotlinked. */
-export function pluginCatalogListingImages(release: PluginCatalogRelease | undefined): {
+function pluginCatalogListingImages(
+  release: PluginCatalogRelease | undefined,
+  snapshot: PluginMarketplaceCachedSnapshot
+): {
   images?: PluginHostImages
 } {
   const images = release?.images
@@ -97,9 +100,18 @@ export function pluginCatalogListingImages(release: PluginCatalogRelease | undef
   }
   const host = (
     kind: PluginCatalogImageIdentity['kind'],
-    image: { sha256: string; alt: string; width: number; height: number }
+    image: { sha256: string; path: string; alt: string; width: number; height: number }
   ) => ({
-    url: pluginShaImageUrl(image.sha256, { kind, width: image.width, height: image.height }),
+    url: pluginShaImageUrl(
+      image.sha256,
+      { kind, width: image.width, height: image.height },
+      {
+        sourceId: snapshot.sourceId,
+        commit: snapshot.marketplaceCommit,
+        path: image.path,
+        fetchedAt: snapshot.fetchedAt
+      }
+    ),
     alt: image.alt,
     width: image.width,
     height: image.height
@@ -183,7 +195,7 @@ export function pluginMarketplaceListing(input: {
     bundled: false,
     ...(release ? { release, releases } : {}),
     ...pluginCatalogListingDetails(release),
-    ...pluginCatalogListingImages(release),
+    ...pluginCatalogListingImages(release, snapshot),
     ...(blocked
       ? {
           blockedByKillList: {

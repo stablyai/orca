@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { PluginCardArt, type PluginArtPalette } from '../list/PluginCardArt'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from '../list/PluginRowArt'
+import { retryPluginCatalogImage } from '../presentation/retry-plugin-catalog-image'
 import { Button } from '../../ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../ui/dialog'
 
@@ -24,8 +25,13 @@ export function PluginPageHero({
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
       {cover && cover.url !== failedCover ? (
         <img
+          key={cover.url}
           src={cover.url}
-          onError={() => setFailedCover(cover.url)}
+          onError={(event) => {
+            if (!retryPluginCatalogImage(event.currentTarget)) {
+              setFailedCover(cover.url)
+            }
+          }}
           alt={cover.alt}
           width={cover.width}
           height={cover.height}
@@ -58,18 +64,20 @@ export function PluginScreenshots({
   const [failedShots, setFailedShots] = useState<ReadonlySet<string>>(new Set())
   const thumbs = useRef(new Map<string, HTMLButtonElement>())
   const returnTo = useRef<string | null>(null)
-  // Why the URL: it names the verified bytes by hash, so equal URLs are the same picture.
-  const shots = (images?.screenshots ?? []).filter(
-    (shot) =>
-      shot.url.split('?')[0] !== images?.cover?.url.split('?')[0] && !failedShots.has(shot.url)
-  )
+  const shots = (images?.screenshots ?? [])
+    .map((shot, index) => ({ ...shot, key: `${index}:${shot.url}` }))
+    .filter(
+      (shot) =>
+        shot.url.split('?')[0] !== images?.cover?.url.split('?')[0] && !failedShots.has(shot.key)
+    )
   if (shots.length === 0) {
     return null
   }
-  const shown = shots.find((shot) => shot.url === open) ?? null
-  const hideShot = (url: string): void => {
-    setFailedShots((current) => new Set([...current, url]))
-    if (open === url) {
+  const shownIndex = shots.findIndex((shot) => shot.key === open)
+  const shown = shots[shownIndex] ?? null
+  const hideShot = (key: string): void => {
+    setFailedShots((current) => new Set([...current, key]))
+    if (open === key) {
       setOpen(null)
     }
   }
@@ -78,8 +86,8 @@ export function PluginScreenshots({
       current === null
         ? current
         : (shots[
-            (shots.findIndex((shot) => shot.url === current) + delta + shots.length) % shots.length
-          ]?.url ?? null)
+            (shots.findIndex((shot) => shot.key === current) + delta + shots.length) % shots.length
+          ]?.key ?? null)
     )
   return (
     <section className="mt-6">
@@ -89,13 +97,13 @@ export function PluginScreenshots({
       </h3>
       <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 scrollbar-sleek">
         {shots.map((shot) => (
-          <li key={shot.url} className="w-60 shrink-0 snap-start">
+          <li key={shot.key} className="w-60 shrink-0 snap-start">
             <button
               ref={(node) => {
                 if (node) {
-                  thumbs.current.set(shot.url, node)
+                  thumbs.current.set(shot.key, node)
                 } else {
-                  thumbs.current.delete(shot.url)
+                  thumbs.current.delete(shot.key)
                 }
               }}
               type="button"
@@ -106,13 +114,17 @@ export function PluginScreenshots({
                 { value0: shot.alt }
               )}
               onClick={() => {
-                returnTo.current = shot.url
-                setOpen(shot.url)
+                returnTo.current = shot.key
+                setOpen(shot.key)
               }}
             >
               <img
                 src={shot.url}
-                onError={() => hideShot(shot.url)}
+                onError={(event) => {
+                  if (!retryPluginCatalogImage(event.currentTarget)) {
+                    hideShot(shot.key)
+                  }
+                }}
                 alt=""
                 width={shot.width}
                 height={shot.height}
@@ -148,8 +160,13 @@ export function PluginScreenshots({
             <>
               {/* Why the top margin: the close button sits above the image, never over it. */}
               <img
+                key={shown.key}
                 src={shown.url}
-                onError={() => hideShot(shown.url)}
+                onError={(event) => {
+                  if (!retryPluginCatalogImage(event.currentTarget)) {
+                    hideShot(shown.key)
+                  }
+                }}
                 alt={shown.alt}
                 className="mt-6 block max-h-[calc(100vh-14rem)] w-full rounded-lg object-contain"
               />
@@ -164,7 +181,7 @@ export function PluginScreenshots({
                         'auto.components.settings.PluginPageHero.position',
                         '{{value0}} of {{value1}}',
                         {
-                          value0: shots.findIndex((shot) => shot.url === open) + 1,
+                          value0: shownIndex + 1,
                           value1: shots.length
                         }
                       )}

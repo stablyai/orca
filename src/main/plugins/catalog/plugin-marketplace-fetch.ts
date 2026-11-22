@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import {
   loadCatalogFiles,
   MARKETPLACE_GIT_TIMEOUT_MS,
@@ -18,7 +19,11 @@ import { formatPluginSchemaIssues } from '../../../shared/plugins/manifest/plugi
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
 import { createCatalogBufferMemo, type CatalogBlobReader } from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
-import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
+import type {
+  CatalogRepositorySlot,
+  PluginMarketplaceCachedSnapshot,
+  PluginMarketplaceRegisteredSource
+} from './plugin-marketplace-store'
 
 const MARKETPLACE_INDEX_MAX_BYTES = 16 * 1024 * 1024
 export type PluginMarketplaceFetchResult = {
@@ -27,19 +32,26 @@ export type PluginMarketplaceFetchResult = {
 }
 
 /** System Git retains private-repo SSH agent and credential-helper support. */
-export async function fetchPluginMarketplace(
+export async function fetchPluginMarketplace<T>(
   source: PluginMarketplaceRegisteredSource,
   options: {
     repositories: Pick<PluginCatalogRepositoryStore, 'refresh'>
-    publishedCommit?: string
-  }
-): Promise<PluginMarketplaceFetchResult> {
-  const { commit, value } = await options.repositories.refresh(
+    published: PluginMarketplaceCachedSnapshot | null
+  },
+  save: (result: PluginMarketplaceFetchResult, slot: CatalogRepositorySlot) => Promise<T>
+): Promise<T> {
+  return options.repositories.refresh(
     source,
-    (repository, revision) => readMarketplaceAtCommit(repository, revision, source.source.url),
-    options.publishedCommit
+    options.published,
+    async (repository, revision, slot) =>
+      save(
+        {
+          marketplaceCommit: revision,
+          marketplace: await readMarketplaceAtCommit(repository, revision, source.source.url)
+        },
+        slot
+      )
   )
-  return { marketplaceCommit: commit, marketplace: value }
 }
 
 /** Prefers orca-catalog.json; repositories that only publish the frozen v1 file still load. */
@@ -50,7 +62,17 @@ async function readMarketplaceAtCommit(
 ): Promise<PluginMarketplace> {
   const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
   const listing = await gitExecFileAsyncBuffer(
-    ['ls-tree', '-l', '-z', commit, '--', PLUGIN_CATALOG_FILENAME, PLUGIN_MARKETPLACE_FILENAME],
+    [
+      '--git-dir',
+      join(repository, '.git'),
+      'ls-tree',
+      '-l',
+      '-z',
+      commit,
+      '--',
+      PLUGIN_CATALOG_FILENAME,
+      PLUGIN_MARKETPLACE_FILENAME
+    ],
     { ...options, maxBuffer: 64 * 1024 }
   )
   const blobs = new Map<string, { object: string; size: number }>()
@@ -70,10 +92,13 @@ async function readMarketplaceAtCommit(
   if (blob.size > MARKETPLACE_INDEX_MAX_BYTES) {
     throw new Error(`${filename} exceeds its size limit`)
   }
-  const bytes = await gitExecFileAsyncBuffer(['cat-file', 'blob', blob.object], {
-    ...options,
-    maxBuffer: MARKETPLACE_INDEX_MAX_BYTES
-  })
+  const bytes = await gitExecFileAsyncBuffer(
+    ['--git-dir', join(repository, '.git'), 'cat-file', 'blob', blob.object],
+    {
+      ...options,
+      maxBuffer: MARKETPLACE_INDEX_MAX_BYTES
+    }
+  )
   const index = parsePluginMarketplaceIndex(filename, bytes.stdout)
   const loaded: CatalogLoadState = {
     files: new Map(),

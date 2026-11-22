@@ -2,7 +2,8 @@ import { validateCatalogImage } from '../catalog/plugin-catalog-image-extraction
 import { protocol } from 'electron'
 import {
   PLUGIN_IMAGE_SCHEME,
-  parsePluginImageUrl
+  parsePluginImageUrl,
+  type PluginImageReference
 } from '../../../shared/plugins/images/plugin-image-url'
 import { pluginThemeBackgroundFile } from '../contributions/plugin-theme-background-image'
 import { readCheckedPluginImage, type CheckedPluginImage } from './plugin-image-read'
@@ -15,7 +16,10 @@ import { parsePluginFontSlot } from '../../../shared/plugins/contributions/plugi
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
-  ensureCatalogImage?: (sha256: string) => Promise<void>
+  readCatalogImage?: (
+    reference: Extract<PluginImageReference, { kind: 'catalog' }>,
+    signal: AbortSignal
+  ) => Promise<CheckedPluginImage | null>
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
   /** Enabled and consented; fonts are served only for these. */
   findApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -60,12 +64,10 @@ export function createPluginImageRequestHandler(
     try {
       let asset: CheckedPluginImage | CheckedPluginFont | null = null
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
-      if (reference?.kind === 'sha') {
+      if (reference?.kind === 'catalog') {
+        asset = (await dependencies.readCatalogImage?.(reference, request.signal)) ?? null
+      } else if (reference?.kind === 'sha') {
         asset = await dependencies.cache.get(reference.sha256)
-        if (!asset && dependencies.ensureCatalogImage) {
-          await dependencies.ensureCatalogImage(reference.sha256)
-          asset = await dependencies.cache.get(reference.sha256)
-        }
         if (
           asset &&
           reference.image &&
@@ -93,7 +95,7 @@ export function createPluginImageRequestHandler(
           ? await readInstalledImage(plugin, reference.contentHash, reference.slot)
           : null
       }
-      if (!asset) {
+      if (!asset || request.signal.aborted) {
         return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
       }
       return new Response(request.method === 'HEAD' ? null : new Uint8Array(asset.bytes), {

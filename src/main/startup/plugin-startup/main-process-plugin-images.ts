@@ -21,7 +21,7 @@ export function createMainProcessPluginImages(
   const images = new PluginCatalogImageOnDemand({ cache: imageCache, store, repositories })
   installPluginImageProtocolHandler({
     cache: imageCache,
-    ensureCatalogImage: (hash) => images.ensureCached(hash),
+    readCatalogImage: (reference, signal) => images.read(reference, signal),
     findValidPlugin: options.findValidPlugin,
     findApprovedPlugin: options.findApprovedPlugin
   })

@@ -13,7 +13,7 @@ export async function readMarketplaceSnapshots(
   const snapshots = await Promise.all(
     sources.map(async (source) => ({
       source,
-      snapshot: await store.readSnapshot(source.id)
+      snapshot: await store.readSnapshot(source.id).catch(() => null)
     }))
   )
   return snapshots.filter(
