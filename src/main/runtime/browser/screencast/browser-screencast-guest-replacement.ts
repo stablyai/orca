@@ -12,24 +12,28 @@ export class BrowserScreencastGuestReplacements<Stream extends ReplaceableStream
 
   constructor(private readonly activeByPageId: Map<string, Stream>) {}
 
-  /** The page's stream a new viewer may join, once no replacement or stop is under way. */
-  async settledStream(browserPageId: string): Promise<Stream | undefined> {
+  /**
+   * Resolves once no replacement or stop is under way for the page. Callers read and start the
+   * page's stream in the same synchronous step after this, so two viewers never both start one.
+   */
+  async settle(browserPageId: string): Promise<void> {
     for (;;) {
-      const replacement = this.byPageId.get(browserPageId)
       const active = this.activeByPageId.get(browserPageId)
-      if (replacement) {
-        await replacement
-      } else if (active?.stopping) {
-        await active.session?.done
-      } else {
-        return active
+      const wait =
+        this.byPageId.get(browserPageId) ?? (active?.stopping ? active.session?.done : undefined)
+      if (!wait) {
+        return
       }
+      await wait
     }
   }
 
   /** Ends the page's streams so viewers resubscribe instead of failing on detach, then swaps its guest. */
   async replace(browserPageId: string, swap: () => Promise<void>): Promise<void> {
+    // Switches of one page run in order, so the last one asked for is the one that sticks.
+    const previous = this.byPageId.get(browserPageId)
     const replacement = (async () => {
+      await previous
       const active = this.activeByPageId.get(browserPageId)
       const session = active ? await active.started.catch(() => null) : null
       if (active && session) {

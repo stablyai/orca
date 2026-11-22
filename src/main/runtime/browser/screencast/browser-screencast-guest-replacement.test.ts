@@ -41,13 +41,34 @@ describe('BrowserScreencastGuestReplacements', () => {
       })
       events.push('swapped')
     })
-    const joined = replacements.settledStream('page').then((stream) => {
-      events.push(`viewer joined ${stream === undefined ? 'fresh' : 'old'}`)
+    const joined = replacements.settle('page').then(() => {
+      events.push(`viewer joined ${active.has('page') ? 'old' : 'fresh'}`)
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(events).toEqual(['swap after stop'])
     finishSwap()
     await Promise.all([replaced, joined])
     expect(events).toEqual(['swap after stop', 'swapped', 'viewer joined fresh'])
+  })
+
+  it('runs overlapping swaps of one page in the order they were asked for', async () => {
+    const replacements = new BrowserScreencastGuestReplacements(new Map<string, Stream>())
+    const events: string[] = []
+    let finishFirst!: () => void
+    const first = replacements.replace('page', async () => {
+      events.push('first started')
+      await new Promise<void>((resolve) => {
+        finishFirst = resolve
+      })
+      events.push('first done')
+    })
+    const second = replacements.replace('page', async () => {
+      events.push('second started')
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(events).toEqual(['first started'])
+    finishFirst()
+    await Promise.all([first, second])
+    expect(events).toEqual(['first started', 'first done', 'second started'])
   })
 })

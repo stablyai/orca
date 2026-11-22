@@ -42,9 +42,7 @@ import { askScreencastViewerPagePrompts } from './browser-screencast-page-prompt
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
-  readonly guestReplacements = new BrowserScreencastGuestReplacements(
-    this.activeScreencastsByPageId
-  )
+  readonly guestSwaps = new BrowserScreencastGuestReplacements(this.activeScreencastsByPageId)
 
   constructor(
     private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
@@ -87,7 +85,8 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone = resolve
     })
     let createdPageStream = false
-    let active = await this.guestReplacements.settledStream(browserPageId)
+    await this.guestSwaps.settle(browserPageId)
+    let active = this.activeScreencastsByPageId.get(browserPageId)
     // Read the guest only now: a replacement swaps it while this viewer waits.
     const { webContents: guest } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,

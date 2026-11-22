@@ -53,7 +53,7 @@ export class RuntimeBrowserProfiles {
       'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
     >,
     private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>,
-    private readonly pageGuestSwaps: Pick<RuntimeBrowserScreencasts['guestReplacements'], 'replace'>
+    private readonly pageGuestSwaps: Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>
   ) {}
 
   async browserTabSetProfile(
@@ -129,19 +129,20 @@ export class RuntimeBrowserProfiles {
     const offscreen = this.host.getOffscreenBrowserBackend()
     if (offscreen?.ownsTab(browserPageId)) {
       // No pane remounts a server's page; viewers resubscribe once it is rebuilt in the profile.
-      await this.pageGuestSwaps.replace(browserPageId, () =>
-        offscreen.setTabProfile(browserPageId, profile.id)
-      )
-      const worktreeId = browserManager.getWorktreeIdForTab(browserPageId)
-      if (worktreeId) {
-        this.host.serveBrowserTabs?.profileChanged({
-          worktreeId,
-          pageId: browserPageId,
-          profileId: profile.id,
-          sessionPartition: profile.partition
-        })
-        this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
-      }
+      // The saved profile follows inside the swap, so overlapping switches save in the order they ran.
+      await this.pageGuestSwaps.replace(browserPageId, async () => {
+        await offscreen.setTabProfile(browserPageId, profile.id)
+        const worktreeId = browserManager.getWorktreeIdForTab(browserPageId)
+        if (worktreeId) {
+          this.host.serveBrowserTabs?.profileChanged({
+            worktreeId,
+            pageId: browserPageId,
+            profileId: profile.id,
+            sessionPartition: profile.partition
+          })
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
+      })
       return { browserPageId, profileId: profile.id, profileLabel: profile.label }
     }
 

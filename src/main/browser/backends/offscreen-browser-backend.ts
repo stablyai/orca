@@ -136,13 +136,18 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const { worktreeId } = params
     const { onPageNavigated } = this.options
     if (worktreeId && onPageNavigated) {
-      const report = (): void =>
+      const report = (): void => {
+        // A page replaced by a profile switch must not save its last address over the new one's.
+        if (this.windowsByPageId.get(browserPageId) !== win) {
+          return
+        }
         onPageNavigated({
           worktreeId,
           pageId: browserPageId,
           url: win.webContents.getURL(),
           title: win.webContents.getTitle()
         })
+      }
       // Persist at navigation milestones, avoiding writes for every dynamic title update.
       win.webContents.on('did-navigate-in-page', report)
       win.webContents.on('did-stop-loading', report)
