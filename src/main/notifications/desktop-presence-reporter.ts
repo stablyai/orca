@@ -91,6 +91,7 @@ export function startDesktopPresenceReporter(
   deps: DesktopPresenceReporterDeps & {
     /** Hold away through sleep/lock until resume/unlock. */
     subscribePowerEvents: (handlers: { away: () => void; back: () => void }) => () => void
+    subscribeAwayChanges: (onChange: () => void) => () => void
   }
 ): () => void {
   const reporter = createDesktopPresenceReporter(deps)
@@ -100,8 +101,10 @@ export function startDesktopPresenceReporter(
     away: () => reporter.setForcedAway(true),
     back: () => reporter.setForcedAway(false)
   })
+  const unsubscribeAwayChanges = deps.subscribeAwayChanges(reporter.tick)
   return () => {
     clearInterval(timer)
     unsubscribe()
+    unsubscribeAwayChanges()
   }
 }

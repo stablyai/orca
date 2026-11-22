@@ -10,7 +10,10 @@ import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
-import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import {
+  readDesktopAwayState,
+  subscribeDesktopAwayLockChanges
+} from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
@@ -60,6 +63,7 @@ export function initializeMainProcessObservers(store: Store): void {
   })
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
+    subscribeAwayChanges: subscribeDesktopAwayLockChanges,
     listTargets: listCapableSharedControlSockets,
     subscribePowerEvents: ({ away, back }) => {
       powerMonitor.on('suspend', away)
