@@ -12,7 +12,6 @@ import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-se
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { WORKSPACE_AGENT_ROW_ATTR } from '../../workspace-actions/context-menu/workspace-agent-row-marker'
 import {
   clearWorktreeAgentExpansionStateForTests,
   seedWorktreeAgentExpansionStateForTests
@@ -143,11 +142,10 @@ function surfaceOf(container: HTMLElement): Element {
   return surface
 }
 
+/** Finds rows by their own class, not by the marker under test, so removing the marker fails on the menu. */
 function agentRows(container: HTMLElement): { root: Element; child: Element } {
-  const rows = Array.from(container.querySelectorAll(`[${WORKSPACE_AGENT_ROW_ATTR}]`))
-  const child = container.querySelector(
-    `.worktree-agent-lineage-child-row[${WORKSPACE_AGENT_ROW_ATTR}]`
-  )
+  const rows = Array.from(container.querySelectorAll('.agent-disclosure-row'))
+  const child = container.querySelector('.agent-disclosure-row.worktree-agent-lineage-child-row')
   const root = rows.find((row) => row !== child)
   if (!root || !child) {
     throw new Error('expected a root agent row and its worker’s child row')
