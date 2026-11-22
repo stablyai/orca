@@ -19,8 +19,9 @@ export const WATCH_PR_EVENTS = [
   'comment'
 ] as const
 
-const DEADLINE_LINE =
-  'If Orca says the deadline came first, no event came in time: read the pull request fresh with gh (state, mergeable, checks) before acting.'
+/** Named here too, since a caller's prompt may not say which pull request it is. */
+const deadlineLine = (pr: string) =>
+  `If Orca says the deadline came first, no event came in time: read ${pr} fresh with gh (state, mergeable, checks) before acting.`
 
 /** owner/repo#n, from that or a pull request link. */
 export function parseWatchedPr(raw: string): string {
@@ -74,7 +75,7 @@ export function watchPrCreateFlags(flags: Flags, now: number): Flags {
     created.delete(own)
   }
   created.set('name', getOptionalStringFlag(flags, 'name') ?? `PR ${pr}`)
-  created.set('prompt', `${prompt}\n\n${DEADLINE_LINE}`)
+  created.set('prompt', `${prompt}\n\n${deadlineLine(pr)}`)
   created.set(
     'on',
     WATCH_PR_EVENTS.map((event) => `github.${event} subject=${pr}`).join(REPEATED_FLAG_SEPARATOR)

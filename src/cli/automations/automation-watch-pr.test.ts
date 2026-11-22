@@ -58,7 +58,7 @@ describe('automations watch-pr', () => {
     expect(params.on).toHaveLength(RULES.length)
     expect(params.once).toEqual({ by: Date.parse('2030-01-01T14:00:00.000Z') })
     expect(params.name).toBe('PR stablyai/orca#482')
-    expect(params.prompt).toMatch(/deadline came first.*read the pull request fresh/)
+    expect(params.prompt).toMatch(/deadline came first.*read stablyai\/orca#482 fresh/)
     expect(params.bot).toMatchObject({ botId: 'bot-1', resultsTo: 'chat' })
   })
 
@@ -76,7 +76,7 @@ describe('automations watch-pr', () => {
     ])
     expect(forty.once).toEqual({ by: Date.parse('2030-01-01T13:30:00.000Z') })
     expect(forty.name).toBe('Watch')
-    expect(forty.prompt).toMatch(/^Fix attempt 1 of 2\n\n/)
+    expect(forty.prompt).toMatch(/^Fix attempt 1 of 2\n\n.*read stablyai\/orca#482 fresh/)
     const by = await watchPr([
       'stablyai/orca#482',
       '--bot',
