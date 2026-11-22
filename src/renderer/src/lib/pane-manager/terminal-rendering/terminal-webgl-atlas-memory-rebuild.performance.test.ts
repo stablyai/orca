@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import type * as AtlasMemoryRebuild from './terminal-webgl-atlas-memory-rebuild'
 
-// Guards #43465: atlas-memory rebuilds need PTY output into the grown atlas, wait for it to pause and for typing to stop, stay ≥60 s apart and only touch that atlas's panes.
+// Guards #43465: atlas-memory rebuilds need PTY output into the grown atlas, wait for it and user input to pause, stay ≥60 s apart and only touch that atlas's panes.
 const QUIET = 2_000
 const INTERVAL = 60_000
 const MAC_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Electron'
@@ -115,7 +115,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toEqual([[busy.pane]])
   })
 
-  it('holds the rebuild while the user types, even once overdue', async () => {
+  it('holds the rebuild while the user types or interacts', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const busy = fakePane(atlas, newAtlas())
     busy.output()
@@ -129,23 +129,18 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toEqual([[busy.pane]])
   })
 
-  it('rebuilds output that never pauses once overdue, at most once per 60 s', async () => {
+  it('never rebuilds while output into the atlas never pauses, with one pending timer at most', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    let current = fakePane(atlas, newAtlas())
-    for (let i = 0; i < 290; i++) {
-      if (rebuilds.at(-1)?.[0] === current.pane) {
-        // A rebuild retires the atlas; the reattached renderer gets a fresh one.
-        atlas.untrackTerminalWebglAtlasPane(current.pane)
-        current = fakePane(atlas, newAtlas())
-      }
-      current.output()
-      atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, current.pane)
-      await vi.advanceTimersByTimeAsync(1_000)
+    const busy = fakePane(atlas, newAtlas())
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, busy.pane)
+    for (let i = 0; i < 3_000; i++) {
+      busy.output()
+      await vi.advanceTimersByTimeAsync(100)
     }
-    // t = 60, 120, 180, 240 s.
-    expect(rebuilds).toHaveLength(4)
-    // One pending timer at most, however many chunks arrived.
+    expect(rebuilds).toHaveLength(0)
     expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
+    await vi.advanceTimersByTimeAsync(QUIET)
+    expect(rebuilds).toEqual([[busy.pane]])
   })
 
   it('rebuilds only the panes that share the grown atlas, re-armed only by their own output', async () => {
@@ -181,7 +176,20 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toEqual([[busy.pane, quiet.pane]])
   })
 
-  it('never starts while an on-screen pane is mid synchronized-output frame, and catches the gap between frames once overdue', async () => {
+  it('waits for an on-screen synchronized-output frame to close, looking again every 250 ms', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const visible = fakePane(atlas, newAtlas())
+    visible.terminal.modes.synchronizedOutputMode = true
+    visible.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
+    await vi.advanceTimersByTimeAsync(QUIET + 1_000)
+    expect(rebuilds).toHaveLength(0)
+    visible.terminal.modes.synchronizedOutputMode = false
+    await vi.advanceTimersByTimeAsync(250)
+    expect(rebuilds).toEqual([[visible.pane]])
+  })
+
+  it('backs off to the 60 s interval when a frame stays open past the watchdog', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const visible = fakePane(atlas, newAtlas())
     visible.terminal.modes.synchronizedOutputMode = true
@@ -189,38 +197,9 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
     await vi.advanceTimersByTimeAsync(QUIET + 3 * INTERVAL)
     expect(rebuilds).toHaveLength(0)
-    // A TUI that keeps reopening frames: the overdue atlas checks every 250 ms and rebuilds in the next gap.
-    visible.terminal.modes.synchronizedOutputMode = false
-    await vi.advanceTimersByTimeAsync(250)
-    expect(rebuilds).toEqual([[visible.pane]])
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('catches a frame that closes without further output', async () => {
-    const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const visible = fakePane(atlas, newAtlas())
-    visible.terminal.modes.synchronizedOutputMode = true
-    visible.output()
-    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
-    await vi.advanceTimersByTimeAsync(QUIET)
-    visible.terminal.modes.synchronizedOutputMode = false
-    await vi.advanceTimersByTimeAsync(INTERVAL)
-    expect(rebuilds).toEqual([[visible.pane]])
-  })
-
-  it('keeps attempts bounded however many chunks arrive inside frames', async () => {
-    const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const visible = fakePane(atlas, newAtlas())
-    visible.terminal.modes.synchronizedOutputMode = true
-    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
-    for (let i = 0; i < 1_200; i++) {
-      visible.output()
-      await vi.advanceTimersByTimeAsync(100)
-    }
-    // 120 s of chunks inside one open frame: one attempt at 60 s, then one look per 250 ms while overdue.
-    expect(rebuilds).toHaveLength(0)
-    expect(visibilityScans.count).toBeLessThanOrEqual(1 + 60_000 / 250 + 1)
-    expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
+    // Nine looks (eight 250 ms retries, then one counted attempt) per interval, three intervals.
+    expect(visibilityScans.count).toBeLessThanOrEqual(4 * 9)
+    expect(vi.getTimerCount()).toBe(1)
   })
 
   it('visits only the due atlas owners on each attempt, however many terminals are attached', async () => {
