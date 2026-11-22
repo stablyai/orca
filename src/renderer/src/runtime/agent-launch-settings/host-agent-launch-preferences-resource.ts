@@ -117,10 +117,6 @@ subscribeHostAgentLaunchSettings((owner) => {
   }
 })
 
-export function clearHostAgentMenuSettingsForTests(): void {
-  snapshotByEnvironment.forEach((_, id) => forget(id))
-}
-
 export function resource(owner: AgentLaunchSettingsOwner): Resource {
   const key = snapshotKey(owner.environmentId, owner.pairingRevision, owner.runtimeId)
   const previous = snapshotByEnvironment.get(owner.environmentId)

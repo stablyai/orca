@@ -58,6 +58,10 @@ export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
  *  constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
 
+/** The cloud takes a reply's `choices` and routes a press of one as its presser's message. Its own
+ *  constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
+
 /** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'

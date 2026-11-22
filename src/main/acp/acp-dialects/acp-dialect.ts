@@ -17,9 +17,11 @@ import type { AgentSessionOptionChoice } from '../../../shared/agent-session/age
 import type {
   AvailableCommand,
   ClientCapabilities,
+  CompactionUpdate,
   InitializeResponse,
   ModelInfo,
   SessionNotification,
+  SessionUpdate,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
@@ -60,6 +62,8 @@ export type AcpSubagentUpdate = {
   /** Spawning provider turn. */
   turn?: string
   result?: string
+  /** Why a failed subagent failed. */
+  error?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
   /** The provider started this subagent again; reopens it after an ending. */
@@ -78,6 +82,8 @@ export type AcpChildSessionReport = {
   state?: NativeChatSubagentState
   /** The child began an execution. */
   started?: true
+  /** Why a failed child failed. */
+  error?: string
   update?: SessionNotification
 }
 
@@ -221,6 +227,8 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own compaction report, read as the standard `compaction_update`. */
+  compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */
   compactCommand?: string
   /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */

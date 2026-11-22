@@ -39,7 +39,8 @@ export function BotItemsSection({
   botRead,
   asks,
   offline,
-  focusFallback
+  focusFallback,
+  scroller
 }: {
   bot: Bot
   list: BotItemsShownList
@@ -57,6 +58,8 @@ export function BotItemsSection({
   asks: BotNeedsYouAsks
   offline: boolean
   focusFallback: React.RefObject<HTMLElement | null>
+  /** The panel's scroller, for windowing long groups. */
+  scroller?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const { items, shown, staleDays } = list
@@ -128,6 +131,7 @@ export function BotItemsSection({
         asks={asks}
         offline={offline}
         focusFallback={focusFallback}
+        scroller={scroller}
       />
       {itemsNote()}
     </>

@@ -184,15 +184,16 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
           '-mb-3',
-        // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
-        joinsActivityAbove && '-mt-4'
+        // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
+        // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
+        joinsActivityAbove && '-mt-3.5'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : itemNotes ? (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           {itemNotes.map((note) => (
             <MessageRow
               key={note.id}

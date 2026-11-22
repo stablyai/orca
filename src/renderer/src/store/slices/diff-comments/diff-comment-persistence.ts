@@ -63,15 +63,6 @@ const floorSeedEpochByQueue = new Map<string, number>()
 // The ids are every note this copy listed or tried to write since: only those are its to change on the host.
 const ownNoteIdsAfterFailure = new Map<string, Set<string>>()
 
-export function resetDiffCommentPersistenceForTests(): void {
-  persistQueueByWorktree.clear()
-  floorKeysByQueue.clear()
-  lastPersistedByQueue.clear()
-  lastMutationNextByQueue.clear()
-  floorSeedEpochByQueue.clear()
-  ownNoteIdsAfterFailure.clear()
-}
-
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
   owner: DiffCommentOwner

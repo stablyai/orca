@@ -1,3 +1,5 @@
+import { SkillRootUnreadableError } from './skill-root-unreadable'
+
 export type SkillScanOutcome<T> = { value: T; cached: boolean }
 
 export type SkillScanRunOptions = {
@@ -24,10 +26,11 @@ export class SkillScanShedError extends Error {
   }
 }
 
-/** Shed/abort/timeout means unavailable. Name matching is narrow because local filesystem errors are caught inside scans; only their signal errors escape. */
+/** Shed/abort/timeout/unreadable root means unavailable. Name matching is narrow because other filesystem errors are caught inside scans; only signal and root-read errors escape. */
 export function isSkillRootUnavailableError(error: unknown): boolean {
   return (
     error instanceof SkillScanShedError ||
+    error instanceof SkillRootUnreadableError ||
     (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
   )
 }
