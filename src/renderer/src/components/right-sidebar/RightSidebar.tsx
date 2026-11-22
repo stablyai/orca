@@ -7,11 +7,8 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { measureTabTitle } from './right-sidebar-tab-title-width'
-import {
-  ActivityBarButton,
-  RIGHT_SIDEBAR_ATTRIBUTE,
-  rightSidebarControlPressProps
-} from './activity-bar/activity-bar-buttons'
+import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
@@ -223,7 +220,7 @@ function RightSidebarInner(): React.JSX.Element {
           type="button"
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
-          {...rightSidebarControlPressProps}
+          {...keepPaneFocusPressProps}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <SidebarToggleIcon side="right" size={16} />
@@ -240,7 +237,6 @@ function RightSidebarInner(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
-      {...{ [RIGHT_SIDEBAR_ATTRIBUTE]: '' }}
       className={cn(
         'relative flex-shrink-0 flex flex-row',
         // Allow the open resize handle to overflow; at width zero, clip mounted content and icons.

@@ -9,17 +9,19 @@ export const keepFocusPressProps = {
   onMouseDown: (event: MouseEvent) => event.preventDefault()
 }
 
+// The workbench holds every pane (terminal hosts included); the floating terminal panel sits outside it.
+const PANE_SURFACE_SELECTOR = '[data-terminal-workbench-container], [data-floating-terminal-panel]'
+
 /**
- * keepFocusPressProps for a control that closes or swaps `region`: focus inside it moves to the
- * control as before, so a field there blurs and saves instead of unmounting with unsaved input.
+ * For sidebar and titlebar chrome: a press keeps focus only while it is in a pane (terminal, editor,
+ * chat), which the press can't unmount. Focus anywhere else moves to the control as usual, so a
+ * field in a sidebar or its portals blurs (and saves) before the press closes or swaps it.
  */
-export function keepOutsideFocusPressProps(region: (pressed: HTMLElement) => Element | null) {
-  return {
-    [KEEPS_FOCUS_ATTRIBUTE]: '',
-    onMouseDown: (event: MouseEvent<HTMLElement>) => {
-      if (!region(event.currentTarget)?.contains(document.activeElement)) {
-        event.preventDefault()
-      }
+export const keepPaneFocusPressProps = {
+  [KEEPS_FOCUS_ATTRIBUTE]: '',
+  onMouseDown: (event: MouseEvent) => {
+    if (document.activeElement?.closest(PANE_SURFACE_SELECTOR)) {
+      event.preventDefault()
     }
   }
 }

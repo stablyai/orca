@@ -15,16 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import {
-  keepFocusPressProps,
-  keepOutsideFocusPressProps
-} from '@/lib/overlay-interaction/focus-keeping-press'
-
-export const RIGHT_SIDEBAR_ATTRIBUTE = 'data-right-sidebar'
-/** Keeps the terminal's focus, but a field inside the sidebar blurs (and saves) before its panel swaps or closes. */
-export const rightSidebarControlPressProps = keepOutsideFocusPressProps((pressed) =>
-  pressed.closest(`[${RIGHT_SIDEBAR_ATTRIBUTE}]`)
-)
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -116,7 +107,7 @@ export function TopActivityOverflowMenu({
         <button
           ref={triggerRef}
           type="button"
-          {...keepFocusPressProps}
+          {...keepPaneFocusPressProps}
           className={cn(
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
@@ -246,7 +237,7 @@ export function ActivityBarButton({
       )}
       // Enter and Space fire click with detail 0.
       onClick={(event) => onClick(event.detail === 0)}
-      {...rightSidebarControlPressProps}
+      {...keepPaneFocusPressProps}
       data-workspace-board-dismiss=""
       data-activity-plugin-key={item.pluginKey}
       aria-label={activityItemAriaLabel(item, effectiveStatus, t)}

@@ -4,11 +4,7 @@ import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import logo from '../../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  keepFocusPressProps,
-  keepOutsideFocusPressProps
-} from '@/lib/overlay-interaction/focus-keeping-press'
-import { WORKSPACE_LIST_REGION_ID } from '@/components/app-rail/app-rail-layout'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -28,11 +24,6 @@ import {
   registerTitlebarSidebarToggle,
   unregisterTitlebarSidebarToggle
 } from './titlebar-sidebar-toggle-ref'
-
-// Keeps the terminal's focus, but a rename typed in the sidebar blurs (and saves) before it collapses.
-const sidebarTogglePressProps = keepOutsideFocusPressProps(() =>
-  document.getElementById(WORKSPACE_LIST_REGION_ID)
-)
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
@@ -77,7 +68,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                   className="titlebar-icon-button"
                   aria-label={t('auto.App.8b0b8eb54f', 'Application menu')}
                   onClick={() => window.api.ui.popupMenu()}
-                  {...keepFocusPressProps}
+                  {...keepPaneFocusPressProps}
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -115,7 +106,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                 ref={sidebarToggleRef}
                 className="sidebar-toggle"
                 onClick={toggleSidebar}
-                {...sidebarTogglePressProps}
+                {...keepPaneFocusPressProps}
                 aria-label={t('auto.App.e4b9e7dff7', 'Toggle sidebar')}
               >
                 <SidebarToggleIcon side="left" size={16} />
