@@ -15,13 +15,16 @@ import { MobileHomeBots } from '../MobileHomeBots'
 import type { HomeBotRow } from '../bots/home-bot-rows'
 import { MobileHomeTasksSection } from '../MobileHomeTasksSection'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import type { ScreenHeaderAction } from '../../components/nav-bar/ScreenHeader'
+import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
 /** Home's first tab: bots, agents that need you or are working, the desktops, and Tasks. */
 export function MobileHomeFeedTab(props: {
   data: MobileHomeData
   bottomInset: number
   agentHandlers: AgentListRowHandlers
+  /** New workspace, when the header carries it. */
+  createAction?: ScreenHeaderAction
   onSeeAllAgents: () => void
   onOpenBot: (row: HomeBotRow) => void
   onSeeAllBots: () => void
@@ -38,13 +41,15 @@ export function MobileHomeFeedTab(props: {
   const title = (
     <MobileHomeTabHeader
       title={t('home.tabs.feed', 'Feed')}
-      trailing={
-        <MobileHomeTabHeaderButton
-          icon={Settings}
-          accessibilityLabel={t('common.settings', 'Settings')}
-          onPress={props.onOpenSettings}
-        />
-      }
+      actions={[
+        ...(props.createAction ? [props.createAction] : []),
+        {
+          id: 'settings',
+          icon: Settings,
+          label: t('common.settings', 'Settings'),
+          onPress: props.onOpenSettings
+        }
+      ]}
     />
   )
   // Keychain reads can outlast the splash; show the title instead of a blank frame.
@@ -70,6 +75,7 @@ export function MobileHomeFeedTab(props: {
     <>
       {title}
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: props.bottomInset },

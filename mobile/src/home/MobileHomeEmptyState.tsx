@@ -51,6 +51,7 @@ export function MobileHomeEmptyState(props: {
   // Scrolls because a phone in landscape is shorter than the hero and the steps together.
   return (
     <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={[
         styles.container,
         { paddingBottom: props.bottomInset },

@@ -208,7 +208,7 @@ export default function RootLayout() {
                 }}
               >
                 <Stack.Screen
-                  name="index"
+                  name="(home)"
                   options={{
                     headerShown: false,
                     headerTitle: () => <OrcaLogo size={22} />

@@ -35,7 +35,7 @@ import { MobileHomeStats } from '../MobileHomeStats'
 import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
-import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
 import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-accounts/managed-account-display-names'
 
@@ -79,19 +79,23 @@ export function MobileHomeUsageTab(props: {
     <View style={styles.screen}>
       <MobileHomeTabHeader
         title={t('home.tabs.usage', 'Usage')}
-        trailing={
-          host ? (
-            <MobileHomeTabHeaderButton
-              icon={RefreshCw}
-              spinning={refreshing}
-              disabled={!connected || !client}
-              accessibilityLabel={t('home.usage.refresh', 'Refresh usage')}
-              onPress={() => void refresh()}
-            />
-          ) : undefined
+        actions={
+          host
+            ? [
+                {
+                  id: 'refresh',
+                  icon: RefreshCw,
+                  label: t('home.usage.refresh', 'Refresh usage'),
+                  spinning: refreshing,
+                  disabled: !connected || !client,
+                  onPress: () => void refresh()
+                }
+              ]
+            : []
         }
       />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: spacing.xl + props.bottomInset },

@@ -18,7 +18,7 @@ function isFilled(fill: LucideProps['fill']): boolean {
 
 function nativeIcon(name: NativeIconName): AppIcon {
   const [ios, android, iosFill]: readonly [string, string, string?] = NATIVE_ICON_SYMBOLS[name]
-  const symbol: NativeIconSymbol = { ios, android }
+  const symbol: NativeIconSymbol = { ios, android, iosFill }
   function Icon({
     size = 24,
     color,

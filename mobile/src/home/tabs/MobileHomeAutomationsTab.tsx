@@ -26,6 +26,7 @@ import { homeListStyles as list } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeAutomationRow, MobileHomeAutomationRunRow } from './MobileHomeAutomationRows'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
+import type { ScreenHeaderAction } from '../../components/nav-bar/ScreenHeader'
 import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
 const RECENT_RUN_LIMIT = 5
@@ -38,8 +39,10 @@ export function MobileHomeAutomationsTab(props: {
   connectedHosts: readonly HostProfile[]
   hostStates: Record<string, ConnectionState>
   bottomInset: number
+  /** New automation, when the header carries it. */
+  createAction?: ScreenHeaderAction
   onOpenAutomations: (hostId: string) => void
-  /** Reports the desktop the tab is showing, so the floating + can create on it. */
+  /** Reports the desktop the tab is showing, so New automation can create on it. */
   onHostChange: (hostId: string | null) => void
 }) {
   const t = useMobileTranslation()
@@ -52,8 +55,12 @@ export function MobileHomeAutomationsTab(props: {
   }, [hostId, onHostChange])
   return (
     <>
-      <MobileHomeTabHeader title={t('home.tabs.automations', 'Automations')} />
+      <MobileHomeTabHeader
+        title={t('home.tabs.automations', 'Automations')}
+        actions={props.createAction ? [props.createAction] : []}
+      />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.content, { paddingBottom: props.bottomInset }]}
         showsVerticalScrollIndicator={false}
       >

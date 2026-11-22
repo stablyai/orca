@@ -20,7 +20,7 @@ import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
-import { NativeMenu, type MenuItem } from '../../components/menu/NativeMenu'
+import type { MenuItem } from '../../components/menu/NativeMenu'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useSerializedStoredState } from '../../storage/use-serialized-stored-state'
@@ -35,7 +35,7 @@ import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { AgentsDesktopFilter } from './MobileHomeAgentsDesktopFilter'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
-import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
 /** Every agent on every paired desktop, grouped the way the user picked. */
 export function MobileHomeAgentsTab(props: {
@@ -212,59 +212,56 @@ export function MobileHomeAgentsTab(props: {
     <>
       <MobileHomeTabHeader
         title={t('home.tabs.agents', 'Agents')}
-        trailing={
-          <>
-            <MobileHomeTabHeaderButton
-              icon={Search}
-              accessibilityLabel={t('agents.search.toggle', 'Search agents')}
-              active={searchOpen}
-              onPress={() => {
-                setSearchOpen((open) => !open)
-                setQuery('')
-              }}
-            />
-            <NativeMenu groups={menuGroups}>
-              {(openMenu) => (
-                <MobileHomeTabHeaderButton
-                  icon={SlidersHorizontal}
-                  accessibilityLabel={t('agents.options.open', 'Agent list options')}
-                  onPress={openMenu}
-                />
-              )}
-            </NativeMenu>
-          </>
-        }
+        actions={[
+          {
+            id: 'search',
+            icon: Search,
+            label: t('agents.search.toggle', 'Search agents'),
+            active: searchOpen,
+            onPress: () => {
+              setSearchOpen((open) => !open)
+              setQuery('')
+            }
+          },
+          {
+            id: 'options',
+            icon: SlidersHorizontal,
+            label: t('agents.options.open', 'Agent list options'),
+            menu: menuGroups
+          }
+        ]}
       />
-      {searchOpen ? (
-        <MobileSearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('agents.search.placeholder', 'Search agents')}
-          onClear={() => setQuery('')}
-          autoFocus
-          style={styles.search}
-        />
-      ) : null}
-      {hosts.length > 1 ? (
-        <View style={styles.filters}>
-          <AgentsDesktopFilter
-            hosts={hosts}
-            selected={hostFilter}
-            summaries={hostSummaries}
-            onSelect={setPickedHost}
-          />
-        </View>
-      ) : null}
+      {/* Search and filters scroll with the list, so a native large title collapses over them. */}
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
-          styles.content,
           { paddingBottom: props.bottomInset },
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {body}
+        {searchOpen ? (
+          <MobileSearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('agents.search.placeholder', 'Search agents')}
+            onClear={() => setQuery('')}
+            autoFocus
+            style={styles.search}
+          />
+        ) : null}
+        {hosts.length > 1 ? (
+          <View style={styles.filters}>
+            <AgentsDesktopFilter
+              hosts={hosts}
+              selected={hostFilter}
+              summaries={hostSummaries}
+              onSelect={setPickedHost}
+            />
+          </View>
+        ) : null}
+        <View style={styles.content}>{body}</View>
       </ScrollView>
     </>
   )
