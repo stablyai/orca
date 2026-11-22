@@ -2,6 +2,7 @@ import {
   type RecognizedAgentProcess,
   recognizeAgentProcess
 } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../../shared/terminal/pty/foreground/remote-foreground-evidence-admission'
 import {
@@ -68,6 +69,7 @@ export function handleAgentCompletionInspectionResult(args: {
   }
   if (remote) {
     state.idleShellUnproven = false
+    state.foregroundIsCommand = false
     const evidence = result.foregroundProcessEvidence
     // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
@@ -145,6 +147,8 @@ export function handleAgentCompletionInspectionResult(args: {
   state.idleShellUnproven =
     !recognized &&
     (result.idleShellProven !== true || options.receivesForegroundExitNotices?.() === false)
+  state.foregroundIsCommand =
+    !recognized && result.foregroundProcess !== null && !isShellProcess(result.foregroundProcess)
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.

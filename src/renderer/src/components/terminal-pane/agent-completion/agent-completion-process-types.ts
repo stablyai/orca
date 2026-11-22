@@ -29,6 +29,8 @@ export type ProcessMonitorState = {
   unresolvedFollowUps: number
   /** No host proof that the shell is alone in front: a command may start an agent with no OS event, so a slow re-check stands in (never above main's). */
   idleShellUnproven: boolean
+  /** The last local read named a program that is neither a shell nor an agent; its quiet re-check already paces input. */
+  foregroundIsCommand: boolean
   hasAgentRunEvidence: boolean
   pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null

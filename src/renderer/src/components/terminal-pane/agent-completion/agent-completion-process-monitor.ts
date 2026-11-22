@@ -276,6 +276,15 @@ export function createAgentCompletionProcessMonitor({
       const now = Date.now()
       recordActivityUntil(now, now)
     },
+    // A command pane's 15 s re-check already answers input that prints nothing, so it never reads above main's pace.
+    // A shell keeps the fast read: input there may start an agent (`read -s -n1; run-agent`).
+    recordInputActivity: () => {
+      if (state.foregroundIsCommand && !state.lastForegroundAgent && !state.hasAgentRunEvidence) {
+        return
+      }
+      const now = Date.now()
+      recordActivityUntil(now, now)
+    },
     // Main reports hidden output only on the leading edge of its throttle window, so read after that window.
     recordHiddenOutputActivity: () => {
       const until = Date.now() + HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS
