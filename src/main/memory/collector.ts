@@ -270,12 +270,15 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     ...optionalCommitField(hasPrivateMemory, privateMemory),
     history: readWorkspaceHistory(b.worktreeId)
   }))
+  // With no agent process, restored pane key or chat series, this is the snapshot paired clients have always received.
+  const asPaired =
+    agentTrees.length === 0 && restoredSessionIds.size === 0 && terminalSeries.length === 0
   const agentProcesses = usageOf(agents, hasPrivateMemory)
 
   const snapshot: MemorySnapshot = {
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
-    agentProcesses,
+    ...(asPaired ? {} : { agentProcesses }),
     host,
     processMemoryMetric: processIndex.memoryMetric,
     ...snapshotCommitFields(
@@ -285,6 +288,9 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     totalCpu: appBuckets.cpu + agentProcesses.cpu + terminals.cpu,
     totalMemory: appBuckets.memory + agentProcesses.memory + terminals.memory,
     collectedAt: now
+  }
+  if (asPaired) {
+    return snapshot
   }
   recordPairedReplyParts(snapshot, {
     rowsDiffer: hasChatOnlyRows || terminalSeries.length > 0 || restoredSessionIds.size > 0,
