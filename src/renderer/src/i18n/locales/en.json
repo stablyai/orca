@@ -24772,7 +24772,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
