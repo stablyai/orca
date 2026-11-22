@@ -275,22 +275,24 @@ export class ClaudeAgentViewBridge {
   }
 
   /** Drops a pane's entry: its Claude ended, its binding went away, or Orca dropped the pane. */
-  forgetSession(sessionId: string | undefined): void {
-    for (const session of sessionId ? [...this.sessions.values()] : []) {
-      if (session.sessionId === sessionId) {
+  /** Drops entries of `sessionId` whose own pane `isLive` no longer vouches for (a moved, dead pane). */
+  forgetSession(sessionId: string, isLive: (paneKey: string) => boolean): void {
+    for (const session of this.sessions.values()) {
+      if (session.sessionId === sessionId && !isLive(session.paneKey)) {
         this.forget(session.paneKey)
       }
     }
   }
 
-  forget(paneKey: string, sessionId?: string): void {
+  forget(paneKey: string, sessionId?: string): boolean {
     const session = this.sessions.get(paneKey)
     if (!session || (sessionId && session.sessionId !== sessionId)) {
-      return
+      return false
     }
     session.pending?.finish({ status: 'unavailable' })
     this.sessions.delete(paneKey)
     this.publish()
     this.save()
+    return true
   }
 }

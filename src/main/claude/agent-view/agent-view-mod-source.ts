@@ -14,6 +14,7 @@ let retryDelay = 0
 let timerToken = 0
 let attemptedAt = 0
 let announcing
+let announceAgain = false
 
   async function post($, action, data = {}, session = identity) {
     if (!session) return {}
@@ -55,9 +56,20 @@ let announcing
     schedule($, retryDelay)
   }
 
-  // One registration in flight; concurrent triggers (parallel turns, renders, timers) share it.
+  // One registration in flight. A trigger during it (a view change it may have missed) queues one
+  // follow-up, so concurrent turns coalesce but no change is lost.
   function announce($) {
-    announcing ??= announceNow($).finally(() => { announcing = undefined })
+    if (announcing) {
+      announceAgain = true
+      return announcing
+    }
+    announcing = announceNow($).finally(() => {
+      announcing = undefined
+      if (announceAgain) {
+        announceAgain = false
+        void announce($)
+      }
+    })
     return announcing
   }
 

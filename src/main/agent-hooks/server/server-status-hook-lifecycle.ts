@@ -76,9 +76,20 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     const committed = super.commitStatusRowMutation(before, after, emit)
     // A row moving to another pane is not its Claude ending; the mod keeps its original pane key.
     if (before && (!after || after.agentPresence?.ended)) {
-      this.claudeAgentViews.forget(before.paneKey, before.providerSession?.id)
-      // A moved pane's entry stays under the mod's launch pane key; its session id still names it.
-      this.claudeAgentViews.forgetSession(before.providerSession?.id)
+      const sessionId = before.providerSession?.id
+      const forgotten = this.claudeAgentViews.forget(before.paneKey, sessionId)
+      // A moved pane's entry stays under the mod's launch key: find it by session, sparing any
+      // other pane still running that session (two panes can resume one conversation).
+      if (!forgotten && sessionId && before.payload.agentType === 'claude') {
+        this.claudeAgentViews.forgetSession(
+          sessionId,
+          (paneKey) =>
+            !this.claudeAgentEnded(paneKey) &&
+            this.getStatusSnapshotForPane(this.resolvePaneKeyAlias(paneKey)).some(
+              (row) => row.agentType === 'claude' && row.providerSession?.id === sessionId
+            )
+        )
+      }
     }
     return committed
   }
