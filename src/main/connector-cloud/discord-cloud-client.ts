@@ -10,7 +10,7 @@ import {
 } from '../../shared/connector-bot-discord-contract'
 import type { BotSlackResult } from '../../shared/connector-bot-slack-contract'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
-import { answer } from './bots-cloud-client'
+import { answer } from './connector-cloud-answer'
 import type { ConnectorCloud } from './connector-cloud'
 import type { ConnectorResult } from './connector-cloud-request'
 
