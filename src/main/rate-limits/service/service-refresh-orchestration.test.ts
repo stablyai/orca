@@ -12,7 +12,10 @@ import {
   fetchCodexRateLimits
 } from '../providers/codex/codex-fetcher'
 import {
+  asRateLimitWindow,
   deferred,
+  errorProvider,
+  FakeRateLimitWindow,
   flushMicrotasks,
   mockFreshBackgroundProviderFetches,
   okProvider,
@@ -423,6 +426,57 @@ describe('RateLimitService', () => {
     // The reply replaces the renderer's state, so it must name the account as the push does.
     for (const codex of [(await service.getState()).codex, state.codex]) {
       expect(codex).toMatchObject({ planType: 'pro', usageMetadata: { readingAccount } })
+    }
+  })
+
+  it('retries an expired Claude token on its backoff while the window stays focused', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchActiveClaudeRateLimits)
+        .mockResolvedValueOnce({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        })
+        .mockResolvedValue(okProvider('claude', 12))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('error')
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+
+      expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves an expired Claude token to activation while the window is unfocused', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValue({
+        ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+        usageMetadata: { failureKind: 'stale-token' }
+      })
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      window.focused = false
+      service.attach(asRateLimitWindow(window))
+      service.start()
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+
+      expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(1)
+      service.stop()
+    } finally {
+      vi.useRealTimers()
     }
   })
 })
