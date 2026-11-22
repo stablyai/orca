@@ -694,6 +694,29 @@ describe('shared Codex app-servers', () => {
       expect(terminated).toEqual([{ id: 'job' }])
     })
 
+    it('fails a server that exits during its containment check as an exit, not as uncontained', async () => {
+      let fake: ReturnType<typeof fakeCodex> | undefined
+      const job = CodexSharedServerWindowsJob.create(
+        {
+          createKillOnCloseJob: () => ({ id: 'job' }),
+          assignProcessToJob: () => true,
+          isProcessInJob: () => true,
+          terminateJob: () => true
+        },
+        async () => {
+          // Codex dies while its process table is being read, so no chain is found.
+          fake!.servers[0]!.crash()
+          return []
+        }
+      )!
+      fake = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      const error = await fake.pool
+        .open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+        .catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(Error)
+      expect(error).not.toBeInstanceOf(CodexSharedServerUncontainedError)
+    })
+
     it("closes a server whose job doesn't hold native Codex, so its chat takes its own", async () => {
       const { job, terminated } = fakeWindowsJob(false)
       const { servers, pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })

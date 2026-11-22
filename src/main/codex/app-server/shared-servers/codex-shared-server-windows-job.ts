@@ -56,9 +56,13 @@ export class CodexSharedServerWindowsJob {
 
   /** Throws unless the launcher chain down to native Codex is in the job, and then this
    *  session's later Windows chats keep their own server. Codex that started before assignment,
-   *  or an outer job that forbids nesting, leaves it out. */
-  async requireHolds(rootPid: number | undefined): Promise<void> {
+   *  or an outer job that forbids nesting, leaves it out. A server that exited meanwhile proves
+   *  nothing about containment; its chats already saw the exit, so it fails as an exit. */
+  async requireHolds(rootPid: number | undefined, exited: () => boolean): Promise<void> {
     if (!(await this.holdsServer(rootPid))) {
+      if (exited()) {
+        throw new Error('codex shared app-server exited before it took chats')
+      }
       sharingRefused = true
       throw new CodexSharedServerUncontainedError()
     }
