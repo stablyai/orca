@@ -6,7 +6,8 @@ export type { PickerListDrawerProps, PickerListItem } from './DrawnPickerListDra
 
 /** The platform's pick-one sheet or dialog. */
 export function PickerListDrawer<T extends PickerListItem>(props: PickerListDrawerProps<T>) {
-  const picked = useRef<T | null>(null)
+  // The pick-time onSelect: the owner may clear what it closes over once the sheet closes.
+  const picked = useRef<{ item: T; onSelect: (item: T) => void } | null>(null)
   const renderIcon = props.renderIcon
   return (
     <NativeSinglePicker
@@ -25,16 +26,15 @@ export function PickerListDrawer<T extends PickerListItem>(props: PickerListDraw
       ]}
       selected={props.selectedId}
       onSelect={(id) => {
-        picked.current = props.items.find((item) => item.id === id) ?? null
+        const item = props.items.find((candidate) => candidate.id === id)
+        picked.current = item ? { item, onSelect: props.onSelect } : null
       }}
       onClose={props.onClose}
       // A pick often opens the next sheet, which can only present once this one has gone.
       onAfterClose={() => {
-        const item = picked.current
+        const pending = picked.current
         picked.current = null
-        if (item) {
-          props.onSelect(item)
-        }
+        pending?.onSelect(pending.item)
       }}
     />
   )
