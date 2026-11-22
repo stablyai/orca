@@ -24,30 +24,30 @@ type SessionRowProps = {
   onKill: (session: UnifiedSessionRow) => void
 }
 
-export function SessionRow(props: SessionRowProps): React.JSX.Element {
-  return props.session.liveTitleTabId ? (
-    <LiveTitledSessionRow {...props} tabId={props.session.liveTitleTabId} />
-  ) : (
-    <SessionRowView {...props} />
-  )
-}
-
-/** Only rows named by a live pane title watch titles, so a title change re-renders just its row. */
-function LiveTitledSessionRow({
+/** Only a label named by a live pane title watches titles, so a title change re-renders just that text. */
+function LiveTitleLabel({
   tabId,
-  ...props
-}: SessionRowProps & { tabId: string }): React.JSX.Element {
+  fallback
+}: {
+  tabId: string
+  fallback: string
+}): React.JSX.Element {
   // Select the tab's title map, not a derived string, so unrelated store writes do no scan.
   const liveTitle = firstRuntimePaneTitle(useAppStore((s) => s.runtimePaneTitlesByTabId[tabId]))
-  return (
-    <SessionRowView
-      {...props}
-      session={liveTitle ? { ...props.session, label: liveTitle } : props.session}
-    />
-  )
+  return <>{liveTitle || fallback}</>
 }
 
-function SessionRowView({
+/** The row's label as shown now, read when an action needs it. */
+function currentLabel(session: UnifiedSessionRow): string {
+  const tabId = session.liveTitleTabId
+  const liveTitle = tabId
+    ? firstRuntimePaneTitle(useAppStore.getState().runtimePaneTitlesByTabId[tabId])
+    : undefined
+  return liveTitle || session.label
+}
+
+// The row keeps one element type whether or not its label is live, so a sample never remounts it.
+export function SessionRow({
   session,
   worktreeId,
   onNavigate,
@@ -89,7 +89,11 @@ function SessionRowView({
         )}
       />
       <span className="text-[11px] text-muted-foreground truncate min-w-0 flex-1">
-        {session.label}
+        {session.liveTitleTabId ? (
+          <LiveTitleLabel tabId={session.liveTitleTabId} fallback={session.label} />
+        ) : (
+          session.label
+        )}
       </span>
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
       {/* Reserve the kill gutter for alignment; paired samples are read-only, while bound local rows reveal actions on hover/focus. */}
@@ -99,7 +103,8 @@ function SessionRowView({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onKill(session)
+              const label = currentLabel(session)
+              onKill(label === session.label ? session : { ...session, label })
             }}
             className={cn(
               'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
