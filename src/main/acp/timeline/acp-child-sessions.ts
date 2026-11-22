@@ -29,8 +29,8 @@ const sessionSchema = z.object({ sessionId: z.string() })
 export class AcpChildSessions {
   /** ACP has no message end; a child's text closes at the next message on its channel, or when it ends. */
   private readonly openText = new Map<string, ProviderTimelineTextItem>()
-  /** The current run's latest message since its last tool call: its reply if the run completes. */
-  private readonly replies = new Map<string, { item: string; text: string }>()
+  /** The current run's latest message: its reply if the run completes before more tool work. */
+  private readonly replies = new Map<string, { item: string; text: string; final: boolean }>()
   /** Children that have not reported an ending, which a user's Stop also ends. */
   private readonly running = new Set<string>()
   /** Live children whose execution has started, so closing their session interrupts it. */
@@ -91,7 +91,8 @@ export class AcpChildSessions {
     if (child.started) {
       this.replies.delete(child.agentId)
     }
-    const reply = child.state === 'completed' ? this.replies.get(child.agentId)?.text : undefined
+    const latest = this.replies.get(child.agentId)
+    const reply = child.state === 'completed' && latest?.final ? latest.text : undefined
     // Plain frames for a known child carry no lifecycle, so they publish no evidence.
     const events =
       known && child.state === undefined
@@ -176,9 +177,10 @@ export class AcpChildSessions {
       update.sessionUpdate === 'tool_call' ||
       update.sessionUpdate === 'tool_call_update'
     ) {
-      if (update.sessionUpdate === 'tool_call') {
-        // Text before more tool work was commentary, not the reply.
-        this.replies.delete(producer.agentId)
+      const latest = this.replies.get(producer.agentId)
+      if (update.sessionUpdate === 'tool_call' && latest) {
+        // Commentary unless the same message continues; its row keeps the text from before the tool.
+        latest.final = false
       }
       // An unscoped join keeps partial tool context between updates.
       events = this.tools.translate(update, this.dialect, join)
@@ -203,7 +205,8 @@ export class AcpChildSessions {
     // The record keeps a bounded preview, so only its prefix is worth holding.
     this.replies.set(agentId, {
       item,
-      text: prior + text.slice(0, AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH - prior.length)
+      text: prior + text.slice(0, AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH - prior.length),
+      final: true
     })
   }
 

@@ -6,6 +6,7 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkEvidenceHandle
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import { boundSubagentLabel } from '../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
@@ -18,8 +19,8 @@ import type { AcpSubagentUpdate } from '../acp-dialects/acp-dialect'
 type KnownSubagent = {
   /** Pin replies to the spawning turn. */
   placement: ProviderTimelineJoin
-  /** ACP names no run, and the host keys a run's saved reply by its handle, so each run gets its own. */
-  run: string
+  /** ACP names no run, and the host keys a run's saved reply by its handle, so each started run gets its own. */
+  run?: string
   replyDigest?: string
   /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
@@ -84,12 +85,12 @@ export class AcpSubagents {
         placement: {
           ...(join.thread === undefined ? {} : { thread: join.thread }),
           ...(turn === undefined ? {} : { turn })
-        },
-        run: newRun()
+        }
       }
       this.known.set(update.id, subagent)
-      if (update.restart && subagent.ended !== undefined) {
-        subagent.run = newRun()
+      // Only a provider start proves a new run; a late report after reattaching must not reopen one.
+      if (update.restart && (subagent.run === undefined || subagent.ended !== undefined)) {
+        subagent.run = `acp-child-run:${randomUUID()}`
         subagent.ended = undefined
         subagent.replyDigest = undefined
       }
@@ -126,18 +127,13 @@ export class AcpSubagents {
   }
 }
 
-function newRun(): string {
-  return `acp-child-run:${randomUUID()}`
-}
-
 // Subagents outlive their spawning prompt.
 function subagentEvidence(
   update: AcpSubagentUpdate,
-  runId: string,
+  run: string | undefined,
   observedAt: number
 ): AgentChildWorkEvidence {
-  const id = subagentId(update.id)
-  const handle: AgentChildWorkEvidenceHandle = { idKind: 'task_id', id, runId }
+  const handle = subagentHandle(update.id, run)
   const outcome = update.state === undefined ? undefined : acpSubagentOutcome(update.state)
   if (outcome === undefined) {
     return {
@@ -150,9 +146,9 @@ function subagentEvidence(
         state: update.state === 'idle' ? 'idle' : 'working',
         ...(update.label !== undefined ? { description: boundSubagentLabel(update.label) } : {}),
         ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
-        ...(update.ownerId !== undefined ? { ownerId: subagentId(update.ownerId) } : {}),
+        ...(update.ownerId !== undefined ? { ownerId: subagentHandle(update.ownerId).id } : {}),
         // Hashed handles cannot address provider cancellation.
-        stoppable: id === update.id
+        stoppable: handle.id === update.id
       },
       ...(update.restart ? { restart: true } : {})
     }
@@ -168,8 +164,19 @@ function subagentEvidence(
   }
 }
 
-function subagentId(id: string): string {
-  return id.length <= MAX_SUBAGENT_FIELD_CHARS
-    ? id
-    : `acp-child:${createHash('sha256').update(id).digest('hex')}`
+function subagentHandle(id: string, run?: string): AgentChildWorkEvidenceHandle {
+  const bounded =
+    id.length <= MAX_SUBAGENT_FIELD_CHARS
+      ? id
+      : `acp-child:${createHash('sha256').update(id).digest('hex')}`
+  return {
+    idKind: 'task_id',
+    id: bounded,
+    // Hash the smaller invocation fence while retaining the full handle.
+    ...(run !== undefined
+      ? { runId: run }
+      : bounded.length > AGENT_CHILD_WORK_ID_MAX_LENGTH
+        ? { runId: `acp-child:${createHash('sha256').update(bounded).digest('hex')}` }
+        : {})
+  }
 }

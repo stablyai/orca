@@ -71,19 +71,42 @@ describe('OpenCode child sessions', () => {
     tool('call-2', 11)
     report({ type: 'status', status: 'completed' }, 12)
     report({ type: 'status', status: 'running' }, 13)
-    says('msg-4', 'THIRD', 14)
-    report({ type: 'status', status: 'completed' }, 15)
+    // One OpenCode message can continue after a tool call; its row holds both parts.
+    says('msg-4', 'Checking. ', 14)
+    tool('call-3', 15)
+    says('msg-4', 'THIRD', 16)
+    report({ type: 'status', status: 'completed' }, 17)
 
     const evidence = lane.subagents.drainEvidence()
     const ended = evidence.flatMap((edge) => (edge.type === 'ended' ? [edge] : []))
     expect(ended.map(({ outcome, lastMessage }) => ({ outcome, lastMessage }))).toEqual([
       { outcome: 'succeeded', lastMessage: 'FIRST' },
       { outcome: 'succeeded', lastMessage: undefined },
-      { outcome: 'succeeded', lastMessage: 'THIRD' }
+      { outcome: 'succeeded', lastMessage: 'Checking. THIRD' }
     ])
     // The host keys a saved reply by run, so each run needs its own handle.
     const runs = ended.map((edge) => edge.handle.runId)
     expect(new Set(runs).size).toBe(3)
     expect(runs).not.toContain(undefined)
+
+    // A reattached lane that sees no start must not claim a new run for a child that already ended.
+    const reattached = new AcpTimelineTranslator({
+      sessionId: 'root',
+      dialect: OPENCODE_ACP_DIALECT
+    })
+    reattached.openPrompt('prompt-2', 20)
+    reattached.notification(
+      'opencode/session/child_update',
+      {
+        ...child,
+        type: 'update',
+        update: { sessionUpdate: 'tool_call', toolCallId: 'late', title: 'x' }
+      },
+      21
+    )
+    const late = reattached.subagents.drainEvidence()
+    expect(late.map((edge) => (edge.type === 'live' ? edge.child.handle.runId : 'other'))).toEqual([
+      undefined
+    ])
   })
 })
