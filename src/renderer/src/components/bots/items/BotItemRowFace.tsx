@@ -3,6 +3,7 @@ import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
+import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { useBotMascotLayers } from '../bot-mascot-look'
 import {
   BotGroupFacePicturesContext,
@@ -45,7 +46,7 @@ function BotPanelFace({
   const look = useBotMascotLayers(
     parsed?.kind === 'mascot' ? parsed.id : null,
     bot.avatarColor,
-    bot.avatarOutfit
+    wornBotOutfit(bot.avatarOutfit)
   )
   return (
     <BotAvatarTile

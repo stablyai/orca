@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { lookForOlderClient } from './bot-share-create'
 
-const shared = { avatar: { mascot: 'H1', color: '#f4c4cf', outfit: 'tie' } }
+const shared: Parameters<typeof lookForOlderClient>[2] = {
+  avatar: { mascot: 'H1', color: '#f4c4cf', outfit: 'tie' }
+}
 
 describe('a shared bot created by a client from before shared looks', () => {
   it("gets the shared mascot's color and outfit", () => {
