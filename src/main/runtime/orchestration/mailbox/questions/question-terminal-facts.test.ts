@@ -101,4 +101,24 @@ describe("a terminal taker's pending wake", () => {
     db.db.prepare('UPDATE messages SET run_id = ? WHERE subject = ?').run(run.id, 'r')
     expect(await told()).toEqual([])
   })
+
+  it("doesn't count another Run's rows in a coordinator's own mailbox, which go to that Run's owner", async () => {
+    const id = takenQuestion()
+    paneKeys = ['tab-1:11111111-1111-4111-8111-111111111111']
+    db.createRun({
+      objective: 'bound',
+      coordinatorHandle: HANDLE,
+      coordinatorPaneKey: paneKeys[0],
+      coordinatorOrcaSessionId: null
+    })
+    const other = db.createRun({
+      objective: 'other',
+      coordinatorHandle: 'term_other',
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: null
+    })
+    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'r', body: 'b', runId: other.id })
+    db.rememberRunCoordinatorHandle(other.id, HANDLE)
+    expect(await told()).toEqual([id])
+  })
 })

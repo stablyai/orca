@@ -40,9 +40,15 @@ const NEVER_RUNS = /^(shell|reply|orca|dropped:.*)$/
 
 function wakePending(db: OrchestrationDb, facts: QuestionPartyFacts, party: string): boolean {
   const mailboxes = facts.mailboxes(party)
-  // As terminal delivery: with no Run bound, a Run's rows in its own mailbox wait to be routed
-  // elsewhere; a bound Run's rows are routed into its mailbox and typed.
-  const ownMailboxSkipsRunRows = !mailboxes.some((mailbox) => mailbox.startsWith('run:'))
+  const ownMailbox = party.startsWith('terminal:') ? party.slice('terminal:'.length) : null
+  // As terminal delivery: a Run's rows in a terminal's own mailbox reach it only through a Run bound
+  // to it, which routes them into its mailbox; another Run's rows go to that Run's owner.
+  const boundRunRows = (handle: string) =>
+    mailboxes.some(
+      (mailbox) =>
+        mailbox.startsWith('run:') &&
+        db.hasUndeliveredDirectMessageForRun(mailbox.slice('run:'.length), handle)
+    )
   return mailboxes.some(
     (mailboxHandle) =>
       facts.handingOver(party, mailboxHandle) ||
@@ -51,8 +57,9 @@ function wakePending(db: OrchestrationDb, facts: QuestionPartyFacts, party: stri
         mailboxHandle,
         waiters: undefined,
         reservedTypes: new Set(['heartbeat']),
-        excludeRunOwnedDirect: ownMailboxSkipsRunRows && party === `terminal:${mailboxHandle}`
-      }).messages.length > 0
+        excludeRunOwnedDirect: mailboxHandle === ownMailbox
+      }).messages.length > 0 ||
+      (mailboxHandle === ownMailbox && boundRunRows(mailboxHandle))
   )
 }
 
