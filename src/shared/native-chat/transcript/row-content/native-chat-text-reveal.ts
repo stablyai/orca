@@ -15,7 +15,7 @@ export type NativeChatTextReveal = {
   source: string
   shown: number
   arrivals: TextArrival[]
-  /** The reply redraws whole each step, so it steps plainly for the rest of the reply. */
+  /** The reply redraws whole each step, so for the rest of it, it shows only its saves, as main does. */
   drawsWhole?: true
 }
 
@@ -28,8 +28,6 @@ export type NativeChatTextRevealFrames = {
   stepCost?: (ms: number) => void
   /** Whether this reply's steps have been slow enough to show it redrawn whole each step. */
   redrawsWhole?: () => boolean
-  /** Marks the reply redrawn whole, as a remount that already knew it was. */
-  drawWhole?: () => void
 }
 
 /** Until the display's own frames are measured, assume 60 Hz. */
@@ -71,9 +69,7 @@ const HIDDEN_STEP_MS = 100
  *  time between steps. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
-  busyShare = 1,
-  /** The share for a reply redrawn whole: it shows plainly, so it may step more often. */
-  wholeRedrawShare = busyShare
+  busyShare = 1
 ): NativeChatTextRevealFrames {
   let steppedAt = -Infinity
   let spacing = stepMs
@@ -98,9 +94,8 @@ export function nativeChatRevealStepFrames(
   }
   // Set as each step's cost arrives, so the very next step already waits for it.
   const respace = (): void => {
-    const share = redrawsWhole ? wholeRedrawShare : busyShare
     // No ceiling: a reply that renders slowly takes no more than its share of the thread.
-    spacing = Math.max(stepMs, medianStepCost(stepCosts) / share)
+    spacing = Math.max(stepMs, medianStepCost(stepCosts) / busyShare)
   }
   return {
     now: () => performance.now(),
@@ -116,10 +111,6 @@ export function nativeChatRevealStepFrames(
       respace()
     },
     redrawsWhole: () => redrawsWhole,
-    drawWhole: () => {
-      redrawsWhole = true
-      respace()
-    },
     request: (step) => {
       const id = ++nextId
       const fire = (at: number): void => {

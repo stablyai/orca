@@ -14,10 +14,12 @@ import { documentHeldDrawnCount } from '../session/structured/read/document-view
 import {
   nativeChatRevealStepFrames,
   nativeChatTextAppended,
+  playNativeChatTextReveal,
   playNativeChatTextRevealOnClock,
   receiveNativeChatText,
   startNativeChatTextReveal,
-  type NativeChatTextReveal
+  type NativeChatTextReveal,
+  type NativeChatTextRevealFrames
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 
 const WORD_FADE_MS = 300
@@ -25,16 +27,20 @@ const WORD_FADE_MS = 300
  *  its last words; one element per word across thousands of words would make each step slower. */
 const FADE_MAX_CHARS = 1500
 
-/** Reduced motion, or a reply redrawn whole, still steps on the clock, so slow replies back off,
- *  but each step shows all it has. */
+/** Reduced motion still steps on the clock, so slow replies back off, but each step shows all it has. */
 const PLAIN_REVEAL_MS = 1
+
+/** The display's own frames, as main reveals each save, for a reply redrawn whole. */
+const ANIMATION_FRAMES: NativeChatTextRevealFrames = {
+  now: () => performance.now(),
+  request: (step) => requestAnimationFrame(step),
+  cancel: (frame) => cancelAnimationFrame(frame)
+}
 
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly (one long document) leaves most of the thread to typing and scrolling. */
 const REVEAL_BUSY_SHARE = 1 / 10
-/** A reply redrawn whole shows plainly, without per-word fades, so it may step more often. */
-const WHOLE_REDRAW_BUSY_SHARE = 1 / 3
 
 export type NativeChatPacedText = {
   text: string
@@ -44,7 +50,7 @@ export type NativeChatPacedText = {
   fadeFrom: number | undefined
   /** Selected fading words, which keep their elements so the selection keeps its nodes. */
   fadeHold: MarkdownFadeHold | undefined
-  /** False once the reply steps plainly: held words keep their elements, but nothing animates. */
+  /** False once the reply shows only its saves: held words keep their elements, but nothing animates. */
   fadeAnimates: boolean
 }
 
@@ -56,7 +62,9 @@ export function useNativeChatPacedText(
   text: string,
   streaming: boolean,
   /** The reply's element; only a selection of its fading words keeps them as elements. */
-  root: React.RefObject<HTMLElement | null>
+  root: React.RefObject<HTMLElement | null>,
+  /** The row's saved journal revision: a save bumps it, live text keeps it. */
+  savedRevision?: number
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
   const reveals = useContext(NativeChatReplyRevealsContext)
@@ -70,9 +78,13 @@ export function useNativeChatPacedText(
       reducedMotion ? PLAIN_REVEAL_MS : undefined
     )
   )
-  // A reply redrawn whole steps plainly until it ends, so it doesn't switch back and forth.
+  // A reply redrawn whole is shown as main shows it until it ends, so it doesn't switch back and
+  // forth: only the text of each save, revealed by main's own reveal.
   const [drawsWhole, setDrawsWhole] = useState(initial.drawsWhole === true)
-  const revealMs = reducedMotion || drawsWhole ? PLAIN_REVEAL_MS : undefined
+  // The text as of the reply's last save; state, so a save renders the reveal that shows it.
+  const saved = useRef({ revision: savedRevision, text: text.slice(0, initial.shown) })
+  const [savedText, setSavedText] = useState(saved.current.text)
+  const revealMs = reducedMotion && !drawsWhole ? PLAIN_REVEAL_MS : undefined
   const pace = useRef(initial)
   // Text already there when the reply mounts never fades.
   const samples = useRef<ShownSample[]>([{ at: -Infinity, length: initial.shown }])
@@ -82,17 +94,7 @@ export function useNativeChatPacedText(
   })
   // Recorded as text is shown, so only words shown in the last fade window are elements, plus any
   // selected ones, so the selection keeps its nodes.
-  const [frames] = useState(() => {
-    const clock = nativeChatRevealStepFrames(
-      ARRIVAL_STEP_MS,
-      REVEAL_BUSY_SHARE,
-      WHOLE_REDRAW_BUSY_SHARE
-    )
-    if (initial.drawsWhole) {
-      clock.drawWhole?.()
-    }
-    return clock
-  })
+  const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
   const setShown = useCallback(
     (length: number, plain = false): void => {
       const now = performance.now()
@@ -131,22 +133,39 @@ export function useNativeChatPacedText(
     // Text held while the window was hidden is drawn at once, without a fade.
     const caughtUp = heldDrawn.current !== documentHeldDrawnCount(heldTextSession)
     heldDrawn.current = documentHeldDrawnCount(heldTextSession)
+    if (!streaming || caughtUp || saved.current.revision !== savedRevision) {
+      saved.current = { revision: savedRevision, text }
+      setSavedText(text)
+    }
+    const source = drawsWhole ? saved.current.text : text
     pace.current = receiveNativeChatText(
       previous,
-      text,
+      source,
       streaming,
-      caughtUp,
+      caughtUp || (drawsWhole && reducedMotion),
       performance.now(),
       revealMs
     )
-    // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
-    if (caughtUp || pace.current.shown >= text.length) {
-      setShown(pace.current.shown, caughtUp)
+    // While text is still to reveal, only the reveal steps it, so arrivals don't add renders.
+    if (caughtUp || pace.current.shown >= source.length) {
+      setShown(pace.current.shown, caughtUp || drawsWhole)
     }
     reveals?.drawn.set(rowKey, pace.current)
-  }, [text, streaming, revealMs, reveals, rowKey, setShown, heldTextSession])
+  }, [
+    text,
+    streaming,
+    revealMs,
+    reveals,
+    rowKey,
+    setShown,
+    heldTextSession,
+    drawsWhole,
+    reducedMotion,
+    savedRevision
+  ])
 
-  const behind = shown < text.length
+  const source = drawsWhole ? savedText : text
+  const behind = shown < source.length
   // The length on screen; a tick that holds a partial word renders nothing, so it is not timed.
   const onScreen = useRef(initial.shown)
   useLayoutEffect(() => {
@@ -158,6 +177,18 @@ export function useNativeChatPacedText(
         reveals?.drawn.delete(rowKey)
       }
       return
+    }
+    if (drawsWhole) {
+      // Main's own reveal of each save, on every display frame.
+      return playNativeChatTextReveal(
+        () => pace.current,
+        (next) => {
+          pace.current = next
+          reveals?.drawn.set(rowKey, next)
+          setShown(next.shown, true)
+        },
+        ANIMATION_FRAMES
+      )
     }
     return playNativeChatTextRevealOnClock(
       () => pace.current,
@@ -172,7 +203,11 @@ export function useNativeChatPacedText(
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
         if (frames.redrawsWhole?.() && !pace.current.drawsWhole) {
-          pace.current = { ...pace.current, drawsWhole: true }
+          // From here it shows what is on screen, then each save as main does.
+          const onScreenText = pace.current.source.slice(0, next.shown)
+          saved.current = { revision: savedRevision, text: onScreenText }
+          setSavedText(onScreenText)
+          pace.current = { source: onScreenText, shown: next.shown, arrivals: [], drawsWhole: true }
           reveals?.drawn.set(rowKey, pace.current)
           setDrawsWhole(true)
         }
@@ -180,7 +215,18 @@ export function useNativeChatPacedText(
       frames,
       revealMs
     )
-  }, [behind, text, reveals, rowKey, streaming, setShown, frames, revealMs])
+  }, [
+    behind,
+    source,
+    reveals,
+    rowKey,
+    streaming,
+    setShown,
+    frames,
+    revealMs,
+    drawsWhole,
+    savedRevision
+  ])
   const revealing = !reducedMotion && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)
   useEffect(() => {
@@ -211,7 +257,7 @@ export function useNativeChatPacedText(
   const fading = !reducedMotion && (revealing || lingering) && (!drawsWhole || hold !== undefined)
   useEffect(() => (fading ? watchDocumentRange() : undefined), [fading])
   return {
-    text: text.slice(0, Math.min(shown, text.length)),
+    text: source.slice(0, Math.min(shown, source.length)),
     revealing,
     fading,
     fadeFrom: fading ? (drawsWhole ? shown : fadeFrom) : undefined,

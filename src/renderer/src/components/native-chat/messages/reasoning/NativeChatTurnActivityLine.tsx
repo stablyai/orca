@@ -88,6 +88,7 @@ export function NativeChatTurnActivityLine({
               rowKey={disclosureKey}
               markdown={reasoning.markdown}
               streaming
+              savedRevision={reasoning.message.journalRevision}
             />
           </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>

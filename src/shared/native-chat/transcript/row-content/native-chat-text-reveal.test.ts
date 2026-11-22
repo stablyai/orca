@@ -151,34 +151,6 @@ describe('a reply redrawn whole each step', () => {
     expect(frames.redrawsWhole?.()).toBe(true)
   })
 
-  it('steps at a third of its time once redrawn whole, where an unswitched reply waits ten times its cost', () => {
-    const switched = spacings(
-      stepTimes(() => 1000 / 60, 600, 150, nativeChatRevealStepFrames(60, 1 / 10, 1 / 3))
-    ).slice(5)
-    expect(Math.min(...switched)).toBeGreaterThanOrEqual(450 - 1000 / 120 - 0.01)
-    expect(Math.max(...switched)).toBeLessThanOrEqual(450 + 1000 / 60 + 0.01)
-    const unswitched = spacings(
-      stepTimes(() => 1000 / 60, 600, 90, nativeChatRevealStepFrames(60, 1 / 10, 1 / 3))
-    ).slice(5)
-    expect(Math.min(...unswitched)).toBeGreaterThanOrEqual(900 - 1000 / 120 - 0.01)
-  })
-
-  it('keeps a very slow reply to its third, with no ceiling on the wait', () => {
-    const frames = nativeChatRevealStepFrames(60, 1 / 10, 1 / 3)
-    frames.drawWhole?.()
-    const gaps = spacings(stepTimes(() => 1000 / 60, 3000, 3000, frames)).slice(1)
-    expect(gaps.length).toBeGreaterThan(0)
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(9000 - 0.01)
-  })
-
-  it('a clock told the reply was already redrawn whole uses the third from its first steps', () => {
-    const frames = nativeChatRevealStepFrames(60, 1 / 10, 1 / 3)
-    frames.drawWhole?.()
-    expect(frames.redrawsWhole?.()).toBe(true)
-    const gaps = spacings(stepTimes(() => 1000 / 60, 300, 150, frames)).slice(1)
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(450 + 1000 / 60 + 0.01)
-  })
-
   it('remembers it was redrawn whole across a remount and replaced text', () => {
     const text = (length: number) => 'w'.repeat(length)
     const remembered = { source: text(1000), shown: 1000, arrivals: [], drawsWhole: true as const }
