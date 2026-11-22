@@ -738,6 +738,8 @@ it('keeps a journal whose pause table is not the one v1.4.219 created, or a tabl
     'ALTER TABLE queued_message_pauses ADD COLUMN body_json TEXT',
     'ALTER TABLE queued_message_pauses ADD COLUMN body_json TEXT GENERATED ALWAYS AS (reason) VIRTUAL',
     'CREATE TABLE "constructor" (value TEXT)',
+    // An accepted import marker's extra column would go unread.
+    'ALTER TABLE journal_imports ADD COLUMN payload_json TEXT',
     'ALTER TABLE queued_message_pauses DROP COLUMN recorded_at',
     // The retired column belongs to the queue only.
     'ALTER TABLE journal_rows ADD COLUMN source_json TEXT'

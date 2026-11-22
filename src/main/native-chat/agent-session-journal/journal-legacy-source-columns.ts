@@ -8,6 +8,9 @@ const SOURCE_COLUMNS = new Map(
     journal_outcome_generations: 'generation session_id epoch',
     journal_outcome_epochs: 'session_id epoch generation format through_seq prefix_seq',
     journal_outcomes: 'generation seq field entry_key format ordinal value_json deleted',
+    journal_repairs: 'session_id epoch content_from repaired_at',
+    journal_imports: 'session_id epoch tip',
+    journal_set_aside: 'session_id epoch tip',
     queued_messages:
       'session_id message_id position body_json fingerprint created_at host_instance state hold_reason returned_reason returned_rejection settled_at settled_by_op consumed_as carried_from queued_epoch queued_sequence options_json'
   })
