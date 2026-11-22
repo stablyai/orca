@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
-import { assertAdoptedTranscriptFolder } from './adopted-transcript-source'
+import { resolveAdoptedTranscriptFolder } from './adopted-transcript-source'
 import { encodeClaudeProjectPath } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 
@@ -212,13 +212,13 @@ it.each([
           }
     )
     // Continue in Chat UI asks this before closing the terminal; it must agree with the import.
-    const preflight = assertAdoptedTranscriptFolder({
+    const preflight = resolveAdoptedTranscriptFolder({
       agent: 'claude',
       filePath,
       source: { providerSessionId: 'claude-moved', workspaceCwd }
     })
     await (ok
-      ? expect(preflight).resolves.toBeUndefined()
+      ? expect(preflight).resolves.toBe(workspaceCwd)
       : expect(preflight).rejects.toMatchObject({
           refusal: { code: 'agent_session_identity_required', details: { otherFolder: true } }
         }))
@@ -248,5 +248,56 @@ it.each([
       options: { filePath, source: { providerSessionId: 'grok-moved', workspaceCwd } }
     })
     expect(prepared.ok).toBe(ok)
+  }
+)
+
+it.each([
+  { saved: 'pkg/app', folder: 'pkg/app' },
+  { saved: '', folder: '' },
+  { saved: '../elsewhere', folder: null }
+])(
+  'resumes a Pi conversation in the workspace folder it was saved in: %j',
+  async ({ saved, folder }) => {
+    const workspaceCwd = join(root, 'workspace')
+    const cwd = join(workspaceCwd, saved)
+    await mkdir(workspaceCwd)
+    await mkdir(cwd, { recursive: true })
+    const id = '01a1ff56-0a97-7640-8168-f0b025754e71'
+    const filePath = join(root, `2026-11-21T18-19-51-319Z_${id}.jsonl`)
+    await writeFile(
+      filePath,
+      `${[
+        { type: 'session', version: 3, id, cwd },
+        {
+          type: 'message',
+          id: 'u1',
+          parentId: null,
+          timestamp: '2026-11-21T18:19:52.000Z',
+          message: { role: 'user', content: 'hello' }
+        }
+      ]
+        .map((line) => JSON.stringify(line))
+        .join('\n')}\n`
+    )
+    const resolved = resolveAdoptedTranscriptFolder({
+      agent: 'pi',
+      filePath,
+      source: { providerSessionId: id, workspaceCwd }
+    })
+    if (folder === null) {
+      await expect(resolved).rejects.toMatchObject({
+        refusal: { code: 'agent_session_identity_required', details: { otherFolder: true } }
+      })
+      return
+    }
+    const expected = join(workspaceCwd, folder)
+    await expect(resolved).resolves.toBe(expected)
+    // Create imports against the folder it resolved, so the import agrees with the listing.
+    const prepared = await prepareLegacyTranscriptImport({
+      agent: 'pi',
+      sessionId: id,
+      options: { filePath, source: { providerSessionId: id, workspaceCwd: expected } }
+    })
+    expect(prepared.ok).toBe(true)
   }
 )
