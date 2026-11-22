@@ -58,3 +58,19 @@ it('tells the coordinator once per hold and leaves the worker’s own rest repor
   expect(mail('Mail to a worker is held after Orca restarted')).toHaveLength(2)
   db.close()
 })
+
+it('settles a hold with nobody to tell at once, so rechecks do not retry it', () => {
+  const db = new OrchestrationDb(':memory:')
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'earlier work' })
+  const dispatch = createRootDispatch(
+    db,
+    task.id,
+    'term_worker',
+    makePaneKey('tab-worker', '33333333-3333-4333-8333-333333333333')
+  )
+  const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
+  // A legacy Run with no active coordinator: the report has no recipient.
+  expect(reportMailHeldWithoutPaint(db, dispatch.id, 'mail-held:inc-1:7', deps)).toBe(true)
+  expect(deps.notify).not.toHaveBeenCalled()
+  db.close()
+})
