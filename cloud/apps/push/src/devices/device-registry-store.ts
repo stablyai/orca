@@ -75,6 +75,11 @@ export class PushDeviceRegistryStore {
            WHERE registration_id = ?`,
           [input.platform, input.token, input.apnsEnvironment ?? null, now, registrationId]
         )
+        // The badge total is looked up by the phone's current token.
+        await transaction.query(
+          'UPDATE push_badge_counts SET token = ? WHERE registration_id = ?',
+          [input.token, registrationId]
+        )
         return { ok: true, registrationId }
       }
       const [countRow] = await transaction.query(

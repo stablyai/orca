@@ -31,6 +31,7 @@ import {
   getDevicePushToken,
   type MobilePushToken
 } from './push-registration/push-token'
+import { clearAppIconBadge } from './push-registration/app-icon-badge'
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
@@ -82,6 +83,9 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
     registeredHostIds: [...value.registered],
     pendingUnregisterHostIds: [...value.pending]
   })
+  if (value.registered.size === 0) {
+    clearAppIconBadge()
+  }
 }
 
 // A missing token is retried: APNs registration may still be in flight.

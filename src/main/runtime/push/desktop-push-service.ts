@@ -10,6 +10,7 @@ import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
+import { PushBadgeSync } from './push-badge-sync'
 import type { ExecutionHostPushCoverage } from './push-burst-slots'
 import { mobilePushTokenDigest } from './push-token-digest'
 import { pushTestResult } from './push-test-result'
@@ -47,6 +48,7 @@ export class DesktopPushService {
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
   private readonly dispatcher: PushDispatcher
+  private readonly badgeSync: PushBadgeSync
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly registerThrottle: PushRegisterThrottle
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
@@ -75,6 +77,7 @@ export class DesktopPushService {
       deliveryMode: this.deliveryMode,
       coverage: options.coverage
     })
+    this.badgeSync = new PushBadgeSync({ client, registry, runtime: options.runtime })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??
@@ -103,6 +106,9 @@ export class DesktopPushService {
     this.unsubscribe = this.runtime.onNotificationDispatched((event) => {
       this.dispatcher.enqueue(event)
     })
+    if (this.deliveryMode !== 'disabled') {
+      this.badgeSync.start()
+    }
     // Unpairing queues a delete without going through this service; drain on that too.
     this.runtimeRpc.setOnPushUnregisterQueued(() => {
       void this.flushUnregisterOutbox()
@@ -116,6 +122,7 @@ export class DesktopPushService {
     this.dispatcher.stop()
     this.unsubscribe?.()
     this.unsubscribe = null
+    this.badgeSync.stop()
     this.runtimeRpc.setOnPushUnregisterQueued(null)
     this.runtime.setMobilePushRegistrar(null)
   }
@@ -195,6 +202,8 @@ export class DesktopPushService {
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
     }
     void this.flushUnregisterOutbox()
+    // A new registration has no count at the gateway yet.
+    this.badgeSync.request()
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }
