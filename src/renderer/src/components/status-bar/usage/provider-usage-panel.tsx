@@ -20,6 +20,7 @@ import {
   getUsageWindowSections,
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import {
   getProviderUsageErrorMessage,
@@ -109,11 +110,14 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
 function ErrorMessage({
   message,
   label,
+  detail,
   stale = false,
   inverted = false
 }: {
   message: string
   label?: string
+  /** Raw provider error, kept as a hover detail when the message replaces it. */
+  detail?: string
   /** When true, prior data is still visible — show a softer "refresh failed" label. */
   stale?: boolean
   inverted?: boolean
@@ -134,7 +138,9 @@ function ErrorMessage({
   return (
     <div className="space-y-0.5">
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      <div className={detailClass}>{message}</div>
+      <div className={detailClass} title={detail}>
+        {message}
+      </div>
     </div>
   )
 }
@@ -296,6 +302,7 @@ export function ProviderPanel({
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
             message={getProviderUsageErrorMessage(p, t)}
+            detail={isCodexUsageSignInRequired(p) ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />
         </div>
@@ -378,7 +385,13 @@ export function ProviderPanel({
 
       {p.error ? (
         <ErrorMessage
-          message={p.error}
+          {...(isCodexUsageSignInRequired(p)
+            ? {
+                label: getProviderUsageStatusLabel(p, t),
+                message: getProviderUsageErrorMessage(p, t),
+                detail: p.error
+              }
+            : { message: p.error })}
           stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
           inverted={inverted}
         />

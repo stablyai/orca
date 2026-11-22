@@ -18,6 +18,7 @@ import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 
 export function CodexSwitcherMenu({
   codex,
@@ -63,6 +64,8 @@ export function CodexSwitcherMenu({
   } = useCodexSwitcherController(codex, ownerUsage)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
+  // `codex` is the selected group's active login; a revoked one needs the same account signed in again.
+  const activeSignInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
       ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
@@ -70,12 +73,14 @@ export function CodexSwitcherMenu({
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
     const showSignInAction =
       !hasActiveRuntimeEnvironment &&
-      !target.active &&
       target.id !== null &&
-      isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+      (target.active ? activeSignInRequired : isUnavailableInactiveUsage(inactiveUsage?.rateLimits))
     return { target, inactiveUsage, showSignInAction }
   })
-  const unavailableUsageRows = rows.filter((row) => row.showSignInAction)
+  // The active row stays in place; only inactive rows move under "Usage unavailable".
+  const isUnavailableUsageRow = (row: (typeof rows)[number]): boolean =>
+    row.showSignInAction && !row.target.active
+  const unavailableUsageRows = rows.filter(isUnavailableUsageRow)
   const renderRow = ({
     target,
     inactiveUsage,
@@ -91,9 +96,11 @@ export function CodexSwitcherMenu({
         event.preventDefault()
         if (!target.active) {
           void handleSelectAccount(target.id, target.runtimeTarget)
+        } else if (showSignInAction && target.id !== null) {
+          void handleSignInAccount(target.id, target.runtimeTarget)
         }
       }}
-      disabled={isBusy || target.active}
+      disabled={isBusy || (target.active && !showSignInAction)}
       action={
         showSignInAction ? (
           <InlineUsageSignInAction
@@ -194,7 +201,8 @@ export function CodexSwitcherMenu({
             }
           : {})}
       />
-      {open ? <CodexRestartStatusPrompt /> : null}
+      {/* Why: restarting sessions onto a login that needs signing in again would break them. */}
+      {open && !activeSignInRequired ? <CodexRestartStatusPrompt /> : null}
       {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
       {rosterKnown ? (
         <AccountSwitchSection
@@ -211,7 +219,7 @@ export function CodexSwitcherMenu({
             openSettingsPage()
           }}
         >
-          {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+          {rows.filter((row) => !isUnavailableUsageRow(row)).map(renderRow)}
           {unavailableUsageRows.length > 0 ? (
             <>
               <DropdownMenuLabel className="mt-1">

@@ -18,6 +18,10 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /sign in with chatgpt/i,
   /token data is not available/i,
   /auth (?:is missing|tokens are missing|does not expose)/i,
+  // The usage backend rejects a revoked or expired ChatGPT login with these codes; no retry recovers it.
+  /\btoken_(?:revoked|expired|invalidated)\b/i,
+  /invalidated oauth token/i,
+  /backend-api\/wham\/usage failed: 401\b/i,
   // API-key-only homes lack ChatGPT tokens, so account/rateLimits/read cannot recover through a fallback read.
   /chatgpt authentication required/i
 ]
@@ -29,6 +33,20 @@ export function isCodexAuthError(error: string | null | undefined): boolean {
     return false
   }
   return CODEX_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+}
+
+/** A Codex usage failure that only signing in to the same account again can fix. */
+export function isCodexUsageSignInRequired(limits: {
+  provider: string
+  error: string | null
+  usageMetadata?: { failureKind?: string }
+}): boolean {
+  // A structured kind (network, a proven API-key home) outranks auth wording in the message.
+  return (
+    limits.provider === 'codex' &&
+    !limits.usageMetadata?.failureKind &&
+    isCodexAuthError(limits.error)
+  )
 }
 
 export function isCodexApiKeyRateLimitError(error: string | null | undefined): boolean {

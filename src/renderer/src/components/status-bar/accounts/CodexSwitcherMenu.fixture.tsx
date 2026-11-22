@@ -288,3 +288,17 @@ export const pairedHostWithWsl = switcherFixture(
   false,
   true
 )
+
+export const revokedActiveSignIn = switcherFixture(
+  [
+    {
+      ...BASE_ACCOUNTS[0],
+      weekly: null,
+      error:
+        'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={ "error": { "message": "Encountered invalidated oauth token for user, failing request", "type": null, "code": "token_revoked", "param": null }, "status": 401 }'
+    },
+    ...BASE_ACCOUNTS.slice(1, 5)
+  ],
+  false,
+  true
+)
