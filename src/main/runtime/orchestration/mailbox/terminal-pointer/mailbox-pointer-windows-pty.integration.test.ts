@@ -190,8 +190,13 @@ it.skipIf(!binary || !evidence || process.platform !== 'win32').each(cases)(
       if (draft) {
         terminal.write(`\x1b[200~${draft}\x1b[201~`)
         await vi.waitFor(
-          () => expect(runtime.readTerminalMailHold(TERMINAL_HANDLE)).toEqual({ kind: 'draft' }),
-          { timeout: 15000 }
+          async () => {
+            expect((await runtime.readTerminal(TERMINAL_HANDLE, { screen: true })).draft).toBe(
+              draft
+            )
+            expect(runtime.readTerminalMailHold(TERMINAL_HANDLE)).toEqual({ kind: 'draft' })
+          },
+          { timeout: 30000 }
         )
       }
       if (!working) {
