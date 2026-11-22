@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useTranslate } from '@/i18n/use-translate'
 import { wslHostsAvailable } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useAppStore } from '@/store'
+import { ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 export function WslRuntimeUpdateStatusSegment(): React.JSX.Element | null {
@@ -12,10 +13,14 @@ export function WslRuntimeUpdateStatusSegment(): React.JSX.Element | null {
       !wslHostsAvailable() || state.wslHostServerFiles === 'missing'
         ? []
         : state.runtimeEnvironments
-            .filter(
-              (host) =>
-                isWslHostRuntimeEnvironment(host) && state.wslHostStatuses[host.id]?.deferredUpdate
-            )
+            .filter((host) => {
+              const deferred = state.wslHostStatuses[host.id]?.deferredUpdate
+              return (
+                isWslHostRuntimeEnvironment(host) &&
+                deferred &&
+                deferred.code !== ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE
+              )
+            })
             .map((host) => host.id)
     )
   )
