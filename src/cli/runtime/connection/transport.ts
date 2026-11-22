@@ -20,6 +20,7 @@ import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurre
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 import { daemonSocketDirIsTrusted } from '../../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'
+import { readInjectedBotToken } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 // Agents read these; a blip must not send them to `orca open`, which raises the window.
 const TRANSIENT_DISCONNECT_NEXT_STEPS = [
@@ -41,6 +42,8 @@ export async function sendRequest<TResult>(
   } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
   const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
+  // A bot run's token names its bot only to this host's runtime, so only this local transport sends it.
+  const botToken = readInjectedBotToken(process.env)
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -244,7 +247,8 @@ export async function sendRequest<TResult>(
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
-          expectedRuntimeSource
+          expectedRuntimeSource,
+          botToken
         })}\n`
         if (Buffer.byteLength(serialized, 'utf8') > MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) {
           throw new RuntimeClientError(

@@ -5,6 +5,7 @@ import { LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BOT_TOOLS_OWNED_SIGN_IN_METHODS } from './bots-tools-owned-sign-in'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const attempts = vi.hoisted(() => ({
   start: vi.fn(async () => ({ flowId: 'flow-1', revision: 1, phase: 'starting' }))
@@ -34,11 +35,15 @@ function dispatcher() {
   return new RpcDispatcher({ runtime, methods: BOT_TOOLS_OWNED_SIGN_IN_METHODS })
 }
 
+const tokens = botRunTokens(['bot-1'])
+
+/** A call naming its session comes from the bot's chat, which holds the bot's token. */
 const start = (params: Record<string, unknown>) => ({
   id: 'r1',
   authToken: 'tok',
   method: 'bots.tools.signIn.start',
-  params: { botId: 'bot-1', name: 'notion', mode: 'paste', ...params }
+  params: { botId: 'bot-1', name: 'notion', mode: 'paste', ...params },
+  ...('callerSessionId' in params ? { botToken: tokens['bot-1'] } : {})
 })
 
 describe('bots.tools.signIn.start', () => {

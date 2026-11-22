@@ -6,6 +6,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { botToolRelay } from '../../../bots/tool-relay/bot-tool-relay'
 import { GOOGLE_READ_METHODS } from './google-read'
+import { BOT_SESSION_NEEDS_TOKEN } from '../bot-session-caller-guard'
 
 const searched = vi.hoisted((): unknown[] => [])
 vi.mock('../../../google/google-api-client', () => ({
@@ -64,17 +65,21 @@ describe('Google reads over RPC', () => {
     expect(searched[1]).toMatchObject({ api: { email: 'ada@acme.dev' } })
   })
 
-  it('name the bot by its token, whatever session id the run sends or leaves off', async () => {
+  it('name the bot by its token, and refuse a run that names another bot’s chat', async () => {
     searched.length = 0
     const rpc = dispatcher([
       makeTestBot({ id: 'b1', name: 'Scout' }),
       makeTestBot({ id: 'b2', name: 'Ivy', google: true })
     ])
     const { token } = await botToolRelay.grant('b1', '/bots/scout')
-    for (const callerSessionId of ['chat-b2', 'owner-terminal', undefined]) {
+    for (const callerSessionId of ['owner-terminal', undefined]) {
       const response = await rpc.dispatch(request({ botToken: token, callerSessionId, query: 'x' }))
       expect(JSON.stringify(response)).toContain('Google is off for Scout')
     }
+    const posing = await rpc.dispatch(
+      request({ botToken: token, callerSessionId: 'chat-b2', query: 'x' })
+    )
+    expect(posing).toMatchObject({ ok: false, error: { message: BOT_SESSION_NEEDS_TOKEN } })
     expect(searched).toEqual([])
   })
 

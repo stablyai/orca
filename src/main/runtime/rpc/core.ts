@@ -115,6 +115,8 @@ export type RpcRequest = {
   expectedRuntimeSource?: unknown
   // Phone-supplied runtime target; validate at its point of use.
   executionHost?: unknown
+  // A bot run's token from the local CLI; untrusted until bot-session-caller-guard checks it.
+  botToken?: unknown
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{

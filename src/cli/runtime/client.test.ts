@@ -154,6 +154,36 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     })
   })
 
+  it("sends its bot run's token to the local runtime, and nothing outside a bot run", async () => {
+    const userDataPath = makeRuntimeClientFixture()
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({ id: request.id, ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    vi.stubEnv('ORCA_BOT_TOOLS_TOKEN', 'bot-token')
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
+    await new RuntimeClient(userDataPath, 500).call('status.get')
+    vi.stubEnv('ORCA_BOT_TOOLS_TOKEN', '')
+    await new RuntimeClient(userDataPath, 500).call('status.get')
+
+    expect(requests.map((request) => request.botToken)).toEqual(['bot-token', undefined])
+  })
+
   it.each(['x'.repeat(1024 * 1024), 'é'.repeat(512 * 1024)])(
     'refuses oversized serialized requests before sending any bytes',
     async (body) => {

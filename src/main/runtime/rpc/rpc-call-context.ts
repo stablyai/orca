@@ -7,6 +7,7 @@ import {
   type RpcDispatchStreamingOptions
 } from './dispatch/dispatcher-stream-options'
 import { assertLookAroundMayCall } from './look-around-rpc-guard'
+import { assertBotSessionCallerHoldsToken } from './bot-session-caller-guard'
 
 /** A call's context. Handlers see the scope admission checked, which a pinned dispatcher sets for every call. */
 export function rpcCallContext(
@@ -21,10 +22,12 @@ export function rpcCallContext(
   return rpcContextFromTransport(runtime, request, scoped, caller, params)
 }
 
-/** A unary call's context, refused before any routing when a bot's look-around or tidy-up run may not make it. */
+/** A unary call's context, refused before any routing when a bot's look-around or tidy-up run may
+ *  not make it, or when it names a bot's chat without that bot's token. */
 export function guardedRpcCallContext(...args: Parameters<typeof rpcCallContext>): RpcContext {
   const context = rpcCallContext(...args)
-  const [runtime, request, , , , params] = args
+  const [runtime, request, , , caller, params] = args
   assertLookAroundMayCall(runtime, request, context.pairedDeviceId, params)
+  assertBotSessionCallerHoldsToken(runtime, request, context, caller, params)
   return context
 }

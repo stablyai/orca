@@ -8,6 +8,7 @@ import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotConnectorOffer } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { BOT_GROUP_ROOM_CARD_REFUSAL } from '../../../bots/bot-group-session-access'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
+import { botRunTokens } from '../../../bots/tool-relay/bot-run-tokens.test-fixture'
 
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -33,11 +34,17 @@ vi.mock('../../../google/google-connect', () => ({
   getGoogleConnect: () => ({ client: () => google.client, accounts: () => google.accounts })
 }))
 
+const tokens = botRunTokens(['b1'])
+
+/** A call naming its session comes from one of b1's runs, which hold b1's token. */
 const request = (params: unknown): RpcRequest => ({
   id: 'req-1',
   authToken: 'tok',
   method: 'bots.connector.offer',
-  params
+  params,
+  ...(typeof params === 'object' && params !== null && 'callerSessionId' in params
+    ? { botToken: tokens.b1 }
+    : {})
 })
 
 function offerRuntime(bot: Bot) {
@@ -49,7 +56,7 @@ function offerRuntime(bot: Bot) {
     getRuntimeId: () => 'test-runtime',
     servesWithoutWindow: () => google.headless,
     getConnectorCloud: () => null,
-    bots: { assertEnabled: () => {}, list: () => [bot] },
+    bots: { enabled: () => true, assertEnabled: () => {}, list: () => [bot] },
     lookAround: {
       botOfLook: (sessionId: string) => (sessionId === 'look' ? bot.id : null),
       botOfTidyUp: () => null
