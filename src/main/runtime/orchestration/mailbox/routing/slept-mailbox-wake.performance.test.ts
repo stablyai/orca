@@ -166,15 +166,17 @@ it.each([1_000, 10_000])(
       get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
     }) as RuntimeNotifier
     try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      // Opening the database repoints restored mail once (unchanged by sleep); count after it.
+      await vi.advanceTimersByTimeAsync(5_000)
       const reads = [
         vi.spyOn(db, 'getRun'),
         vi.spyOn(db, 'getDispatchContextById'),
         vi.spyOn(db, 'getRemoteDispatchAttachment')
       ]
       const prepare = vi.spyOn(db.db, 'prepare')
-      runtime.setOrchestrationDb(db)
-      runtime.setNotifier(notifier)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       for (let tick = 0; tick < 10; tick += 1) {
         // Availability edges re-check every sleeper; unnamed changes re-check nothing.
         runtime.retrySleptMailboxWakes()

@@ -473,7 +473,7 @@ it('wakes a Run coordinator that slept after its pane moved to another tab', asy
 it('listens to crew changes only while an agent sleeps', async () => {
   const db = new OrchestrationDb(':memory:')
   let session: WorkspaceSessionState = getDefaultWorkspaceSession()
-  let sessionWritten: (hostId: string | null) => void = () => {}
+  let sessionWritten: (hostId: ExecutionHostId | null) => void = () => {}
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
       getWorkspaceSession: () => session,
