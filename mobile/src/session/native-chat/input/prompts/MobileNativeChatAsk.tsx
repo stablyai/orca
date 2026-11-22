@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -50,6 +50,8 @@ type Props = {
   choiceOnly?: true
   /** Under the question: what the card's owner adds, e.g. a worker prompt's countdown. */
   note?: ReactNode
+  /** Each question's identity: when the prompt drops one (answered elsewhere), the rest keep their picks. */
+  questionKeys?: readonly string[]
 }
 
 function confirmLabels(t: Translate) {
@@ -74,8 +76,9 @@ export function MobileNativeChatAsk({
   allowOther,
   freeTextInputs,
   choiceOnly,
-  note
-}: Props): React.JSX.Element {
+  note,
+  questionKeys
+}: Props): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
@@ -107,6 +110,35 @@ export function MobileNativeChatAsk({
   const cancelBusy = busyControl === 'cancel' && isLocalPending(operation)
   const confirmBusy = submitting && !cancelBusy
   const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
+  const [shownKeys, setShownKeys] = useState(questionKeys)
+  // Counts lines answered elsewhere while on screen: the line that takes over opens as showStep opens it.
+  const [stepsGone, setStepsGone] = useState(0)
+  useEffect(() => {
+    if (stepsGone > 0) {
+      inputRef.current?.blur()
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }
+  }, [stepsGone, inputRef, scrollRef])
+  if (questionKeys && shownKeys && questionKeys.join('\n') !== shownKeys.join('\n')) {
+    const carry = <T,>(values: readonly T[], fill: (qi: number) => T): T[] =>
+      questionKeys.map((key, qi) => {
+        const at = shownKeys.indexOf(key)
+        return at === -1 ? fill(qi) : values[at]!
+      })
+    // A pending auto-advance holds the old lines' picks.
+    autoAdvance.cancel()
+    setShownKeys(questionKeys)
+    setSelections(carry(selections, () => []))
+    setOtherText(carry(otherText, (qi) => freeTextInputs?.[qi]?.initialValue ?? ''))
+    const at = questionKeys.indexOf(shownKeys[index]!)
+    setIndex(Math.max(0, at))
+    if (at === -1) {
+      setStepsGone((count) => count + 1)
+    }
+    setViewedOption(null)
+    // React renders again at once with the carried state; this pass's lines no longer match it.
+    return null
+  }
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     setViewedOption(null)
