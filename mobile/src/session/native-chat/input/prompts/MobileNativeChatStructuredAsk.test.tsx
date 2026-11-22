@@ -1,7 +1,7 @@
-import { createElement } from 'react'
-import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { createElement, type ReactElement } from 'react'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createWithQueryClient } from '../../../../test-support/query-client-test-renderer'
+import { documentQueryClient } from '../../../../test-support/rpc-recording/react-mounting/hook-mount'
 import { decodeAgentSessionQuestionAnswers } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentJournalQuestion } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../../src/shared/native-chat/input/questions/native-chat-question-auto-advance'
@@ -37,10 +37,17 @@ vi.mock('../session-options/MobileNativeChatOptionPreviewSheet', () => ({
 }))
 
 let tree: ReactTestRenderer
+let queries: ReturnType<typeof documentQueryClient>
 
-afterEach(() => {
+function createWithQueryClient(element: ReactElement): ReactTestRenderer {
+  queries = documentQueryClient()
+  return create(queries.wrap(element))
+}
+
+afterEach(async () => {
   act(() => tree.unmount())
   vi.useRealTimers()
+  await queries.end()
 })
 
 const question = (n: number, skippable: boolean): AgentJournalQuestion => ({
