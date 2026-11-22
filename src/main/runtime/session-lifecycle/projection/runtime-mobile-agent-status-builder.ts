@@ -22,6 +22,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
@@ -264,17 +265,22 @@ export function buildRuntimeMobileAgentStatus(
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
   const agentType = ownerAgent ?? undefined
+  const state =
+    pty?.lastAgentStatus === 'working'
+      ? 'working'
+      : pty?.lastAgentStatus === 'permission'
+        ? 'blocked'
+        : 'done'
+  // Why: title evidence after a shown Done is the agent quitting or relaunching, not a new turn
+  // end (#46569); restate that Done so clients don't announce it again.
+  const restatedDone = state === 'done' ? shownDoneSegment(shownSegment) : null
   return {
     agentStatus: {
-      state:
-        pty?.lastAgentStatus === 'working'
-          ? 'working'
-          : pty?.lastAgentStatus === 'permission'
-            ? 'blocked'
-            : 'done',
+      state,
       prompt: '',
       updatedAt: pty ? ptyStatusEvidenceAt(pty, evidenceAt) : evidenceAt,
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
+      ...restatedDone,
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(agentType ? { agentType } : {}),
@@ -284,6 +290,23 @@ export function buildRuntimeMobileAgentStatus(
       stateHistory: [],
       ...providerSession
     }
+  }
+}
+
+function shownDoneSegment(
+  segment: HookLiveAgentRow | RuntimeAgentRowSnapshot | AgentStatusIpcPayload | null
+):
+  | (HostTurnEndFacts & { stateStartedAt: number; turnCompletedAt?: number; sessionBoundary?: true })
+  | null {
+  const payload = segment && 'payload' in segment ? segment.payload : segment
+  if (!segment || payload?.state !== 'done') {
+    return null
+  }
+  return {
+    stateStartedAt: segment.stateStartedAt,
+    ...pickHostTurnEnd(segment),
+    ...(payload.turnCompletedAt !== undefined ? { turnCompletedAt: payload.turnCompletedAt } : {}),
+    ...(payload.sessionBoundary === true ? { sessionBoundary: true } : {})
   }
 }
 
