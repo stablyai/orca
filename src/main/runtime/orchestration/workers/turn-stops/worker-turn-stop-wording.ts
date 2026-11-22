@@ -99,6 +99,7 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
   const output = redact(stop.lastOutput)?.trim()
   return [
     what,
+    ...(stop.reason === 'start-unconfirmed' ? (stop.startEvidence?.lines ?? []) : []),
     ...describeNextStep(stop, context),
     ...(leftover ? [`Left behind: ${leftover}.`] : []),
     ...(stop.reason === 'finished'
@@ -161,7 +162,9 @@ function describeNextStep(
     const check =
       stop.startSurface === 'chat'
         ? `See where it is with your Orca CLI's \`orchestration worker-show --dispatch ${dispatchId}\`.`
-        : `If the brief is still in its prompt, submit it with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
+        : stop.startEvidence?.withheld
+          ? `Don't press Enter yet: it would answer that dialog or submit what was typed. Tell the user to answer or clear it in that terminal, then submit the brief with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
+          : `If the brief is still in its prompt, submit it with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
     return [
       check,
       `If it is stuck, stop it with \`orchestration worker-stop --dispatch ${dispatchId}\`, then retry it or tell the user.`,

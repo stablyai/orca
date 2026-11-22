@@ -7,7 +7,7 @@ import { observeWorker } from './worker-presence-report'
 import { settleRestartCutWorkerStart } from '../../db/worker-dispatch/restart-cut-worker-start'
 import { isWorkerAwaitingAgent } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 
-const START_BLOCKED_FENCE = 'start-blocked'
+export const START_BLOCKED_FENCE = 'start-blocked'
 
 const BLOCKED_SCREENS: Record<RuntimeTerminalWaitBlockedReason, string> = {
   'codex-update-prompt': 'an update prompt',

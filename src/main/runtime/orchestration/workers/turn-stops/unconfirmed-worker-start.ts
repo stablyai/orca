@@ -6,6 +6,8 @@ import {
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
+import { START_BLOCKED_FENCE } from './awaiting-worker-start-report'
+import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
@@ -16,13 +18,16 @@ const START_UNCONFIRMED_FENCE = 'start-unconfirmed'
 const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
   'dispatch_input',
   'turn_observation',
-  'turn_start_unobserved'
+  'turn_start_unobserved',
+  SUBMIT_WITHHELD_STAGE
 ])
 
 export type UnconfirmedWorkerStart =
   | {
       surface: 'terminal'
       /** The terminal's last lines, when they could be read. */ screen?: string
+      /** How the brief went in and what followed; see describeUnconfirmedStartEvidence. */
+      evidence?: UnconfirmedStartEvidence
     }
   | { surface: 'chat' }
 
@@ -55,7 +60,8 @@ export function observeUnconfirmedWorkerStart(
   const seen = readWorkerPresence(db, dispatchId)
   // Any presence but this alert's own was reported as its own news; a working or resting worker
   // also proves its turn ran, and an alert is never sent twice.
-  if (seen && seen.fence !== START_UNCONFIRMED_FENCE) {
+  // A start-blocked prompt was seen before the brief went in, so it proves no turn ran.
+  if (seen && seen.fence !== START_UNCONFIRMED_FENCE && seen.fence !== START_BLOCKED_FENCE) {
     if (seen.presence !== 'gone') {
       confirmUnknownWorkerStart(db, dispatchId)
     }
@@ -72,7 +78,8 @@ export function observeUnconfirmedWorkerStart(
         from,
         reason: 'start-unconfirmed',
         startSurface: start.surface,
-        lastOutput: start.surface === 'terminal' ? start.screen : undefined
+        lastOutput: start.surface === 'terminal' ? start.screen : undefined,
+        ...(start.surface === 'terminal' && start.evidence ? { startEvidence: start.evidence } : {})
       }
     },
     deps
