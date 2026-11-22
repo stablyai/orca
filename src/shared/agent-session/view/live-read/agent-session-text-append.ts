@@ -124,21 +124,28 @@ function textAppendStream(
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
 ): ((event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null) & {
   holds: (itemId: string) => boolean
-  release: () => void
+  /** Lets go of every base, or only those of rows the given turns own. */
+  release: (turnItemIds?: ReadonlySet<string>) => void
 } {
   const bases = new Map<string, string>()
+  const turnOf = new Map<string, string>()
   let epoch: string | null = null
   const note = (item: AgentJournalRenderItem): void => {
     bases.delete(item.itemId)
+    turnOf.delete(item.itemId)
     const text = growingText(item, rules)
     if (text === null || isFinished(item)) {
       return
     }
     bases.set(item.itemId, text)
+    if (item.turnScope?.kind === 'turn') {
+      turnOf.set(item.itemId, item.turnScope.turnItemId)
+    }
     const limit = rules.toolOutputAppend === 1 ? MAX_TEXT_APPEND_BASES : MAX_REPLY_APPEND_BASES
     const oldest = bases.size > limit ? bases.keys().next().value : undefined
     if (oldest !== undefined) {
       bases.delete(oldest)
+      turnOf.delete(oldest)
     }
   }
   const stream = (event: AgentSessionSubscribeEvent): AgentSessionSubscribeEvent | null => {
@@ -147,6 +154,7 @@ function textAppendStream(
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
       bases.clear()
+      turnOf.clear()
       epoch = event.page.epoch
       event.page.items.forEach(note)
       return event
@@ -154,10 +162,12 @@ function textAppendStream(
     // A new journal epoch renumbers rows, so nothing from the old one is a base.
     if (event.batch.cursor.epoch !== epoch) {
       bases.clear()
+      turnOf.clear()
       epoch = event.batch.cursor.epoch
     }
     for (const itemId of event.batch.removedItemIds) {
       bases.delete(itemId)
+      turnOf.delete(itemId)
     }
     let changed = false
     const items: AgentJournalRenderItem[] = []
@@ -174,7 +184,15 @@ function textAppendStream(
   }
   return Object.assign(stream, {
     holds: (itemId: string) => bases.has(itemId),
-    release: () => bases.clear()
+    release: (turnItemIds?: ReadonlySet<string>) => {
+      for (const itemId of bases.keys()) {
+        const turn = turnOf.get(itemId)
+        if (!turnItemIds || (turn !== undefined && turnItemIds.has(turn))) {
+          bases.delete(itemId)
+          turnOf.delete(itemId)
+        }
+      }
+    }
   })
 }
 
@@ -198,16 +216,20 @@ export function sendingTextAppends<R>(
     (event: AgentSessionSubscribeEvent) => {
       const sent = emit(send(event) ?? event)
       // A finished turn's replies no longer grow, and a final reply carries no completion mark, so
-      // the sender lets go of every base then. Only the sender may: a row without a base goes whole,
+      // the sender lets go of that turn's bases then; a later revision of an old turn (a context
+      // report) leaves a newer reply's alone. Only the sender may: a row without a base goes whole,
       // which any reader takes, while a reader missing a base its sender holds could not.
       // A replacement page with no turn running, on it or off it, holds only finished replies.
-      const finished =
-        event.type === 'batch'
-          ? event.batch.items.some(endsTurn)
-          : (event.type === 'snapshot' || event.type === 'reset') &&
-            event.page.latestTurn?.turn.state !== 'running' &&
-            !event.page.items.some(runsTurn)
-      if (finished) {
+      if (event.type === 'batch') {
+        const ended = event.batch.items.filter(endsTurn).map((item) => item.itemId)
+        if (ended.length > 0) {
+          send.release(new Set(ended))
+        }
+      } else if (
+        (event.type === 'snapshot' || event.type === 'reset') &&
+        event.page.latestTurn?.turn.state !== 'running' &&
+        !event.page.items.some(runsTurn)
+      ) {
         send.release()
       }
       return sent

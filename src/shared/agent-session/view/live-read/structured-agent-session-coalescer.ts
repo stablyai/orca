@@ -29,7 +29,10 @@ function mergeBatch(
 ): Extract<AgentSessionSubscribeEvent, { type: 'batch' }> {
   const items = new Map(left.batch.items.map((item) => [item.itemId, item]))
   for (const item of right.batch.items) {
-    items.set(item.itemId, item)
+    // A live snapshot read before a save can arrive after it; the older revision must not win.
+    if ((items.get(item.itemId)?.revision ?? -Infinity) <= item.revision) {
+      items.set(item.itemId, item)
+    }
   }
   const submissions = new Map(
     left.batch.submissions.map((submission) => [submission.clientMessageId, submission])

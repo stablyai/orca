@@ -149,3 +149,38 @@ it("draws a shown viewer's held text together with the host's newest text, at on
   coalescer.dispose()
   vi.useRealTimers()
 })
+
+it('keeps a saved revision when a live snapshot read before the save arrives after it', () => {
+  vi.useFakeTimers()
+  const events: AgentSessionSubscribeEvent[] = []
+  const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event), {
+    ms: 50
+  })
+  const reply = (sequence: number, revision: number, text: string) => ({
+    ...batch(sequence),
+    batch: {
+      ...batch(sequence).batch,
+      items: [
+        {
+          itemId: 'reply',
+          revision,
+          sequence: 1,
+          observedAt: 1,
+          body: {
+            kind: 'message' as const,
+            role: 'assistant' as const,
+            blocks: [{ type: 'text' as const, text }]
+          }
+        }
+      ]
+    }
+  })
+  coalescer.push(reply(2, 2, 'The whole reply, saved'))
+  coalescer.push(reply(2, 1, 'The whole'))
+  vi.advanceTimersByTime(50)
+  expect(events).toHaveLength(1)
+  expect(events[0]).toMatchObject({
+    batch: { items: [{ revision: 2, body: { blocks: [{ text: 'The whole reply, saved' }] } }] }
+  })
+  vi.useRealTimers()
+})
