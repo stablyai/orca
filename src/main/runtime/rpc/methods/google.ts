@@ -81,7 +81,12 @@ const GOOGLE_ASKERS_CHANGED =
   'Who can ask changed while you were confirming. Review it and turn Google on again.'
 
 function sameAskers(shown: readonly string[], current: readonly string[]): boolean {
-  return shown.length === current.length && shown.every((name) => current.includes(name))
+  const sortedShown = [...shown].sort()
+  const sortedCurrent = [...current].sort()
+  return (
+    sortedShown.length === sortedCurrent.length &&
+    sortedShown.every((key, index) => key === sortedCurrent[index])
+  )
 }
 
 export const GOOGLE_METHODS = [
