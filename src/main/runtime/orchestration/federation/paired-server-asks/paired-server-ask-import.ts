@@ -25,6 +25,7 @@ import {
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 
 const Withdrawn = z.object({ requestId: z.string().min(1) })
 
@@ -182,6 +183,7 @@ function decideAsk(
       isServerKnown(db, asks.serverKey, bot.id))
   ) {
     holdPairedServerAsk(db, { ...row, bot_id: bot.id, state: 'card' })
+    notifyPairedServerCardsChanged(runtime, [bot.id])
   } else {
     declinePairedServerAsk(runtime, db, {
       conversationId: item.conversationId,
@@ -207,9 +209,10 @@ export async function importPairedServerItem(
     if (
       card &&
       card.environment_id === asks.environmentId &&
-      card.conversation_id === item.conversationId
-    ) {
+      card.conversation_id === item.conversationId &&
       dropPairedServerAsk(db, card.message_id, 'card')
+    ) {
+      notifyPairedServerCardsChanged(runtime, [card.bot_id])
     }
     return { card: false }
   }

@@ -11,6 +11,7 @@ import {
 } from '../../db/federation/paired-server-asks-store'
 import { declinePairedServerAsk, safeJson } from './paired-server-ask-import'
 import { admitPairedServerAsksNow } from './paired-server-asks-loop'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 
 export type PairedServerDecision = 'once' | 'always' | 'deny'
 
@@ -55,6 +56,7 @@ export function decidePairedServerAsk(
   if (!row) {
     return false
   }
+  notifyPairedServerCardsChanged(runtime, [row.bot_id])
   if (decision === 'deny') {
     return true
   }

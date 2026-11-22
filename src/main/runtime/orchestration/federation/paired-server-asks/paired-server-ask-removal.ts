@@ -10,6 +10,7 @@ import { activePairedServerAsks, leavePairedServer } from './paired-server-asks-
 import { flushPairedServerReturns } from './paired-server-ask-returns'
 import { pairedServerAsksFor } from './paired-server-asks-pull'
 import { tellSender } from '../../../rpc/methods/orchestration/messaging/bot-request-sender-notice'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 
 /** A deleted agent's cards and admissions are declined, and nothing names it anymore. A failure is
  *  logged, never thrown: the deletion goes ahead. */
@@ -30,6 +31,7 @@ function forgetAsksOf(runtime: OrcaRuntimeService, botId: string): void {
   }
   db.db.prepare('DELETE FROM paired_server_introductions WHERE bot_id = ?').run(botId)
   db.db.prepare('DELETE FROM paired_server_allowances WHERE bot_id = ?').run(botId)
+  notifyPairedServerCardsChanged(runtime, [botId])
 }
 
 /** Asks an agent here took and hasn't answered: each asker hears the pairing is gone, by the
@@ -85,6 +87,7 @@ export async function settlePairedServerAsksOnRemoval(
 export function retirePairedServerRoute(runtime: OrcaRuntimeService, environmentId: string): void {
   const db = runtime.getOrchestrationDb()
   forgetServerRoute(db, environmentId)
+  notifyPairedServerCardsChanged(runtime)
   // Replies to a server this computer no longer reaches can never go out.
   db.db
     .prepare(

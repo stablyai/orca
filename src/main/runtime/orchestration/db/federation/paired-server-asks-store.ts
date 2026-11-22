@@ -307,3 +307,12 @@ SELECT 1 FROM peer_mail_conversations c
 export function pairedServerAsksWanted(db: OrchestrationDb, environmentId: string): boolean {
   return db.db.prepare(`${PAIRED_SERVER_ASK_WANTS_SQL} LIMIT 1`).get(environmentId) !== undefined
 }
+
+/** Whether a card waits for a person to let a paired server's agent message this agent. */
+export function hasPairedServerCards(db: OrchestrationDb, botId: string): boolean {
+  return (
+    db.db
+      .prepare("SELECT 1 FROM paired_server_asks WHERE bot_id = ? AND state = 'card' LIMIT 1")
+      .get(botId) !== undefined
+  )
+}

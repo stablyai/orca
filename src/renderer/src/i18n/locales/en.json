@@ -22640,6 +22640,14 @@
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
       },
+      "pairedServerAsk": {
+        "always": "Always allow {{server}}",
+        "deny": "Deny",
+        "once": "Allow once",
+        "thisServer": "this server",
+        "title": "{{from}} wants to message {{to}} on this computer",
+        "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
+      },
       "dock": {
         "label": "Message box and prompts"
       }
@@ -29022,7 +29030,9 @@
       "actionFor": "{{action}}: {{title}}",
       "worker": "Worker: {{name}}",
       "permissionTool": "Permission · {{tool}}",
-      "whereItRuns": "{{need}} · open it where it runs"
+      "whereItRuns": "{{need}} · open it where it runs",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "pairedAskDetail": "Permission · Message {{name}}"
     },
     "upcoming": {
       "empty": "Ask {{name}} in chat to run something on a schedule or when something happens.",
@@ -29566,6 +29576,17 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "pairedServers": {
+      "add": "Add a paired server",
+      "allAdded": "Every paired server is added",
+      "heading": "Paired servers",
+      "info": "About paired servers",
+      "none": "No paired servers",
+      "remove": "Remove",
+      "search": "Search paired servers",
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "removeServer": "Remove {{server}}"
     }
   },
   "plugins": {
