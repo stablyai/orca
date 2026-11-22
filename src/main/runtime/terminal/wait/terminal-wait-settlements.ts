@@ -34,6 +34,8 @@ const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithBindPtyIncarnationHandle>) {
     super(...args)
+    this.orchestrationMailboxPointerDelivery.readPaneAgentForeground = (ptyId, agent) =>
+      this.readPaneAgentForeground(ptyId, agent)
     // A hook report is live status for mail when the title names none, so it is a delivery edge too.
     this.subscribeAgentStatusRowChanges((paneKey) => {
       const pty = this.getPtyRecordForPaneKey(paneKey)

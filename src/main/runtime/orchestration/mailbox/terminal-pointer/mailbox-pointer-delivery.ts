@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { noteQuestionEdge } from '../../db/messages/question-edges'
 import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import {
@@ -21,6 +22,9 @@ import {
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
+/** Mailboxes by handle, with the message types each caller reserved. */
+type ReservedMailboxes = Map<string, ReadonlySet<string> | undefined>
+
 const DEFAULT_POINTER_ENTER_DELAY_MS = 500
 
 function pointerEnterDelayMs(): number {
@@ -33,8 +37,13 @@ function pointerEnterDelayMs(): number {
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   private readonly coldParkedPtys = new Set<string>()
-  private readonly reporterProbeMailboxes = new Map<string, Set<string>>()
+  /** Mailboxes waiting on each pane's foreground read. */
+  private readonly reporterProbeMailboxes = new Map<string, ReservedMailboxes>()
   private readonly disprovedHookReportAt = new Map<string, number>()
+  /** `agent` when that agent itself is the pane's foreground program, by an exact read; the runtime
+   *  installs it once its foreground inspection exists. Until then no hook report is trusted. */
+  readPaneAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<string> = async () =>
+    'unknown'
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -138,7 +147,12 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
     // A shell in front would run the pointer as a command, so a hook report needs its agent in front.
     if (terminal.hookReport && !options.reporterInForeground) {
-      this.deliverOnceReporterInForeground(ptyId, terminal.hookReport, mailboxHandle)
+      this.deliverOnceReporterInForeground(
+        ptyId,
+        terminal.hookReport,
+        mailboxHandle,
+        options.reservedTypes
+      )
       return
     }
     // Every path stages here, async retries included: type only for a mailbox this terminal still owns.
@@ -237,17 +251,17 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   private deliverOnceReporterInForeground(
     ptyId: string,
     report: HookAgentReport,
-    mailboxHandle: string
+    mailboxHandle: string,
+    reservedTypes: ReadonlySet<string> | undefined
   ): void {
     const waiting = this.reporterProbeMailboxes.get(ptyId)
     if (waiting) {
-      waiting.add(mailboxHandle)
+      waiting.set(mailboxHandle, reservedTypes)
       return
     }
-    const mailboxes = new Set([mailboxHandle])
+    const mailboxes = new Map([[mailboxHandle, reservedTypes]])
     this.reporterProbeMailboxes.set(ptyId, mailboxes)
-    void this.deps
-      .readPaneAgentForeground(ptyId, report.agent)
+    void this.readPaneAgentForeground(ptyId, report.agent)
       .catch(() => 'unknown')
       .then((foreground) => {
         // Retired or respawned meanwhile: that pane's next delivery probes afresh.
@@ -268,9 +282,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
           return
         }
         // A newer report since speaks for itself and gets its own read.
-        for (const probed of mailboxes) {
+        for (const [probed, reserved] of mailboxes) {
           this.deliver(current, {
             mailboxHandle: probed,
+            reservedTypes: reserved,
             skipAbsenceProbe: true,
             reporterInForeground: sameReport
           })
