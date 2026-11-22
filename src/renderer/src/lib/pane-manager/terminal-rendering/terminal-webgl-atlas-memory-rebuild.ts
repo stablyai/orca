@@ -19,8 +19,8 @@ const ATLAS_MEMORY_REBUILD_ENABLED =
   navigator.userAgent.includes('Macintosh') &&
   !(navigator.maxTouchPoints > 0)
 
-// xterm's shared TextureAtlas, read from the addon's private renderer; only its identity is used.
-type GlyphAtlas = { readonly pages: readonly unknown[] }
+// xterm's shared TextureAtlas, read from the addon's private renderer: its identity, and clearTexture to empty it in place.
+type GlyphAtlas = { readonly pages: readonly unknown[]; clearTexture?: () => void }
 type PaneFilter = (pane: ManagedPaneInternal) => boolean
 /** Rechecked on each pane's own frame: 'skip' leaves it detached until reveal, 'wait' holds it a frame. */
 export type DeferredReattachVerdict = 'now' | 'wait' | 'skip'
@@ -158,6 +158,12 @@ function rebuildDueAtlases(): void {
     scheduleRebuild()
     return
   }
+  if (!getWindowParkVisible()) {
+    // Nothing on screen to recreate; wait an interval rather than drop every context of a hidden window.
+    lastAttemptAt = now
+    scheduleRebuild()
+    return
+  }
   const shown = shownPaneFilter()
   const onScreen: PaneFilter = (pane) => shown(pane) && !paneIsCoveredByNativeChat(pane)
   const panes: ManagedPaneInternal[] = []
@@ -183,7 +189,8 @@ function rebuildDueAtlases(): void {
       continue
     }
     attempted = true
-    // The rebuild clears this atlas in place; it rebuilds again only after a new large page and new output.
+    // Emptied in place, so every recreated context joins a small atlas; destroying each old context frees what it retained. It rebuilds again only after a new large page and new output.
+    atlas.clearTexture?.()
     forgetDue(atlas)
     atlasesWithLargePage.delete(atlas)
     atlasesWithOutput.delete(atlas)

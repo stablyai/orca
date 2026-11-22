@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from '../pane-manager-types'
 
-// Guards #43465: an atlas rebuild clears the shared atlas, then recreates at most one WebGL context per frame, never leaves a shown pane on the DOM renderer, and pauses while the user interacts.
+// Guards #43465: an atlas rebuild recreates at most one WebGL context per frame, decides each pane on its own frame, never leaves a shown pane on the DOM renderer or paints mid-frame, and pauses while the user interacts.
 const attaches = { count: 0 }
 const interactionHold = { ms: 0 }
 type Verdict = 'now' | 'wait' | 'skip'
@@ -87,11 +87,9 @@ describe('atlas-rebuild context recreation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('clears the shared atlas once, then recreates one context per frame without ever dropping a shown pane to DOM', async () => {
+  it('recreates one context per frame without ever dropping a shown pane to DOM', async () => {
     const fakes = Array.from({ length: 6 }, fakePane)
-    const firstAddon = fakes[0].raw.webglAddon
     run(fakes)
-    expect(firstAddon?.clears).toBe(1)
     expect(attaches.count).toBe(1)
     for (let frame = 2; frame <= 6; frame++) {
       expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
@@ -117,19 +115,20 @@ describe('atlas-rebuild context recreation', () => {
     expect(attaches.count).toBe(3)
   })
 
-  it('drops off-screen panes contexts in their own frame without recreating them', async () => {
-    const [shown, hidden] = Array.from({ length: 2 }, fakePane)
+  it('decides each pane on its own frame: hidden ones drop their context, one revealed meanwhile gets a new one', async () => {
+    const [shown, hidden, revealed] = Array.from({ length: 3 }, fakePane)
+    const onScreen = new Set([shown.pane])
     run(
-      [hidden, shown],
-      () => 'now',
-      (pane) => pane === shown.pane
+      [shown, hidden, revealed],
+      (pane) => (onScreen.has(pane) ? 'now' : 'skip'),
+      (pane) => onScreen.has(pane)
     )
-    // The shown pane goes first.
     expect(attaches.count).toBe(1)
-    expect(hidden.raw.webglAddon).toBeTruthy()
-    await vi.advanceTimersByTimeAsync(16)
+    onScreen.add(revealed.pane)
+    await vi.advanceTimersByTimeAsync(16 * 2)
     expect(hidden.raw.webglAddon).toBeNull()
-    expect(attaches.count).toBe(1)
+    expect(revealed.raw.webglAddon).toBeTruthy()
+    expect(attaches.count).toBe(2)
   })
 
   it('recreates a pane mid synchronized-output frame only once its frame closes', async () => {
@@ -142,6 +141,18 @@ describe('atlas-rebuild context recreation', () => {
     expect(framed.raw.webglAddon).toBeTruthy()
     framed.raw.terminal.modes.synchronizedOutputMode = false
     await vi.advanceTimersByTimeAsync(16)
+    expect(attaches.count).toBe(2)
+  })
+
+  it('never recreates a pane while its synchronized-output frame stays open, however long', async () => {
+    const [plain, framed] = Array.from({ length: 2 }, fakePane)
+    framed.raw.terminal.modes.synchronizedOutputMode = true
+    run([plain, framed], (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(attaches.count).toBe(1)
+    expect(framed.raw.webglAddon).toBeTruthy()
+    framed.raw.terminal.modes.synchronizedOutputMode = false
+    await vi.advanceTimersByTimeAsync(250)
     expect(attaches.count).toBe(2)
   })
 

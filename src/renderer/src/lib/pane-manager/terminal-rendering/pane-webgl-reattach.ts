@@ -84,19 +84,18 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
   return () => reattach.forEach(reattachDetachedWebgl)
 }
 
-// xterm's own watchdog ends a synchronized frame within a second; past this, recreate anyway rather than keep the old context.
-const MAX_SYNC_WAIT_FRAMES = 120
-
-type RebuildStep = { pane: ManagedPaneInternal; recreate: boolean }
+// A pane mid synchronized-output frame keeps its old context until the frame closes; after this many frames it rechecks on a slower timer instead.
+const SYNC_WAIT_FRAMES = 120
+const SYNC_WAIT_SLOW_MS = 250
 
 /** One pane per frame, so no frame pays for more than one context; user input holds the rest, which keep rendering on their old context meanwhile. */
 function rebuildAcrossFrames(
-  steps: RebuildStep[],
+  steps: ManagedPaneInternal[],
   verdictOf: (pane: ManagedPaneInternal) => DeferredReattachVerdict,
   waitedFrames = 0
 ): void {
-  const [step, ...rest] = steps
-  if (!step) {
+  const [pane, ...rest] = steps
+  if (!pane) {
     return
   }
   const hold = terminalWebglAtlasInteractionHoldMs()
@@ -107,7 +106,6 @@ function rebuildAcrossFrames(
     )
     return
   }
-  const { pane } = step
   // The pane may have closed, lost its renderer or its DOM since the rebuild started.
   if (
     pane.webglAddon &&
@@ -115,9 +113,15 @@ function rebuildAcrossFrames(
     pane.container.isConnected &&
     !isXtermInstanceDisposed(pane.terminal)
   ) {
-    const verdict = step.recreate ? verdictOf(pane) : 'skip'
-    if (verdict === 'wait' && waitedFrames < MAX_SYNC_WAIT_FRAMES) {
-      requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames + 1))
+    // Decided on its own frame: a tab revealed or a chat cover closed since the rebuild started gets a new context, not a dropped one.
+    const verdict = verdictOf(pane)
+    if (verdict === 'wait') {
+      // Never painted mid-frame: past the frame budget it keeps checking, more slowly, on its old context.
+      if (waitedFrames < SYNC_WAIT_FRAMES) {
+        requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames + 1))
+      } else {
+        setTimeout(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames), SYNC_WAIT_SLOW_MS)
+      }
       return
     }
     if (verdict === 'skip') {
@@ -137,11 +141,9 @@ function rebuildAcrossFrames(
 }
 
 setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
+  // Shown panes first; the atlas module already cleared each atlas in place, so every recreated context joins a small one.
   const steps = panes
     .filter((pane) => pane.webglAddon && !pane.webglDisabledAfterContextLoss)
-    .map((pane) => ({ pane, recreate: shouldReattach(pane) }))
-    .sort((a, b) => Number(b.recreate) - Number(a.recreate))
-  // Clearing the shared atlas first means every recreated context joins a small atlas, and destroying each old context frees what it retained; on a quiet screen the waiting panes keep their last frame.
-  steps[0]?.pane.webglAddon?.clearTextureAtlas()
+    .sort((a, b) => Number(shouldReattach(b)) - Number(shouldReattach(a)))
   rebuildAcrossFrames(steps, verdictOnItsFrame)
 })

@@ -21,8 +21,17 @@ vi.mock('../pane-manager-registry', () => ({
 
 type AtlasModule = typeof AtlasMemoryRebuild
 
-type FakeAtlas = { readonly pages: unknown[] }
-const newAtlas = (): FakeAtlas => ({ pages: [] })
+type FakeAtlas = { readonly pages: unknown[]; clears: number; clearTexture: () => void }
+const newAtlas = (): FakeAtlas => {
+  const atlas = {
+    pages: [],
+    clears: 0,
+    clearTexture: () => {
+      atlas.clears++
+    }
+  }
+  return atlas
+}
 
 function fakePane(
   atlasModule: AtlasModule,
@@ -263,16 +272,36 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(atlas.takeCoveredDetachedPane(covered.pane.terminal)).toBeUndefined()
   })
 
-  it('reattaches nothing while the window is hidden', async () => {
-    vi.stubGlobal('document', { visibilityState: 'hidden' })
+  it('rebuilds nothing while the window is hidden, and goes ahead once it is shown', async () => {
+    const parkVisibility = { visible: false }
+    vi.doMock('../../window-activity/window-park-visibility', () => ({
+      getWindowParkVisible: () => parkVisibility.visible
+    }))
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const shown = fakePane(atlas, newAtlas())
-    shown.terminal.modes.synchronizedOutputMode = true
     shown.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
-    await vi.advanceTimersByTimeAsync(QUIET)
+    await vi.advanceTimersByTimeAsync(QUIET + INTERVAL)
+    expect(rebuilds).toHaveLength(0)
+    parkVisibility.visible = true
+    await vi.advanceTimersByTimeAsync(INTERVAL)
     expect(rebuilds).toEqual([[shown.pane]])
-    expect(reattached).toEqual([[]])
+    vi.doUnmock('../../window-activity/window-park-visibility')
+  })
+
+  it('empties each due atlas in place before its owners are recreated', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const first = newAtlas()
+    const second = newAtlas()
+    const a = fakePane(atlas, first)
+    const b = fakePane(atlas, second)
+    a.output()
+    b.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, a.pane)
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, b.pane)
+    await vi.advanceTimersByTimeAsync(QUIET)
+    expect(rebuilds).toEqual([[a.pane, b.pane]])
+    expect([first.clears, second.clears]).toEqual([1, 1])
   })
 
   it('ignores other page sizes, touch Apple devices and other platforms', async () => {
