@@ -6,9 +6,11 @@ import type { WorkspaceCleanupWorkspaceRef } from '../../../../../shared/workspa
 export function WorkspaceCleanupWorkspaceLine({
   workspace,
   trailing,
-  className
+  className,
+  hideProject = false
 }: {
   workspace: Pick<WorkspaceCleanupWorkspaceRef, 'displayName' | 'repoName'>
+  hideProject?: boolean
   trailing?: React.ReactNode
   className?: string
 }): React.JSX.Element {
@@ -17,10 +19,12 @@ export function WorkspaceCleanupWorkspaceLine({
       <span className="min-w-0 truncate text-sm font-medium text-foreground">
         {workspace.displayName}
       </span>
-      <span className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground">
-        <Folder className="size-3 shrink-0" aria-hidden="true" />
-        <span className="truncate">{workspace.repoName}</span>
-      </span>
+      {hideProject ? null : (
+        <span className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground">
+          <Folder className="size-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{workspace.repoName}</span>
+        </span>
+      )}
       {trailing ? (
         <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
           {trailing}

@@ -23695,9 +23695,6 @@
       "workspaceCleanup": {
         "title": "Workspace Cleanup",
         "description": "Remove workspaces you're done with. Before removing anything, Orca checks again for unsaved work.",
-        "unsupportedHost": "This host runs an Orca version without automatic cleanup. Update Orca on it to use these settings.",
-        "previewFailed": "Couldn't check which workspaces this change matches.",
-        "pinFailed": "Couldn't keep {{name}}.",
         "rules": {
           "branchNote": "Merged branches are deleted with their workspace. Unmerged branches are kept.",
           "recommended": "Recommended",
@@ -23766,11 +23763,15 @@
         "updateFailed": "Couldn't save the cleanup rules.",
         "enable": {
           "title": "Turn on {{rule}}?",
-          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
-          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
+          "description_one": "1 workspace matches right now.",
+          "description_other": "{{count}} workspaces match right now.",
           "summary": "{{count}} will be deleted",
           "cancel": "Cancel",
-          "turnOn": "Turn on"
+          "turnOn": "Turn on",
+          "summary_one": "1 will be deleted",
+          "summary_other": "{{count}} will be deleted",
+          "keep": "Keep",
+          "keepNamed": "Keep {{name}}"
         },
         "reason": {
           "merged": "Merged",
@@ -23801,7 +23802,8 @@
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
           "rulesOff": "No rule on",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "identityUnverified": "Couldn't verify it right before deleting, so it was kept"
         },
         "trigger": {
           "startup": "On startup",
@@ -23847,9 +23849,33 @@
         },
         "change": {
           "title": "Change {{rule}}?",
-          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
-          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it.",
-          "apply": "Apply"
+          "apply": "Apply",
+          "thisHost": "this host",
+          "oldProject": "Update Orca on {{host}} to change rules. Off still works.",
+          "oldProjectUnsupported": "Update Orca on {{host}} to change cleanup here.",
+          "oldGlobal": "Update Orca on {{host}} to change cleanup rules.",
+          "saveFailed": "Couldn't save. Rule not changed.",
+          "conflict": "The cleanup rules changed elsewhere. Review the change again.",
+          "checkingSaved": "Checking saved rules…",
+          "previewFailed": "Couldn't check which workspaces match.",
+          "pinFailed": "Couldn't keep {{name}}. Rule not changed.",
+          "inheritTitle": "Use global rules for {{project}}?",
+          "projectEnableTitle": "Turn on {{rule}} for {{project}}?",
+          "projectTitle": "Change {{rule}} for {{project}}?",
+          "inheritDescription_one": "1 workspace matches the global rules now.",
+          "inheritDescription_other": "{{count}} workspaces match the global rules now.",
+          "fullDescription_one": "1 workspace matches now.",
+          "fullDescription_other": "{{count}} workspaces match now.",
+          "keptDeleted": "{{name}} was already deleted.",
+          "keptDeletedCount_one": "1 kept workspace was already deleted.",
+          "keptDeletedCount_other": "{{count}} kept workspaces were already deleted.",
+          "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
+          "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again.",
+          "new": "New",
+          "alreadySet": "Rows without New are already set to be deleted.",
+          "cancelCurrent": "Cancel won't stop current rules from deleting some of these.",
+          "keepTooLate": "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
+          "proposalChanged": "Cleanup rules changed elsewhere. Review the updated rules: {{rules}}"
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
         "retry": "Try again",
@@ -23865,13 +23891,10 @@
         "disableIgnoredFiles": {
           "title": "Turn off ignored-file protection?",
           "description": "For projects using these cleanup rules, ignored files will no longer prevent automatic cleanup. Files such as .env and local config may be deleted and cannot be recovered.",
-          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
-          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection.",
           "noMatches": "No additional workspaces match right now. This setting affects future cleanup in projects using these rules.",
           "turnOff": "Turn off protection"
         },
         "pinAndKeep": {
-          "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
           "named": "Pin and keep {{name}}",
           "label": "Pin and keep"
         },

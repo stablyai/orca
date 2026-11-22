@@ -49,7 +49,7 @@ export type WorkspaceCleanupRuleOperation = {
   /** Switches stay focusable while busy; the toggle is dropped instead of natively disabled. */
   busy: boolean
   onRetry: () => void
-  switchRef: (key: WorkspaceCleanupRuleKey, element: HTMLButtonElement | null) => void
+  switchRef?: (key: WorkspaceCleanupRuleKey, element: HTMLButtonElement | null) => void
 }
 
 type RuleRowsProps = {
@@ -60,9 +60,11 @@ type RuleRowsProps = {
   /** What each rule that is on would remove now; omitted where no preview is read. */
   matches?: Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>>
   operation?: WorkspaceCleanupRuleOperation
+  pendingRule?: WorkspaceCleanupRuleKey | null
   /** Changes after a change that was not saved, so the Inactive fields show the saved values. */
   inactiveDraftKey?: number
   /** Natively disables every control while a change is in flight. */
+  error?: { key: WorkspaceCleanupRuleKey; message: string; retry: () => void }
   disabled?: boolean
   forceVisible?: boolean
 }
@@ -83,9 +85,11 @@ export function WorkspaceCleanupRuleRows({
   onChange,
   matches,
   operation,
+  pendingRule,
   inactiveDraftKey,
   disabled = false,
-  forceVisible = false
+  forceVisible = false,
+  error
 }: RuleRowsProps): React.JSX.Element {
   const t = useTranslate()
   const idPrefix = useId()
@@ -110,7 +114,12 @@ export function WorkspaceCleanupRuleRows({
   }
 
   const ruleRow = (key: WorkspaceCleanupRuleKey, description: string, badge?: string) => {
-    const phase = operation?.pending?.key === key ? operation.pending.phase : null
+    const phase =
+      operation?.pending?.key === key
+        ? operation.pending.phase
+        : pendingRule === key
+          ? 'checking'
+          : null
     const failed = operation?.failedKey === key && !rules[key].enabled
     const errorId = `${idPrefix}-${key}-check-failed`
     const shownOn = phase === 'checking' || phase === 'enabling' ? true : rules[key].enabled
@@ -152,13 +161,14 @@ export function WorkspaceCleanupRuleRows({
           }
           control={
             <Switch
-              ref={operation ? (element) => operation.switchRef(key, element) : undefined}
+              ref={
+                operation?.switchRef ? (element) => operation.switchRef?.(key, element) : undefined
+              }
               // Shown On while its turn-on is checked or saved; screen readers hear the saved value.
               checked={shownOn}
               aria-checked={rules[key].enabled}
-              aria-disabled={held ? true : undefined}
+              aria-disabled={held || disabled}
               aria-describedby={failed ? errorId : undefined}
-              disabled={disabled}
               pending={
                 phase === null
                   ? undefined
@@ -167,7 +177,7 @@ export function WorkspaceCleanupRuleRows({
                     : 'saving'
               }
               onCheckedChange={() => {
-                if (!held) {
+                if (!held && !disabled) {
                   onToggle(key)
                 }
               }}
@@ -175,6 +185,14 @@ export function WorkspaceCleanupRuleRows({
             />
           }
         />
+        {error?.key === key && !failed ? (
+          <p role="alert" className="mb-3 text-xs text-destructive">
+            {error.message}{' '}
+            <button type="button" className="underline" onClick={error.retry}>
+              {t('components.settings.workspaceCleanup.retry', 'Try again')}
+            </button>
+          </p>
+        ) : null}
         {key === 'inactive' && rules.inactive.enabled ? (
           <InactiveRuleOptions
             key={inactiveDraftKey}
@@ -242,7 +260,7 @@ function InactiveRuleOptions({
         max={WORKSPACE_CLEANUP_POLICY_MAX_DAYS}
         integer
         suffix={t('components.settings.workspaceCleanup.rules.days', 'days')}
-        disabled={disabled}
+        ariaDisabled={disabled}
         onChange={(afterDays) => setInactive({ afterDays })}
       />
       {WORKSPACE_ARCHIVE_SUPPORTED ? (

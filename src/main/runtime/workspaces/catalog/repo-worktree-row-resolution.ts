@@ -61,6 +61,7 @@ export type RepoWorktreeRow = Worktree & {
 
 export type RepoWorktreeRowDeps = {
   store: RepoWorktreeRowStore
+  requireComplete?: (repo: Repo) => boolean
   /** The cache-aware per-repo scan. Injected so this module never owns scan-cache state. */
   scanRepo: (
     repo: Repo,
@@ -139,13 +140,16 @@ export async function scanRepoWorktreeRows(
     deps
       .scanRepo(repo, projectRuntimeByRepoId)
       .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
-    RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+    deps.requireComplete?.(repo) ? 60_000 : RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? {
     ok: false,
     worktrees:
       deps.getCachedSuccessfulScan?.(repo)?.worktrees ??
       listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
+  }
+  if (!scan.ok && deps.requireComplete?.(repo)) {
+    throw new Error(`Could not freshly list every workspace in ${repo.displayName}.`)
   }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   // Cached reads must not re-prune against a generation captured after their rows were observed.

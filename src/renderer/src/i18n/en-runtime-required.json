@@ -3248,16 +3248,21 @@
           "notListed_other": "{{count}} more kept workspaces are not listed."
         },
         "change": {
-          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
-          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
-        },
-        "disableIgnoredFiles": {
-          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
-          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection."
+          "fullDescription_one": "1 workspace matches now.",
+          "fullDescription_other": "{{count}} workspaces match now.",
+          "inheritDescription_one": "1 workspace matches the global rules now.",
+          "inheritDescription_other": "{{count}} workspaces match the global rules now.",
+          "keptDeletedCount_one": "1 kept workspace was already deleted.",
+          "keptDeletedCount_other": "{{count}} kept workspaces were already deleted.",
+          "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
+          "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again."
         },
         "enable": {
-          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
-          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."
+          "description_one": "1 workspace matches right now.",
+          "description_other": "{{count}} workspaces match right now.",
+          "summary": "{{count}} will be deleted",
+          "summary_one": "1 will be deleted",
+          "summary_other": "{{count}} will be deleted"
         },
         "rules": {
           "inactiveDescription": "No activity for {{count}} days.",

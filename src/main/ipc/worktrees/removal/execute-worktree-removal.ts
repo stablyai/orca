@@ -199,5 +199,6 @@ export async function executeWorktreeRemoval(
     hasLocalWorktreeGitOptions,
     deleteBranch
   )
-  return archiveHookOverride ? { ...result, archiveHookOverride } : result
+  // Keep the accepted reply's own object: its background completion is tied to it.
+  return archiveHookOverride ? Object.assign(result, { archiveHookOverride }) : result
 }

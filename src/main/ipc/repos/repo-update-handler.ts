@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -69,6 +70,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
           workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+          workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null

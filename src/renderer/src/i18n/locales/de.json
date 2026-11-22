@@ -21568,6 +21568,54 @@
         "confirmCheckHomeFolder": "Kein anderer Rechner, der diesen Home-Ordner teilt, führt Orca aus",
         "details": "Details",
         "clearing": "Wird aufgehoben…"
+      },
+      "workspaceCleanup": {
+        "enable": {
+          "title": "{{rule}} aktivieren?",
+          "summary_one": "1 wird gelöscht",
+          "summary_other": "{{count}} werden gelöscht",
+          "keep": "Behalten",
+          "keepNamed": "{{name}} behalten",
+          "cancel": "Abbrechen",
+          "turnOn": "Aktivieren",
+          "description_one": "1 Arbeitsbereich entspricht jetzt den Regeln.",
+          "description_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln."
+        },
+        "change": {
+          "thisHost": "diesem Host",
+          "oldProject": "Aktualisiere Orca auf {{host}}, um Regeln zu ändern. Aus funktioniert weiterhin.",
+          "oldProjectUnsupported": "Aktualisiere Orca auf {{host}}, um die Bereinigung hier zu ändern.",
+          "oldGlobal": "Aktualisiere Orca auf {{host}}, um Bereinigungsregeln zu ändern.",
+          "saveFailed": "Speichern fehlgeschlagen. Die Regel wurde nicht geändert.",
+          "conflict": "Die Bereinigungsregeln wurden andernorts geändert. Prüfe die Änderung erneut.",
+          "checkingSaved": "Gespeicherte Regeln werden geprüft…",
+          "previewFailed": "Passende Arbeitsbereiche konnten nicht geprüft werden.",
+          "pinFailed": "{{name}} konnte nicht behalten werden. Die Regel wurde nicht geändert.",
+          "inheritTitle": "Globale Regeln für {{project}} verwenden?",
+          "projectEnableTitle": "{{rule}} für {{project}} aktivieren?",
+          "projectTitle": "{{rule}} für {{project}} ändern?",
+          "inheritDescription_one": "1 Arbeitsbereich entspricht jetzt den globalen Regeln.",
+          "inheritDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den globalen Regeln.",
+          "fullDescription_one": "1 Arbeitsbereich entspricht jetzt den Regeln.",
+          "fullDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln.",
+          "keptDeleted": "{{name}} wurde bereits gelöscht.",
+          "keptDeletedCount_one": "1 zum Behalten markierter Arbeitsbereich wurde bereits gelöscht.",
+          "keptDeletedCount_other": "{{count}} zum Behalten markierte Arbeitsbereiche wurden bereits gelöscht.",
+          "moreMatches_one": "1 weiterer Arbeitsbereich entspricht jetzt den Regeln. Prüfe und bestätige erneut.",
+          "moreMatches_other": "{{count}} weitere Arbeitsbereiche entsprechen jetzt den Regeln. Prüfe und bestätige erneut.",
+          "new": "Neu",
+          "alreadySet": "Zeilen ohne Neu sind bereits zum Löschen vorgesehen.",
+          "cancelCurrent": "Abbrechen verhindert nicht, dass aktuelle Regeln einige dieser Arbeitsbereiche löschen.",
+          "apply": "Anwenden",
+          "keepTooLate": "{{name}} konnte nicht behalten werden, da das Löschen bereits begonnen hat. Regel nicht geändert.",
+          "proposalChanged": "Die Bereinigungsregeln wurden an anderer Stelle geändert. Prüfe die aktualisierten Regeln: {{rules}}",
+          "title": "{{rule}} ändern?"
+        },
+        "rules": {
+          "merged": "Zusammengeführte Arbeitsbereiche löschen",
+          "inactive": "Inaktive Arbeitsbereiche löschen"
+        },
+        "retry": "Erneut versuchen"
       }
     },
     "agentChildRow": {

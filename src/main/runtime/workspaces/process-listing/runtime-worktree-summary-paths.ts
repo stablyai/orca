@@ -192,3 +192,13 @@ function runtimeWorktreeSummaryPathKey(
 ): string {
   return `${repoId}\0${worktreePathComparisonKey(worktreePath, platform)}`
 }
+
+export function indexRuntimeWorktreePs(
+  summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+  platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+): RuntimeWorktreePsSummaryLookup {
+  return createRuntimeWorktreePsSummaryLookup(
+    summaries,
+    buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
+  )
+}

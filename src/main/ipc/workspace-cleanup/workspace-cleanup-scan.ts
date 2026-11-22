@@ -71,8 +71,16 @@ export async function scanWorkspaceCleanup(
 ): Promise<WorkspaceCleanupScanResult> {
   throwIfWorkspaceCleanupScanAborted(options.signal)
   const scannedAt = Date.now()
-  const targetWorktreeIdsByRepo = getTargetWorktreeIdsByRepo(args)
-  if (hasTargetedWorkspaceCleanupScan(args) && targetWorktreeIdsByRepo.size === 0) {
+  const targetWorktreeIdsByRepo = options.targetWorktreeIds
+    ? getTargetWorktreeIdsByRepo(
+        { worktreeIds: [...options.targetWorktreeIds] },
+        Number.MAX_SAFE_INTEGER
+      )
+    : getTargetWorktreeIdsByRepo(args)
+  if (
+    (hasTargetedWorkspaceCleanupScan(args) || options.targetWorktreeIds) &&
+    targetWorktreeIdsByRepo.size === 0
+  ) {
     return { scannedAt, candidates: [], errors: [] }
   }
   const allRepos = store.getRepos()
@@ -116,6 +124,7 @@ export async function scanWorkspaceCleanup(
           includeAllWorkspaces: args.includeAllWorkspaces === true,
           skipGitWorktreeIds: new Set(args.skipGitWorktreeIds ?? []),
           signal: options.signal,
+          listingTimeoutMs: options.listingTimeoutMs,
           onWorktreesDiscovered: progress.addDiscovered,
           onCandidateScanned: progress.addCandidate,
           onErrors: progress.addErrors
@@ -134,6 +143,7 @@ export async function scanWorkspaceCleanup(
 
 async function scanRepoWorkspaces(
   args: {
+    listingTimeoutMs?: number
     store: RuntimeStore
     repo: Repo
     repoOwnerCount: number
@@ -171,7 +181,13 @@ async function scanRepoWorkspaces(
   let gitWorktrees: GitWorktreeInfo[] = []
 
   try {
-    const discovered = await listCleanupGitWorktrees(store, repo, repoIsFolder, signal)
+    const discovered = await listCleanupGitWorktrees(
+      store,
+      repo,
+      repoIsFolder,
+      signal,
+      args.listingTimeoutMs
+    )
     route = discovered.route
     gitWorktrees = discovered.gitWorktrees
   } catch (error) {

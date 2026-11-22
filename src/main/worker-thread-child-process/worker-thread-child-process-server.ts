@@ -1,3 +1,6 @@
+import { isAbsolute, resolve } from 'node:path'
+import { WorktreeRemovalIncarnationChangedError } from '../../shared/worktree/removal/worktree-checkout-identity'
+import { assertWorktreeCheckoutIdentityBeforeSpawn } from './worktree-checkout-identity-guard'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   nativeExecutableResolver,
@@ -53,7 +56,21 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   ): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
+      const { worktreeCheckoutGuard, ...processSpec } = spec
+      if (worktreeCheckoutGuard) {
+        const target = spec.args.at(-1) ?? ''
+        const command = spec.args.indexOf('worktree')
+        if (
+          command === -1 ||
+          spec.args[command + 1] !== 'remove' ||
+          !isAbsolute(target) ||
+          resolve(target) !== worktreeCheckoutGuard.identity.root
+        ) {
+          throw new WorktreeRemovalIncarnationChangedError()
+        }
+        assertWorktreeCheckoutIdentityBeforeSpawn(worktreeCheckoutGuard)
+      }
+      child = spawnProcess({ ...processSpec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
