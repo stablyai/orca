@@ -6404,6 +6404,8 @@
       "description": "Your new bot reads the old one and sets itself up.",
       "nameAnother": "Name a new bot",
       "importedBefore": "{{bot}} came from this bot",
+      "update": "Update {{bot}}",
+      "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "keysStay": "Keys and logins stay behind",
       "nudgeOne": "We found a bot in {{app}}.",
       "nudgeMany": "We found {{count}} bots in {{app}}.",
