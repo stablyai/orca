@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { syncParkedTerminalTabWatchers } from '../output-watchers/terminal-parked-tab-watchers'
 import { disposeParkedTerminalWatchersForWorktree } from '../output-watchers/terminal-parked-watcher-registry'
 import {
@@ -26,7 +27,8 @@ export function useParkedTerminalWatcherSynchronization(args: {
   const { worktreeId, terminalTabs, parkedTabIds, activationDeferredMountTabIds } = args
   const inputs = useTerminalParkingWorkspaceInputs(worktreeId)
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
-  const synchronize = useEffectEvent(() => {
+  // Not useEffectEvent: React 19.2 never refreshes it in memo() components, and our caller is memoized.
+  const synchronize = useLatestHandler(() => {
     syncParkedTerminalTabWatchers({
       worktreeId,
       tabs: terminalTabs,
@@ -36,5 +38,5 @@ export function useParkedTerminalWatcherSynchronization(args: {
   })
   useEffect(() => {
     synchronize()
-  }, [activationDeferredMountTabIds, parkedTabIds, inputs])
+  }, [activationDeferredMountTabIds, parkedTabIds, inputs, synchronize])
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'

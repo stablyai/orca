@@ -10,12 +10,12 @@ import {
   compareNativeChatDisplayMessages as compareMessages,
   orderNativeChatDisplayEntries as orderEntries,
   orderNativeChatDisplayMessages as orderMessages
-} from '../../../../../../../shared/native-chat/transcript/native-chat-message-order'
+} from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import {
-  hasImagePromptMarker,
-  isImageSourceUserTurn,
+  imageTranscriptUnitPrompt,
+  nativeChatImageTranscriptUnits,
   normalizeImageTranscriptMessages
-} from '../../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 
 /** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {
@@ -122,60 +122,12 @@ export function sortForImageNormalization(
   const sourceOrdered = messages.some((message) => message.transcriptOrder !== undefined)
     ? Array.from(messages).sort(compareMessages)
     : messages
-  const units: ImageNormalizationUnit[] = []
-  for (let index = 0; index < sourceOrdered.length; index += 1) {
-    const message = sourceOrdered[index]!
-    const companions: NativeChatMessage[] = []
-    let prompt: NativeChatMessage | undefined
-
-    if (isImageSourceUserTurn(message)) {
-      let nextIndex = index
-      while (
-        nextIndex < sourceOrdered.length &&
-        sourceOrdered[nextIndex]?.source === message.source &&
-        isImageSourceUserTurn(sourceOrdered[nextIndex]!)
-      ) {
-        companions.push(sourceOrdered[nextIndex]!)
-        nextIndex += 1
-      }
-      const candidate = sourceOrdered[nextIndex]
-      if (
-        candidate?.role === 'user' &&
-        candidate.source === message.source &&
-        hasImagePromptMarker(candidate)
-      ) {
-        prompt = candidate
-        index = nextIndex
-      } else {
-        companions.length = 0
-      }
-    } else {
-      const candidate = sourceOrdered[index + 1]
-      if (
-        message.role === 'user' &&
-        hasImagePromptMarker(message) &&
-        candidate?.source === message.source &&
-        candidate.timestamp === message.timestamp &&
-        isImageSourceUserTurn(candidate)
-      ) {
-        let nextIndex = index + 1
-        while (
-          nextIndex < sourceOrdered.length &&
-          sourceOrdered[nextIndex]?.source === message.source &&
-          sourceOrdered[nextIndex]?.timestamp === message.timestamp &&
-          isImageSourceUserTurn(sourceOrdered[nextIndex]!)
-        ) {
-          companions.push(sourceOrdered[nextIndex]!)
-          nextIndex += 1
-        }
-        prompt = message
-        index = nextIndex - 1
-      }
-    }
-
-    const unitMessages = prompt ? [...companions, prompt] : [message]
-    units.push({ messages: unitMessages, sortKey: prompt ?? message })
-  }
+  const units: ImageNormalizationUnit[] = nativeChatImageTranscriptUnits(sourceOrdered).map(
+    (members) => ({
+      messages: members,
+      sortKey: imageTranscriptUnitPrompt(members) ?? members[0]!
+    })
+  )
 
   const sorted = orderEntries(units, (unit) => unit.sortKey).flatMap((unit) => unit.messages)
   return sorted.every((message, index) => message === messages[index]) ? messages : sorted

@@ -9,16 +9,17 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions
+  useWindowDimensions,
+  type HostInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { ActionSheetAction } from '../ActionSheetModal'
+import type { ActionSheetAction } from '../sheets/ActionSheetModal'
 
 const MENU_WIDTH = 252
 const ANCHOR_GAP = 6
@@ -33,7 +34,7 @@ type Anchor = { top: number; right: number } | { bottom: number; right: number }
 type PullDownMenuProps = {
   visible: boolean
   /** The button the menu drops from. */
-  anchorRef: RefObject<View | null>
+  anchorRef: RefObject<HostInstance | null>
   /** Groups are separated by a thicker divider, like an iOS menu's sections. */
   groups: readonly (readonly ActionSheetAction[])[]
   onClose: () => void

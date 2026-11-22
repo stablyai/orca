@@ -2,8 +2,8 @@ import { ChevronDown, Link } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ClaudeRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
-import { canCopyClaudeSignInLink } from '../../../../../../shared/claude-sign-in-link'
+import type { ClaudeRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
+import { canCopyClaudeSignInLink } from '../../../../../../shared/agent-accounts/claude/claude-sign-in-link'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,

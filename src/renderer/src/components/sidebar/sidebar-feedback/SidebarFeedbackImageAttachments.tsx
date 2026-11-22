@@ -11,7 +11,7 @@ import {
 import {
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../../../../shared/feedback-image-limits'
+} from '../../../../../shared/feedback/feedback-image-limits'
 
 // Delay progress hints to avoid flashing during fast unshrunk reads.
 const PREPARING_HINT_DELAY_MS = 250

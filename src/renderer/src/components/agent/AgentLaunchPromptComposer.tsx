@@ -1,6 +1,6 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
-import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../shared/native-chat/input/composer/agent-image-paste'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
@@ -13,7 +13,7 @@ import {
   readNativeChatComposerDraft,
   clearNativeChatComposerDraftIfUnchanged
 } from '../native-chat/drafts/native-chat-composer-draft-store'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 

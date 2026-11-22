@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId,
   type LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import {
   CLIENT_REMOVAL_HOME,
   executionHostRemovalHome,

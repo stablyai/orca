@@ -1,6 +1,6 @@
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import React from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import {
@@ -10,23 +10,28 @@ import {
 } from './automation-launch-surface'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
   AutomationLaunchPreferences,
   AutomationLaunchSetupPatch
 } from '../../../../../shared/automations/launch/automation-launch-types'
 import type {
+  AutomationBotTarget,
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../../shared/automations/automation-definition'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Bot } from '../../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { AutomationEventTrigger } from '../../../../../shared/automation-event-triggers'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SetupDecision } from '../../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco-find-widget'
+import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco/monaco-find-widget'
 import { AutomationOwnerConflictNotice } from '../hosts/AutomationOwnerConflictNotice'
 import type { AutomationActionNotice } from '../hosts/automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
@@ -48,6 +53,10 @@ export type AutomationDraft = {
   surface?: 'chat' | 'terminal'
   /** Saved as-is; empty means none. */
   extraAgentArgs: string
+  /** Set when the automation runs as a bot; the project, workspace, session and agent are then the bot's. */
+  bot: AutomationBotTarget | null
+  /** The host listing the picked bot: ids are random per host, so the id alone can name two. */
+  botHostId?: ExecutionHostId
   launchPreferences?: AutomationLaunchPreferences
   agentArgs?: string | null
   launchSetupPatch?: AutomationLaunchSetupPatch & { legacyOnly?: true }
@@ -68,6 +77,17 @@ export type AutomationDraft = {
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  /** The bot automation being edited, as saved: its chat changes it, so a handoff names this, not unsaved input. */
+  savedBotAutomation?: { name: string; botId: string; on: readonly AutomationEventTrigger[] }
+  /** Runs only on its events: saving keeps it without a schedule. */
+  eventsOnly?: boolean
+}
+
+type AutomationEditBaseline = { draftKey: string; hostKey: string | null }
+
+function automationDraftKey(draft: AutomationDraft): string {
+  // Leaving Custom keeps its cron text, which no longer affects a non-custom schedule.
+  return JSON.stringify(draft.preset === 'custom' ? draft : { ...draft, customSchedule: '' })
 }
 
 type AutomationEditorDialogProps = {
@@ -84,6 +104,7 @@ type AutomationEditorDialogProps = {
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  bots: readonly Bot[]
   /** Present only while creating an Orca automation. */
   createDestination?: AutomationCreateDestinationControl
   /** Present only while editing an Orca automation; selecting another host moves the record. */
@@ -116,6 +137,7 @@ export function AutomationEditorDialog({
   worktrees,
   settings,
   draft,
+  bots,
   createDestination,
   editDestination,
   notice,
@@ -133,10 +155,41 @@ export function AutomationEditorDialog({
   const [templateOpen, setTemplateOpen] = React.useState(false)
   const dialogContentRef = React.useRef<HTMLDivElement>(null)
   const isCreateMode = !isEditing
-  const destination = isCreateMode ? createDestination : editDestination
+  const selectedDestination = isCreateMode ? createDestination : editDestination
+  const hostKey =
+    selectedDestination?.resolution.status === 'ready'
+      ? selectedDestination.resolution.entry.stableKey
+      : null
+  // Baseline at the first user edit, after opening effects have filled project/workspace/setup defaults.
+  const [editBaseline, setEditBaseline] = React.useState<AutomationEditBaseline | null>(null)
+  if (!open && editBaseline) {
+    setEditBaseline(null)
+  }
+  const isDirty =
+    editBaseline !== null &&
+    (editBaseline.hostKey !== hostKey || editBaseline.draftKey !== automationDraftKey(draft))
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(() => isDirty)
+  const markUserEdit = (): void => {
+    setEditBaseline((current) => current ?? { draftKey: automationDraftKey(draft), hostKey })
+  }
+  const handleDraftChange = (updater: (current: AutomationDraft) => AutomationDraft): void => {
+    markUserEdit()
+    onDraftChange(updater)
+  }
+  const handleProjectChange = (projectId: string): void => {
+    markUserEdit()
+    onProjectChange(projectId)
+  }
+  const destination = selectedDestination && {
+    ...selectedDestination,
+    onSelect: (stableKey: string) => {
+      markUserEdit()
+      selectedDestination.onSelect(stableKey)
+    }
+  }
   const launchWorkspace = automationLaunchWorkspace(draft, destination?.resolution)
   useChatProgramFacts(launchWorkspace, open)
-  const routeState = useAppStore(selectAgentLaunchRouteView)
+  const routeState = useAppStoreWithHostStatuses(selectAgentLaunchRouteView)
   const chatSupported = automationChatSupport(routeState, draft, launchWorkspace)
   const surface = automationDraftSurface(draft, settings, chatSupported)
   const visibleAgents = React.useMemo(() => {
@@ -157,6 +210,8 @@ export function AutomationEditorDialog({
         className="flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
         aria-describedby={undefined}
         ref={dialogContentRef}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
         }}
@@ -184,6 +239,7 @@ export function AutomationEditorDialog({
           templates={getAutomationTemplates()}
           onTemplateOpenChange={setTemplateOpen}
           onApplyTemplate={(template) => {
+            markUserEdit()
             onApplyTemplate(template)
             setTemplateOpen(false)
           }}
@@ -192,7 +248,7 @@ export function AutomationEditorDialog({
         <div className="flex min-h-0 flex-1 flex-row">
           <AutomationEditorPromptSection
             draft={draft}
-            onDraftChange={onDraftChange}
+            onDraftChange={handleDraftChange}
             onDismiss={() => onOpenChange(false)}
           />
           <AutomationEditorSettingsSidebar
@@ -211,11 +267,14 @@ export function AutomationEditorDialog({
             draft={draft}
             visibleAgents={visibleAgents}
             pickerTriggerClassName={AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS}
-            onProjectChange={onProjectChange}
+            onProjectChange={handleProjectChange}
             getRepoHostLabel={getRepoHostLabel}
             allowAddProject={allowAddProject}
-            onDraftChange={onDraftChange}
+            onDraftChange={handleDraftChange}
             onSetupDecisionTouched={onSetupDecisionTouched}
+            bots={bots}
+            isEditing={isEditing}
+            onClose={() => onOpenChange(false)}
           />
         </div>
 
@@ -230,7 +289,7 @@ export function AutomationEditorDialog({
           isEditing={isEditing}
           isSaving={isSaving}
           canSave={canSave && (surface !== 'chat' || chatSupported === true)}
-          hasProjects={repos.length > 0}
+          hasProjects={repos.length > 0 || draft.bot !== null}
           onOpenChange={onOpenChange}
           onSave={onSave}
         />

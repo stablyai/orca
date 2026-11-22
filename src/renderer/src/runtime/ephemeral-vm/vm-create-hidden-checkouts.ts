@@ -1,10 +1,10 @@
-import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import {
   indexPendingVmCheckouts,
   isPendingVmCheckout,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../../shared/pending-vm-checkouts'
+} from '../../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
 

@@ -5,7 +5,10 @@ import {
 } from '../host/structured-agent-session-logger'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 
-import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
+import type {
+  StatusFeedSession,
+  StructuredAgentSessionStatusFeedDeps
+} from './structured-agent-session-status-feed-deps'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 import {
   StructuredAgentSessionSubagentRows,
@@ -13,10 +16,12 @@ import {
 } from './structured-agent-session-subagent-rows'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionConversationNaming } from '../host/structured-agent-session-host-types'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 
 /** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
-  sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  sessions: ReadonlyMap<string, StatusFeedSession & { journal: AgentSessionJournal }>
   starting?: (sessionId: string) => boolean
   readUsageLimitContinue?: StructuredAgentSessionStatusFeedDeps['readUsageLimitContinue']
   now: () => number
@@ -27,9 +32,12 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
     >
     logger: StructuredAgentSessionLogger
+    adapter?: Pick<StructuredAgentSessionAdapter, 'runningPermissionMode'>
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
+    quietTurnEnd?: StructuredAgentSessionStatusFeedDeps['quietTurnEnd']
+    isBotHome?: StructuredAgentSessionStatusFeedDeps['isBotHome']
   }
   onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
@@ -63,10 +71,14 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     sessions: args.sessions,
     starting: args.starting,
     readUsageLimitContinue: args.readUsageLimitContinue,
+    runningPermissionMode: (sessionId) => args.deps().adapter?.runningPermissionMode?.(sessionId),
     onPublished: args.onPublished,
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
+    quietTurnEnd: (sessionId, outcome, usageLimited) =>
+      args.deps().quietTurnEnd?.(sessionId, outcome, usageLimited) === true,
+    isBotHome: (workspaceId) => args.deps().isBotHome?.(workspaceId) === true,
     // A closed chat's agent can still run (a send, a worker); its row shows while it does.
     rowRetired: (sessionId) =>
       !args.sessions.get(sessionId)?.child && args.deps().store.isSessionTabRetired(sessionId),
@@ -80,7 +92,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onChildWorkChanged: (sessionId, producer) => {
       subagentRows.changed(sessionId, producer)
       args.onChildWorkChanged?.(sessionId)
-    }
+    },
+    drainChildWork: (sessionId) => subagentRows.drain(sessionId)
   })
   return feed
 }

@@ -7,6 +7,7 @@ import { SessionSearchStore } from '../storage/session-search-store'
 import type { SessionSearchStateCounts } from '../storage/session-search-store-types'
 import { SessionSearchEngine } from '../query/session-search-engine'
 import { createSessionSearchService } from '../session-search-service'
+import { PARTIAL_FILE_CURSOR } from '../storage/session-search-file-cursor'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type { TranscriptSessionIdentity } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type {
@@ -14,6 +15,9 @@ import type {
   SearchWorkerResponse,
   SessionSearchSnapshotRow
 } from './session-search-worker-protocol'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-session-search')
 
 setActiveSink({
   push: (trace) => parentPort?.postMessage({ id: 0, trace }),
@@ -60,7 +64,7 @@ function rows(path?: string): SessionSearchSnapshotRow[] {
       state: row.state === 'due' ? 'due' : row.state === 'failed' ? 'failed' : 'current',
       failCount: Number(row.fail_count),
       failedMtimeMs: row.failed_mtime_ms === null ? null : Number(row.failed_mtime_ms),
-      byteOffset: row.byte_offset === -1 ? null : Number(row.byte_offset),
+      byteOffset: row.byte_offset === PARTIAL_FILE_CURSOR ? null : Number(row.byte_offset),
       prefixHash: typeof row.prefix_hash === 'string' ? row.prefix_hash : null,
       agent: typeof row.agent === 'string' ? row.agent : null,
       contentHash: {
@@ -237,7 +241,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     case 'purge': {
       store.setRetentionCutoffMs(c.cutoff)
       const before = [...files.keys()]
-      await withSpan('aiVault.search.purge', () => store!.purgeOlderThan(c.cutoff))
+      await withSpan('aiVault.search.retentionPurge', () => store!.purgeOlderThan(c.cutoff))
       const remaining = new Map(rows().map((row) => [row.path, row]))
       const deltas = before.filter((p) => !remaining.has(p)).map(delta)
       return {

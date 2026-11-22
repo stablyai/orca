@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useStructuredAgentSessionHostRecoversRewindOnSend } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { StructuredAgentSessionWrite } from '../../session/structured/writes/use-structured-agent-session-mutate'
 import { useNativeChatRewind, type RewindInput } from './use-native-chat-rewind'

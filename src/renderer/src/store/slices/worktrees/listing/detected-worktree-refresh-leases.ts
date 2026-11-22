@@ -4,7 +4,7 @@ import type {
   ListDetectedWorktreesArgs,
   LocalDetectedWorktreeRequest,
   ProviderRequestId
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 
 export type WaiterLeaseId = string & {
   readonly __waiterLeaseId: unique symbol

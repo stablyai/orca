@@ -7,20 +7,18 @@ import type { NativeChatOlderPageResult } from '../history/native-chat-paginatio
 /** Bound runaway paging beyond any expected session size. */
 export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
 
-/** A rail pick, or a subagent named from outside the transcript (the agents strip). */
+/** A rail pick, or the subagent a view shows, whose spawn may sit in older history. */
 export type NativeChatHistoryJumpTarget =
   | { kind: 'rail'; id: string }
+  | { kind: 'item'; id: string }
   | { kind: 'subagent'; agentId: string }
 
-/**
- * What the committed transcript can do for a target now: it landed, it needs older history,
- * it needs one more commit (a disclosure the step just opened), or it cannot be reached.
- * `waited` counts the commits waited since the last page, so a step opens once, then lands.
- */
+/** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
+type HistoryJumpResult = 'landed' | 'missing' | 'aborted'
+
 export type NativeChatHistoryJumpStep = (
-  target: NativeChatHistoryJumpTarget,
-  waited: number
-) => 'landed' | 'page' | 'commit' | 'stop'
+  target: NativeChatHistoryJumpTarget
+) => 'landed' | 'page' | 'stop'
 
 /** A rail pick lands once its message has a slot; an omitted one stops. */
 export function nativeChatRailJumpStep(
@@ -53,7 +51,10 @@ export function useNativeChatHistoryJump({
   loadEarlier: () => Promise<NativeChatOlderPageResult>
 }): {
   pending: NativeChatHistoryJumpTarget | null
-  start: (target: NativeChatHistoryJumpTarget) => void
+  start: (
+    target: NativeChatHistoryJumpTarget,
+    settled?: (result: HistoryJumpResult) => void
+  ) => void
   abort: () => void
 } {
   const [pending, setPending] = useState<NativeChatHistoryJumpTarget | null>(null)
@@ -87,33 +88,31 @@ export function useNativeChatHistoryJump({
   }, [])
 
   const run = useCallback(
-    async (target: NativeChatHistoryJumpTarget, signal: AbortSignal): Promise<void> => {
-      let waited = 0
-      for (let pages = 0; ;) {
-        const next = committedRef.current.step(target, waited)
-        if (next === 'landed' || next === 'stop') {
-          return
+    async (
+      target: NativeChatHistoryJumpTarget,
+      signal: AbortSignal
+    ): Promise<HistoryJumpResult> => {
+      for (let pages = 0; ; pages += 1) {
+        if (signal.aborted) {
+          return 'aborted'
         }
-        if (next === 'commit') {
-          // A disclosure opens once; a target still missing after its commit is not coming.
-          if (waited > 0) {
-            return
-          }
-          waited += 1
-        } else {
-          if (pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
-            return
-          }
-          pages += 1
-          waited = 0
-          const result = await committedRef.current.loadEarlier()
-          if (signal.aborted || result !== 'applied') {
-            return
-          }
+        const next = committedRef.current.step(target)
+        if (next === 'landed') {
+          return 'landed'
+        }
+        if (next === 'stop' || pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
+          return 'missing'
+        }
+        const result = await committedRef.current.loadEarlier()
+        if (signal.aborted || result === 'superseded') {
+          return 'aborted'
+        }
+        if (result !== 'applied') {
+          return 'missing'
         }
         await nextCommit(signal)
         if (signal.aborted) {
-          return
+          return 'aborted'
         }
       }
     },
@@ -132,14 +131,15 @@ export function useNativeChatHistoryJump({
 
   // The latest pick wins; a page the previous jump started is joined, not repeated.
   const start = useCallback(
-    (target: NativeChatHistoryJumpTarget) => {
+    (target: NativeChatHistoryJumpTarget, settled?: (result: HistoryJumpResult) => void) => {
       controllerRef.current?.abort()
       const controller = new AbortController()
       controllerRef.current = controller
       setPending(target)
       void run(target, controller.signal)
-        .catch(() => undefined)
-        .finally(() => {
+        .catch((): HistoryJumpResult => (controller.signal.aborted ? 'aborted' : 'missing'))
+        .then((result) => {
+          settled?.(result)
           if (controllerRef.current === controller) {
             controllerRef.current = null
             setPending(null)

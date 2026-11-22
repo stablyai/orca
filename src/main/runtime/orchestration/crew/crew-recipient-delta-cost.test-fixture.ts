@@ -1,7 +1,7 @@
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import { formatOrcaSessionAddress as address } from '../../../../shared/orca-session-address'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress as address } from '../../../../shared/agent-session/identity/orca-session-address'
 import { fixture } from './crew-read-model.test-fixture'
 
 export const SELF = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')

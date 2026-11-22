@@ -3,8 +3,8 @@ import {
   nativeSkillPathSemantics,
   skillPathInside,
   skillPathsEqual
-} from '../../../shared/skill-path-containment'
-import type { SkillInstallProviderId } from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/paths/skill-path-containment'
+import type { SkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import type { ResolvedSkillInstallDestination } from '../install/skill-install-destinations'
 import {
   resolveSkillProviderDestinations,
@@ -110,4 +110,17 @@ export async function resolveBundledSkillTargets(
     roots.set(bundledSkillPathKey(realPath), { ...candidate, realPath })
   }
   return [...roots.values()]
+}
+
+/** Whether the link at `path` (raw target `rawTarget`) resolves to `realPath`. */
+export async function linkPointsAt(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  rawTarget: string,
+  realPath: string
+): Promise<boolean> {
+  const resolved =
+    (await filesystem.realpath(path)) ??
+    resolve(await resolveBundledSkillRealPath(filesystem, dirname(path)), rawTarget)
+  return bundledSkillPathKey(resolved) === bundledSkillPathKey(realPath)
 }

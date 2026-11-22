@@ -1,4 +1,4 @@
-import type { SkillCloudVersion } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudVersion } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { groupInstallState, type SkillManagedInstallGroup } from './skill-managed-install-groups'

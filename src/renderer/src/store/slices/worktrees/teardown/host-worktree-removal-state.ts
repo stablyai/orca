@@ -1,7 +1,7 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
@@ -101,8 +101,4 @@ export function settleHostWorktreeRemovals(): void {
   for (const judge of pendingJudgements) {
     judge()
   }
-}
-
-export function _resetHostWorktreeRemovalsForTests(): void {
-  pendingJudgements.clear()
 }

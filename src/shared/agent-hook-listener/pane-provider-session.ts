@@ -1,6 +1,6 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from '../agent-session/lifecycle/provider-session-live-settings'
+import { readClaudePermissionMode } from '../agent-session/lifecycle/resume/provider-session-live-settings'
 import {
   extractAgentProviderSession,
   readPathFromKeys,
@@ -9,8 +9,8 @@ import {
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'
-import { isGrokSubagentEvent } from './providers/grok-tool-fields'
-import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes-events'
+import { isGrokSubagentEvent } from './providers/grok/grok-tool-fields'
+import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes/hermes-events'
 import { readString } from './tool-input-preview'
 import { readFirstTranscriptRecord } from './transcript-reader'
 
@@ -270,10 +270,16 @@ export function retainHookRootContext(
       : undefined
   const providerSession =
     !incoming.providerSession && (previousRoot?.providerSession ?? returningProviderSession)
-  const model =
-    incoming.payload.agentType === 'codex' && !incoming.payload.model
-      ? previousRoot?.payload.model
-      : undefined
+  // Claude reports its model only on SessionStart; OSC rows and post-restart hooks keep the saved one.
+  const modelSource =
+    incoming.payload.agentType === 'codex'
+      ? previousRoot
+      : incoming.payload.agentType === 'claude' &&
+          sameTerminalOwner &&
+          previous?.payload.agentType === 'claude'
+        ? previous
+        : undefined
+  const model = incoming.payload.model ? undefined : modelSource?.payload.model
   return providerSession || model
     ? {
         ...incoming,

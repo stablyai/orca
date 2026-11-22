@@ -1,0 +1,14 @@
+.native-chat-empty-state {
+  container: native-chat-empty-state / size;
+}
+
+@container native-chat-empty-state (height < 12rem) {
+  .native-chat-empty-state-content {
+    gap: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 2);
+  }
+
+  .native-chat-empty-state-icon {
+    display: none;
+  }
+}

@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { TerminalInferCodexQuestionSkip } from '../../../../../shared/rpc-contract/terminal-codex-question-params'
+import { TerminalInferCodexQuestionSkip } from '../../../../../shared/rpc-contract/terminal/terminal-codex-question-params'
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 
 /** Codex reports no async-question skip, and this host's hook state tracks the question, so a

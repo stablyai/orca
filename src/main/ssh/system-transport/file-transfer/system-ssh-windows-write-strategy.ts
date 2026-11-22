@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { getSystemSshBuildArgsFromOperationOptions } from '../system-ssh-args'
 import { spawnSystemSshCommand } from '../system-ssh-command'
 import {
@@ -303,15 +303,12 @@ function runWindowsCommandWithoutStdin(
 ): Promise<void> {
   const channel = spawnSystemSshCommand(target, command, {
     wrapCommand: false,
+    closeStdin: true,
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
-  const closePromise = awaitWithSystemSshAbort(
+  return awaitWithSystemSshAbort(
     options.signal,
     () => channel.close(),
     waitForChannelClose(channel, label, WINDOWS_STDIN_WRITE_TIMEOUT_MS)
   )
-  if (!options.signal?.aborted) {
-    channel.stdin.end()
-  }
-  return closePromise
 }

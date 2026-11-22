@@ -1,5 +1,5 @@
-import type { SkillCloudVersion } from '../../../../../shared/skill-cloud-contract'
-import type { SkillBundleManifestV1 } from '../../../../../shared/skill-bundle-manifest'
+import type { SkillCloudVersion } from '../../../../../shared/skills/sharing/skill-cloud-contract'
+import type { SkillBundleManifestV1 } from '../../../../../shared/skills/packages/skill-bundle-manifest'
 
 export type ResolvedSkillShare = { shareId: string; version: SkillCloudVersion }
 

@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 /** What a new tab opens on; a partition only when it must not be derived from the profile. */
@@ -15,7 +16,7 @@ import type {
   BrowserSessionProfile,
   BrowserViewportPresetId,
   BrowserWorkspace
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
@@ -29,9 +30,9 @@ import type {
   PendingClientHostedBrowserClose
 } from '@/runtime/browser/closing/client-hosted-browser-close-intents'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
-import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
   /** Link-only guard, checked before records and again at the unified-tab mutation. */
@@ -85,7 +86,10 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+
 export type RemoteBrowserPageHandle = {
+  initializationPresentation?: BrowserInitializationPresentation
   environmentId: string
   remotePageId: string
   /** Profile identity confirmed by the host's current page snapshot. */
@@ -112,6 +116,12 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   // Why: for a remote environment the import silently runs on either machine; toasts must say which.
   executionMachine: 'client' | 'remote'
   executionRemoteEnvironment: boolean
+}
+
+/** A page browsing through an SSH host keeps cookies in that host's jar, not the profile's. */
+export type BrowserSshPageCookieImportRoute = {
+  sshTargetId: string
+  hostLabel: string
 }
 
 export type BrowserSlice = {
@@ -187,8 +197,16 @@ export type BrowserSlice = {
     options?: { surfacePane?: boolean }
   ) => void
   consumeAddressBarFocusRequest: (pageId: string) => boolean
-  updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
-  updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
+  updateBrowserTabPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
+  updateBrowserPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
   setBrowserPageCertificateFailure: (
     pageId: string,
     failure: BrowserCertificateFailure | null
@@ -260,7 +278,10 @@ export type BrowserSlice = {
   deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
   /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
   managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
+  importCookiesToProfile: (
+    profileId: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
+  ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -275,7 +296,8 @@ export type BrowserSlice = {
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]

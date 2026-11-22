@@ -9,18 +9,18 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../../../../src/shared/agent-session/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../../../src/shared/agent-session/view/structured-agent-session-holder'
-import { startStructuredAgentSessionLiveRead } from '../../../../../src/shared/agent-session/structured-agent-session-live-read'
+import { startStructuredAgentSessionLiveRead } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
   type AgentSessionTextAppendCapabilities,
   agentSessionTextAppendRequest
-} from '../../../../../src/shared/agent-session/agent-session-text-append'
+} from '../../../../../src/shared/agent-session/view/live-read/agent-session-text-append'
 import { isFinalAgentSessionReadRefusal } from '../../../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../../../diagnostics/connection/connection-revival-signal'
 import {
   readRuntimeStatusProbe,
@@ -31,7 +31,7 @@ import { hostStatusSchema } from '../../../transport/hosts/host-status-reply-sch
 import {
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   agentSessionReadFailureRefusal,
@@ -42,7 +42,7 @@ import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-sub
 import {
   useMobileOlderPageLoader,
   type OlderPagePhase
-} from '../transcript/use-mobile-older-page-loader'
+} from '../transcript/ingestion/use-mobile-older-page-loader'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import {
   reduceStructuredChatState,
@@ -50,8 +50,8 @@ import {
   storedStructuredSessionState,
   storedStructuredCopy,
   unconfirmedStructuredStateSavedAt
-} from '../transcript/mobile-native-chat-transcript-writer'
-import { useStoredChatTranscript } from '../transcript/use-stored-chat-transcript'
+} from '../transcript/persistence/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
 
 const MAX_RETAINED_SESSION_STATES = 32
 

@@ -6,6 +6,8 @@ import {
   type NodeViewProps
 } from '@tiptap/react'
 import { Users } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
 import {
   agentReferenceToken,
@@ -14,6 +16,9 @@ import {
 import { closeHistory } from '@tiptap/pm/history'
 
 function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
+  const t = useTranslate()
+  const label = String(node.attrs.label)
+  const agentType = String(node.attrs.agentType ?? '')
   return (
     <NodeViewWrapper
       as="span"
@@ -21,7 +26,20 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
       contentEditable={false}
       data-native-chat-agent-reference={node.attrs.address}
     >
-      <NativeChatPromptPill icon={Users} label={String(node.attrs.label)} selected={selected} />
+      <NativeChatPromptPill
+        icon={Users}
+        // The agent's logo where it was picked from a list that knows it; older drafts keep the generic icon.
+        avatar={
+          agentType ? (
+            <AgentTypeIcon agentType={agentType} size={12} className="size-3" />
+          ) : undefined
+        }
+        label={label}
+        spokenLabel={t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
+          name: label
+        })}
+        selected={selected}
+      />
     </NodeViewWrapper>
   )
 }
@@ -35,7 +53,8 @@ export const NativeChatAgentReference = Node.create({
   addAttributes: () => ({
     label: { default: '' },
     address: { default: '' },
-    hostKey: { default: '' }
+    hostKey: { default: '' },
+    agentType: { default: '' }
   }),
   addNodeView: () => ReactNodeViewRenderer(AgentReferencePill),
   renderText: ({ node }) =>
@@ -72,14 +91,18 @@ export function insertAgentReferences(
   if (references.length === 0) {
     return
   }
-  const nextNode = editor.state.selection.$to.nodeAfter
-  const hasRightSeparator = nextNode?.isText
-    ? /^\s/u.test(nextNode.text ?? '')
-    : nextNode?.type.name === 'hardBreak'
+  const { $to } = editor.state.selection
+  const nextNode = $to.nodeAfter
+  const endsNonFinalLine =
+    !nextNode && $to.depth > 0 && $to.after(1) < editor.state.doc.content.size
+  const hasRightSeparator = nextNode?.isText ? /^\s/u.test(nextNode.text ?? '') : endsNonFinalLine
   editor.view.dispatch(closeHistory(editor.state.tr))
   editor.commands.insertContent(
     references.flatMap((attrs, index) => [
-      { type: NativeChatAgentReference.name, attrs },
+      {
+        type: NativeChatAgentReference.name,
+        attrs: { ...attrs, agentType: attrs.agentType ?? '' }
+      },
       ...(index < references.length - 1 || !hasRightSeparator ? [{ type: 'text', text: ' ' }] : [])
     ])
   )

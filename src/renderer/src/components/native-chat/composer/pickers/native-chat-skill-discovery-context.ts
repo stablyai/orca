@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -14,8 +14,8 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../../../store/types'
-import type { SkillDiscoveryTarget } from '../../../../../../shared/skills'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { SkillDiscoveryTarget } from '../../../../../../shared/skills/discovery/skills'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,

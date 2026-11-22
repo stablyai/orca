@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_ORCA_STOP_COPY as COPY,
   type NativeChatOrcaStopCopyId,
   type NativeChatOrcaStopSay
-} from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
+} from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 
 const PIECES: Record<NativeChatOrcaStopCopyId, (machine: string | undefined) => string> = {
   update: (machine) =>

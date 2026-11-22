@@ -9,7 +9,7 @@ import {
   parseGitLabIssueOrMRLink,
   type ProjectSlug
 } from '../../../../../../shared/new-workspace/gitlab-links'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 

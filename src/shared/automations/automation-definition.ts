@@ -6,6 +6,15 @@ import type {
   AutomationLaunchSetupPatch,
   AutomationLaunchPreferences
 } from './launch/automation-launch-types'
+import type { AutomationEventTrigger } from '../automation-event-triggers'
+import type { AutomationBotTarget } from '../automation-bot-target'
+import type { AutomationOnce } from '../automation-once'
+
+export type {
+  AutomationBotResultsTo,
+  AutomationBotRunsIn,
+  AutomationBotTarget
+} from '../automation-bot-target'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 
@@ -20,6 +29,17 @@ export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly
 export type AutomationPrecheck = {
   command: string
   timeoutSeconds: number
+}
+
+/** Who created an automation, when Orca knows it was not the person. Set by Orca, never by the
+ *  creator; `name` is the plugin's name then, so the label survives the plugin's removal. */
+export type AutomationCreator = {
+  kind: 'plugin'
+  pluginKey: string
+  name: string
+  /** When the plugin was removed, disabled or blocked: it no longer owns the automation, and a
+   *  plugin installed later under the same key does not either. */
+  endedAt?: number
 }
 
 export type Automation = {
@@ -44,8 +64,15 @@ export type Automation = {
   runContext?: WorkspaceRunContext | null
   /** Task/provider host/account may differ from the workspace run target; persist independently. */
   sourceContext?: TaskSourceContext | null
+  /** Older hosts ignore this and see an automation with no project, which they refuse to run. */
+  bot?: AutomationBotTarget
+  /** Events that start a bot automation; without a schedule it stores EVENT_ONLY_SCHEDULE. */
+  on?: AutomationEventTrigger[]
+  /** A wait: runs once, on its first event or at `by`, then is deleted. Its schedule stays
+   *  EVENT_ONLY_SCHEDULE, so a host that drops this never runs it on time. */
+  once?: AutomationOnce
   /** @deprecated Legacy repo-id compatibility field. New code should persist
-   *  runContext and use getAutomationRunRepoId() for fallback reads. */
+   *  runContext and use getAutomationRunRepoId() for fallback reads. Empty for a bot. */
   projectId: string
   executionTargetType: AutomationExecutionTargetType
   executionTargetId: string
@@ -60,6 +87,11 @@ export type Automation = {
   setupTrustHash?: string
   reuseSession: boolean
   timezone: string
+  /**
+   * The owner named the zone (`--timezone`), so it holds on every host. Otherwise it is the zone
+   * captured at creation: a server keeps it, a desktop follows its own clock. Older peers omit it.
+   */
+  timezoneExplicit?: boolean
   rrule: string
   dtstart: number
   enabled: boolean
@@ -69,6 +101,7 @@ export type Automation = {
   missedRunGraceMinutes: number
   createdAt: number
   updatedAt: number
+  createdBy?: AutomationCreator
 }
 
 export type AutomationCreateInput = {
@@ -83,6 +116,9 @@ export type AutomationCreateInput = {
   extraAgentArgs?: string
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
+  bot?: AutomationBotTarget
+  on?: AutomationEventTrigger[]
+  once?: AutomationOnce
   /** @deprecated Legacy repo-id compatibility field required for older stored
    *  automations and clients. Pair it with runContext for new writes. */
   projectId: string
@@ -93,10 +129,12 @@ export type AutomationCreateInput = {
   setupTrustHash?: string
   reuseSession?: boolean
   timezone: string
+  timezoneExplicit?: boolean
   rrule: string
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
+  createdBy?: AutomationCreator
 }
 
 export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
@@ -109,6 +147,9 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'extraAgentArgs'
     | 'runContext'
     | 'sourceContext'
+    | 'bot'
+    | 'on'
+    | 'once'
     | 'projectId'
     | 'workspaceMode'
     | 'workspaceId'
@@ -117,9 +158,11 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'setupTrustHash'
     | 'reuseSession'
     | 'timezone'
+    | 'timezoneExplicit'
     | 'rrule'
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'createdBy'
   >
 >

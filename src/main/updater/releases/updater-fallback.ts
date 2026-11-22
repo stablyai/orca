@@ -1,16 +1,16 @@
-import type { UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   compareAppVersions,
   isPrereleaseAppVersion,
   isValidAppVersion
-} from '../../../shared/app-version'
+} from '../../../shared/app-lifecycle/identity/app-version'
 
 export const compareVersions = compareAppVersions
 export const isPrereleaseVersion = isPrereleaseAppVersion
 export const isValidVersion = isValidAppVersion
 
 export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
-  if (left.source !== right.source) {
+  if (left.source !== right.source || left.automaticDownload !== right.automaticDownload) {
     return false
   }
   switch (left.state) {

@@ -12,6 +12,15 @@ export class SharedControlSocketGeneration {
     return generation === this.current
   }
 
+  captureReady(ready: () => boolean): () => void {
+    const generation = this.peek()
+    return () => {
+      if (!this.isCurrent(generation) || !ready()) {
+        throw new Error('Remote Orca runtime changed before sending')
+      }
+    }
+  }
+
   begin(): number {
     this.current += 1
     return this.current

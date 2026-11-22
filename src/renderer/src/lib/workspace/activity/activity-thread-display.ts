@@ -4,14 +4,15 @@ import type {
   AgentStatusState
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { aiVaultTitleOfSession } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { formatAgentToolPreview } from '../../agent-status/presentation/agent-row-tool-preview'
-import { agentVerdictStatusLine } from '../../agent-status/presentation/agent-verdict-status-line'
+import { formatAgentToolPreview } from '../../../../../shared/agent-status/presentation/agent-row-tool-preview'
+import { agentVerdictStatusLine } from '../../../../../shared/agent-status/presentation/agent-verdict-status-line'
 
 // Terse follow-ups such as “yes” are valid prompts but poor cross-worktree task labels.
 const TERSE_FOLLOW_UP_PATTERN =
@@ -83,8 +84,14 @@ export function getActivityThreadWorkspaceTitle(
 }
 
 export function getActivityThreadTaskTitle(args: {
-  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
+  entry: Pick<
+    AgentStatusEntry,
+    'orchestration' | 'prompt' | 'stateHistory' | 'agentType' | 'providerSession'
+  >
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
+  >
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
@@ -95,6 +102,17 @@ export function getActivityThreadTaskTitle(args: {
   const orchestrationLabel = orchestrationLabelForEntry(args.entry)
   if (orchestrationLabel) {
     return orchestrationLabel
+  }
+
+  // Like the tab, a session's own name outranks the first prompt this tab saw, e.g. after a resume.
+  const sessionTitle = aiVaultTitleOfSession(
+    args.tab.aiVaultTitle,
+    args.entry.agentType,
+    args.entry.providerSession?.id
+  )
+  const sessionName = sessionTitle?.kind === 'named' ? sessionTitle.title.trim() : ''
+  if (sessionName) {
+    return sessionName
   }
 
   // Respect tabAutoGenerateTitle here too so disabled generated titles cannot resurface.

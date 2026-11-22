@@ -1,5 +1,5 @@
 /** How a managed-server setup that did not finish ends: with SSH's own reason, or as an unserved status. */
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   HostServerOnConnectDeps,
   HostServerOnConnectResult
@@ -7,7 +7,7 @@ import type {
 import { orcadMigrationConflictGuidance } from '../../managed-server/migration/cutover/orcad-migration-conflict-guidance'
 import { boundedDetail, setupFailure, type SetupFailure } from './ssh-host-server-setup-failure'
 import { isSshSessionStartFailure } from '../connection/ssh-session-start-failure'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 import {
   reportHostServerSetupError,
   type HostServerDecisionTrace

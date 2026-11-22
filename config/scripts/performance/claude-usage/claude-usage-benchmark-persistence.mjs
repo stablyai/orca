@@ -255,7 +255,12 @@ export function createClaudeBenchmarkStore(arm, cacheFile, splitCacheFile, parse
   class BenchmarkStore extends implementation.UsageProviderStoreLifecycle {
     constructor() {
       super(
-        { getRepos: () => [], getAllWorktreeMeta: () => ({}) },
+        {
+          getRepos: () => [],
+          getAllWorktreeMeta: () => ({}),
+          getRememberedWorktreeDisplayNames: () => new Map(),
+          whenLoaded: async () => {}
+        },
         {
           logTag: '[claude-persistence-benchmark]',
           resolveCacheFile: () => cacheFile,

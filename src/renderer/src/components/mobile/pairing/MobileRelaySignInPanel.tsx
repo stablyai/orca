@@ -1,6 +1,6 @@
 import { useTranslate } from '../../../i18n/use-translate'
 import { useAppStore } from '../../../store/index'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../orca-profiles/OrcaSignInProgress'
 
 export function MobileRelaySignInPanel({
   reconnectRequired
@@ -36,7 +36,7 @@ export function MobileRelaySignInPanel({
         {reconnectRequired
           ? t(
               'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
-              'Sign in again for Relay'
+              'Sign in again'
             )
           : t(
               'auto.components.settings.MobilePairingConnectionOptions.signIn',

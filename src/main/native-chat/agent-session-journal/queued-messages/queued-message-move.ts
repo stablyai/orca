@@ -5,9 +5,12 @@ import type {
 import type { JournalQueueCardChange } from './journal-queue-events'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
+/** The ordering headers a move reads; bodies never take part in placement. */
+export type QueuedMessageMoveHeader = Pick<QueuedMessageRow, 'messageId' | 'position' | 'state'>
+
 /** Permute unsettled positions without changing sender, enqueue/pause/hold facts or edit leases. */
 export function queuedMessageMovePlan(
-  cards: readonly QueuedMessageRow[],
+  cards: readonly QueuedMessageMoveHeader[],
   input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor
 ): { changes: JournalQueueCardChange[]; result: AgentSessionQueuedMessageMoveResult } {
   const unsettled = cards.filter(isUnsettledQueuedMessage)

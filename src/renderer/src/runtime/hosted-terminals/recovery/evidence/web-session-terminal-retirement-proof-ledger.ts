@@ -1,8 +1,8 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   appendRetiredTerminalSurfaceProofs,
   dropRetirementProofsForLiveSurfaces
-} from '../../../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+} from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { isRemovedSnapshot } from '../surfaces/web-session-terminal-orphan-recovery-surface-index'
 
@@ -61,8 +61,4 @@ export function mergeRetainedTerminalRetirementProofs(
     merged.length === (snapshot.retiredTerminalSurfaces?.length ?? 0) &&
     merged.every((proof, index) => proof === snapshot.retiredTerminalSurfaces?.[index])
   return unchanged ? snapshot : { ...snapshot, retiredTerminalSurfaces: merged }
-}
-
-export function clearRetainedTerminalRetirementProofsForTests(): void {
-  retainedByKey.clear()
 }

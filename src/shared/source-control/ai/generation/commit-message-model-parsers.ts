@@ -1,5 +1,5 @@
-import { parseClaudeModelList } from '../../../claude-model-list-probe'
-import { labelFromModelId } from '../../../model-id-label'
+import { parseClaudeModelList } from '../../../agent-session/options/model-catalog/claude-model-list-probe'
+import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
 
 export const BASIC_THINKING_LEVELS: ThinkingLevel[] = [

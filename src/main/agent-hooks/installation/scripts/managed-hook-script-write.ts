@@ -1,4 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync,
+  observeFilePublication
+} from '../../../filesystem/file-content-observation'
+import { mkdirSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
 
 import { dirname, join } from 'node:path'
 
@@ -37,6 +42,7 @@ export function writeManagedScript(
       chmodSync(tmpPath, 0o755)
     }
     renameOverLockedTarget(tmpPath, scriptPath, options.moveLockedTargetAside === true)
+    observeFilePublication(scriptPath, content)
   } finally {
     if (existsSync(tmpPath)) {
       try {

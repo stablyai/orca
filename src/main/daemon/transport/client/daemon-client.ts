@@ -1,7 +1,7 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
@@ -13,7 +13,8 @@ import {
 import {
   armDaemonSocketCloseHandlers,
   connectDaemonSocket,
-  waitForDaemonConnectionAttempt
+  waitForDaemonConnectionAttempt,
+  watchControlSocketBootstrap
 } from './daemon-client-socket-connect'
 import { DaemonClientListeners } from './daemon-client-listener-registry'
 import { sameDaemonIdentity, sendDaemonHello } from './daemon-client-hello-handshake'
@@ -139,7 +140,6 @@ export class DaemonClient {
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
       const controlHello = await this.sendHello(this.controlSocket, token, 'control', remainingMs())
-      const controlIdentity = controlHello.identity
       this.assertConnectionAttemptCurrent(attemptGeneration, this.controlSocket)
       pendingListenerCleanups.push(
         attachControlResponseReader(
@@ -149,12 +149,15 @@ export class DaemonClient {
         )
       )
 
-      const pendingStreamSocket = await connectDaemonSocket(this.socketPath, remainingMs())
+      const controlBootstrap = watchControlSocketBootstrap(this.controlSocket, connectDaemonSocket)
+      pendingListenerCleanups.push(controlBootstrap.stop)
+      const pendingStreamSocket = await controlBootstrap.connect(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingStreamSocket)
       this.streamSocket = pendingStreamSocket
-      const streamHello = await this.sendHello(this.streamSocket, token, 'stream', remainingMs())
+      const streamHelloStep = this.sendHello(this.streamSocket, token, 'stream', remainingMs())
+      const streamHello = await controlBootstrap.race(streamHelloStep)
       this.assertConnectionAttemptCurrent(attemptGeneration, this.streamSocket)
-      if (!sameDaemonIdentity(controlIdentity, streamHello.identity)) {
+      if (!sameDaemonIdentity(controlHello.identity, streamHello.identity)) {
         throw new DaemonProtocolError('Daemon identity changed during connection')
       }
       const streamReader = attachStreamEventReader(this.streamSocket, streamHello, (event) => {
@@ -165,7 +168,7 @@ export class DaemonClient {
       this.assertConnectionAttemptCurrent(attemptGeneration)
       this.connected = true
       this.observedAuthenticatedDisconnect = false
-      this.daemonIdentity = controlIdentity
+      this.daemonIdentity = controlHello.identity
       this.daemonResizeModel = controlHello.resizeModel
       this.disconnectArmed = true
       this.connectionGeneration++
@@ -179,6 +182,7 @@ export class DaemonClient {
           streamReader.drainBuffered
         )
       )
+      controlBootstrap.stop()
       this.cleanupSocketListeners = cleanupPendingListeners
     } catch (error) {
       cleanupPendingListeners()

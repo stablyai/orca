@@ -2,7 +2,7 @@ import {
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress,
   type PairingNetworkInterface
-} from '../../../../../shared/pairing-address-auto-selection'
+} from '../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 
 export function selectRefreshedNetworkAddress(
   currentAddress: string | undefined,

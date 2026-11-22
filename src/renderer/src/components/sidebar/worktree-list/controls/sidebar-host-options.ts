@@ -1,13 +1,13 @@
 import { shallow } from 'zustand/shallow'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import type {
   EphemeralVmHostLifecycle,
@@ -19,9 +19,12 @@ import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execut
 import { getExecutionHostHealthLabel } from '@/runtime/hosts/display/runtime-host-copy'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
-import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
-import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
-import { translateHostDisplayLabel } from '../../execution-host-label'
+import type { RuntimeCompatVerdict } from '../../../../../../shared/remote-runtime/protocol/protocol-compat'
+import type {
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -30,7 +33,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostBlockedReason
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { WslHostStatus } from '../../../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
@@ -39,7 +42,7 @@ import {
   getWslHostRowHealth,
   getWslHostRowServerFilesMissingDetail,
   getWslHostRowTurnedOffDetail
-} from '../../wsl-host-row-status'
+} from '../../host-admission/wsl/wsl-host-row-status'
 
 export type SidebarHostOption = {
   id: ExecutionHostId

@@ -72,15 +72,8 @@ struct MobileWebShellBridgeSource {
   var originHost: String
 }
 
-/// Silently count refusals for tests without revealing the cap to the page.
 final class MobileWebShellBridgeGate {
-  private(set) var refusedCount = 0
-
   func accepts(byteCount: Int) -> Bool {
-    guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
-      refusedCount += 1
-      return false
-    }
-    return true
+    MobileWebShellBridge.acceptsByteCount(byteCount)
   }
 }

@@ -1,7 +1,3 @@
-import type { TerminalRecord } from './mobile-terminal-records'
-
-export type Terminal = TerminalRecord
-
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
 export type TerminalGestureInputBucket = {

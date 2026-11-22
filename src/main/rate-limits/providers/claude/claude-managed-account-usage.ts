@@ -1,10 +1,11 @@
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   getClaudeProfileRouter,
   getClaudeWslProfileRouter
-} from '../../../claude-accounts/claude-profile-installed-router'
-import { toWindowsWslPath } from '../../../../shared/wsl-paths'
+} from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
 import { claudeUsageUnavailable, makeClaudeUsageResult } from './claude-usage-result'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
@@ -24,9 +25,7 @@ export async function fetchInactiveClaudeAccountUsage(
   if (account.managedAuthRuntime !== 'wsl') {
     // Covered accounts share System Default usage and launch routing.
     const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
-    return authPreparation
-      ? fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
-      : signInAgain()
+    return authPreparation ? readLogin(authPreparation, options) : signInAgain()
   }
   const distro = account.wslDistro
   const router = getClaudeWslProfileRouter()
@@ -42,9 +41,7 @@ export async function fetchInactiveClaudeAccountUsage(
   const timeout = AbortSignal.timeout(INACTIVE_WSL_READ_TIMEOUT_MS)
   const read = router
     .accountUsagePreparation(distro, account.id)
-    .then((authPreparation) =>
-      fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
-    )
+    .then((authPreparation) => readLogin(authPreparation, options))
     .catch(() => claudeUsageUnavailable())
   return Promise.race([
     read,
@@ -52,6 +49,20 @@ export async function fetchInactiveClaudeAccountUsage(
       timeout.addEventListener('abort', () => resolve(claudeUsageUnavailable()), { once: true })
     )
   ])
+}
+
+/** Accounts that resolve to the same home are one login, so they share one read. */
+function readLogin(
+  authPreparation: ClaudeRuntimeAuthPreparation,
+  options: ClaudeManagedAccountUsageOptions
+): Promise<ProviderRateLimits> {
+  const shared = options.readsByHome?.get(authPreparation.configDir)
+  if (shared) {
+    return shared
+  }
+  const read = fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
+  options.readsByHome?.set(authPreparation.configDir, read)
+  return read
 }
 
 function signInAgain(): ProviderRateLimits {

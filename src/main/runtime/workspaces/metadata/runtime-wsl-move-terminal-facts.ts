@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithClientTerminalScrollback } from '../../terminal/output/runtime-client-scrollback'
-import type { WslMoveLiveTerminal } from '../../../persistence/moving-wsl-projects/wsl-move-gate-facts'
+import type { WslMoveLiveTerminal } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-gate-facts'
 
 export abstract class OrcaRuntimeWithWslMoveTerminalFacts extends OrcaRuntimeWithClientTerminalScrollback {
   /** The pane a live terminal shows, including one the window has not reopened since a relaunch. */

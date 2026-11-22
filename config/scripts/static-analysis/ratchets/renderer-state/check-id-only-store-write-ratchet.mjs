@@ -213,7 +213,7 @@ export function main(root = process.cwd(), arg = undefined) {
       ],
       collect: collectIdOnlyStoreWrites,
       fix: [
-        'Take the row, not its id: RepoHostTarget (src/shared/repo-host-identity.ts) for repo rows,',
+        'Take the row, not its id: RepoHostTarget (src/shared/repository/repo-host-identity.ts) for repo rows,',
         'HostWorktreeTarget (src/shared/worktree/host-qualified-identity.ts) for worktree rows. A caller',
         'with only an id resolves the row where its host is known (RPC selector, IPC hostId).'
       ]

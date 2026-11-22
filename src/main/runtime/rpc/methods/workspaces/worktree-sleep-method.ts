@@ -1,4 +1,4 @@
-import { WorktreeSleepParams } from '../../../../../shared/rpc-contract/worktree-params'
+import { WorktreeSleepParams } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { defineMethod } from '../../core'
 
 export const WORKTREE_SLEEP_METHOD = defineMethod({

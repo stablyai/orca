@@ -1,9 +1,9 @@
 import { setActiveSink } from '../../observability/tracer'
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
-import { aiVaultScanWork, trackAiVaultScanProgress } from '../ai-vault-scan-progress'
+import { aiVaultScanWork, trackAiVaultScanProgress } from '../scan-lifecycle/ai-vault-scan-progress'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { readAiVaultFirstUserPrompt } from '../session-first-user-prompt-read'
+import { readAiVaultFirstUserPrompt } from '../prompts/session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence
@@ -26,7 +26,7 @@ import {
   type CachedAiVaultSessionTitle
 } from '../session-titles/session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from '../session-titles/session-title-request-paths'
-import { listLocalAiVaultSubagentSessions } from '../session-subagent-reader'
+import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 import {
   noteWslDistroMayHaveStopped,
   noteWslDistroWoken

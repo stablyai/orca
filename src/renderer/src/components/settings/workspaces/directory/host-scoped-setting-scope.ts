@@ -1,7 +1,7 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { SidebarHostOption } from '../../../sidebar/worktree-list/controls/sidebar-host-options'
 
 /** Sentinel scope for "edit the shared client default" rather than a host override. */

@@ -1,9 +1,11 @@
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { StructuredAgentSessionObservedWork } from './structured-agent-session-observed-work'
+import { readHostStructuredAgentSessionWork } from './structured-agent-session-read-work'
+import { structuredAgentSessionHandoverAuthority } from '../delivery/structured-agent-session-handing-over'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
-import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-work-evidence'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
+import type { JournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
 // Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
 export type StructuredAgentSessionCurrentWorkHost = {
@@ -20,48 +22,53 @@ export type StructuredAgentSessionCurrentWorkHost = {
   }
 }
 
-export function hostStructuredAgentSessionCurrentWork(
+export async function hostStructuredAgentSessionCurrentWork(
   host: StructuredAgentSessionCurrentWorkHost,
   sessionId: string
-): StructuredAgentSessionCurrentWork | null {
+): Promise<StructuredAgentSessionObservedWork | null> {
   const session = host.sessions.get(sessionId)
-  return session
-    ? heldStructuredAgentSessionCurrentWork(host.store, sessionId, session.journal, session)
-    : null
+  if (!session) {
+    return null
+  }
+  const { state } = await readHostStructuredAgentSessionWork(host, sessionId, { kind: 'state' })
+  return new StructuredAgentSessionObservedWork(session.journal, state, session.journal.cursor())
 }
 
-/** Use identical child evidence for actions and display; explicitly absent children mean none held. */
-export function heldStructuredAgentSessionCurrentWork(
+/** Capture only live authority; SQL selects the bounded work population in one snapshot. */
+export async function heldStructuredAgentSessionCurrentWork(
   store: StructuredAgentSessionCurrentWorkHost['store'],
   sessionId: string,
-  journal: StructuredAgentSessionCurrentWorkJournal,
+  journal: AgentSessionJournal,
   session:
     | Pick<StructuredAgentSessionHostSession, 'lastEndedChild' | 'operationalRevision' | 'child'>
     | undefined
-): StructuredAgentSessionCurrentWork {
-  const ended = session?.lastEndedChild
-  return structuredAgentSessionCurrentWork(journal, {
-    record: store.getConversation(sessionId),
-    replaced: store.replacedRuntime(sessionId),
-    child: session?.child ?? null,
-    ...(ended ? { ended } : {}),
-    revision: session?.operationalRevision ?? 0
-  })
+): Promise<StructuredAgentSessionObservedWork> {
+  const { state } = await journal.readWork(
+    () => heldStructuredAgentSessionWorkAuthority(store, sessionId, journal, session),
+    { kind: 'state' }
+  )
+  return new StructuredAgentSessionObservedWork(journal, state, journal.cursor())
 }
 
-/** Attempt-end observation uses current ownership independently of provider startup presentation. */
-export function bindStructuredAgentSessionInputWork(
+/** Live authority from the record store and the session's held child. */
+export function heldStructuredAgentSessionWorkAuthority(
   store: StructuredAgentSessionCurrentWorkHost['store'],
   sessionId: string,
+  journal: AgentSessionJournal,
   session:
-    | Pick<
-        StructuredAgentSessionHostSession,
-        'journal' | 'child' | 'lastEndedChild' | 'operationalRevision'
-      >
+    | Pick<StructuredAgentSessionHostSession, 'lastEndedChild' | 'operationalRevision' | 'child'>
     | undefined
-): void {
-  if (session) {
-    session.journal.queuedMessages.inputWork = () =>
-      heldStructuredAgentSessionCurrentWork(store, sessionId, session.journal, session)
+): JournalCurrentWorkAuthority {
+  const child = session?.child
+  const held = child?.heldSends?.()
+  return {
+    handle: journal.observationHandle(),
+    record: store.getConversation(sessionId),
+    replaced: store.replacedRuntime(sessionId),
+    ended: session?.lastEndedChild,
+    child: child ? { fence: child.fence, heldSends: held && [...held] } : null,
+    ...structuredAgentSessionHandoverAuthority(journal),
+    openedThrough: journal.openingCursor(),
+    operationalRevision: session?.operationalRevision ?? 0
   }
 }

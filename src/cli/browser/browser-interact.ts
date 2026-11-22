@@ -12,16 +12,17 @@ import type {
   BrowserTypeResult,
   BrowserUploadResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { printResult } from '../format'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getFlagOrStdinPayload } from '../arguments/flag-or-stdin-payload'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
+} from '../arguments/flags'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 const checkHandler =
@@ -52,7 +53,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
+    const value = await getFlagOrStdinPayload(flags, 'value', { trimTrailingNewline: true })
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,
@@ -126,7 +127,12 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   upload: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
     const filesStr = getRequiredStringFlag(flags, 'files')
-    const files = filesStr.split(',').map((f) => f.trim())
+    const files = filesStr
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean)
+      // A paired runtime's pages read workspace-relative or server paths, so those pass as typed.
+      .map((f) => (client.isRemote ? f : resolveRepoPathArgument(f, cwd, false)))
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserUploadResult>('browser.upload', {
       element,

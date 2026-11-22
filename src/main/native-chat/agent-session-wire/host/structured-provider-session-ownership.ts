@@ -1,15 +1,15 @@
 import type {
   AgentSessionOwnerObservation,
   AgentSessionConversationView
-} from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionOwnerObservationVerdict } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionOwnerObservationVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   keysMayMatch,
   recordConversationKey,
   type ConversationKey
-} from '../../structured-conversation-key'
+} from '../../conversation-adoption/structured-conversation-key'
 
 export type StructuredProviderSessionOwnership = {
   wslDistro: string | null

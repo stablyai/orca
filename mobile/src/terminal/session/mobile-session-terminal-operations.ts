@@ -1,6 +1,9 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import { terminalComposerDraftSchema, terminalSendAcceptedSchema } from '../terminal-reply-schema'
+import {
+  terminalComposerDraftSchema,
+  terminalSendAcceptedSchema
+} from '../host-operations/terminal-reply-schema'
 import { sessionTerminalInventorySchema } from './mobile-session-terminal-reply-schema'
 import { sessionWriteUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
 

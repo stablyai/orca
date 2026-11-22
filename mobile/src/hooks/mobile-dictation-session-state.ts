@@ -1,8 +1,5 @@
-// Use the buffer polyfill: Metro cannot resolve node:buffer in React Native.
-import { Buffer } from 'buffer'
-
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
+import type { DictationTerm } from '../../../src/shared/speech/dictation/dictation-dictionary'
 import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
@@ -56,10 +53,6 @@ export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
 // Calls, Siri and mic dropouts end capture before anything was transcribed.
 export const MOBILE_DICTATION_INTERRUPTED_ERROR_MESSAGE =
   'Voice dictation stopped because the microphone was interrupted. Try again.'
-
-export function bytesToBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64')
-}
 
 export function createMobileDictationId(): string {
   return `mobile-dictation-${Date.now()}-${Math.random().toString(36).slice(2)}`

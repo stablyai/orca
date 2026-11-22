@@ -1,10 +1,12 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
+import { ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT } from '../../../../../shared/updater/updater-renderer-events'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
-import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
+import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
 import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
@@ -133,7 +135,13 @@ export function useSettingsPageEffects(
 
   // Use the discard dialog for close/quit; a bare unload veto offers no way to resolve dirty state.
   useEffect(() => {
-    return registerWindowCloseGuard(() => {
+    const protectDraft = (event: Event): void => {
+      if (hasUnsavedSourceControlAiPromptChangesRef.current) {
+        event.preventDefault()
+      }
+    }
+    window.addEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    const unregisterCloseGuard = registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
         return true
       }
@@ -142,6 +150,10 @@ export function useSettingsPageEffects(
       }
       return promptDiscardSourceControlAiPromptChanges()
     })
+    return () => {
+      unregisterCloseGuard()
+      window.removeEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    }
   }, [hasUnsavedSourceControlAiPromptChangesRef, promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
@@ -173,7 +185,8 @@ export function useSettingsPageEffects(
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
-      repoIdToRepresentative
+      repoIdToRepresentative,
+      settingsNavigationTarget.sectionId
     )
     if (settingsNavigationTarget.intent === 'toggle' && activeSectionId === paneSectionId) {
       clearSettingsTarget()
@@ -204,9 +217,13 @@ export function useSettingsPageEffects(
     if (settingsNavigationTarget.pane === 'general') {
       setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
     }
+    cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.pane === 'bots'
+        ? paneSectionId
+        : (settingsNavigationTarget.sectionId ?? paneSectionId)
     setHighlightedSettingsTarget(
       settingsNavigationTarget.pane === 'developer-permissions' &&
         settingsNavigationTarget.sectionId

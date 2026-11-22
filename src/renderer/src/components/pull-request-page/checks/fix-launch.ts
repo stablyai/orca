@@ -15,8 +15,8 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 

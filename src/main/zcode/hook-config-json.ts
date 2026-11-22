@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { isZCodeHooksEnabled, readZCodeEventMap, type ZCodeConfig } from './hook-settings'
 

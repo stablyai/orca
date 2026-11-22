@@ -15,10 +15,8 @@ import {
   SquareTerminal,
   Type
 } from 'lucide-react'
-import type {
-  PluginHostListEntry,
-  PluginMarketplaceHostInstallPreview
-} from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { translate } from '@/i18n/i18n'
@@ -29,7 +27,7 @@ import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'

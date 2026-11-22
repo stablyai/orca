@@ -10,7 +10,7 @@ import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty
 
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../../providers/pty/process-inspection'
 
 import {
   type TerminalProcessInspection as PtyProcessInspection,
@@ -60,6 +60,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
       // Additive: an older daemon ignores it and pays for the full capture.
       ...(options?.steadyState === true ? { steadyState: true } : {}),
+      ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
       ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
     })
   }

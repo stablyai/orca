@@ -1,4 +1,4 @@
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import { resolveWorkspaceDocAddressTarget } from '@/lib/browser/documents/workspace-doc-address-input'

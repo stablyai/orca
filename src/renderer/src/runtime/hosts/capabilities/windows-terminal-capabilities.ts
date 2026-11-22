@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
@@ -287,12 +287,4 @@ export function useLocalWindowsTerminalCapabilities(
 ): WindowsTerminalCapabilities {
   // Why: desktop-owned defaults must not follow the active remote environment.
   return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, ownerKey, { kind: 'local' })
-}
-
-export function resetWindowsTerminalCapabilitiesForTests(): void {
-  cachedCapabilitiesByOwnerKey.clear()
-  pendingCapabilitiesByOwnerKey.clear()
-  nextCapabilityRequestId = 0
-  latestCapabilityRequestIdByOwnerKey.clear()
-  subscribersByOwnerKey.clear()
 }

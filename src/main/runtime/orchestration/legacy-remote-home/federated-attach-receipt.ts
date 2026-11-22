@@ -1,4 +1,4 @@
-import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/worker-launch-preferences'
+import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 
 export type RemoteFederatedWorkerStartReceipt = {
   dispatchId: string

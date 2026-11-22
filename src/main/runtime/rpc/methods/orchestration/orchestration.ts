@@ -1,4 +1,4 @@
-import { requiringOrcadFeature } from '../../orcad-feature-readiness'
+import { requiringOrcadFeature } from '../../startup/orcad-readiness'
 import { ORCHESTRATION_CREW_METHODS } from './crew-methods'
 import { ORCHESTRATION_RUN_METHODS } from './runs/runs'
 import { ORCHESTRATION_WORKER_METHODS } from './worker/worker-methods'

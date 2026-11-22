@@ -9,7 +9,7 @@
 // and, for frames, `@/runtime/runtime-layout-client` with `runtimeLayoutClientWithTestFrames`.
 // Imports stay clear of the RPC client at runtime: a mock factory must not reach what it replaces.
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { applyLayoutCommand } from '../../../../../shared/workspace-layout/workspace-layout-commands'
 import type {
   LayoutApplyReply,
@@ -20,14 +20,14 @@ import type { WorkspaceLayoutModel } from '../../../../../shared/workspace-layou
 import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
   indexPublishedLayout,
   type WorkspaceLayoutRecordChange
-} from '../../../../../shared/workspace-layout/workspace-layout-records'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-records'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { layoutSnapshotFrame, publishedLayoutsOf } from './main-loaded-layout-frames.test-fixture'
 import { throwLayoutFrameApplyErrors } from './workspace-layout-frame-apply-check.test-fixture'
 import {

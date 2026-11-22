@@ -1,15 +1,15 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../shared/worktree/id'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../shared/resolved-worktree-lineage'
+} from '../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { resolveRepoOwnershipEvidence } from '../../ipc/worktrees/listing/worktree-host-ownership'
 import {
   getFolderWorkspaceInstanceIdentity,

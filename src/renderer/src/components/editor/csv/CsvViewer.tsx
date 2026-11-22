@@ -10,7 +10,7 @@ import { useCsvTableEditor } from './editing/useCsvTableEditor'
 import { CsvTableToolbar } from './editing/CsvTableToolbar'
 import { remapCsvColumnWidths } from './grid/columns/csv-column-width-preferences'
 import { useCsvColumnWidths } from './grid/columns/useCsvColumnWidths'
-import { buildFileViewPreferenceKey } from '../file-view-preference-storage'
+import { buildFileViewPreferenceKey } from '../view-mode/file-view-preference-storage'
 import { formatCsvPreviewError } from './csv-preview-error-message'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

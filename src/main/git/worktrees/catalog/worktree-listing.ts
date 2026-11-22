@@ -1,14 +1,14 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
-import { isWorktreeCreatePreparation } from '../../../../shared/worktree/create-preparation'
-import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
+import { isWorktreeCreatePreparation } from '../../../../shared/worktree/creation/create-preparation'
+import { toWslExecutionSpace } from '../../../../shared/file-access/wsl-paths'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   readCheckedOutBranchRef,
@@ -68,7 +68,7 @@ export async function listWorktreesUnshared(
 }
 
 /** Only a missing path or confirmed non-repo permits an authoritative empty listing. */
-async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+export async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
   if (getErrorCode(err) === 'ENOENT') {
     try {
       await stat(repoPath)
@@ -94,21 +94,6 @@ export async function listWorktreesStrict(
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
-}
-
-/** Reject scan failures to prevent pruning valid worktrees and tabs; confirmed missing/non-repos return []. */
-export async function listWorktreesStrictAllowingTrueEmpty(
-  repoPath: string,
-  options: GitWorktreeExecOptions = {}
-): Promise<GitWorktreeInfo[]> {
-  try {
-    return await listWorktreesStrict(repoPath, options)
-  } catch (err) {
-    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
-      return []
-    }
-    throw err
-  }
 }
 
 export async function annotateSparseCheckoutStatus(

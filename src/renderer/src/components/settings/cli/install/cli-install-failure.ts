@@ -1,4 +1,4 @@
-import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../../../../shared/cli/cli-install-types'
 import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 // Why: Electron re-wraps a rejected `ipcMain.handle` as

@@ -1,3 +1,4 @@
+import type { RuntimeProjectGroupDependencies } from '../repositories/runtime-project-group-contract'
 import type {
   WorkspaceSelectorCandidate,
   WorkspaceSelectorOptions
@@ -111,3 +112,8 @@ export type ResolveTerminalWorkspaceLaunchScopeResult = ReturnType<
 export type SelectorArgs = [selector: string, options?: WorkspaceSelectorOptions]
 export type SelectorResult = Promise<ResolvedWorktree>
 export type CandidateResult = Promise<WorkspaceSelectorCandidate>
+
+export type FinishGroupFolderCreation = NonNullable<
+  RuntimeProjectGroupDependencies['finishFolderCreation']
+>
+export type AcquireFileWatcherRemoval = RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']

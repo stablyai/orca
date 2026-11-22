@@ -1,9 +1,12 @@
-import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource
+} from '../../../../shared/skills/discovery/skills'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getNativeChatAgentProfile,
   readsSkillSource
-} from '../../../../shared/native-chat/native-chat-agent-profiles'
+} from '../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 export function agentReadsSkill(
   agent: TuiAgent,
@@ -16,7 +19,9 @@ export function agentReadsSkill(
   return rootPaths.some((rootPath) =>
     sources.some(
       (source) =>
-        source.path === rootPath && source.sourceKind !== 'repo' && readsSkillSource(reader, source)
+        source.path === rootPath &&
+        source.sourceKind !== 'repo' &&
+        readsSkillSource(reader, source, skill)
     )
   )
 }

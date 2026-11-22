@@ -1,4 +1,4 @@
-import { overlayEnvironmentVariables } from '../../environment-overlay'
+import { overlayEnvironmentVariables } from '../../shell/launch/environment-overlay'
 
 export const CLAUDE_ENTRYPOINT_ENV = 'CLAUDE_CODE_ENTRYPOINT'
 const ORCA_CLAUDE_CHAT_ENTRYPOINT = 'orca'

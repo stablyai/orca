@@ -1,4 +1,4 @@
-import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
 export function nullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }

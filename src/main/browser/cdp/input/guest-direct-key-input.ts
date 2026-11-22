@@ -1,14 +1,16 @@
 import { assertExpectedPageUrlForStep } from './browser-expected-page-url'
 import type { WebContents } from 'electron'
-import { enablePageFocusEmulation, type AgentInputFocusGuard } from './agent-input-focus-guard'
+import type { AgentInputFocusGuard } from './agent-input-focus-guard'
+import { BrowserError } from '../../browser-error'
 import { withAgentInputInjection } from './agent-input-injection'
 import { resolveFocusedFrameRoute } from './guest-focused-frame-route'
+import { prepareGuestTextInsertion } from './guest-renderer-text-insertion'
 import {
   settleWithin,
   type GuestSessionCdpSender,
   sendFrameSessionInput
 } from './guest-frame-input-sessions'
-import { planCdpKeyEvent, planInsertText, type GuestEditCommand } from './guest-key-event-plan'
+import { planCdpKeyEvent, type GuestEditCommand } from './guest-key-event-plan'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { normalizeCdpPointerButton } from './cdp-pointer-targets'
@@ -68,16 +70,11 @@ function runEditCommand(webContents: WebContents, command: GuestEditCommand): vo
 
 const NO_FOCUS_GUARD: AgentInputFocusGuard = async () => () => {}
 
-// Restore user focus after CDP fallback; emulation keeps the page from seeing blur.
-async function focusGuestForCdpInput(
-  webContents: WebContents,
-  send: GuestSessionCdpSender,
-  guardFocus: AgentInputFocusGuard
-): Promise<() => void> {
-  await enablePageFocusEmulation(send)
-  const release = await guardFocus()
-  webContents.focus()
-  return release
+export function pageInputRouteUnavailableError(): BrowserError {
+  return new BrowserError(
+    'browser_input_target_unavailable',
+    'Input could not be routed directly to the browser page, so it was not sent.'
+  )
 }
 
 // Cross-site frame sessions route CDP input without borrowing user focus.
@@ -93,7 +90,7 @@ async function sendToFrameSession(
   )
 }
 
-/** Prefer guest widget or frame-session events; borrow focus for embedded-guest CDP fallback. */
+/** Guest input must target its widget or frame session without borrowing window focus. */
 export async function dispatchPageKeyEvent(
   webContents: WebContents,
   params: Record<string, unknown>,
@@ -190,17 +187,7 @@ export async function dispatchPageKeyEvents(
     }
     return {}
   }
-  const release = await focusGuestForCdpInput(webContents, send, guardFocus)
-  try {
-    for (const params of remaining) {
-      result = await withAgentInputInjection(webContents, () =>
-        send('Input.dispatchKeyEvent', params)
-      )
-    }
-    return result
-  } finally {
-    release()
-  }
+  throw pageInputRouteUnavailableError()
 }
 
 /** Release input held by a revoked host, routing keys to the focused frame. */
@@ -235,49 +222,45 @@ export async function releaseHeldPageInput(
 
 export type TextInsertionRoute = {
   deliver: (params: Record<string, unknown>) => Promise<unknown>
-  // Release borrowed focus even if delivery is abandoned.
-  release: () => void
 }
 
-/** Route before DOM.focus replay: CDP fallback can blur the selected element. */
+/** Guest edits target their renderer without borrowing window focus. */
 export async function routePageTextInsertion(
   webContents: WebContents,
-  params: Record<string, unknown>,
-  send: GuestSessionCdpSender,
-  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
+  send: GuestSessionCdpSender
 ): Promise<TextInsertionRoute> {
   const sendText = (insertParams: Record<string, unknown>): Promise<unknown> =>
     send('Input.insertText', insertParams)
   if (!isEmbeddedGuest(webContents)) {
-    webContents.focus()
-    return { deliver: sendText, release: () => {} }
+    return { deliver: sendText }
   }
   const route = await resolveFocusedFrameRoute(webContents, send)
   if (route.kind === 'session') {
     const { sessionId } = route
     return {
       deliver: (insertParams) =>
-        sendToFrameSession(webContents, send, sessionId, 'Input.insertText', insertParams),
-      release: () => {}
+        sendToFrameSession(webContents, send, sessionId, 'Input.insertText', insertParams)
     }
   }
-  const events = planInsertText(params.text)
-  if (events && route.kind === 'widget') {
+  if (route.kind === 'widget' && route.hasFocusedLocalFrame) {
+    const insertText = await prepareGuestTextInsertion(send, route.contextId)
     return {
-      deliver: () =>
+      deliver: (insertParams) =>
         withAgentInputInjection(webContents, async () => {
-          for (const event of events) {
-            webContents.sendInputEvent(event)
+          assertExpectedPageUrlForStep()
+          if (typeof insertParams.text !== 'string') {
+            throw new BrowserError('invalid_argument', 'Browser text must be a string')
           }
-          await waitForPageToHandleInput(send)
+          await insertText(webContents, insertParams.text)
           return {}
-        }),
-      release: () => {}
+        })
     }
   }
-  const release = await focusGuestForCdpInput(webContents, send, guardFocus)
-  return {
-    deliver: (insertParams) => withAgentInputInjection(webContents, () => sendText(insertParams)),
-    release
+  if (route.kind === 'unknown') {
+    throw pageInputRouteUnavailableError()
   }
+  throw new BrowserError(
+    'browser_input_target_unavailable',
+    'The browser page has no focused element to receive text, so it was not sent. Focus a field first.'
+  )
 }

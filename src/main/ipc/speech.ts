@@ -5,8 +5,9 @@ import {
   type IpcMainInvokeEvent,
   type MessagePortMain
 } from 'electron'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { dictationTermsFor } from '../../shared/dictation-dictionary'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
+import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
+import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -23,10 +24,54 @@ import {
   clearOpenAiCompatibleSpeechProvider,
   summarizeOpenAiCompatibleSpeechProvider
 } from '../speech/openai-compatible-speech-provider-store'
-import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
+import type {
+  DictationContext,
+  OpenAiCompatibleSpeechProvider
+} from '../../shared/speech/speech-types'
 import type { Store } from '../persistence/loading-store/store'
+import type { DictationCleanupResult } from '../../shared/speech/dictation/dictation-cleanup'
+import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
-export function registerSpeechHandlers(store: Store): void {
+// Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
+const MAX_CLEANUP_TEXT_LENGTH = 100_000
+
+export function registerSpeechHandlers(
+  store: Store,
+  agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
+): void {
+  ipcMain.handle(
+    'speech:cleanUpDictation',
+    (
+      _event,
+      args: { text: string; context?: DictationContext; requestId: string }
+    ): Promise<DictationCleanupResult> => {
+      if (typeof args?.text !== 'string' || args.text.length > MAX_CLEANUP_TEXT_LENGTH) {
+        return Promise.resolve({
+          status: 'failed',
+          reason: 'Dictated text is too long to clean up.'
+        })
+      }
+      return cleanUpDictatedText(
+        {
+          text: args.text,
+          terms: dictationTermsFor(store.getSettings().voice, {
+            dictationTerms: args.context?.repoTerms,
+            displayName: args.context?.repoName
+          }),
+          requestId: typeof args.requestId === 'string' ? args.requestId : undefined
+        },
+        { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnvResolvers }
+      )
+    }
+  )
+
+  ipcMain.handle('speech:cancelDictationCleanup', (_event, requestId: unknown) => {
+    if (typeof requestId === 'string') {
+      cancelDictationCleanup(requestId)
+    }
+  })
+
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })
@@ -36,22 +81,25 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+    return {
+      configured: await hasOpenAiSpeechApiKey(),
+      protection: await getOpenAiSpeechApiKeyProtection()
+    }
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     await saveVerifiedOpenAiSpeechApiKey(apiKey)
-    return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
+    return { configured: true, protection: await getOpenAiSpeechApiKeyProtection() }
   })
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
-    clearOpenAiSpeechApiKey()
+    await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
 
-  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
+  ipcMain.handle('speech:getOpenAiCompatibleProvider', async () => {
     try {
-      return summarizeOpenAiCompatibleSpeechProvider()
+      return await summarizeOpenAiCompatibleSpeechProvider()
     } catch {
       return null
     }
@@ -64,8 +112,8 @@ export function registerSpeechHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
-    clearOpenAiCompatibleSpeechProvider()
+  ipcMain.handle('speech:clearOpenAiCompatibleProvider', async () => {
+    await clearOpenAiCompatibleSpeechProvider()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
@@ -225,7 +273,7 @@ export function registerSpeechHandlers(store: Store): void {
             displayName: context?.repoName
           }),
           owner,
-          store.getSettings().voice
+          dictationTextSettingsFor(store.getSettings())
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {

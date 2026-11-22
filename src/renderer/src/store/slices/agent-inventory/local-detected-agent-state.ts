@@ -1,6 +1,6 @@
 import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
@@ -36,6 +36,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     detectPromises: new Map(),
     refreshPromises: new Map(),
     wakeRefreshes: new WeakSet(),
+    explicitRefreshes: new WeakSet(),
     wakeDetects: new WeakSet(),
     refusedContextKeys: new Set(),
     keptThroughFailure: new WeakSet(),

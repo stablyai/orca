@@ -1,3 +1,4 @@
+import { useProjectGroupSetup } from './workspace-setup/use-project-group-setup'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
@@ -5,13 +6,13 @@ import { useMemo } from 'react'
 import {
   normalizeSparseDirectoryLines,
   sparseDirectoriesMatch
-} from '@/lib/directory-input/sparse-paths'
+} from '../../../../shared/worktree/creation/sparse-directory-paths'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
   canUseIssueCommandForLinkedItemProvider,
@@ -19,15 +20,17 @@ import {
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
 } from '@/lib/workspace/creation/new-workspace'
-import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
+import { useRetiredWorktreeNames } from '@/hooks/composer-state/workspace-identity/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {
   const {
+    selectedProjectGroup,
+    isProjectGroupTarget,
     agentPrompt,
     checkedHooksContextKey,
     enableIssueAutomation,
@@ -53,6 +56,8 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     worktreesByRepo,
     yamlHooks
   } = input
+
+  const groupSetup = useProjectGroupSetup(isProjectGroupTarget ? selectedProjectGroup : null)
 
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
 
@@ -238,6 +243,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   ])
 
   return {
+    groupSetup,
     sparsePresetsForRepo,
     sparsePresets,
     normalizedSparseDirectories,

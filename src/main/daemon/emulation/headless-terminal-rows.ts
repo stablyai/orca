@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/headless'
-import type { RuntimeTerminalRowMetadata } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalRowMetadata } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type HeadlessTerminalRow = { text: string; metadata: RuntimeTerminalRowMetadata }
 

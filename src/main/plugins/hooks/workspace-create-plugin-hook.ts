@@ -1,8 +1,8 @@
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
 import { shortPluginBranchName } from '../../../shared/plugins/events/plugin-events'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { notifyPluginHook, pluginHookWanted, runPluginHook } from './plugin-hook-dispatch'
 
 type WorkspaceCreateRequest = { name: string; branchNameOverride?: string; baseBranch?: string }

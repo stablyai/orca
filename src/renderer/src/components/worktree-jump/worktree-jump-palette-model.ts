@@ -72,6 +72,13 @@ export type ExtraPaletteItem = {
 }
 
 export type SectionHeader = { id: string; type: 'section-header'; label: string }
+/** Rows that change what the palette searches rather than opening something. */
+export type BotScopeActionItem = {
+  id: string
+  type: 'bot-scope-action'
+  action: 'show-everything' | 'browse-templates'
+  label: string
+}
 export type HintRow = {
   id: string
   type: 'hint'
@@ -93,6 +100,7 @@ export type PaletteItem =
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem
   | ExtraPaletteItem
+  | BotScopeActionItem
 
 export type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 export type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem

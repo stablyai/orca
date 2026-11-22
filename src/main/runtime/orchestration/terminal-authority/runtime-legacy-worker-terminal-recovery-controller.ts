@@ -1,4 +1,4 @@
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
@@ -19,13 +19,6 @@ type RecoveryRetry = {
 // Retain controllers only while timers need cancellation during test teardown.
 const controllersWithArmedRetries = new Set<RuntimeLegacyWorkerTerminalRecoveryController>()
 
-/** Stop every armed recovery retry. Test-only: a retry loop must not outlive the test that armed it. */
-export function __cancelLegacyWorkerTerminalRecoveryRetriesForTests(): void {
-  for (const controller of Array.from(controllersWithArmedRetries)) {
-    controller.cancelAllRetries()
-  }
-}
-
 export class RuntimeLegacyWorkerTerminalRecoveryController {
   private queue: Promise<void> = Promise.resolve()
   private readonly retries = new Map<string, RecoveryRetry>()
@@ -42,6 +35,10 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     this.cancelAllRetries()
     await this.queue
     await Promise.all(this.backgroundWork)
+  }
+
+  isStopped(): boolean {
+    return this.stopped
   }
 
   /** Work a pass starts without awaiting; shutdown still waits for it. */

@@ -1,11 +1,11 @@
-import type { TaskPageJiraListEffectsModel } from './jira/use-task-page-jira-list-effects'
+import type { TaskPageJiraListEffectsModel } from './jira/listing/use-task-page-jira-list-effects'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import { useAppStore } from '@/store'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { toast } from 'sonner'

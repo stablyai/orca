@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/file-write/file-write-disk-precondition'
 import { restrictWindowsDirectory } from '../../../shared/secure-storage/secure-path-windows-acl'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/file-write/staged-file-save'
-import { writeLocalTextFileWithDiskPrecondition } from '../../ipc/filesystem/local-disk-write-precondition'
+import { writeLocalTextFileWithDiskPrecondition } from '../../filesystem/local-file-io/local-disk-write-precondition'
 import { inspectProcessLiveness } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { ProcessLivenessVerdict } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 

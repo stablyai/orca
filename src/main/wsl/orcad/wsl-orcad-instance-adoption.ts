@@ -1,10 +1,10 @@
 /** Adopt serving unrecorded orcad under the activation fence only when lock, readiness and installed build identify the same process. Never kill it without census; launching another loses the instance lock. Normal update admission handles version changes. */
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import {
   parseOrcadInstanceLockRecord,
   type OrcadLockRecord
-} from '../../orcad/orcad-instance-lock-record'
-import { compareOrcadProcessIdentity } from '../../orcad/orcad-process-start-time'
+} from '../../orcad/instance-lock/orcad-instance-lock-record'
+import { compareOrcadProcessIdentity } from '../../orcad/instance-lock/orcad-process-start-time'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,

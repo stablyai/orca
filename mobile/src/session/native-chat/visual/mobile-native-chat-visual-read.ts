@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import * as z from 'zod'
-import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import { isMobileMethodUnavailableError } from '../../../transport/rpc/mobile-method-unavailable'
@@ -8,6 +9,14 @@ import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 export type MobileNativeChatVisualSource = {
   client: RpcClient
   sessionId: string
+}
+
+/** A session's visual reads; one identity while its client and session stay. */
+export function useMobileNativeChatVisualSource(
+  client: RpcClient | null,
+  sessionId: string | null
+): MobileNativeChatVisualSource | null {
+  return useMemo(() => (client && sessionId ? { client, sessionId } : null), [client, sessionId])
 }
 
 export type MobileNativeChatVisualRead =
@@ -151,9 +160,4 @@ export function readMobileNativeChatVisual(
   })
   inFlight.set(key, read)
   return read
-}
-
-export function resetMobileNativeChatVisualCacheForTest(): void {
-  cache.clear()
-  inFlight.clear()
 }

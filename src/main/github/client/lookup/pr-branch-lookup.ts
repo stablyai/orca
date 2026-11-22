@@ -1,12 +1,16 @@
 import { assertRateLimitBudget } from './pr-lookup-rate-limit'
 import { selectBranchReview } from '../../../source-control/branch-review-selection'
-import { ghExecFileAsync } from '../../gh-utils'
-import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type {
+  GitHubRepositoryIdentity as OwnerRepo,
+  GitHubRepositoryIdentity as GitHubApiRepository
+} from '../../../../shared/github/repositories/repository-identity'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import {
   githubHostExecOptions,
-  githubRepositoryWebHost,
-  type GitHubApiRepository
-} from '../../github-api-repository'
+  githubRepositoryWebHost
+} from '../../repositories/github-repository-host'
+
 import type { GhExecOptions } from './../github-exec-scope'
 import { isNoPullRequestError } from './../gh-error-predicates'
 import {
@@ -22,8 +26,8 @@ import {
 import { getPRByNumber } from './pr-number-lookup'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import type { PRProviderReadOptions } from './shared-pr-provider-reads'
-import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { revalidateGitHubRestJson } from '../../api/github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
 const BRANCH_PR_LOOKUP_PAGE_SIZE = 10

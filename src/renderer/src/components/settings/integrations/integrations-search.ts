@@ -1,9 +1,25 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  JIRA_INTEGRATION_SECTION_ID,
+  LINEAR_INTEGRATION_SECTION_ID
+} from '../../integrations/task-trackers/task-provider-integration-section-ids'
+
+// Provider rows carry these ids so search results can scroll to and highlight them.
+export const INTEGRATION_SETTING_TARGET_IDS = {
+  github: 'integrations-github',
+  gitlab: 'integrations-gitlab',
+  bitbucket: 'integrations-bitbucket',
+  azuredevops: 'integrations-azure-devops',
+  gitea: 'integrations-gitea',
+  jira: JIRA_INTEGRATION_SECTION_ID,
+  linear: LINEAR_INTEGRATION_SECTION_ID
+} as const
 
 export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.github,
     title: translate(
       'auto.components.settings.integrations.search.a17a94d0b0',
       'GitHub integration'
@@ -25,6 +41,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.gitlab,
     title: translate(
       'auto.components.settings.integrations.search.cd74b2f587',
       'GitLab integration'
@@ -51,6 +68,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.bitbucket,
     title: translate(
       'auto.components.settings.integrations.search.9e238582e8',
       'Bitbucket integration'
@@ -95,6 +113,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.azuredevops,
     title: translate(
       'auto.components.settings.integrations.search.b3efe7ab71',
       'Azure DevOps integration'
@@ -128,6 +147,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.gitea,
     title: translate(
       'auto.components.settings.integrations.search.86a08aa60c',
       'Gitea integration'
@@ -157,6 +177,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.jira,
     title: translate('auto.components.settings.integrations.search.d8906d60a9', 'Jira integration'),
     description: translate(
       'auto.components.settings.integrations.search.76f6af7c57',
@@ -191,6 +212,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.linear,
     title: translate(
       'auto.components.settings.integrations.search.d905b3ecee',
       'Linear integration'

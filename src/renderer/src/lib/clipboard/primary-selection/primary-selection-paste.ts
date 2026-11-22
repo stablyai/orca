@@ -1,6 +1,7 @@
-import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../../shared/concurrency/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../../shared/text/utf8-byte-limits'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
+import { INPUT_PROXY_SELECTOR } from '../../text-input/focus/editable-target'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
@@ -207,7 +208,7 @@ export function findEditablePrimarySelectionPasteTarget(
   if (!(target instanceof Element)) {
     return null
   }
-  if (target.closest('.xterm-helper-textarea')) {
+  if (target.closest(`${INPUT_PROXY_SELECTOR}, .rich-markdown-editor a`)) {
     return null
   }
 

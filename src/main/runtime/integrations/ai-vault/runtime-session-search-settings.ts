@@ -1,5 +1,5 @@
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** After persistence, reach the host-owned index: desktop scanner child or orcad instance. Hosts without one still save without reconstruction. */

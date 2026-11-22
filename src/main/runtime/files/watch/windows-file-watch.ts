@@ -1,5 +1,5 @@
 import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
-import { PhysicalExitTracker } from '../../../../shared/physical-exit-tracker'
+import { PhysicalExitTracker } from '../../../../shared/process-observation/physical-exit-tracker'
 import { watch as watchFs } from 'node:fs'
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'

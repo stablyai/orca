@@ -1,11 +1,14 @@
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
 import { threadId } from 'node:worker_threads'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
-  writeFileDurable
+  writeFileDurable,
+  type DurableFilePayload
 } from '../../filesystem/durable-file-write'
+import { encodeUsageCacheJson, parseUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
+import { decodedUsageCacheText, publishGzipUsageCache } from './usage-cache-gzip'
 
 // Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
@@ -35,30 +38,40 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
     return []
   }
   try {
-    const parsed = JSON.parse(await readFile(ref.path, 'utf-8'))
+    const parsed = await parseUsageCacheJson<{
+      schemaVersion: number
+      worktreeFingerprint: string | null
+      sources: T[]
+    }>(decodedUsageCacheText(ref.path))
     // The sidecar can commit before its report, so validate attribution independently.
     return parsed?.schemaVersion === ref.schemaVersion &&
       parsed.worktreeFingerprint === ref.worktreeFingerprint &&
       Array.isArray(parsed.sources)
-      ? parsed.sources
+      ? parsed.sources.filter(isSourceRecord)
       : []
   } catch {
     return []
   }
 }
 
+// One unreadable entry would otherwise fail every later scan, since a failed scan never rewrites the sidecar.
+function isSourceRecord(source: unknown): boolean {
+  return typeof source === 'object' && source !== null && !Array.isArray(source)
+}
+
 export async function writeUsageSourceCache(
   ref: UsageSourceCacheRef,
   sources: readonly unknown[]
 ): Promise<void> {
-  await writeUsageSourceCacheText(
-    ref,
-    JSON.stringify({
+  const encode = () =>
+    encodeUsageCacheJson({
       schemaVersion: ref.schemaVersion,
       worktreeFingerprint: ref.worktreeFingerprint,
       sources
     })
-  )
+  if (!(await publishGzipUsageCache(ref.path, encode()))) {
+    await writeUsageSourceCacheData(ref, encode())
+  }
 }
 
 export async function writeUsageSourceCacheText(
@@ -70,7 +83,7 @@ export async function writeUsageSourceCacheText(
 
 export async function writeUsageSourceCacheData(
   ref: UsageSourceCacheRef,
-  data: string | Uint8Array
+  data: DurableFilePayload
 ): Promise<void> {
   await mkdir(dirname(ref.path), { recursive: true }).catch(() => {})
   // Reclaim old durable-write temps left by workers terminated mid-write.
@@ -87,25 +100,26 @@ export async function writeUsageSourceCacheData(
 export async function splitUsageCacheFile(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {
-  let text: string
+  let parsed: Record<string, unknown> | null
   try {
-    text = await readFile(request.cacheFile, 'utf-8')
+    parsed = await readUsageCacheJson<Record<string, unknown>>(request.cacheFile)
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return { reportText: null, migrated: false }
     }
     throw error
   }
-  const parsed = JSON.parse(text)
-  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed[request.sourceKey])) {
-    return { reportText: text, migrated: false }
+  const sources = parsed?.[request.sourceKey]
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(sources)) {
+    return { reportText: JSON.stringify(parsed), migrated: false }
   }
-  const { [request.sourceKey]: sources, ...report } = parsed
+  const { [request.sourceKey]: _sources, ...report } = parsed
   await writeUsageSourceCache(
     {
       path: usageSourceCachePath(request.cacheFile),
-      schemaVersion: report.schemaVersion,
-      worktreeFingerprint: report.worktreeFingerprint ?? null,
+      schemaVersion: typeof report.schemaVersion === 'number' ? report.schemaVersion : 0,
+      worktreeFingerprint:
+        typeof report.worktreeFingerprint === 'string' ? report.worktreeFingerprint : null,
       reuse: true
     },
     sources

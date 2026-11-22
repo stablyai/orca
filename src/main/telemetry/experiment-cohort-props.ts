@@ -1,4 +1,4 @@
-import type { CommonProps } from '../../shared/telemetry-events'
+import type { CommonProps } from '../../shared/telemetry/telemetry-event-classification'
 import type { Store } from '../persistence/loading-store/store'
 import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
 

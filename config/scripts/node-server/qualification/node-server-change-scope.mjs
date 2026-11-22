@@ -26,9 +26,6 @@ const BUILD_SCRIPTS = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
   'config/scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts'
 ]
-const NODE_SERVER_POLICY_TESTS = new Set([
-  'config/scripts/node-server/qualification/node-server-change-scope.test.mjs'
-])
 const ALWAYS_FILES = new Set([
   'package.json',
   'pnpm-lock.yaml',
@@ -39,9 +36,7 @@ const ALWAYS_FILES = new Set([
   '.github/workflows/node-server-tests.yml',
   'config/scripts/node-server/qualification/node-server-change-scope.mjs',
   'config/scripts/node-server/qualification/node-server-native-compat-scope.mjs',
-  ...NODE_SERVER_POLICY_TESTS,
   'config/scripts/workspace/source-exports/workspace-source-exports.mjs',
-  'config/scripts/workspace/source-exports/workspace-source-exports.test.mjs',
   'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs',
   'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs',
   'config/scripts/native-build/windows/capture-windows-native-environment.cmd',
@@ -67,7 +62,6 @@ const ALWAYS_PREFIXES = [
   'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
   'src/main/daemon/pty-subprocess/foreground-fallback-process.ts',
   'src/main/daemon/pty-subprocess/foreground-process-tracker.ts',
-  'src/main/daemon/pty-subprocess/native-pty-spawn-windows.test.ts',
   'src/main/daemon/pty-subprocess/native-pty-spawn.ts',
   'src/main/daemon/pty-subprocess/pre-listener-events.ts',
   'src/main/daemon/pty-subprocess/pty-shell-foreground-confirmation.ts',
@@ -75,7 +69,6 @@ const ALWAYS_PREFIXES = [
   'src/main/daemon/pty-subprocess/spawn-environment.ts',
   'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
   'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
-  'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
   'src/main/daemon/pty-subprocess/spawn-preflight.ts',
   'src/main/daemon/pty-subprocess/subprocess-handle.ts',
   'src/main/providers/',
@@ -86,7 +79,7 @@ const ALWAYS_PREFIXES = [
 ]
 
 export function discoverNodeServerTests(root = ROOT) {
-  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true, template: true })
+  const selectors = nodeServerTestPaths()
   return globSync(
     ['src/**/*.test.{ts,tsx}', 'config/scripts/**/*.test.{ts,mjs}', 'tests/e2e/**/*.unit.test.ts'],
     { cwd: root }
@@ -190,10 +183,10 @@ export async function classifyNodeServerChanges(
     new Set(modifiedFiles).size === modifiedFiles.length &&
     modifiedFiles.length === changedFiles.length &&
     changedFiles.every((file) => modifiedFiles.includes(file))
-  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true, template: true })
+  const selectors = nodeServerTestPaths()
   const forced = changedFiles.find(
     (file) =>
-      (ALWAYS_FILES.has(file) && !(modifiedOnly && NODE_SERVER_POLICY_TESTS.has(file))) ||
+      ALWAYS_FILES.has(file) ||
       (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
       /^config\/scripts\/(?:release\/workflow-contracts\/|orcad-distribution\/qualification\/)?(?:orcad-distribution\/prebuilds\/|orcad-distribution\/template\/|orcad-distribution\/server-bundle\/|orcad-distribution\/qualification\/)?(?:test-runtime\/environment\/)?[^/]*orcad[^/]*$/.test(
         file

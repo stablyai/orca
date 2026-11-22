@@ -1,6 +1,9 @@
-import { isWslHookRelayConnectionId, wslHookRelayConnectionId } from '../../wsl-hook-relay-contract'
+import {
+  isWslHookRelayConnectionId,
+  wslHookRelayConnectionId
+} from '../../agent-hook-listener/transport/wsl-hook-relay-contract'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../worktree/id'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 
 type TerminalOwner = { connectionId?: string | null; worktreeId?: string }
 type SessionOwner = TerminalOwner & { providerSession?: { id: string } }

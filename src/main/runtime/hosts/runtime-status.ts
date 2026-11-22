@@ -1,11 +1,16 @@
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
+  BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_GRAB_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-sign-in'
+import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
@@ -13,37 +18,37 @@ import {
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
 import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/mode/browser-identity-mode-store'
-import { servesLocalWslMigrationSource } from '../../orcad/orcad-migration-wsl-destination'
-import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
-import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/orcad-migration-destination-capabilities'
-import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
+import { servesLocalWslMigrationSource } from '../../orcad/migration/orcad-migration-wsl-destination'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/migration/orcad-migration-destination-capabilities'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
 
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../../shared/host-runtime-capabilities'
-import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+} from '../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
 } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import type { RuntimeDegradation } from '../../../shared/runtime-capability-degradation'
+import type { RuntimeDegradation } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 
 import {
   type RuntimeStatus,
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
   TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
   TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
-} from '../../../shared/runtime-capability-degradation'
+} from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { getBundledMobileWebBundleRoot } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from '../terminal/launch/native-terminal-availability'
@@ -52,10 +57,12 @@ import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-c
 
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './platform-probe/runtime-machine-name'
 import { getManagedServerActions } from './management/managed-server-actions-registry'
+import { isRemoteServerUpdaterConfigured } from './management/remote-server-updater'
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { getRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
 import { HOST_RECIPE_VM_WAKE_CAPABILITY } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { isDesktopBrowserBridgeHostEnabled } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
-import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/desktop-browser-bridge-protocol'
+import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from '../construction/dark-switch-runtime-capabilities'
 import { supportsDurableTerminalPromptDelivery } from '../terminal/input/durable-terminal-prompt-delivery-support'
 import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-workspace-change-events'
@@ -63,7 +70,7 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasRenderer = Boolean(this.hasAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
@@ -90,6 +97,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
           supportsDurableTerminalPromptDelivery()) &&
+        (capability !== REMOTE_SERVER_UPDATE_CAPABILITY || isRemoteServerUpdaterConfigured()) &&
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
@@ -108,8 +116,15 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     capabilities.push(...advertisedOrcadMigrationDestinationCapabilities())
     // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
-      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+      capabilities.push(
+        BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+        BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+        BROWSER_GRAB_RUNTIME_CAPABILITY
+      )
     }
+    capabilities.push(...orcaAccountRuntimeCapabilities())
+    capabilities.push(...googleRuntimeCapabilities())
     if (getManagedServerActions()) {
       capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
     }

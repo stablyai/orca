@@ -119,6 +119,11 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ['--chat-inline-code', '--chat-user-message']
   ].map((under) => chatPair('--chat-selection', '--chat-selection-foreground', undefined, under)),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  {
+    ...textPair('--editor-selection', '--foreground'),
+    drop: ['--editor-selection'],
+    over: '--editor-surface'
+  },
   chatPair('--chat-user-message', '--chat-link', ['--chat-user-message']),
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
@@ -136,7 +141,9 @@ export const RINGS: readonly (readonly [string, string])[] = [
   ['--ring', '--background'],
   ['--sidebar-ring', '--sidebar'],
   ['--worktree-sidebar-ring', '--worktree-sidebar'],
-  ['--tab-active-indicator', '--tab-active']
+  ['--tab-active-indicator', '--tab-active'],
+  // The same line marks the active right sidebar tool.
+  ['--tab-active-indicator', '--sidebar']
 ]
 export const MIN_RING_CONTRAST = 2
 // Why a floor, not opaque: Orca's own dark borders are 7% white; 0 or near-0 alpha hides them.

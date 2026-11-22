@@ -1,4 +1,4 @@
-import { setTerminalPrewarmWorktrees } from '../../../terminal/terminal-worktree-prewarm'
+import { setTerminalPrewarmWorktrees } from '../../../terminal/worktree-prewarm/terminal-worktree-prewarm'
 
 // Long enough that sweeping or scrolling past rows never mounts them; short enough to finish before a typical press.
 export const HOVER_PREWARM_DWELL_MS = 120

@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { getDefaultUIState } from '../../../../../shared/constants'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { AppState } from '../../types'
 import { createUISlice } from './create-ui-slice'
 import { createWorktreeNavHistorySlice } from './workspace-navigation-history'

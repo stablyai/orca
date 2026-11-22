@@ -1,9 +1,9 @@
-import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-opencode2-fork-coverage'
+import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage'
 import { readOpenCodeDatabase } from '../sqlite/session-scanner-opencode-sqlite-open'
 import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
-} from '../../../../native-chat/transcript-opencode-sqlite-query'
+} from '../../../../native-chat/transcript-history/opencode/transcript-opencode-sqlite-query'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { captureOpenCodeSqliteSession } from '../sqlite/session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from '../sqlite/session-scanner-opencode-sqlite-list'
@@ -13,12 +13,21 @@ import {
   captureOpenCode2SqliteSession,
   parseOpenCode2SqliteSession
 } from '../../opencode2/session-scanner-opencode2-sqlite'
+import {
+  hasHermesSession,
+  readHermesChatTranscript
+} from '../../../../native-chat/transcript-history/hermes/transcript-hermes-sqlite'
+import {
+  captureHermesSqliteSession,
+  listHermesSqliteSessions,
+  parseHermesSqliteSession
+} from '../../hermes/session-scanner-hermes-sqlite'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
 
-import { withFullFirstUserPromptCapture } from '../../../session-scanner-first-user-prompt-capture'
+import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
 
 export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
@@ -31,6 +40,12 @@ export async function handleOpenCodeSqliteRequest(
       })
       return { id: request.id, ok: true, value }
     }
+    if (request.kind === 'hermes-history') {
+      return { id: request.id, ok: true, value: readHermesChatTranscript(request) }
+    }
+    if (request.kind === 'hermes-exists') {
+      return { id: request.id, ok: true, value: { exists: hasHermesSession(request) } }
+    }
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
       const value =
         request.kind === 'native-signal'
@@ -41,48 +56,59 @@ export async function handleOpenCodeSqliteRequest(
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []
       const candidates =
-        request.agent === 'opencode2'
-          ? await listOpenCode2SqliteSessions({
+        request.agent === 'hermes'
+          ? listHermesSqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
               issues,
               scopePaths: request.scopePaths
             })
-          : await listOpenCodeSqliteSessions({
-              dbPaths: request.dbPaths,
-              limit: request.limit ?? Infinity,
-              issues,
-              agent: request.agent === 'zcode' ? 'zcode' : 'opencode',
-              scopePaths: request.scopePaths
-            })
+          : request.agent === 'opencode2'
+            ? await listOpenCode2SqliteSessions({
+                dbPaths: request.dbPaths,
+                limit: request.limit ?? Infinity,
+                issues,
+                scopePaths: request.scopePaths
+              })
+            : await listOpenCodeSqliteSessions({
+                dbPaths: request.dbPaths,
+                limit: request.limit ?? Infinity,
+                issues,
+                agent: request.agent === 'zcode' ? 'zcode' : 'opencode',
+                scopePaths: request.scopePaths
+              })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
     if (request.kind === 'capture') {
       const capture =
-        request.agent === 'opencode2'
-          ? await captureOpenCode2SqliteSession(request)
-          : await captureOpenCodeSqliteSession({
-              ...request,
-              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
-            })
+        request.agent === 'hermes'
+          ? captureHermesSqliteSession(request)
+          : request.agent === 'opencode2'
+            ? await captureOpenCode2SqliteSession(request)
+            : await captureOpenCodeSqliteSession({
+                ...request,
+                agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
+              })
       return { id: request.id, ok: true, value: capture }
     }
     if (request.kind !== 'parse') {
       throw new Error('Unsupported OpenCode SQLite request')
     }
     const parse = async () =>
-      request.agent === 'opencode2'
-        ? await parseOpenCode2SqliteSession({
-            dbPath: request.dbPath,
-            sessionId: request.sessionId,
-            platform: request.platform
-          })
-        : await parseOpenCodeSqliteSession({
-            dbPath: request.dbPath,
-            sessionId: request.sessionId,
-            platform: request.platform,
-            agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
-          })
+      request.agent === 'hermes'
+        ? parseHermesSqliteSession(request)
+        : request.agent === 'opencode2'
+          ? await parseOpenCode2SqliteSession({
+              dbPath: request.dbPath,
+              sessionId: request.sessionId,
+              platform: request.platform
+            })
+          : await parseOpenCodeSqliteSession({
+              dbPath: request.dbPath,
+              sessionId: request.sessionId,
+              platform: request.platform,
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
+            })
     const session = request.fullFirstUserPrompt
       ? await withFullFirstUserPromptCapture(parse)
       : await parse()

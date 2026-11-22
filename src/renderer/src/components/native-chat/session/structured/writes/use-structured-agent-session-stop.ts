@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionCancelResult } from '../../../../../../../shared/agent-session/agent-session-wire'
 import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { agentStopDisplayStatus } from '../../../../../../../shared/agent-status/lifecycle/agent-stop-display-status'

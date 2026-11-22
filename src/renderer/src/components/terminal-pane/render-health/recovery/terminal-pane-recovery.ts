@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
+import { locateTerminalTab } from '@/store/terminals/ownership/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
   captureTabRecoveryGeneration,
@@ -8,13 +8,10 @@ import {
   type TerminalRecoveryRemountRequest,
   type TerminalRecoveryRemountResult,
   type TerminalRecoveryTrigger
-} from '@/store/terminals/terminal-tab-recovery-ledger'
+} from '@/store/terminals/pty/terminal-tab-recovery-ledger'
 
 import type { TerminalPaneRecoveryReason } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import {
-  _resetTerminalInputQuarantineForTests,
-  armTerminalInputQuarantine
-} from '../../input/terminal-input-quarantine'
+import { armTerminalInputQuarantine } from '../../input/terminal-input-quarantine'
 import { notifyTerminalInputNotSent } from '../../input/terminal-input-not-sent-notice'
 
 // Renderer death can leave the PTY alive; remount rebuilds xterm and reattaches/replays without restarting the shell (#2836, #8104). Store budget/epoch on the durable tab row, with only concrete xterm registration module-local.
@@ -288,14 +285,4 @@ export function settleTerminalPaneRecovery(
     return
   }
   useAppStore.getState().settleTerminalTabRecovery?.(tabId, generation, outcome)
-}
-
-export function _resetTerminalPaneRecoveryForTests(): void {
-  activeTerminalRecoveryInstanceIds.clear()
-  nextTerminalRecoveryInstanceId = 0
-  for (const pendingRetry of pendingRetryByTabId.values()) {
-    clearTimeout(pendingRetry.timer)
-  }
-  pendingRetryByTabId.clear()
-  _resetTerminalInputQuarantineForTests()
 }

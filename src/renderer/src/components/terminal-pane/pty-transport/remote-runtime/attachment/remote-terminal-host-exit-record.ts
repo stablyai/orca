@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSummary } from '../../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSummary } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 type HostTerminalExitFacts = Partial<
   Pick<RuntimeTerminalSummary, 'verdict' | 'exitCause' | 'connected'>

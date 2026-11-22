@@ -1,10 +1,10 @@
 import {
   resolveHostDisplay,
   type HostDisplayResolution
-} from '../../../src/shared/host-display-resolution'
+} from '../../../src/shared/execution-host/host-display-resolution'
 import { useHostDescriptor } from './host-descriptor-store'
 import { classifyLegacyHostName } from '../host-catalog/host-name-identity'
-import type { HostMachine } from '../../../src/shared/host-machine-line'
+import type { HostMachine } from '../../../src/shared/execution-host/host-machine-line'
 
 export type HostDisplaySource = {
   id: string

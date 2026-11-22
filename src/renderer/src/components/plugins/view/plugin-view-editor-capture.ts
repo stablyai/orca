@@ -7,7 +7,7 @@ import {
   pluginEditorCaptureStatus,
   subscribePluginEditorCapture,
   type PluginEditorCaptureStatus
-} from '@/components/editor/plugin-editor-capture-status'
+} from '@/components/editor/plugin-editors/plugin-editor-capture-status'
 import { flushEditorFrames } from '@/components/editor/save/flush/editor-pending-flush'
 import { useAppStore } from '@/store'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'

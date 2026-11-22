@@ -1,65 +1,107 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  digestFileContent,
+  observedExistsSync as existsSync,
+  invalidateFileObservation,
+  observeFilePublication
+} from './file-content-observation'
+import { createHash, randomUUID } from 'node:crypto'
+import { linkSync, lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
+import { isHardLinkUnsupported } from './hard-link-unsupported-error'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
-import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
+import { assertGuardedFileCurrent, recordGuardedPublication } from './concurrent-file-edit-guard'
 
 export function writeFileAtomically(
   targetPath: string,
   contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
-  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    renameFileWithWindowsRetry(tmpPath, targetPath)
-  } catch (error) {
-    rmSync(tmpPath, { force: true })
-    // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
-    if (isPermissionError(error) && process.platform === 'win32') {
+  // Rechecked before every rename attempt: a Windows retry waits, and another writer can save meanwhile.
+  const stillCurrent = (): boolean => {
+    assertGuardedFileCurrent(targetPath)
+    return true
+  }
+  let firstError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+      renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
+      observeFilePublication(targetPath, contents)
+      return
+    } catch (error) {
       try {
-        grantDirAcl(dirname(targetPath))
-        const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-        try {
-          writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-          renameFileWithWindowsRetry(retryTmpPath, targetPath)
-          return
-        } catch {
-          rmSync(retryTmpPath, { force: true })
+        rmSync(tmpPath, { force: true })
+      } catch (cleanupError) {
+        if (attempt === 0) {
+          throw cleanupError
         }
+      }
+      if (attempt > 0) {
+        break
+      }
+      firstError = error
+      if (!isPermissionError(error) || process.platform !== 'win32') {
+        break
+      }
+      try {
+        // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
+        grantDirAcl(dirname(targetPath))
       } catch {
         // Preserve the original write error when ACL repair fails.
+        break
       }
     }
-    throw error
   }
+  throw firstError
 }
+
+/**
+ * `credential`: an earlier copy that conflicts with a recreated file is dropped as before, never
+ * kept beside it. A login can be signed in again; a token left behind can outlive a logout.
+ */
+export type GuardedFileOptions = { mode?: number; credential?: boolean }
 
 export function writeFileAtomicallyIfUnchanged(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: GuardedFileOptions
 ): boolean {
-  try {
-    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
-  } catch (error) {
-    if (!isPermissionError(error) || process.platform !== 'win32') {
-      throw error
+  // Guarded recovery moves files through a held name; keep those passes eligible for retry.
+  invalidateFileObservation(targetPath)
+  assertGuardedFileCurrent(targetPath)
+  let published = false
+  for (let attempt = 0; ; attempt++) {
+    try {
+      published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+      break
+    } catch (error) {
+      if (attempt > 0 || !isPermissionError(error) || process.platform !== 'win32') {
+        throw error
+      }
+      grantDirAcl(dirname(targetPath))
     }
-    grantDirAcl(dirname(targetPath))
-    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   }
+  if (published) {
+    recordGuardedPublication(targetPath, () => digestFileContent(contents))
+  }
+  return published
 }
 
 export function removeFileAtomicallyIfUnchanged(
   targetPath: string,
-  expectedContents: string
+  expectedContents: string,
+  options?: GuardedFileOptions
 ): boolean {
+  invalidateFileObservation(targetPath)
   const heldPath = getGuardedOperationHeldPath(targetPath)
-  recoverInterruptedGuardedOperation(heldPath, targetPath)
+  const keep = !options?.credential
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   try {
     assertHardLinkPublicationSupported(targetPath, targetPath)
   } catch (error) {
@@ -76,58 +118,140 @@ export function removeFileAtomicallyIfUnchanged(
     }
     throw error
   }
+  let matched = false
+  let removed = false
   try {
-    if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
-      return false
+    matched = nodeFileContentsEqualSync(heldPath, expectedContents)
+    if (matched) {
+      rmSync(heldPath, { force: true })
+      removed = true
     }
-    rmSync(heldPath, { force: true })
-    return !existsSync(targetPath)
+  } finally {
+    // A mismatch or a failure puts the held file back. After a removal the held name may already
+    // be another removal's, which that one restores or drops itself.
+    if (!removed) {
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
+    }
+  }
+  return matched && !existsSync(targetPath)
+}
+
+export function recoverInterruptedGuardedFileOperation(
+  targetPath: string,
+  options?: GuardedFileOptions
+): void {
+  const heldPath = getGuardedOperationHeldPath(targetPath)
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, !options?.credential)
+}
+
+/**
+ * Drops a held file once its bytes are back at the target (`restore` puts them back when the target
+ * is free). Otherwise it is kept beside it as `<target>.orca-kept-<id>`, with its own permissions: a
+ * writer that recreated the target found no file, so the held bytes can be the user's only copy of
+ * their settings. Held bytes never go back over a target that a newer writer created. Credentials
+ * are dropped instead, as a kept copy would outlive a logout.
+ */
+function restoreMovedFileWithoutOverwrite(
+  sourcePath: string,
+  targetPath: string,
+  restore = true,
+  keep = true
+): void {
+  let held: Buffer | null = null
+  try {
+    held = readFileSync(sourcePath)
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
-    throw error
+    // Gone: another process already released this held file. Unreadable: it can't be named by
+    // content, so it stays held below.
+    if (isDefinitiveAbsence(error)) {
+      return
+    }
   }
-}
-
-export function recoverInterruptedGuardedFileOperation(targetPath: string): void {
-  recoverInterruptedGuardedOperation(getGuardedOperationHeldPath(targetPath), targetPath)
-}
-
-function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string): void {
-  if (!existsSync(sourcePath)) {
+  const drop = (): void => rmSync(sourcePath, { force: true })
+  // Named by content, so a repeated conflict finds its copy already kept; a name holding other
+  // bytes (a kept copy edited since) moves on to the next. The target comes first.
+  const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : null
+  for (let attempt = 0; attempt <= (keep ? KEPT_NAME_ATTEMPTS : 0); attempt++) {
+    if (attempt > 0 && name === null) {
+      break
+    }
+    const path =
+      attempt === 0 ? targetPath : `${targetPath}.orca-kept-${name}${keptSuffix(attempt)}`
+    let free = attempt === 0 && restore
+    try {
+      if (held !== null && nodeFileContentsEqualSync(path, held)) {
+        drop()
+        return
+      }
+    } catch (error) {
+      free ||= attempt > 0 && isDefinitiveAbsence(error)
+    }
+    if (!free) {
+      continue
+    }
+    try {
+      // A link refuses a name another program took meanwhile and keeps the file's permissions. A
+      // crash before the held name goes leaves two equal files, and the next try drops the held one.
+      if (publishHeldFile(sourcePath, path)) {
+        drop()
+        if (attempt > 0) {
+          console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
+        }
+        return
+      }
+    } catch (error) {
+      // Gone: another process already released this held file.
+      if (isDefinitiveAbsence(error)) {
+        return
+      }
+      throw error
+    }
+  }
+  if (!keep) {
+    drop()
     return
   }
-  publishFileWithoutOverwrite(sourcePath, targetPath)
-  rmSync(sourcePath, { force: true })
+  // Left held, so the next guarded operation tries again: unreadable, or every content name holds
+  // other bytes and a copy per conflict would grow unbounded.
+  throw new Error(`Could not keep an earlier version of ${targetPath}`)
 }
 
-function getGuardedOperationHeldPath(targetPath: string): string {
+const KEPT_NAME_ATTEMPTS = 16
+
+function keptSuffix(attempt: number): string {
+  return attempt > 1 ? `-${attempt - 1}` : ''
+}
+
+export function getGuardedOperationHeldPath(targetPath: string): string {
   return `${targetPath}.orca-guarded`
-}
-
-function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string): void {
-  if (!existsSync(heldPath)) {
-    return
-  }
-  publishFileWithoutOverwrite(heldPath, targetPath)
-  rmSync(heldPath, { force: true })
 }
 
 function attemptGuardedAtomicWrite(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: GuardedFileOptions
 ): boolean {
+  const keep = !options?.credential
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
-  recoverInterruptedGuardedOperation(heldPath, targetPath)
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
+  let superseded = false
+  // How the held file goes back once this attempt ends; null when nothing was held.
+  let restoreHeld: boolean | null = null
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     if (expectedContents === null) {
-      return publishFileWithoutOverwrite(tmpPath, targetPath)
+      return publishHeldFile(tmpPath, targetPath)
     }
-    assertHardLinkPublicationSupported(tmpPath, targetPath)
+    try {
+      assertHardLinkPublicationSupported(tmpPath, targetPath)
+    } catch (error) {
+      // Why: \\wsl$ shares and FAT/exFAT have no hard links, so they go on to the rename path below.
+      if (!isHardLinkUnsupported(error)) {
+        throw error
+      }
+    }
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
@@ -137,20 +261,28 @@ function attemptGuardedAtomicWrite(
       throw error
     }
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      restoreHeld = true
       return false
     }
-    if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
-      rmSync(heldPath, { force: true })
+    if (!publishHeldFile(tmpPath, targetPath)) {
+      // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
+      superseded = true
+      restoreHeld = false
       return false
     }
     rmSync(heldPath, { force: true })
     return true
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    restoreHeld = !superseded
     throw error
   } finally {
-    rmSync(tmpPath, { force: true })
+    try {
+      if (restoreHeld !== null) {
+        restoreMovedFileWithoutOverwrite(heldPath, targetPath, restoreHeld, keep)
+      }
+    } finally {
+      rmSync(tmpPath, { force: true })
+    }
   }
 }
 
@@ -163,6 +295,27 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   } finally {
     rmSync(probePath, { force: true })
   }
+}
+
+// No hard links and no no-replace rename in Node: a save landing between this lstat and the rename is still replaced; the window is only that pair.
+function publishHeldFile(sourcePath: string, targetPath: string): boolean {
+  try {
+    return publishFileWithoutOverwrite(sourcePath, targetPath)
+  } catch (error) {
+    if (!isHardLinkUnsupported(error)) {
+      throw error
+    }
+  }
+  try {
+    lstatSync(targetPath)
+    return false
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+  }
+  renameSync(sourcePath, targetPath)
+  return true
 }
 
 export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {

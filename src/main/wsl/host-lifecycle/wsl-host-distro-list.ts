@@ -1,5 +1,5 @@
 /** List user distros from Lxss (including WSL version), then probe running state without booting any. Exclude Docker internals. */
-import type { WslHostDistro } from '../../../shared/wsl-host-types'
+import type { WslHostDistro } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { filterUserWslDistros } from '../discovery/wsl-distro-list-output'
 import {
   readConfirmedRunningWslDistros,
@@ -20,20 +20,19 @@ export type WslHostDistroCandidate = Omit<WslHostDistro, 'environmentId'> & { id
 export async function listWslHostDistros(
   dependencies: WslHostDistroListDependencies = {}
 ): Promise<WslHostDistroCandidate[]> {
-  const [registered, running] = await Promise.all([
-    (dependencies.readRegistrations ?? readWslDistroRegistrations)(),
-    (dependencies.readRunning ?? readConfirmedRunningWslDistros)().catch(
-      (): WslRunningDistrosRead => ({ status: 'unavailable' })
-    )
-  ])
-  if (!registered) {
+  const registered = await (dependencies.readRegistrations ?? readWslDistroRegistrations)()
+  const userNames = new Set(filterUserWslDistros((registered ?? []).map(({ distro }) => distro)))
+  // Without WSL, Windows' wsl.exe stub opens the installer and a UAC prompt: never spawn it for nothing.
+  if (!registered || userNames.size === 0) {
     return []
   }
+  const running = await (dependencies.readRunning ?? readConfirmedRunningWslDistros)().catch(
+    (): WslRunningDistrosRead => ({ status: 'unavailable' })
+  )
   const runningKeys =
     running.status === 'confirmed'
       ? new Set(running.distros.map((name) => name.trim().toLowerCase()))
       : null
-  const userNames = new Set(filterUserWslDistros(registered.map(({ distro }) => distro)))
   return registered
     .filter(({ distro }) => userNames.has(distro))
     .map(({ id, distro, version }) => ({

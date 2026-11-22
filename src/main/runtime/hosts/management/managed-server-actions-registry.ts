@@ -8,7 +8,7 @@ import type {
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 export type ManagedServerActions = {
   status: (selector: string) => Promise<OrcadManagedRuntimeStatus>

@@ -2,8 +2,8 @@ import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-promp
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-terminal-contracts'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
@@ -197,6 +197,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       timeoutMs?: number
       signal?: AbortSignal
       launchReadiness?: boolean
+      acceptsMidTurnInput?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
