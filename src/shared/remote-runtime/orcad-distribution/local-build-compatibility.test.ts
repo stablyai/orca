@@ -47,7 +47,9 @@ describe('local build compatibility', () => {
   })
 
   it('ships a contract whose own daemon protocol is attachable, in both copies', () => {
-    expect(parseLocalBuildCompatibility(target(LOCAL_BUILD_COMPATIBILITY_CONTRACT))).toBeTruthy()
+    expect(
+      parseLocalBuildCompatibility({ ...target(), ...LOCAL_BUILD_COMPATIBILITY_CONTRACT })
+    ).toBeTruthy()
     const json: unknown = JSON.parse(
       readFileSync(join(import.meta.dirname, 'local-build-compatibility-contract.json'), 'utf8')
     )
