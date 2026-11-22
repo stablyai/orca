@@ -17,6 +17,7 @@ import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
 import { RuntimeBrowserGrab } from './browser-grab-commands'
+import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
 
 type BrowserPageCommand = (
   params: BrowserCommandTargetParams & { index?: number },
@@ -241,32 +242,8 @@ export class RuntimeBrowserCommands {
     this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
     this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
     this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
-    const passive = new Set([
-      // Page admission waits for the load; zoom must apply while the page is still loading.
-      'browserZoom',
-      'browserSiteDisplay',
-      'browserSetSiteColorScheme',
-      // Page admission waits for the main-frame load, the very load a stop ends.
-      'browserStop',
-      // Chrome finds while a page loads; the stop must also reach a page that is still loading.
-      'browserFindInPage',
-      'browserStopFindInPage',
-      'browserTabList',
-      'browserTabCurrent',
-      'browserTabAnnotations',
-      'browserTabClose',
-      'browserTabCreate',
-      'browserOpenUrlOnClient',
-      'browserProfileList',
-      'browserProfileCreate',
-      'browserProfileDelete',
-      'browserProfileDetectBrowsers',
-      'browserProfileImportFromBrowser',
-      'browserProfileClearGoogleCookies',
-      'browserProfileClearDefaultCookies'
-    ])
     for (const [name, value] of Object.entries(this)) {
-      if (passive.has(name)) {
+      if (BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION.has(name)) {
         continue
       }
       if (!isBrowserPageCommand(value)) {
