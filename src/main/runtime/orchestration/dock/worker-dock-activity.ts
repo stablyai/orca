@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { workerDockSession } from './worker-dock-read'
+import { workerDockSession } from './worker-dock-source'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isAgentStatusFresh
