@@ -119,7 +119,7 @@ export function projectStructuredItemToNativeChat(
           ? { drawnMarkdown: projected.drawnMarkdown }
           : {}),
         ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {}),
-        ...(projected.role === 'assistant' ? { journalRevision: item.revision } : {})
+        journalRevision: item.revision
       }
     : null
   projectedItems.set(item, message)

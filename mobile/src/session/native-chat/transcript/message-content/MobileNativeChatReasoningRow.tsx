@@ -13,6 +13,7 @@ import type { NativeChatMessage } from '../../../../../../src/shared/native-chat
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
+import { useMobileNativeChatPacedText } from './use-mobile-native-chat-paced-text'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
@@ -47,7 +48,7 @@ export function MobileNativeChatReasoningRow({
   onToggle,
   onLongPress
 }: {
-  message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp'>
+  message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp' | 'journalRevision'>
   markdown: string
   fontScale: number
   live?: boolean
@@ -87,6 +88,7 @@ export function MobileNativeChatReasoningRow({
           positionKey={nativeChatReasoningDisclosureKey(message.id)}
           markdown={markdown}
           streaming={live}
+          savedRevision={message.journalRevision}
           fontScale={fontScale}
           onLongPress={onLongPress}
         />
@@ -100,6 +102,7 @@ export function MobileNativeChatReasoningBody({
   positionKey,
   markdown,
   streaming = false,
+  savedRevision,
   fontScale,
   onLongPress
 }: {
@@ -107,11 +110,21 @@ export function MobileNativeChatReasoningBody({
   markdown: string
   /** The turn is live, so the text may end mid-path. */
   streaming?: boolean
+  /** The reasoning row's saved journal revision, while it streams. */
+  savedRevision?: number
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const prose = useNativeChatProseText(fontScale)
+  // Streaming reasoning steps on the reveal clock, so a slow-to-draw block backs off as replies do.
+  const shown = useMobileNativeChatPacedText(
+    positionKey,
+    markdown,
+    streaming,
+    streaming,
+    savedRevision
+  )
   return (
     <MobileNativeChatOwnedScrollView
       positionKey={positionKey}
@@ -120,7 +133,7 @@ export function MobileNativeChatReasoningBody({
     >
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
         <MobileNativeChatMarkdown
-          content={markdown}
+          content={shown.text}
           streaming={streaming}
           rangeSelectable
           {...prose}

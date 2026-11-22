@@ -77,7 +77,12 @@ export function NativeChatTurnActivityLine({
       </div>
       {reasoning ? (
         <CollapsibleContent>
-          <NativeChatReasoningBody rowKey={disclosureKey} markdown={reasoning.markdown} streaming />
+          <NativeChatReasoningBody
+            rowKey={disclosureKey}
+            markdown={reasoning.markdown}
+            streaming
+            savedRevision={reasoning.message.journalRevision}
+          />
         </CollapsibleContent>
       ) : null}
     </Collapsible>
