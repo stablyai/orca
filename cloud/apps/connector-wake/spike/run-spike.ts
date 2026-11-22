@@ -35,7 +35,7 @@ async function loadKeys(): Promise<SpikeKeys> {
 // A positive integer option; the fallback only when the option is absent.
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`)
-  if (i < 0) { return fallback }
+  if (i === -1) { return fallback }
   const value = Number(process.argv[i + 1])
   if (!Number.isSafeInteger(value) || value <= 0) { throw new Error(`--${name} needs a positive integer`) }
   return value
