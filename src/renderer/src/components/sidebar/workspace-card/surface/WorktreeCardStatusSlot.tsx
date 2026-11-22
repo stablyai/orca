@@ -11,8 +11,9 @@ import type { WorktreeStatus } from '../../../../../../shared/worktree/row-displ
 import '../activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
+import { agentStateLabel } from '@/components/agent/status/AgentStateDot'
 import StatusIndicator from './StatusIndicator'
-import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { useWorktreeActivity } from '../activity/use-worktree-activity-status'
 import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -155,7 +156,8 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
+  const own = useWorktreeActivity(worktreeId)
+  const liveStatus = laneStatusWithLineage(own.status, lineageStatus)
   const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
@@ -167,7 +169,9 @@ export function WorktreeCardStatusSlot({
   )
   const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
-  const statusLabel = getWorktreeStatusLabel(status) || status
+  // A collapsed child's wait can claim the lane, and that one may have stopped.
+  const asking = status === 'permission' && lineageStatus !== 'permission' && own.asking
+  const statusLabel = asking ? agentStateLabel('asking') : getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
   const canShowSleepingStatus =
     newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
@@ -243,7 +247,7 @@ export function WorktreeCardStatusSlot({
   ) : newCardStyle && showStatus ? (
     <>
       <span className={cn('inline-flex size-5 items-center justify-center', className)}>
-        <StatusIndicator status={status} aria-hidden="true" tooltipSide="right" />
+        <StatusIndicator status={status} asking={asking} aria-hidden="true" tooltipSide="right" />
       </span>
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </>
@@ -251,6 +255,7 @@ export function WorktreeCardStatusSlot({
     <>
       <StatusIndicator
         status={status}
+        asking={asking}
         aria-hidden="true"
         className={className}
         tooltipSide="right"
@@ -325,7 +330,12 @@ export function WorktreeCardStatusSlot({
                   {branchStatusIcon}
                 </span>
               ) : showStatus ? (
-                <StatusIndicator status={status} aria-hidden="true" showTooltip={false} />
+                <StatusIndicator
+                  status={status}
+                  asking={asking}
+                  aria-hidden="true"
+                  showTooltip={false}
+                />
               ) : (
                 <span className="sr-only">{actionLabel}</span>
               )
@@ -340,6 +350,7 @@ export function WorktreeCardStatusSlot({
                 ) : (
                   <StatusIndicator
                     status={status}
+                    asking={asking}
                     aria-hidden="true"
                     showTooltip={false}
                     className="transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"

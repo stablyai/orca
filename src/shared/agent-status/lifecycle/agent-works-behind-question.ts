@@ -1,7 +1,10 @@
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../native-chat/input/questions/codex-async-question-input'
 import type { AgentStatusEntry } from '../contracts/agent-status-types'
 
-type WorksBehindQuestionRow = Pick<AgentStatusEntry, 'state' | 'subagents' | 'programStatus'> & {
+export type WorksBehindQuestionRow = Pick<
+  AgentStatusEntry,
+  'state' | 'subagents' | 'programStatus'
+> & {
   toolName?: string | null
 }
 

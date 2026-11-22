@@ -7,7 +7,7 @@ import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+import { resolvesToAsking, resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
 
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -102,6 +102,7 @@ function getOrCreateTerminalTabActivityFlags(
   if (!flags) {
     flags = {
       hasPermission: false,
+      hasBlockingWait: false,
       hasLiveWorking: false,
       hasLiveMonitoring: false,
       hasFailed: false,
@@ -165,17 +166,17 @@ type TerminalTabActivityInput = {
   terminalLayout?: TerminalLayoutSnapshot
 }
 
-/** Resolve fresh hook state and live title fallback like the sidebar, returning a primitive to avoid unrelated rerenders. */
-export function resolveTerminalTabActivityStatus({
+/** Resolve fresh hook state and live title fallback like the sidebar, plus `asking`, returning a primitive to avoid unrelated rerenders. */
+export function resolveTerminalTabActivityGlyph({
   tab,
   agentStatusByPaneKey,
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
   terminalLayout
-}: TerminalTabActivityInput): TerminalTabActivityStatus {
+}: TerminalTabActivityInput): TerminalTabActivityStatus | 'asking' {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
-  return resolveWorktreeStatus({
+  const args = {
     tabs: [tab],
     browserTabs: [],
     ptyIdsByTabId: ptyIdsByTabId ?? {},
@@ -184,6 +185,7 @@ export function resolveTerminalTabActivityStatus({
     stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
+    hasBlockingWait: flags?.hasBlockingWait ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
     hasFailed: flags?.hasFailed ?? false,
@@ -192,7 +194,8 @@ export function resolveTerminalTabActivityStatus({
     hasLiveDone: flags?.hasLiveDone ?? false
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
-  })
+  }
+  return resolvesToAsking(args) ? 'asking' : resolveWorktreeStatus(args)
 }
 
 /** Use the newest progress from a pane driving this resolved state, sharing freshness and identity rules with activity flags. */

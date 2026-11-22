@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
-import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+import { resolvesToAsking, resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
@@ -62,6 +62,14 @@ export function selectWorktreeActivityPtyIds(
 }
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
+  return useWorktreeActivity(worktreeId).status
+}
+
+export function useWorktreeActivity(worktreeId: string): {
+  status: WorktreeStatus
+  /** With `permission`: every agent that needs you here works on meanwhile. */
+  asking: boolean
+} {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
   const hasStructuredChat = useAppStore((s) =>
@@ -79,25 +87,24 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const summary = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
 
   // Use common liveness and agent-row precedence so compact and detailed cards show the same status.
-  return useMemo(
-    () =>
-      resolveWorktreeStatus({
-        tabs,
-        browserTabs,
-        hasStructuredChat,
-        ptyIdsByTabId: ptyIdsForWorktree,
-        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        terminalLayoutRootsByTabId,
-        ...summary
-      }),
-    [
+  return useMemo(() => {
+    const args = {
       tabs,
       browserTabs,
       hasStructuredChat,
-      ptyIdsForWorktree,
-      runtimePaneTitlesForWorktree,
+      ptyIdsByTabId: ptyIdsForWorktree,
+      runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
       terminalLayoutRootsByTabId,
-      summary
-    ]
-  )
+      ...summary
+    }
+    return { status: resolveWorktreeStatus(args), asking: resolvesToAsking(args) }
+  }, [
+    tabs,
+    browserTabs,
+    hasStructuredChat,
+    ptyIdsForWorktree,
+    runtimePaneTitlesForWorktree,
+    terminalLayoutRootsByTabId,
+    summary
+  ])
 }
