@@ -230,7 +230,7 @@ export function WorktreeTitleInlineRename({
       }
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
-  useBlurSaveOnUnmount(() => editingRef.current, commitRename)
+  useBlurSaveOnUnmount(() => editing && editingRef.current, commitRename)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {

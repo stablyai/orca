@@ -36,6 +36,31 @@ function startEditing(onRename: (name: string) => void): HTMLInputElement {
   return input
 }
 
+// Like a card that moves the title to a new tree position when renaming starts, remounting it.
+function RemountOnRenameCard({
+  onRename
+}: {
+  onRename: (name: string) => void
+}): React.JSX.Element {
+  const [displayName, setDisplayName] = useState('Old name')
+  const [renaming, setRenaming] = useState(false)
+  const title = (
+    <WorktreeTitleInlineRename
+      displayName={displayName}
+      onRename={onRename}
+      onEditingChange={setRenaming}
+    />
+  )
+  return (
+    <TooltipProvider>
+      <button type="button" onClick={() => setDisplayName('Agent name')}>
+        Agent rename
+      </button>
+      {renaming ? title : <span>{title}</span>}
+    </TooltipProvider>
+  )
+}
+
 describe('WorktreeTitleInlineRename unmount', () => {
   afterEach(cleanup)
 
@@ -55,6 +80,16 @@ describe('WorktreeTitleInlineRename unmount', () => {
       fireEvent.keyDown(input, { key: 'Escape' })
     })
     expect(screen.queryByText('Old name')).toBeNull()
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('does not write back a stale name when starting a rename remounts the title', async () => {
+    const onRename = vi.fn()
+    render(<RemountOnRenameCard onRename={onRename} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Agent rename' }))
+    await act(async () => {
+      fireEvent.doubleClick(screen.getByText('Agent name'))
+    })
     expect(onRename).not.toHaveBeenCalled()
   })
 })
