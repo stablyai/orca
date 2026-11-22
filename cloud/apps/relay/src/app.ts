@@ -624,7 +624,8 @@ export function createRelayApp(
             JSON.stringify({
               event: 'orca_relay_edge_move_deferred',
               reason: error.message,
-              ...(error.ownControlOnly ? { ownControlOnly: true } : {})
+              ...(error.ownControlOnly ? { ownControlOnly: true } : {}),
+              ...(error.held ? { held: error.held } : {})
             })
           )
           moved = null
