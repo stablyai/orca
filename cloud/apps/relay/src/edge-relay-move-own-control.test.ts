@@ -62,7 +62,7 @@ describe('edge move past the host\'s own control', () => {
   const databases: RelayDatabase[] = []
   afterEach(async () => {
     vi.restoreAllMocks()
-    for (const database of databases.splice(0)) await database.close()
+    for (const database of databases.splice(0)) { await database.close() }
   })
 
   async function setup(edgeOverrides: Partial<EdgeRelayConfig> = {}) {
@@ -263,7 +263,7 @@ describe('edge move past the host\'s own control', () => {
   }
 
   it('still defers with the option for two controls, a unit no lease backs, another lease, or an open migration or rehome', async () => {
-    const cases: Array<[string, (h: Awaited<ReturnType<typeof setup>>, epoch: number) => Promise<void>]> = [
+    const cases: [string, (h: Awaited<ReturnType<typeof setup>>, epoch: number) => Promise<void>][] = [
       ['two control units', async (h) => {
         await h.database.query(`UPDATE relay_assignments SET reserved_controls = 2 WHERE relay_host_id = ?`, [IDENTITY.relayHostId])
       }],
