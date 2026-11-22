@@ -10,6 +10,7 @@ import type {
   ProviderTimelineTextItem
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { z } from 'zod'
+import { AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AcpChildSessionReport,
   AcpDialect,
@@ -28,6 +29,8 @@ const sessionSchema = z.object({ sessionId: z.string() })
 export class AcpChildSessions {
   /** ACP has no message end; a child's text closes at the next message on its channel, or when it ends. */
   private readonly openText = new Map<string, ProviderTimelineTextItem>()
+  /** The current run's latest message since its last tool call: its reply if the run completes. */
+  private readonly replies = new Map<string, { item: string; text: string }>()
   /** Children that have not reported an ending, which a user's Stop also ends. */
   private readonly running = new Set<string>()
   /** Live children whose execution has started, so closing their session interrupts it. */
@@ -85,6 +88,10 @@ export class AcpChildSessions {
       return []
     }
     const known = subagents.has(child.agentId)
+    if (child.started) {
+      this.replies.delete(child.agentId)
+    }
+    const reply = child.state === 'completed' ? this.replies.get(child.agentId)?.text : undefined
     // Plain frames for a known child carry no lifecycle, so they publish no evidence.
     const events =
       known && child.state === undefined
@@ -97,6 +104,7 @@ export class AcpChildSessions {
                 ...(child.label ? { label: child.label } : {}),
                 ...(child.started ? { restart: true as const } : {}),
                 ...(child.error ? { error: child.error } : {}),
+                ...(reply ? { reply } : {}),
                 ...(child.parentAgentId ? { ownerId: child.parentAgentId } : {})
               }
             ],
@@ -123,6 +131,7 @@ export class AcpChildSessions {
     } else {
       this.running.delete(child.agentId)
       this.executing.delete(child.agentId)
+      this.replies.delete(child.agentId)
       events.push(
         ...this.closeText(`${child.agentId}:assistant`),
         ...this.closeText(`${child.agentId}:reasoning`)
@@ -160,10 +169,17 @@ export class AcpChildSessions {
         { type: 'text.delta', item, channel, text: update.content.text }
       ]
       this.openText.set(slot, item)
+      if (channel === 'assistant') {
+        this.recordReply(producer.agentId, textKey(item), update.content.text)
+      }
     } else if (
       update.sessionUpdate === 'tool_call' ||
       update.sessionUpdate === 'tool_call_update'
     ) {
+      if (update.sessionUpdate === 'tool_call') {
+        // Text before more tool work was commentary, not the reply.
+        this.replies.delete(producer.agentId)
+      }
       // An unscoped join keeps partial tool context between updates.
       events = this.tools.translate(update, this.dialect, join)
     } else {
@@ -179,6 +195,16 @@ export class AcpChildSessions {
           ? { ...event, join: placed }
           : event
     )
+  }
+
+  private recordReply(agentId: string, item: string, text: string): void {
+    const reply = this.replies.get(agentId)
+    const prior = reply?.item === item ? reply.text : ''
+    // The record keeps a bounded preview, so only its prefix is worth holding.
+    this.replies.set(agentId, {
+      item,
+      text: prior + text.slice(0, AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH - prior.length)
+    })
   }
 
   private closeText(slot: string): ProviderTimelineEvent[] {
