@@ -256,10 +256,10 @@ function withConvertedGroupFolders(
     const members = [
       ...state.repos
         .filter((repo) => repo.projectGroupId === group.id)
-        .map((repo) => repoIds.has(repo.id)),
+        .map((repo) => repoIds.has(repo.id) && isLocalRepo(repo)),
       ...state.folderWorkspaces
         .filter((folder) => folder.projectGroupId === group.id)
-        .map((folder) => folderWorkspaceIds.has(folder.id))
+        .map((folder) => folderWorkspaceIds.has(folder.id) && isLocalFolderWorkspace(state, folder))
     ]
     const parentPath = group.parentPath && wslUncDrivePathToWindows(group.parentPath, distro)
     return parentPath && members.length > 0 && members.every(Boolean)
