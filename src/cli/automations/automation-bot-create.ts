@@ -191,7 +191,7 @@ function defaultResultsTo(
 
 /** The bot target named by --bot, or null when the automation targets a project. A wait answers
  *  the person who asked, so it runs in the bot's Chat and reports there unless told otherwise; the
- *  host moves one made from another of the bot's chats, and a teammate's automation, to that chat. */
+ *  host moves one made from another of the bot's chats, wait or recurring, to that chat. */
 export async function getBotTargetFlags(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client'],
