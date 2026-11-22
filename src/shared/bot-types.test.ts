@@ -32,4 +32,31 @@ describe('GitHub people per org', () => {
     expect(gitHubMembersOf(after.members, '7')).toEqual([])
     expect(gitHubMembersOf(after.members, '8')).toEqual([{ ...alice, workspaceId: '8' }])
   })
+
+  it('takes one Linear workspace off the current list, keeping one added elsewhere', () => {
+    const a = { workspaceId: 'a', workspaceName: 'A' }
+    const b = { workspaceId: 'b', workspaceName: 'B' }
+    const c = { workspaceId: 'c', workspaceName: 'C' }
+    const after = applyBotUpdates(makeTestBot({ linear: a, linearWorkspaces: [a, b, c] }), {
+      removeLinearWorkspaceId: 'a'
+    })
+    expect(after.linearWorkspaces).toEqual([b, c])
+    expect(after.linear).toEqual(b)
+  })
+
+  it('adds one removed GitHub org to the current list, keeping one removed elsewhere', () => {
+    const after = applyBotUpdates(makeTestBot({ github: { removedInstallationIds: ['2'] } }), {
+      removeGitHubInstallationId: '1'
+    })
+    expect(after.github?.removedInstallationIds).toEqual(['2', '1'])
+  })
+
+  it('refuses a removal delta that would pass the removed-org limit', () => {
+    const ids = Array.from({ length: 100 }, (_, i) => String(i))
+    expect(() =>
+      applyBotUpdates(makeTestBot({ github: { removedInstallationIds: ids } }), {
+        removeGitHubInstallationId: 'new'
+      })
+    ).toThrow('bot_github_removed_full')
+  })
 })

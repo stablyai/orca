@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import type { ConnectorBotSlackAppResponse } from '../../../../src/shared/connector-bot-slack-contract'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink, SLACK_LINK_HOSTS } from './connector-link'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { slackCall, slackSaveGrant, slackSetUpApp } from './bot-slack-operations'
 import { slackErrorMessage } from './mobile-slack-copy'
@@ -209,8 +209,11 @@ export function usePhoneSlackSetup(props: {
     if (step.kind !== 'ready') {
       return
     }
-    openExternalLink(step.link.authorizeUrl)
-    setStep({ ...step, opened: true })
+    setStep(
+      openConnectorLink(step.link.authorizeUrl, SLACK_LINK_HOSTS)
+        ? { ...step, opened: true }
+        : { kind: 'failed', code: 'link_refused' }
+    )
   }, [step])
 
   // Watches for the install while Slack's page is open: every 3 s for 10 minutes, and on return to the app.

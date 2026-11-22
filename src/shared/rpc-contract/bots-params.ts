@@ -24,6 +24,7 @@ import {
 } from '../bot-types'
 import { isSettableBotAvatar, MAX_BOT_AVATAR_BYTES } from '../bot-avatar'
 import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
+import { withConnectorLinksRemoved } from '../bots/bot-connector-link-removal'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
@@ -140,6 +141,10 @@ export const BotUpdate = z.object({
       removeMember: BotMemberKeySchema.optional(),
       /** Several people off at once, as removeMember does each (Keep only me). */
       removeMembers: z.array(BotMemberKeySchema).max(BOT_MAX_MEMBERS).optional(),
+      /** Takes one Linear workspace off the host's current list, so a concurrent edit is kept. */
+      removeLinearWorkspaceId: z.string().min(1).optional(),
+      /** Adds one GitHub installation to the host's current removed list, so a concurrent edit is kept. */
+      removeGitHubInstallationId: z.string().min(1).optional(),
       /** People added on the host to whoever can ask now, so a concurrent removal isn't undone. */
       addMembers: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS).optional(),
       /** The bot's only Slack workspace; slackApps sets several. */
@@ -330,6 +335,8 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     removeMember,
     removeMembers,
     addMembers,
+    removeLinearWorkspaceId,
+    removeGitHubInstallationId,
     lookAround,
     tidyUp,
     offerAnswer,
@@ -378,6 +385,10 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   } else if (rest.linear !== undefined) {
     next.linearWorkspaces = rest.linear ? [rest.linear] : []
   }
+  Object.assign(
+    next,
+    withConnectorLinksRemoved(next, { removeLinearWorkspaceId, removeGitHubInstallationId })
+  )
   if (permissionMode === null) {
     delete next.permissionMode
   } else if (permissionMode !== undefined) {

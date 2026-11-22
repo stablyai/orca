@@ -174,7 +174,7 @@ export function MobileBotGitHubPage(props: {
                 botMemberSource(member) === 'github' &&
                 (!partial || member.workspaceId === installation.installationId)
             ),
-            partial ? { github: { removedInstallationIds: removed } } : { github: null }
+            partial ? { removeGitHubInstallationId: installation.installationId } : { github: null }
           ).then((saved) => {
             setBusy(false)
             if (saved) {
