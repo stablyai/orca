@@ -4,6 +4,7 @@ import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeCallOptions } from '../runtime/connection/types'
 import { MANAGED_SERVER_HANDLERS } from './managed-server'
+import { reportAfterClosedConnection } from './managed-server-reconnect'
 
 describe('orca environment update', () => {
   it('refuses plain force on a desktop that could end uncounted terminals', async () => {
@@ -28,5 +29,20 @@ describe('orca environment update', () => {
     await expect(MANAGED_SERVER_HANDLERS['environment update']!(context)).rejects.toMatchObject({
       code: 'incompatible_runtime'
     })
+  })
+
+  it('reports an unknown outcome when only current server status is available', async () => {
+    const status = { activeVersion: 'other-version' }
+    const call = async () => ({ id: 'status', ok: true, result: status })
+    const context: HandlerContext = {
+      flags: new Map(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only call is used for the status read.
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp',
+      json: true
+    }
+    await expect(
+      reportAfterClosedConnection(context, { selector: 'build-box' }, () => Promise.resolve())
+    ).rejects.toMatchObject({ code: 'managed_server_outcome_unknown', data: status })
   })
 })

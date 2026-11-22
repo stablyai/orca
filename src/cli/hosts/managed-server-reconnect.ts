@@ -1,47 +1,35 @@
-// Updates can close this connection mid-call; report the outcome from status after the runtime returns.
+// A status reply can describe the server after reconnecting, but it cannot confirm the lost action.
 import type { OrcadManagedRuntimeStatus } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const STATUS_ATTEMPTS = 15
 const STATUS_RETRY_MS = 2_000
+const UNKNOWN_OUTCOME =
+  'The connection closed before Orca could confirm the action outcome. Run `orca environment status` before retrying.'
 
 export async function reportAfterClosedConnection(
-  { client, json }: HandlerContext,
+  { client }: HandlerContext,
   selector: { selector: string },
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms))
-): Promise<void> {
+): Promise<never> {
   for (let attempt = 0; attempt < STATUS_ATTEMPTS; attempt++) {
     await sleep(STATUS_RETRY_MS)
-    let response: RuntimeRpcSuccess<OrcadManagedRuntimeStatus>
-    try {
-      response = await client.call<OrcadManagedRuntimeStatus>('managedServer.status', selector)
-    } catch {
+    const response = await client
+      .call<OrcadManagedRuntimeStatus>('managedServer.status', selector)
+      .catch(() => null)
+    if (!response) {
       continue
     }
     const status = response.result
-    if (status.recovery) {
-      throw new RuntimeClientError(
-        'managed_server_interrupted',
-        `The ${status.recovery.operation} of ${status.recovery.version} was interrupted. Run \`orca environment recover\`.`,
-        status
-      )
-    }
-    if (status.deferredUpdate) {
-      throw new RuntimeClientError('managed_server_deferred', status.deferredUpdate.reason, status)
-    }
-    printResult(
-      response,
-      json,
-      (value) =>
-        `The server restarted during the action and now runs ${value.activeVersion ?? 'no version'}.`
+    const version = status.activeVersion
+      ? `The server currently reports active version ${status.activeVersion}.`
+      : 'The server currently reports no active version.'
+    throw new RuntimeClientError(
+      'managed_server_outcome_unknown',
+      `${UNKNOWN_OUTCOME} ${version}`,
+      status
     )
-    return
   }
-  throw new RuntimeClientError(
-    'managed_server_in_progress',
-    'The connection closed while the server restarted, and it has not answered since. Check `orca environment status`.'
-  )
+  throw new RuntimeClientError('managed_server_outcome_unknown', UNKNOWN_OUTCOME)
 }

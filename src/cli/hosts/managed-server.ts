@@ -20,7 +20,7 @@ import { formatManagedServerStatus } from './managed-server-format'
 import { callExpectingRestart, callManagedServer } from './managed-server-request'
 
 const END_SERVER_TERMINALS_HINT =
-  'To update anyway, re-run with --force --end-server-terminals. It goes ahead only if no terminal daemon is running, and any terminals the server runs itself end.'
+  'To allow a restart with an unknown terminal count, re-run with --force --end-server-terminals to confirm that any terminals the server runs itself will end if it restarts.'
 
 function selectorOf(context: HandlerContext): { selector: string } {
   return { selector: getRequiredStringFlag(context.flags, 'environment') }
@@ -85,9 +85,6 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       params,
       force && !endServerTerminals
     )
-    if (!response) {
-      return
-    }
     report(
       response,
       context.json,
@@ -112,9 +109,6 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       'managedServer.rollback',
       selectorOf(context)
     )
-    if (!response) {
-      return
-    }
     report(
       response,
       context.json,

@@ -23,7 +23,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'force', 'end-server-terminals'],
     notes: [
       'Without --force, an update that would restart over running terminals is deferred and reported, not applied.',
-      'When the server cannot count its terminals, --force still defers; add --end-server-terminals to update anyway. It goes ahead only if no terminal daemon is running, and any terminals the server runs itself end.',
+      'When the server responds without a usable terminal count, plain --force defers. Add --end-server-terminals to confirm that any terminals the server runs itself will end if it restarts. Orca still checks that daemon-backed terminals can survive.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],

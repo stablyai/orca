@@ -89,7 +89,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     force:
       '--force                Allow restart when daemon terminals can survive. Counted in-process terminals block it.',
     'end-server-terminals':
-      '--end-server-terminals With --force, allow an unknown count when no terminal daemon is running. Any terminals the server runs itself end.'
+      '--end-server-terminals With --force, confirm that any terminals the server runs itself will end if it restarts.'
   },
   'environment recover': {
     'accept-changed-state':

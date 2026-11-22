@@ -142,9 +142,8 @@ export function planOrcadUpdate(input: {
         code: 'orcad_update_terminal_census_unavailable',
         ...(forceable ? { forceable: true } : {}),
         reason:
-          'The terminal daemon did not answer a session count, so this update cannot tell ' +
-          'whether work is running on the host. Retry, or force the update: it goes ahead only ' +
-          'if no terminal daemon is running, and any terminals orcad runs itself end.'
+          'The terminal census did not provide a session count, so Orca cannot tell ' +
+          'whether work is running on the host. Retry when the server can count its terminals.'
       }
     }
     return {

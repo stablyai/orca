@@ -13,7 +13,7 @@ const UNSUPPORTED_MESSAGE =
   'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
 
 const OLDER_DESKTOP_FORCE_MESSAGE =
-  'This Orca desktop app may end uncounted terminals with --force. Update the desktop, or explicitly accept that risk with --force --end-server-terminals.'
+  'Update this Orca desktop app to use limited force, or use --force --end-server-terminals to confirm that any terminals the server runs itself will end if it restarts.'
 
 // Windows promotion and readiness waits can take ten minutes; allow headroom on slow hosts.
 const MANAGED_SERVER_ACTION_TIMEOUT_MS = 20 * 60_000
@@ -79,13 +79,12 @@ export async function callManagedServer<TResult>(
   }
 }
 
-/** Null once the restart's outcome was reported from status instead. */
 export async function callExpectingRestart<TResult>(
   context: HandlerContext,
   method: string,
   params: { selector: string } & Record<string, unknown>,
   requireLimitedForce = false
-): Promise<RuntimeRpcSuccess<TResult> | null> {
+): Promise<RuntimeRpcSuccess<TResult>> {
   let dispatched = false
   try {
     return await callManagedServer<TResult>(context, method, params, {
@@ -102,7 +101,6 @@ export async function callExpectingRestart<TResult>(
     ) {
       throw error
     }
-    await reportAfterClosedConnection(context, { selector: params.selector })
-    return null
+    return reportAfterClosedConnection(context, { selector: params.selector })
   }
 }
