@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { autoUpdateInstalledBundledSkills } from './bundled-skill-installation'
@@ -38,10 +38,8 @@ describe('Gemini CLI bundled skill placement', () => {
     const copied = await makeSkillHome()
     await writeCopy(copied.shared, OLD_TEXT)
     await writeCopy(geminiSkill(copied.home), OLD_TEXT)
-    const lone = await makeSkillHome()
-    await writeCopy(geminiSkill(lone.home), OLD_TEXT)
 
-    for (const target of [home, copied, lone]) {
+    for (const target of [home, copied]) {
       await autoUpdateInstalledBundledSkills({
         ...serviceInput(target, { agents: ['gemini'] }),
         names: [NAME]
@@ -57,5 +55,16 @@ describe('Gemini CLI bundled skill placement', () => {
     await writeCopy(geminiSkill(home.home), EDITED_TEXT)
     await previewAndInstall(serviceInput(home, { agents: ['gemini'] }))
     expect(await snapshot(geminiSkill(home.home))).toBe(`dir[SKILL.md]:${EDITED_TEXT}`)
+  })
+
+  it("keeps another agent's link when ~/.gemini/skills links to that agent's folder", async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+    await mkdir(dirname(home.claude), { recursive: true })
+    await linkDirectory(home.shared, home.claude)
+    await mkdir(join(home.home, '.gemini'))
+    await linkDirectory(dirname(home.claude), join(home.home, '.gemini', 'skills'))
+    await previewAndInstall(serviceInput(home, { agents: ['codex'] }))
+    expect(await snapshot(home.claude)).toBe(`link:${home.shared}`)
   })
 })

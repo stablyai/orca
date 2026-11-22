@@ -196,9 +196,8 @@ async function planTarget(
       : files('replace')
   }
 
-  const formerInstalled = former.installed || formerRoots.length > 0
   const holdsOrcaCopy =
-    formerInstalled || Boolean(restoreFrom) || ORCA_COPY_CLASSES.has(folderClass)
+    former.installed || Boolean(restoreFrom) || ORCA_COPY_CLASSES.has(folderClass)
   const decision = await decide()
   // Only a folder holding just Orca's SKILL.md; a swap would move an agent's files to backups.
   const decided =
@@ -215,7 +214,7 @@ async function planTarget(
     op.kind === 'keep'
       ? formerLeavesBesideKeep(former.leaves, keptBesideAgentFiles(op, shared?.besideAgentFiles))
       : former.leaves
-  const result = { holdsOrcaCopy, formerInstalled, leaves }
+  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'
   if (!writes && op.cleanup.length === 0 && !op.previous?.length) {
     return { op, ...result }

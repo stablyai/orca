@@ -37,6 +37,7 @@ export async function planFormerRootPlacements(
     return []
   }
   const targetKeys = new Set(roots.map((root) => bundledSkillPathKey(root.realPath)))
+  const homeRealPath = await resolveBundledSkillRealPath(filesystem, destination.homeDirectory)
   const previous: NonNullable<BundledSkillOp['previous']>[number][] = []
   for (const segments of FORMER_GLOBAL_SKILL_ROOTS) {
     const root = join(destination.homeDirectory, ...segments)
@@ -50,9 +51,12 @@ export async function planFormerRootPlacements(
     if (observed.kind === 'absent' || observed.kind === 'unreadable') {
       continue
     }
-    // A former root linked to a current target is that target, not a second placement.
+    // Orca only made a plain folder here; a linked one, or one a target links to, is another root.
     const rootRealPath = await resolveBundledSkillRealPath(filesystem, root)
-    if (targetKeys.has(bundledSkillPathKey(rootRealPath))) {
+    if (
+      bundledSkillPathKey(rootRealPath) !== bundledSkillPathKey(join(homeRealPath, ...segments)) ||
+      targetKeys.has(bundledSkillPathKey(rootRealPath))
+    ) {
       continue
     }
     const keys = stateKeysFor(path, join(rootRealPath, source.name))
