@@ -128,7 +128,12 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
       pending = recordReattachedLaunch(pty, incarnationId, reattach.launchNote)
     }
-    if (!fenced || pty.launchToken) {
+    // An older local owner can only list every session per read: with no cheap proof, restore nothing.
+    if (
+      !fenced ||
+      pty.launchToken ||
+      (!pty.connectionId && !this.ptyController?.supportsForegroundObservation?.(pty.ptyId))
+    ) {
       return undefined
     }
     const note = pending ? (reattach?.launchNote ?? null) : null
@@ -137,7 +142,8 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
 
   /** Only the launched agent's own process in front restores it (and re-holds a noted launch). With
    *  no such proof (vim, ssh, another agent, an unreadable Windows/WSL/SSH foreground) the pane gets
-   *  no launch agent, and its foreground name decides; a shell in front also retires the note. */
+   *  no launch agent, and its foreground name decides. Only a shell in front undoes an earlier proof,
+   *  and retires the note. */
   private async confirmReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     identity: ReattachedLaunchIdentity,
@@ -160,7 +166,10 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       return
     }
     if (foreground === 'agent') {
-      pty.launchAgent ??= agent
+      if (!pty.launchAgent) {
+        pty.launchAgent = agent
+        this.touchMobileSessionSnapshotsForPty(pty.ptyId)
+      }
       if (note && pty.launchAgent === agent) {
         holdLaunch(pty, identity.incarnationId, {
           agent,
@@ -170,11 +179,15 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       }
       return
     }
+    if (foreground !== 'shell') {
+      return
+    }
     // An earlier attach may have restored it before the launch ended.
     if (pty.launchAgent === agent) {
       pty.launchAgent = null
+      this.touchMobileSessionSnapshotsForPty(pty.ptyId)
     }
-    if (foreground === 'shell' && note) {
+    if (note) {
       this.ptyController?.setLaunchNote?.(pty.ptyId, { retire: note.launchToken })
       retireLaunch(pty)
     }
