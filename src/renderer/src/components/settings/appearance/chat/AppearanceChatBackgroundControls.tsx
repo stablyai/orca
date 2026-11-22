@@ -212,8 +212,9 @@ function ChatPercentSlider({
           onValueChange={([next]) => setDraft({ saved: value, value: next })}
           onValueCommit={([next]) =>
             void onCommit(next).then((saved) => {
+              // Only while the thumb still shows the value that failed; a newer drag keeps its own.
               if (!saved) {
-                setDraft({ saved: value, value })
+                setDraft((current) => (current.value === next ? { saved: value, value } : current))
               }
             })
           }
