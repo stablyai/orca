@@ -134,9 +134,9 @@ function createViewport(): BotItemsViewport {
   let frameScrollOnly = false
   const onFrame = (scrollOnly = false, fromFrame = false): void => {
     if (scroller) {
-      frameBox = readBox(scroller)
       frameScrollOnly = scrollOnly && !layoutPending
       layoutPending = false
+      frameBox = readBox(scroller)
       const changes: (() => void)[] = []
       listeners.forEach((listener) => {
         const change = listener()
@@ -168,6 +168,7 @@ function createViewport(): BotItemsViewport {
       return () => {
         listeners.delete(listener)
         if (listeners.size === 0) {
+          layoutPending = false
           listen()
         }
       }
@@ -194,6 +195,9 @@ function createViewport(): BotItemsViewport {
     },
     attach: (nextScroller, nextList) => {
       if (nextScroller !== scroller || nextList !== list) {
+        if (nextScroller !== scroller) {
+          layoutPending = false
+        }
         scroller = nextScroller
         list = nextList
         listen()
