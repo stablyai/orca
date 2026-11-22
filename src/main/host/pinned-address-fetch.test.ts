@@ -1,9 +1,16 @@
 import http from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fetchWithPinnedAddresses } from './pinned-address-fetch'
 
 let server: http.Server | undefined
+
+function portOf(listening: http.Server): number {
+  const address = listening.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('server is not listening on a port')
+  }
+  return address.port
+}
 afterEach(() => server?.close())
 
 describe('fetchWithPinnedAddresses', () => {
@@ -14,7 +21,7 @@ describe('fetchWithPinnedAddresses', () => {
       res.writeHead(200, { 'content-type': 'image/png' }).end('png')
     })
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r))
-    const { port } = server.address() as AddressInfo
+    const port = portOf(server)
 
     // rebind.invalid cannot resolve; only the pinned address can reach the server.
     const response = await fetchWithPinnedAddresses(`http://rebind.invalid:${port}/f.png`, {}, [
@@ -30,7 +37,7 @@ describe('fetchWithPinnedAddresses', () => {
       res.writeHead(302, { location: 'http://10.0.0.1/x' }).end()
     })
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r))
-    const { port } = server.address() as AddressInfo
+    const port = portOf(server)
 
     const response = await fetchWithPinnedAddresses(`http://rebind.invalid:${port}/`, {}, [
       { address: '127.0.0.1' }
