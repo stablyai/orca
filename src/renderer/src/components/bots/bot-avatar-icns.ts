@@ -6,7 +6,7 @@ const PNG_ICNS_SIDES: Readonly<Record<string, number>> = {
   ic05: 32,
   icp4: 16,
   icp5: 32,
-  icp6: 48,
+  icp6: 64,
   ic07: 128,
   ic08: 256,
   ic09: 512,

@@ -12,6 +12,25 @@ import { avatarPngFromBlob } from './bot-avatar-intake'
 const MULTI_RESOLUTION_ICNS = new Uint8Array(
   readFileSync('src/renderer/src/components/bots/__fixtures__/multi-resolution.icns')
 )
+// Original 64 x 64 pixel content encoded with pngjs for the icp6 boundary.
+const PNG_64 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAALElEQVR4Ae3BQQ0AAAgEoEtoXZv51RxuQKZrAwAAAAAAAAAAAAAAAAAAAHx2gqcC+33SF8oAAAAASUVORK5CYII=',
+  'base64'
+)
+
+function singleElementIcns(type: string, png: Buffer): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(16 + png.byteLength)
+  const view = new DataView(bytes.buffer)
+  bytes.set([0x69, 0x63, 0x6e, 0x73], 0)
+  view.setUint32(4, bytes.byteLength)
+  bytes.set(
+    Array.from(type, (character) => character.charCodeAt(0)),
+    8
+  )
+  view.setUint32(12, png.byteLength + 8)
+  bytes.set(png, 16)
+  return bytes
+}
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -52,6 +71,15 @@ describe('ICNS bot avatar intake', () => {
     })
 
     await expect(avatarPngFromBlob(input)).rejects.toMatchObject({ error: 'type' })
+  })
+
+  it('applies the existing minimum source size to a 64 px PNG in an icp6-only bundle', async () => {
+    mocks.squareAvatarPng.mockRejectedValue(new Error('bot_avatar_too_small'))
+    const input = new File([singleElementIcns('icp6', PNG_64)], 'icon.icns', {
+      type: 'image/icns'
+    })
+
+    await expect(avatarPngFromBlob(input)).rejects.toMatchObject({ error: 'too_small' })
   })
 
   it('refuses an ICNS encoding without a supported PNG representation', async () => {
