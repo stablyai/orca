@@ -380,6 +380,21 @@ describe('item rows that touch', () => {
     expect(Object.fromEntries(joins)).toEqual({ 0: 'below', 1: 'both', 2: 'above' })
   })
 
+  it('keeps notes apart across a hidden row that draws its turn’s bar', () => {
+    const rows = [
+      bot('t1', made('a1')),
+      { message: itemMail('mail'), turn: 't2' },
+      bot('t2', made('a2'))
+    ]
+    const joins = nativeChatActivityRowJoins(
+      rows.map((row) => row.message),
+      () => false,
+      (index) => ({ below: index === 1 })
+    )
+
+    expect(joins.size).toBe(0)
+  })
+
   it('keeps a note apart from the next when a turn diff draws under it', () => {
     const rows = [bot('t1', made('a1')), bot('t2', made('a2')), bot('t3', made('a3'))]
     const joins = nativeChatActivityRowJoins(

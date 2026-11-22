@@ -19,7 +19,10 @@ export function nativeChatActivityEdges(message: NativeChatMessage): NativeChatA
       ? BOTH_EDGES
       : { top: note.entries.some((entry) => entry.event === 'status'), bottom: false }
   }
-  return message.from !== undefined && (message.role === 'user' || message.agentStart === true)
+  // Item mail draws nothing, so it is no update row.
+  return message.from !== undefined &&
+    (message.role === 'user' || message.agentStart === true) &&
+    !rowDrawsNothing(message)
     ? BOTH_EDGES
     : NO_EDGES
 }
@@ -34,13 +37,16 @@ export function nativeChatActivityRowJoins(
   hidden: (index: number) => boolean,
   apart: (index: number) => { above?: boolean; below?: boolean } = () => ({})
 ): Map<number, NativeChatActivityJoin> {
+  const marks = messages.map((_, index) => apart(index))
+  // A row whose turn bar or diff draws counts even when it draws nothing else, so rows don't join across it.
   const drawn = messages.flatMap((message, index) =>
-    hidden(index) || rowDrawsNothing(message) ? [] : [index]
+    marks[index]!.above || marks[index]!.below || (!hidden(index) && !rowDrawsNothing(message))
+      ? [index]
+      : []
   )
   const edges = drawn.map((index) => {
     const own = nativeChatActivityEdges(messages[index]!)
-    const kept = apart(index)
-    return { top: own.top && !kept.above, bottom: own.bottom && !kept.below }
+    return { top: own.top && !marks[index]!.above, bottom: own.bottom && !marks[index]!.below }
   })
   const joins = new Map<number, NativeChatActivityJoin>()
   drawn.forEach((index, at) => {
