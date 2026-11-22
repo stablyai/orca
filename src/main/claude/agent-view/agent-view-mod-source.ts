@@ -96,7 +96,6 @@ let announceAgain = false
           ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
         }, session)
       } catch {}
-      // A relay that could not forward answers {} with neither flag.
       if (!result) {
         await retry($)
         return {}

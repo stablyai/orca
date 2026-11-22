@@ -58,6 +58,20 @@ describe('Claude agent view delivery', () => {
     expect(await parent).toEqual({ status: 'viewed' })
   })
 
+  it('refuses a registration whose pane no longer shows that Claude live, so a late post cannot leave a dead entry', async () => {
+    const bridge = new ClaudeAgentViewBridge()
+    let live = false
+    bridge.isLive = () => live
+    const register = { ...identity, action: 'register', keybindings: binding('ctrl+alt+g') }
+    expect(bridge.receive(register)).toEqual({})
+    const trigger = vi.fn(async () => true)
+    expect(await bridge.view({ ...identity, agentId: 'child', trigger })).toEqual({
+      status: 'unsupported'
+    })
+    live = true
+    expect(bridge.receive(register)).toEqual({ registered: true })
+  })
+
   it('expires a swallowed trigger so a later shortcut cannot switch views', async () => {
     vi.useFakeTimers()
     const bridge = new ClaudeAgentViewBridge()
