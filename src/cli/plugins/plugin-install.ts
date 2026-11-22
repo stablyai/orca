@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
+import { getPresentStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import {
   failedUpdatesOf,
@@ -11,6 +12,7 @@ import {
 } from './plugin-approval-rerun'
 import { isQualifiedPluginKey } from '../../shared/plugins/frames/plugin-tab-key'
 import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/manifest/plugin-manifest'
+import { parsePluginGitInstallInput } from '../../shared/plugins/installation/plugin-git-install-input'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 import {
   pluginInstallSourceLines,
@@ -66,16 +68,38 @@ function looksLikePath(value: string): boolean {
   )
 }
 
+// Why not stringFlag: a selector passed without a value must fail, not install the default.
+function selectorFlag(ctx: HandlerContext, name: string): string | undefined {
+  const value = getPresentStringFlag(ctx.flags, name)?.trim()
+  if (value === '') {
+    throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
+  }
+  return value
+}
+
 /** Sorts what the caller typed into a catalog id, a Git source or a folder on the Orca host. */
 export function classifyPluginInstallSource(ctx: HandlerContext, value: string): InstallSpec {
-  const ref = stringFlag(ctx, 'ref')
-  const catalog = stringFlag(ctx, 'catalog')
+  const ref = selectorFlag(ctx, 'ref')
+  const catalog = selectorFlag(ctx, 'catalog')
   const localFolder =
     !ctx.client.isRemote && existsSync(join(resolve(ctx.cwd, value), PLUGIN_MANIFEST_FILENAME))
   if (looksLikePath(value) || localFolder) {
-    return { kind: 'local-path', path: resolveHostPluginPath(ctx, value) }
+    const path = resolveHostPluginPath(ctx, value)
+    if (ref || catalog) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--${ref ? 'ref' : 'catalog'} does not apply to the plugin folder ${path}; Orca installs the folder as it is.`
+      )
+    }
+    return { kind: 'local-path', path }
   }
   if (!value.includes('/') && !value.includes(':') && isQualifiedPluginKey(value)) {
+    if (ref) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--ref does not apply to a catalog id; the catalog picks the version. To pin one, install from owner/repo with --ref.'
+      )
+    }
     return { kind: 'catalog', pluginKey: value, ...(catalog ? { catalog } : {}) }
   }
   if (catalog) {
@@ -87,11 +111,15 @@ export function classifyPluginInstallSource(ctx: HandlerContext, value: string):
   // Why `@` only for owner/repo: in an SSH URL `@` already separates the user from the host.
   const shorthand = SHORTHAND_WITH_REF.exec(value)
   const input = shorthand ? `${shorthand[1]}#${shorthand[2]}` : value
-  if (ref && input.includes('#')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Pass the version once: either @ref/#ref or --ref.'
-    )
+  // Why parse: a release, tag or tree page URL already names a version, and that one would win.
+  if (ref) {
+    const parsed = parsePluginGitInstallInput(input)
+    if (input.includes('#') || (parsed.ok && parsed.ref)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass the version once: either @ref/#ref, a page URL, or --ref.'
+      )
+    }
   }
   return { kind: 'git', input: ref ? `${input}#${ref}` : input }
 }
