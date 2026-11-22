@@ -26,7 +26,6 @@ import {
   readAppMemoryHistory,
   readMemoryHistory,
   createProjectGroupNameLookup,
-  createRepoNameLookup,
   resolveWorktreeMemoryNames,
   type MemorySnapshotStore,
   type WorktreeMemoryBucket
@@ -154,7 +153,6 @@ function addUsage(target: RowTotals, usage: UsageValues): void {
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
-  const repoName = createRepoNameLookup(store)
   const agentMark = agentRegistrationMark()
   const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
   const { hasPrivateMemory } = processIndex
@@ -173,12 +171,13 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     'Other'
   )
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
+  const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
   const bucketFor = (worktreeId: string): WorktreeMemoryBucket => {
     const existing = worktreeBuckets.get(worktreeId)
     if (existing) {
       return existing
     }
-    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName, repoName)
+    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName)
     const bucket = createEmptyWorktreeMemoryBucket(
       worktreeId,
       names.worktreeName,
@@ -189,17 +188,26 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     return bucket
   }
 
-  const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
   // Per workspace, sessions whose pane key came from startup restore.
   const restoredSessionIds = new Map<string, Set<string>>()
   for (const { pty, rows } of ptyTrees) {
     // This machine's panel names a restored terminal by its pane before the pane mounts; paired replies don't carry it.
     const restoredPaneKey = pty.paneKey ? null : (pty.restoredPaneKey ?? null)
+    let sessionCpu = 0
+    let sessionMemory = 0
+    let sessionPrivateMemory = 0
+    for (const row of rows) {
+      sessionCpu += row.cpu
+      sessionMemory += row.memory
+      sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
+    }
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey ?? restoredPaneKey,
       pid: pty.pid ?? 0,
-      ...usageOf(sumRows(rows), hasPrivateMemory)
+      cpu: clampMemoryMetric(sessionCpu),
+      memory: clampMemoryMetric(sessionMemory),
+      ...optionalCommitField(hasPrivateMemory, sessionPrivateMemory)
     }
     const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
     if (restoredPaneKey) {
@@ -207,9 +215,14 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       restored.add(session.sessionId)
       restoredSessionIds.set(bucket.worktreeId, restored)
     }
-    addUsage(bucket, session)
-    addUsage(terminals, session)
+    const sessionPrivate = clampMemoryMetric(session.privateMemory)
+    bucket.cpu += session.cpu
+    bucket.memory += session.memory
+    bucket.privateMemory += sessionPrivate
     bucket.sessions.push(session)
+    terminals.cpu += session.cpu
+    terminals.memory += session.memory
+    terminals.privateMemory += sessionPrivate
   }
 
   const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }

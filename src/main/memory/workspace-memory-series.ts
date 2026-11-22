@@ -29,6 +29,14 @@ export function recordWorkspaceMemorySeries(
   now: number
 ): { worktreeId: string; usage: Usage }[] {
   const terminalSeries: { worktreeId: string; usage: Usage }[] = []
+  if (terminalUsage.size === 0 && chatSeries.size === 0 && !buckets.some((b) => b.chats)) {
+    // No chats now or still drawn: every bucket has terminals alone, as it always did.
+    for (const bucket of buckets) {
+      pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
+    }
+    sweepStaleMemoryHistory(now)
+    return terminalSeries
+  }
   const sweep = ++sweepCount
   for (const bucket of buckets) {
     // A sample without chats skips the lookup.
@@ -43,7 +51,7 @@ export function recordWorkspaceMemorySeries(
       entry.sweep = sweep
     }
     if (bucket.sessions.length > 0) {
-      const usage = terminalUsage.get(bucket.worktreeId) ?? bucket
+      const usage = (bucket.chats && terminalUsage.get(bucket.worktreeId)) || bucket
       pushMemoryHistorySample(bucket.worktreeId, usage.memory, now)
       if (bucket.chats) {
         terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
