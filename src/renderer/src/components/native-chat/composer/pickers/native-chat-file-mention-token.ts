@@ -1,7 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
-import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
-import { mentionPathFromChatFolder } from '../../../../../../shared/native-chat/input/composer/native-chat-mention-folder'
+import { chatFolderFileReference } from '../../../../../../shared/native-chat/input/composer/native-chat-mention-folder'
 import { findNativeChatTabOwnerWorktreeId } from '../../pane/ownership/native-chat-tab-owner'
 import {
   resolveNativeChatSessionFolder,
@@ -15,6 +13,5 @@ export function nativeChatFileMentionToken(tabId: string, path: string): string 
   const worktreeId = findNativeChatTabOwnerWorktreeId(state, tabId)
   const folder = worktreeId && resolveNativeChatSessionFolder(state, tabId, worktreeId)
   const root = folder && resolveNativeChatTabDirectory(state, tabId, worktreeId)
-  const inside = folder && root ? relativePathInsideRoot(root, folder) : null
-  return inside ? formatNativeChatFileReference(mentionPathFromChatFolder(path, inside)) : undefined
+  return folder && root ? chatFolderFileReference(path, root, folder) : undefined
 }

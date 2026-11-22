@@ -37,3 +37,11 @@ export function useMobileStructuredSessionHostExecutionPhase(
 ): AgentSessionStatusSummary['hostExecutionPhase'] {
   return useHostSummaryValue(args, (summary) => summary?.hostExecutionPhase)
 }
+
+/** The folder the host runs this chat in when it pinned one (a floating chat's, or the workspace
+ *  sub-folder a conversation was adopted from). */
+export function useMobileStructuredSessionLaunchDirectory(
+  args: HostExecutionArgs
+): string | undefined {
+  return useHostSummaryValue(args, (summary) => summary?.launchDirectory)
+}
