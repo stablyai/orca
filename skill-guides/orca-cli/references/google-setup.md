@@ -12,10 +12,11 @@ When someone asks why this is needed, say: "You create your own Google app, so y
 
 ## Flow
 
-1. `ORCA bot google-setup start`, then end your turn. Do nothing else until the path card's answer reaches you: don't open Google Cloud, and don't post about the card, which already asks. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below.
+1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below.
 2. Account:
    - In do-it-for-me and guide-here, open Google Cloud and read the account (see Browser). In guide-browser, ask for it (see Paths).
-   - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal> --services <gmail,calendar,files>`.
+   - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal>`.
+   - The services are your owner's answer on the services card; `show` prints them as `Services:`. Never ask for them again, in chat or a question. If `show` has none yet, end your turn and wait for that card's answer.
    - Work or personal: an email ending in gmail.com or googlemail.com is personal. Otherwise it's work when Branding lets you choose the Internal audience. Ask only if that's still unclear.
 3. Go through the steps in order: account, project, apis, branding, links, publish, client, connect.
    - Personal accounts do all of them.
@@ -76,7 +77,7 @@ The API ids are `people.googleapis.com`, plus the ones for each chosen service:
   2. Run `ORCA bot google-setup need-user branding --note "Tick the User Data Policy box under Finish"`.
   3. Ticking is enough; your owner doesn't have to press Done. Watch the box in the background: `ORCA wait --page <id> --selector "input[type=checkbox]:checked" --timeout 600000`, then `snapshot` and check the box shows `checked=true`. When it does, say "Got it, carrying on" and mark branding done. In do-it-for-me you finish the wizard first (Continue, then Create); in guide-here your owner does.
   4. If the wait ends without it, end your turn. Their Done on the card, or a word in chat, wakes you: `snapshot`, and go on only if the box shows `checked=true`.
-- **Never `snapshot`, `read`, `screenshot` or `eval` while the "OAuth client created" dialog is open,** because it shows the client secret. On the client page, click effects carry no page lines (no `page`), so the dialog's secret never reaches you; don't `snapshot` to make up for it. After Create, `wait --text "OAuth client created"`, then click Download JSON by its label: `ORCA exec --page <id> --command 'find role button click --name "Download JSON"'`. Then OK, and only then read the page again.
+- **Never `snapshot`, `read`, `screenshot` or `eval` while the "OAuth client created" dialog is open,** because it shows the client secret. On the client page, click effects carry no page lines (no `page`), so the dialog's secret never reaches you; don't `snapshot` to make up for it. After Create, `wait --text "OAuth client created"`, then click Download JSON by its label: `ORCA find --page <id> --locator text --value "Download JSON" --action click`. Then OK, and only then read the page again.
 - **Never open, print or import the key file.** Your owner's Import button on the card saves it.
 - **Never resize the page or the browser** (`ORCA viewport`, or any other way). Your owner sees the same page.
 

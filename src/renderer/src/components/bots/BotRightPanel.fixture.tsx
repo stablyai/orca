@@ -13,6 +13,8 @@ import type { BotActivity, BotSessionActivityRow } from '../../../../shared/bots
 import type { AgentDotState } from '../../../../shared/agent-dot-state'
 import { EVENT_ONLY_SCHEDULE } from '../../../../shared/automation-event-triggers'
 import type { BotUpNext } from '../../../../shared/bots/bot-look-around'
+import { stubUsageLimitFeed } from '../../component-fixtures/fixture-usage-limit-feed'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 const now = Date.now()
 
@@ -210,4 +212,82 @@ export const closedWorking = defineFixture({
       <RightSidebarToggle />
     </div>
   )
+})
+
+const LOOK_STOPPED: BotActivity = {
+  ...BUSY,
+  upNext: {
+    state: {
+      running: false,
+      lastLookedAt: now - 20 * 60_000,
+      lastSessionId: 'look-1',
+      error: 'The last look didn’t finish.',
+      seenAt: 1
+    },
+    items: []
+  }
+}
+
+function lookStoppedFixture(auto: boolean) {
+  return defineFixture({
+    width: 360,
+    store: botPanelPage(true, null),
+    setup: () => {
+      stubBotPanel(LOOK_STOPPED)()
+      stubUsageLimitFeed([
+        {
+          sessionId: 'look-1',
+          workspaceId: folderWorkspaceKey(cos.folderWorkspaceId),
+          name: 'Look around',
+          resetsAt: now + 2 * 3_600_000,
+          auto
+        }
+      ])
+    },
+    render: () => <BotPanelFrame />
+  })
+}
+
+export const lookStoppedWaiting = lookStoppedFixture(false)
+export const lookStoppedContinues = lookStoppedFixture(true)
+
+// Automations folded: the failed row stays listed under the bare header; healthy and paused rows hide.
+export const automationsFolded = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: () => {
+    stubBotPanel(NEEDS_YOU)()
+    window.localStorage.setItem(
+      'orca.bots.panelFolds',
+      JSON.stringify({ [cos.id]: ['automations'] })
+    )
+  },
+  render: () => <BotPanelFrame />
+})
+
+/** Keyboard focus on the row whose name starts with `name` opens its hover card. */
+function focusRow(name: string) {
+  return async (frame: HTMLElement): Promise<void> => {
+    const row = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      (button.getAttribute('aria-label') ?? button.textContent ?? '').startsWith(name)
+    )
+    row?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 700))
+  }
+}
+
+export const failedRowCard = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: stubBotPanel(NEEDS_YOU),
+  render: () => <BotPanelFrame />,
+  interact: focusRow('Label new Linear bugs')
+})
+
+export const askRowCard = defineFixture({
+  width: 360,
+  store: botPanelPage(true, 'blocked'),
+  setup: stubBotPanel(NEEDS_YOU),
+  render: () => <BotPanelFrame />,
+  interact: focusRow('Open: Fix flaky')
 })

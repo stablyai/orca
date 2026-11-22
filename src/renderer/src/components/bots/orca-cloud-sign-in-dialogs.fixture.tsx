@@ -96,7 +96,7 @@ export const linearResumed = defineFixture({
   interact: signIn
 })
 
-/** Share bot…, signed out: asked before picking parts or writing a note. */
+/** Share bot…, signed out: review the parts before signing in. */
 export const shareSignedOut = defineFixture({
   width: 1000,
   store: signedOutStore(),
@@ -108,5 +108,5 @@ export const shareResumed = defineFixture({
   store: signedOutStore(),
   setup: () => stubCloud(),
   render: shareDialog,
-  interact: signIn
+  interact: () => click('Sign in to publish').then(() => settle(1500))
 })

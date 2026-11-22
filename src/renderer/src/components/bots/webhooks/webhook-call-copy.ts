@@ -1,6 +1,6 @@
 // Recent calls in words: the cloud's verdict, then the run's outcome in the run history's own labels.
 import { translate } from '@/i18n/i18n'
-import { botResultsPlace } from '../../automations/authoring/automation-bot-results-to'
+import { botResultsPlace } from '../../../../../shared/automation-bot-target'
 import type { AutomationBotResultsTo } from '../../../../../shared/automations/automation-definition'
 import type { WebhookCallRow } from '../../../../../shared/rpc-contract/webhooks-params'
 

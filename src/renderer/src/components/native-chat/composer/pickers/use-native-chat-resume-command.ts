@@ -3,6 +3,10 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import {
+  NATIVE_CHAT_RESUME_COMMAND,
+  withNativeChatOrcaCommands
+} from '../../../../../../shared/native-chat/input/commands/native-chat-orca-commands'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '@/components/right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
@@ -17,58 +21,36 @@ import {
 import { NativeChatSessionHistoryScopeContext } from '../../native-chat-session-history-scope'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 
-export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
-
 const FORK_DRAFT = /^\/fork(?:\s+([\s\S]*))?$/i
 const MCP_DRAFT = /^\/mcp\s*$/i
 
-/** Replace the agent’s /resume catalog entry with Orca’s Session History command, and its /usage
- *  and /fork with Orca’s where this chat runs them. */
+/** Orca’s /resume, /usage and /fork rows in this app’s words. */
 export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[],
   accountUsage = false,
   fork = false,
   t: Translate = translate
 ): SlashCommandSuggestion[] {
-  const resume: SlashCommandSuggestion = {
-    name: NATIVE_CHAT_RESUME_COMMAND,
-    description: t(
-      'components.native-chat.resumeCommand.description',
-      'Open Agent Session History'
-    ),
-    argumentHint: t('components.native-chat.resumeCommand.argumentHint', '[search]'),
-    orcaOwned: true
-  }
-  if (accountUsage) {
-    commands = [
-      {
-        name: 'usage',
-        description: t(
-          'components.native-chat.usage.description',
-          'Show usage for this chat’s Codex account'
-        ),
-        orcaOwned: true
-      },
-      ...commands.filter((command) => command.name !== 'usage')
-    ]
-  }
-  if (fork) {
-    commands = [
-      {
-        name: 'fork',
-        description: t(
-          'components.native-chat.fork.commandDescription',
-          'Fork this chat from its latest response'
-        ),
-        orcaOwned: true
-      },
-      ...commands.filter((command) => command.name !== 'fork')
-    ]
-  }
-  const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
-  return at === -1
-    ? [...commands, resume]
-    : [...commands.slice(0, at), resume, ...commands.slice(at)]
+  return withNativeChatOrcaCommands(commands, {
+    resume: t('components.native-chat.resumeCommand.description', 'Open Agent Session History'),
+    resumeArgumentHint: t('components.native-chat.resumeCommand.argumentHint', '[search]'),
+    ...(accountUsage
+      ? {
+          usage: t(
+            'components.native-chat.usage.description',
+            'Show usage for this chat’s Codex account'
+          )
+        }
+      : {}),
+    ...(fork
+      ? {
+          fork: t(
+            'components.native-chat.fork.commandDescription',
+            'Fork this chat from its latest response'
+          )
+        }
+      : {})
+  })
 }
 
 /** Parse optional /resume search text using host command syntax; null for other drafts. */

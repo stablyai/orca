@@ -181,6 +181,46 @@ export const CONNECTOR_REACH_COPY: Record<BotAccessConnector, BotAccessCopyId> =
   github: 'reachGitHub'
 }
 
+/** One line of the desktop's access confirm: shorter than a reach line, with no detail under it. */
+export type BotAccessConfirmRow =
+  | { kind: 'computer' }
+  /** Full access: nothing waits for an approval. */
+  | { kind: 'no-approvals' }
+  /** A starting mode this side can't read: it may never ask. */
+  | { kind: 'may-skip-approvals' }
+  /** Ask or Auto: whoever asked answers its prompts. */
+  | { kind: 'approves' }
+  /** Google is on: one row for every area it reaches. */
+  | { kind: 'google' }
+  | { kind: 'connector'; connector: BotAccessConnector }
+
+/** The access confirm's tone and rows, at most four. `high` (red) when the setup reaches far: Full
+ *  access, a starting mode this side can't read (it may never ask), or Google; else `medium` (amber). */
+export function botAccessConfirm(input: {
+  permission: BotStartingPermission
+  connector: BotAccessConnector
+  google: boolean
+}): { tone: 'high' | 'medium'; rows: BotAccessConfirmRow[] } {
+  const { mode } = input.permission
+  const tone = mode === 'full-access' || mode === null || input.google ? 'high' : 'medium'
+  return {
+    tone,
+    rows: [
+      { kind: 'computer' },
+      {
+        kind:
+          mode === 'full-access'
+            ? 'no-approvals'
+            : mode === null
+              ? 'may-skip-approvals'
+              : 'approves'
+      },
+      ...(input.google ? [{ kind: 'google' as const }] : []),
+      { kind: 'connector', connector: input.connector }
+    ]
+  }
+}
+
 export type BotAccessFix = 'only-me' | 'google-off' | 'ask-for-approval'
 
 export type BotAccessAdvice = {

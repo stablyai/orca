@@ -138,10 +138,7 @@ export function ArtifactsPageEmptyState({
           className="mt-1"
           onClick={onOpenArtifactsSettings}
         >
-          {t(
-            'auto.components.artifacts.ArtifactsPage.openArtifactsSettings',
-            'Open Settings → Artifacts'
-          )}
+          {t('auto.components.artifacts.ArtifactsPage.openArtifactsSettings', 'Artifact settings')}
         </Button>
       ) : null}
       {hasMore ? (

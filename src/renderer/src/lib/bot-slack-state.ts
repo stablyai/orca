@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import {
   BOT_SLACK_DESKTOP_ERRORS,
+  slackTeamState,
   type ConnectorBotSlackState,
   type ConnectorBotSlackStateResponse
 } from '../../../shared/connector-bot-slack-contract'
@@ -15,23 +16,8 @@ export type BotSlackView =
   | { status: 'ready'; slack: ConnectorBotSlackStateResponse }
   | { status: 'failed'; error: string }
 
-/** The bot's Slack in one workspace; with no team, its first. An older cloud lists no teams. */
-export function slackTeamState(
-  slack: ConnectorBotSlackStateResponse,
-  teamId: string | undefined
-): ConnectorBotSlackState {
-  if (teamId === undefined) {
-    return slack
-  }
-  const listed = slack.teams?.find((team) => 'teamId' in team && team.teamId === teamId)
-  return (
-    listed ??
-    ('teamId' in slack && slack.teamId === teamId ? slack : { state: 'not_created' as const })
-  )
-}
+export { slackTeamState }
 
-// An install begun and not done yet. An update needed is followed only once the owner starts it.
-// An app waiting for its install, or an installed one whose identity change waits on approval.
 const awaitsInstall = (slack: ConnectorBotSlackState): boolean =>
   slack.state === 'created' || (slack.state === 'installed' && slack.postAsPending !== undefined)
 
@@ -135,6 +121,7 @@ function follow(bot: BotRef, returnUrl: string | null): () => void {
     const until = Date.now() + INSTALL_POLL_FOR_MS
     let timer: ReturnType<typeof setTimeout> | undefined
     let reading = false
+    let again = false
     const check = (): void => {
       // A poll stopped and restarted meanwhile is a new one; this one ends.
       if (polls.get(key) !== started) {
@@ -147,13 +134,20 @@ function follow(bot: BotRef, returnUrl: string | null): () => void {
         returns.stop()
         return
       }
+      // A return during a read may postdate what that read sees, so it reads again once it ends.
       if (reading) {
+        again = true
         return
       }
       clearTimeout(timer)
       reading = true
       void refreshBotSlack(bot, true).then(() => {
         reading = false
+        if (again) {
+          again = false
+          check()
+          return
+        }
         timer = setTimeout(check, returns.delay(INSTALL_POLL_MS))
       })
     }

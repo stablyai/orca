@@ -50,36 +50,37 @@ export const GOOGLE_FILES_METHODS = [
     name: 'google.drive.search',
     permission: 'workspace',
     params: DriveSearchParams,
-    handler: async (params, context) => searchDrive(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      searchDrive(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.drive.list',
     permission: 'workspace',
     params: DriveListParams,
     handler: async (params, context) =>
-      searchDrive(googleApiForCaller(params, context), { ...params, in: params.folder })
+      searchDrive(await googleApiForCaller(params, context), { ...params, in: params.folder })
   }),
   defineMethod({
     name: 'google.drive.read',
     permission: 'workspace',
     params: DriveReadParams,
-    handler: async (params, context) => readDrive(googleApiForCaller(params, context), params)
+    handler: async (params, context) => readDrive(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.drive.download',
     permission: 'workspace',
     params: DriveDownloadParams,
     handler: async (params, context) =>
-      downloadDrive(googleApiForCaller(params, context), params.ref)
+      downloadDrive(await googleApiForCaller(params, context), params.ref)
   }),
   defineMethod({
     name: 'google.drive.upload',
     permission: 'workspace',
     params: DriveUploadParams,
     handler: async (params, context) =>
-      uploadDrive(googleApiForCaller(params, context), {
+      uploadDrive(await googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
@@ -87,64 +88,64 @@ export const GOOGLE_FILES_METHODS = [
     permission: 'workspace',
     params: DriveMkdirParams,
     handler: async (params, context) =>
-      makeFolder(googleApiForCaller(params, context), {
+      makeFolder(await googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
     name: 'google.drive.move',
     permission: 'workspace',
     params: DriveMoveParams,
-    handler: async (params, context) => moveDrive(googleApiForCaller(params, context), params)
+    handler: async (params, context) => moveDrive(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.drive.share',
     permission: 'workspace',
     params: DriveShareParams,
     handler: async (params, context) =>
-      shareDrive(googleApiForCaller(params, context), {
+      shareDrive(await googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
     name: 'google.docs.read',
     permission: 'workspace',
     params: DocsReadParams,
-    handler: async (params, context) => readDoc(googleApiForCaller(params, context), params)
+    handler: async (params, context) => readDoc(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.docs.create',
     permission: 'workspace',
     params: DocsCreateParams,
     handler: async (params, context) =>
-      createDoc(googleApiForCaller(params, context), {
+      createDoc(await googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
     name: 'google.docs.append',
     permission: 'workspace',
     params: DocsAppendParams,
-    handler: async (params, context) => appendDoc(googleApiForCaller(params, context), params)
+    handler: async (params, context) => appendDoc(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.docs.replace',
     permission: 'workspace',
     params: DocsReplaceParams,
-    handler: async (params, context) => replaceInDoc(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      replaceInDoc(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.docs.comment',
     permission: 'workspace',
     params: DocsCommentParams,
     handler: async (params, context) =>
-      commentOnDoc(googleApiForCaller(params, context), {
+      commentOnDoc(await googleApiForCaller(params, context), {
         ...params,
-        text:
-          (await attributedGoogleText(params.text, params.callerSessionId, context)) ?? params.text
+        text: (await attributedGoogleText(params.text, params, context)) ?? params.text
       })
   }),
   defineMethod({
@@ -152,30 +153,33 @@ export const GOOGLE_FILES_METHODS = [
     permission: 'workspace',
     params: SheetsCreateParams,
     handler: async (params, context) =>
-      createSheet(googleApiForCaller(params, context), params.title)
+      createSheet(await googleApiForCaller(params, context), params.title)
   }),
   defineMethod({
     name: 'google.sheets.read',
     permission: 'workspace',
     params: SheetsReadParams,
-    handler: async (params, context) => readSheet(googleApiForCaller(params, context), params)
+    handler: async (params, context) => readSheet(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.sheets.write',
     permission: 'workspace',
     params: SheetsWriteParams,
-    handler: async (params, context) => writeSheet(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      writeSheet(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.sheets.append',
     permission: 'workspace',
     params: SheetsAppendParams,
-    handler: async (params, context) => appendSheet(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      appendSheet(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.sheets.upsert',
     permission: 'workspace',
     params: SheetsUpsertParams,
-    handler: async (params, context) => upsertSheet(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      upsertSheet(await googleApiForCaller(params, context), params)
   })
 ] as const

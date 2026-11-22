@@ -233,7 +233,7 @@ export function SettingsSidebar({
       style={leftSidebarStyle}
     >
       {/* Same 48px height as SettingsHeader so both bottom borders meet in one line. */}
-      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-border px-3">
+      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-divider px-3">
         <Button
           variant="ghost"
           size="sm"
@@ -273,7 +273,7 @@ export function SettingsSidebar({
       ) : null}
 
       {!isSearching && showSetupGuideTopRow ? (
-        <div className="border-b border-worktree-sidebar-border px-3 py-3">
+        <div className="border-b border-worktree-sidebar-divider px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
             setupActive={setupActive}

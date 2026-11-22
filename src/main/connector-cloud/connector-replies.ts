@@ -17,6 +17,7 @@ import { connectorReviewText } from '../../shared/connector-review-text'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'
+import { slackBotPostBody, slackReplyBody } from './connector-slack-text'
 
 const REPLY_ATTEMPTS = 3
 // A longer Retry-After fails the reply rather than holding the agent's command.
@@ -34,8 +35,9 @@ export type ConnectorReplyBody = {
   answerDeliveryId?: string
 }
 
-/** For a cloud that takes no review. */
-export function foldConnectorReview(body: ConnectorReplyBody): ConnectorReplyBody {
+/** For a cloud that takes no review; Slack's notes are scrubbed before they join the text. */
+export function foldConnectorReview(written: ConnectorReplyBody): ConnectorReplyBody {
+  const body = slackReplyBody(written)
   const { review, ...rest } = body
   return review ? { ...rest, text: connectorReviewText(body.text, review) } : body
 }
@@ -71,10 +73,23 @@ export function postConnectorReply(
 ): Promise<ConnectorResult<ConnectorReplyResponse>> {
   return postWithRetries(
     transport,
-    { path: CONNECTOR_PATHS.replies, body: { v: 1, ...body }, schema: ConnectorReplyResponse },
+    {
+      path: CONNECTOR_PATHS.replies,
+      body: { v: 1, ...slackReplyBody(body) },
+      schema: ConnectorReplyResponse
+    },
     signal,
     random
   )
+}
+
+/** The reply outbox's drain while the cloud's hello leaves replies.outbox out: one /replies post,
+ *  retried by the outbox itself. It carries v like every other replies body. */
+export function postConnectorOutboxReply(
+  transport: ConnectorTransport,
+  body: ConnectorReplyBody
+): Promise<ConnectorResult<ConnectorReplyResponse>> {
+  return transport.call(CONNECTOR_PATHS.replies, { v: 1, ...body }, ConnectorReplyResponse)
 }
 
 /** A message a bot posts on its own, in a Slack channel or as a Linear issue comment; one postId posts once. */
@@ -88,10 +103,11 @@ export type ConnectorBotPostBody =
 export async function postConnectorBotMessage(
   transport: ConnectorTransport,
   botId: string,
-  body: ConnectorBotPostBody,
+  written: ConnectorBotPostBody,
   signal: AbortSignal,
   random: () => number = Math.random
 ): Promise<ConnectorResult<ConnectorBotPostAnswer>> {
+  const body = slackBotPostBody(written)
   if ('ref' in body) {
     // The actions route's post, queued once per postId as the bot's other posts are.
     const { postId, ref, text, turnFor } = body

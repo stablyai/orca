@@ -121,9 +121,9 @@ describe('installPluginFromLocalPath', () => {
       installPluginFromLocalPath({ pluginsDir, sourcePath: secondSource, hostVersion: '1.4.0' })
     ])
     expect(results.every((result) => result.ok)).toBe(true)
-    const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
-      plugins: Record<string, unknown>
-    }
+    const lock: { plugins: Record<string, unknown> } = JSON.parse(
+      await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
+    )
     expect(Object.keys(lock.plugins).sort()).toEqual(['samples.first', 'samples.second'])
   })
 })

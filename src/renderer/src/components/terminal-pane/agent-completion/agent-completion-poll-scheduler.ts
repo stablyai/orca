@@ -42,10 +42,26 @@ export function createAgentCompletionPollScheduler(args: {
     )
   }
 
+  function isPaneQuiet(now: number): boolean {
+    return (
+      state.lastPaneActivityAt === null ||
+      now - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS
+    )
+  }
+
   function currentPollTier(): PollCadenceTier {
     const ptyId = options.getPtyId()
     if (ptyId && options.isRemotePtyId?.(ptyId) === true) {
       return 'hidden'
+    }
+    const now = Date.now()
+    // An agent idling at its prompt changes nothing until it prints; a pending exit still confirms fast.
+    if (
+      (state.lastForegroundAgent || state.hasAgentRunEvidence) &&
+      state.pendingProcessExit === null &&
+      isPaneQuiet(now)
+    ) {
+      return 'quiet-agent'
     }
     if (options.shouldPollProcessCadence?.() === false) {
       return 'hidden'
@@ -56,11 +72,7 @@ export function createAgentCompletionPollScheduler(args: {
     if (state.hasAgentRunEvidence) {
       return 'idle'
     }
-    if (
-      options.isProcessInspectionCostly?.() === true &&
-      (state.lastPaneActivityAt === null ||
-        Date.now() - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
-    ) {
+    if (options.isProcessInspectionCostly?.() === true && isPaneQuiet(now)) {
       return 'no-evidence'
     }
     return 'idle'
@@ -92,9 +104,7 @@ export function createAgentCompletionPollScheduler(args: {
     const now = Date.now()
     // Align only genuinely idle panes; agent activity retains the exact interval and phase.
     const isIdlePane =
-      state.lastForegroundAgent === null &&
-      (state.lastPaneActivityAt === null ||
-        now - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
+      tier === 'quiet-agent' || (state.lastForegroundAgent === null && isPaneQuiet(now))
     const interval = nextCadenceInspectionDelayMs({
       baseMs: backoff,
       hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,

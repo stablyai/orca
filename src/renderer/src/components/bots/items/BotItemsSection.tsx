@@ -7,11 +7,12 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import {
   BOT_ITEM_NO_FILTER,
-  type BotItemChatChoice,
+  isBotItemFilterOn,
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { BotItemsList } from './BotItemsList'
+import { BotItemsLoading } from './BotItemsLoading'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import type { BotItemsShownList } from './use-bot-items-shown-list'
 import type { BotNeedsYouAsks } from '../BotNeedsYouSection'
@@ -29,7 +30,6 @@ const NO_GROUPS: BotItemGroups = {
 export function BotItemsSection({
   bot,
   list,
-  chats,
   seenEventId,
   filter,
   onFilter,
@@ -39,11 +39,11 @@ export function BotItemsSection({
   botRead,
   asks,
   offline,
-  focusFallback
+  focusFallback,
+  scroller
 }: {
   bot: Bot
   list: BotItemsShownList
-  chats: readonly BotItemChatChoice[]
   /** Null until the first read says where the seen mark was. */
   seenEventId: string | null
   filter: BotItemFilter
@@ -52,31 +52,30 @@ export function BotItemsSection({
   /** The row Back returns to: shown, focused and scrolled to once. */
   focusUid: string | null
   onOpen: (item: BotItem) => void
-  /** The bot's own item read: `unsupported` for a host without items, which says nothing of them. */
+  /** The bot's own item read. */
   botRead: { state: BotHostReadState; retry: () => void }
-  /** Orca's asks the filter keeps; they lead Needs you whatever the item read says. */
+  /** Orca's asks; they lead Needs you whatever the item read says. */
   asks: BotNeedsYouAsks
   offline: boolean
   focusFallback: React.RefObject<HTMLElement | null>
+  /** The panel's scroller, for windowing long groups. */
+  scroller?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
-  const { chatRead, items, shown, staleDays } = list
+  const { items, shown, staleDays } = list
   // Rows wait for the seen mark as the tab opened, so none flashes as changed.
   const read = seenEventId === null ? null : list.read
   const groups = read ? list.groups : NO_GROUPS
-  const filtered = filter.chatId !== null || filter.needsYou
+  const filtered = isBotItemFilterOn(filter)
   const asking = asks.needs.length + asks.stoppedForSignIn.length > 0
   // Every message here speaks for items only; the asks above it stand on their own.
   const itemsNote = (): React.ReactNode => {
     if (!read) {
-      if (botRead.state === 'unsupported') {
-        return null
-      }
-      const chatFailed = filter.chatId !== null && chatRead.failed
-      return botRead.state === 'failed' || chatFailed ? (
-        <BotItemsReadFailed onRetry={chatFailed ? chatRead.retry : botRead.retry} />
+      return botRead.state === 'failed' ? (
+        <BotItemsReadFailed onRetry={botRead.retry} />
       ) : (
-        <BotItemsLoading />
+        // Needs you shows only for counted asks; runs a sign-in stopped, alone, leave it out.
+        <BotItemsLoading afterAsks={asks.needs.length > 0} />
       )
     }
     if (items.length === 0 && !filtered) {
@@ -107,7 +106,7 @@ export function BotItemsSection({
     }
     if (filtered) {
       return shown.length === 0 ? (
-        <FilteredEmpty chats={chats} filter={filter} onFilter={onFilter} />
+        <FilteredEmpty onClear={() => onFilter(BOT_ITEM_NO_FILTER)} />
       ) : null
     }
     return groups.needs_you.length === 0 && groups.working.length === 0 ? (
@@ -118,10 +117,6 @@ export function BotItemsSection({
   }
   return (
     <>
-      {/* A chat's re-read failed: its last read stays up, saying so, with Retry. */}
-      {read && filter.chatId !== null && chatRead.failed ? (
-        <BotItemsReadFailed stale onRetry={chatRead.retry} />
-      ) : null}
       {/* Mounted in every read state, so an ask keeps its place and focus as items arrive. */}
       <BotItemsList
         bot={bot}
@@ -136,46 +131,22 @@ export function BotItemsSection({
         asks={asks}
         offline={offline}
         focusFallback={focusFallback}
+        scroller={scroller}
       />
       {itemsNote()}
     </>
   )
 }
 
-function FilteredEmpty({
-  chats,
-  filter,
-  onFilter
-}: {
-  chats: readonly BotItemChatChoice[]
-  filter: BotItemFilter
-  onFilter: (filter: BotItemFilter) => void
-}): React.JSX.Element {
+/** Needs you only, with nothing needing the owner. */
+function FilteredEmpty({ onClear }: { onClear: () => void }): React.JSX.Element {
   const t = useTranslate()
-  const chat = chats.find((entry) => entry.chatId === filter.chatId)
-  const chatName =
-    chat?.kind === 'home' ? t('bots.items.homeChat', 'Home Chat') : (chat?.title ?? '')
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center text-xs text-muted-foreground">
-      {filter.needsYou
-        ? chat
-          ? t('bots.items.empty.chatNeedsYou', 'Nothing in {{chat}} needs you.', {
-              chat: chatName
-            })
-          : t('bots.items.empty.needsYou', 'Nothing needs you.')
-        : t('bots.items.empty.filtered', 'No items match.')}
-      <Button variant="outline" size="xs" onClick={() => onFilter(BOT_ITEM_NO_FILTER)}>
+      {t('bots.items.empty.needsYou', 'Nothing needs you.')}
+      <Button variant="outline" size="xs" onClick={onClear}>
         {t('bots.items.filter.clearAll', 'Clear filters')}
       </Button>
     </div>
-  )
-}
-
-export function BotItemsLoading(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-      {t('bots.items.loading', 'Loading items…')}
-    </p>
   )
 }

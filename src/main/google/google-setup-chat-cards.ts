@@ -130,17 +130,19 @@ export function rewriteGoogleSetupWaitingCard(
   writeInChat(chatSessionId, googleSetupCardBody(stamped ?? card), 'google-setup')
 }
 
-/** Writes the cards a change calls for into the bot's chat; a failed write is logged, never thrown. */
+/** Writes the cards a change calls for into the bot's chat and returns them; a failed write is
+ *  logged, never thrown. */
 export function writeGoogleSetupCards(
   chatSessionId: string | undefined,
   prev: GoogleSetupRun | null,
   next: GoogleSetupRun
-): void {
+): GoogleSetupCardRef[] {
   const due = googleSetupCardsDue(prev, next)
   if (due.length === 0) {
-    return
+    return []
   }
   for (const ref of googleSetupRuns().stampCards(next.botId, due)) {
     writeInChat(chatSessionId, googleSetupCardBody(ref), 'google-setup')
   }
+  return due
 }

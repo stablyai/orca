@@ -1,6 +1,7 @@
 import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
+import { SIDEBAR_REPO_ICON_METHODS } from './sidebar-inputs/sidebar-repo-icons'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
@@ -18,6 +19,7 @@ import { BROWSER_CORE_METHODS } from './browser/browser-core'
 import { BROWSER_IDENTITY_METHODS } from './browser/browser-identity-rpc'
 import { BROWSER_EXTRA_METHODS } from './browser/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser/browser-screencast'
+import { BROWSER_GRAB_METHODS } from './browser/browser-grab'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser/browser-client-host'
 import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from './browser/desktop-browser-bridge'
 import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser/browser-client-file-channel'
@@ -79,6 +81,7 @@ import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessio
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runtime-install'
+import { AGENT_CLI_UPDATE_METHODS } from './host-management/agent-cli-update'
 import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
@@ -100,6 +103,7 @@ import { BOT_WORK_METHODS } from './bots-work'
 import { BOT_ITEMS_METHODS } from './bots-items'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
 import { GOOGLE_SETUP_METHODS } from './bots-google-setup'
+import { GOOGLE_SETUP_SAVED_KEY_METHODS } from './bots-google-setup-saved-key'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
@@ -144,6 +148,7 @@ const CORE_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
+  ...AGENT_CLI_UPDATE_METHODS,
   ...AGENT_LAUNCH_METHODS,
   ...AGENT_CONVERSATION_METHODS,
   ...CONNECTOR_METHODS,
@@ -166,6 +171,7 @@ const BOT_RPC_METHODS = [
   ...BOT_ITEMS_METHODS,
   BOT_CONNECTOR_OFFER_METHOD,
   ...GOOGLE_SETUP_METHODS,
+  ...GOOGLE_SETUP_SAVED_KEY_METHODS,
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
@@ -187,6 +193,7 @@ const SERVICE_RPC_METHODS = [
   ...BROWSER_CORE_METHODS,
   ...BROWSER_IDENTITY_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
+  ...BROWSER_GRAB_METHODS,
   ...BROWSER_EXTRA_METHODS,
   ...BROWSER_CLIENT_HOST_METHODS,
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
@@ -246,6 +253,7 @@ const SERVICE_RPC_METHODS = [
   ...MOBILE_PROJECT_SECTIONS_METHODS,
   // Switch point: a window-fed build publishes no sidebar input.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? SIDEBAR_INPUT_METHODS : []),
+  ...SIDEBAR_REPO_ICON_METHODS,
   ...UPDATER_METHODS,
   ...AUTOMATIC_WORK_METHODS
 ] as const

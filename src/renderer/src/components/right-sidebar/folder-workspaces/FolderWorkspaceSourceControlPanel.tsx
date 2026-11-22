@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
@@ -190,7 +191,9 @@ export default function FolderWorkspaceSourceControlPanel() {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const executionHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId)
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
-  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const workspaceLineageByChildKey = useAppStore((state) => state.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((state) => state.worktreeLineageById)
   const repos = useAppStore((state) => state.repos)

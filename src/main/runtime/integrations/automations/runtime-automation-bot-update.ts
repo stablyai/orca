@@ -1,6 +1,5 @@
 // The bot part of an update to a bot's automation: its agent and folder follow the bot, and its
 // rules, places and chosen chat are looked up as on create.
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import type {
   Automation,
   AutomationBotTarget,
@@ -71,9 +70,6 @@ export async function patchBotAutomationUpdate(
       ? botAutomationAgent(patch.bot, bot)
       : botAutomationSetup(current.bot, bot).agent
   assertNoBotOwnedSettings(updates, agent)
-  if (bot && patch.bot) {
-    assertBotAgentRunsOnThisHost(agent)
-  }
   patch.bot &&= await withCheckedBotChat(patch.bot, bot, lookups.botChat, current.bot)
   if (bot) {
     assertBotHearsEventTriggers(lookups.webhooks.hearing(bot), updates.on)

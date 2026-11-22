@@ -7,6 +7,7 @@ import {
   unregisterPersistentWebview,
   webviewRegistry
 } from '@/components/browser-pane/host-guest/webview-registry'
+import { isPageDocumentNavigationStart } from '@/components/browser-pane/host-guest/lifecycle/browser-page-webview-navigation-handlers'
 
 export function attachDocPreviewWebview({
   previewId,
@@ -41,7 +42,13 @@ export function attachDocPreviewWebview({
   webview.style.width = '100%'
   webview.style.height = '100%'
   webview.style.border = 'none'
-  webview.addEventListener('did-start-loading', onLoadStarted)
+  // Why not did-start-loading: it also fires for iframe loads, so lazy frames would re-cover the page.
+  const onNavigationStarted = (event: Electron.DidStartNavigationEvent): void => {
+    if (isPageDocumentNavigationStart(event)) {
+      onLoadStarted()
+    }
+  }
+  webview.addEventListener('did-start-navigation', onNavigationStarted)
   webview.addEventListener('did-stop-loading', onLoadStopped)
   webview.addEventListener('did-fail-load', onLoadFailed)
   // Track both sibling-document navigation and fragment history for Back/Forward.
@@ -59,7 +66,7 @@ export function attachDocPreviewWebview({
   return {
     webview,
     detach: () => {
-      webview.removeEventListener('did-start-loading', onLoadStarted)
+      webview.removeEventListener('did-start-navigation', onNavigationStarted)
       webview.removeEventListener('did-stop-loading', onLoadStopped)
       webview.removeEventListener('did-fail-load', onLoadFailed)
       webview.removeEventListener('did-navigate', onNavigated)

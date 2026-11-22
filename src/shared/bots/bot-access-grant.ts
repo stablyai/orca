@@ -12,6 +12,10 @@ export type BotAccessGrant = {
 export type BotAccessGrantFacts = {
   /** The one person being added; null when several are. */
   person: string | null
+  /** The one person's first name, so a long name can't wrap the confirm's title; null when several. */
+  firstName: string | null
+  /** Everyone being added, by name, in order. */
+  names: string[]
   count: number
   /** The one person's connector identity, when known. */
   identity: string | null
@@ -21,7 +25,15 @@ export function botAccessGrantFacts(grant: BotAccessGrant): BotAccessGrantFacts 
   const one = grant.people.length === 1 ? grant.people[0] : undefined
   return {
     person: one?.name ?? null,
+    firstName: one ? firstName(one.name) : null,
+    names: grant.people.map((person) => person.name),
     count: grant.people.length,
     identity: one?.identity ?? null
   }
+}
+
+/** The first word of a name ("Maximiliana" of "Maximiliana Fernández-Oyelaran"); a one-word name,
+ *  handle or name without spaces stays whole. */
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name
 }

@@ -45,7 +45,11 @@ export type MobileWebShellBlockedVerdict =
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
   | PageRouteRefusalVerdict
 
-export type MobileWebShellReportedFailure = MobileWebShellFailureReason | 'host-profile-unreadable'
+// page-fault fails as itself only after paint, once per build: those bytes rendered, so Try again keeps the cache.
+export type MobileWebShellReportedFailure =
+  | MobileWebShellFailureReason
+  | 'host-profile-unreadable'
+  | 'page-fault'
 
 export type MobileWebShellFailureCause =
   | MobileWebShellReportedFailure
@@ -166,6 +170,10 @@ export type MobileWebShellSessionEvent =
   | { readonly type: 'page-ready-deadline'; readonly flow: number }
   | { readonly type: 'document-load-deadline'; readonly flow: number }
   | { readonly type: 'layout-changed'; readonly wide: boolean }
+  // The app came back from the background: ask the host for a newer build once it answers.
+  | { readonly type: 'app-resumed' }
+  // Every page reading this host's build agreed to reload, and a newer build waits to commit.
+  | { readonly type: 'update-swap' }
 
 // Keep retry/remount latches outside state because they must survive checking/ready replacements.
 export type MobileWebShellSession = {
@@ -203,6 +211,12 @@ export type MobileWebShellSession = {
   readonly requestedCompat: MobileWebBundleCompatManifest | null
   // An open verdict reached this flow's document: from then on it may have talked, so a blocked verdict walls rather than reloads.
   readonly verdicted: boolean
+  // A resume asked for a newer build while the host was not answering; the next open verdict asks.
+  readonly resumeCheckDue?: boolean
+  // Try again after a page fault asks the host before reopening cache, so a fixed build replaces the faulting one.
+  readonly manifestFirst: boolean
+  // The build whose painted page already faulted; a repeat may be a damaged lazy chunk, so it fails as an unopened document.
+  readonly pageFaultBuildId: string | null
   // Stamp effects/results with the incremented flow to reject superseded work.
   readonly flow: number
 }
