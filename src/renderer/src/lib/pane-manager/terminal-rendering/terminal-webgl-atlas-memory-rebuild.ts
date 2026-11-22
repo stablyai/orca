@@ -246,7 +246,8 @@ function resumeWhenWindowShown(): void {
 }
 
 function scheduleRebuild(): void {
-  if (rebuildTimer !== null) {
+  // Parked while the window is hidden: output into a hidden pane must not restart the timer; showing the window does.
+  if (rebuildTimer !== null || stopWatchingWindow) {
     return
   }
   // One timer, set to the earliest due atlas; output arriving later just moves that atlas's time, checked when the timer fires.
@@ -319,11 +320,12 @@ export function terminalWebglAtlasInteractionHoldMs(): number {
   return Math.max(0, lastInteractionAt + ATLAS_REBUILD_QUIET_MS - performance.now())
 }
 
-// Clicks, wheel scrolls and keys anywhere in the window (tab switches, scrolling, the chat composer) count as input too.
+// Clicks, wheel scrolls and keys anywhere in the window (tab switches, scrolling, the chat composer) count as input too, and so do clicks into an embedded browser page, which main reports.
 if (ATLAS_MEMORY_REBUILD_ENABLED && typeof window !== 'undefined' && window.addEventListener) {
   for (const type of ['pointerdown', 'wheel', 'keydown'] as const) {
     window.addEventListener(type, noteTerminalWebglAtlasTyping, { capture: true, passive: true })
   }
+  window.api?.ui?.onBrowserPagePointerDown?.(noteTerminalWebglAtlasTyping)
 }
 
 /** Requests a rebuild of the grown atlas's renderers, at most every 60 s, only after PTY output into that atlas, once it and user input pause. */
