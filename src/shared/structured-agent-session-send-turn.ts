@@ -21,8 +21,9 @@ export type StructuredAgentSessionSendTurn =
   | { kind: 'pending' }
   /** The turn it opened, which no other send went into or could have. */
   | { kind: 'turn'; itemId: string; turn: AgentJournalTurnLifecycle }
-  /** Another send went, or may have gone, into the turn that answered it: their answers can't be told apart. */
-  | { kind: 'shared' }
+  /** Another send went, or may have gone, into the turn that answered it: their answers can't be told
+   *  apart. `turn` is that turn when its row is known. */
+  | { kind: 'shared'; turn?: { itemId: string; turn: AgentJournalTurnLifecycle } }
   /** The agent refused it before any turn: the request failed. */
   | { kind: 'refused' }
   /** It will never have a turn of its own: taken back, or its host stopped before the provider answered. */
@@ -56,7 +57,7 @@ export function structuredAgentSessionSendTurn(
   if (opened) {
     return soleInput(journal, submission, opened.index)
       ? { kind: 'turn', itemId: opened.itemId, turn: opened.turn }
-      : { kind: 'shared' }
+      : { kind: 'shared', turn: { itemId: opened.itemId, turn: opened.turn } }
   }
   switch (submission.dispatchState) {
     case 'rejected':
@@ -67,11 +68,13 @@ export function structuredAgentSessionSendTurn(
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }
     case 'accepted':
       // Answered, yet no ended turn after it names it: it went into a turn another send opened.
-      return planned?.kind === 'turn' ||
-        journal.items.some((item, index) => {
-          const turn = index > sent ? rootTurn(item) : null
-          return turn !== null && turn.state !== 'running'
-        })
+      if (planned?.kind === 'turn') {
+        return { kind: 'shared', ...steeredInto(journal, planned.turnItemId) }
+      }
+      return journal.items.some((item, index) => {
+        const turn = index > sent ? rootTurn(item) : null
+        return turn !== null && turn.state !== 'running'
+      })
         ? { kind: 'shared' }
         : { kind: 'pending' }
     case 'unknown':
@@ -155,6 +158,15 @@ function openedTurn(
     }
   }
   return null
+}
+
+function steeredInto(
+  journal: Pick<AgentJournalSnapshot, 'items'>,
+  itemId: string
+): { turn?: { itemId: string; turn: AgentJournalTurnLifecycle } } {
+  const item = journal.items.find((entry) => entry.itemId === itemId)
+  const turn = item ? rootTurn(item) : null
+  return turn ? { turn: { itemId, turn } } : {}
 }
 
 function rootTurn(item: AgentJournalRenderItem): AgentJournalTurnLifecycle | null {
