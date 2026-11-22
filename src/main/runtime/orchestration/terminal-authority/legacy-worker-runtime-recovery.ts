@@ -26,6 +26,7 @@ import {
   observeWithheldRestartContinue,
   type UnconfirmedWorkerStart
 } from '../workers/turn-stops/unconfirmed-worker-start'
+import { readWorkerPresence } from '../db/worker-presence/worker-presence-store'
 import { redactWorkerTerminalView } from './views/worker-terminal-redaction'
 import {
   describeUnconfirmedStartEvidence,
@@ -212,13 +213,17 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     if (!db) {
       return
     }
+    const before = readWorkerPresence(db, dispatchId)
+    const screen = await this.readUnsubmittedWorkerScreen(handle)
+    const after = readWorkerPresence(db, dispatchId)
+    // Submitted and seen to work or rest during the read: the alert would be stale.
+    if (after?.presence !== before?.presence || after?.generation !== before?.generation) {
+      return
+    }
     observeWithheldRestartContinue(
       db,
       dispatchId,
-      {
-        screen: await this.readUnsubmittedWorkerScreen(handle),
-        evidence: describeWithheldContinue(hold)
-      },
+      { screen, evidence: describeWithheldContinue(hold) },
       this.workerTurnStopReportDeps
     )
   }
