@@ -37,7 +37,7 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
 
 /**
  * Null for a workspace a paired machine hosts, so its load is never attributed here. Terminals follow
- * the repo's host, as before. Chats run here, so only a record stamped with a paired host drops them.
+ * the workspace's host, as before. Chats run here, so they drop only when that host is also the record's stamp.
  */
 export function localSamplePlacement(
   ctx: MergeContext,
@@ -47,7 +47,7 @@ export function localSamplePlacement(
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-  if (chatOnly ? stampedRuntimeHostId(ctx, wt.worktreeId) : runtimeHostId) {
+  if (runtimeHostId && (!chatOnly || stampedRuntimeHostId(ctx, wt.worktreeId))) {
     return null
   }
   return {

@@ -17,9 +17,9 @@ export function registerAgentProcess(
   agentPid = rootPid,
   isLive: () => boolean = () => true
 ): () => void {
-  for (const pid of [rootPid, agentPid]) {
+  // A pid held as a root belongs to an exited run; one held only as a CLI pid may sit under a live root.
+  for (const pid of new Set([rootPid, agentPid])) {
     registrationByRoot.get(pid)?.release()
-    registrationByAgentPid.get(pid)?.release()
   }
   const registration: AgentRegistration = {
     chats: new Set<string>(),

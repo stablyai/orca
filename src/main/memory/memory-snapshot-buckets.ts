@@ -7,7 +7,7 @@ import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-sco
 import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
-  Partial<Pick<Store, 'getFolderWorkspace'>> & {
+  Partial<Pick<Store, 'getFolderWorkspace' | 'getRepos'>> & {
     getProjectGroup?: (id: string) => Pick<ProjectGroup, 'id' | 'name'> | undefined
     getProjectGroups?: () => Pick<ProjectGroup, 'id' | 'name'>[]
   }
@@ -122,8 +122,16 @@ export function createProjectGroupNameLookup(store: MemorySnapshotStore): Projec
 export type RepoNameLookup = (repoId: string) => string | undefined
 
 export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup {
+  // getRepo scans the catalog, so a sample spanning many projects indexes it once instead.
+  let byId: Map<string, string | undefined> | undefined
   const names = new Map<string, string | undefined>()
   return (repoId) => {
+    if (store.getRepos) {
+      byId ??= new Map(
+        store.getRepos().map((repo) => [repo.id, repo.displayName?.trim() || undefined])
+      )
+      return byId.get(repoId)
+    }
     if (!names.has(repoId)) {
       names.set(repoId, store.getRepo(repoId)?.displayName?.trim() || undefined)
     }

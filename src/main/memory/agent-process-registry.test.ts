@@ -44,6 +44,16 @@ describe('agent process registry', () => {
     expect(listAgentProcessRoots()).toEqual([])
   })
 
+  it("keeps a live owner's chat when a new run reuses its exited CLI's pid", () => {
+    const releaseOld = registerAgentProcess(4500, 4501)
+    noteAgentProcessChat(4501, 'old-chat')
+    const releaseNew = registerAgentProcess(4501)
+
+    expect(listAgentProcessRoots()).toEqual([{ pid: 4500, agentSessionId: 'old-chat' }])
+    releaseNew()
+    releaseOld()
+  })
+
   it("never shows the old chat when a new wrapper reuses an exited wrapper's pid", () => {
     const releaseOld = registerAgentProcess(4444, 4300)
     noteAgentProcessChat(4300, 'old-chat')

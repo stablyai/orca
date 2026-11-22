@@ -203,6 +203,33 @@ describe('folder Resource Manager rows', () => {
     ])
   })
 
+  it("keeps this machine's chat after its last terminal closes when a same-id record is stamped with a paired machine", () => {
+    const chat = { agentSessionId: 'chat-6', agent: 'claude', name: null, cpu: 1, memory: 128 }
+    const worktree: Worktree = {
+      ...workspace,
+      id: 'repo-1::/shared',
+      repoId: 'repo-1',
+      hostId: 'runtime:peer'
+    }
+    const chatOnly: WorktreeMemory = {
+      ...oldRow,
+      worktreeId: worktree.id,
+      repoId: 'repo-1',
+      sessions: [],
+      chats: [chat]
+    }
+    const repos = mergeSnapshotAndSessions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+      { worktrees: [chatOnly] } as MemorySnapshot,
+      [],
+      context({ worktreeById: new Map([[worktree.id, worktree]]) })
+    )
+
+    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
+      expect.objectContaining({ worktreeId: 'repo-1::/shared', chats: [chat] })
+    ])
+  })
+
   it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {
     const chat = { agentSessionId: 'chat-4', agent: 'codex', name: null, cpu: 1, memory: 256 }
     const repos = mergeSnapshotAndSessions(
