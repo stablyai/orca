@@ -8,6 +8,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/consta
 import type { Store } from '../loading-store/store'
 import { WindowSession } from './testing/terminal-topology-window-session-fixture'
 import {
+  closeTrackedTopologyStores,
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
@@ -26,7 +27,8 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

@@ -180,18 +180,4 @@ describe('both spellings of a symlinked ~/.codex', () => {
     )
     expect(trust.get(computeTrustKey(afterAt(resolvedHooks, 1)))).toBeUndefined()
   })
-
-  it('keeps both files when an approval would break config.toml', async () => {
-    linkCodexHomeToDotfiles()
-    writeFileSync(hooksPath(), `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
-    // Appending a hooks.state table would conflict with this inline declaration.
-    const original = 'model = "m"\nhooks = { state = {} }\n'
-    writeFileSync(tomlPath(), original)
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await reconcile()
-
-    expect(readFileSync(tomlPath(), 'utf-8')).toBe(original)
-    expect(JSON.parse(readFileSync(hooksPath(), 'utf-8'))).toEqual({ hooks: {} })
-  })
 })

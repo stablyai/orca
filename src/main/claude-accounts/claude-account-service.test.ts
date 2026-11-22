@@ -1,5 +1,7 @@
+import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { PassThrough } from 'node:stream'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/orca-profiles/constants'
@@ -10,6 +12,16 @@ import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude
 
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
+
+const spawnProcess = vi.hoisted(() => vi.fn())
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  spawnProcess
+}))
+vi.mock('../codex-cli/command', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveClaudeCommand: () => 'claude'
+}))
 
 // Selection checks must never reach the real Keychain.
 vi.mock('../macos-keychain/generic-password', async (importOriginal) => ({
@@ -35,15 +47,23 @@ function account(id: string, extra: Partial<ClaudeManagedAccount> = {}): ClaudeM
   }
 }
 
-function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]) {
+function fixture(
+  accounts: ClaudeManagedAccount[] = [account('a'), account('b')],
+  options: { spawnClaude?: boolean; settings?: Partial<GlobalSettings> } = {}
+) {
   const root = mkdtempSync(join(tmpdir(), 'claude-accounts-'))
   roots.push(root)
   const home = (id: string) => join(root, id, 'home')
-  const signIn = (id: string, email: string, organizationUuid?: string) => {
+  const signIn = (
+    id: string,
+    email: string,
+    organizationUuid?: string,
+    organizationName?: string
+  ) => {
     mkdirSync(home(id), { recursive: true })
     writeFileSync(
       join(home(id), '.claude.json'),
-      JSON.stringify({ oauthAccount: { emailAddress: email, organizationUuid } })
+      JSON.stringify({ oauthAccount: { emailAddress: email, organizationUuid, organizationName } })
     )
   }
   const covered = new Set<string>()
@@ -51,7 +71,8 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     ...getDefaultSettings('/tmp'),
     claudeManagedAccounts: accounts,
     activeClaudeManagedAccountId: 'a',
-    activeClaudeManagedAccountIdsByRuntime: { host: 'a', wsl: {} }
+    activeClaudeManagedAccountIdsByRuntime: { host: 'a', wsl: {} },
+    ...options.settings
   }
   const runtimeAuth = {
     router: {
@@ -90,7 +111,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       refreshForClaudeAccountChange: vi.fn().mockResolvedValue(undefined)
     },
     runtimeAuth,
-    runLogin
+    options.spawnClaude ? undefined : runLogin
   )
   return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
@@ -197,6 +218,54 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
+  it('refuses to sign a saved account in again as a login another account already has', async () => {
+    const f = fixture()
+    f.signIn('a', 'a@example.test')
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'a@example.test')
+      return ''
+    })
+    await expect(f.service.reauthenticateAccount('b')).rejects.toThrow(
+      'You signed in as a@example.test, which another Claude account already uses. Sign in again as b@example.test.'
+    )
+    expect(f.settings().claudeManagedAccounts.find((entry) => entry.id === 'b')).toMatchObject({
+      email: 'b@example.test'
+    })
+    expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
+  })
+
+  it('names the organization when a refused sign-in again shares the saved email', async () => {
+    const f = fixture([
+      account('a', { email: 'x@example.test', organizationUuid: 'team' }),
+      account('b', {
+        email: 'x@example.test',
+        organizationUuid: 'personal',
+        organizationName: 'Personal'
+      })
+    ])
+    f.signIn('a', 'x@example.test', 'team', 'Team')
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'x@example.test', 'team', 'Team')
+      return ''
+    })
+    await expect(f.service.reauthenticateAccount('b')).rejects.toThrow(
+      'You signed in as x@example.test (Team), which another Claude account already uses. Sign in again as x@example.test (Personal).'
+    )
+  })
+
+  it('signs a saved account in again as its own login while another folder holds it', async () => {
+    const f = fixture()
+    f.signIn('a', 'b@example.test')
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'B@example.test')
+      return ''
+    })
+    await f.service.reauthenticateAccount('b')
+    expect(f.settings().claudeManagedAccounts.find((entry) => entry.id === 'b')).toMatchObject({
+      email: 'B@example.test'
+    })
+  })
+
   it('refuses to select an account that has its identity but no login to start Claude with', async () => {
     const f = fixture()
     f.signIn('b', 'b@example.test')
@@ -210,5 +279,32 @@ describe('ClaudeAccountService', () => {
       JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
     )
     await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
+  })
+
+  it('signs Claude in through the proxy configured in settings', async () => {
+    const f = fixture([], {
+      spawnClaude: true,
+      settings: { httpProxyUrl: 'http://127.0.0.1:7890', httpProxyBypassRules: 'corp.test' }
+    })
+    // Claude's token exchange after the browser callback only reaches Anthropic through the proxy.
+    spawnProcess.mockImplementationOnce(({ env }: { env: NodeJS.ProcessEnv }) => {
+      const child = Object.assign(new EventEmitter(), {
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        stdin: null,
+        kill: vi.fn()
+      })
+      setImmediate(() => {
+        if (env.HTTPS_PROXY === 'http://127.0.0.1:7890' && env.NO_PROXY === 'corp.test') {
+          f.signIn(newId(f), 'proxied@example.test')
+        }
+        child.emit('exit', 0)
+        child.emit('close', 0)
+      })
+      return child
+    })
+    await expect(f.service.addAccount({ runtime: 'host' })).resolves.toMatchObject({
+      accounts: [expect.objectContaining({ email: 'proxied@example.test' })]
+    })
   })
 })

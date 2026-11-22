@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -49,7 +50,15 @@ const record = (
   hookDecision: ClaudeToolRecord['hookDecision'] = null
 ): ClaudeToolRecord => ({ hookDecision, result })
 
-function setup(options: { canAnswer?: boolean } = {}) {
+// A helper's calls are recorded only in its own transcript beside the session's, in host separators.
+const helperTranscript = (helper: string) =>
+  join('/t/session', 'subagents', `agent-${helper}.jsonl`)
+// The screen while a held helper prompt waits: Claude draws no dialog for it (probe 2026-11-19, 2.1.326).
+const LEAD_WAITING = ['⏺ Agent(Run rm check)', '✻ Waiting for 1 background agent to finish', '❯']
+
+function setup(
+  options: { canAnswer?: boolean; coordinatorApprovals?: boolean; waitingForMail?: boolean } = {}
+) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
     objective: 'approvals',
@@ -62,16 +71,23 @@ function setup(options: { canAnswer?: boolean } = {}) {
     lines: readonly string[] | null
     incarnation: string
     record: ClaudeToolRecord | null
-  } = { lines: DIALOG, incarnation: 'run-1', record: null }
+    /** Keyed by transcript path and tool call. */
+    helperRecords: Map<string, ClaudeToolRecord>
+  } = { lines: DIALOG, incarnation: 'run-1', record: null, helperRecords: new Map() }
   const timers: { run: () => void; cancelled: boolean }[] = []
   const holds = new TerminalWorkerApprovalHolds({
     notify: vi.fn(),
+    getDb: () => db,
+    isWaitingForMail: () => options.waitingForMail ?? false,
+    coordinatorApprovals: () => options.coordinatorApprovals ?? true,
     resolveWorker: () => ({ db, handle: HANDLE, dispatch }),
     canAnswerPane: () => options.canAnswer ?? true,
     processIncarnation: () => screen.incarnation,
     readScreen: () => screen.lines,
     readToolRecord: async ({ transcriptPath, toolUseId }) =>
-      transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1' ? screen.record : null,
+      transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1'
+        ? screen.record
+        : (screen.helperRecords.get(`${transcriptPath}|${toolUseId}`) ?? null),
     now: () => Date.UTC(2026, 10, 10, 12, 0, 0),
     setTimer: (run) => {
       const timer = { run, cancelled: false }
@@ -100,12 +116,17 @@ function setup(options: { canAnswer?: boolean } = {}) {
       const { approval } = JSON.parse(message.payload ?? '{}')
       return { state: approval.state, ...approval.outcome }
     })
-  return { db, dispatch, screen, holds, tick, closing, closings, closedWith }
+  const escalations = () =>
+    db
+      .getUnreadRunMailbox(run.id, 100)
+      .filter((message) => message.subject === 'Worker is waiting for permission')
+  return { db, dispatch, screen, holds, tick, closing, closings, closedWith, escalations }
 }
 
 function hook(
   toolUseId: string | undefined,
-  onWrite?: (verdict: ClaudePermissionVerdict | null) => void
+  onWrite?: (verdict: ClaudePermissionVerdict | null) => void,
+  helper?: string
 ) {
   const replies: (ClaudePermissionVerdict | null)[] = []
   const ends: ((why: ClaudePermissionHoldEnd) => void)[] = []
@@ -114,7 +135,14 @@ function hook(
     connectionId: null,
     hookEventName: 'PermissionRequest',
     ...(toolUseId ? { toolUseId } : {}),
-    payload: { state: 'blocked', prompt: '', agentType: 'claude', toolName: 'Bash' },
+    ...(helper ? { toolAgentId: helper, toolAgentType: 'general-purpose' } : {}),
+    payload: {
+      state: 'blocked',
+      prompt: '',
+      agentType: 'claude',
+      toolName: 'Bash',
+      ...(helper ? { toolInput: `rm ${toolUseId}.txt` } : {})
+    },
     providerSession: { key: 'session_id', id: 'session-1', transcriptPath: '/t/session.jsonl' }
   }
   return {
@@ -390,6 +418,122 @@ describe('terminal worker approval holds', () => {
       expect.stringContaining(
         `Closed without an answer Orca can name: approval ${approval.approvalId}`
       )
+    ])
+  })
+})
+
+describe("terminal worker approval holds for a helper agent's prompt", () => {
+  const HELPER = 'a28760f4d40f595de'
+  const OTHER_HELPER = 'a5a826dca766863e5'
+  const helperAsks = (
+    ctx: ReturnType<typeof setup>,
+    toolUseId: string,
+    onWrite?: (verdict: ClaudePermissionVerdict | null) => void,
+    helper = HELPER
+  ) => {
+    const asked = hook(toolUseId, onWrite, helper)
+    expect(ctx.holds.admit(asked.request)).toBe(true)
+    return asked
+  }
+  const cardOf = (ctx: ReturnType<typeof setup>, index: number) => {
+    const message = ctx.escalations()[index]
+    return { body: message.body, approval: JSON.parse(message.payload ?? '{}').approval }
+  }
+  const deniedInHelperTranscript =
+    (ctx: ReturnType<typeof setup>, toolUseId: string, helper = HELPER) =>
+    () =>
+      ctx.screen.helperRecords.set(`${helperTranscript(helper)}|${toolUseId}`, record(OURS, 'deny'))
+
+  it("cards a helper's prompt at once and denies it without a dialog, claimed from the helper's transcript", async () => {
+    const ctx = setup()
+    ctx.screen.lines = LEAD_WAITING
+    const asked = helperAsks(ctx, 'tool-2', deniedInHelperTranscript(ctx, 'tool-2'))
+
+    const { body, approval } = cardOf(ctx, 0)
+    expect(approval).toMatchObject({
+      fromHelper: true,
+      summary: {
+        title: "Allow Bash? · from the worker's general-purpose helper",
+        detail: 'rm tool-2.txt'
+      }
+    })
+    expect(body).toContain(
+      "A helper agent inside the worker asked, so the worker's terminal shows it only if nobody answers in Orca within 2 minutes."
+    )
+    expect(body).not.toContain('whoever answers first wins')
+    expect(await deny(ctx, approval.approvalId)).toMatchObject({ ok: true })
+    expect(asked.replies).toEqual([{ behavior: 'deny', message: REASON }])
+  })
+
+  it('gives two helpers prompting at once a card each, each answered and claimed from its own transcript', async () => {
+    const ctx = setup()
+    ctx.screen.lines = LEAD_WAITING
+    const first = helperAsks(ctx, 'tool-2', deniedInHelperTranscript(ctx, 'tool-2'))
+    const second = helperAsks(
+      ctx,
+      'tool-3',
+      deniedInHelperTranscript(ctx, 'tool-3', OTHER_HELPER),
+      OTHER_HELPER
+    )
+
+    expect(ctx.escalations()).toHaveLength(2)
+    const cardFor = (detail: string) =>
+      [0, 1]
+        .map((index) => cardOf(ctx, index).approval)
+        .find((card) => card.summary.detail === detail)
+    expect(await deny(ctx, cardFor('rm tool-3.txt').approvalId)).toMatchObject({ ok: true })
+    expect(first.replies).toEqual([])
+    expect(second.replies).toEqual([{ behavior: 'deny', message: REASON }])
+    expect(await deny(ctx, cardFor('rm tool-2.txt').approvalId)).toMatchObject({ ok: true })
+    expect(first.replies).toEqual([{ behavior: 'deny', message: REASON }])
+  })
+
+  it("keeps the lead's on-screen prompt answerable while a helper's is held", async () => {
+    const ctx = setup()
+    const lead = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      ctx.screen.record = record(OURS, 'deny')
+    })
+    const leadId = await opened(ctx, lead)
+    const helper = helperAsks(ctx, 'tool-2', deniedInHelperTranscript(ctx, 'tool-2'))
+
+    expect(await deny(ctx, leadId)).toMatchObject({ ok: true })
+    expect(await deny(ctx, cardOf(ctx, 0).approval.approvalId)).toMatchObject({ ok: true })
+    expect(lead.replies).toEqual([{ behavior: 'deny', message: REASON }])
+    expect(helper.replies).toEqual([{ behavior: 'deny', message: REASON }])
+  })
+
+  it("names a lead's stop by a held helper's card, but leaves an unheld dialog on screen to its own report", async () => {
+    const ctx = setup()
+    ctx.screen.lines = LEAD_WAITING
+    helperAsks(ctx, 'tool-2')
+    const helperId = cardOf(ctx, 0).approval.approvalId
+
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toMatchObject({
+      approvalId: helperId
+    })
+    ctx.screen.lines = DIALOG
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toBeNull()
+  })
+
+  it("leaves a helper's prompt to the worker's terminal while its lead waits on mail", () => {
+    const ctx = setup({ waitingForMail: true })
+    ctx.screen.lines = LEAD_WAITING
+    const asked = helperAsks(ctx, 'tool-2')
+
+    expect(ctx.escalations()).toEqual([])
+    expect(asked.replies).toEqual([null])
+  })
+
+  it("hands a helper's prompt to the worker's terminal when Orca's hold ends unanswered", async () => {
+    const ctx = setup()
+    ctx.screen.lines = LEAD_WAITING
+    const asked = helperAsks(ctx, 'tool-2')
+    asked.end('budget')
+    await ctx.tick(40)
+
+    expect(ctx.closing()).toEqual([
+      expect.stringContaining("Closed for Orca; a person must answer it in the worker's terminal")
     ])
   })
 })

@@ -14,7 +14,7 @@ import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
-import { probeWslActiveOrcad, wslOrcadActiveProbeCommand } from './wsl-orcad-active-probe'
+import { probeWslActiveOrcad } from './wsl-orcad-active-probe'
 
 const mockExec = vi.mocked(execCommand)
 const VERSION = '0.1.0+aa'
@@ -65,14 +65,19 @@ beforeEach(() => {
 })
 
 describe('probeWslActiveOrcad', () => {
-  it('reads liveness, readiness and the pid in one exec, in that order', async () => {
+  it('returns the ready server and its process ID', async () => {
     mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n`)
     await expect(probe()).resolves.toMatchObject({ readiness: { runtimeId: 'r1' }, pid: 4242 })
-    expect(mockExec).toHaveBeenCalledOnce()
-    const command = wslOrcadActiveProbeCommand(context, VERSION)
-    const at = (needle: string) => command.lastIndexOf(needle)
-    expect(at('orcad_alive')).toBeLessThan(at('head -c'))
-    expect(at('head -c')).toBeLessThan(at("cat '/home/u/.orca-remote/orcad-0.1.0+aa/.orcad-pid'"))
+  })
+
+  it('tells a server started without the WSL host marker from one started with it', async () => {
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n__ORCA_OTHER_LAUNCH__\n`)
+    await expect(probe()).resolves.toMatchObject({ pid: 4242, launch: 'other' })
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n__ORCA_WSL_HOST_LAUNCH__\n`)
+    await expect(probe()).resolves.toMatchObject({ pid: 4242, launch: 'wsl-host' })
+    // An unreadable environment is unknown, never "other": nothing restarts on a guess.
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n`)
+    await expect(probe()).resolves.toMatchObject({ launch: 'unknown' })
   })
 
   it('judges the answers as the separate probes do', async () => {

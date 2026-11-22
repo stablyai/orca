@@ -16,7 +16,7 @@ export type WslHostOfferDeps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   addWslHost: (args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>
   addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
-  /** Moves the project just added onto the host, and only it: Stage 1 never moves the others. */
+  /** Moves what this add just added onto the host, and only that: Stage 1 never moves the others. */
   moveAddedProject: (offer: WslHostOffer, added: unknown) => void
 }
 
@@ -105,7 +105,7 @@ async function addDistroAsHost(
 }
 
 /**
- * Turns WSL hosts on, adds the distro, adds the project as before, then moves that one project
+ * Turns WSL hosts on, adds the distro, adds the project as before, then moves what that add added
  * onto the host. The distro's other bridge projects stay put. Returns the refusal when the add fails.
  */
 export async function acceptWslHostOffer(
@@ -117,8 +117,26 @@ export async function acceptWslHostOffer(
     return refusal
   }
   const added = await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
-  deps.moveAddedProject(offer, added)
+  const pausedAdd = projectAddedAfterPause(added)
+  if (!pausedAdd) {
+    deps.moveAddedProject(offer, added)
+    return null
+  }
+  // A plain folder or nested repos exist only once the user finishes "Open as Folder" or the
+  // nested review; cancelling either moves nothing.
+  void pausedAdd.then((settled) => {
+    if (settled) {
+      deps.moveAddedProject(offer, settled)
+    }
+  })
   return null
+}
+
+function projectAddedAfterPause(added: unknown): Promise<unknown> | null {
+  if (typeof added !== 'object' || added === null || !('projectAdded' in added)) {
+    return null
+  }
+  return added.projectAdded instanceof Promise ? added.projectAdded : null
 }
 
 /** Adds the project as before, and never offers again. */

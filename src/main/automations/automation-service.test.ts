@@ -18,6 +18,9 @@ import {
   tickAt
 } from './testing/automation-service-tick.test-fixture'
 
+// These tests write times on the host's clock, so the automation lives in the host's zone.
+const HOST_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
@@ -83,7 +86,7 @@ describe('AutomationService', () => {
       projectId: 'r1',
       workspaceMode: 'existing',
       workspaceId: 'wt1',
-      timezone: 'UTC',
+      timezone: HOST_TIMEZONE,
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00').getTime()
     })
@@ -138,7 +141,7 @@ describe('AutomationService', () => {
       projectId: 'r1',
       workspaceMode: 'existing',
       workspaceId: 'wt1',
-      timezone: 'UTC',
+      timezone: HOST_TIMEZONE,
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
@@ -149,7 +152,7 @@ describe('AutomationService', () => {
       projectId: 'r1',
       workspaceMode: 'existing',
       workspaceId: 'wt1',
-      timezone: 'UTC',
+      timezone: HOST_TIMEZONE,
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })

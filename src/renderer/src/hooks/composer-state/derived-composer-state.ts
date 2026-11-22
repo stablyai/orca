@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import {
   normalizeSparseDirectoryLines,
   sparseDirectoriesMatch
-} from '@/lib/directory-input/sparse-paths'
+} from '../../../../shared/worktree/creation/sparse-directory-paths'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink

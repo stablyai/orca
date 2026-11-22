@@ -33,7 +33,18 @@ export function loadCapture(name: string): CapturedRecord[] {
   )
     .trim()
     .split('\n')
-    .map((line) => capturedRecord.parse(JSON.parse(line)))
+    .map((line) => withoutScrubbedPromptId(capturedRecord.parse(JSON.parse(line))))
+}
+
+// Scrubbing gave every turn the same placeholder prompt_id, which would read as one long turn.
+const SCRUBBED_PROMPT_ID = '00000000-0000-4000-8000-000000000000'
+
+function withoutScrubbedPromptId(record: CapturedRecord): CapturedRecord {
+  if (record.kind !== 'hook' || record.payload.prompt_id !== SCRUBBED_PROMPT_ID) {
+    return record
+  }
+  const { prompt_id: _scrubbed, ...payload } = record.payload
+  return { ...record, payload }
 }
 
 export function hookAt(records: CapturedRecord[], index: number): CapturedHook {

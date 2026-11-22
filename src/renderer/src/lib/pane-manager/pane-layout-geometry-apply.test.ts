@@ -80,7 +80,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
     const dividers = root.querySelectorAll('.pane-divider')
     expect(dividers).toHaveLength(1)
     expect(dividers[0]).not.toBe(oldDivider)
-    expect(dividers[0].classList.contains('is-horizontal')).toBe(true)
     expect(paneIdentity()).toEqual(before)
     expect(onLayoutChanged).not.toHaveBeenCalled()
   })

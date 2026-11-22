@@ -140,7 +140,13 @@ export function submitOrchestrationMailboxPointer(
           }
         } else if (submitted || releaseWithoutRedrive) {
           try {
-            deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            // Submitted, or left in the same terminal with no redrive: that terminal took it.
+            deps
+              .getDb()
+              ?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase], {
+                kind: 'terminal',
+                handle: input.expectedTarget.terminal.handle
+              })
           } catch {
             // A surviving pending row is revalidated against live agent state after restart.
           }

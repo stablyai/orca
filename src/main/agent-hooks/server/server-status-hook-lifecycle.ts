@@ -21,6 +21,14 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   readonly claudeTerminalMail = new ClaudeTerminalMailBridge()
   protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
+  private restoredOwnersChecked: Promise<void> = Promise.resolve()
+
+  /** Settles once replayed hooks are in and each replayed pane's agent was probed once. */
+  whenRestoredOwnersChecked(): Promise<void> {
+    return (this.statusHookInitialization ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.restoredOwnersChecked)
+  }
 
   /** The reply to a request from Orca's Claude plugin, or null when `pathname` is not one of its. */
   protected receiveClaudePlugin(pathname: string, body: unknown): object | null {
@@ -59,10 +67,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       this.clearClaudePlugins()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
-      for (const timer of this.assistantMessageRetryTimers.values()) {
-        clearTimeout(timer)
-      }
-      this.assistantMessageRetryTimers.clear()
+      this.clearAllAssistantMessageRetries()
       this.clearAllTranscriptPolls()
     }
     this.statusHooksEnabled = enabled
@@ -111,9 +116,9 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
           return
         }
         // Replayed owners may have died while Orca was down; probe each pane once.
-        for (const paneKey of replayedPaneKeys) {
-          void this.checkAgentPresence(paneKey)
-        }
+        this.restoredOwnersChecked = Promise.allSettled(
+          [...replayedPaneKeys].map((paneKey) => this.checkAgentPresence(paneKey))
+        ).then(() => undefined)
       }
       this.ownerStateInitialized = true
       this.activateClaudeHelperObservations()

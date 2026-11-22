@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import {
-  getDefaultRepoHookSettings,
-  getDefaultSettings
-} from '../../../../shared/orca-profiles/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { getDefaultRepoHookSettings } from '../../../../shared/workspace-setup/repo-hook-settings-defaults'
 import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'

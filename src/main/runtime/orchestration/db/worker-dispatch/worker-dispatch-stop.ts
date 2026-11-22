@@ -9,6 +9,7 @@ import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { markUnreadFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
+import { releaseExitedWorkerTerminalInTransaction } from '../worker-terminal/worker-terminal-release'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -158,6 +159,8 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     this.closeQuestionsForDispatch(dispatchId)
     // Mail it never read stays for the next send, as a report would keep it.
     markUnreadFollowUpMail(this, dispatchId)
+    // Callers settle only after proving the process gone, so its terminal no longer pins the Run.
+    releaseExitedWorkerTerminalInTransaction(this, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

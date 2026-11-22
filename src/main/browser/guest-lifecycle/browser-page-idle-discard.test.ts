@@ -172,3 +172,17 @@ it('follows live Memory Saver changes: off stops waiting and in-flight frees, ho
   await f.advance(3_600_000)
   expect(f.requests.map((request) => request.browserPageId)).toEqual(['due', 'waiting'])
 })
+
+it('counts for the perf notice only pages hidden that long while awake and that Memory Saver could free', async () => {
+  const f = fixture()
+  // Memory Saver off: the notice is what suggests turning it on.
+  f.scheduler.configure({ enabled: false, idleMs: 14_400_000 })
+  f.report(false, 1, 1, 'clean')
+  f.report(false, 1, 2, 'pdf')
+  const canFree = (pageId: string): boolean => pageId !== 'pdf'
+  // Eight hours pass, but the machine slept for all but half an hour of them.
+  await f.advance(28_800_000, 1_800_000)
+  expect(f.scheduler.countHiddenLoadedPages(14_400_000, canFree)).toBe(0)
+  await f.advance(12_600_000)
+  expect(f.scheduler.countHiddenLoadedPages(14_400_000, canFree)).toBe(1)
+})

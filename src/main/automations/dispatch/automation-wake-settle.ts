@@ -1,4 +1,4 @@
-import { getSystemAwakeClock, type AwakeClock } from '../../power/awake-clock'
+import { getSystemAwakeClock, WAKE_SETTLE_MS, type AwakeClock } from '../../power/awake-clock'
 import type { Store } from '../../persistence/loading-store/store'
 import { missedBeyondGrace } from './dispatch-refusal'
 import type { Automation } from '../../../shared/automations/automation-definition'
@@ -8,7 +8,7 @@ import type { Automation } from '../../../shared/automations/automation-definiti
  *  its agent frozen mid-start when the machine sleeps again.
  *  Known limits: wakes repeatedly shorter than this defer scheduling until one lasts; a fresh
  *  process has no wake history and starts settled; an App Nap-sized stall counts as a wake. */
-export const AUTOMATION_WAKE_SETTLE_MS = 2 * 60_000
+export const AUTOMATION_WAKE_SETTLE_MS = WAKE_SETTLE_MS
 
 /** Whether scheduled automation runs may start now. */
 export function automationSystemSettled(clock: AwakeClock = getSystemAwakeClock()): boolean {

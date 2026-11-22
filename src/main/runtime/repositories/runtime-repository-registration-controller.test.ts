@@ -51,7 +51,7 @@ function gitInit(path: string): void {
   runGit(['init', '-q', path])
 }
 
-describe('RuntimeRepositoryRegistrationController.add through a symlink alias', () => {
+describe('RuntimeRepositoryRegistrationController.add reuses the existing project', () => {
   let root: string
 
   beforeEach(async () => {
@@ -102,6 +102,34 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
 
     expect(second.id).not.toBe(first.id)
     expect(repos).toHaveLength(2)
+  })
+
+  it('returns the main checkout project when one of its linked worktrees is added', async () => {
+    const repoPath = join(root, 'repo')
+    await mkdir(repoPath)
+    gitInit(repoPath)
+    runGit([
+      '-C',
+      repoPath,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@t',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'init'
+    ])
+    const worktreePath = join(root, 'repo-feature')
+    runGit(['-C', repoPath, 'worktree', 'add', '-q', '-b', 'feature', worktreePath])
+    const { controller, repos } = createController()
+
+    const first = await controller.add(repoPath, 'git')
+    const second = await controller.add(worktreePath, 'git')
+
+    expect(second.id).toBe(first.id)
+    expect(repos).toHaveLength(1)
   })
 
   it('does not resolve an SSH project path against this machine', async () => {

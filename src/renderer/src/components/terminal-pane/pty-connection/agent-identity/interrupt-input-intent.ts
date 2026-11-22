@@ -8,7 +8,7 @@ import type { AgentInterruptInputIntent } from '../../../../../../shared/agent-s
 import { markTerminalBracketedPasteInterrupted } from '../../input/paste/terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

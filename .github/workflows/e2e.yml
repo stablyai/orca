@@ -410,7 +410,7 @@ jobs:
             printf '%s\n' "$TEST_FILES_JSON" | node "$E2E_SELECTION_SCRIPT" > "$RUNNER_TEMP/general-e2e-specs"
           else
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
-            jq -r --argjson dedicated '["tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/terminal-ibus-hangul-native.spec.ts","tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts","tests/e2e/orcad-serve-mode-switch.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts","tests/e2e/windows-missing-appdata-startup.spec.ts","tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts","tests/e2e/file-explorer-copy-file-windows.spec.ts","tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts"]' --argjson managed '["tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts"]' '
+            jq -r --argjson dedicated '["tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/terminal-ibus-hangul-native.spec.ts","tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts","tests/e2e/orcad-serve-mode-switch.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts","tests/e2e/windows-missing-appdata-startup.spec.ts","tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts","tests/e2e/file-explorer-copy-file-windows.spec.ts","tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts","tests/e2e/orcad-connector-server-bot.spec.ts","tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts"]' --argjson managed '["tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts"]' '
               .[] | select(. as $spec |
                 (($dedicated | index($spec)) == null) and
                 (($managed | index($spec)) == null) and
@@ -522,7 +522,8 @@ jobs:
     needs: [build]
     if: >-
       inputs.test_files == '' ||
-      contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts')
+      contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts')
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
@@ -582,6 +583,16 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/remote/mobile-mirror/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
+      # A Slack event reaches a bot on a signed-in orcad; sign-out and quit fence its connector.
+      - name: Bot on a signed-in orcad server
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

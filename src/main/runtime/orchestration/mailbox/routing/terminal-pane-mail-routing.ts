@@ -30,6 +30,7 @@ import {
 import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
+import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected terminalIdentitySources = () => ({
@@ -196,20 +197,27 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
     // Log failures without blocking the later first-turn workspace rename.
     try {
-      // A working edge can follow a human answer, unblocking parked mail too.
-      this.notifyStructuredSessionJournalActivity(summary.sessionId)
       if (summary.status === 'working') {
+        observeChatWorkerWorking(summary.sessionId, this.workerTurnStopReportDeps)
+        // A working edge can follow a human answer, unblocking parked mail too.
+        this.notifyStructuredSessionJournalActivity(summary.sessionId)
         return
       }
-      const openDb = () => this.getExistingOrchestrationDb()
-      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
-      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
+      this.redriveStructuredSessionMail(summary.sessionId)
     } catch (error) {
       console.warn('[orchestration] structured session mail redrive failed', {
         sessionId: summary.sessionId,
         error: error instanceof Error ? error.message : String(error)
       })
     }
+  }
+
+  /** A chat's idle edge for its mail: parked mail retried, and the mailboxes it owns re-derived. */
+  redriveStructuredSessionMail(sessionId: string): void {
+    this.notifyStructuredSessionJournalActivity(sessionId)
+    const openDb = () => this.getExistingOrchestrationDb()
+    const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+    structuredSessionIdleEdgeMailboxes(sessionId, openDb).forEach(deliver)
   }
 
   /** A closed chat ends its workers' Dispatches as a closed terminal does; /clear successors retain their work. */

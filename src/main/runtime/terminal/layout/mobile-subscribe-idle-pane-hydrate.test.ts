@@ -144,7 +144,7 @@ async function firstSnapshot(runtime: OrcaRuntimeService, handle: string) {
 }
 
 describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size', () => {
-  it('serves the first snapshot from a host model hydrated onto the phone grid', async () => {
+  it('hydrates the first phone snapshot and keeps live paint on the hydrated grid', async () => {
     const { runtime, handle, sizes } = setup({ paneMounted: true })
     expect(runtime.hasHeadlessTerminalState(PTY_ID)).toBe(false)
 
@@ -154,6 +154,13 @@ describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size'
     expect({ cols: snapshot.cols, rows: snapshot.rows }).toEqual(PHONE)
     expect((await paintedRows(snapshot)).slice(0, 4)).toEqual(EXPECTED_PHONE_ROWS)
     expect(runtime.hasHeadlessTerminalState(PTY_ID)).toBe(true)
+
+    runtime.onPtyData(PTY_ID, '\r\n$ repainted', Date.now())
+    const repainted = await firstSnapshot(runtime, handle)
+    expect((await paintedRows(repainted)).slice(0, 5)).toEqual([
+      ...EXPECTED_PHONE_ROWS,
+      '$ repainted'
+    ])
   })
 
   it('serves the phone grid when a reattach left the restored snapshot preferred', async () => {
@@ -167,18 +174,5 @@ describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size'
     expect((await paintedRows(snapshot)).slice(0, 4)).toEqual(EXPECTED_PHONE_ROWS)
     const resubscribed = await firstSnapshot(runtime, handle)
     expect({ cols: resubscribed.cols, rows: resubscribed.rows }).toEqual(PHONE)
-  })
-
-  it('chains a live repaint after the hydrated seed', async () => {
-    const { runtime, handle } = setup({ paneMounted: true })
-    await firstSnapshot(runtime, handle)
-    runtime.onPtyData(PTY_ID, '\r\n$ repainted', Date.now())
-
-    const snapshot = await firstSnapshot(runtime, handle)
-
-    expect((await paintedRows(snapshot)).slice(0, 5)).toEqual([
-      ...EXPECTED_PHONE_ROWS,
-      '$ repainted'
-    ])
   })
 })

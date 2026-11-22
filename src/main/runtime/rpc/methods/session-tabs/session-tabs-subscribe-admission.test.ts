@@ -18,6 +18,7 @@ import type { RpcRequest } from '../../core'
 import { SESSION_TAB_METHODS } from './session-tabs'
 
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
+import { beginCreatedWorkspaceLaunch } from '../../../../agent-launch/agent-launch-created-workspace'
 
 const CONNECTION = 'conn-1'
 const KEY = (requestId: string): string => `session.tabs:${CONNECTION}:wt-1:${requestId}`
@@ -61,6 +62,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
         return stopListening
       }
     ),
+    onAgentListChanged: () => () => {},
     registerSubscriptionCleanup: registry.register.bind(registry),
     cleanupSubscription: registry.cleanup.bind(registry),
     cleanupSubscriptionsByPrefix: registry.cleanupByPrefix.bind(registry),
@@ -107,6 +109,37 @@ async function settle(): Promise<void> {
 }
 
 describe('session.tabs.subscribe registers when the request arrives', () => {
+  it('reports the current initial agent launch on snapshots and updates until release', async () => {
+    const host = makeHost()
+    const launch = beginCreatedWorkspaceLaunch(host.runtime, 'codex')
+    launch.onWorkspaceCreated('wt-1')
+    const messages: Frame[] = []
+    try {
+      await host.dispatch(
+        request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }),
+        messages
+      )
+      host.tabListeners[0](visibleSnapshot(), 1)
+      launch.release()
+      host.tabListeners[0](visibleSnapshot(), 2)
+
+      expect(messages.map((message) => message.result)).toEqual([
+        expect.objectContaining({
+          type: 'snapshot',
+          initialSurfaceLaunch: { launchId: expect.any(String), agent: 'codex' }
+        }),
+        expect.objectContaining({
+          type: 'updated',
+          initialSurfaceLaunch: { launchId: expect.any(String), agent: 'codex' }
+        }),
+        expect.not.objectContaining({ initialSurfaceLaunch: expect.anything() })
+      ])
+    } finally {
+      launch.release()
+      host.runtime.cleanupSubscriptionsForConnection(CONNECTION)
+    }
+  })
+
   it('a socket close during setup leaves no registration and no listener', async () => {
     const host = makeHost()
     const listing = deferred<RuntimeMobileSessionTabsResult>()

@@ -80,22 +80,6 @@ async function nextCycle(): Promise<void> {
   await indexer?.settled()
 }
 
-it('reflects a rename-replaced transcript within one reconcile interval', async () => {
-  const path = transcriptPath()
-  await writeClaudeTranscript(path, ['original content aaaa'], SESSION_ID)
-  await newIndexer().start()
-  expect(sessionsMatching('original')).toEqual([SESSION_ID])
-  const original = await stat(path)
-
-  await renameReplaceTranscript(path, ['swapped content bbbbb'], SESSION_ID)
-  expect((await stat(path)).size).toBe(original.size)
-  await nextCycle()
-
-  expect(sessionsMatching('swapped')).toEqual([SESSION_ID])
-  expect(sessionsMatching('original')).toEqual([])
-  expect(errors).toEqual([])
-})
-
 /** Two transcripts untouched for days in one directory, so cycles reuse their indexed stats. */
 async function writeQuietTranscripts(): Promise<string> {
   const path = transcriptPath()
@@ -129,12 +113,15 @@ it('reflects a rename-replaced transcript that was quiet for days on the next cy
   // Let a cycle record the quiet directory so later cycles reuse its files' stats.
   await nextCycle()
   expect(sessionsMatching('original')).toEqual([SESSION_ID])
+  const original = await stat(path)
 
   // The replacement keeps a quiet mtime; only its directory shows the change.
   await renameReplaceTranscript(path, ['swapped content bbbbb'], SESSION_ID)
+  expect((await stat(path)).size).toBe(original.size)
   await nextCycle()
 
   expect(sessionsMatching('swapped')).toEqual([SESSION_ID])
+  expect(sessionsMatching('original')).toEqual([])
   expect(errors).toEqual([])
 })
 
@@ -144,6 +131,9 @@ it('indexes an in-place append to a quiet transcript at the scheduled sweep duri
   await nextCycle()
   await writeBacklog(20)
   await appendFile(path, `${claudeLines(['appendedneedle'], SESSION_ID, 2).join('\n')}\n`)
+  // Linux's coarse mtime clock can tie the append with the backlog; reads go newest first, so date it later.
+  const appendedAt = new Date(4_102_444_800_000)
+  await utimes(path, appendedAt, appendedAt)
 
   for (let cycle = 0; cycle < 7; cycle += 1) {
     await nextCycle()

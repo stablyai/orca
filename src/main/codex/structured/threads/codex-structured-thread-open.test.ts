@@ -13,6 +13,28 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it('gives developer instructions to a new thread only', async () => {
+    const request = vi.fn(async (method: string, _params?: Record<string, unknown>) => ({
+      thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
+    }))
+    const developerInstructions = 'You are Reviewer.'
+
+    for (const resumeThreadId of [null, 'thread-existing']) {
+      await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId, developerInstructions },
+        2_000
+      )
+    }
+
+    expect(
+      request.mock.calls.map(([method, params]) => [method, params?.developerInstructions])
+    ).toEqual([
+      ['thread/start', developerInstructions],
+      ['thread/resume', undefined]
+    ])
+  })
+
   // Omitting policy can inherit approval_policy = never and suppress Ask prompts.
   it('sends Ask as an explicit policy on resume, not as absent fields', async () => {
     const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({

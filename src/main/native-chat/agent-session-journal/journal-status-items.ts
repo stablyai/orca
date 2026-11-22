@@ -22,7 +22,7 @@ export type JournalStatusItemSelection =
       after?: JournalStatusPosition
       before?: JournalStatusPosition
     }
-  | { kind: 'assistant-prose'; floor?: number }
+  | { kind: 'assistant-prose'; floor?: number; turnItemId?: string }
   | { kind: 'async-question-candidates'; floor?: number }
   | { kind: 'assistant-exists' }
   | { kind: 'prompt' }

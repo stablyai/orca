@@ -22,22 +22,17 @@ import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 export function CodexSwitcherMenu({
   codex,
   ownerUsage,
-  compact,
-  iconOnly,
   asSubmenu = false,
   triggerContent
 }: {
   codex: ProviderRateLimits
-  ownerUsage?: OwnerUsageRateLimits
-  compact: boolean
-  iconOnly: boolean
+  ownerUsage: OwnerUsageRateLimits
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const {
     activeTarget,
-    activeUsage,
     canRedeemReset,
     confirmedResetAccountId,
     handleConfirmReset,
@@ -56,6 +51,7 @@ export function CodexSwitcherMenu({
     providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
+    rosterKnown,
     resetCreditCount,
     resetCreditExpiry,
     selectedGroup,
@@ -120,10 +116,8 @@ export function CodexSwitcherMenu({
     active: boolean,
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
-    if (active && activeUsage) {
-      return (
-        <AccountUsageGauge limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
-      )
+    if (active) {
+      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -136,8 +130,6 @@ export function CodexSwitcherMenu({
   return (
     <ProviderDetailsMenu
       provider={codex}
-      compact={compact}
-      iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(
@@ -146,7 +138,7 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        activeUsage
+        rosterKnown
           ? (activeTarget?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -203,29 +195,33 @@ export function CodexSwitcherMenu({
           : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={activeUsage !== null}
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-codex'
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
-        {unavailableUsageRows.length > 0 ? (
-          <>
-            <DropdownMenuLabel className="mt-1">
-              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
-            </DropdownMenuLabel>
-            {unavailableUsageRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-codex',
+              hostScope: ownerUsage.owner.target
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+          {unavailableUsageRows.length > 0 ? (
+            <>
+              <DropdownMenuLabel className="mt-1">
+                {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              </DropdownMenuLabel>
+              {unavailableUsageRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

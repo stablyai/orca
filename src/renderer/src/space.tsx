@@ -20,6 +20,7 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
+import { registerBackgroundWorkerPausedIpcBridge } from './hooks/ipc-events/native-app/background-worker-paused-ipc-bridge'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
@@ -60,6 +61,13 @@ function SpaceWindowRoot(): React.JSX.Element {
       offState?.()
       offProgress()
     }
+  }, [])
+
+  // A scan run from this window can pause background work; the notice belongs here too.
+  useEffect(() => {
+    const unsubs: (() => void)[] = []
+    registerBackgroundWorkerPausedIpcBridge(unsubs)
+    return () => unsubs.forEach((unsub) => unsub())
   }, [])
 
   useEffect(() => {

@@ -143,13 +143,14 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string, fixtureRoot: string) {
+/** `folder` attaches it in a folder workspace instead of the git worktree. */
+export function attachParams(sessionId: string, fixtureRoot: string, folder?: string) {
   const params = {
     location: {
       executionHostId: 'local' as const,
       wslDistro: null,
-      workspaceId: WORKSPACE,
-      workspaceKind: 'git-worktree' as const
+      workspaceId: folder ? `folder:${folder}` : WORKSPACE,
+      workspaceKind: folder ? ('folder' as const) : ('git-worktree' as const)
     },
     provider: 'codex' as const,
     agent: 'codex' as const,

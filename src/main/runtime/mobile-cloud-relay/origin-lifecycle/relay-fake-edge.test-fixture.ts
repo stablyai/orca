@@ -58,6 +58,10 @@ export class FakeEdgePath {
   readonly connections: WebSocket[] = []
   readonly hellos: Hello[] = []
   readonly acks: string[] = []
+  // Tokens the host sent in auth-refresh frames on this path.
+  readonly authRefreshes: string[] = []
+  // The bearer token each control connection dialled with.
+  readonly dialTokens: string[] = []
   pings = 0
   answersPings = true
   behaviour: PathBehaviour = 'resume'
@@ -73,7 +77,10 @@ export class FakeEdgePath {
     readonly url: string,
     private readonly session: FakeHostSession
   ) {
-    server.on('connection', (socket) => this.accept(socket))
+    server.on('connection', (socket, request) => {
+      this.dialTokens.push(String(request.headers.authorization ?? '').replace(/^Bearer /, ''))
+      this.accept(socket)
+    })
   }
 
   static async listen(session: FakeHostSession): Promise<FakeEdgePath> {
@@ -134,6 +141,10 @@ export class FakeEdgePath {
       if (this.behaviour !== 'silent' && socket.readyState === socket.OPEN) {
         socket.send(this.challenge(socket, hello))
       }
+      return
+    }
+    if (message.type === 'auth-refresh') {
+      this.authRefreshes.push('relayJwt' in message ? String(message.relayJwt) : '')
       return
     }
     if (message.type === 'host-challenge-ack') {
@@ -231,4 +242,21 @@ export class FakeHostSession {
 
 export function closedOnServer(socket: WebSocket): Promise<number> {
   return new Promise((resolve) => socket.once('close', (code) => resolve(code)))
+}
+
+// Waits on loopback I/O with the fake clock held still: vi.waitFor advances it every poll and gives
+// up after 1s of wall time, so a slow CI runner fails it while the handshake is still in flight.
+export async function untilLoopback(check: () => void, timeoutMs = 10_000): Promise<void> {
+  const deadline = performance.now() + timeoutMs
+  for (;;) {
+    try {
+      check()
+      return
+    } catch (error) {
+      if (performance.now() > deadline) {
+        throw error
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
 }

@@ -5,6 +5,7 @@ import {
   orchestrationMailNotice,
   readAgentMessageSource
 } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { botItemMailImageBlocks } from './bot-item-mail-images'
 
 /** Compare the admitted fields, never a newly rendered address or reply line. */
 export function structuredMailWasDeliveredWhole(
@@ -22,11 +23,17 @@ export function structuredMailWasDeliveredWhole(
     return false
   }
   const mail = orchestrationMailNotice(readAgentMessageSource(body.from))
+  // Item mail's stored images follow its one text block, exactly as the mail source appends them.
+  const images = botItemMailImageBlocks(message)
   if (
     !mail ||
     mail.mailbox !== attempt.mailbox_handle ||
     !Array.isArray(body.blocks) ||
-    body.blocks.length !== 1
+    body.blocks.length !== 1 + images.length ||
+    images.some((image, index) => {
+      const sent = body.blocks[index + 1]
+      return sent?.type !== 'image-ref' || sent.path !== image.path
+    })
   ) {
     return false
   }

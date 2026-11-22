@@ -47,6 +47,7 @@ export function buildCapabilitySettingsSections(
         includeAgentChatChoice: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
+        includeDeleteAgentHistory: !isWebClient,
         includeCodexTerminalServerIsolation: !isWebClient
       }),
       group: 'capabilities'

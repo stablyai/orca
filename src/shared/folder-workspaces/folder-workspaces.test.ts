@@ -10,28 +10,7 @@ const folderGroup = {
 } as unknown as ProjectGroup
 
 describe('normalizeFolderWorkspaces host attribution', () => {
-  it('drops a stored executionHostId instead of round-tripping it', () => {
-    const [workspace] = normalizeFolderWorkspaces(
-      [
-        {
-          id: 'ws-1',
-          projectGroupId: 'group-1',
-          name: 'Nightly',
-          folderPath: '/tmp/projects/nightly',
-          connectionId: null,
-          executionHostId: 'runtime:env-7'
-        }
-      ],
-      [folderGroup]
-    )
-
-    // Runtime stamps name an authority the desktop store does not own and lack a generation fence; persisting them recreates #12 divergence.
-    expect(workspace).toBeDefined()
-    expect(workspace.executionHostId).toBeUndefined()
-    expect(Object.keys(workspace)).not.toContain('executionHostId')
-  })
-
-  it('keeps connectionId as the durable host pin', () => {
+  it('keeps connectionId as the durable host pin and discards the runtime stamp', () => {
     const [pinned] = normalizeFolderWorkspaces(
       [
         {
@@ -40,13 +19,13 @@ describe('normalizeFolderWorkspaces host attribution', () => {
           name: 'Pinned',
           folderPath: '/tmp/projects/pinned',
           connectionId: 'ssh-box',
-          executionHostId: 'local'
+          executionHostId: 'runtime:env-7'
         }
       ],
       [folderGroup]
     )
 
-    expect(pinned.connectionId).toBe('ssh-box')
-    expect(pinned.executionHostId).toBeUndefined()
+    expect(pinned).toMatchObject({ connectionId: 'ssh-box' })
+    expect(pinned).not.toHaveProperty('executionHostId')
   })
 })

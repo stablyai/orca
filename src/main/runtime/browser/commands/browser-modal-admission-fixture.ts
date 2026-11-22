@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from '../../../browser/guest-lifecycle/manager/registration/browser-page-state-form-data.test-fixture'
 import { expect, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './browser-commands'
 import type { BrowserTabBarEntry } from '../tabs/browser-tab-listing'
@@ -15,6 +16,11 @@ import {
   reserveBrowserPageDiscard,
   acknowledgeBrowserPageRemoval
 } from '../../../browser/guest-lifecycle/browser-page-memory'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const pageId = 'modal-page'
 let nextId = 700
@@ -41,7 +47,7 @@ export function createModalAdmissionFixture(
     getRuntimeBrowserPageRegistry: () => ({
       getPage: (page: string) => (managedPages.has(page) ? { browserPageId: page } : undefined)
     }),
-    getAuthoritativeWindow: () => ({ webContents: { send } }),
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
     resolveWorkspaceSelector: async (selector: string) => {
       if (selector === 'reject') {
         throw new Error('Unknown workspace')
@@ -50,6 +56,7 @@ export function createModalAdmissionFixture(
     },
     readBrowserTabBar: () => catalog
   } as unknown as RuntimeBrowserCommandHost
+  setRuntimeDesktopSurface(rendererWindowSurfaceForTest({ send }))
   const commands = new RuntimeBrowserCommands(host)
   const attach = (page = pageId, register = true) => {
     const id = ++nextId
@@ -75,8 +82,11 @@ export function createModalAdmissionFixture(
       debugger: Object.assign(new EventEmitter(), { isAttached: () => false }),
       loadURL: load,
       navigationHistory: {
-        getAllEntries: () => [{ url: 'https://localhost/app', title: 'Modal' }],
+        getAllEntries: () => [
+          { url: 'https://localhost/app', title: 'Modal', pageState: GET_PAGE_STATE }
+        ],
         getActiveIndex: () => 0,
+        getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
         restore: () => new Promise<void>(() => {})
       },
       close: () => {

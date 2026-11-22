@@ -10,16 +10,16 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal/input/terminal-word-separator'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
@@ -39,11 +39,14 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
+import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
+import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
+import { projectHostOwnedSettings } from '../../../../shared/settings/host-owned-settings'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -73,6 +76,7 @@ export class RuntimeClientSettingsController {
     // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
+      ...projectHostOwnedSettings(settings),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
@@ -80,11 +84,14 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
-      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
-      codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
+      // Phones size their terminal scrollback and word selection the way this desktop's terminals do.
+      terminalScrollbackRows: normalizeDesktopTerminalScrollbackRows(
+        settings.terminalScrollbackRows
+      ),
+      terminalWordSeparator: settings.terminalWordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
@@ -118,13 +125,9 @@ export class RuntimeClientSettingsController {
         : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       workspaceCleanupPolicy: settings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules(),
-      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
-      deleteChatHistoryWithWorkspace: settings.deleteChatHistoryWithWorkspace === true,
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
-      nativeChatAutoContinueAfterUsageLimit:
-        settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
       // A paired browser dictates through this host, which refuses unless these allow it.
       voice: {
@@ -136,6 +139,8 @@ export class RuntimeClientSettingsController {
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
       // Resolved, so a phone can tell a reported value from an older host's absence.
       nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
+      hostNotifications: projectHostNotificationSettings(settings.notifications),
+      trackerAccountHost: getSettingsFocusedExecutionHostId(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -154,11 +159,19 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
+    const { agentDefaultArgs, agentDefaultEnv, hostNotifications, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
         ...otherUpdates,
+        ...(hostNotifications
+          ? {
+              notifications: {
+                ...(beforeSettings.notifications ?? getDefaultNotificationSettings()),
+                ...hostNotifications
+              }
+            }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
@@ -167,13 +180,15 @@ export class RuntimeClientSettingsController {
               process.platform
             )
           : {}),
-        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
+        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {}),
+        ...(updates.agentDefaultSurface !== undefined ? { agentDefaultSurfaceChosen: true } : {})
       },
       { notifyListeners: true }
     )
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
-    if (updates.worktreeVisibilityDefaults !== undefined) {
+    // Nesting moves the worktree roots the base-directory watcher follows.
+    if (updates.worktreeVisibilityDefaults !== undefined || updates.nestWorkspaces !== undefined) {
       this.notifyReposChanged?.()
     }
     if (
@@ -306,19 +321,9 @@ export class RuntimeClientSettingsController {
   }
 }
 
-function projectSourceControlLaunchRecipes(
-  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
-): RuntimeClientSourceControlAi {
-  const { actions } = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
-  )
-  return {
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
-        const recipe = actions?.[actionId]
-        return recipe ? [[actionId, recipe]] : []
-      })
-    )
-  }
+function projectHostNotificationSettings(
+  settings: NotificationSettings = getDefaultNotificationSettings()
+): RuntimeClientSettings['hostNotifications'] {
+  const { enabled, agentTaskComplete, agentNeedsInput, terminalBell } = settings
+  return { enabled, agentTaskComplete, agentNeedsInput, terminalBell }
 }

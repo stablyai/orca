@@ -83,6 +83,7 @@ describe('WslHostService pending removal', () => {
 
     // Remove again: a proven stop finishes it.
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
+    expect(connector.connect).not.toHaveBeenCalled()
     expect(await listEnvironments(userDataPath)).toEqual([])
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
   })
@@ -101,21 +102,6 @@ describe('WslHostService pending removal', () => {
     await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ ...unverifiable, kept: true })
     expect(connector.stopServer).toHaveBeenCalledTimes(2)
     expect(await listEnvironments(userDataPath)).toHaveLength(1)
-  })
-
-  it('finishes a pending Remove on a stopped distro, which proves the stop, without booting it', async () => {
-    const connector = makeConnector([UBUNTU])
-    connector.stopServer.mockResolvedValueOnce({ stopped: false, reason: 'busy', verdict: 'live' })
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-    await service.remove('wsl:ubuntu')
-    connector.connect.mockClear()
-    // What the cold probe answers for a stopped distro.
-    connector.stopServer.mockResolvedValueOnce({ stopped: true })
-
-    await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
-    expect(connector.connect).not.toHaveBeenCalled()
-    expect(await listEnvironments(userDataPath)).toEqual([])
   })
 
   it('finishes removing a host whose distro is gone, which runs nothing', async () => {

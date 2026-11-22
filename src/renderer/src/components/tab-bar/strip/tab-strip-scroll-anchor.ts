@@ -57,5 +57,11 @@ export function restoreTabStripScrollAnchor(
 }
 
 export function isLastTabStripTab(strip: HTMLElement, tabId: string | null): boolean {
-  return tabId !== null && tabElements(strip).at(-1)?.dataset.tabId === tabId
+  const last = tabElements(strip).at(-1)
+  if (tabId === null || last?.dataset.tabId !== tabId) {
+    return false
+  }
+  // A windowed strip ends in a spacer for unmounted tabs; the last mounted tab isn't last then.
+  const lastGap = Array.from(strip.querySelectorAll(':scope > [data-tab-strip-gap]')).at(-1)
+  return !lastGap || !(last.compareDocumentPosition(lastGap) & Node.DOCUMENT_POSITION_FOLLOWING)
 }

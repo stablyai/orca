@@ -14,17 +14,17 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import type * as CodexFsUtils from '../../../filesystem/atomic-file-publication'
+import type * as TomlAtomicWrite from '../toml/config-toml-atomic-write'
 
 // Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  codexDaemonSocketPathExceedsLimit: () => false
 }))
 
 const { homedirMock, promotionTestState } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>(),
-  promotionTestState: { failAtomicWrite: false, atomicWritePaths: [] as string[] }
+  promotionTestState: { failAtomicWrite: false }
 }))
 
 vi.mock('node:os', async (importOriginal) => {
@@ -35,16 +35,15 @@ vi.mock('node:os', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../filesystem/atomic-file-publication', async (importOriginal) => {
-  const actual = await importOriginal<typeof CodexFsUtils>()
+vi.mock('../toml/config-toml-atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof TomlAtomicWrite>()
   return {
     ...actual,
-    writeFileAtomically: (...args: Parameters<typeof actual.writeFileAtomically>) => {
-      promotionTestState.atomicWritePaths.push(args[0])
+    writeTomlConfigAtomically: (...args: Parameters<typeof actual.writeTomlConfigAtomically>) => {
       if (promotionTestState.failAtomicWrite) {
         throw new Error('injected atomic write failure')
       }
-      return actual.writeFileAtomically(...args)
+      return actual.writeTomlConfigAtomically(...args)
     }
   }
 })
@@ -62,7 +61,6 @@ beforeEach(() => {
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   promotionTestState.failAtomicWrite = false
-  promotionTestState.atomicWritePaths.length = 0
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }

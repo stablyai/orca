@@ -6,7 +6,6 @@ import { cn } from '@/lib/class-names'
 import { LoadingSpinner } from '../ui/LoadingSpinner'
 import { ManagedRuntimeLinkButton } from '../managed-runtime/ManagedRuntimeLinkButton'
 import { Badge } from '../ui/badge'
-import { AntigravityInfoTooltip } from './AntigravityInfoTooltip'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { AntigravityChatAuthAction } from './AntigravityChatAuthForm'
@@ -159,12 +158,7 @@ export function AntigravityChatAccountRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const title = (
-    <p className="flex items-center gap-1 text-sm font-medium">
-      {t('accounts.antigravity.chatAccount', 'Chat account')}
-      <AntigravityInfoTooltip
-        info={t('accounts.antigravity.chatSeparate', 'Separate from your agy terminal account.')}
-      />
-    </p>
+    <p className="text-sm font-medium">{t('accounts.antigravity.account', 'Account')}</p>
   )
   if (signIn.ownFlow) {
     return (

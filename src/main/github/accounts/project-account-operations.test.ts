@@ -1,5 +1,6 @@
 import type { createGitHubPullRequest } from '../client/create/create-github-pull-request'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../worker-thread-child-process/worker-thread-child-process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,14 @@ import {
 } from '../../persistence/persistence-test-harness'
 
 const { spawnMock, remote } = vi.hoisted(() => ({ spawnMock: vi.fn(), remote: vi.fn() }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('../repositories/github-api-repository-remote-probe', () => ({
   getOriginGitHubApiRepository: remote,

@@ -189,6 +189,7 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
         candidateVersion: '1.5.0+ab',
         code: 'orcad_update_terminals_running',
         reason: '2 terminals are running',
+        incumbentVersion: '1.4.0+aa',
         forceable: true
       }
     })
@@ -211,6 +212,30 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       reason: 'terminals are running'
     })
     await expect(launch()).resolves.toMatchObject({ outcome: 'deferred', forceable: true })
+  })
+
+  it('passes an uncounted census only for a confirmed Update anyway, pinned to its build', async () => {
+    const deferral = {
+      outcome: 'installed-not-activated',
+      fullVersion: '1.5.0+ab',
+      code: 'orcad_update_terminal_census_unavailable',
+      reason: 'no session count'
+    }
+    mocks.deploy.mockResolvedValueOnce(deferral).mockResolvedValueOnce(deferral)
+    await launch(undefined, { intent: 'force' })
+    // Plain Force keeps the uncounted census for the confirm that names what ends.
+    expect(mocks.deploy.mock.calls[0]?.[0]).toMatchObject({ force: 'live-terminals' })
+
+    await launch(undefined, {
+      intent: 'update',
+      pastUncountedTerminals: { incumbentVersion: '1.4.0+aa' }
+    })
+    const confirmed = mocks.deploy.mock.calls[1]?.[0]
+    expect(confirmed).toMatchObject({ force: true })
+    expect(confirmed.admitRecord(activeOld, '1.5.0+ab')).toBeNull()
+    expect(confirmed.admitRecord({ ...activeOld, active: '1.4.5+cc' }, '1.5.0+ab')).toBe(
+      "This host's server changed since the update was confirmed. Review it and update again."
+    )
   })
 
   it('reports a deferral when the incumbent could not be proven serving', async () => {
@@ -361,6 +386,19 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: false, census: LIVE })
       const { admitRecord } = mocks.deploy.mock.calls[1][0]
       expect(admitRecord({ ...activeOld, rolledBackFrom: '1.5.0+ab' }, '1.5.0+ab')).toBeNull()
+
+      mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('1.4.0+aa', INCUMBENT_READINESS))
+      await expect(launch()).resolves.toMatchObject({
+        outcome: 'ready',
+        fullVersion: '1.4.0+aa',
+        deferredUpdate: {
+          candidateVersion: '1.5.0+ab',
+          code: 'orcad_candidate_readiness_rejected',
+          reason: rejected.reason,
+          forceable: true
+        }
+      })
+      expect(mocks.deploy).toHaveBeenCalledTimes(2)
     })
 
     it('reports the rejection as is when the incumbent was not restored', async () => {
@@ -384,33 +422,22 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     it('serves a newer host on Update rather than downgrading it, and only Force deploys', async () => {
       withRecord(newer)
       mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('2.0.0+cd', NEWER_READINESS))
-      await expect(launch(undefined, { intent: 'update' })).resolves.toMatchObject({
+      const updated = await launch(undefined, { intent: 'update' })
+      expect(updated).toMatchObject({
         outcome: 'ready',
-        fullVersion: '2.0.0+cd'
+        fullVersion: '2.0.0+cd',
+        readiness: NEWER_READINESS
       })
+      expect(updated).not.toHaveProperty('deferredUpdate')
       expect(mocks.deploy).not.toHaveBeenCalled()
       mocks.adoptRunning.mockResolvedValueOnce(null)
       mocks.deploy.mockResolvedValue(policyRefused)
       await launch(undefined, { intent: 'update' })
       expect(mocks.deploy.mock.calls[0][0].admitRecord(newer, '1.5.0+ab')).toMatch(/last ran/)
       await launch(undefined, { intent: 'force' })
-      expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: true })
+      // Force passes version admission; live terminals still need their own confirm.
+      expect(mocks.deploy.mock.calls[1][0]).toMatchObject({ force: 'live-terminals' })
       expect(mocks.deploy.mock.calls[1][0].admitRecord(newer, '1.5.0+ab')).toBeNull()
-    })
-
-    it('still skips a failed build on the next connect when an explicit Update only waited', async () => {
-      mocks.deploy.mockResolvedValueOnce(rejected)
-      await launch()
-      mocks.deploy.mockResolvedValueOnce({
-        outcome: 'installed-not-activated',
-        fullVersion: '1.5.0+ab',
-        code: 'orcad_update_terminals_running',
-        reason: 'busy'
-      })
-      await launch(undefined, { intent: 'update' })
-      mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('1.4.0+aa', INCUMBENT_READINESS))
-      await expect(launch()).resolves.toMatchObject({ outcome: 'ready', fullVersion: '1.4.0+aa' })
-      expect(mocks.deploy).toHaveBeenCalledTimes(2)
     })
 
     it('leaves a host stopped after a rollback for Force, not the build it rolled back from', async () => {

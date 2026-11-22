@@ -18,3 +18,10 @@ export type AgentSessionRestartActivity = {
   prompts: AgentSessionRestartPrompt[]
   tasks: AgentSessionRestartTask[]
 }
+
+/** Its saved approval or question died with the agent; resuming only makes the agent ask again. */
+export function restartActivityWaitsOnPerson(
+  activity: AgentSessionRestartActivity | undefined
+): boolean {
+  return activity?.state === 'blocked' && activity.prompts.length > 0
+}

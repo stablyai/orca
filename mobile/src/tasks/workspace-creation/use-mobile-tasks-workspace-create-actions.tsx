@@ -10,6 +10,7 @@ import {
   pickWorkspaceAgent
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { buildTaskWorkspaceCreateParams } from '../../new-workspace/creation/workspace-create-params'
+import { getUsableLinearBranchName } from '../../../../src/shared/new-workspace/workspace-source'
 import {
   createMayRunSetup,
   resolveCreateSetupApproval,
@@ -228,7 +229,12 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             workspaceName: workspaceNameOverride,
             note: comment,
             baseBranch: baseBranchOverride,
-            branchNameOverride,
+            // As desktop: Linear's suggested branch unless a picked base named the workspace.
+            branchNameOverride:
+              branchNameOverride ??
+              (item.provider === 'linear'
+                ? getUsableLinearBranchName(item.source.branchName)
+                : undefined),
             sparseCheckout: sparseCheckoutOverride,
             nameIsAutoManaged
           })

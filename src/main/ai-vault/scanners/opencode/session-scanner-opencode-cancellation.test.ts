@@ -14,9 +14,7 @@ const readers = vi.hoisted(() => ({
 }))
 vi.mock('./reader-transport/session-scanner-opencode-sqlite-worker-spawn', () => ({
   parseOpenCodeSqliteSessionViaWorker: readers.parse,
-  parseOpenCode2SqliteSessionViaWorker: readers.parse,
-  captureOpenCodeSqliteSessionViaWorker: readers.capture,
-  captureOpenCode2SqliteSessionViaWorker: readers.capture
+  captureOpenCodeSqliteSessionViaWorker: readers.capture
 }))
 vi.mock('../../discovery/session-scanner-source-discovery', () => ({
   discoverAiVaultSessionSources: readers.discover
@@ -49,7 +47,9 @@ afterEach(() => {
   resetSessionParseCacheForTests()
 })
 
-function configure(agent: 'opencode' | 'opencode2') {
+const agent = 'opencode'
+
+function configure() {
   readers.discover.mockResolvedValue([{ agent, rootDir: '/fixture', files: [file] }])
   const accumulator = createAccumulator({ agent, file, sessionId: 'session' })
   accumulator.title = 'SQLite session'
@@ -69,12 +69,12 @@ function untilAborted(signal: AbortSignal | undefined): Promise<never> {
   })
 }
 
-describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent) => {
+describe('OpenCode SQLite scan cancellation', () => {
   it('reports a deadline while retaining completed sessions and other agents, then retries', async () => {
     vi.useFakeTimers()
     const root = mkdtempSync(join(tmpdir(), 'orca-scan-deadline-'))
     try {
-      const session = configure(agent)
+      const session = configure()
       const blocked = { ...file, path: '/fixture/opencode.db#blocked' }
       const claudePath = join(root, 'claude.jsonl')
       writeFileSync(
@@ -124,7 +124,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
 
   it('marks a deadline capture incomplete instead of caching a failed history', async () => {
     vi.useFakeTimers()
-    const session = configure(agent)
+    const session = configure()
     const outcomes: TranscriptReadOutcome[] = []
     registerTranscriptConsumer({
       beginRead: () => ({ message() {}, finish: (outcome) => outcomes.push(outcome) })
@@ -148,7 +148,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
   })
 
   it('marks a partially delivered capture incomplete and never caches it', async () => {
-    const session = configure(agent)
+    const session = configure()
     const controller = new AbortController()
     const outcomes: TranscriptReadOutcome[] = []
     const received: string[] = []

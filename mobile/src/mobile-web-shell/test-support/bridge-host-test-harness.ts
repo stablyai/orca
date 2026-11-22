@@ -81,6 +81,7 @@ export function harness(
     readStorage?: () => PageStorageForInit
     readHostStatus?: () => HostStatusReply | null
     onPageFault?: (error: BridgeErrorCapture) => void
+    onRouteRefused?: (issue: string) => void
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
     pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
@@ -141,7 +142,10 @@ export function harness(
       pagePaints += 1
     },
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
-    onRouteRefused: (issue) => routeRefusals.push(issue),
+    onRouteRefused: (issue) => {
+      routeRefusals.push(issue)
+      options.onRouteRefused?.(issue)
+    },
     onNavigate: options.onNavigate ?? ((href) => navigations.push(href)),
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),

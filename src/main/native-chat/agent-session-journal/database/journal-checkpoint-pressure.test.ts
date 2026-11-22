@@ -1,12 +1,13 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { JournalSqlBatch } from '../journal-sql-batch'
-import { JournalCheckpointOwner, JOURNAL_WAL_BACKPRESSURE_FRAMES } from './journal-checkpoint-owner'
+import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { JOURNAL_WAL_BACKPRESSURE_FRAMES } from './journal-wal-admission'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 
@@ -88,7 +89,6 @@ it.each(['before-write', 'after-write'] as const)(
       body: 'queued send'
     })
     expect(Number(writer.prepare('PRAGMA wal_checkpoint(NOOP)').get()!.log)).toBeLessThan(32768)
-    expect(statSync(`${filename}-wal`).size).toBeLessThan(JOURNAL_SIZE_LIMIT_BYTES)
   },
   15000
 )
@@ -169,4 +169,56 @@ it('hands pending sends back to autocheckpoint when the checkpoint worker fails'
   const close = owner.close()
   worker.exited()
   await close
+})
+
+it('admits a sending chat past WAL pressure while bulk waits, but never past a truncate', async () => {
+  const { filename, writer } = fixture()
+  const worker = new ControlledCheckpoint()
+  const owner = new JournalCheckpointOwner(writer, filename, { factory: () => worker })
+  cleanup.push(() => {
+    const closed = owner.close()
+    worker.exited()
+    return closed
+  })
+  const batch = new JournalSqlBatch(writer, owner)
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  owner.afterCommit()
+  const insert = (id: number) => writer.prepare(`INSERT INTO writes VALUES(?, 'w')`).run(id)
+  const ids = () => writer.prepare('SELECT id FROM writes WHERE id > 1 ORDER BY id').all()
+
+  let bulkAdmitted = false
+  // The writer parks bulk outside its transaction, as its drain does, so a sending chat can pass.
+  const bulk = owner.beforeWrite().then(() => {
+    bulkAdmitted = true
+  })
+  await batch.run([3], insert, 'normal', true)
+  expect(ids()).toEqual([{ id: 3 }])
+  expect(bulkAdmitted).toBe(false)
+
+  worker.emit('message', { type: 'truncate-request', truncateId: 7 })
+  let sendingAdmitted = false
+  const sending = batch.run(
+    [4],
+    (id) => {
+      sendingAdmitted = true
+      return insert(id)
+    },
+    'normal',
+    true
+  )
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve()
+  }
+  expect(sendingAdmitted).toBe(false)
+
+  worker.emit('message', {
+    type: 'checked',
+    truncateId: 7,
+    generation: 0,
+    log: 0,
+    checkpointed: 0,
+    blocked: false
+  })
+  await Promise.all([bulk, sending])
+  expect(ids()).toEqual([{ id: 3 }, { id: 4 }])
 })

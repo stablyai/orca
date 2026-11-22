@@ -18,6 +18,11 @@ import type {
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
+  BranchAutoRenameAttemptEvent,
+  BranchAutoRenameRetryAvailability,
+  BranchAutoRenameRetryResult
+} from '../../../shared/worktree/branch-auto-rename-attempt'
+import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../shared/workspace/lifecycle/workspace-sleep'
@@ -155,10 +160,22 @@ export type WorktreeApi = {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
+    /** Apply only while the current parent is this workspace key. */
+    ifParentWorkspace?: string
   }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
+  /** Desktop-local only; other hosts and the web client report unavailable. */
+  getBranchAutoRenameRetryAvailability: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameRetryAvailability>
+  retryBranchAutoRename: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameRetryResult>
+  onBranchAutoRenameAttempt: (callback: (event: BranchAutoRenameAttemptEvent) => void) => () => void
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (
     callback: (data: GitStatusMetadataChangedEvent) => void

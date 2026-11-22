@@ -37,56 +37,55 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('owned native Git lifetime', () => {
-  it.each([30, 300])(
-    'bounds admitted resources and a live successor with %i canceled requests',
-    async (population) => {
-      vi.useFakeTimers()
-      const fixture = ownedChildren()
-      const scheduler = new GitAdmissionScheduler()
-      _resetGitAdmissionForTests(scheduler)
-      const options = {
-        cwd: process.cwd(),
-        admissionClass: 'checkout' as const,
-        admissionTier: 'interactive' as const
-      }
-      const controllers = Array.from({ length: population }, () => new AbortController())
-      const pending = controllers.map((controller, index) =>
-        gitExecFileAsync(['worktree', 'add', `owned-${index}`], {
-          ...options,
-          signal: controller.signal
-        }).catch((error: unknown) => error)
-      )
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fixture.children).toHaveLength(3)
-      controllers.forEach((controller) => controller.abort())
-      await Promise.all(pending)
-      const successor = gitExecFileAsync(['worktree', 'add', 'successor'], options)
-      fixture.children.forEach((child) => {
-        child.emit('exit', 0, null)
-        child.emit('close', 0, null)
-      })
-      await vi.advanceTimersByTimeAsync(2_000)
-      expect(fixture.children).toHaveLength(3)
-      expect(scheduler.snapshot().budgets.checkout).toEqual({ baseUsed: 2, headroomUsed: 1 })
-      fixture.proofs.get(fixture.children[0].pid)?.(true)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fixture.children).toHaveLength(4)
-      fixture.children[3].stdout.emit('data', Buffer.from('successor completed'))
-      fixture.children[3].emit('close', 0, null)
-      await expect(successor).resolves.toEqual({ stdout: 'successor completed', stderr: '' })
-      for (const proof of fixture.proofs.values()) {
-        proof(true)
-      }
-      await vi.advanceTimersByTimeAsync(0)
-      expect(scheduler.snapshot().budgets.checkout).toEqual({ baseUsed: 0, headroomUsed: 0 })
-      expect(scheduler.snapshot().queued).toBe(0)
-      // Explicit perf contract: stops scale with admitted roots, never queued population.
-      expect(fixture.term).toHaveBeenCalledTimes(3)
-      expect(fixture.force).toHaveBeenCalledTimes(3)
+  it('bounds admitted resources and a live successor with 300 canceled requests', async () => {
+    const population = 300
+    vi.useFakeTimers()
+    const fixture = ownedChildren()
+    const scheduler = new GitAdmissionScheduler()
+    _resetGitAdmissionForTests(scheduler)
+    const options = {
+      cwd: process.cwd(),
+      admissionClass: 'checkout' as const,
+      admissionTier: 'interactive' as const
     }
-  )
+    const controllers = Array.from({ length: population }, () => new AbortController())
+    const pending = controllers.map((controller, index) =>
+      gitExecFileAsync(['worktree', 'add', `owned-${index}`], {
+        ...options,
+        signal: controller.signal
+      }).catch((error: unknown) => error)
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fixture.children).toHaveLength(3)
+    controllers.forEach((controller) => controller.abort())
+    await Promise.all(pending)
+    const successor = gitExecFileAsync(['worktree', 'add', 'successor'], options)
+    fixture.children.forEach((child) => {
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+    })
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(fixture.children).toHaveLength(3)
+    expect(scheduler.snapshot().budgets.checkout).toEqual({ baseUsed: 2, headroomUsed: 1 })
+    fixture.proofs.get(fixture.children[0].pid)?.(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fixture.children).toHaveLength(4)
+    fixture.children[3].stdout.emit('data', Buffer.from('successor completed'))
+    fixture.children[3].emit('close', 0, null)
+    await expect(successor).resolves.toEqual({ stdout: 'successor completed', stderr: '' })
+    for (const proof of fixture.proofs.values()) {
+      proof(true)
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(scheduler.snapshot().budgets.checkout).toEqual({ baseUsed: 0, headroomUsed: 0 })
+    expect(scheduler.snapshot().queued).toBe(0)
+    // Explicit perf contract: stops scale with admitted roots, never queued population.
+    expect(fixture.term).toHaveBeenCalledTimes(3)
+    expect(fixture.force).toHaveBeenCalledTimes(3)
+  })
 
-  it.each([30, 300])('completes %i normal reads without termination probes', async (population) => {
+  it('completes 300 normal reads without termination probes', async () => {
+    const population = 300
     vi.useFakeTimers()
     const fixture = ownedChildren()
     let done = 0

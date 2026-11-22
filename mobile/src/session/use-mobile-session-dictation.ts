@@ -29,7 +29,7 @@ import {
   useWorkspaceExecutionHost,
   workspaceRouteHref
 } from '../navigation/workspace-execution-host'
-import { mobileSessionTabPaneKey } from './tabs/notification-pane-tab'
+import { sessionTabPaneKey } from '../../../src/shared/remote-runtime/session-graph/session-tab-pane-key'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 import type { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
 
@@ -227,7 +227,7 @@ export function useMobileSessionDictation(
     const routeContext = activeHandle ? { handle: activeHandle } : null
     dictationRouteContextRef.current = routeContext
     const target = destination.captureDestination(showNativeChat, activeHandle)
-    const paneKey = mobileSessionTabPaneKey(activeSessionTab)
+    const paneKey = sessionTabPaneKey(activeSessionTab)
     // A refused start comes back through this screen's reportFailure while it is shown, or the host's toast.
     void startHost({
       instance,

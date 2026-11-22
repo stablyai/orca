@@ -31,6 +31,8 @@ it.skipIf(process.platform === 'win32')(
     const profile = join(directory, 'rc')
     const shell = join(directory, 'bash')
     const reader = join(directory, 'reader.cjs')
+    // Ubuntu's /etc/bash.bashrc prints a sudo hint to stdout in a home without this file.
+    writeFileSync(join(directory, '.hushlogin'), '')
     writeFileSync(
       shell,
       `#!/bin/sh\nexec /bin/bash --noprofile --rcfile ${quotePosixShell(profile)} -ic "$2"\n`,
@@ -124,6 +126,7 @@ it.skipIf(process.platform === 'win32').each([
     const shell = join(directory, 'bash')
     const report = join(directory, 'report.json')
     const reader = join(directory, 'reader.cjs')
+    writeFileSync(join(directory, '.hushlogin'), '')
     writeFileSync(
       shell,
       `#!/bin/sh\nexec /bin/bash --noprofile --rcfile ${quotePosixShell(profile)} -ic "$2"\n`,

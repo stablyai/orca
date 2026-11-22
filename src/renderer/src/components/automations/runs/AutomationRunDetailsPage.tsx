@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
@@ -8,6 +8,8 @@ import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import { automationRunEventSourceKey } from '../../../../../shared/automations/automation-run-row-words'
+import { sayAutomationRun } from '../../native-chat/automation-run/automation-run-wording'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
@@ -108,7 +110,16 @@ export function AutomationRunDetailsPage({
   const startedLate =
     startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined
-  const errorText = automationRunErrorText(run, agentLabel)
+  const savedError = automationRunErrorText(run, agentLabel)
+  const errorText =
+    run.status === 'dispatch_failed' &&
+    run.sessionKind === 'chat' &&
+    savedError === "The bot's turn ended without finishing (failure)."
+      ? t(
+          'automations.runFailures.botProviderErrorNotSaved',
+          "The bot's turn failed, but this run did not save the provider's error. The original Chat may contain more details."
+        )
+      : savedError
   // Why: a failed run's reason has its own banner; Output shows only what the agent printed.
   const content = getAutomationRunContent(failed ? { ...run, error: null } : run, t)
   // Without the automation, the run can't be checked against its approval.
@@ -178,7 +189,9 @@ export function AutomationRunDetailsPage({
       value:
         run.trigger === 'manual'
           ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
-          : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
+          : run.trigger === 'event'
+            ? sayAutomationRun(t)(automationRunEventSourceKey(run))
+            : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
     }
   ]
   const stepLabel = {
@@ -196,9 +209,10 @@ export function AutomationRunDetailsPage({
             </AutomationsPageTitle>
             <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
-            {(['newer', 'older'] as const).map((step) => {
+            {/* Why: left reads as back in time, so Older sits left and Newer right. */}
+            {(['older', 'newer'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
-              const Icon = step === 'newer' ? ChevronUp : ChevronDown
+              const Icon = step === 'newer' ? ChevronRight : ChevronLeft
               return (
                 <Tooltip key={step}>
                   <TooltipTrigger asChild>
@@ -353,6 +367,7 @@ export function AutomationRunDetailsPage({
               <CommentMarkdown
                 variant="document"
                 content={content}
+                singleTildeStrikethrough={false}
                 className="text-sm leading-relaxed text-foreground"
               />
             </RunSection>

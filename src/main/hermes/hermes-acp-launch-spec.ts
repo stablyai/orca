@@ -14,6 +14,7 @@ import {
   resolveHermesActiveProfileHome
 } from './hermes-default-home'
 import { HERMES_TRANSCRIPT_IMPORT } from './hermes-transcript-import'
+import { deliverHermesInstructions } from '../acp/launch/acp-instructions'
 
 // Chats and terminals share the profile's session store; `--resume` also takes a session title.
 const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -72,6 +73,8 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'Hermes lists its models only inside a session it cannot delete'
   },
+  instructions: deliverHermesInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: HERMES_TRANSCRIPT_IMPORT,

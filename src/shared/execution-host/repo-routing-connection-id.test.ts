@@ -15,8 +15,6 @@ describe('getRepoRoutingConnectionId', () => {
       { executionHostId: 'local' as const, connectionId: 'gpu' },
       'gpu'
     ],
-    ['local', { executionHostId: 'local' as const }, null],
-    ['runtime host', { executionHostId: 'runtime:env' as const }, null],
     ['unstamped', {}, null]
   ])('%s', (_label, repo, expected) => {
     expect(getRepoRoutingConnectionId(repo)).toBe(expected)

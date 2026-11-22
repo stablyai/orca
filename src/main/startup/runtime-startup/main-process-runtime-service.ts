@@ -12,17 +12,17 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
-import { app } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../../agent-hooks/server/server-status-identity'
-import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import type { Store } from '../../persistence/loading-store/store'
+import type { StatsCollector } from '../../stats/collector'
+import type { DesktopCore } from '../../core-desktop/desktop-core'
 import { codexAiVaultSessionResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from '../agent-accounts/codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
@@ -33,7 +33,6 @@ import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/t
 import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/requests/orchestration-environment-transport'
 import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
 import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
-import { mainProcessState as state } from '../main-process-state'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -41,6 +40,9 @@ import {
 } from '../agent-accounts/codex-launch-preparation'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { BotShareClient } from '../../bots/sharing/bot-share-client'
+import { skillPackageDownloadOrigins } from '../../skills/runtime-transfer/skill-client-mediated-transfer'
+import { join } from 'node:path'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
@@ -49,31 +51,32 @@ import { bindTerminalPaneStatusLifecycle } from '../../ipc/pty/pane/terminal-pan
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
-import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
+import { providePairedDesktopComputerName } from '../../ipc/runtime-environments/connections/paired-desktop-account-declaration'
 
-export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
-  const activation = state.desktopActivationGate
-  if (!activation) {
-    return 'available'
-  }
-  const value = activation.getState()
-  return value === 'ready' ? 'openable' : value
+export type DesktopRuntimeServiceDeps = {
+  store: Store
+  stats: StatsCollector
+  userDataPath: string
+  isPackaged: boolean
+  servedOrcaProfileId: string | undefined
+  getDesktopWindowStatus: () => RuntimeDesktopWindowStatus
+  sendTerminalSideEffects: (batch: TerminalSideEffectBatch) => void
+  /** Browser guests, offscreen tab links and profile changes report into this runtime. */
+  attachBrowserHost: (runtime: OrcaRuntimeService) => void
+  registerCleanup: (cleanup: () => void) => void
 }
 
-export function initializeMainProcessRuntime(): OrcaRuntimeService {
-  const store = state.store
-  const stats = state.stats
-  if (!store || !stats) {
-    throw new Error('Store and stats must be initialized before runtime')
-  }
+export function initializeMainProcessRuntime(
+  core: DesktopCore,
+  deps: DesktopRuntimeServiceDeps
+): OrcaRuntimeService {
+  const { store, stats, userDataPath } = deps
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
     getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
-    ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
-      state.store?.getSettings()
-    ),
-    prepareClaudeAuth: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () => store.getSettings()),
+    prepareClaudeAuth: (target) => core.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()
@@ -82,31 +85,30 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     getLocalProvider: () => getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
     // Serve can activate in place; wire now, but enable desktop scanners only for a ready renderer.
-    onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
-      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-        state.mainWindow.webContents.send('pty:sideEffect', batch)
-      }
-    },
-    getDesktopWindowStatus,
+    onTerminalSideEffects: deps.sendTerminalSideEffects,
+    getDesktopWindowStatus: deps.getDesktopWindowStatus,
+    servedOrcaProfileId: deps.servedOrcaProfileId,
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
-    retireAgentHookCompatibilityAuthority: (paneKey) =>
-      agentHookServer.retireProcessAuthority(paneKey),
+    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+      agentHookServer.retireProcessAuthority(paneKey, options),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
-      state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
+      core.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
+    getPairedDeviceAccount: (pairedDeviceId, connectionClaim) =>
+      core.runtimeRpc?.pairedDeviceTypist(pairedDeviceId, connectionClaim) ?? null,
     // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
-      state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
+      core.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
-      runtimeHome: state.codexRuntimeHome,
+      runtimeHome: core.codexRuntimeHome,
       systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
       preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
     })),
     ...codexStructuredLaunchHomeResolvers,
     prepareCodexCatalogProbeHome: (homePath) =>
-      state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
+      core.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
@@ -115,10 +117,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       onEnvironmentVerified: (listener) =>
         onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
     },
-    workspaceSleepPlatform: desktopWorkspaceSleepPlatform(store, () => app.getPath('userData')),
+    workspaceSleepPlatform: desktopWorkspaceSleepPlatform(store, () => userDataPath),
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
-    skillTransactionRecovery: state.skillTransactionRecovery
+    skillTransactionRecovery: core.skillTransactionRecovery
   })
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
@@ -127,18 +129,19 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Read the host catalog per search so added repos/renamed workspaces are immediately in scope.
     getScopeCatalog: () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
   })
-  app.once('will-quit', () => sessionSearch?.dispose())
+  deps.registerCleanup(() => sessionSearch?.dispose())
   // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
-  wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  wireRecipeWorkspaceRemoval(runtime, store, () => userDataPath)
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
-  app.once('will-quit', disposeIssueLinkTitleFill)
+  deps.registerCleanup(disposeIssueLinkTitleFill)
   bindTerminalPaneStatusLifecycle(runtime, store)
-  state.runtime = runtime
-  installDesktopWorkspaceVmWaker(runtime, () => app.getPath('userData'))
+  core.runtime = runtime
+  providePairedDesktopComputerName(() => runtime.readMachineName())
+  installDesktopWorkspaceVmWaker(runtime, () => userDataPath)
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
@@ -155,35 +158,38 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   }
   // Rehydrate before clients attach so restarted runtimes can return their owned pages.
   runtime.rehydrateClientHostedBrowserPages()
-  browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
-    runtime.notifyMobileSessionTabsChanged(worktreeId)
-  })
-  browserManager.setOffscreenTabOpener((request) =>
-    openOffscreenBrowserPageLink(
-      (params, caller) => runtime.browserTabCreate(params, caller),
-      request
-    )
-  )
-  browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+  deps.attachBrowserHost(runtime)
   runtime.startupWorkerAuthority.begin()
   return runtime
 }
 
-export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
-  const store = state.store
-  const claudeAccounts = state.claudeAccounts
-  const codexAccounts = state.codexAccounts
-  const rateLimits = state.rateLimits
-  if (!store || !claudeAccounts || !codexAccounts || !rateLimits) {
+export function configureRuntimeServices(
+  core: DesktopCore,
+  runtime: OrcaRuntimeService,
+  {
+    store,
+    userDataPath,
+    isPackaged
+  }: Pick<DesktopRuntimeServiceDeps, 'store' | 'userDataPath' | 'isPackaged'>
+): void {
+  const claudeAccounts = core.claudeAccounts
+  const codexAccounts = core.codexAccounts
+  const rateLimits = core.rateLimits
+  if (!claudeAccounts || !codexAccounts || !rateLimits) {
     throw new Error('Account services must be initialized before runtime wiring')
   }
-  configureDesktopCloudServices(runtime, () => state.store?.getSettings(), app.getPath('userData'))
+  configureDesktopCloudServices(runtime, () => store.getSettings(), userDataPath)
+  runtime.setBotShareClient(BotShareClient.forProfile(userDataPath), {
+    temporaryRoot: join(userDataPath, 'bot-share-downloads'),
+    allowedOrigins: skillPackageDownloadOrigins(!isPackaged),
+    requireHttps: isPackaged
+  })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    prepareForClaudeLaunch: (target) => core.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
   })
 }

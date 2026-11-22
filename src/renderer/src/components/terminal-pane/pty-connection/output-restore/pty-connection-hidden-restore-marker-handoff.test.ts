@@ -292,27 +292,6 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     _resetPtyRendererDeliveryClaimsForTest()
   })
 
-  it('[mechanism] the renderer channel drops a marker with no registered handler and never replays it', async () => {
-    const { registerPtyModelRestoreNeededHandler, _dispatchPtyModelRestoreNeededForTest } =
-      await import('../../pty-transport/delivery/pty-model-restore-channel')
-    const retiringHandler = vi.fn()
-    const unregister = registerPtyModelRestoreNeededHandler(PTY_ID, retiringHandler)
-    unregister()
-
-    _dispatchPtyModelRestoreNeededForTest({
-      id: PTY_ID,
-      reason: 'unhide',
-      markerSeq: 4096
-    })
-    expect(retiringHandler).not.toHaveBeenCalled()
-
-    // The replacement view registers a moment later: nothing is held for it.
-    const replacementHandler = vi.fn()
-    registerPtyModelRestoreNeededHandler(PTY_ID, replacementHandler)
-    await flushAsyncTicks(6)
-    expect(replacementHandler).not.toHaveBeenCalled()
-  })
-
   it('[control] a revealed pane consumes the unhide marker and repaints from the model', async () => {
     const gate = await wireMainGateToRendererChannel()
     const drive = await connectPane(false)

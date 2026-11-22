@@ -13,15 +13,13 @@ import { createSequencedSetupAgentCommands } from '../../../../shared/agent-laun
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
+import { ownerSurfacing } from '../../terminal/launch/terminal-presentation'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningArgs
-} from './runtime-worktree-terminal-provisioning'
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
 export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
@@ -157,7 +155,13 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   const startupPaneHeld =
     didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
   if (shouldActivate) {
-    const provisionInBackground = ports.provisionInBackground?.() === true
+    // The host's activation window may be a different viewer from the caller of a plain create.
+    const provisionInBackground =
+      ports.provisionInBackground?.() === true ||
+      (!sequencedStartup &&
+        !setup &&
+        !defaultTabs &&
+        request.terminalImageViewerSupported !== undefined)
     // Legacy failure hands provisioning to the window, which needs the agent tab first; main provisioning would consume that slot.
     const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
     // Main provisions even without an open window; no window takes over.
@@ -178,7 +182,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
             startupPaneHeld,
             wrappedSetupCommand
           ),
-          ...(provisionInBackground ? { surfaceOwner: false as const } : {})
+          ...ownerSurfacing(!provisionInBackground)
         })
         didSpawnSetup = provisioned.setupSpawned
         setupTerminalHandle = provisioned.setupTerminalHandle
@@ -293,12 +297,6 @@ function setupPlatform(
   fallback: 'windows' | 'posix'
 ): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
-}
-
-function ownerSurfacing(
-  shouldSurface: boolean
-): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
-  return shouldSurface ? {} : { surfaceOwner: false }
 }
 
 function appendFailure(

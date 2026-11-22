@@ -27,6 +27,20 @@ export function hasLifecycleAuthority(
   return dispatch.assignee_handle === msg.from_handle
 }
 
+/** The sender the home's relay import stores a federated Dispatch's reports under. */
+export function isFederatedRelaySender(
+  db: OrchestrationDb,
+  dispatchId: string,
+  from: string,
+  paneKey: string | null | undefined
+): boolean {
+  return (
+    from === `dispatch:${dispatchId}` &&
+    !paneKey &&
+    db.getFederatedDispatch(dispatchId) !== undefined
+  )
+}
+
 export type LifecycleReconciliationResult =
   | { action: 'ignored' }
   // Suppressed mail is already read and must not wake waiters; ignored mail still needs delivery.
@@ -251,6 +265,9 @@ function reconcileWorkerDoneMessage(
       `worker_done dispatch ${dispatchId} belongs to ${dispatch.task_id}, not ${taskId}.`,
       onLog
     )
+  }
+  if (isFederatedRelaySender(db, dispatchId, msg.from_handle, msg.sender_pane_key)) {
+    return { action: 'ignored' }
   }
   if (!hasLifecycleAuthority(dispatch, msg)) {
     const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)

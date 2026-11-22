@@ -1,4 +1,8 @@
-import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  toVisibleTabType as toContentVisibleTabType,
+  type Tab,
+  type TabGroup
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from '../state'
 import { sameStringArray } from './state-equality-core'
@@ -128,7 +132,7 @@ export function sameGroups(
 }
 
 export function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabType'] {
-  if (tab.contentType === 'agent-session') {
+  if (toContentVisibleTabType(tab.contentType) === 'agent-session') {
     return 'agent-session'
   }
   if (tab.contentType === 'browser' || tab.contentType === 'terminal') {

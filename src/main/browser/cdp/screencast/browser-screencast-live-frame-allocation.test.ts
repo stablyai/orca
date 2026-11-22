@@ -45,7 +45,13 @@ function createLiveFrameRoute(
   }
   const isClosed = () => false
   const isStopping = () => false
-  const pacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
+  const pacer = createBrowserScreencastFramePacer({
+    dbg,
+    options,
+    isClosed,
+    isStopping,
+    readZoomFactor: () => 1
+  })
   const handler = createBrowserScreencastMessageHandler({
     dbg,
     options,
@@ -74,51 +80,46 @@ async function settleAcknowledgements(): Promise<void> {
 }
 
 describe('live screencast image allocation', () => {
-  it('owns pooled and offset images through refused sends and keeps encoded bytes independent', async () => {
+  it('owns an offset image through refused sends and keeps encoded bytes independent', async () => {
     vi.useFakeTimers()
     const bytes = readFileSync(resolve('resources/tray/orca-menu-barTemplate.png'))
     const data = bytes.toString('base64')
     const expectedDigest = digest(bytes)
-    const pooled = Buffer.from(data, 'base64')
     const parent = Buffer.alloc(bytes.byteLength + 4096, 0xa5)
     bytes.copy(parent, 127)
-    const offset = parent.subarray(127, 127 + bytes.byteLength)
+    const decoded = parent.subarray(127, 127 + bytes.byteLength)
     try {
-      expect(offset.byteOffset).toBe(127)
-      for (const decoded of [pooled, offset]) {
-        expect(decoded.buffer.byteLength).toBeGreaterThan(decoded.byteLength)
-        let accepted = false
-        const wires: Uint8Array[] = []
-        const route = createLiveFrameRoute('png', (wire) => {
-          wires.push(wire)
-          return accepted
-        })
-        const from = vi.spyOn(Buffer, 'from').mockReturnValueOnce(decoded)
-        try {
-          route.emit(data, 42)
-        } finally {
-          from.mockRestore()
-        }
-        await settleAcknowledgements()
-        expect(route.acknowledgements).toEqual([])
-        decoded.fill(0)
-        accepted = true
-        await vi.advanceTimersByTimeAsync(50)
-        expect(route.acknowledgements).toEqual([42])
-        expect(wires).toHaveLength(2)
-        for (const wire of wires) {
-          const frame = decodeBrowserScreencastFrame(wire)
-          if (!frame) {
-            throw new Error('Pooled frame was not encoded')
-          }
-          expect(frame.metadata.imageWidth).toBe(22)
-          expect(frame.metadata.imageHeight).toBe(14)
-          expect(digest(frame.image)).toBe(expectedDigest)
-          expect(wire.buffer).not.toBe(decoded.buffer)
-        }
-        expect(wires.map((wire) => decodeBrowserScreencastFrame(wire)?.seq)).toEqual([0, 1])
-        route.pacer.clearPending(true)
+      let accepted = false
+      const wires: Uint8Array[] = []
+      const route = createLiveFrameRoute('png', (wire) => {
+        wires.push(wire)
+        return accepted
+      })
+      const from = vi.spyOn(Buffer, 'from').mockReturnValueOnce(decoded)
+      try {
+        route.emit(data, 42)
+      } finally {
+        from.mockRestore()
       }
+      await settleAcknowledgements()
+      expect(route.acknowledgements).toEqual([])
+      decoded.fill(0)
+      accepted = true
+      await vi.advanceTimersByTimeAsync(50)
+      expect(route.acknowledgements).toEqual([42])
+      expect(wires).toHaveLength(2)
+      for (const wire of wires) {
+        const frame = decodeBrowserScreencastFrame(wire)
+        if (!frame) {
+          throw new Error('Offset frame was not encoded')
+        }
+        expect(frame.metadata.imageWidth).toBe(22)
+        expect(frame.metadata.imageHeight).toBe(14)
+        expect(digest(frame.image)).toBe(expectedDigest)
+        expect(wire.buffer).not.toBe(decoded.buffer)
+      }
+      expect(wires.map((wire) => decodeBrowserScreencastFrame(wire)?.seq)).toEqual([0, 1])
+      route.pacer.clearPending(true)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

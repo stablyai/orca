@@ -99,7 +99,9 @@ async function service(): Promise<ArtifactCloudService> {
 
 // The wait is scheduled after the 429 body is read; advance only once it exists.
 async function untilRetryScheduled(): Promise<void> {
-  for (let turn = 0; turn < 1000 && vi.getTimerCount() === 0; turn++) {
+  // Real disk I/O runs first, so bound this by wall time; vi.waitUntil would advance the fake clock.
+  const deadline = performance.now() + 10_000
+  while (vi.getTimerCount() === 0 && performance.now() < deadline) {
     await new Promise((resolve) => setImmediate(resolve))
   }
   expect(vi.getTimerCount()).toBe(1)
@@ -148,6 +150,11 @@ describe('artifact share under a rate limit', () => {
     expect(message).toContain(`Try again after`)
     expect(message).toContain(localTime(resetAt))
     expect(message).not.toContain(resetAt)
+    expect(mapRuntimeError('request-1', { runtimeId: 'runtime-1' }, error).error).toMatchObject({
+      code: 'artifact_rate_limited',
+      message,
+      data: { resetAt, retryAfterSeconds: 2700 }
+    })
   })
 
   it('waits out a short Retry-After and replays once with the same Idempotency-Key', async () => {
@@ -233,19 +240,5 @@ describe('artifact share under a rate limit', () => {
     await expect(artifacts.share(writeRequest)).rejects.toThrow(
       'Slow down [2J please. Try again in 15 minutes.'
     )
-  })
-
-  it('reaches RPC callers with its own code, message and reset details', async () => {
-    const artifacts = await service()
-    stubFetch(rateLimited('2700', limitBody(2700)))
-    const error = await shareFailure(artifacts)
-
-    const response = mapRuntimeError('request-1', { runtimeId: 'runtime-1' }, error)
-
-    expect(response.error).toMatchObject({
-      code: 'artifact_rate_limited',
-      message: error.message,
-      data: { resetAt, retryAfterSeconds: 2700 }
-    })
   })
 })

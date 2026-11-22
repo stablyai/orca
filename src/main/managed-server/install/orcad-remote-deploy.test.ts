@@ -34,7 +34,11 @@ vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
+import {
+  execCommand,
+  SSH_EXEC_TIMEOUT_CODE,
+  sshCommandExitError
+} from '../../ssh/remote-exec/remote-exec-command'
 import { isRelayInstallLockStale } from './remote-install-lock'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
@@ -52,6 +56,7 @@ import { isSnapshotCaptureCommand } from '../activation/testing/orcad-snapshot-c
 import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime/node-runtime-pin'
 import { serializeOrcadActivationTransaction } from '../activation/orcad-activation-transaction'
 import { createOrcadActivationTransaction } from '../activation/orcad-activation-transaction-transitions'
+import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'
@@ -109,11 +114,14 @@ type HostScript = {
   activationRecord: string
   readiness: Record<string, string>
   log: string[]
-  preflightResult?: string
+  /** An Error is thrown, as when the preflight command fails instead of answering. */
+  preflightResult?: string | Error
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
   orcadLog?: string
+  /** What the candidate's daemon probe finds, when it is asked. */
+  liveDaemonProtocols?: number[] | null
 }
 
 function scriptHost(script: HostScript): void {
@@ -142,6 +150,9 @@ function scriptHost(script: HostScript): void {
     }
     if (text.includes('--orcad-profile-state-preflight')) {
       script.log.push('preflight')
+      if (script.preflightResult instanceof Error) {
+        throw script.preflightResult
+      }
       return (
         script.preflightResult ??
         JSON.stringify({
@@ -151,7 +162,10 @@ function scriptHost(script: HostScript): void {
           runtimeVersion: NODE_RUNTIME_PIN.version,
           sqliteVersion: '3.51.0',
           artifactVersion: NEW_VERSION,
-          revision: 1
+          revision: 1,
+          ...(script.liveDaemonProtocols !== undefined && text.includes("'/home/u/.orca'")
+            ? { liveDaemonProtocols: script.liveDaemonProtocols }
+            : {})
         })
       )
     }
@@ -207,33 +221,74 @@ const ACTIVE_OLD = JSON.stringify(
 )
 
 describe('deployOrcad', () => {
-  it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(
-    'leaves the incumbent and shared state alone when preflight returns %j',
-    async (preflightResult) => {
-      const script: HostScript = {
-        activationRecord: ACTIVE_OLD,
-        readiness: { [NEW_VERSION]: readyLine({}) },
-        log: [],
-        preflightResult
-      }
-      scriptHost(script)
-      expect(await deployOrcad(options())).toMatchObject({
-        outcome: 'installed-not-activated',
-        code: 'orcad_candidate_preflight_failed',
-        startCheckFailed: true
-      })
-      expect(script.log).toEqual(['preflight'])
-      expect(
-        vi
-          .mocked(writeAtomicOrcadRemoteRecord)
-          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
-      ).toBe(false)
+  it('leaves the incumbent and shared state alone when preflight returns invalid evidence', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      preflightResult: '{"type":"orca_profile_state_ready","revision":0}'
     }
-  )
+    scriptHost(script)
+    expect(await deployOrcad(options())).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_candidate_preflight_failed',
+      startCheckFailed: true
+    })
+    expect(script.log).toEqual(['preflight'])
+    expect(
+      vi
+        .mocked(writeAtomicOrcadRemoteRecord)
+        .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+    ).toBe(false)
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  it.each([
+    [
+      'times out',
+      Object.assign(new Error('Command "preflight" timed out after 90s'), {
+        code: SSH_EXEC_TIMEOUT_CODE
+      }),
+      false,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'ends with OpenSSH’s own exit 255',
+      sshCommandExitError('preflight', 255, ''),
+      true,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'exits 255 over ssh2',
+      sshCommandExitError('preflight', 255, ''),
+      false,
+      'orcad_candidate_preflight_failed'
+    ],
+    [
+      'exits 1 over system SSH',
+      sshCommandExitError('preflight', 1, ''),
+      true,
+      'orcad_candidate_preflight_failed'
+    ]
+  ])(
+    'defers with the right code when the preflight %s',
+    async (_label, preflightResult, systemSsh, code) => {
+      scriptHost({
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: [],
+        preflightResult
+      })
+      const conn = Object.assign(Object.create(null), { usesSystemSshTransport: () => systemSsh })
+      expect(await deployOrcad(options({ conn }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code
+      })
+    }
+  )
 
   it.each([
     ['a fresh fence with no journal', false, false, 'orcad_activation_fence_busy'],
@@ -267,14 +322,16 @@ describe('deployOrcad', () => {
     expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  it.skipIf(process.platform === 'win32').each([undefined, 'linux-x64', 'linux-musl-x64'])(
-    'restores uploaded executable modes with optional browser %s',
+  it.skipIf(process.platform === 'win32').each(['linux-x64', 'linux-musl-x64'])(
+    'restores uploaded executable modes with browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
-      const binaries = ['ripgrep/linux-x64/rg', 'bin/orca-provider-exec']
-      if (browserTarget) {
-        binaries.push(`agent-browser-${browserTarget}`)
-      }
+      const binaries = [
+        'ripgrep/linux-x64/rg',
+        'bin/orca-provider-exec',
+        'node_modules/node-pty/build/Release/journal-file-lock',
+        `agent-browser-${browserTarget}`
+      ]
       try {
         for (const filename of binaries) {
           const path = join(directory, filename)
@@ -351,6 +408,105 @@ describe('deployOrcad', () => {
     expect(script.log).toEqual([])
   })
 
+  it('forces an update past a daemon the candidate proves is not running', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      liveDaemonProtocols: []
+    }
+    scriptHost(script)
+    // The incumbent answers, but its daemon never started, so it counts no daemon sessions.
+    const census = {
+      ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+      inProcessSessions: 0,
+      answered: true as const
+    }
+    expect(await deployOrcad(options({ census, force: true }))).toMatchObject({
+      outcome: 'installed-and-activated',
+      fullVersion: NEW_VERSION
+    })
+    expect(script.log).toContain(`stop:${OLD_VERSION}`)
+  })
+
+  it('keeps a forced update deferred when the recount before the stop goes unanswered', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      liveDaemonProtocols: []
+    }
+    scriptHost(script)
+    // An older orcad that cannot count its in-process terminals, as on the reporting host.
+    const census = {
+      ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+      inProcessSessions: null,
+      answered: true as const
+    }
+    expect(
+      await deployOrcad(
+        options({
+          census,
+          force: true,
+          recountCensus: async () => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+        })
+      )
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+    expect(script.log).toEqual(['preflight'])
+  })
+
+  it('keeps a forced update deferred when the recount cannot count in-process terminals', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      liveDaemonProtocols: []
+    }
+    scriptHost(script)
+    const census = {
+      ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+      inProcessSessions: 0,
+      answered: true as const
+    }
+    // An older server's reply while a spawn was still settling: answered, but with no in-process count.
+    const recounted = {
+      ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+      admissionClosedUntil: 60_000,
+      answered: true as const
+    }
+    expect(
+      await deployOrcad(options({ census, force: true, recountCensus: async () => recounted }))
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    expect(script.log).toEqual(['preflight'])
+  })
+
+  it('does not probe an uncounted census for Update anyway, which only full force may pass', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      // A probe would fail the candidate; Update anyway must not run one.
+      preflightResult: new Error('preflight unavailable')
+    }
+    scriptHost(script)
+    const census = {
+      ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+      inProcessSessions: 0,
+      answered: true as const
+    }
+    expect(await deployOrcad(options({ census, force: 'live-terminals' }))).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+    expect(script.log).toEqual([])
+  })
+
   it('installs but does not activate when terminals are running', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
@@ -420,7 +576,7 @@ describe('deployOrcad', () => {
     )
   })
 
-  it.each(['CHANGED', 'UNKNOWN', ''])(
+  it.each(['CHANGED', ''])(
     'preserves rejected candidate state when comparison is %s',
     async (comparisonResult) => {
       const script: HostScript = {

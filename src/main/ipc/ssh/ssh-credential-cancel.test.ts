@@ -74,18 +74,6 @@ describe('a cancelled SSH sign-in', () => {
     await expect(pending).resolves.toBeNull()
   }
 
-  it('is not re-prompted by a later automatic credential request for that host', async () => {
-    await promptAndCancel()
-    mockWindow.webContents.send.mockClear()
-
-    // A reconnect ladder, host-resume reconnect or managed-server tunnel asking again.
-    await expect(
-      requestCredential(target.id, 'passphrase', '~/.ssh/id_ed25519')
-    ).resolves.toBeNull()
-
-    expect(credentialRequests()).toHaveLength(0)
-  })
-
   it('lets the cancelled attempt still offer its other method, but not a later attempt', async () => {
     const cancelledAttempt = new AbortController().signal
     await promptAndCancel(cancelledAttempt)
@@ -101,8 +89,13 @@ describe('a cancelled SSH sign-in', () => {
     expect(credentialRequests()).toHaveLength(1)
   })
 
-  it('is lifted by an explicit reconnect, which prompts again', async () => {
+  it('suppresses automatic prompts until an explicit reconnect', async () => {
     await promptAndCancel()
+    mockWindow.webContents.send.mockClear()
+    await expect(
+      requestCredential(target.id, 'passphrase', '~/.ssh/id_ed25519')
+    ).resolves.toBeNull()
+    expect(credentialRequests()).toHaveLength(0)
 
     await handlers.get('ssh:connect')!(null, { targetId: target.id })
     mockWindow.webContents.send.mockClear()

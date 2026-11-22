@@ -61,14 +61,20 @@ function profile(savedSnapshots: Record<string, unknown> = {}) {
   directories.push(directory)
   const databasePath = join(directory, 'profile-state.db')
   const profileId = 'host-repo-catalog'
-  new ProfileStateSqliteAuthority(databasePath, profileId).writeSerializedState(
-    Buffer.from(
-      JSON.stringify({
-        ...getDefaultPersistedState(directory),
-        hostRepoCatalogSnapshots: savedSnapshots
-      })
+  // Each Store closes its own authority on freeze; the seed's open handle would block rmSync on Windows.
+  const seed = new ProfileStateSqliteAuthority(databasePath, profileId)
+  try {
+    seed.writeSerializedState(
+      Buffer.from(
+        JSON.stringify({
+          ...getDefaultPersistedState(directory),
+          hostRepoCatalogSnapshots: savedSnapshots
+        })
+      )
     )
-  )
+  } finally {
+    seed.close()
+  }
   const open = () => {
     const store = new Store({
       dataFile: join(directory, 'orca-data.json'),
@@ -120,7 +126,7 @@ const notes = {
   kind: 'folder' as const
 }
 
-it("keeps a WSL host's projects across a restart, with only the row fields", () => {
+it('keeps only offline project fields across restart and persists removal by host', () => {
   const { open } = profile()
   const store = open()
   recordHostRepoCatalogAnswer(
@@ -129,6 +135,7 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
     'repo.list',
     repoListAnswer([helloWorld, django, notes])
   )
+  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
   store.flushOrThrow()
 
   const restarted = open()
@@ -155,19 +162,13 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
       ]
     }
   })
-})
 
-it('does not restore a removed WSL project from the offline catalog after a restart', () => {
-  const { open } = profile()
-  const store = open()
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
-  forgetHostRepoCatalogRepo(store, wslHost.id, 'django')
-  store.flushOrThrow()
-
-  const restarted = open()
-  expect(listHostRepoCatalogSnapshots(restarted, [wslHost, otherWslHost])).toEqual({
-    'env-wsl': { repos: [expect.objectContaining({ id: 'hello' })] },
+  forgetHostRepoCatalogRepo(restarted, wslHost.id, 'django')
+  restarted.flushOrThrow()
+  expect(listHostRepoCatalogSnapshots(open(), [wslHost, otherWslHost])).toEqual({
+    'env-wsl': {
+      repos: [expect.objectContaining({ id: 'hello' }), expect.objectContaining({ id: 'notes' })]
+    },
     'env-wsl-2': { repos: [expect.objectContaining({ id: 'django' })] }
   })
 })

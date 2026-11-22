@@ -69,12 +69,16 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
   }
 
   itWithZsh(
-    'loads the user .zshrc when the wrapper is sourced from a relocated path (#8003)',
+    'loads the user .zshrc after moving the wrapper to a non-ASCII path (#8003)',
     async () => {
-      // Relocate to model Windows-generated wrappers sourced through a different WSL /mnt path.
+      // Korean UTF-8 bytes overlap zsh's token range and can corrupt env-imported ZDOTDIR during startup.
       const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
       try {
-        const { values } = await runFromRelocatedRoot(home, `${userDataPath}-wsl-view`)
+        // A unique destination avoids collisions with directories left by killed test runs.
+        const { values } = await runFromRelocatedRoot(
+          home,
+          join(dirname(userDataPath), `홍길동-${basename(userDataPath)}`)
+        )
 
         expect(values.ORCA_TEST_FROM_ZSHRC).toBe('1')
         expect(values.ORCA_SHELL_FEATURES).toBe('UNSET')
@@ -84,24 +88,6 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
       }
     }
   )
-
-  itWithZsh('loads the user .zshrc from a non-ASCII wrapper path (#8003)', async () => {
-    // Korean UTF-8 bytes overlap zsh's token range and can corrupt env-imported ZDOTDIR during startup.
-    const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
-    try {
-      // A unique destination avoids collisions with directories left by killed test runs.
-      const { values } = await runFromRelocatedRoot(
-        home,
-        join(dirname(userDataPath), `홍길동-${basename(userDataPath)}`)
-      )
-
-      expect(values.ORCA_TEST_FROM_ZSHRC).toBe('1')
-      expect(values.ORCA_SHELL_FEATURES).toBe('UNSET')
-      expect(values.HISTFILE).toBe(join(home, 'scoped_history'))
-    } finally {
-      rmSync(home, { recursive: true, force: true })
-    }
-  })
 
   itWithZsh('refuses an inherited ZDOTDIR that is an Orca wrapper dir (#15258)', async () => {
     // Older parents can supply stale ORCA_ORIG_ZDOTDIR without passing through Node's ownership check.

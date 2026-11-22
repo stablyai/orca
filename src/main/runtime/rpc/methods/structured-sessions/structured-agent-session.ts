@@ -1,9 +1,11 @@
+import { STRUCTURED_AGENT_SESSION_CANCEL_METHOD } from '../structured-agent-session-cancel-method'
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
 import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './catalog/structured-agent-session-account-usage'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog/structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS } from './conversation/structured-agent-session-skip-async-questions'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './conversation/structured-agent-session-close-method'
+import { STRUCTURED_AGENT_SESSION_DELETE_METHOD } from './conversation/structured-agent-session-delete-method'
 import { STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD } from './subscriptions/structured-agent-session-subscribe-method'
 import {
   clientReadsCurrentRequests,
@@ -43,7 +45,6 @@ import { STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS } from './history/struct
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structured-agent-session-options-read'
 import {
   AttachParams,
-  CancelParams,
   ConversationCommandParams,
   CreateParams,
   CreateSupportParams,
@@ -109,14 +110,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: SendParams,
     handler: sendStructuredAgentSessionForClient
   }),
-  defineMethod({
-    name: 'agentSession.cancel',
-    permission: 'workspace',
-    params: CancelParams,
-    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
-  }),
+  STRUCTURED_AGENT_SESSION_CANCEL_METHOD,
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   STRUCTURED_AGENT_SESSION_CLOSE_METHOD,
+  STRUCTURED_AGENT_SESSION_DELETE_METHOD,
   defineMethod({
     name: 'agentSession.sleepWorkspace',
     permission: 'workspace',

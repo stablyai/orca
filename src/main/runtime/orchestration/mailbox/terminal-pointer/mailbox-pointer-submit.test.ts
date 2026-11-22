@@ -11,6 +11,7 @@ import '../../db/attempt-outcome-projection'
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { OrchestrationMailboxOwner } from '../routing/mailbox-owner'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
+import { getQuestionTaker } from '../../db/messages/mail-taker'
 import {
   settledWriteStub,
   stubWriteSettlement
@@ -261,6 +262,71 @@ describe('orchestration mailbox pointer submit', () => {
     db.close()
   })
 
+  describe('a question a pointer was typed in for', () => {
+    async function submitQuestion(absent: boolean) {
+      const db = new OrchestrationDb(':memory:')
+      const admitted = db.admitBotRequest({
+        rootKey: 'q',
+        fromBotId: 'ranger',
+        toBotId: 'docs',
+        purpose: 'question',
+        depth: 1,
+        record: '{}',
+        message: { from: 'orca_session_id:asker', to: 'run:run-1', subject: 'q', type: 'question' }
+      })
+      const id = admitted.kind === 'sent' ? admitted.message.id : ''
+      const ptyId = 'pty-q'
+      const reservation = { ptyId, processIncarnation: 'inc-q' }
+      const terminal = {
+        ptyId,
+        handle: 'term-docs',
+        paneKeys: ['tab-1:leaf-1', 'tab-2:leaf-1'],
+        lastAgentStatus: 'idle' as const,
+        lastAgentStatusObservedLive: true
+      }
+      const expectedTarget = { terminal, processIncarnation: reservation.processIncarnation }
+      const state = new OrchestrationMailboxPointerState()
+      const flight = state.beginFlight(ptyId)
+      state.setWatermark('run:run-1', 1, ptyId)
+      expect(db.stageMailboxPointerEnter([id], reservation)).toBe(true)
+      expect(db.markMailboxPointerWriteAttempted([id], reservation)).toBe(true)
+      const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+      submitOrchestrationMailboxPointer(
+        {
+          mailboxOwner: { resolve: () => 'run:run-1' } as never,
+          state,
+          getDb: () => db,
+          resolveSubmitTarget: () => expectedTarget,
+          isLeafPtyProvenAbsent: async () => absent,
+          isPtyAwaitingUserInput: () => false,
+          writePty: vi.fn(settledWriteStub()),
+          settle,
+          redrive: vi.fn()
+        },
+        {
+          mailboxHandle: 'run:run-1',
+          messages: [{ id, type: 'question' }],
+          newestSequence: 1,
+          ptyId,
+          flight,
+          expectedTarget
+        }
+      )
+      await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+      const taker = getQuestionTaker(db, id)
+      db.close()
+      return taker
+    }
+
+    it('hands it to the terminal it was submitted to, by handle', async () => {
+      expect(await submitQuestion(false)).toBe('terminal:term-docs')
+    })
+
+    it('hands it to no one when the terminal was gone and the pointer goes to its next owner', async () => {
+      expect(await submitQuestion(true)).toBeNull()
+    })
+  })
+
   describe('a pointer whose mail a check read before Enter', () => {
     function submitAfterRead(
       options: {
@@ -292,7 +358,7 @@ describe('orchestration mailbox pointer submit', () => {
       state.setWatermark('run:run-1', 1, ptyId)
       expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
       expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
-      db.markAsRead([message.id])
+      db.markAsRead([message.id], { kind: 'orca' })
       const writePty = vi.fn(settledWriteStub())
       const settle = vi.fn(() => state.settleFlight(ptyId, flight))
       submitOrchestrationMailboxPointer(

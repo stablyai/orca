@@ -65,16 +65,6 @@ describe('listOmpSubagentSessions', () => {
     ])
   })
 
-  it('resolves empty for a session that never delegated', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-subagent-list-'))
-    tempRoots.push(workspace)
-    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
-    await writeFile(parentPath, '')
-
-    await expect(
-      listOmpSubagentSessions({ parentFilePath: parentPath, platform: 'darwin' })
-    ).resolves.toEqual({ sessions: [], issues: [] })
-  })
   it('traverses each saved generation through its own transcript without flattening descendants', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'orca-omp-nested-list-'))
     tempRoots.push(workspace)
@@ -111,6 +101,10 @@ describe('listOmpSubagentSessions', () => {
       filePath: grandchildPath,
       sessionId: 'research-id',
       subagentTranscriptCount: 0
+    })
+    await expect(listOmpSubagentSessions({ parentFilePath: grandchildPath })).resolves.toEqual({
+      sessions: [],
+      issues: []
     })
   })
 })

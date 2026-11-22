@@ -12,6 +12,9 @@ export const WINDOWS_MISSING_APPDATA_E2E_SPEC =
 // Windows-only; the same Windows job runs it.
 export const WINDOWS_COPY_FILE_E2E_SPEC =
   'tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts'
+// Needs out/orcad, which only the mode-switch job builds; it runs there beside that spec.
+export const ORCAD_CONNECTOR_SERVER_BOT_E2E_SPEC =
+  'tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts'
 // Managed-SSH specs need the orcad template built by their Docker lane.
 export const MANAGED_SSH_E2E_SPECS = [
   'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts',
@@ -28,7 +31,8 @@ export const DEDICATED_E2E_SPECS = [
   NATIVE_IME_E2E_SPEC,
   ORCAD_SERVE_MODE_SWITCH_E2E_SPEC,
   WINDOWS_MISSING_APPDATA_E2E_SPEC,
-  WINDOWS_COPY_FILE_E2E_SPEC
+  WINDOWS_COPY_FILE_E2E_SPEC,
+  ORCAD_CONNECTOR_SERVER_BOT_E2E_SPEC
 ]
 const dedicatedSpecs = new Set(DEDICATED_E2E_SPECS)
 // Their jobs build their own app or none, so they never need the shared e2e build.

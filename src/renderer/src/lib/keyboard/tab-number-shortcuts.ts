@@ -89,6 +89,11 @@ export function activateTabNumberShortcut(index: number): boolean {
     return true
   }
 
+  if (target.contentType === 'room') {
+    store.setActiveTabType('agent-session', worktreeId)
+    return true
+  }
+
   if (target.contentType === 'simulator') {
     store.setActiveTab(target.id)
     store.setActiveTabType('simulator', worktreeId)

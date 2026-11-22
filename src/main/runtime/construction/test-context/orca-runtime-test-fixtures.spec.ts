@@ -30,6 +30,7 @@ import type { RpcRequest } from '../../rpc/core'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -520,6 +521,19 @@ function makeRuntimeStoreWithWorkspaceSession(
       getWorkspaceSession: (hostId?: string) =>
         hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
       setWorkspaceSession: vi.fn(setSession),
+      retireSleepingAgentSession: (
+        paneKey: string,
+        retire: (saved: SleepingAgentSessionRecord) => boolean,
+        hostId?: string | null
+      ) => {
+        const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+        if ((hostId ?? ownerHostId) !== ownerHostId || !saved || !retire(saved)) {
+          return false
+        }
+        const { [paneKey]: _retired, ...kept } = session.sleepingAgentSessionsByPaneKey ?? {}
+        session = { ...session, sleepingAgentSessionsByPaneKey: kept }
+        return true
+      },
       getWorkspaceSessionHostIds: () => [ownerHostId],
       applyLayoutCommand: vi.fn(
         async (

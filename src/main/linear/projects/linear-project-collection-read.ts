@@ -30,7 +30,7 @@ export async function readCollection<T>(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(workspaceId, signal)
+      const entries = await getClients(workspaceId, signal)
       if (entries.length === 0) {
         return { items: [] }
       }
@@ -51,7 +51,7 @@ export async function readCollection<T>(
             return await load(entry, yieldSlot)
           } catch (error) {
             if (isAuthError(error)) {
-              clearToken(entry.workspace.id)
+              await clearToken(entry.workspace.id)
             } else {
               console.warn('[linear] project/view read failed:', error)
             }

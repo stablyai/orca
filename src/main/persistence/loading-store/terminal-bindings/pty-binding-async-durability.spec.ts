@@ -54,15 +54,30 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
         throw new Error('binding did not create its terminal row')
       }
       const layout = session.terminalLayoutsByTabId[binding.tabId]
-      layout.root = {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', leafId: TEST_LEAF_2 },
-        second: { type: 'leaf', leafId: binding.leafId }
+      const expectedRoot = {
+        type: 'split' as const,
+        direction: 'horizontal' as const,
+        first: { type: 'leaf' as const, leafId: TEST_LEAF_2 },
+        second: { type: 'leaf' as const, leafId: binding.leafId }
       }
-      layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
-      tab.ptyId = 'new-root-pty'
-      const expectedRoot = structuredClone(layout.root)
+      // A newer write publishes a new session; published sessions are never edited.
+      store.setWorkspaceSession({
+        ...session,
+        terminalLayoutsByTabId: {
+          ...session.terminalLayoutsByTabId,
+          [binding.tabId]: {
+            ...layout,
+            root: expectedRoot,
+            ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
+          }
+        },
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          [binding.worktreeId]: session.tabsByWorktree[binding.worktreeId].map((candidate) =>
+            candidate === tab ? { ...tab, ptyId: 'new-root-pty' } : candidate
+          )
+        }
+      })
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )

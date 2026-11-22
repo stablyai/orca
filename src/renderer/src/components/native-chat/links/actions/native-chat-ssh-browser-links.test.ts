@@ -106,7 +106,7 @@ function setSettings(settings: Partial<GlobalSettings>): void {
   useAppStore.setState((state) => ({ settings: { ...state.settings!, ...settings } }))
 }
 
-function clickLink(): void {
+function clickLink(url = URL_TO_OPEN): void {
   handleNativeChatWebLink(
     {
       altKey: false,
@@ -117,11 +117,11 @@ function clickLink(): void {
       shiftKey: false,
       preventDefault: () => {}
     },
-    URL_TO_OPEN,
+    url,
     {
       worktreeId: WORKSPACE,
       sourceTabId: 'source',
-      ...resolveNativeChatHttpLinkRouting(useAppStore.getState(), WORKSPACE),
+      ...resolveNativeChatHttpLinkRouting(useAppStore.getState(), WORKSPACE, url),
       actionsEnabled: false,
       plainClickBehavior: 'open',
       restoreFocus: () => {},
@@ -158,5 +158,17 @@ describe.each([
         .getState()
         .unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.contentType === 'browser')
     ).toMatchObject({ executionHostId: hostId })
+  })
+})
+
+describe('direct SSH loopback links with links set to open in the system browser', () => {
+  const LOOPBACK_URL = 'http://localhost:5173/'
+  beforeEach(() => seedOwner('ssh:box', null))
+
+  it('opens in the SSH host browser, which reaches the host that printed it', async () => {
+    clickLink(LOOPBACK_URL)
+
+    await vi.waitFor(() => expect(pages()).toMatchObject([{ url: LOOPBACK_URL }]))
+    expect(openUrl).not.toHaveBeenCalled()
   })
 })

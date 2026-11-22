@@ -223,6 +223,12 @@ export class ExternalChromiumBrowserProcess {
     if (input !== null) {
       return input
     }
+    if (method === 'browserReload' && params.ignoreCache === true) {
+      throw new BrowserError(
+        'browser_command_unavailable',
+        'This browser provider cannot reload without the cache.'
+      )
+    }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {
       await session.run([method.slice('browser'.length).toLowerCase()])
       const tab = await this.tabs.describePage(page)

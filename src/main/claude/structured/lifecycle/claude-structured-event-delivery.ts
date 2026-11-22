@@ -11,7 +11,10 @@ import type { ClaudeStructuredSessionEvent } from './claude-structured-session-e
 type ClaudeEventDelivery = {
   session: ClaudeSession | null
   event: ClaudeStructuredSessionEvent
-  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'onEvent' | 'requestTimeoutMs' | 'logger'>
+  deps: Pick<
+    ClaudeStructuredSessionAdapterDeps,
+    'onEvent' | 'onUserRenamed' | 'requestTimeoutMs' | 'logger'
+  >
   publishChildWork: (
     sessionId: string,
     session?: ClaudeSession | null,
@@ -46,6 +49,9 @@ export function emitClaudeStructuredSessionEvent({
   session?.translator?.handle(event)
   if (event.type !== 'retiring') {
     deps.onEvent?.(event)
+  }
+  if (event.type === 'message' && event.renamedTo) {
+    deps.onUserRenamed?.(event.sessionId, event.renamedTo)
   }
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   // Child waiting requires the card to be durable.

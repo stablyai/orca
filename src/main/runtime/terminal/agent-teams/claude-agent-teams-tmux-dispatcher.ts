@@ -7,8 +7,8 @@ import {
 import { describeUnconfirmedAgentStop } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import {
   formatContext,
-  paneEnv,
   resolveSplitTarget,
+  splitTeammate,
   updateMainVerticalAfterSplit
 } from './claude-agent-teams-pane-layout'
 import type { AgentTeam, AgentTeamsTerminalApi, TeamPane } from './claude-agent-teams-types'
@@ -114,22 +114,20 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const fakePaneId = `%${team.nextPaneNumber}`
     team.nextPaneNumber += 1
     const splitTarget = resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
-    const split = await api.splitTerminal(splitTarget.pane.handle, {
-      direction: splitTarget.direction,
-      command: parsed.positional.join(' ') || undefined,
-      env: paneEnv(team, fakePaneId),
-      envToDelete: ['TERM_PROGRAM'],
-      activate: false
+    const { direction } = splitTarget
+    const target = { direction, command: parsed.positional.join(' ') || undefined, fakePaneId }
+    const pane = await splitTeammate(team, api, splitTarget.pane.handle, target, (split) => {
+      const added: TeamPane = {
+        fakePaneId,
+        handle: split.handle,
+        index: team.paneOrder.length,
+        splitFromPane: splitTarget.pane.fakePaneId,
+        splitDirection: direction
+      }
+      team.panes.set(fakePaneId, added)
+      team.paneOrder.push(fakePaneId)
+      return added
     })
-    const pane: TeamPane = {
-      fakePaneId,
-      handle: split.handle,
-      index: team.paneOrder.length,
-      splitFromPane: splitTarget.pane.fakePaneId,
-      splitDirection: splitTarget.direction
-    }
-    team.panes.set(fakePaneId, pane)
-    team.paneOrder.push(fakePaneId)
     updateMainVerticalAfterSplit(team, fakePaneId, splitTarget)
     if (!parsed.flags.has('-P')) {
       return ''
@@ -167,14 +165,14 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       throw new Error(pane.respawnBlockedReason)
     }
     try {
-      const split = await api.splitTerminal(origin.handle, {
+      const target = {
         direction: pane.splitDirection ?? 'horizontal',
         command,
-        env: paneEnv(team, pane.fakePaneId),
-        envToDelete: ['TERM_PROGRAM'],
-        activate: false
+        fakePaneId: pane.fakePaneId
+      }
+      await splitTeammate(team, api, origin.handle, target, (split) => {
+        pane.handle = split.handle
       })
-      pane.handle = split.handle
     } catch (error) {
       this.removePane(team, pane)
       throw error

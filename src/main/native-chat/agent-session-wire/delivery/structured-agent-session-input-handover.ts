@@ -42,6 +42,8 @@ export async function beginStructuredAgentSessionInputHandover(
   const ownsInput = () => deps.sessions.get(sessionId) === session
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
+  const toolsDue = async () =>
+    (await deps.launchToolsRefreshDue?.(sessionId, next.clientMessageId)) === true
   const validate = (signal?: AbortSignal) =>
     assertStructuredAgentSessionInputReady({
       deps,
@@ -75,6 +77,7 @@ export async function beginStructuredAgentSessionInputHandover(
       agents: deps.agents,
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
+      turnContext: deps.turnContext,
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
         let admission: StructuredAgentSessionInputAdmission | undefined
@@ -89,6 +92,11 @@ export async function beginStructuredAgentSessionInputHandover(
               mode !== binding.permissionMode)
           ) {
             return { kind: 'acquire' as const, reason: 'permission' as const }
+          }
+          // A new turn after Orca changed the bot's tools starts a child that has them; a send that
+          // joins work still owed goes to this child with the tools it has.
+          if (await toolsDue()) {
+            return { kind: 'acquire' as const, reason: 'tools' as const }
           }
           const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
           await validate(signal)
@@ -123,7 +131,7 @@ export async function beginStructuredAgentSessionInputHandover(
           const mode = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
               await validate(signal)
-              return deps.immediatePermission?.(sessionId)
+              return reason === 'tools' ? null : deps.immediatePermission?.(sessionId)
             }),
             signal
           )
@@ -165,11 +173,12 @@ export async function beginStructuredAgentSessionInputHandover(
                 throw new Error('input continuation no longer owns its submission')
               }
               const latest = deps.immediatePermission?.(sessionId)
-              const acquire =
+              const permissionAcquire =
                 (reason === 'auto' && latest === 'auto') ||
                 (!!latest &&
                   (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, latest) ??
                     latest !== binding.permissionMode))
+              const acquire = reason === 'tools' ? await toolsDue() : permissionAcquire
               if (!acquire) {
                 return null
               }

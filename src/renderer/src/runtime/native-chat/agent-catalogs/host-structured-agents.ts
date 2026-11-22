@@ -151,18 +151,20 @@ export async function relearnHostStructuredAgents(
   await loadHostStructuredAgents(executionHostId, capabilities, runtimeId)
 }
 
-/** Drops hosts no longer paired; a stale runtime is already ignored by the reader. */
-export function retainHostStructuredAgents(executionHostIds: ReadonlySet<string>): void {
+/** Drops the agents learned from hosts that were unpaired; other hosts keep theirs. */
+export function forgetHostStructuredAgents(executionHostIds: Iterable<string>): void {
   let removed = false
-  for (const id of entries.keys()) {
-    if (!executionHostIds.has(id)) {
-      entries.delete(id)
-      removed = true
-    }
+  for (const id of executionHostIds) {
+    removed = entries.delete(id) || removed
   }
   if (removed) {
     publish()
   }
+}
+
+/** Drops hosts no longer paired; a stale runtime is already ignored by the reader. */
+export function retainHostStructuredAgents(executionHostIds: ReadonlySet<string>): void {
+  forgetHostStructuredAgents([...entries.keys()].filter((id) => !executionHostIds.has(id)))
 }
 
 export function subscribeHostStructuredAgents(listener: () => void): () => void {

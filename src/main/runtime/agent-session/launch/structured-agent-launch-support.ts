@@ -2,11 +2,8 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { structuredAgentSettingsEnv } from '../environment/structured-agent-launch-env'
 import {
   checkAgentCliVersion,
   launchableRelease,
@@ -36,9 +33,18 @@ import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-se
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
-  'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
+  | 'agentDefaultEnv'
+  | 'nativeChatInheritShellEnvironment'
+  | 'nativeChatShellEnvironmentVariables'
+  | 'httpProxyUrl'
+  | 'httpProxyBypassRules'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  Partial<
+    Pick<
+      GlobalSettings,
+      'agentCmdOverrides' | 'antigravityChatAuth' | 'antigravityManagedAgyEnabled'
+    >
+  > &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */
@@ -126,7 +132,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   return overlayEnvironmentVariables(
     await resolveHostAgentBaseEnvironment(settings),
-    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    structuredAgentSettingsEnv(agent, settings),
     process.platform
   )
 }
@@ -146,7 +152,7 @@ export async function structuredAgentHostLaunchSources(
 }> {
   const settings = runtime.requireStore().getSettings()
   const policy = nativeChatShellEnvironmentPolicy(settings)
-  const overlay = isTuiAgent(agent) ? { ...resolveTuiAgentLaunchEnv(agent, settings) } : {}
+  const overlay = structuredAgentSettingsEnv(agent, settings)
   const environment = createStructuredAgentEnvironmentResolvers({
     prewarm: false,
     processEnvironment: { ...process.env },

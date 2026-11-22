@@ -24,6 +24,11 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
+    list: async () =>
+      (await listEnvironments(registryRoot())).map((environment) => ({
+        environmentId: environment.id,
+        name: environment.name
+      })),
     hasEnvironment: async (environmentId) =>
       (await listEnvironments(registryRoot())).some(
         (environment) => environment.id === environmentId

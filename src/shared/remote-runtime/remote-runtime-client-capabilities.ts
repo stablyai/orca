@@ -25,6 +25,7 @@ import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../agent-s
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../skills/capabilities/skill-install-capability'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-list/feed/sidebar-inputs-switch'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../worktree/metadata/workspace-unread-raise-capability'
+import { GOOGLE_TRIGGERS_RUNTIME_CAPABILITY } from '../google/google-connect-types'
 import {
   COMPRESSED_FRAMES_CLIENT_CAPABILITY,
   compressedFramesDisabled
@@ -38,6 +39,8 @@ export function remoteRuntimeClientCapabilities(
     new Set([
       AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
       AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+      // Reads Gmail and Calendar automation rules without crashing.
+      GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
       AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
       AGENT_SESSION_TURN_ITEM_CAPABILITY,
       SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,

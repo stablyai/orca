@@ -1,3 +1,4 @@
+import { foldAutomationRunCards } from '../../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 import { formatAgentTypeLabel } from '../../../../../../src/shared/agent-status/presentation/agent-type-label'
 import { describeLoadError } from '../../../../components/feedback/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
@@ -101,8 +102,10 @@ export function foldMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  return finishMobileNativeChatMessages(
-    foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+  return foldAutomationRunCards(
+    finishMobileNativeChatMessages(
+      foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+    )
   )
 }
 
