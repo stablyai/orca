@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  type RefObject
+} from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
@@ -17,6 +24,7 @@ import {
   subscribeGitHistory,
   presentGitHistoryEntry,
   pageKeyFor,
+  type GitHistoryFence,
   type GitHistoryPanelState
 } from './git-history-page-store'
 export type { GitHistoryPanelState } from './git-history-page-store'
@@ -72,6 +80,15 @@ export function useSourceControlGitHistory({
     connectionId ?? null
   ])
   const statusHeadOid = headOid === '(initial)' ? null : headOid
+  const historyFence = useMemo<GitHistoryFence>(
+    () => ({
+      branchName,
+      headOid: statusHeadOid,
+      baseRef: compareBaseRef,
+      baseOid: compareBaseOid
+    }),
+    [branchName, statusHeadOid, compareBaseRef, compareBaseOid]
+  )
   const gitHistoryContextKey = JSON.stringify([
     slotKey,
     branchName,
@@ -83,12 +100,7 @@ export function useSourceControlGitHistory({
     activeWorktreeId ? gitHistorySlots.get(slotKey) : undefined
   )
   const gitHistoryState = activeWorktreeId
-    ? presentGitHistoryEntry(entry, {
-        branchName,
-        headOid: statusHeadOid,
-        baseRef: compareBaseRef,
-        baseOid: compareBaseOid
-      })
+    ? presentGitHistoryEntry(entry, historyFence)
     : EMPTY_GIT_HISTORY_STATE
 
   useEffect(() => {
@@ -163,7 +175,7 @@ export function useSourceControlGitHistory({
           return
         }
         publishGitHistory(slotKey, {
-          key: pageKeyFor(result, branchName, compareBaseRef, compareBaseOid),
+          key: pageKeyFor(result, historyFence),
           state: { status: 'ready', result }
         })
       } catch (error) {
@@ -186,10 +198,9 @@ export function useSourceControlGitHistory({
     [
       activeRepoTarget,
       activeWorktreeId,
-      branchName,
       compareBaseRef,
-      compareBaseOid,
       connectionId,
+      historyFence,
       isBranchVisible,
       isFolder,
       isGitHistoryNeeded,

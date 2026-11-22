@@ -11,12 +11,11 @@ export const LOADING_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'loadin
 
 /** What a page answered for: null fields are resolved absence (unborn HEAD, no base), never "unknown". */
 type GitHistoryPageKey = {
+  request: GitHistoryFence
   branchName: string
   headOid: string | null
-  baseRef: string | null
   /** Resolved base OID of a branch page; null for a plain HEAD page. */
   baseOid: string | null
-  requestedBaseOid: string | null | undefined
 }
 type GitHistoryEntry = { state: GitHistoryPanelState; key: GitHistoryPageKey | null }
 
@@ -57,7 +56,7 @@ function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean
   if (
     fence.headOid === undefined ||
     key.branchName !== fence.branchName ||
-    key.baseRef !== fence.baseRef
+    key.request.baseRef !== fence.baseRef
   ) {
     return false
   }
@@ -66,11 +65,10 @@ function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean
   }
   // A plain HEAD page does not depend on the base OID; a branch page needs the same resolved base.
   return key.baseOid === null
-    ? key.requestedBaseOid === fence.baseOid
+    ? key.request.baseOid === fence.baseOid
     : key.baseOid === fence.baseOid
 }
 
-/** Never show another host's, HEAD's or base's commits; a mismatched page reads as loading until replaced. */
 export function presentGitHistoryEntry(
   entry: GitHistoryEntry | undefined,
   fence: GitHistoryFence
@@ -85,28 +83,35 @@ export function presentGitHistoryEntry(
   if (key && pageKeyMatches(key, fence)) {
     return state
   }
+  if (
+    state.status === 'ready' &&
+    key &&
+    fence.headOid !== undefined &&
+    fence.baseOid !== undefined &&
+    key.request.branchName === fence.branchName &&
+    key.request.headOid === fence.headOid &&
+    key.request.baseRef === fence.baseRef &&
+    key.request.baseOid === fence.baseOid
+  ) {
+    // The current read finished with an incompatible page, so there is nothing left to wait for.
+    return { status: 'error', error: 'Commit history did not match the current checkout' }
+  }
   return state.status === 'error'
     ? { status: 'error', error: state.error }
     : LOADING_GIT_HISTORY_STATE
 }
 
-export function pageKeyFor(
-  result: GitHistoryResult,
-  requestedBranchName: string,
-  baseRef: string | null,
-  requestedBaseOid: string | null | undefined
-) {
+export function pageKeyFor(result: GitHistoryResult, request: GitHistoryFence): GitHistoryPageKey {
   const currentRef = result.currentRef
   const branchPrefix = 'refs/heads/'
   return {
+    request,
     branchName: currentRef?.id.startsWith(branchPrefix)
       ? currentRef.id.slice(branchPrefix.length)
       : currentRef?.category === 'commits'
         ? ''
-        : requestedBranchName,
+        : request.branchName,
     headOid: result.currentRef?.revision ?? null,
-    baseRef,
-    requestedBaseOid,
     baseOid: result.branch?.baseRef.revision ?? null
   }
 }

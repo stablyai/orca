@@ -18,6 +18,29 @@ function branchPage(subject: string, headOid: string, baseOid: string): GitHisto
 }
 
 describe('useSourceControlGitHistory session page', () => {
+  it.each([
+    { id: 'h1', name: 'h1', revision: 'h1', category: 'commits' },
+    { id: 'refs/heads/other', name: 'other', revision: 'h1', category: 'branches' }
+  ] satisfies NonNullable<GitHistoryResult['currentRef']>[])(
+    'settles a mismatched history reply from $name as an error and can retry',
+    async (currentRef) => {
+      const matching = historyResult('current commit', 'h1')
+      mocks.getRuntimeGitHistory
+        .mockResolvedValueOnce({ ...historyResult('wrong context', 'h1'), currentRef })
+        .mockResolvedValueOnce(matching)
+      mount({ branchName: 'main', headOid: 'h1', compareBaseRef: null })
+      await act(() => Promise.resolve())
+
+      expect(historyProbe.current?.gitHistoryState).toEqual({
+        status: 'error',
+        error: 'Commit history did not match the current checkout'
+      })
+
+      await act(async () => historyProbe.current?.refreshGitHistory())
+      expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: matching })
+    }
+  )
+
   it('settles an unborn HEAD as an empty page when status reports (initial)', async () => {
     const emptyPage: GitHistoryResult = { ...historyResult('unused'), items: [] }
     mocks.getRuntimeGitHistory.mockResolvedValueOnce(emptyPage)
