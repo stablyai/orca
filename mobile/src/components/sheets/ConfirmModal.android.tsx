@@ -3,13 +3,21 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConfirmModalProps } from './ConfirmContent'
+import { DrawnConfirmModal } from './DrawnConfirmModal'
 import { DIALOG_HOST_STYLE, DIALOG_TITLE_STYLE } from './native-dialog-host'
 
 export { ConfirmContent } from './ConfirmContent'
 export type { ConfirmModalProps }
 
-/** A Material 3 alert dialog; `media` and `details` stay with the drawn sheet. */
-export function ConfirmModal({
+/** A Material 3 alert dialog; `media` or `details` keep the drawn sheet. */
+export function ConfirmModal(props: ConfirmModalProps) {
+  if (props.media || props.details) {
+    return <DrawnConfirmModal {...props} />
+  }
+  return <ConfirmAlertDialog {...props} />
+}
+
+function ConfirmAlertDialog({
   visible,
   title,
   message,

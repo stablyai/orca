@@ -3,12 +3,20 @@ import { Alert, type AlertButton } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConfirmModalProps } from './ConfirmContent'
+import { DrawnConfirmModal } from './DrawnConfirmModal'
 
 export { ConfirmContent } from './ConfirmContent'
 export type { ConfirmModalProps }
 
-/** A UIKit alert, raised each time `visible` turns on; `media` and `details` stay with the drawn sheet. */
+/** A UIKit alert, raised each time `visible` turns on; `media` or `details` keep the drawn sheet. */
 export function ConfirmModal(props: ConfirmModalProps) {
+  if (props.media || props.details) {
+    return <DrawnConfirmModal {...props} />
+  }
+  return <ConfirmAlert {...props} />
+}
+
+function ConfirmAlert(props: ConfirmModalProps) {
   const t = useMobileTranslation()
   const scheme = useMobileColorScheme()
   const latest = useRef({ props, t, scheme })

@@ -1,6 +1,6 @@
-import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { useShellDialog } from '../../platform/page-dialogs/use-shell-dialog'
 import { ConfirmContent, type ConfirmModalProps } from './ConfirmContent'
+import { DrawnConfirmModal } from './DrawnConfirmModal'
 
 export { ConfirmContent }
 export type { ConfirmModalProps }
@@ -32,9 +32,5 @@ export function ConfirmModal({ visible, ...content }: ConfirmModalProps) {
   if (native) {
     return null
   }
-  return (
-    <BottomDrawer visible={visible} onClose={content.onCancel}>
-      <ConfirmContent {...content} />
-    </BottomDrawer>
-  )
+  return <DrawnConfirmModal visible={visible} {...content} />
 }
