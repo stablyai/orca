@@ -91,7 +91,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground> {
     const pty = this.ptysById.get(ptyId)
-    return pty?.adoptedRootProcess
+    return pty?.adoptedRootProcess && pty.adoptedRootProcess.incarnationId === pty.incarnationId
       ? this.readRestTitleForeground(pty, ptyId, agent)
       : readExactAgentForeground(this, this.ptyController, ptyId, agent)
   }

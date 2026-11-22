@@ -204,12 +204,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
+    const mailStatus = this.readMailboxAgentStatus(pty)
     const evidence = ptyTuiIdleEvidence(
       this.tuiIdleEvidenceSource,
       pty,
       () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-      // Settles on the same status the mail gate read.
-      this.readMailboxAgentStatus(pty).lastAgentStatus ?? undefined
+      // Settles on the hook report the mail gate read; a titled status reads as before.
+      mailStatus.hookReport ? (mailStatus.lastAgentStatus ?? undefined) : undefined
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
