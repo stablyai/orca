@@ -40,10 +40,7 @@ export function legacySourceColumnsAccounted(table: string, present: readonly st
     (retired
       ? new Set(retired)
       : source
-        ? new Set([
-            ...source.split(' '),
-            ...(RETIRED_SOURCE_COLUMNS.get(table)?.split(' ') ?? [])
-          ])
+        ? new Set([...source.split(' '), ...(RETIRED_SOURCE_COLUMNS.get(table)?.split(' ') ?? [])])
         : undefined)
   return (
     !columns ||

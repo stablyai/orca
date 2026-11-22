@@ -95,10 +95,7 @@ function assertSourceInventory(
 ): LegacySourceArtifact {
   const version = Number(db.pragma('user_version', { simple: true }))
   if (version !== 3 && version !== 4) {
-    throw new JournalLegacyRetentionError(
-      'unsupported legacy source inventory',
-      'source-inventory'
-    )
+    throw new JournalLegacyRetentionError('unsupported legacy source inventory', 'source-inventory')
   }
   const artifact = legacySourceArtifacts(db, tables)
   for (const table of tables) {

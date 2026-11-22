@@ -11,10 +11,7 @@ import {
   legacyCompanionsPresent,
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
-import {
-  type LegacySourceHeld,
-  type LegacySourceRetiring
-} from './journal-legacy-retirement-state'
+import type { LegacySourceHeld, LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
