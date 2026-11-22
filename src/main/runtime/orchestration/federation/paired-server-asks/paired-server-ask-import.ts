@@ -4,6 +4,7 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { isGeneratedId } from '../../db/generated-id'
 import {
   ClientAskPayload,
   ClientReplyPayload
@@ -201,6 +202,13 @@ export async function importPairedServerItem(
   asks: PairedServerAsks,
   item: PulledItem
 ): Promise<{ card: boolean }> {
+  // The relay keys replies by conversation, so any other id could name a dispatch's queued reports.
+  if (!isGeneratedId(item.conversationId, 'peerconv')) {
+    console.warn(
+      `[orchestration] Dropped ${item.messageId} from a paired server: it names no conversation`
+    )
+    return { card: false }
+  }
   const json = safeJson(item.payload)
   if (item.kind === 'client_ask_withdraw') {
     const withdrawn = Withdrawn.safeParse(json)

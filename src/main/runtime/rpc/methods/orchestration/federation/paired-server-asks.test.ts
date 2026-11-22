@@ -686,7 +686,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
       payload: reply(OTHER)
     })
     await importItem({
-      conversationId: 'conversation_never_opened',
+      conversationId: 'peerconv_0000000000a1',
       messageId: 'forged_2',
       kind: 'client_reply',
       payload: reply(DOCS_HOME)
@@ -694,7 +694,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     expect(computer.db.getMessageById('forged_1')).toBeFalsy()
     expect(computer.db.getMessageById('forged_2')).toBeFalsy()
-    expect(computer.db.getPeerMailConversation('conversation_never_opened')).toBeFalsy()
+    expect(computer.db.getPeerMailConversation('peerconv_0000000000a1')).toBeFalsy()
   })
 
   it('takes no reply for an agent an ask only named: a decline is no part in the conversation', async () => {
@@ -702,7 +702,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await listening()
     // An ask straight to Docs's chat address, which nothing lets in.
     await importItem({
-      conversationId: 'c_victim',
+      conversationId: 'peerconv_0000000000a2',
       messageId: 'm_victim',
       kind: 'client_ask',
       payload: {
@@ -713,10 +713,10 @@ describe('agents on a paired server messaging an agent on this computer', () => 
         rootSession: ASKER
       }
     })
-    expect(declined('c_victim', 'm_victim')).toBe(true)
+    expect(declined('peerconv_0000000000a2', 'm_victim')).toBe(true)
 
     await importItem({
-      conversationId: 'c_victim',
+      conversationId: 'peerconv_0000000000a2',
       messageId: 'forged_after_decline',
       kind: 'client_reply',
       payload: {
@@ -750,10 +750,10 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     }
 
     await importItem(
-      { conversationId: 'c_x', messageId: 'm_x', kind: 'client_ask', payload },
+      { conversationId: 'peerconv_0000000000a3', messageId: 'm_x', kind: 'client_ask', payload },
       impostor
     )
-    expect(declined('c_x', 'm_x')).toBe(true)
+    expect(declined('peerconv_0000000000a3', 'm_x')).toBe(true)
 
     settleRemovedPairedServer(computer.runtime, computer.db, 'env_s', 'Build Box')
     expect(isServerAllowed(computer.db, 'fingerprint_s', 'docs')).toBe(false)
@@ -766,7 +766,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
 
     await importItem({
-      conversationId: 'another_conversation',
+      conversationId: 'peerconv_0000000000a4',
       messageId: 'withdraw_1',
       kind: 'client_ask_withdraw',
       payload: { requestId: sent.message.id }
@@ -796,7 +796,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
     await listening()
     await importItem({
-      conversationId: 'c_plain',
+      conversationId: 'peerconv_0000000000a5',
       messageId: 'm_plain',
       kind: 'client_ask',
       payload: {
@@ -834,6 +834,20 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+  })
+
+  it("admits a paired server's ask as no one this computer can name, never as its owner", async () => {
+    await call('pairedServerAsks.allow', {
+      environmentId: 'env_s',
+      botId: 'docs'
+    })
+    await listening()
+    const sent = await ask()
+
+    await vi.waitFor(() => expect(computer.db.getBotRequest(sent.message.id)).toBeTruthy())
+    const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
+    expect(record.askers).toEqual([{ kind: 'unknown' }])
+    expect(record.askedBy).toEqual([{ kind: 'unknown' }])
   })
 
   it('shows a card again, from any chat, once a person removes a server it allowed', async () => {

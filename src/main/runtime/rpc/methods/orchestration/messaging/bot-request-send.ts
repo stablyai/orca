@@ -30,7 +30,6 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { SendParams } from './send-params'
 import {
   botAddressReach,
-  readActingSender,
   receivingBot,
   refuse,
   toOtherChat,
@@ -43,6 +42,7 @@ import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import { readSendingActor } from './bot-request-acting'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
 type SendParamsInput = Pick<
@@ -91,7 +91,7 @@ export async function sendToBot(
       'Group bot sessions accept peer requests only from current members of their own group.'
     )
   }
-  const acting = await readActingSender(runtime, db, callerSessionId, mail.sender, receiving)
+  const acting = await readSendingActor(runtime, db, { ...mail, callerSessionId, receiving })
   if (!acting) {
     return null
   }

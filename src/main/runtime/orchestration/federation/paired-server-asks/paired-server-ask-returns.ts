@@ -52,23 +52,31 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
       RETURN_TIMEOUT_MS
     )
   )
+  // Only what this page sent can be acknowledged: an ack past it, or for another conversation,
+  // would settle mail the server never received.
+  const sentThrough = new Map<string, number>()
+  for (const item of items) {
+    sentThrough.set(
+      item.dispatch_id,
+      Math.max(sentThrough.get(item.dispatch_id) ?? 0, item.sequence)
+    )
+  }
+  const acknowledge = (conversationId: string, throughSequence: number): void => {
+    const sent = sentThrough.get(conversationId)
+    if (sent !== undefined) {
+      db.acknowledgeFederationRelay({
+        dispatchId: conversationId,
+        direction: 'to_home',
+        throughSequence: Math.min(throughSequence, sent)
+      })
+    }
+  }
   for (const ack of returned.acknowledgments) {
-    db.acknowledgeFederationRelay({
-      dispatchId: ack.conversationId,
-      direction: 'to_home',
-      throughSequence: ack.throughSequence
-    })
+    acknowledge(ack.conversationId, ack.throughSequence)
   }
   // A conversation the server no longer has under this pairing: its askers were told there.
   for (const conversationId of returned.gone) {
-    const through = Math.max(
-      ...items.filter((item) => item.dispatch_id === conversationId).map((item) => item.sequence)
-    )
-    db.acknowledgeFederationRelay({
-      dispatchId: conversationId,
-      direction: 'to_home',
-      throughSequence: through
-    })
+    acknowledge(conversationId, Number.MAX_SAFE_INTEGER)
   }
   return items.length === PAGE
 }
