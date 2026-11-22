@@ -25,7 +25,7 @@ export type { GitHistoryPanelState } from './git-history-page-store'
 type HistoryRefresh = { wakeWslDistro?: boolean }
 const SHOWN_HISTORY_LOAD: HistoryRefresh = { wakeWslDistro: true }
 
-/** Session-cached history per worktree with one publication authority; refreshGitHistoryRef lets effects refresh without callback resubscription. */
+/** Session-cached history per worktree and execution owner. */
 export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
@@ -55,6 +55,7 @@ export function useSourceControlGitHistory({
   isGitHistoryVisible: boolean
   worktreeMap: ReadonlyMap<string, unknown>
 }): {
+  gitHistoryContextKey: string
   gitHistoryState: GitHistoryPanelState
   refreshGitHistory: (options?: HistoryRefresh) => Promise<void>
   refreshGitHistoryRef: RefObject<() => Promise<void>>
@@ -64,47 +65,55 @@ export function useSourceControlGitHistory({
     ? sourceControlConnectionId(scope, activeWorktreeId)
     : undefined
   // The authority that answers: same worktree id on another runtime or SSH host is another page.
-  const owner = JSON.stringify([
+  const slotKey = JSON.stringify([
+    activeWorktreeId,
     activeRepoTarget?.kind ?? null,
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null,
     connectionId ?? null
   ])
+  const statusHeadOid = headOid === '(initial)' ? null : headOid
+  const gitHistoryContextKey = JSON.stringify([
+    slotKey,
+    branchName,
+    statusHeadOid,
+    compareBaseRef,
+    compareBaseOid
+  ])
   const entry = useSyncExternalStore(subscribeGitHistory, () =>
-    activeWorktreeId ? gitHistorySlots.get(activeWorktreeId) : undefined
+    activeWorktreeId ? gitHistorySlots.get(slotKey) : undefined
   )
   const gitHistoryState = activeWorktreeId
     ? presentGitHistoryEntry(entry, {
-        owner,
-        headOid,
+        branchName,
+        headOid: statusHeadOid,
         baseRef: compareBaseRef,
         baseOid: compareBaseOid
       })
     : EMPTY_GIT_HISTORY_STATE
 
   useEffect(() => {
-    const mountedId =
-      activeWorktreeId && worktreeMap.has(activeWorktreeId) ? activeWorktreeId : null
-    if (mountedId) {
-      mountedHistoryConsumers.set(mountedId, (mountedHistoryConsumers.get(mountedId) ?? 0) + 1)
+    const mounted = activeWorktreeId && worktreeMap.has(activeWorktreeId)
+    if (mounted) {
+      mountedHistoryConsumers.set(slotKey, (mountedHistoryConsumers.get(slotKey) ?? 0) + 1)
     }
-    for (const key of latestGitHistoryRequest.keys()) {
-      if (!worktreeMap.has(key) && !mountedHistoryConsumers.has(key)) {
+    for (const [key, request] of latestGitHistoryRequest) {
+      if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
         gitHistorySlots.delete(key)
         latestGitHistoryRequest.delete(key)
       }
     }
     return () => {
-      if (!mountedId) {
+      if (!mounted) {
         return
       }
-      const remaining = (mountedHistoryConsumers.get(mountedId) ?? 1) - 1
+      const remaining = (mountedHistoryConsumers.get(slotKey) ?? 1) - 1
       if (remaining) {
-        mountedHistoryConsumers.set(mountedId, remaining)
+        mountedHistoryConsumers.set(slotKey, remaining)
       } else {
-        mountedHistoryConsumers.delete(mountedId)
+        mountedHistoryConsumers.delete(slotKey)
       }
     }
-  }, [activeWorktreeId, worktreeMap])
+  }, [activeWorktreeId, slotKey, worktreeMap])
 
   const refreshGitHistory = useCallback(
     async (options?: HistoryRefresh): Promise<void> => {
@@ -120,12 +129,12 @@ export function useSourceControlGitHistory({
       }
       const worktreeId = activeWorktreeId
       const requestId = nextGitHistoryRequestId()
-      latestGitHistoryRequest.set(worktreeId, requestId)
-      const isLatest = (): boolean => latestGitHistoryRequest.get(worktreeId) === requestId
-      const previous = gitHistorySlots.get(worktreeId)
+      latestGitHistoryRequest.set(slotKey, { worktreeId, id: requestId })
+      const isLatest = (): boolean => latestGitHistoryRequest.get(slotKey)?.id === requestId
+      const previous = gitHistorySlots.get(slotKey)
       // Keep the previous page while refreshing; the read fence hides it if it no longer applies.
       publishGitHistory(
-        worktreeId,
+        slotKey,
         previous?.state.result
           ? { ...previous, state: { status: 'refreshing', result: previous.state.result } }
           : { key: null, state: LOADING_GIT_HISTORY_STATE }
@@ -137,7 +146,7 @@ export function useSourceControlGitHistory({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId,
             worktreePath,
-            connectionId: sourceControlConnectionId(scope, worktreeId)
+            connectionId
           },
           {
             limit: GIT_HISTORY_DEFAULT_LIMIT,
@@ -153,8 +162,8 @@ export function useSourceControlGitHistory({
         if (!isLatest()) {
           return
         }
-        publishGitHistory(worktreeId, {
-          key: pageKeyFor(result, owner, compareBaseRef, compareBaseOid),
+        publishGitHistory(slotKey, {
+          key: pageKeyFor(result, branchName, compareBaseRef, compareBaseOid),
           state: { status: 'ready', result }
         })
       } catch (error) {
@@ -162,9 +171,9 @@ export function useSourceControlGitHistory({
           return
         }
         const message = error instanceof Error ? error.message : 'Failed to load commits'
-        const current = gitHistorySlots.get(worktreeId)
+        const current = gitHistorySlots.get(slotKey)
         publishGitHistory(
-          worktreeId,
+          slotKey,
           current?.state.result
             ? {
                 ...current,
@@ -175,16 +184,17 @@ export function useSourceControlGitHistory({
       }
     },
     [
-      scope,
       activeRepoTarget,
       activeWorktreeId,
+      branchName,
       compareBaseRef,
       compareBaseOid,
+      connectionId,
       isBranchVisible,
       isFolder,
       isGitHistoryNeeded,
       isGitHistoryVisible,
-      owner,
+      slotKey,
       worktreePath
     ]
   )
@@ -196,12 +206,11 @@ export function useSourceControlGitHistory({
 
   // Needed at mount, or restored with another worktree's view, is not a click: only a change
   // within the same worktree counts as the user opening the scope menu.
-  const lastExpandedRef = useRef({ worktreeId: activeWorktreeId, expanded: isGitHistoryNeeded })
+  const lastExpandedRef = useRef({ slotKey, expanded: isGitHistoryNeeded })
   useEffect(() => {
     const last = lastExpandedRef.current
-    const userExpanded =
-      isGitHistoryNeeded && !last.expanded && last.worktreeId === activeWorktreeId
-    lastExpandedRef.current = { worktreeId: activeWorktreeId, expanded: isGitHistoryNeeded }
+    const userExpanded = isGitHistoryNeeded && !last.expanded && last.slotKey === slotKey
+    lastExpandedRef.current = { slotKey, expanded: isGitHistoryNeeded }
     // Defer Git subprocesses until the menu or a picked commit needs them, especially for large/remote repos.
     if (!isBranchVisible || !isGitHistoryNeeded || !isGitHistoryVisible) {
       return
@@ -219,17 +228,17 @@ export function useSourceControlGitHistory({
     branchName,
     compareBaseRef,
     // A rebase or reset in a terminal must drop a picked commit that is no longer on the branch.
-    headOid,
+    statusHeadOid,
     isBranchVisible,
     isFolder,
     isGitHistoryNeeded,
     isGitHistoryVisible,
     // Owner changes can occur without worktree/path changes; refetch rather than retain another host’s commits.
-    owner,
+    slotKey,
     // A same-name base that moved (fetch) changes the range even with HEAD unchanged.
     compareBaseOid,
     worktreePath
   ])
 
-  return { gitHistoryState, refreshGitHistory, refreshGitHistoryRef }
+  return { gitHistoryContextKey, gitHistoryState, refreshGitHistory, refreshGitHistoryRef }
 }

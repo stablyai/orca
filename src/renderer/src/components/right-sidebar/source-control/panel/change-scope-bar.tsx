@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { ChevronDown, FileDiff, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -59,6 +59,7 @@ export function SourceControlChangeScopeBar({
 }: SourceControlPanelReadyProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const scopeTriggerRef = useRef<HTMLButtonElement>(null)
   const {
     branchEntries,
     branchLineTotal,
@@ -68,6 +69,7 @@ export function SourceControlChangeScopeBar({
     commitScopeFiles,
     compareBaseRef,
     entries,
+    gitHistoryContextKey,
     gitHistoryState,
     openAllDiffs,
     openHistoryCommitDiff,
@@ -172,6 +174,7 @@ export function SourceControlChangeScopeBar({
         <div className="flex min-w-0 items-center gap-1">
           <DropdownMenuTrigger asChild>
             <Button
+              ref={scopeTriggerRef}
               type="button"
               variant="outline"
               size="xs"
@@ -190,7 +193,10 @@ export function SourceControlChangeScopeBar({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={showAllLabel}
-                  onClick={() => setChangeScope(ALL_CHANGES_SCOPE)}
+                  onClick={() => {
+                    scopeTriggerRef.current?.focus()
+                    setChangeScope(ALL_CHANGES_SCOPE)
+                  }}
                 >
                   <X className="size-3" />
                 </Button>
@@ -247,6 +253,7 @@ export function SourceControlChangeScopeBar({
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}
           allDetail={allDetail}
           uncommittedDetail={uncommittedDetail}
+          historyContextKey={gitHistoryContextKey}
           historyState={gitHistoryState}
           graphSupported={graphSupported}
           onOpenGitGraph={() => {

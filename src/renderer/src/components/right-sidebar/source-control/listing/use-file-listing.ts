@@ -114,27 +114,26 @@ export function useSourceControlFileListing({
     sourceControlViewMode,
     collapsedSections
   })
-  const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
-    activeRepoTarget,
-    activeWorktreeId,
-    worktreePath,
-    branchName,
-    compareBaseRef,
-    // Unknown while compare loads; null when it settled without a base OID.
-    compareBaseOid: !compareBaseRef
-      ? null
-      : !branchSummary || branchSummary.status === 'loading'
-        ? undefined
-        : branchSummary.status === 'ready'
-          ? (branchSummary.baseOid ?? null)
-          : null,
-    headOid,
-    isFolder,
-    isBranchVisible,
-    isGitHistoryNeeded,
-    isGitHistoryVisible,
-    worktreeMap
-  })
+  const { gitHistoryContextKey, gitHistoryState, refreshGitHistory, refreshGitHistoryRef } =
+    useSourceControlGitHistory({
+      activeRepoTarget,
+      activeWorktreeId,
+      worktreePath,
+      branchName,
+      compareBaseRef,
+      // Unknown while compare loads; null when it settled without a base OID.
+      compareBaseOid: !compareBaseRef
+        ? null
+        : !branchSummary || branchSummary.status === 'loading'
+          ? undefined
+          : (branchSummary.baseOid ?? null),
+      headOid,
+      isFolder,
+      isBranchVisible,
+      isGitHistoryNeeded,
+      isGitHistoryVisible,
+      worktreeMap
+    })
 
   const visibleBranchRowKeys = useMemo(() => {
     if (collapsedSections.has('branch') || changeScope.kind === 'commit') {
@@ -248,6 +247,7 @@ export function useSourceControlFileListing({
     fileFilterState,
     filteredBranchEntries,
     flatEntriesByKey,
+    gitHistoryContextKey,
     gitHistoryState,
     grouped,
     handleBulkStage,

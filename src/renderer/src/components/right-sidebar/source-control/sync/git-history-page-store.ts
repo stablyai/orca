@@ -11,7 +11,7 @@ export const LOADING_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'loadin
 
 /** What a page answered for: null fields are resolved absence (unborn HEAD, no base), never "unknown". */
 type GitHistoryPageKey = {
-  owner: string
+  branchName: string
   headOid: string | null
   baseRef: string | null
   /** Resolved base OID of a branch page; null for a plain HEAD page. */
@@ -22,16 +22,16 @@ type GitHistoryEntry = { state: GitHistoryPanelState; key: GitHistoryPageKey | n
 
 /** The current context; `undefined` fields are not known yet, so no page can be trusted against them. */
 export type GitHistoryFence = {
-  owner: string
+  branchName: string
   headOid: string | null | undefined
   baseRef: string | null
   /** Current resolved base OID from branch compare; undefined while compare is loading. */
   baseOid: string | null | undefined
 }
 
-// One session store shared by every panel instance: slots, the latest request per worktree, listeners.
+// Share each worktree and execution owner’s history across panel remounts.
 export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({ maxEntries: 256 })
-export const latestGitHistoryRequest = new Map<string, number>()
+export const latestGitHistoryRequest = new Map<string, { worktreeId: string; id: number }>()
 export const mountedHistoryConsumers = new Map<string, number>()
 const gitHistoryListeners = new Set<() => void>()
 let gitHistoryRequestSeq = 0
@@ -41,8 +41,8 @@ export function nextGitHistoryRequestId(): number {
   return gitHistoryRequestSeq
 }
 
-export function publishGitHistory(worktreeId: string, entry: GitHistoryEntry): void {
-  gitHistorySlots.set(worktreeId, entry)
+export function publishGitHistory(slotKey: string, entry: GitHistoryEntry): void {
+  gitHistorySlots.set(slotKey, entry)
   for (const listener of gitHistoryListeners) {
     listener()
   }
@@ -54,7 +54,11 @@ export function subscribeGitHistory(listener: () => void): () => void {
 }
 
 function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean {
-  if (fence.headOid === undefined || key.owner !== fence.owner || key.baseRef !== fence.baseRef) {
+  if (
+    fence.headOid === undefined ||
+    key.branchName !== fence.branchName ||
+    key.baseRef !== fence.baseRef
+  ) {
     return false
   }
   if (key.headOid !== fence.headOid) {
@@ -88,12 +92,18 @@ export function presentGitHistoryEntry(
 
 export function pageKeyFor(
   result: GitHistoryResult,
-  owner: string,
+  requestedBranchName: string,
   baseRef: string | null,
   requestedBaseOid: string | null | undefined
 ) {
+  const currentRef = result.currentRef
+  const branchPrefix = 'refs/heads/'
   return {
-    owner,
+    branchName: currentRef?.id.startsWith(branchPrefix)
+      ? currentRef.id.slice(branchPrefix.length)
+      : currentRef?.category === 'commits'
+        ? ''
+        : requestedBranchName,
     headOid: result.currentRef?.revision ?? null,
     baseRef,
     requestedBaseOid,

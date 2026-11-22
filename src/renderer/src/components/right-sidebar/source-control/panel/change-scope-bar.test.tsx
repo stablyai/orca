@@ -95,6 +95,7 @@ function renderBar({
           : null,
       compareBaseRef: 'origin/main',
       entries: [{ path: 'a.ts', status: 'modified', area: 'unstaged', added: 1, removed: 1 }],
+      gitHistoryContextKey: 'history-context',
       gitHistoryState: history,
       resolveSplitTargetGroupId: () => undefined,
       setBaseRefDialogOpen: vi.fn(),

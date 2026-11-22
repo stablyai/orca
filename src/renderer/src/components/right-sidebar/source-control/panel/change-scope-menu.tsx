@@ -86,6 +86,7 @@ export function SourceControlChangeScopeMenuContent({
   onChangeBaseRef,
   allDetail,
   uncommittedDetail,
+  historyContextKey,
   historyState,
   graphSupported,
   onOpenGitGraph,
@@ -97,6 +98,7 @@ export function SourceControlChangeScopeMenuContent({
   onChangeBaseRef: () => void
   allDetail: string
   uncommittedDetail: string
+  historyContextKey: string
   historyState: GitHistoryPanelState
   graphSupported: boolean
   onOpenGitGraph: () => void
@@ -105,6 +107,11 @@ export function SourceControlChangeScopeMenuContent({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const [query, setQuery] = useState('')
+  const [queryContextKey, setQueryContextKey] = useState(historyContextKey)
+  if (queryContextKey !== historyContextKey) {
+    setQueryContextKey(historyContextKey)
+    setQuery('')
+  }
   const filterRef = useRef<HTMLInputElement>(null)
   const result = historyState.result
   const commits = useMemo(() => result?.items ?? [], [result])

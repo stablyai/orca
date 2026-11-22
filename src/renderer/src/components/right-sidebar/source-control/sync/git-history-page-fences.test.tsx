@@ -18,6 +18,43 @@ function branchPage(subject: string, headOid: string, baseOid: string): GitHisto
 }
 
 describe('useSourceControlGitHistory session page', () => {
+  it('settles an unborn HEAD as an empty page when status reports (initial)', async () => {
+    const emptyPage: GitHistoryResult = { ...historyResult('unused'), items: [] }
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(emptyPage)
+    await mount({ headOid: '(initial)', compareBaseRef: null })
+    await flush()
+
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: emptyPage })
+  })
+
+  it('fences branch and recent history in both directions when two branches share a tip', async () => {
+    const ranged = {
+      ...branchPage('feature commit', 'h1', 'b1'),
+      currentRef: { id: 'refs/heads/feature', name: 'feature', revision: 'h1' }
+    }
+    const recent = historyResult('recent commit', 'h1')
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(ranged)
+    const root = await mount({ branchName: 'feature', headOid: 'h1', compareBaseOid: 'b1' })
+    await flush()
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: ranged })
+
+    const ontoBase = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(ontoBase.promise)
+    await act(async () => root.render(<Probe branchName="main" headOid="h1" compareBaseOid="b1" />))
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'loading' })
+    await act(async () => ontoBase.resolve(recent))
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: recent })
+
+    const offBase = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(offBase.promise)
+    await act(async () =>
+      root.render(<Probe branchName="feature" headOid="h1" compareBaseOid="b1" />)
+    )
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'loading' })
+    await act(async () => offBase.resolve(ranged))
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: ranged })
+  })
+
   it('shows the last page at once on remount while it refreshes', async () => {
     mocks.getRuntimeGitHistory.mockResolvedValueOnce(historyResult('first', 'h1'))
     await mount({ headOid: 'h1' })
@@ -150,6 +187,25 @@ describe('useSourceControlGitHistory session page', () => {
     await mount({ worktreeId: 'B', worktreePath: '/b', worktreeMap: new Map([['B', {}]]) })
     await act(async () => pending.resolve(historyResult('section-a')))
     expect(historyProbe.current?.gitHistoryState.result?.items[0].subject).toBe('section-a')
+  })
+
+  it('lets both execution owners publish for the same worktree ID', async () => {
+    const local = deferred<GitHistoryResult>()
+    const remote = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory
+      .mockReturnValueOnce(local.promise)
+      .mockReturnValueOnce(remote.promise)
+    await mount({ worktreeId: 'A', headOid: 'h1' })
+    await mount({
+      worktreeId: 'A',
+      headOid: 'h1',
+      activeRepoTarget: { kind: 'environment', environmentId: 'other-host' }
+    })
+
+    await act(async () => local.resolve(historyResult('local commit', 'h1')))
+    expect(historyProbe.current?.gitHistoryState.result?.items[0].subject).toBe('local commit')
+    await act(async () => remote.resolve(historyResult('remote commit', 'h1')))
+    expect(historyProbe.current?.gitHistoryState.result?.items[0].subject).toBe('remote commit')
   })
 })
 
