@@ -17,8 +17,33 @@ const PERMISSION_PILL_CONTROLS = join(
   '../../../renderer/src/components/native-chat/session/options/controls'
 )
 
-/** Every key the composer permission pill and its menu render, read from the source itself. */
-function permissionPillKeys(): string[] {
+// Why written out rather than read from source: a refactor that hides a key from the source scan
+// also drops it from the generated manifest, so a scan-only list would shrink with it and stay green.
+const PERMISSION_PILL_KEYS = [
+  'components.native-chat.composer.permissionAcceptEdits',
+  'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
+  'components.native-chat.composer.permissionAcceptEditsDescription',
+  'components.native-chat.composer.permissionAgentSettings',
+  'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+  'components.native-chat.composer.permissionAgentSettingsUsedHint',
+  'components.native-chat.composer.permissionAppliesNextMessage',
+  'components.native-chat.composer.permissionAsk',
+  'components.native-chat.composer.permissionAskDescription',
+  'components.native-chat.composer.permissionAskSharedDescription',
+  'components.native-chat.composer.permissionAuto',
+  'components.native-chat.composer.permissionAutoDescription',
+  'components.native-chat.composer.permissionFromAgentSettings',
+  'components.native-chat.composer.permissionFullAccess',
+  'components.native-chat.composer.permissionFullAccessCodexDescription',
+  'components.native-chat.composer.permissionFullAccessDescription',
+  'components.native-chat.composer.permissionFullAccessSharedDescription',
+  'components.native-chat.composer.permissions',
+  'components.native-chat.composer.pillAccessibleName',
+  'components.native-chat.composer.planMode'
+]
+
+/** Keys the pill's source renders literally; only used to catch keys added after the list above. */
+function permissionPillSourceKeys(): string[] {
   const keys = new Set<string>()
   for (const file of [
     'NativeChatPermissionModePicker.tsx',
@@ -48,21 +73,8 @@ describe('plugin language-pack artifacts', () => {
       error: `catalog cannot replace protected security copy at ${path}`
     })
   })
-  it('finds the permission pill keys it pins', () => {
-    expect(permissionPillKeys()).toEqual(
-      expect.arrayContaining([
-        'components.native-chat.composer.permissionAgentSettings',
-        'components.native-chat.composer.permissionFromAgentSettings',
-        'components.native-chat.composer.permissionAgentSettingsUsedHint',
-        'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
-        'components.native-chat.composer.permissionAppliesNextMessage',
-        'components.native-chat.composer.pillAccessibleName',
-        'components.native-chat.composer.permissionAsk'
-      ])
-    )
-  })
   // The pill says what the running agent may do, so a pack must not be able to reword it.
-  it.each(permissionPillKeys())(
+  it.each(PERMISSION_PILL_KEYS)(
     'rejects a language pack relabelling the permission pill at %s',
     (path) => {
       expect(
@@ -73,6 +85,18 @@ describe('plugin language-pack artifacts', () => {
       })
     }
   )
+  it('rejects a language pack relabelling any key the pill source adds later', () => {
+    const sourceKeys = permissionPillSourceKeys()
+    expect(sourceKeys.length).toBeGreaterThan(0)
+    for (const path of sourceKeys.filter((key) => !PERMISSION_PILL_KEYS.includes(key))) {
+      expect(
+        parsePluginLanguagePackArtifact(JSON.stringify(catalogReplacing(path, 'Ask for approval')))
+      ).toEqual({
+        ok: false,
+        error: `catalog cannot replace protected security copy at ${path}`
+      })
+    }
+  })
   it('drops protected copy instead of rejecting the pack when loading tolerantly', () => {
     const raw = JSON.stringify({
       common: { save: 'Sávé' },
