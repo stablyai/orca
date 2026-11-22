@@ -61,7 +61,7 @@ const MemberReader = memo(function MemberReader({
 }): null {
   const items = useBotItems(bot)
   const read = items.read
-  const seenEventId = useBotItemsSeenMark(read)
+  const seenEventId = useBotItemsSeenMark(bot, read)
   const list = useBotItemsShownList(bot, read, filter, now, seenEventId ?? '')
   const botNow = useBotNow(bot)
   const needsYou = useBotNeedsYouCount(bot, botNow)

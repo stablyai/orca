@@ -14,6 +14,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
 import { resolveKeyedFolderWorkspaceSelection } from './catalog/workspace-selector-candidates'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
@@ -167,10 +168,17 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
    * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
    * no such record — callers that only need to address the workspace want the scope below instead.
    */
-  async showManagedTerminalWorkspace(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+  /** `reads`: one batch's owner-repo reads, so its lookups read each repo once. */
+  async showManagedTerminalWorkspace(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
+  ) {
     const target = await this.resolveManagedTerminalWorkspaceTarget(
       worktreeSelector,
-      requiredHostId
+      requiredHostId,
+      true,
+      reads
     )
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
@@ -181,7 +189,8 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
   async resolveManagedTerminalWorkspaceTarget(
     worktreeSelector: string,
     requiredHostId?: ExecutionHostId,
-    checkPath = true
+    checkPath = true,
+    reads?: ScopedWorktreeReads
   ) {
     const key = worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
     const scope = parseWorkspaceKey(key)
@@ -192,7 +201,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     const resolved =
       requiredHostId && scope?.type !== 'folder'
         ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
-        : undefined
+        : reads && scope?.type !== 'folder'
+          ? // The row the launch target would resolve, through the batch's reads; on any miss it
+            // resolves the row itself, as without them.
+            await this.resolveGitWorktreeSelector(
+              scope?.type === 'worktree' ? `id:${scope.worktreeId}` : worktreeSelector,
+              undefined,
+              reads
+            ).catch(() => undefined)
+          : undefined
     return this.resolveTerminalWorkspaceLaunchTarget(
       worktreeSelector,
       undefined,

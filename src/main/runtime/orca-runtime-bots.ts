@@ -2,7 +2,6 @@ import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
-import type { Worktree } from '../../shared/worktree/types'
 import type { Bot } from '../../shared/bot-types'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
@@ -208,7 +207,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
-    showManagedTerminalWorkspace: (selector) => this.showManagedTerminalWorkspace(selector),
+    showManagedTerminalWorkspace: (...args) => this.showManagedTerminalWorkspace(...args),
     bots: this.bots,
     linkStore: () => this.store,
     listWorkspaceLineage: () => this.listWorkspaceLineage()
@@ -318,8 +317,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   abstract listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>>
 
   abstract showManagedTerminalWorkspace(
-    worktreeSelector: string
-  ): Promise<Pick<Worktree, 'displayName' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR'>>
+    ...args: Parameters<BotWorkRuntime['showManagedTerminalWorkspace']>
+  ): ReturnType<BotWorkRuntime['showManagedTerminalWorkspace']>
 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({

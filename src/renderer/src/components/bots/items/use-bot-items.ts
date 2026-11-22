@@ -11,7 +11,7 @@ import type {
   BotItemStatus
 } from '../../../../../shared/bots/bot-items'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
-import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
+import { BOT_ITEM_LIMITS, parseBotItemEventId } from '../../../../../shared/bots/bot-items'
 import {
   loadBotItemsList,
   type BotItemsListCall
@@ -50,7 +50,8 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   'Failed to read bot items:',
   ITEMS_KINDS,
   ITEMS_MIN_READ_GAP_MS,
-  false,
+  // Reopening shows the last list at once while it re-reads (a big bot's read takes seconds).
+  true,
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
@@ -75,16 +76,26 @@ export function useBotItems(bot: Bot | null): {
   return { read, ...useBotHostReadState(itemsRead, bot) }
 }
 
-/** The item as the open Items tab last read it, without subscribing; null while no tab holds a read. */
+/** The item as an Items tab last read it, without subscribing; null until one has. */
 export function botItemLastRead(bot: BotRef, uid: string): BotItem | null {
   return itemsRead.snapshot(botRefKey(bot))?.items.find((item) => item.uid === uid) ?? null
 }
 
+/** Each bot's mark as its tab's last open moved it: a kept read from before that open is older. */
+const openedMarks = new Map<string, string>()
+
+function laterMark(read: string | null, opened: string | undefined): string | null {
+  if (read === null || opened === undefined) {
+    return read
+  }
+  return (parseBotItemEventId(opened) ?? 0) > (parseBotItemEventId(read) ?? 0) ? opened : read
+}
+
 /** The seen mark as the list opened, without moving it: rows changed since keep their dot while it
  *  stays open. A group's list reads its members' marks this way; only a bot's own tab moves them. */
-export function useBotItemsSeenMark(read: BotItemsRead | null): string | null {
+export function useBotItemsSeenMark(bot: BotRef, read: BotItemsRead | null): string | null {
   const [atOpen, setAtOpen] = useState<string | null>(null)
-  const seen = read?.seenEventId ?? null
+  const seen = laterMark(read?.seenEventId ?? null, openedMarks.get(botRefKey(bot)))
   if (atOpen === null && seen !== null) {
     setAtOpen(seen)
   }
@@ -94,7 +105,7 @@ export function useBotItemsSeenMark(read: BotItemsRead | null): string | null {
 /** The seen mark as the tab opened (`useBotItemsSeenMark`). Opening moves the bot's mark, once the
  *  first read has said where it was. */
 export function useBotItemsSeenAtOpen(bot: Bot, read: BotItemsRead | null): string | null {
-  const atOpen = useBotItemsSeenMark(read)
+  const atOpen = useBotItemsSeenMark(bot, read)
   const sent = useRef(false)
   const seen = read?.seenEventId ?? null
   const { hostId, id } = bot
@@ -103,9 +114,13 @@ export function useBotItemsSeenAtOpen(bot: Bot, read: BotItemsRead | null): stri
       return
     }
     sent.current = true
-    void callBotRpc({ hostId }, 'bots.items.owner.opened', { botId: id }).catch((error: unknown) =>
-      console.warn('[bots] items: marking the tab opened failed', error)
-    )
+    void callBotRpc<{ seenEventId?: string }>({ hostId }, 'bots.items.owner.opened', { botId: id })
+      .then((result) => {
+        if (result?.seenEventId) {
+          openedMarks.set(botRefKey({ hostId, id }), result.seenEventId)
+        }
+      })
+      .catch((error: unknown) => console.warn('[bots] items: marking the tab opened failed', error))
   }, [hostId, id, seen])
   return atOpen
 }
