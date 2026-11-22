@@ -88,6 +88,7 @@ const browserClientHosts =
       const routes = registerBrowserClientHostEnvironmentRoutes(
         input.environmentId,
         downloadRelay,
+        (browserPageId) => executor?.pageCookieJar(browserPageId) ?? null,
         (params) => executor?.recordPublishedPageUrl(params)
       )
       return new PairedRuntimeBrowserClientHostComposition({

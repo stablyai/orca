@@ -40,7 +40,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
-import { askedInConversation } from './bot-request-record'
+import { answersRequest, askedInConversation } from './bot-request-record'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
@@ -135,9 +135,10 @@ type SendBotRequestArgs = {
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
 async function sendBotRequest(args: SendBotRequestArgs): Promise<unknown> {
-  const card = ownerChatCard(args.acting, args.receiving, args.params)
+  const asked = askedInConversation(args.runtime, args.acting)
+  const card = ownerChatCard(args.acting, args.receiving, args.params, asked)
   try {
-    return await admitBotRequestMail(args, card)
+    return await admitBotRequestMail(args, card, asked)
   } catch (error) {
     card.refused(error)
     throw error
@@ -146,7 +147,8 @@ async function sendBotRequest(args: SendBotRequestArgs): Promise<unknown> {
 
 async function admitBotRequestMail(
   args: SendBotRequestArgs,
-  card: ReturnType<typeof ownerChatCard>
+  card: ReturnType<typeof ownerChatCard>,
+  asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
   const chain = botRequestChain(db, acting.sessionId, acting.turn)
@@ -204,7 +206,8 @@ async function admitBotRequestMail(
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
-    ...askedInConversation(runtime, acting)
+    ...asked,
+    ...answersRequest(db, acting)
   }
   // A worker's send is its own: another worker asking the same still gets an answer.
   const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey

@@ -7,6 +7,7 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
+import { browserPagePromptStreamTarget } from '../prompts/browser-page-prompt-viewers'
 import type { ActiveDownload } from './downloads/browser-active-download'
 import type { CdpUserAgentOverrideState } from './navigation/browser-user-agent-override-state'
 import type { PendingMainFrameNavigation } from './navigation/browser-main-frame-navigation'
@@ -295,7 +296,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       !this.popupOwnerContextByGuestId.has(guest.id) &&
       !this.offscreenGuestIds.has(guest.id) &&
       guest.getType() === 'webview'
-    return awaitingRegistration ? 'awaiting-registration' : null
+    return awaitingRegistration ? 'awaiting-registration' : browserPagePromptStreamTarget(guest.id)
   }
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
