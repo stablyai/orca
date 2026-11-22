@@ -35,7 +35,6 @@ import {
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
 } from './layout/right-sidebar-titlebar-drag-regions'
 import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-activity-items'
-import { shouldFocusVaultSearchOnRoute } from './activity-bar/activity-bar-tab-focus'
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
 import { useWindowWidth } from './layout/use-window-width'
 import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
@@ -99,14 +98,12 @@ function RightSidebarInner(): React.JSX.Element {
     }
     lastRouteRequestId.current = routeRequestId
     setFocusVaultSearch(
-      shouldFocusVaultSearchOnRoute({
-        open: rightSidebarOpen,
-        creatingWorktree,
-        tab: rightSidebarTab,
-        effectiveTab,
-        settingsFocusRequested,
-        routeFocusesVaultSearch
-      })
+      routeFocusesVaultSearch &&
+        rightSidebarOpen &&
+        !creatingWorktree &&
+        rightSidebarTab === 'vault' &&
+        effectiveTab === 'vault' &&
+        !settingsFocusRequested
     )
   }, [
     routeRequestId,
@@ -190,7 +187,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => selectActivityTab(item.id)}
+      onClick={(fromKeyboard) => selectActivityTab(item.id, fromKeyboard)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />

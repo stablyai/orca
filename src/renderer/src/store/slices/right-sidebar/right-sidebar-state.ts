@@ -12,7 +12,7 @@ export type RightSidebarState = {
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
-  /** A vault route focuses Agents search. A mouse click on the tab sets this false. */
+  /** Whether the latest route asked Agents to focus its search box (keyboard activation of its tab). */
   rightSidebarRouteFocusesVaultSearch: boolean
   /** Set to ask the Agent Session Search panel to widen to all computers and focus its box. */
   aiVaultSearchFocusRequested: boolean
@@ -57,7 +57,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
       set((s) => ({
         rightSidebarTab: tab,
         rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
-        rightSidebarRouteFocusesVaultSearch: tab === 'vault' && options?.focusVaultSearch !== false,
+        rightSidebarRouteFocusesVaultSearch: tab === 'vault' && options?.focusVaultSearch === true,
         ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
       })),
     setRightSidebarExplorerView: (view) =>

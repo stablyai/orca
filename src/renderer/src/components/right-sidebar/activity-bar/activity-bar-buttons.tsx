@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
@@ -15,10 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
-
-// A mouse press must not move the caret out of the terminal. Keyboard Tab still reaches the button.
-const keepTerminalFocusOnPress = (event: React.MouseEvent): void => event.preventDefault()
+import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -80,10 +77,13 @@ export function TopActivityOverflowMenu({
 }: {
   items: ActivityBarItem[]
   activeTab: ActiveRightSidebarTab
-  onSelect: (tab: ActiveRightSidebarTab) => void
+  onSelect: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const focusBeforeOpenRef = useRef<Element | null>(null)
+  const interactedOutsideRef = useRef(false)
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
@@ -97,10 +97,19 @@ export function TopActivityOverflowMenu({
   )
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) {
+          focusBeforeOpenRef.current = document.activeElement
+          interactedOutsideRef.current = false
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
+          {...keepFocusPressProps}
           className={cn(
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
@@ -124,14 +133,37 @@ export function TopActivityOverflowMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+      <DropdownMenuContent
+        align="end"
+        side="bottom"
+        sideOffset={6}
+        onInteractOutside={() => {
+          interactedOutsideRef.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          const before = focusBeforeOpenRef.current
+          focusBeforeOpenRef.current = null
+          // A mouse-opened menu hands focus back to where it was (the terminal), not to More.
+          if (
+            !interactedOutsideRef.current &&
+            before instanceof HTMLElement &&
+            before !== document.body &&
+            before !== triggerRef.current &&
+            before.isConnected
+          ) {
+            event.preventDefault()
+            before.focus({ preventScroll: true })
+          }
+        }}
+      >
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
           return (
             <DropdownMenuItem
               key={item.id}
-              onSelect={() => onSelect(item.id)}
+              // Focus on More when it opened means the keyboard opened it.
+              onSelect={() => onSelect(item.id, focusBeforeOpenRef.current === triggerRef.current)}
               data-workspace-board-dismiss=""
               data-activity-plugin-key={item.pluginKey}
               className={cn(active && 'bg-accent text-accent-foreground')}
@@ -176,7 +208,7 @@ export function ActivityBarButton({
 }: {
   item: ActivityBarItem
   active: boolean
-  onClick: () => void
+  onClick: (fromKeyboard: boolean) => void
   layout: 'top' | 'side'
   statusIndicator?: CheckStatus | null
   /** A labeled tab that isn't open shows its icon alone, for a bar too narrow for every title. */
@@ -209,9 +241,9 @@ export function ActivityBarButton({
               active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
             )
       )}
-      onClick={onClick}
-      onMouseDown={keepTerminalFocusOnPress}
-      {...{ [KEEPS_FOCUS_ATTRIBUTE]: '' }}
+      // Enter and Space fire click with detail 0.
+      onClick={(event) => onClick(event.detail === 0)}
+      {...keepFocusPressProps}
       data-workspace-board-dismiss=""
       data-activity-plugin-key={item.pluginKey}
       aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
