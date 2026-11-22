@@ -17,6 +17,7 @@ export class JournalCheckpointOwner {
   private pending: number | undefined
   private nextRequest = 0
   private generation = 0
+  private attachedGeneration = 0
   private checkAgain = false
   /** WAL frames since the last reset; the writer reports it beside each commit. */
   log = 0
@@ -24,7 +25,7 @@ export class JournalCheckpointOwner {
   private frames: ReturnType<Database.Database['prepare']> | undefined
   private unknown = true
   private blocked = false
-  private truncate: { id: number; acknowledged: boolean; granted: boolean } | undefined
+  private truncate: { id: number; acknowledged: boolean } | undefined
   private readonly waiters = new JournalWalWaiters()
   private restoreNeeded = false
   private closePromise: Promise<void> | undefined
@@ -152,6 +153,7 @@ export class JournalCheckpointOwner {
       this.restoreNeeded = true
       this.writer.pragma('wal_autocheckpoint = 0')
       this.afterCommit()
+      this.attachedGeneration = this.generation
     } catch (error) {
       this.lose(error, 'error')
     }
@@ -186,9 +188,7 @@ export class JournalCheckpointOwner {
       return
     }
     this.truncate.acknowledged = true
-    if (this.truncate.granted) {
-      this.worker.grantTruncate()
-    }
+    this.worker.grantTruncate()
     this.worker.post({ type: 'truncate', truncateId: this.truncate.id })
   }
 
@@ -196,10 +196,8 @@ export class JournalCheckpointOwner {
     if (this.closing) {
       return
     }
-    const reattached = this.stopped
-    if (reattached) {
-      // A starting or late worker answered: it takes checkpoints with fresh state. A truncate this reply
-      // asks for was measured before the writer took over, so it is acknowledged but never granted.
+    if (this.stopped) {
+      // A starting or late worker answered: it takes checkpoints with fresh state.
       this.worker.unwatch()
       this.attach()
       if (this.stopped) {
@@ -210,7 +208,14 @@ export class JournalCheckpointOwner {
     this.worker.recovered()
     try {
       if (message.type === 'truncate-request' && Number.isSafeInteger(message.truncateId)) {
-        this.truncate = { id: message.truncateId!, acknowledged: false, granted: !reattached }
+        // Measured before the worker last took checkpoints over, while the writer had them: it would
+        // truncate a WAL it never saw, so the worker skips it, and a fresh check follows if writes wait.
+        if (message.generation < this.attachedGeneration) {
+          this.worker.post({ type: 'truncate', truncateId: message.truncateId })
+          this.request()
+          return
+        }
+        this.truncate = { id: message.truncateId!, acknowledged: false }
         this.blocked = true
         this.acknowledge()
         return

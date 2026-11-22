@@ -96,8 +96,8 @@ try {
     if (request.type === 'truncate') {
       if (!pendingTruncate || request.truncateId !== pendingTruncate.truncateId) return;
       const pending = pendingTruncate;
-      // A revoked truncate never starts: the owner already gave the writer its lock back.
-      let busy = true;
+      // A revoked or declined truncate never starts, and the reply reports the WAL as it is.
+      let busy = false;
       if (Atomics.compareExchange(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, ${JOURNAL_TRUNCATE_GRANTED}, ${JOURNAL_TRUNCATE_RUNNING}) === ${JOURNAL_TRUNCATE_GRANTED}) {
         const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
         db.exec('PRAGMA busy_timeout = 0;');
