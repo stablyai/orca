@@ -1,5 +1,6 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalAnsweredTurnIdentity,
   type AgentJournalTurnItem,
   type AgentJournalTurnLifecycleState
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -53,6 +54,26 @@ export function codexTurnLifecycleIdentity(
     sessionId,
     recordId: `turn-lifecycle:${turnId}`
   }
+}
+
+/** Codex echoes a turn's opening message first; a send echoed later joined that running turn. */
+export function codexAcceptedSend(
+  sessionId: string,
+  providerIdentity: AgentJournalItemIdentity
+): {
+  providerIdentity: AgentJournalItemIdentity
+  answeredInTurn?: AgentJournalAnsweredTurnIdentity
+} {
+  return providerIdentity.provider === 'codex' &&
+    providerIdentity.ordinal !== CODEX_USER_MESSAGE_ORDINAL
+    ? {
+        providerIdentity,
+        answeredInTurn: {
+          turn: codexTurnLifecycleIdentity(sessionId, providerIdentity.turnId),
+          via: 'steer'
+        }
+      }
+    : { providerIdentity }
 }
 
 export function codexTurnUserItemId(threadId: string, turnId: string): string {

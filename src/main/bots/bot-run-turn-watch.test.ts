@@ -11,7 +11,18 @@ import { applyJournalDomainItem } from '../native-chat/agent-session-journal/jou
 import { readJournalDomainOperationWindow } from '../native-chat/agent-session-journal/journal-domain-operation-window'
 import { JournalSqlScope } from '../native-chat/agent-session-journal/journal-sql-scope'
 import type { ResolveDispatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
-import { codexTurnLifecycleIdentity } from '../codex/structured/journal/codex-structured-journal-translation-turns'
+import {
+  codexAcceptedSend,
+  codexTurnLifecycleIdentity
+} from '../codex/structured/journal/codex-structured-journal-translation-turns'
+import { claudeTurnLifecycleIdentity } from '../claude/structured/turns/claude-turn-lifecycle-item'
+import { resolveClaudeReplayTurn } from '../claude/structured/turns/claude-replay-turn-resolution'
+import { waitForReplay } from '../claude/structured/dispatch/claude-structured-dispatch-waiters'
+import type {
+  ClaudeLateDispatchOutcome,
+  ClaudeSession
+} from '../claude/structured/claude-structured-session-state'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -19,6 +30,7 @@ import {
   agentJournalSubmissionKey
 } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalMessageItem,
   AgentJournalTurnLifecycleState
 } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -29,8 +41,8 @@ const target = { sessionId: 'chat', epoch: 'epoch' }
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
-/** A real Codex chat journal, written by the same writers the host uses. */
-function codexJournal() {
+/** A real chat journal, written by the same writers the host uses. */
+function chatJournal(agent: 'codex' | 'claude', turn: AgentJournalItemIdentity) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-bot-run-turn-'))
   const db = new Database(join(directory, 'journal.sqlite'))
   cleanups.push(() => {
@@ -46,8 +58,8 @@ function codexJournal() {
       sessionId: 'chat',
       workspaceId: 'workspace',
       hostId: 'host',
-      agent: 'codex' as const,
-      providerHandle: codexProviderHandle('thread')
+      agent,
+      providerHandle: agent === 'codex' ? codexProviderHandle('thread') : null
     }
   }
   let now = 1_800_000_000_000
@@ -62,7 +74,6 @@ function codexJournal() {
       throw error
     }
   }
-  const turn = codexTurnLifecycleIdentity('chat', 'turn-1')
   return {
     turnItemId: agentJournalItemKey(turn),
     admit: (id: string): string => {
@@ -97,25 +108,15 @@ function codexJournal() {
     },
     dispatch: (input: ResolveDispatchInput) =>
       transaction(() => applyJournalDomainDispatch(db, target, { kind: 'dispatch', input }, now++)),
-    /** Codex echoes each accepted send keyed by the turn it ran in. */
-    accept: (clientMessageId: string, ordinal: number) =>
+    /** The provider's receipt, as the host settles it. */
+    accept: (clientMessageId: string, receipt: AcceptedReceipt) =>
       transaction(() =>
         applyJournalDomainDispatch(
           db,
           target,
           {
             kind: 'dispatch',
-            input: {
-              clientMessageId,
-              state: 'accepted',
-              providerIdentity: {
-                provider: 'codex',
-                threadId: 'thread',
-                turnId: 'turn-1',
-                ordinal
-              },
-              fence: 1
-            }
+            input: { clientMessageId, state: 'accepted', ...receipt, fence: 1 }
           },
           now++
         )
@@ -147,8 +148,16 @@ function codexJournal() {
   }
 }
 
-it('waits for the turn a run was steered into, and fails when that turn fails', async () => {
-  const journal = codexJournal()
+type AcceptedReceipt = {
+  providerIdentity: AgentJournalItemIdentity
+  answeredInTurn?: AgentJournalAnsweredTurnIdentity
+}
+
+/** A person's turn runs; the run is steered into it, and the provider's receipts settle both. */
+async function steeredRunEndsWithFailedTurn(
+  journal: ReturnType<typeof chatJournal>,
+  receipts: { person: AcceptedReceipt; run: () => AcceptedReceipt }
+) {
   journal.admit('person')
   journal.dispatch({
     clientMessageId: 'person',
@@ -157,7 +166,7 @@ it('waits for the turn a run was steered into, and fails when that turn fails', 
     fence: 1
   })
   journal.writeTurn('running')
-  journal.accept('person', 0)
+  journal.accept('person', receipts.person)
   const fingerprint = journal.admit('run')
   journal.dispatch({
     clientMessageId: 'run',
@@ -165,7 +174,7 @@ it('waits for the turn a run was steered into, and fails when that turn fails', 
     turnScope: { kind: 'turn', turnItemId: journal.turnItemId },
     fence: 1
   })
-  journal.accept('run', 1)
+  journal.accept('run', receipts.run())
 
   let emit: (event: { type: string; completion?: { sessionId: string } }) => void = () => {}
   let reads = 0
@@ -198,4 +207,62 @@ it('waits for the turn a run was steered into, and fails when that turn fails', 
   emit({ type: 'completion', completion: { sessionId: 'chat' } })
   // A failed ending, never the other message's answer: delivery records it failed, with Rerun.
   expect(await ended).toMatchObject({ outcome: 'failure', message: '' })
+}
+
+const codexEcho = (ordinal: number): AgentJournalItemIdentity => ({
+  provider: 'codex',
+  threadId: 'thread',
+  turnId: 'turn-1',
+  ordinal
+})
+
+it('a Codex run steered into a turn waits for it, and fails when that turn fails', async () => {
+  const journal = chatJournal('codex', codexTurnLifecycleIdentity('chat', 'turn-1'))
+  await steeredRunEndsWithFailedTurn(journal, {
+    person: codexAcceptedSend('chat', codexEcho(0)),
+    run: () => codexAcceptedSend('chat', codexEcho(1))
+  })
+})
+
+it('a Claude run steered into a turn waits for it, and fails when that turn fails', async () => {
+  const providerSession = '00000000-0000-4000-8000-00000000c1a0'
+  const sent = 'ec94ea32-e87c-4cef-9ff1-be319d2e77a5'
+  const turn = claudeTurnLifecycleIdentity(providerSession, 'turn-1')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replay correlation reads only these fields; the translator holds the person's running turn
+  const session = {
+    providerSessionId: providerSession,
+    dispatchSequence: 0,
+    dispatchWaiters: [],
+    retiredDispatchWaiters: [],
+    translator: {
+      currentTurnId: 'turn-1',
+      turnCycle: { ownsLiveProviderCycle: true, confirmProviderCycle: () => {}, identity: turn }
+    }
+  } as unknown as ClaudeSession
+  await steeredRunEndsWithFailedTurn(chatJournal('claude', turn), {
+    person: {
+      providerIdentity: { provider: 'claude', sessionId: providerSession, uuid: 'person' }
+    },
+    run: () => {
+      // Claude replays the steered prompt into its running turn.
+      waitForReplay(session, false, sent, 'key', 'run', null)
+      const settled: ClaudeLateDispatchOutcome[] = []
+      resolveClaudeReplayTurn(
+        session,
+        {
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'text', text: 'run' }] },
+          parent_tool_use_id: null,
+          session_id: providerSession,
+          uuid: sent
+        },
+        (outcome) => settled.push(outcome)
+      )
+      const [receipt] = settled
+      if (!receipt || !('providerIdentity' in receipt)) {
+        throw new Error('Claude did not accept the steered run')
+      }
+      return receipt
+    }
+  })
 })

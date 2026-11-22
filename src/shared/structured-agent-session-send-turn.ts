@@ -1,12 +1,10 @@
 // The root turn one send opened, proven by the send's own id, so a reader can take that turn's answer
 // and never a neighbour's. The Chat's grouping guesses where ids are missing; this never does.
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from './agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import { isQueuedAgentJournalSubmission } from './agent-session/requests/agent-session-queued-submission'
 import type {
+  AgentJournalAnsweredTurn,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
@@ -71,10 +69,10 @@ export function structuredAgentSessionSendTurn(
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }
     case 'accepted': {
       // Answered, yet no ended turn after it names it: it went into a turn another send opened.
-      // The turn the provider echoed it in is that turn; the planned scope is never proof of it.
-      const echoed = echoedInTurn(journal, submission.providerItemId)
-      if (echoed) {
-        return { kind: 'shared', turn: echoed }
+      // The running turn the provider recorded it joined; the planned scope is never proof of it.
+      const joined = submission.answeredInTurn && answeredTurn(journal, submission.answeredInTurn)
+      if (joined) {
+        return { kind: 'shared', turn: joined }
       }
       return planned?.kind === 'turn' ||
         journal.items.some((item, index) => {
@@ -167,23 +165,13 @@ function openedTurn(
   return null
 }
 
-/** The root turn a provider's echo of the send names: Codex keys an echo by the turn it ran in.
- *  Other providers' echoes name no turn. */
-function echoedInTurn(
+function answeredTurn(
   journal: Pick<AgentJournalSnapshot, 'items'>,
-  providerItemId: string | null
+  answered: AgentJournalAnsweredTurn
 ): { itemId: string; turn: AgentJournalTurnLifecycle } | null {
-  const echo = providerItemId ? parseAgentJournalItemKey(providerItemId) : null
-  if (echo?.provider !== 'codex') {
-    return null
-  }
-  for (const item of journal.items) {
-    const turn = rootTurn(item)
-    if (turn?.turnId === echo.turnId) {
-      return { itemId: item.itemId, turn }
-    }
-  }
-  return null
+  const item = journal.items.find((entry) => entry.itemId === answered.turnItemId)
+  const turn = item ? rootTurn(item) : null
+  return turn ? { itemId: answered.turnItemId, turn } : null
 }
 
 function rootTurn(item: AgentJournalRenderItem): AgentJournalTurnLifecycle | null {

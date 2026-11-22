@@ -46,6 +46,7 @@ import {
   type CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
 import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
 
 type CodexOpenContext = {
   input: StructuredAgentSessionAcquireInput
@@ -146,7 +147,11 @@ export async function openCodexStructuredSession(
           paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
           subagentExecutions: start.subagentExecutions,
           onReceipt: (clientMessageId, providerIdentity) =>
-            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
+            deps.onDispatchSettledLate?.({
+              sessionId,
+              clientMessageId,
+              ...codexAcceptedSend(sessionId, providerIdentity)
+            }),
           signal,
           assertCurrent: current,
           ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
