@@ -256,17 +256,19 @@ function BotItemGroup({
   const section = useRef<HTMLElement | null>(null)
   // Back's row until it has focus; one that left the group has nothing to return to.
   const [backDone, setBackDone] = useState(false)
-  const backItem = backDone ? undefined : items[focusIndex]
+  // Found by uid: an update can move it, or take it out of the group, before it is focused.
+  const backItem = useMemo(
+    () => (backDone || !focusUid ? undefined : items.find((item) => item.uid === focusUid)),
+    [backDone, focusUid, items]
+  )
   const needsYouBackDone = useRef(false)
   const unfold = useLatestHandler(() => setOpen(true))
   // Needs you's rows are all mounted, so its row is focused here; other groups' windows focus it as drawn.
   useEffect(() => {
-    if (!backItem || needsYouBackDone.current) {
-      return
-    }
-    if (!open) {
+    const pending = backItem !== undefined && !needsYouBackDone.current
+    if (pending && !open) {
       unfold()
-    } else if (id === 'needs_you') {
+    } else if (pending && id === 'needs_you') {
       needsYouBackDone.current = true
       focusBotItemBackRow(
         section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)

@@ -96,6 +96,8 @@ function hostAnswer(changed: { number: number; title: string } | null, count = O
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(NOW)
   // The panel's scroller shows 400 px from the top of the list.
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement
@@ -111,6 +113,7 @@ afterEach(() => {
   localStorage.clear()
   rowRenders.at = []
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 async function showWholePlannedGroup(items: readonly BotItem[]) {

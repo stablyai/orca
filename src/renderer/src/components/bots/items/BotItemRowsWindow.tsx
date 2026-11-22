@@ -328,11 +328,11 @@ export function BotItemRowsWindow({
   const focusBack = useCallback(
     (node: HTMLElement | null) => {
       if (node) {
-        focusBotItemBackRow(node)
+        focusBotItemBackRow(node, rowsTakeFocus)
         onBackFocused()
       }
     },
-    [onBackFocused]
+    [onBackFocused, rowsTakeFocus]
   )
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {

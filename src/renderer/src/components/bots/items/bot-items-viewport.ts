@@ -172,7 +172,8 @@ function createViewport(): BotItemsViewport {
     },
     flush: () => {
       // Every group changing in one commit flushes; the first measures them all, after every change is in.
-      if (flushed || listeners.size === 0 || botItemsDocumentHidden()) {
+      // Before the scroller attaches there is nothing to measure; its attach measures.
+      if (flushed || !scroller || listeners.size === 0 || botItemsDocumentHidden()) {
         return
       }
       flushed = true
