@@ -123,6 +123,67 @@ describe('GitHub work item link routing', () => {
     expect(metadataRequests.mock.calls[0]?.[0]).toEqual(['api', 'repos/other/tools/pulls/7'])
   })
 
+  it('returns a pull request when a chat link refers to it as an issue number', async () => {
+    const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [repository],
+      headRepo: repository
+    })
+    const empty = { nodes: [], pageInfo: { hasNextPage: false } }
+    metadataRequests.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            issueOrPullRequest: {
+              __typename: 'PullRequest',
+              number: 42,
+              title: 'Improve widget detection',
+              url: 'https://github.com/acme/widgets/pull/42',
+              updatedAt: '2026-04-01T00:00:00Z',
+              author: null,
+              labels: empty,
+              assignees: empty,
+              pullState: 'OPEN',
+              isDraft: true,
+              headRefName: 'widget-detection',
+              baseRefName: 'main',
+              headRefOid: '0123456789abcdef0123456789abcdef01234567',
+              headRepositoryOwner: { login: 'fork-owner' },
+              additions: 24,
+              deletions: 5,
+              changedFiles: 3,
+              mergeable: 'UNKNOWN',
+              mergeStateStatus: 'DRAFT',
+              autoMergeRequest: null,
+              reviewRequests: empty
+            }
+          }
+        }
+      })
+    })
+
+    await expect(
+      getWorkItemByOwnerRepo(
+        '/repo-root',
+        repository,
+        42,
+        'issue',
+        undefined,
+        {},
+        { preview: true }
+      )
+    ).resolves.toMatchObject({
+      number: 42,
+      type: 'pr',
+      title: 'Improve widget detection',
+      url: 'https://github.com/acme/widgets/pull/42',
+      state: 'draft',
+      additions: 24,
+      deletions: 5,
+      isCrossRepository: true
+    })
+  })
+
   it('reads issue link metadata from the linked repository on the configured host', async () => {
     const configured = { owner: 'acme', repo: 'widgets', host: 'github.example.test' }
     const linked = { owner: 'other', repo: 'tools', host: 'github.example.test' }
