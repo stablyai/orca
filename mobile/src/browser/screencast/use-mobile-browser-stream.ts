@@ -46,6 +46,11 @@ type MobileBrowserStreamArgs = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setBusy: Dispatch<SetStateAction<boolean>>
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
+  /** The host streams page prompts and relays their answers (browser.page-prompts.v1). */
+  pagePromptsSupported: boolean
+  /** Takes the stream's prompt and download events; true when it handled one. */
+  handlePageEvent: (payload: unknown) => boolean
+  clearPagePrompt: () => void
   setError: Dispatch<SetStateAction<string | null>>
   setFrameMetadata: Dispatch<SetStateAction<BrowserScreencastFrameMetadata | null>>
   setZoom: Dispatch<SetStateAction<BrowserZoomState>>
@@ -74,6 +79,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     setAddressValue,
     setBusy,
     setDialog,
+    pagePromptsSupported,
+    handlePageEvent,
+    clearPagePrompt,
     setError,
     setFrameMetadata,
     setZoom,
@@ -158,6 +166,8 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       setFrameMetadata(cachedFrame?.metadata ?? null)
     }
     setDialog(null)
+    // The host replays prompts it still holds to the new stream.
+    clearPagePrompt()
     setError(null)
     setStreamStopped(null)
     if (
@@ -217,7 +227,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         worktree,
         page: tab.browserPageId,
         ...streamRequest,
-        frameAck: 1
+        frameAck: 1,
+        ...(pagePromptsSupported ? { pagePrompts: 1 } : {}),
+        downloads: 1
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) {
@@ -226,6 +238,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         const ready = readScreencastReady(payload)
         if (ready) {
           ackSubscriptionId = ready.frameAck === true ? ready.subscriptionId : null
+        }
+        if (handlePageEvent(payload)) {
+          return
         }
         handleBrowserScreencastEvent({
           busyRef,
@@ -272,8 +287,11 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
   }, [
     binaryScreencastGranted,
+    clearPagePrompt,
     client,
     foregroundVisit,
+    handlePageEvent,
+    pagePromptsSupported,
     framePacer,
     reconnectRequest,
     resetBrowserZoomState,
