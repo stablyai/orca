@@ -12,7 +12,7 @@ export type ExplorerDirState = {
     requestId: number
     flash?: boolean
   } | null
-  revealInExplorer: (worktreeId: string, filePath: string) => void
+  revealInExplorer: (worktreeId: string, filePath: string, options?: { flash?: boolean }) => void
   clearPendingExplorerReveal: () => void
 }
 
@@ -58,7 +58,7 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
         return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
       }),
     pendingExplorerReveal: null,
-    revealInExplorer: (worktreeId, filePath) =>
+    revealInExplorer: (worktreeId, filePath, options) =>
       set((s) => ({
         rightSidebarOpen: true,
         rightSidebarTab: 'explorer',
@@ -68,7 +68,12 @@ export function createExplorerDirState(set: EditorSet, _get: EditorGet): Explore
           ...s.rightSidebarExplorerViewByWorktree,
           [worktreeId]: 'files'
         },
-        pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
+        pendingExplorerReveal: {
+          worktreeId,
+          filePath,
+          requestId: Math.max(Date.now(), (s.pendingExplorerReveal?.requestId ?? 0) + 1),
+          ...(options?.flash !== undefined ? { flash: options.flash } : {})
+        }
       })),
     clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null })
   }

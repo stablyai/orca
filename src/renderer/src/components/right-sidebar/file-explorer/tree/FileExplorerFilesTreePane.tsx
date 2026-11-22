@@ -23,7 +23,6 @@ type FileExplorerFilesTreePaneProps = {
   displayRootPath: string | null
   /** 'search' while results cover the tree; it stays mounted to keep scroll position and caches. */
   explorerView: RightSidebarExplorerView
-  activeFileId: string | null
   tree: ReturnType<typeof useFileExplorerTree>
   selection: ReturnType<typeof useFileExplorerSelection>
   paneState: ReturnType<typeof useFileExplorerTreePaneState>
@@ -42,7 +41,6 @@ export function FileExplorerFilesTreePane({
   worktreePath,
   displayRootPath,
   explorerView,
-  activeFileId,
   tree,
   selection,
   paneState,
@@ -192,7 +190,6 @@ export function FileExplorerFilesTreePane({
           canCollapseFolderSubtree
           loadingDirPaths={loadingDirPaths}
           selectedPaths={selectedPaths}
-          activeFileId={activeFileId}
           flashingPath={flashingPath}
           deleteShortcutLabel={deletion.deleteShortcutLabel}
           connectionId={activeRepo?.connectionId ?? null}

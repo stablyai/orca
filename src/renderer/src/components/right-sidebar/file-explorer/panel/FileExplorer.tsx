@@ -276,7 +276,6 @@ function FileExplorerFiles(): React.JSX.Element {
               activeRepo={activeRepo}
               worktreePath={worktreePath}
               explorerView={treeView}
-              activeFileId={activeFileId}
               tree={tree}
               selection={selection}
               paneState={paneState}

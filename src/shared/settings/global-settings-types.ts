@@ -231,6 +231,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   rightSidebarOpenByDefault: boolean
   followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
+  explorerRevealActiveFile?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
