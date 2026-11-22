@@ -1,6 +1,9 @@
 // The root turn one send opened, proven by the send's own id, so a reader can take that turn's answer
 // and never a neighbour's. The Chat's grouping guesses where ids are missing; this never does.
-import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from './agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import { isQueuedAgentJournalSubmission } from './agent-session/requests/agent-session-queued-submission'
 import type {
@@ -66,11 +69,12 @@ export function structuredAgentSessionSendTurn(
       }
       // A Stop takes a card's handoff back and the card waits again.
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }
-    case 'accepted':
+    case 'accepted': {
       // Answered, yet no ended turn after it names it: it went into a turn another send opened.
-      // The provider's record of the turn it steered into; the planned scope is never proof of it.
-      if (submission.answeredInTurn?.via === 'steer') {
-        return { kind: 'shared', ...steeredInto(journal, submission.answeredInTurn.turnItemId) }
+      // The turn the provider echoed it in is that turn; the planned scope is never proof of it.
+      const echoed = echoedInTurn(journal, submission.providerItemId)
+      if (echoed) {
+        return { kind: 'shared', turn: echoed }
       }
       return planned?.kind === 'turn' ||
         journal.items.some((item, index) => {
@@ -79,6 +83,7 @@ export function structuredAgentSessionSendTurn(
         })
         ? { kind: 'shared' }
         : { kind: 'pending' }
+    }
     case 'unknown':
       // Recovered: its writer is gone, so no provider answer will come.
       return submission.recovered ? { kind: 'none' } : { kind: 'pending' }
@@ -162,13 +167,23 @@ function openedTurn(
   return null
 }
 
-function steeredInto(
+/** The root turn a provider's echo of the send names: Codex keys an echo by the turn it ran in.
+ *  Other providers' echoes name no turn. */
+function echoedInTurn(
   journal: Pick<AgentJournalSnapshot, 'items'>,
-  itemId: string
-): { turn?: { itemId: string; turn: AgentJournalTurnLifecycle } } {
-  const item = journal.items.find((entry) => entry.itemId === itemId)
-  const turn = item ? rootTurn(item) : null
-  return turn ? { turn: { itemId, turn } } : {}
+  providerItemId: string | null
+): { itemId: string; turn: AgentJournalTurnLifecycle } | null {
+  const echo = providerItemId ? parseAgentJournalItemKey(providerItemId) : null
+  if (echo?.provider !== 'codex') {
+    return null
+  }
+  for (const item of journal.items) {
+    const turn = rootTurn(item)
+    if (turn?.turnId === echo.turnId) {
+      return { itemId: item.itemId, turn }
+    }
+  }
+  return null
 }
 
 function rootTurn(item: AgentJournalRenderItem): AgentJournalTurnLifecycle | null {
