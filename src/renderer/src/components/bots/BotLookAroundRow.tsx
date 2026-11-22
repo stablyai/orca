@@ -72,7 +72,7 @@ export function LookAroundRow({
   if (folded && !isBotRowTrouble(rowState)) {
     return null
   }
-  const every = everyText(setting.every)
+  const every = everyText(setting)
   const dueNow = setting.on && !looking && state?.dueNow === true
   const name = t('settings.bots.lookAround.title', 'Look around')
   const setOn = (on: boolean): void => updateBotReporting(bot, { lookAround: { on } })

@@ -50,8 +50,14 @@ export const TIDY_UP_FAILURES = {
   asleep: 'The last tidy-up was missed because this computer was asleep.',
   unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
   noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
+  noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
+  allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
+  notListLines:
+    "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
+  movedOnly:
+    'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
-  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
+  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines and no shorter, so nothing changed.`,
   tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
   tooManyAdded: 'The last tidy-up added too many new lines at once, so nothing changed.',
   notCopied:
@@ -71,6 +77,8 @@ export type TidyUpMemoryFile = { name: string; text: string }
 export type BotTidyUpState = BackgroundRuns & {
   /** Its chats are read from here on: when the last tidy-up that applied started. */
   through?: number
+  /** Before any tidy-up applied: where the first one that failed read its chats from. */
+  firstFrom?: number
   /** When it last found nothing new to tidy, so it waits for the next night. */
   checkedAt?: number
   /** The last tidy-up that changed something, for its summary. */
@@ -135,7 +143,7 @@ export function tidyUpOwed(
 
 export type TidyUpApplied = Pick<
   BotTidyUpSummary,
-  'learned' | 'replaced' | 'filed' | 'moved' | 'merged'
+  'learned' | 'replaced' | 'filed' | 'moved' | 'merged' | 'skipped'
 >
 
 /** A run that changed something, as its summary shows it, with the History row it wrote; null
@@ -273,7 +281,10 @@ function chatsText(chats: readonly TidyUpChat[]): string {
 }
 
 /** Each topic file's start, then the archive's latest lines. */
-function memoryFilesText(files: readonly TidyUpMemoryFile[]): { topics: string; archive: string } {
+export function memoryFilesText(files: readonly TidyUpMemoryFile[]): {
+  topics: string
+  archive: string
+} {
   let left: number = TIDY_UP_MEMORY_FILES.topics
   const topics: string[] = []
   for (const { name, text } of files) {
@@ -309,6 +320,7 @@ export function tidyUpPrompt(input: {
     '- Merge lines that say the same thing into one: the clearer wording and the earliest date.',
     '- When a newer line replaces an older one, leave the older one out of MEMORY.md and list it as replaced.',
     `- Leave out at most a fifth of the lines; when MEMORY.md is over ${TIDY_UP_TARGET_FACTS} lines, move the oldest details to topic files first. Orca keeps every line you leave out in memory/archive.md.`,
+    `- When MEMORY.md is over ${BOT_MEMORY_INDEX_LINE_CAP} lines, make it shorter within these limits; it may stay over ${BOT_MEMORY_INDEX_LINE_CAP} tonight, and the next tidy-up carries on.`,
     `- Add only facts your owner stated, decisions they made, and lessons from their corrections in the chats below, each as "- ${input.today} <fact>". Never add a question, a task, a hypothetical, anything from someone other than your owner, anything the archive already retired, or a password, key or token.`,
     '',
     'Reply with only these blocks, each marker on its own line: the whole new MEMORY.md, then one block for each topic file with only the lines to add to it, then the replaced lines. Leave out blocks you have nothing for. If nothing should change, reply with MEMORY.md unchanged.',

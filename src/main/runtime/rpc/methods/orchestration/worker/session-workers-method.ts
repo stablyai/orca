@@ -1,3 +1,4 @@
+import { sessionWorkerBackgroundWait } from './session-worker-background-wait'
 import type {
   FleetDurableWorker,
   OrchestrationFleetWorker
@@ -36,6 +37,11 @@ import {
 import { structuredWorkerSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { latestLiveAgentStatusRowsByPaneKey } from '../../../../../../shared/agent-status/live-agent-status-rows'
+import {
+  projectTerminalPresence,
+  type TerminalPresenceCandidate,
+  type TerminalPresenceReads
+} from './session-worker-terminal-presence'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export const ORCHESTRATION_SESSION_WORKERS_METHODS = [
@@ -45,7 +51,7 @@ export const ORCHESTRATION_SESSION_WORKERS_METHODS = [
     permission: 'workspace',
     params: SessionWorkersParams,
     handler: async (params, { runtime }): Promise<OrchestrationSessionWorkersResult> => ({
-      workers: await readSessionWorkers(runtime, params.session),
+      workers: await readSessionWorkers(runtime, params.session, { lostTerminalsEnded: true }),
       workerNotices: true
     })
   })
@@ -58,14 +64,19 @@ export type SessionWorkersRuntime = Pick<
   | 'ensureStructuredAgentSessionHost'
   | 'getAgentStatusSnapshotFn'
 > &
-  FederatedFleetRuntime
+  FederatedFleetRuntime &
+  Partial<TerminalPresenceReads>
+
+/** For surfaces that only show workers: an open terminal worker whose terminal its host can't find at all reads as
+ *  `stopped`, as one that exited without reporting does. Its Dispatch stays open, so a coordinator's read leaves this off. */
+export type DispatchWorkersReadOptions = { lostTerminalsEnded?: boolean }
 
 /** The workers a chat started, newest first, as its execution host sees them; with `connectorOnly`,
  *  only those a turn its connector conversation woke started. */
 export async function readSessionWorkers(
   runtime: SessionWorkersRuntime,
   session: string,
-  options: { connectorOnly?: boolean } = {}
+  options: { connectorOnly?: boolean } & DispatchWorkersReadOptions = {}
 ): Promise<OrchestrationSessionWorker[]> {
   const db = runtime.getOrchestrationDb()
   const ids = db.listDispatchIdsCreatedBySession(session, ORCHESTRATION_SESSION_WORKERS_LIMIT)
@@ -73,14 +84,16 @@ export async function readSessionWorkers(
     runtime,
     options.connectorOnly
       ? ids.filter((id) => db.getDispatchContextById(id)?.creator_turn_source === 'connector')
-      : ids
+      : ids,
+    options
   )
 }
 
 /** These Dispatches' workers, newest first, read in one pass over the worker records. */
 export async function readDispatchWorkers(
   runtime: SessionWorkersRuntime,
-  dispatchIds: readonly string[]
+  dispatchIds: readonly string[],
+  options: DispatchWorkersReadOptions = {}
 ): Promise<OrchestrationSessionWorker[]> {
   const db = runtime.getOrchestrationDb()
   const rows =
@@ -98,21 +111,20 @@ export async function readDispatchWorkers(
     ),
     now
   )
-  const workers: OrchestrationSessionWorker[] = []
+  const reads: { read: OrchestrationSessionWorker; candidate: TerminalPresenceCandidate }[] = []
   for (const worker of fleet.workers) {
     const durable = fleet.durable.get(worker.dispatchId)
     if (durable) {
-      workers.push(
-        sessionWorker(
-          db,
-          await withStructuredLiveness(runtime, db, worker, durable),
-          durable,
-          chatStatusRows
-        )
-      )
+      const observed = await withStructuredLiveness(runtime, db, worker, durable)
+      reads.push({
+        read: sessionWorker(db, observed, durable, chatStatusRows),
+        candidate: { worker: observed, durable }
+      })
     }
   }
-  return workers
+  return options.lostTerminalsEnded
+    ? projectTerminalPresence(runtime, reads)
+    : reads.map(({ read }) => read)
 }
 
 /** The fleet projection of these rows: this machine's statuses, session records and paired hosts' verdicts. */
@@ -245,6 +257,7 @@ function sessionWorker(
     agent: worker.provider?.id ?? provider ?? requestedAgent(db, worker.dispatchId),
     state,
     activity: sessionWorkerActivity(worker, chatSessionId, chatStatusRows),
+    ...sessionWorkerBackgroundWait(worker, state, chatSessionId, chatStatusRows),
     pendingQuestion: hasPendingQuestion(worker),
     liveness: worker.liveness.verdict,
     host: worker.host.kind,

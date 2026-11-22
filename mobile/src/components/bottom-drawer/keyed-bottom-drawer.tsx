@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MountedBottomDrawer, type MountedBottomDrawerProps } from './mounted-bottom-drawer'
 import { useBottomDrawerModalHost } from './bottom-drawer-modal-host-scope'
+import { SheetPageScrollContext } from '../nav-bar/sheet-page-scroll'
 
 // Own one Modal and swap only after prior unmount commit: iOS rejects second presentation even mid-close.
 
@@ -87,7 +88,9 @@ export function KeyedBottomDrawer<T>({
       onClose={() => onClose(presented)}
       onHidden={handleHidden}
     >
-      {children(presented)}
+      <SheetPageScrollContext.Provider value={null}>
+        {children(presented)}
+      </SheetPageScrollContext.Provider>
     </MountedBottomDrawer>
   )
 }

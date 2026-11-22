@@ -286,7 +286,7 @@ export const AutomationCreate = z.object({
   destination: Destination,
   // The native chat whose agent ran the command, to show the saved automation there.
   callerSessionId: OptionalString,
-  // No --runs-in was given: a wait, or a teammate's automation, runs in that chat when it is one of the bot's own.
+  // No --runs-in was given: it runs in the calling chat when that is one of the bot's own.
   runsInDefault: z.literal(true).optional(),
   // What a CLI from before runsInDefault sends for a wait given no --runs-in.
   waitInCallerChat: z.literal(true).optional()

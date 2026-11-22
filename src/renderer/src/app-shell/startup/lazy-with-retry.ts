@@ -97,11 +97,6 @@ const MAX_RELOAD_REQUESTS_PER_DOCUMENT = 2
 let reloadRequestsThisDocument = 0
 let reloadRequestInFlight = false
 
-export function resetLazyChunkReloadRequestsForTest(): void {
-  reloadRequestsThisDocument = 0
-  reloadRequestInFlight = false
-}
-
 type ReloadBreadcrumbName = 'lazy_chunk_reload' | 'lazy_chunk_reload_vetoed'
 
 function recordReloadBreadcrumb(
