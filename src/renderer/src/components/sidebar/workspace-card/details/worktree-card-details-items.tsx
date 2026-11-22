@@ -147,6 +147,7 @@ export function WorktreeCardIdentityHover({
               <WorktreeCardLineActivity
                 worktreeId={worktree.id}
                 executionHostId={worktree.hostId ?? 'local'}
+                runtimeOwnerEnvironmentId={worktree.runtimeOwnerEnvironmentId}
                 workspaceMenuEnabled={!affiliateListMode}
               />
             ) : null}

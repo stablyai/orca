@@ -11,7 +11,10 @@ import {
   WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR,
   WorktreeContextMenuPortalScope
 } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   applyAgentPaneActivityFlags,
   createAgentPaneActivityFlags,
@@ -25,15 +28,16 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 export function WorktreeCardLineActivity({
   worktreeId,
   executionHostId,
+  runtimeOwnerEnvironmentId,
   workspaceMenuEnabled
 }: {
   worktreeId: string
   executionHostId: ExecutionHostId
+  runtimeOwnerEnvironmentId?: string
   workspaceMenuEnabled: boolean
 }): React.JSX.Element | null {
   const menuScope = React.useContext(WorktreeContextMenuPortalScope)
   const workspaceStatus = useWorktreeActivityStatus(worktreeId)
-  const agents = useWorktreeAgentRows(worktreeId, true, executionHostId)
   const hasHostCopies = useAppStateValue((state) => {
     const copies = findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId)
     if (copies.length < 2) {
@@ -42,6 +46,10 @@ export function WorktreeCardLineActivity({
     const firstOwner = worktreeCopyOwnerKey(copies[0])
     return copies.some((copy) => worktreeCopyOwnerKey(copy) !== firstOwner)
   })
+  const runtimeOwner = runtimeOwnerEnvironmentId?.trim()
+  const activityHostId =
+    hasHostCopies && runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : executionHostId
+  const agents = useWorktreeAgentRows(worktreeId, true, activityHostId)
   let status = workspaceStatus
   if (hasHostCopies) {
     // The bare-ID rollup cannot attribute terminal titles or permission to one copy.
@@ -67,7 +75,7 @@ export function WorktreeCardLineActivity({
           [WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR]: workspaceMenuEnabled ? menuScope : undefined
         }}
       >
-        <WorktreeCardAgents worktreeId={worktreeId} executionHostId={executionHostId} />
+        <WorktreeCardAgents worktreeId={worktreeId} executionHostId={activityHostId} />
       </div>
     </WorktreeCardDetailSection>
   )
