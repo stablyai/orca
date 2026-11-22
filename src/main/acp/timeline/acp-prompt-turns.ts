@@ -10,6 +10,7 @@ import { acpPromptFailureEnding } from '../turns/acp-prompt-failure'
 import type { AcpTurnFailures } from './acp-turn-failures'
 import { hookOutcomeRowBody } from '../../../shared/agent-session/journal/agent-session-hook-outcome'
 import type { SessionUpdate } from '../generated/acp-protocol.generated'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 
 export type AcpPromptTurn = {
   clientMessageId: string
@@ -26,6 +27,7 @@ export class AcpPromptTurns {
   current?: AcpPromptTurn
   /** Retain the ended prompt so its reply can supply a late failure reason. */
   last?: AcpPromptTurn
+  private readonly compactions = new BoundedMap<string, string>({ maxEntries: 128 })
 
   constructor(
     private readonly sessionId: string,
@@ -103,7 +105,33 @@ export class AcpPromptTurns {
     update: SessionUpdate | undefined
   ): boolean {
     const prompt = this.compacting(turn)
-    return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
+    if (!prompt?.compaction) {
+      return false
+    }
+    const lifecycle =
+      extension?.compaction ??
+      (update?.sessionUpdate === 'compaction_update'
+        ? update
+        : update?.sessionUpdate === 'compaction_summary_chunk'
+          ? { compactionId: update.compactionId, status: 'in_progress' }
+          : undefined)
+    if (lifecycle) {
+      const owner = this.compactions.peek(lifecycle.compactionId)
+      const current = prompt.compaction.lifecycle
+      if (
+        (owner !== undefined && owner !== prompt.turn) ||
+        (current !== undefined && current.compactionId !== lifecycle.compactionId)
+      ) {
+        return true
+      }
+      // A late operation stays owned even after ordinary prompts replace `last`.
+      this.compactions.set(lifecycle.compactionId, prompt.turn)
+    }
+    return absorbAcpCompactionFrame(
+      prompt,
+      lifecycle ? { ...extension, compaction: lifecycle } : extension,
+      update
+    )
   }
 
   endCompaction(

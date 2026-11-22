@@ -7,7 +7,13 @@ import {
   type AgentSessionPromptResponse
 } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
-import { openProviderTimelineRig } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import {
+  openProviderTimelineRig,
+  SESSION
+} from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isSubagentBlock } from '../../../../shared/native-chat/native-chat-types'
+import { StructuredAgentSessionSubagentRows } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import { GROK_ACP_DIALECT } from '../../acp-dialects/grok-dialect'
 import type { AcpDialect, AcpRequestPresentation } from '../../acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from '../acp-timeline-translator'
@@ -86,6 +92,15 @@ export async function openAcpFixtureRig(
     })
   let lane = translator()
   const records = acpSubagentRecords()
+  const subagentRows = new StructuredAgentSessionSubagentRows({
+    journal: () => rig.journal,
+    fence: () => 1,
+    currentWork: async () => ({ turnScope: () => AGENT_JOURNAL_THREAD_SCOPE }),
+    readChildWork: () => records([]),
+    onWriteFailed: (_sessionId, error) => {
+      throw error
+    }
+  })
   // Preserve the host's last saved view after record retirement.
   const latest = new Map<string, AgentChildWorkView>()
   const report = (evidence: AgentChildWorkEvidence[]) => {
@@ -199,6 +214,15 @@ export async function openAcpFixtureRig(
     subagents: () => {
       drain()
       return [...latest.values()]
+    },
+    reportChildWork: report,
+    savedSubagents: async () => {
+      drain()
+      subagentRows.changed(SESSION)
+      await subagentRows.drain()
+      return (await rig.rows()).flatMap((row) =>
+        row.body.kind === 'message' ? row.body.blocks.filter(isSubagentBlock) : []
+      )
     },
     finishLoad: () => lane.finishLoad()
   }

@@ -1,6 +1,7 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionProviderRetry } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   AgentJournalThreadGoal,
@@ -17,9 +18,11 @@ import type { AgentSessionOptionChoice } from '../../../shared/agent-session/age
 import type {
   AvailableCommand,
   ClientCapabilities,
+  CompactionUpdate,
   InitializeResponse,
   ModelInfo,
   SessionNotification,
+  SessionUpdate,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
@@ -60,6 +63,7 @@ export type AcpSubagentUpdate = {
   /** Spawning provider turn. */
   turn?: string
   result?: string
+  lastMessage?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
   /** The provider started this subagent again; reopens it after an ending. */
@@ -76,6 +80,7 @@ export type AcpChildSessionReport = {
   parentAgentId?: string
   label?: string
   state?: NativeChatSubagentState
+  lastMessage?: string
   /** The child began an execution. */
   started?: true
   update?: SessionNotification
@@ -103,6 +108,7 @@ export type AcpDialectNotification =
       failureDetail?: string
       /** Replaces the update that reported it. */
       failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
+      compaction?: CompactionUpdate
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -202,8 +208,8 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
-  /** The cause, when this agent text only announces a retry of a failed model call. */
-  providerRetry?(text: string): string | undefined
+  /** Provider retry facts; null clears a retry run and undefined leaves the update unhandled. */
+  providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
     error: AcpAgentError,

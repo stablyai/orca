@@ -14,15 +14,24 @@ import {
   type AcpTurnFailureEvidence
 } from './acp-turn-failure-evidence'
 import type { AcpTurnFailures } from '../timeline/acp-turn-failures'
-import type { ContentBlock, SessionUpdate } from '../generated/acp-protocol.generated'
+import type {
+  CompactionUpdate,
+  ContentBlock,
+  SessionUpdate
+} from '../generated/acp-protocol.generated'
 
 export function acpCompactPrompt(instructions?: string, command?: string): ContentBlock[] {
   return [{ type: 'text', text: agentSessionCompactCommandText(instructions, command) }]
 }
 
-export type AcpCompaction = { reply: string; failure?: AcpTurnFailureEvidence }
+export type AcpCompaction = {
+  reply: string
+  lifecycle?: Pick<CompactionUpdate, 'compactionId' | 'status'>
+  failure?: AcpTurnFailureEvidence
+}
 
 export type AcpCompactionFrame = {
+  compaction?: CompactionUpdate
   failureDetail?: string
   failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
   end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
@@ -49,6 +58,24 @@ export function absorbAcpCompactionFrame(
   if (!compaction) {
     return false
   }
+  const lifecycle = extension?.compaction
+  if (lifecycle) {
+    if (
+      !compaction.lifecycle ||
+      !['completed', 'failed', 'cancelled'].includes(compaction.lifecycle.status)
+    ) {
+      compaction.lifecycle = {
+        compactionId: lifecycle.compactionId,
+        status: lifecycle.status
+      }
+    }
+    if (compaction.lifecycle.status === 'failed' && lifecycle.status === 'failed') {
+      compaction.failure = mergeAcpTurnFailureEvidence(compaction.failure, {
+        stopReason: 'error',
+        failureDetail: lifecycle.error ?? undefined
+      })
+    }
+  }
   const failure = extension?.failure ?? extension?.end
   const detail = extension?.failureDetail ?? failure?.failureDetail
   if (detail || (failure && acpStopReasonFailed(failure.stopReason))) {
@@ -66,7 +93,9 @@ export function absorbAcpCompactionFrame(
   if (extension?.failure || extension?.failureDetail) {
     return true
   }
-  return update !== undefined && readAcpCompactionUpdate(compaction, update)
+  return (
+    lifecycle !== undefined || (update !== undefined && readAcpCompactionUpdate(compaction, update))
+  )
 }
 
 export function acpCompactionEnd(
@@ -89,9 +118,14 @@ export function acpCompactionEnd(
     outcome,
     ...(input.durationMs === undefined ? {} : { durationMs: input.durationMs })
   })
+  const status = compaction.lifecycle?.status
+  const interrupted =
+    status === 'cancelled' || stopReason === 'cancelled' || input.cancelRequested === true
   const reply =
-    stopReason === 'end_turn' ? input.dialect.compactionReply?.(compaction.reply) : undefined
-  if (reply?.outcome === 'skipped') {
+    stopReason === 'end_turn' && status === undefined
+      ? input.dialect.compactionReply?.(compaction.reply)
+      : undefined
+  if (reply?.outcome === 'skipped' && !compaction.failure && !input.failureDetail && !interrupted) {
     const text = providerDiagnostic(reply.detail, 'person')?.text ?? 'Nothing to compact'
     return [
       {
@@ -116,13 +150,25 @@ export function acpCompactionEnd(
     }
   }
   // Settlement already merged its detail behind the first diagnostic the agent reported.
-  const words = reply?.detail ?? (compaction.failure?.text || input.failureDetail)
+  const words = compaction.failure?.text || input.failureDetail || reply?.detail
   const detail = words === undefined ? undefined : providerDiagnostic(words, 'person')
+  const failed =
+    compaction.failure !== undefined || reply?.outcome === 'failed' || detail !== undefined
   const verdict = structuredCompactionOutcome({
-    // Normal completion implies compaction unless the reply says otherwise.
-    compacted: stopReason === 'end_turn' && reply === undefined,
-    interruptRequested: stopReason === 'cancelled',
-    failed: detail ? { detail } : {}
+    compacted:
+      status === 'completed' ||
+      (status === undefined &&
+        stopReason === 'end_turn' &&
+        reply === undefined &&
+        !failed &&
+        !interrupted),
+    interruptRequested: interrupted,
+    failed:
+      failed || status === undefined || stopReason !== 'end_turn'
+        ? detail
+          ? { detail }
+          : {}
+        : undefined
   })
   if (verdict.outcome === 'cancellation') {
     return [end('cancellation')]

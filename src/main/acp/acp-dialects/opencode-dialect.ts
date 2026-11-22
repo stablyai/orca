@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import { readProviderRetry } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpDialect } from './acp-dialect'
+import type { AcpDialect, AcpDialectNotification } from './acp-dialect'
 import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
@@ -79,6 +80,68 @@ function promptFailure(error: AcpAgentError, at: number) {
 // OpenCode 2.x refuses a session/load outside the session's folder with exactly this data.
 const otherFolderRefusalSchema = z.strictObject({ sessionId: z.string(), cwd: z.string() })
 
+const providerRetrySchema = z
+  .object({
+    attempt: z.number().int().positive(),
+    error: z.object({
+      type: z.string(),
+      message: z.string(),
+      status: z.number().int().min(100).max(599).optional().catch(undefined)
+    })
+  })
+  .nullable()
+
+const compactionNotificationSchema = z.object({
+  sessionId: z.string(),
+  update: z.object({
+    sessionUpdate: z.literal('session_info_update'),
+    _meta: z.object({
+      'opencode/compaction': z.object({
+        status: z.enum(['started', 'completed', 'failed']),
+        messageId: z.string(),
+        reason: z.enum(['manual', 'auto']),
+        error: z.object({ type: z.string(), message: z.string().optional() }).optional()
+      })
+    })
+  })
+})
+
+function compactionNotification(
+  method: string,
+  params: unknown
+): AcpDialectNotification | undefined {
+  if (method !== 'session/update') {
+    return undefined
+  }
+  const parsed = compactionNotificationSchema.safeParse(params)
+  if (!parsed.success) {
+    return undefined
+  }
+  const marker = parsed.data.update._meta['opencode/compaction']
+  if (marker.reason !== 'manual') {
+    return undefined
+  }
+  const cancelled =
+    marker.error?.type === 'aborted' || marker.error?.type === 'compaction.interrupted'
+  return {
+    disposition: 'map',
+    compaction: {
+      compactionId: marker.messageId,
+      status:
+        marker.status === 'started'
+          ? 'in_progress'
+          : marker.status === 'failed' && cancelled
+            ? 'cancelled'
+            : marker.status,
+      // Match OpenCode's standard update: internal pretty-printed causes are not a person diagnostic.
+      error:
+        marker.error?.type === 'compaction.failed' && marker.error.message?.includes('\n')
+          ? undefined
+          : marker.error?.message
+    }
+  }
+}
+
 function sessionInOtherFolder(error: AcpAgentError, sessionId: string, cwd: string): boolean {
   const data = otherFolderRefusalSchema.safeParse(error.data)
   return (
@@ -127,7 +190,27 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   interactionModes: { default: 'build', plan: 'plan' },
   linksFileMentions: true,
   normalizeToolUpdate,
-  notification: openCodeChildUpdate,
+  notification: (method, params) =>
+    openCodeChildUpdate(method, params) ?? compactionNotification(method, params),
+  providerRetry: (update) => {
+    if (update.sessionUpdate !== 'session_info_update') {
+      return undefined
+    }
+    const parsed = providerRetrySchema.safeParse(update._meta?.['opencode/retry'])
+    if (!parsed.success) {
+      return undefined
+    }
+    const retry = parsed.data
+    if (retry === null) {
+      return null
+    }
+    return readProviderRetry({
+      attempt: retry.attempt,
+      error: retry.error.type,
+      status: retry.error.status,
+      cause: retry.error.message
+    })
+  },
   promptFailure,
   sessionInOtherFolder
 }

@@ -17,7 +17,11 @@ const childSchema = z.looseObject({
   _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish().catch(undefined)
 })
 const reportSchema = z.discriminatedUnion('type', [
-  childSchema.extend({ type: z.literal('status'), status: z.string() }),
+  childSchema.extend({
+    type: z.literal('status'),
+    status: z.string(),
+    error: z.object({ message: z.string() }).optional().catch(undefined)
+  }),
   childSchema.extend({
     type: z.literal('update'),
     update: z.looseObject({ sessionUpdate: z.string() })
@@ -70,8 +74,13 @@ export function openCodeChildUpdate(
   if (report.type === 'status') {
     const state = CHILD_STATES.get(report.status)
     const started = report.status === 'running' ? { started: true as const } : {}
+    const lastMessage = state === 'failed' ? report.error?.message : undefined
     return state
-      ? { disposition: 'map', ...replay, child: { ...identity, state, ...started } }
+      ? {
+          disposition: 'map',
+          ...replay,
+          child: { ...identity, state, ...started, ...(lastMessage ? { lastMessage } : {}) }
+        }
       : { disposition: 'ignore' }
   }
   const event = readAcpSessionEvent({
