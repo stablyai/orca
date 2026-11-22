@@ -274,19 +274,20 @@ export class JournalCheckpointOwner {
    * on it, the writer takes them back until it answers. A truncate it is inside keeps them, since SQLite
    * holds the write lock for that whole call; one it hasn't started is revoked.
    */
-  private late(stuck: boolean): void {
+  private late(stuck: boolean): boolean {
     if (this.stopped) {
-      return
+      return false
     }
     if (this.truncate?.acknowledged) {
       if (this.worker.revokeTruncate()) {
-        return
+        return true
       }
     } else if (!stuck && this.pending === undefined && !this.gated()) {
-      return
+      return false
     }
     this.release()
     this.wake()
+    return false
   }
 
   private release(): void {

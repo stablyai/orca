@@ -5,7 +5,6 @@ import {
   JOURNAL_CHECKPOINT_PROGRESS,
   grantJournalTruncate,
   journalCheckpointWorkerSource,
-  journalTruncateRunning as truncateRunning,
   revokeJournalTruncate
 } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
@@ -43,8 +42,11 @@ export type JournalCheckpointWorkerOptions = {
 export type JournalCheckpointWorkerHost<Message> = {
   receive(message: Message): void
   lose(error: unknown, cause: JournalCheckpointOutage['cause']): void
-  /** The worker is busy past a deadline; the owner may take checkpoints back without retiring it. */
-  late(stuck: boolean): void
+  /**
+   * The worker is late; the owner may take checkpoints back without retiring it. True while writes stay
+   * parked on a truncate the worker is inside.
+   */
+  late(stuck: boolean): boolean
   drained(): void
 }
 
@@ -322,13 +324,13 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       attached.busySince ??= now
       if (!attached.stuck && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
         attached.stuck = true
-        this.openOutage(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
+        this.openOutage(new Error('checkpoint worker is stuck in a native call'), 'slow')
       }
-      this.host.late(attached.stuck)
+      const holding = this.host.late(attached.stuck)
       if (attached.stuck) {
         // Only its reply, error or exit ends a stuck native call; inside a truncate, writes wait on the
         // lock, so it is looked at once a minute to release them soon after the call returns.
-        if (truncateRunning(attached.liveness)) {
+        if (holding) {
           this.watch(progress, RESTART_MAX_MS)
         }
         return

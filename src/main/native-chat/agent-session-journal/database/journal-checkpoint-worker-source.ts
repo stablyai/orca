@@ -22,10 +22,6 @@ export function revokeJournalTruncate(liveness: Int32Array): boolean {
   return was === JOURNAL_TRUNCATE_RUNNING
 }
 
-export function journalTruncateRunning(liveness: Int32Array): boolean {
-  return Atomics.load(liveness, JOURNAL_CHECKPOINT_TRUNCATE) === JOURNAL_TRUNCATE_RUNNING
-}
-
 /** A reply from the checkpoint worker. */
 export type CheckpointResponse = {
   type: 'checked' | 'truncate-request' | 'hello'
@@ -124,6 +120,8 @@ try {
       return;
     }
     if (pendingTruncate) {
+      // Later retries carry the owner's newest generation, so their result isn't discarded as stale.
+      generation = Math.max(generation, request.generation);
       reply({ type: 'checked', id: request.id, generation: pendingTruncate.generation,
         ...pendingTruncate.state, blocked: true });
       return;
