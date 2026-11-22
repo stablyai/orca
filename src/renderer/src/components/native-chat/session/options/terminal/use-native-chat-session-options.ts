@@ -1,5 +1,5 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
@@ -46,6 +46,8 @@ export function useNativeChatSessionOptions(args: {
   const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
   // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
   const appliedReportedModelRef = useRef<string | null>(null)
+  // Host discovery can resolve a reported id the seed families only matched by family.
+  const [discoveredModelsRevision, setDiscoveredModelsRevision] = useState(0)
   const discoveryContext = useMemo(
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
@@ -116,7 +118,7 @@ export function useNativeChatSessionOptions(args: {
     }
     appliedReportedModelRef.current = matched
     surface.reportSessionOptions({ model: matched })
-  }, [agent, discoveryContext, reportedModel, surface])
+  }, [agent, discoveredModelsRevision, discoveryContext, reportedModel, surface])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
@@ -127,6 +129,7 @@ export function useNativeChatSessionOptions(args: {
       discoveryContext.hostKey,
       (models) => {
         surface.replaceModels(models)
+        setDiscoveredModelsRevision((revision) => revision + 1)
       }
     )
     ensureNativeChatModelEnrichment({

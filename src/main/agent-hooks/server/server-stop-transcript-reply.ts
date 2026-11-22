@@ -1,34 +1,19 @@
 import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  droidVerdictFields,
-  droidVerdictRetryDelayMs,
-  readDroidTurnVerdictAsync,
-  type DroidTurnVerdict
-} from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
-import {
-  readLastAssistantFromTranscriptAsync,
-  type AssistantTranscriptFormat
-} from '../../../shared/agent-hook-listener/transcript-reader'
+import { droidVerdictFields } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeLeadModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
-import {
-  claudeReplyModelChange,
-  claudeReplyModelRetryDelayMs,
-  readClaudeTranscriptReplyModelAsync
-} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
+import { claudeReplyModelChange } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
-  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
-  ASSISTANT_MESSAGE_RETRY_MS,
-  COPILOT_STOP_REPLY_RETRY_ATTEMPTS
-} from './server-constants'
+  replyModelRead,
+  replyRead,
+  verdictRead,
+  type StopTranscriptFind,
+  type StopTranscriptRead
+} from './server-stop-transcript-reads'
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
-
-/** What one Stop's transcript reads found: the reply text it came without, a Droid turn verdict,
- *  the model that wrote a Claude reply. */
-type StopTranscriptFind = { text?: string; verdict?: DroidTurnVerdict; model?: string }
 
 /** One Stop's pending transcript reads. Each retries on its own timer and publishes its find at
  *  once; any later hook that changes the row ends them all. */
@@ -40,62 +25,9 @@ type StopReplyClaim = {
   row: EnrichedAgentHookEventPayload
   pendingReads: number
   readonly timers: Set<ReturnType<typeof setTimeout>>
+  /** A statusline report since the Stop is newer than the reply's model. */
+  replyModelSuperseded?: boolean
 }
-
-/** One transcript read: undefined while it has not found what it reads, then what to publish. */
-type StopTranscriptRead = {
-  readonly scan: (
-    keepReading: () => boolean,
-    scannedSize: number | undefined,
-    onError: () => void
-  ) => Promise<StopTranscriptFind | undefined>
-  readonly retryDelayMs: (attempt: number) => number | undefined
-}
-
-const REPLY_RETRY_ATTEMPTS: Record<AssistantTranscriptFormat, number> = {
-  copilot: COPILOT_STOP_REPLY_RETRY_ATTEMPTS,
-  shared: ASSISTANT_MESSAGE_RETRY_ATTEMPTS
-}
-
-const replyRead = (
-  transcriptPath: string,
-  format: AssistantTranscriptFormat
-): StopTranscriptRead => ({
-  scan: async (keepReading, scannedSize, onError) => {
-    const text = await readLastAssistantFromTranscriptAsync(
-      transcriptPath,
-      keepReading,
-      scannedSize,
-      onError,
-      format
-    )
-    return text ? { text } : undefined
-  },
-  retryDelayMs: (attempt) =>
-    attempt < REPLY_RETRY_ATTEMPTS[format] ? ASSISTANT_MESSAGE_RETRY_MS : undefined
-})
-
-const verdictRead = (transcriptPath: string): StopTranscriptRead => ({
-  scan: async (keepReading, _scannedSize, onError) => {
-    const verdict = await readDroidTurnVerdictAsync(transcriptPath, keepReading, onError)
-    return verdict === undefined ? undefined : { verdict: verdict ?? undefined }
-  },
-  retryDelayMs: droidVerdictRetryDelayMs
-})
-
-const replyModelRead = (transcriptPath: string): StopTranscriptRead => ({
-  scan: async (keepReading, scannedSize, onError) => {
-    const model = await readClaudeTranscriptReplyModelAsync(
-      transcriptPath,
-      keepReading,
-      scannedSize,
-      onError
-    )
-    // null: the transcript ends on a newer user record, so this reply isn't written yet.
-    return model ? { model } : undefined
-  },
-  retryDelayMs: claudeReplyModelRetryDelayMs
-})
 
 /** A Stop that came without its reply gets it from the transcript, and a Droid Stop its turn
  *  verdict, read off the event loop. */
@@ -209,6 +141,15 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     }
   }
 
+  /** Claude's statusline names the live model, even an unchanged one, so it wins over a pending
+   *  Stop read of the model that wrote the reply. */
+  protected supersedeStopReplyModel(paneKey: string): void {
+    const claim = this.stopReplyClaims.get(paneKey)
+    if (claim) {
+      claim.replyModelSuperseded = true
+    }
+  }
+
   private endStopReplyClaim(claim: StopReplyClaim): void {
     for (const timer of claim.timers) {
       clearTimeout(timer)
@@ -303,9 +244,8 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     row: AgentHookEventPayload,
     { text, verdict, model }: StopTranscriptFind
   ): void {
-    // A statusline report since this Stop is newer than the reply's model.
     const newModel =
-      model && row.payload.model === claim.row.payload.model
+      model && !claim.replyModelSuperseded
         ? claudeReplyModelChange(row.payload.model, model)
         : undefined
     if (!text && !verdict && !newModel) {

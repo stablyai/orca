@@ -12,6 +12,7 @@ export abstract class AgentHookServerClaudeStatusLineModel extends AgentHookServ
     if (!lead || this.state.claudeSessionOwnerByPaneKey.get(paneKey) !== report.sessionId) {
       return
     }
+    this.supersedeStopReplyModel(paneKey)
     retainClaudeLeadModel(this.state, paneKey, report.model)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as

@@ -113,21 +113,19 @@ it('takes a /model switch from the Stop reply when no statusline post arrives', 
   expect(model()).toBe('claude-fable-5-2')
 })
 
-it('keeps a statusline model reported while the Stop reply was being read', async () => {
+it('keeps the model a statusline reports while the Stop reply is read', async () => {
   await hook({ hook_event_name: 'SessionStart', source: 'startup', model: 'claude-opus-5-5' })
   await hook({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
-  writeTranscript([user('first'), assistant('claude-opus-5-5', 'One.')])
   held.active = true
   await hook({ hook_event_name: 'Stop', last_assistant_message: 'One.' })
   await vi.waitFor(() => expect(held.pending).toHaveLength(1))
 
-  // /model right after the turn: the statusline reports it before the Stop's read lands.
-  await statusLine('claude-fable-5-2')
-  expect(model()).toBe('claude-fable-5-2')
-  held.pending[0]!('claude-opus-5-5')
+  // /model opus right after a turn on fable: the statusline is newer than the reply, even unchanged.
+  await statusLine('claude-opus-5-5')
+  held.pending[0]!('claude-fable-5-2')
   await new Promise((resolve) => setImmediate(resolve))
   await new Promise((resolve) => setImmediate(resolve))
-  expect(model()).toBe('claude-fable-5-2')
+  expect(model()).toBe('claude-opus-5-5')
 })
 
 it('keeps the 1M window the session started with, which replies do not name', async () => {
