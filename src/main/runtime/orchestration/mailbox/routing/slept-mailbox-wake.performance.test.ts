@@ -198,3 +198,42 @@ it.each([1_000, 10_000])(
     }
   }
 )
+
+it.each([100, 1_000])(
+  'with nobody asleep, %i mail reads do no sleeping-mail lookups',
+  async (reads) => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => getDefaultWorkspaceSession(),
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.retrySleptMailboxWakes()
+      const run = db.createRun({
+        objective: 'awake',
+        coordinatorHandle: null,
+        coordinatorPaneKey: null
+      })
+      const ids = Array.from(
+        { length: reads },
+        () =>
+          db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'x' }).id
+      )
+      const prepare = vi.spyOn(db.db, 'prepare')
+
+      for (const id of ids) {
+        db.markAsRead([id], { kind: 'orca' })
+      }
+
+      expect(
+        prepare.mock.calls.filter(([sql]) => sql.includes('SELECT DISTINCT to_handle'))
+      ).toEqual([])
+    } finally {
+      db.close()
+    }
+  }
+)
