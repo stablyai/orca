@@ -31,6 +31,8 @@ export class ClaudeUnstartedSendWatch {
   private idle = false
   /** Content withdrawn since Claude last started work; a second stall of it fails, not resent. */
   private readonly withdrawn = new Set<string>()
+  /** Advances whenever Claude starts work, so a withdrawal answered after that is not recorded. */
+  private workGeneration = 0
 
   constructor(
     private readonly deps: {
@@ -57,6 +59,7 @@ export class ClaudeUnstartedSendWatch {
       (message.type === 'command_lifecycle' && message.state === 'started')
     ) {
       this.withdrawn.clear()
+      this.workGeneration += 1
     }
     if (state || message.type === 'command_lifecycle' || message.type === 'user') {
       this.rearm()
@@ -102,17 +105,23 @@ export class ClaudeUnstartedSendWatch {
       if (!this.live() || !this.idle) {
         return
       }
+      // An earlier withdrawal's wait can let this send echo or settle first.
+      if (!session.dispatchWaiters.includes(waiter)) {
+        continue
+      }
       // A resend that stalls again fails back to the person instead of waiting to be resent.
       const kind = resentContent.has(waiter.replayContentKey) ? 'providerRejected' : 'notDelivered'
       // Claude's own `cancelled` frame usually settles the send before this answer; it uses this kind.
       waiter.withdrawnAs = kind
+      const generation = this.workGeneration
       const withdrawn = await session.connection
         .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
         .catch(() => false)
-      if (withdrawn || waiter.cancelledByClaude) {
-        this.withdrawn.add(waiter.replayContentKey)
-      } else {
+      if (!withdrawn && !waiter.cancelledByClaude) {
         delete waiter.withdrawnAs
+      } else if (generation === this.workGeneration) {
+        // Work started during the wait resets the cap, as it does for every withdrawal before it.
+        this.withdrawn.add(waiter.replayContentKey)
       }
       if (
         !this.live() ||

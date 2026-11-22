@@ -198,3 +198,48 @@ it('fails a repeat stall even when Claude cancels the send but its withdrawal an
     })
   )
 })
+
+it('does not withdraw a send that Claude echoes while an earlier withdrawal is pending', async () => {
+  const uuids: string[] = []
+  const { adapter, connection } = await idleChat(true, (live, uuid) => {
+    const other = uuids.find((candidate) => candidate !== uuid)
+    if (other && withdrawals(live).length === 1) {
+      claudeFrame(live, {
+        type: 'user',
+        uuid: other,
+        parent_tool_use_id: null,
+        message: { role: 'user', content: [{ type: 'text', text: 'second mail' }] }
+      })
+    }
+  })
+  uuids.push(await send(adapter, connection, 'mail-1'))
+  uuids.push(await send(adapter, connection, 'mail-2', 'second mail'))
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+
+  expect(withdrawals(connection)).toEqual([
+    { subtype: 'cancel_async_message', params: { uuid: uuids[0] } }
+  ])
+})
+
+it('treats a later stall as a first stall when Claude started work during the withdrawal', async () => {
+  const { adapter, connection, settlements } = await idleChat(false, (live, uuid) => {
+    lifecycle(live, uuid, 'cancelled')
+    claudeFrame(live, {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'working on the next one' }] }
+    })
+  })
+  await send(adapter, connection, 'mail-1')
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+  await send(adapter, connection, 'mail-1-again')
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+
+  expect(settlements.at(-1)).toEqual(
+    expect.objectContaining({
+      clientMessageId: 'mail-1-again',
+      state: 'rejected',
+      rejection: expect.objectContaining({ kind: 'notDelivered' })
+    })
+  )
+})
