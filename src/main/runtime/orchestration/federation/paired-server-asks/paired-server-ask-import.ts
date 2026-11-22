@@ -126,17 +126,14 @@ function knownConversation(db: OrchestrationDb, asks: PairedServerAsks, conversa
     : undefined
 }
 
-/** Whether the agent `to` names took part in the conversation: mail admitted to it, or its answer. */
+/** Whether the agent `to` names took part in the conversation: mail a person or an allowance admitted
+ *  to it there. A decline, a withdraw or a held card names an agent without admitting anything. */
 function tookPart(db: OrchestrationDb, conversationId: string, to: string): boolean {
   return (
     db.db
       .prepare(
         `SELECT 1 FROM peer_mail_messages p JOIN messages m ON m.id = p.message_id
-         WHERE p.conversation_id = ?1 AND m.to_handle = ?2
-         UNION ALL
-         SELECT 1 FROM federation_relay_items
-         WHERE dispatch_id = ?1 AND direction = 'to_home' AND json_extract(payload, '$.fromAddress') = ?2
-         LIMIT 1`
+         WHERE p.conversation_id = ? AND m.to_handle = ? LIMIT 1`
       )
       .get(conversationId, to) !== undefined
   )
