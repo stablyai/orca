@@ -20102,7 +20102,6 @@
         "steerHint": "Ajan çalışmaya devam ederken şimdi gönder",
         "sendHint": "Bu mesajı şimdi gönder",
         "delete": "Sil",
-        "moreActions": "Diğer işlemler",
         "moveChanged": "Bu taşımadan önce kuyruk değişti. Mesajı yeniden sürüklemeyi deneyin.",
         "reorderHint": "Sırayı değiştirmek için sürükleyin veya Up ve Down ok tuşlarını kullanın.",
         "reorderMessage": "Mesajın sırasını değiştir",
@@ -20127,8 +20126,6 @@
         "editGonePrompt": "Bu mesaj zaten gönderildi veya kaldırıldı. Ajana yanıt verdikten sonra düzenlediğiniz metin sohbet kutusuna getirilecek.",
         "imageCount_one": "{{count}} görsel",
         "imageCount_other": "{{count}} görsel",
-        "collapse": "Daralt",
-        "expand": "Genişlet",
         "queued": "Sıraya alındı",
         "clearAll": "Tümünü temizle"
       },
