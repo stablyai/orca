@@ -93,6 +93,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
   })
 
   const [frameUri, setFrameUri] = useState(initialFrameUri)
+  // A stopped stream sends nothing more, so the last frame stays until the person reconnects.
+  const [streamStopped, setStreamStopped] = useState<string | null>(null)
+  const [reconnectRequest, setReconnectRequest] = useState(0)
   const [framePacer] = useState(() =>
     createBrowserFramePacer({
       initialUri: initialFrameUri,
@@ -156,6 +159,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
     setDialog(null)
     setError(null)
+    setStreamStopped(null)
     if (
       !client ||
       !binaryScreencastGranted ||
@@ -193,7 +197,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       }
       busyRef.current = false
       setBusy(false)
-      setError(translate('browser.stream.timedOut', 'Browser stream timed out.'))
+      setStreamStopped(translate('browser.stream.timedOut', 'Browser stream timed out.'))
     }, 15_000)
     const clearStartupTimer = (): void => {
       if (startupTimer) {
@@ -229,7 +233,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
           setAddressValue,
           setBusy,
           setDialog,
-          setError
+          setStreamStopped
         })
       },
       {
@@ -264,6 +268,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     client,
     foregroundVisit,
     framePacer,
+    reconnectRequest,
     resetBrowserZoomState,
     screencastSupported,
     streamRequest,
@@ -279,8 +284,10 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     frameGeometry,
     frameLayers: framePacer.layers,
     pageParams,
+    reconnectStream: () => setReconnectRequest((current) => current + 1),
     renderedFrameSource,
-    sendBrowserRequest
+    sendBrowserRequest,
+    streamStopped
   }
 }
 

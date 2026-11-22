@@ -2137,7 +2137,9 @@
       "sendText": "Send text to browser",
       "dialogTitleWithOrigin": "{{origin}} says",
       "dialogTitleNoOrigin": "This page says",
-      "dialogAnswer": "Answer"
+      "dialogAnswer": "Answer",
+      "stop": "Stop",
+      "reconnect": "Reconnect"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -2156,7 +2158,8 @@
       "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
-      "timedOut": "Browser stream timed out."
+      "timedOut": "Browser stream timed out.",
+      "stopped": "Stream stopped"
     },
     "loadFailure": {
       "retry": "Retry",
@@ -2287,7 +2290,8 @@
     "browserTabActionSheet": {
       "title": "Browser",
       "forward": "Forward",
-      "reload": "Reload"
+      "reload": "Reload",
+      "hardReload": "Hard reload"
     },
     "terminalLiveInputStatus": {
       "listening": "Listening",
@@ -2464,7 +2468,9 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalWithShell": "Terminal: {{shell}}",
-      "more": "More"
+      "more": "More",
+      "linkCopied": "Link copied",
+      "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
       "newTab": "New tab",
