@@ -23607,6 +23607,20 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Git username on {{host}}"
+      },
+      "accounts": {
+        "textFailover": {
+          "title": "Retry AI-generated text on another account after quota limits",
+          "description": "When a subscription limit stops branch or workspace names, commit messages, pull request details or Jira titles, Orca retries the same request on up to two other saved Claude or Codex accounts that still have room. The model and prompt stay the same, and the selected account does not change.",
+          "kw": {
+            "account": "account",
+            "quota": "quota",
+            "usageLimit": "usage limit",
+            "retry": "retry",
+            "commitMessage": "commit message",
+            "branchName": "branch name"
+          }
+        }
       }
     },
     "agentChildRow": {

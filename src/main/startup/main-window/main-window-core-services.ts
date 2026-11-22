@@ -15,6 +15,7 @@ import {
   handlePtyExit
 } from '../pty-startup/main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from '../agent-accounts/codex-launch-preparation'
+import { createHostTextAccountFailover } from '../../text-generation/execution/host-text-account-failover'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
   prepareCodexPinnedLaunchHome,
@@ -88,7 +89,13 @@ async function installMainWindowCoreServices(
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
-      resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+      resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings()),
+      prepareTextAccountFailover: createHostTextAccountFailover({
+        store,
+        claudeRuntimeAuth,
+        codexRuntimeHome,
+        rateLimits
+      })
     },
     state.agentAwakeService ?? undefined,
     state.crashReports ?? undefined,

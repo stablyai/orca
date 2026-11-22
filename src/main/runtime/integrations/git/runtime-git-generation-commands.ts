@@ -119,7 +119,7 @@ export class RuntimeGitGenerationCommands {
         return generateCommitMessageFromContext(
           context,
           resolvedSettings.params,
-          localTextGenerationTargetForTarget(target, localEnv.env)
+          localTextGenerationTargetForTarget(target, localEnv)
         )
       }
     )
@@ -231,7 +231,7 @@ export class RuntimeGitGenerationCommands {
     return generatePullRequestFieldsFromContext(
       context,
       resolvedSettings.params,
-      localTextGenerationTargetForTarget(target, localEnv.env)
+      localTextGenerationTargetForTarget(target, localEnv)
     )
   }
 

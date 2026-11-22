@@ -4,7 +4,10 @@ import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
 } from '../../../workspaces/execution-host/project-runtime-git-options'
-import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/execution/commit-message-agent-environment'
+import type {
+  CommitMessageAgentRuntimeTarget,
+  PreparedCommitMessageAgentEnv
+} from '../../../text-generation/execution/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
 import { resolve } from 'node:path'
 import { listRepoWorktreeGraph } from '../../../workspaces/catalog/repo-worktrees'
@@ -153,12 +156,13 @@ export async function resolveModelDiscoveryLocalPath(
 export function getLocalTextGenerationTarget(
   worktreePath: string,
   gitOptions: LocalProjectWorktreeGitOptions,
-  env?: NodeJS.ProcessEnv
+  { env, accountFailover }: Partial<PreparedCommitMessageAgentEnv> = {}
 ): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
   return {
     kind: 'local',
     cwd: worktreePath,
     ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {}),
-    ...(env ? { env } : {})
+    ...(env ? { env } : {}),
+    ...(accountFailover ? { accountFailover } : {})
   }
 }

@@ -7,7 +7,10 @@ import type {
   ResolvedSourceControlAiGenerationParams
 } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlAiOperation } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/execution/commit-message-agent-environment'
+import type {
+  CommitMessageAgentRuntimeTarget,
+  PreparedCommitMessageAgentEnv
+} from '../../../text-generation/execution/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
 import {
@@ -70,14 +73,15 @@ export function localAgentRuntimeTargetForTarget(
 
 export function localTextGenerationTargetForTarget(
   target: RuntimeGitTarget,
-  env?: NodeJS.ProcessEnv
+  { env, accountFailover }: Partial<PreparedCommitMessageAgentEnv> = {}
 ): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
   return {
     kind: 'local',
     cwd: target.worktree.path,
     ...(wslDistro ? { wslDistro } : {}),
-    ...(env ? { env } : {})
+    ...(env ? { env } : {}),
+    ...(accountFailover ? { accountFailover } : {})
   }
 }
 

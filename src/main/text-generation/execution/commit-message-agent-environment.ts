@@ -1,11 +1,20 @@
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import { applyClaudeEnvPatch } from '../../claude-accounts/runtime-auth/environment'
+import {
+  applyClaudeEnvPatch,
+  CLAUDE_AUTH_ENV_VARS
+} from '../../claude-accounts/runtime-auth/environment'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV,
+  CLAUDE_USER_CONFIG_DIR_ENV
+} from '../../../shared/agent-accounts/claude/claude-profile-routing'
 import { readShellStartupEnvVar } from '../../pty/shell-startup/shell-startup-env'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   processEnvWithoutAgentSession,
   stripInheritedAgentSessionEnv
 } from '../../../shared/agent-launch/startup/parent-agent-session-env'
+import type { TextAccountFailover } from '../source-control-text-generation-types'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: (
@@ -16,6 +25,17 @@ export type CommitMessageAgentEnvironmentResolvers = {
   ) => Promise<ClaudeRuntimeAuthPreparation>
   /** The login-shell base env chats start from; a host-only source, never used for WSL. */
   resolveBaseEnvironment?: () => Promise<Record<string, string>>
+  /** Opt-in quota failover; `baseEnv` carries no account routing. Undefined when off or unsupported. */
+  prepareTextAccountFailover?: (
+    agentId: 'claude' | 'codex',
+    baseEnv: Record<string, string>
+  ) => TextAccountFailover | undefined
+}
+
+export type PreparedCommitMessageAgentEnv = {
+  ok: true
+  env?: NodeJS.ProcessEnv
+  accountFailover?: TextAccountFailover
 }
 
 export type CommitMessageAgentRuntimeTarget = {
@@ -91,6 +111,41 @@ function prepareShellConfigDirEnv(
   return { ok: true, env: { ...(base ?? cloneProcessEnv()), [configVar]: value } }
 }
 
+// The user's own credentials or config home pin the agent to one login, so no saved account replaces it.
+function textAccountFailover(
+  agentId: 'claude' | 'codex',
+  resolvers: CommitMessageAgentEnvironmentResolvers,
+  base: Record<string, string>
+): TextAccountFailover | undefined {
+  const pinned =
+    agentId === 'claude'
+      ? Boolean(
+          base.CLAUDE_CONFIG_DIR && base.CLAUDE_CONFIG_DIR !== base[CLAUDE_INJECTED_CONFIG_DIR_ENV]
+        ) || CLAUDE_AUTH_ENV_VARS.some((key) => base[key])
+      : Boolean(base.OPENAI_API_KEY || base.CODEX_API_KEY) ||
+        Boolean(base.CODEX_HOME && base.CODEX_HOME !== base.ORCA_CODEX_HOME)
+  if (pinned || !resolvers.prepareTextAccountFailover) {
+    return undefined
+  }
+  const unrouted = agentId === 'codex' ? withoutOrcaCodexHomeOverride(base) : { ...base }
+  if (agentId === 'claude') {
+    for (const key of [
+      'CLAUDE_CONFIG_DIR',
+      CLAUDE_INJECTED_CONFIG_DIR_ENV,
+      CLAUDE_PROFILE_POINTER_ENV,
+      CLAUDE_USER_CONFIG_DIR_ENV
+    ]) {
+      delete unrouted[key]
+    }
+  }
+  try {
+    return resolvers.prepareTextAccountFailover(agentId, unrouted)
+  } catch (error) {
+    console.error('[commit-message] Failed to prepare account failover:', error)
+    return undefined
+  }
+}
+
 async function resolveHostBaseEnv(
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined
 ): Promise<Record<string, string> | undefined> {
@@ -109,7 +164,7 @@ export async function prepareLocalCommitMessageAgentEnv(
   agentId: string,
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
   target?: CommitMessageAgentRuntimeTarget
-): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+): Promise<PreparedCommitMessageAgentEnv | { ok: false; error: string }> {
   // Host agents need shell proxies/tokens; WSL resolves them in the guest.
   const hostBase = target?.runtime === 'wsl' ? undefined : await resolveHostBaseEnv(resolvers)
   // Shell-config agents short-circuit below; never put a Codex/Claude-style resolver agent on this path.
@@ -145,18 +200,22 @@ export async function prepareLocalCommitMessageAgentEnv(
         // Host-binary generation cannot use a guest managed home without wsl.exe routing.
         return hostBase ? { ok: true, env: hostBase } : { ok: true }
       }
+      const accountFailover = textAccountFailover('codex', resolvers, base)
       return {
         ok: true,
         env: codexHomePath
           ? { ...base, CODEX_HOME: codexHomePath }
-          : withoutOrcaCodexHomeOverride(base)
+          : withoutOrcaCodexHomeOverride(base),
+        ...(accountFailover ? { accountFailover } : {})
       }
     }
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
       const preparation = await resolvers.prepareForClaudeLaunch(target)
       const env = applyClaudeEnvPatch({ ...base }, preparation.envPatch)
-      return { ok: true, env }
+      const accountFailover =
+        target?.runtime === 'wsl' ? undefined : textAccountFailover('claude', resolvers, base)
+      return { ok: true, env, ...(accountFailover ? { accountFailover } : {}) }
     }
   } catch (error) {
     console.error('[commit-message] Failed to prepare agent environment:', error)

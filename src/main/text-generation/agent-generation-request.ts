@@ -20,6 +20,8 @@ import { runLocalPlanForAgent } from './execution/source-control-local-generatio
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
 import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './execution/source-control-remote-generation'
+import { runWithTextAccountFailover } from './execution/text-account-failover'
+import { wslDistroForCommand } from '../../shared/file-access/wsl-paths'
 import type {
   CommitMessageGenerationTarget,
   InternalTextGenerationResult,
@@ -36,14 +38,45 @@ export function commandBackslashMode(
   return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
 }
 
-export async function runGenerationRequest(input: {
+type GenerationRequestInput = {
   params: GenerateParams
   prompt: string
   target: CommitMessageGenerationTarget
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
-}): Promise<InternalTextGenerationResult> {
+}
+
+export function runGenerationRequest(
+  input: GenerationRequestInput
+): Promise<InternalTextGenerationResult> {
+  const { target, params } = input
+  const failover = target.kind === 'local' ? target.accountFailover : undefined
+  // Custom commands, extra arguments and WSL run a login Orca cannot swap for a saved account.
+  if (
+    target.kind !== 'local' ||
+    !failover ||
+    params.customAgentCommand ||
+    params.agentCommandOverride ||
+    params.agentArgs?.trim() ||
+    wslDistroForCommand(target.cwd, target.wslDistro)
+  ) {
+    return runGenerationAttempt(input)
+  }
+  return runWithTextAccountFailover({
+    agentId: params.agentId,
+    target,
+    failover,
+    operation: input.operation,
+    shouldExecute: input.shouldExecute,
+    run: (attemptTarget, shouldExecute) =>
+      runGenerationAttempt({ ...input, target: attemptTarget, shouldExecute })
+  })
+}
+
+async function runGenerationAttempt(
+  input: GenerationRequestInput
+): Promise<InternalTextGenerationResult> {
   const params = {
     ...input.params,
     backslash: commandBackslashMode(input.target),
