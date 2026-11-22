@@ -1,7 +1,6 @@
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -10,7 +9,6 @@ import {
   type AgentMessageSource
 } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
-  agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
@@ -20,10 +18,7 @@ import {
   sessionWorkerIsRunning,
   type OrchestrationSessionWorker
 } from '../../../../../../shared/orchestration-session-workers'
-import {
-  NativeChatAgentMessageSenderNames,
-  NativeChatAgentMessageSenderOpen
-} from '../agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatAgentMessageSenderNames } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
 import {
   unnamedSenderLabel,
@@ -39,31 +34,9 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
-
-function lead(
-  from: AgentMessageSource,
-  message: NativeChatMessage,
-  t: Translate = translate
-): string {
-  switch (agentMessageHeading(from, message)) {
-    case 'started':
-    case 'started-agent':
-      return t('components.native-chat.agentMessage.row.started', 'Started')
-    case 'reopened-worker':
-      return t('components.native-chat.agentMessage.row.reopened', 'Reopened')
-    case 'followed-up-worker':
-      return t('components.native-chat.agentMessage.row.followedUp', 'Sent follow-up to')
-    case 'handed-off':
-      return t('components.native-chat.agentMessage.row.handedOff', 'Handed off to')
-    case 'task':
-      return t('components.native-chat.agentMessage.row.task', 'Task from')
-    case 'worker':
-      return t('components.native-chat.agentMessage.row.update', 'Update from')
-    case 'coordinator':
-    case 'generic':
-      return t('components.native-chat.agentMessage.row.message', 'Message from')
-  }
-}
+import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
+import { agentMessageRowLead } from './agent-message-row-lead'
+import { NATIVE_CHAT_ROW_SHARE } from '../events/native-chat-inline-chip'
 
 type AgentMessageCardProps = {
   message: NativeChatMessage
@@ -92,15 +65,11 @@ export function NativeChatAgentMessageCard({
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
   const { shown, more } = agentMessageSendersShown(from)
   const canCopy = agentMessageCanCopy(text)
-  // Mail from several senders opens each from its details.
-  const several = shown.length > 1
   const merged = message.mergedEvents ?? []
   const expandable =
-    canCopy ||
-    several ||
-    merged.length > 0 ||
-    message.blocks.some((block) => block.type === 'image-ref')
-  const words = lead(from, message, t)
+    canCopy || merged.length > 0 || message.blocks.some((block) => block.type === 'image-ref')
+  const words = agentMessageRowLead(from, message, t)
+  const items = message.agentStartItems ?? []
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
@@ -116,7 +85,20 @@ export function NativeChatAgentMessageCard({
         />
       }
       badge={agentMessageBadge(worker, view.dot)}
-      label={expandable ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}` : undefined}
+      label={
+        expandable
+          ? [
+              words,
+              sender ? senderName : unnamedSenderLabel(t),
+              ...(items.length > 0
+                ? [
+                    t('components.native-chat.agentMessage.row.forItems', 'for'),
+                    items.map((item) => item.title).join(', ')
+                  ]
+                : [])
+            ].join(' ')
+          : undefined
+      }
       timestamp={message.timestamp}
       disclosureKey={`agent-message:${message.id}`}
       onOpenChange={(open) => {
@@ -124,34 +106,9 @@ export function NativeChatAgentMessageCard({
           requestAnimationFrame(onRefolded)
         }
       }}
-      action={
-        sender && !several ? (
-          <NativeChatAgentMessageSenderOpen
-            from={from}
-            sender={sender}
-            dispatchId={dispatchId}
-            chatWorktreeId={worktreeId}
-            target={target}
-          />
-        ) : null
-      }
       details={
         expandable ? (
           <>
-            {several ? (
-              <span className="-ml-1.5 flex flex-wrap gap-1">
-                {shown.map((each) => (
-                  <NativeChatAgentMessageSenderOpen
-                    key={each.party.address}
-                    from={from}
-                    sender={each}
-                    chatWorktreeId={worktreeId}
-                    target={target}
-                    named
-                  />
-                ))}
-              </span>
-            ) : null}
             <NativeChatImageAttachments
               blocks={message.blocks}
               runtimeContext={runtimeContext}
@@ -178,24 +135,37 @@ export function NativeChatAgentMessageCard({
         ) : null
       }
     >
-      {words}{' '}
-      {shown.length === 0 ? (
-        unnamedSenderLabel(t)
-      ) : (
-        <NativeChatAgentMessageSenderNames
-          shown={shown}
-          chatWorktreeId={worktreeId}
-          target={target}
-          dispatchId={dispatchId}
-        />
-      )}
-      {more > 0 ? ` +${more}` : null}
+      <span className="flex min-w-0 items-center gap-x-1">
+        <span className="shrink-0">{words}</span>
+        {shown.length === 0 ? (
+          <span className={NATIVE_CHAT_ROW_SHARE}>{unnamedSenderLabel(t)}</span>
+        ) : (
+          <NativeChatAgentMessageSenderNames
+            from={from}
+            shown={shown}
+            chatWorktreeId={worktreeId}
+            target={target}
+            dispatchId={dispatchId}
+          />
+        )}
+        {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+        {items.length > 0 ? (
+          <>
+            <span className="shrink-0">
+              {t('components.native-chat.agentMessage.row.forItems', 'for')}
+            </span>
+            {items.map((item) => (
+              <ItemChip key={item.uid} item={item} />
+            ))}
+          </>
+        ) : null}
+      </span>
     </NativeChatEventRow>
   )
 }
 
 /** An earlier message about the same Dispatch, under the newer row it merged into: its time (and
- *  its lead when it differs, as "Started"), then its words. */
+ *  its lead when it differs, as "Started", with the items its start was for), then its words. */
 function MergedAgentMessage({
   message,
   newerLead
@@ -205,12 +175,20 @@ function MergedAgentMessage({
 }): React.JSX.Element {
   const t = useTranslate()
   const from = message.from
-  const words = from ? lead(from, message, t) : null
+  const words = from ? agentMessageRowLead(from, message, t) : null
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   return (
     <>
-      <p className="flex items-center gap-1 text-xs text-chat-foreground-faint">
+      <p className="flex min-w-0 items-center gap-1 text-xs text-chat-foreground-faint">
         {words && words !== newerLead ? <span>{words}</span> : null}
+        {message.agentStartItems?.length ? (
+          <>
+            <span>{t('components.native-chat.agentMessage.row.forItems', 'for')}</span>
+            {message.agentStartItems.map((item) => (
+              <ItemChip key={item.uid} item={item} />
+            ))}
+          </>
+        ) : null}
         <NativeChatMessageTimestamp timestamp={message.timestamp} />
       </p>
       {text.trim() ? (

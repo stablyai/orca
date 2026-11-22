@@ -224,8 +224,14 @@ function resolveRecoveryShell(
   )
 }
 
+// Characters literal in cmd, batch shims and CommandLineToArgvW.
+const SAFE_WINDOWS_CMD_TOKEN = /^[A-Za-z0-9_.-]+$/
+
 function quoteRecoveryArgument(value: string, shell: AgentStartupShell): string {
   if (shell === 'cmd') {
+    if (SAFE_WINDOWS_CMD_TOKEN.test(value)) {
+      return value
+    }
     // cmd expands %VAR% inside double quotes; its argv encoder must escape percent pairs too.
     return quoteWindowsCmdArgument(value)
   }

@@ -129,10 +129,6 @@ export function devinSessionsIndexForSidecar(sidecar: SessionSidecarObservation 
   }
 }
 
-export function resetDevinSessionsIndexCacheForTests(): void {
-  indexCache.clear()
-}
-
 /** Read older schemas with available columns; absent sessions/id yields an empty index, while SQLite failures propagate. */
 function readDevinSessionsIndex(dbPath: string): DevinSessionsIndex {
   return readOpenCodeDatabase({

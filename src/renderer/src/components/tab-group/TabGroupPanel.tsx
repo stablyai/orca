@@ -257,6 +257,8 @@ export default function TabGroupPanel({
   )
   return (
     <div
+      // Why: store focus (last focused group), not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
+      data-unfocused-split-group={hasSplitGroups && !isFocused ? '' : undefined}
       // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups

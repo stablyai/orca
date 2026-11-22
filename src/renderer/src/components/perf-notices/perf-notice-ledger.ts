@@ -10,6 +10,9 @@ const DAY = 24 * 60 * MINUTE
 const WEEK = 7 * DAY
 const LAUNCH_QUIET_MS = 10 * MINUTE
 
+/** Disk breaks work now: it skips the launch quiet period, and repeats and snoozes by the day. */
+const URGENT: ReadonlySet<PerfNoticeId> = new Set(['disk-almost-full'])
+
 const launchedAt = Date.now()
 // Why: if storage fails, this copy keeps snoozes and caps for the rest of the session.
 let sessionLedger: Ledger = { lastToastAt: null, notices: {} }
@@ -61,13 +64,13 @@ export function canShowPerfNotice(id: PerfNoticeId, now: number): boolean {
   if (record && now < record.snoozedUntil) {
     return false
   }
-  if (now - launchedAt < LAUNCH_QUIET_MS) {
+  if (!URGENT.has(id) && now - launchedAt < LAUNCH_QUIET_MS) {
     return false
   }
   if (ledger.lastToastAt !== null && now - ledger.lastToastAt < DAY) {
     return false
   }
-  return !record || now - record.lastShownAt >= WEEK
+  return !record || now - record.lastShownAt >= (URGENT.has(id) ? DAY : WEEK)
 }
 
 export function recordPerfNoticeShown(id: PerfNoticeId, now: number): void {
@@ -89,7 +92,7 @@ export function snoozePerfNotice(id: PerfNoticeId, now: number): void {
       ...ledger,
       notices: {
         ...ledger.notices,
-        [id]: { ...record, snoozedUntil: now + WEEK }
+        [id]: { ...record, snoozedUntil: now + (URGENT.has(id) ? DAY : WEEK) }
       }
     })
   }

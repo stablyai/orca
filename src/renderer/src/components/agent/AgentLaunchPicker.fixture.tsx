@@ -61,13 +61,13 @@ function entry(
 }
 
 const claudeModels = [
-  model('claude-opus-5-5', 'Claude Opus 5.5', CLAUDE_EFFORTS, {
+  model('claude-opus-5-5', 'Opus 5.5', CLAUDE_EFFORTS, {
     isDefault: true,
     supportsFastMode: true
   }),
-  model('claude-sonnet-5-5', 'Claude Sonnet 5.5', CLAUDE_EFFORTS, { supportsFastMode: true }),
-  model('claude-fable-5', 'Claude Fable 5', CLAUDE_EFFORTS),
-  model('claude-haiku-5-5', 'Claude Haiku 5.5', CLAUDE_EFFORTS.slice(0, 3))
+  model('claude-sonnet-5-5', 'Sonnet 5.5', CLAUDE_EFFORTS, { supportsFastMode: true }),
+  model('claude-fable-5', 'Fable 5', CLAUDE_EFFORTS),
+  model('claude-haiku-5-5', 'Haiku 5.5', CLAUDE_EFFORTS.slice(0, 3))
 ]
 const fastTier = [{ value: 'fast', label: 'Fast' }]
 const codexModels = [

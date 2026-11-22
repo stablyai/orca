@@ -92,7 +92,10 @@ export const homeWorktreeCountsQuery = defineHostQuery<
 function botsByHomeWorktreeId(answer: HostBotsRead): ReadonlyMap<string, HomeAgentBot> {
   return new Map(
     answer.kind === 'bots'
-      ? answer.bots.map((bot) => [botHomeWorktreeId(bot), { name: bot.name, avatar: bot.avatar }])
+      ? answer.bots.map((bot) => [
+          botHomeWorktreeId(bot),
+          { id: bot.id, name: bot.name, avatar: bot.avatar }
+        ])
       : []
   )
 }

@@ -39,13 +39,11 @@ export function NativeChatImportDoneCard({ done }: { done: BotImportDone }): Rea
         </NativeChatCardAvatar>
       }
       heading={t('components.native-chat.importDone.heading', 'Import finished')}
+      title={t('components.native-chat.importDone.title', '{{name}} came over from {{app}}', {
+        name: done.name,
+        app: done.app
+      })}
     >
-      <p className="mt-0.5 text-sm font-medium text-foreground">
-        {t('components.native-chat.importDone.title', '{{name}} came over from {{app}}', {
-          name: done.name,
-          app: done.app
-        })}
-      </p>
       {done.created.length ? (
         <div className="mt-2 space-y-1">
           {done.created.map((entry) => {
@@ -62,7 +60,7 @@ export function NativeChatImportDoneCard({ done }: { done: BotImportDone }): Rea
                   ) : null}
                 </p>
                 {open ? (
-                  <Button type="button" variant="outline" size="xs" onClick={open}>
+                  <Button type="button" variant="link" size="inlineText" onClick={open}>
                     {t('components.native-chat.importDone.open', 'Open')}
                   </Button>
                 ) : null}
@@ -71,7 +69,7 @@ export function NativeChatImportDoneCard({ done }: { done: BotImportDone }): Rea
           })}
         </div>
       ) : null}
-      <p className="mt-2 text-2xs text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         {done.stayed.length
           ? t(
               'components.native-chat.importDone.stayed',
@@ -83,7 +81,7 @@ export function NativeChatImportDoneCard({ done }: { done: BotImportDone }): Rea
             })}
       </p>
       {done.paused ? (
-        <p className="mt-1 text-2xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           {t(
             'components.native-chat.importDone.paused',
             'Automations are paused so nothing runs twice. Turn them on once the old bot is switched off in {{app}}.',

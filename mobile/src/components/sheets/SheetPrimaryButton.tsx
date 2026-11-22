@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable, Text } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { MobilePendingButton } from '../controls/MobilePendingButton'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -30,40 +30,26 @@ export function SheetPrimaryButton({
   useMobileColorScheme()
   const foreground = tone === 'merge' ? colors.onMergeGreen : colors.bgBase
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <MobilePendingButton
+      label={label}
+      icon={Icon ? <Icon size={17} color={foreground} strokeWidth={2.2} /> : undefined}
+      style={[
         sheetPrimaryButtonStyles.button,
         tone === 'merge' && sheetPrimaryButtonStyles.merge,
-        size === 'compact' && sheetPrimaryButtonStyles.compact,
-        pressed && sheetPrimaryButtonStyles.pressed,
-        disabled && !busy && sheetPrimaryButtonStyles.disabled
+        size === 'compact' && sheetPrimaryButtonStyles.compact
       ]}
-      disabled={disabled || busy}
+      labelStyle={[
+        sheetPrimaryButtonStyles.label,
+        size === 'compact' && sheetPrimaryButtonStyles.compactLabel,
+        { color: foreground }
+      ]}
+      spinnerColor={foreground}
+      pending={busy}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={size === 'compact' ? 8 : undefined}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled, busy }}
       testID={testID}
-    >
-      {busy ? (
-        <ActivityIndicator size="small" color={foreground} />
-      ) : (
-        <>
-          {Icon ? <Icon size={17} color={foreground} strokeWidth={2.2} /> : null}
-          <Text
-            style={[
-              sheetPrimaryButtonStyles.label,
-              size === 'compact' && sheetPrimaryButtonStyles.compactLabel,
-              { color: foreground }
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
-        </>
-      )}
-    </Pressable>
+    />
   )
 }
 
@@ -82,6 +68,5 @@ export const sheetPrimaryButtonStyles = themedStyleSheet(() => ({
   compactLabel: { fontSize: 13 },
   merge: { backgroundColor: colors.mergeGreen },
   pressed: { opacity: feedback.pressedOpacity },
-  disabled: { opacity: feedback.disabledOpacity },
   label: { color: colors.bgBase, fontSize: 15, fontWeight: '600' }
 }))

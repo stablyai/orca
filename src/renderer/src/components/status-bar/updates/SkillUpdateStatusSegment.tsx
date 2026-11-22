@@ -6,11 +6,7 @@ import { useLatestSkillUpdateRun } from '../../skills/freshness/skill-update-run
 import { updatedSkillsLabel } from '../../skills/freshness/skill-plan-op-copy'
 
 // Keep reporting after the update dialog closes; statusBarItems must not hide the remaining progress surface.
-export function SkillUpdateStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function SkillUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const run = useLatestSkillUpdateRun()
 
@@ -88,7 +84,7 @@ export function SkillUpdateStatusSegment({
           aria-label={segment.ariaLabel}
         >
           {segment.icon}
-          {!iconOnly && <span className="text-[11px]">{segment.label}</span>}
+          <span className="text-[11px]">{segment.label}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>

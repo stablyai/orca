@@ -16,8 +16,7 @@ import {
   localNameWriteByTabId,
   namesClearedBy,
   pendingHostRenameByTabId,
-  renamedFromByTabId,
-  resetTerminalSessionNameStateForTest
+  renamedFromByTabId
 } from './terminal-session-name-state'
 
 /** A rename through the store: the user's act, so it names the focused pane's session now (a
@@ -103,8 +102,4 @@ export function terminalTabNameUnsettled(
   }
   const seen = lastSeenByTabId.get(tab.id)
   return seen?.key !== binding.key || seen.name !== normalizeTerminalSessionName(tab.customTitle)
-}
-
-export function resetTerminalSessionNameRecordingForTest(): void {
-  resetTerminalSessionNameStateForTest()
 }

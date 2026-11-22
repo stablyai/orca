@@ -73,7 +73,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     }
     const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
-    const rendererBrowserTabs = this.getAvailableAuthoritativeWindow()
+    const rendererBrowserTabs = this.hasAuthoritativeWindow()
       ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
       : []
     // Deduplicate overlapping sources by id; newly built rows replace retained rows.
@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
   ): void {
     // An attached renderer's unaccepted epoch cannot acquire offscreen rows.
     if (
-      this.getAvailableAuthoritativeWindow() &&
+      this.hasAuthoritativeWindow() &&
       !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch) &&
       !this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(existing)
     ) {
