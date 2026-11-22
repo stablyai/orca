@@ -57,6 +57,7 @@ export function SourceControlBranchSection({
   activeConnectionId,
   openEntry,
   diffCommentCountByPath,
+  headerButtonRef,
   children
 }: {
   label: string
@@ -79,6 +80,7 @@ export function SourceControlBranchSection({
   activeConnectionId: string | null
   openEntry: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
   diffCommentCountByPath: Map<string, number>
+  headerButtonRef?: React.Ref<HTMLButtonElement>
   /** Replaces the rows, for loading/error/empty states. */
   children?: React.ReactNode
 }): React.JSX.Element {
@@ -92,6 +94,7 @@ export function SourceControlBranchSection({
         label={label}
         count={fileCount}
         countTitle={countTitle}
+        buttonRef={headerButtonRef}
         isCollapsed={collapsed}
         onToggle={() => toggleSection(sectionKey)}
         actions={

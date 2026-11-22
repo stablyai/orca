@@ -15524,6 +15524,7 @@
             "scopeFilterCommits": "Filter commits",
             "scopeCommitsFailed": "Couldn't load commits.",
             "scopeFilesFailed": "Couldn't load files.",
+            "scopeLoadingFiles": "Loading files…",
             "scopeNoSharedHistory": "No shared history with {{ref}}",
             "scopeRetryCommits": "Retry",
             "scopeLoadingCommits": "Loading commits…",

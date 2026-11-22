@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -16,6 +17,7 @@ const NO_COMMENT_COUNTS = new Map<string, number>()
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
   const t = useTranslate()
+  const commitFilesHeaderRef = useRef<HTMLButtonElement>(null)
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -264,6 +266,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         <SourceControlBranchSection
           label={t('auto.components.right.sidebar.SourceControl.scopeCommitFiles', 'Files')}
           sectionKey="commit"
+          headerButtonRef={commitFilesHeaderRef}
           activeOpenRowKeys={activeOpenRowKeys}
           filteredBranchEntries={filteredBranchEntries}
           collapsedSections={collapsedSections}
@@ -285,7 +288,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             t,
             currentCommitFiles,
             hasFilteredBranchEntries || Boolean(normalizedFilter),
-            retryCommitScopeFiles
+            (button) =>
+              retryCommitScopeFiles(() => {
+                if (button.ownerDocument.activeElement === button) {
+                  commitFilesHeaderRef.current?.focus({ preventScroll: true })
+                }
+              })
           )}
         </SourceControlBranchSection>
       ) : null}

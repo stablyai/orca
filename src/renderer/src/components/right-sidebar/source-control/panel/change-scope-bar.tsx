@@ -114,7 +114,7 @@ export function SourceControlChangeScopeBar({
     commitsAhead > 0
       ? `${fileCountLabel(t, all.files)} · ${commitCountLabel(t, commitsAhead)}`
       : fileCountLabel(t, all.files)
-  if (branchSummary?.status === 'no-merge-base') {
+  if (branchSummary?.status === 'no-merge-base' && branchSummary.baseRef === compareBaseRef) {
     allDetail = t(
       'auto.components.right.sidebar.SourceControl.scopeNoSharedHistory',
       'No shared history with {{ref}}',

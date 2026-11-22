@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -25,24 +25,31 @@ export function useChangeScopeSync({
   gitHistoryState: GitHistoryPanelState
   statusHead: string | null
   loadCommitFiles: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
-}): () => void {
+}): (onLoaded: () => void) => void {
   const commitScope = changeScope.kind === 'commit' ? changeScope : null
   const commit = commitScope?.commit ?? null
-  const [commitFilesAttempt, retryCommitScopeFiles] = useReducer(
-    (attempt: number) => attempt + 1,
-    0
-  )
+  const [commitFilesAttempt, requestRetry] = useReducer((attempt: number) => attempt + 1, 0)
+  const retryRequest = useRef<{
+    commit: GitHistoryItem
+    loader: typeof loadCommitFiles
+    onLoaded: () => void
+  } | null>(null)
 
   useEffect(() => {
+    const retry = retryRequest.current
+    retryRequest.current = null
     if (!commit) {
       setCommitScopeFiles(null)
       return
     }
+    const onLoaded =
+      retry?.commit === commit && retry.loader === loadCommitFiles ? retry.onLoaded : undefined
     let live = true
-    setCommitScopeFiles({ commitId: commit.id, status: 'loading' })
+    setCommitScopeFiles({ commitId: commit.id, status: onLoaded ? 'retrying' : 'loading' })
     loadCommitFiles(commit)
       .then((entries) => {
         if (live) {
+          onLoaded?.()
           setCommitScopeFiles({ commitId: commit.id, status: 'ready', entries })
         }
       })
@@ -73,5 +80,10 @@ export function useChangeScopeSync({
     }
   }, [commitScope, result, setChangeScope, statusHead])
 
-  return retryCommitScopeFiles
+  return (onLoaded) => {
+    if (commit) {
+      retryRequest.current = { commit, loader: loadCommitFiles, onLoaded }
+      requestRetry()
+    }
+  }
 }

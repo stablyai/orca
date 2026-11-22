@@ -17,7 +17,7 @@ export type SourceControlChangeScope =
     }
 
 export type SourceControlCommitScopeFiles =
-  | { commitId: string; status: 'loading' }
+  | { commitId: string; status: 'loading' | 'retrying' }
   | { commitId: string; status: 'error'; error: string }
   | { commitId: string; status: 'ready'; entries: GitBranchChangeEntry[] }
 
