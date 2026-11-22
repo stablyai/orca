@@ -116,7 +116,11 @@ export function RemoteBrowserPageViewport({
     imageRef.current?.focus()
   }, [hasStreamFrame, imageRef, remoteViewportRef])
 
-  const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const hasViewportPreset = Boolean(browserTab.viewportPresetId)
+  const remoteFrameStyle = useMemo(
+    () => getRemoteBrowserFrameStyle(frameMetadata, hasViewportPreset),
+    [frameMetadata, hasViewportPreset]
+  )
   const pageCursor = pagePointer?.cursor
   const remoteImageStyle = useMemo(
     () => ({ ...remoteFrameStyle, cursor: getRemoteBrowserFrameCursor(pageCursor) }),
