@@ -44,6 +44,8 @@ export type NativeChatApprovalCardProps = {
   placement?: 'composer' | 'stacked'
   /** Read off a terminal screen (folder trust, startup menus): keeps the full card. */
   parsedFromTerminal?: boolean
+  /** Shown as the title, with mention pills; `approval.title` stays its name for assistive tech. */
+  titleContent?: React.ReactNode
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -59,7 +61,8 @@ export function NativeChatApprovalCard({
   worker,
   countdown,
   placement = 'composer',
-  parsedFromTerminal = false
+  parsedFromTerminal = false,
+  titleContent
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -178,7 +181,7 @@ export function NativeChatApprovalCard({
                         : 'font-semibold text-foreground'
                     )}
                   >
-                    {title}
+                    {titleContent ?? title}
                   </p>
                   {worker ? (
                     <p

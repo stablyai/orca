@@ -11,7 +11,10 @@ import {
   peerMailRelayEnvironments,
   peerMailRelayWants
 } from '../../../../orchestration/federation/peer-mail/peer-mail-relay-environments'
-import { settleRemovedPairedClient } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import {
+  settleRemovedPairedClient,
+  withdrawClientAsksOf
+} from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
@@ -410,6 +413,24 @@ describe('agents here messaging agents on a paired computer', () => {
 
     expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(db.getInbox(10)).toEqual([])
+  })
+
+  it("withdraws a deleted chat's asks: drops the one not taken yet, withdraws the one taken", async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const [taken] = (await pull()).items
+    await fromClient('orchestration.peerMailAck', {
+      acknowledgments: [{ conversationId: taken!.conversationId, throughSequence: taken!.sequence }]
+    })
+    await ask({ type: 'question', subject: 'Not taken yet' })
+
+    withdrawClientAsksOf(runtime, ['term_s'])
+
+    const items = (await pull()).items
+    expect(items.map((item) => [item.kind, JSON.parse(item.payload)])).toEqual([
+      ['client_ask_withdraw', { requestId: taken!.messageId }]
+    ])
+    expect(db.db.prepare('SELECT COUNT(*) AS n FROM peer_questions_out').get()).toEqual({ n: 0 })
   })
 
   it('never starts a pull loop toward a paired computer', async () => {

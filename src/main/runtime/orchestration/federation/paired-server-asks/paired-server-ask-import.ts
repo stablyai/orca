@@ -15,12 +15,14 @@ import { peerMailSenderSnapshot } from '../peer-mail/peer-mail-sender-snapshot'
 import { storePeerMailForAgent } from '../../../rpc/methods/orchestration/federation/peer-mail-agent-store'
 import {
   dropPairedServerAsk,
+  getPairedServerAsk,
   holdPairedServerAsk,
   isIntroduced,
   isServerAllowed,
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 
 const Withdrawn = z.object({ requestId: z.string().min(1) })
 
@@ -121,6 +123,7 @@ function decideAsk(
     holdPairedServerAsk(db, { ...row, bot_id: bot.id, state: 'admit' })
   } else if (bot && isIntroduced(db, asks.serverInstallationId, ask.rootSession, bot.id)) {
     holdPairedServerAsk(db, { ...row, bot_id: bot.id, state: 'card' })
+    notifyPairedServerCardsChanged(runtime, [bot.id])
   } else {
     declinePairedServerAsk(runtime, db, {
       conversationId: item.conversationId,
@@ -142,8 +145,9 @@ export async function importPairedServerItem(
   const json = safeJson(item.payload)
   if (item.kind === 'client_ask_withdraw') {
     const withdrawn = Withdrawn.safeParse(json)
-    if (withdrawn.success) {
-      dropPairedServerAsk(db, withdrawn.data.requestId, 'card')
+    const card = withdrawn.success ? getPairedServerAsk(db, withdrawn.data.requestId) : undefined
+    if (card && dropPairedServerAsk(db, card.message_id, 'card')) {
+      notifyPairedServerCardsChanged(runtime, [card.bot_id])
     }
     return { card: false }
   }

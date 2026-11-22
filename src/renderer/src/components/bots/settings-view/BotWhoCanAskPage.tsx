@@ -9,6 +9,8 @@ import { BotWhoCanAskList, type BotWhoCanAskService } from '../BotWhoCanAskList'
 import { useGitHubCard } from '../github/BotGitHubCard'
 import { useLinearCard } from '../linear/BotLinearCard'
 import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { BotPairedServersWhoCanAsk } from './BotPairedServersWhoCanAsk'
 
 type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'linear' | 'github' }>
 
@@ -76,8 +78,16 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
     (entry): entry is PeopleEntry =>
       entry.kind === 'slack' || entry.kind === 'linear' || entry.kind === 'github'
   )
+  // Paired servers ask agents on this computer: listed even with no connector.
+  const pairedServers =
+    bot.hostId === LOCAL_EXECUTION_HOST_ID ? <BotPairedServersWhoCanAsk bot={bot} /> : null
   if (entries.length === 0) {
-    return <BotNoConnectors bot={bot} />
+    return (
+      <>
+        <BotNoConnectors bot={bot} />
+        {pairedServers}
+      </>
+    )
   }
   return (
     <>
@@ -98,6 +108,7 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
             )
         }
       })}
+      {pairedServers}
     </>
   )
 }

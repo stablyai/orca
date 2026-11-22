@@ -32,6 +32,7 @@ import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-f
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
+import { PairedAskNeedRow } from './BotPairedAskNeedRow'
 
 type ReportApproval = (key: string, approval: boolean) => void
 
@@ -288,6 +289,8 @@ const NeedItem = memo(function NeedItem({
         />
       )
     }
+    case 'paired-ask':
+      return <PairedAskNeedRow bot={bot} card={need.card} />
   }
 })
 

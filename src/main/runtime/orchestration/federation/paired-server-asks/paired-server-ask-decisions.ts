@@ -10,6 +10,7 @@ import {
 } from '../../db/federation/paired-server-asks-store'
 import { declinePairedServerAsk } from './paired-server-ask-import'
 import { admitPairedServerAsksNow } from './paired-server-asks-loop'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 
 export type PairedServerDecision = 'once' | 'always' | 'deny'
 
@@ -35,6 +36,7 @@ export function decidePairedServerAsk(
       to: ask.success ? ask.data.to : `bot:${row.bot_id}`,
       subject: ask.success ? ask.data.subject : 'Message'
     })
+    notifyPairedServerCardsChanged(runtime, [row.bot_id])
     return true
   }
   if (!admitPairedServerCard(db, messageId)) {
@@ -50,5 +52,6 @@ export function decidePairedServerAsk(
   // Admitted by the server's loop, which knows its pairing; started now rather than at its next pull.
   runtime.ensureOrchestrationPeerMailRelay(row.environment_id)
   admitPairedServerAsksNow(runtime, row.environment_id)
+  notifyPairedServerCardsChanged(runtime, [row.bot_id])
   return true
 }

@@ -3,7 +3,7 @@
 // what it took. When the pairing they were sent under ends, their askers are told once.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { tellUnpairedPeerQuestions } from '../peer-mail/peer-questions-out'
+import { forgetPeerQuestionOut, tellUnpairedPeerQuestions } from '../peer-mail/peer-questions-out'
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { clientDeviceEnvironmentPattern, CLIENT_ENVIRONMENT_PREFIX } from './client-ask-environment'
 import { forgetClientAskDevice } from './client-ask-listeners'
@@ -126,4 +126,56 @@ function settleRemovedClientDevice(
     device.name,
     `${device.name} was removed from this Orca's paired computers.`
   )
+}
+
+/** A chat that asked agents on paired computers was deleted: asks not taken yet are dropped, and
+ *  each one taken is withdrawn there, so a card waiting for a person goes. Its questions are
+ *  forgotten, since no one is left to tell. A failure is logged, never thrown: the chat is gone. */
+export function withdrawClientAsksOf(runtime: OrcaRuntimeService, askers: readonly string[]): void {
+  try {
+    const db = runtime.getOrchestrationDb()
+    for (const asker of askers) {
+      const conversations = db.db
+        .prepare(
+          `SELECT conversation_id FROM peer_mail_conversations
+           WHERE role = 'home' AND local_party = ? AND environment_id LIKE ?`
+        )
+        .all(asker, `${CLIENT_ENVIRONMENT_PREFIX}%`)
+        .map((row) => String(row.conversation_id))
+      for (const conversationId of conversations) {
+        withdrawConversationAsks(db, conversationId)
+      }
+    }
+  } catch (error) {
+    console.warn("[orchestration] Withdrawing a deleted chat's asks failed:", error)
+  }
+}
+
+function withdrawConversationAsks(db: OrchestrationDb, conversationId: string): void {
+  const asks = db.db
+    .prepare(
+      `SELECT message_id, acked_at FROM federation_relay_items
+       WHERE dispatch_id = ? AND direction = 'to_worker' AND kind = 'client_ask'`
+    )
+    .all(conversationId)
+  for (const ask of asks) {
+    const messageId = String(ask.message_id)
+    forgetPeerQuestionOut(db, messageId)
+    if (ask.acked_at === null) {
+      db.db
+        .prepare(
+          `UPDATE federation_relay_items SET acked_at = datetime('now')
+           WHERE dispatch_id = ? AND direction = 'to_worker' AND message_id = ?`
+        )
+        .run(conversationId, messageId)
+      continue
+    }
+    // A stable id, so a second deletion pass queues nothing new.
+    queueClientItem(db, {
+      conversationId,
+      messageId: `withdraw:${messageId}`,
+      kind: 'client_ask_withdraw',
+      payload: { requestId: messageId }
+    })
+  }
 }

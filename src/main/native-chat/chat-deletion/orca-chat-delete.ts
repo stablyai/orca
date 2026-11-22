@@ -15,6 +15,8 @@ import { botOfSession } from '../../bots/bot-session-tabs'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { DeletedChatConversation } from './deleted-chats'
 import { getStructuredAgentSessionHost } from '../agent-session-wire/host/structured-agent-session-registry'
+import { withdrawClientAsksOf } from '../../runtime/orchestration/federation/client-asks/client-ask-queue'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 
 type ChatHost = NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>
 
@@ -149,6 +151,11 @@ export async function deleteOrcaChat(
   if (committed !== 'forgotten') {
     return { outcome: 'refused', reason: committed === 'worker' ? 'workers' : 'unavailable' }
   }
+  // What it asked agents on paired computers is withdrawn: no one is left to read the answers.
+  withdrawClientAsksOf(
+    runtime,
+    chat.records.map((record) => `${ORCA_SESSION_ADDRESS_PREFIX}${record.sessionId}`)
+  )
   if (bot) {
     for (const record of chat.records) {
       // Mail it never read goes unanswered, and its senders hear so.
