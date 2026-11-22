@@ -187,8 +187,12 @@ export function ptyTuiIdleEvidence(
   }
   // Why not with the shell in front: once a command finished, the shell is itself at rest; only an
   // agent's own explicit rest title must not speak for it.
+  // A reported status was already proven current for the running command.
   const statusRetired =
-    !titleIsCurrent && !isShellInFront(pty) && fullRecord.lastAgentStatus === 'idle'
+    !reportedStatus &&
+    !titleIsCurrent &&
+    !isShellInFront(pty) &&
+    fullRecord.lastAgentStatus === 'idle'
   // With the shell in front, an exited agent's rest title must not leave its idle behind either.
   const record =
     titleIsCurrent || !hasExplicitIdleTitle(fullRecord)

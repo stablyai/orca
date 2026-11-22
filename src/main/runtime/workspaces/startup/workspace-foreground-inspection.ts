@@ -1,3 +1,4 @@
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -49,7 +50,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     const incarnationId = pty?.incarnationId
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const foreground = await this.readPaneAgentForeground(ptyId, agent)
+    const foreground = await this.readRestTitleForeground(pty, ptyId, agent)
     if (
       foreground !== 'agent' ||
       !pty ||
@@ -66,12 +67,11 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return true
   }
 
-  /** Whether `agent` itself is the pane's foreground program now, by an exact read. */
-  protected readPaneAgentForeground(
+  private readRestTitleForeground(
+    pty: RuntimePtyWorktreeRecord | undefined,
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground> {
-    const pty = this.ptysById.get(ptyId)
     if (!pty || pty.connectionId || this.ptyController?.supportsForegroundObservation?.(ptyId)) {
       return readExactAgentForeground(this, this.ptyController, ptyId, agent)
     }
@@ -82,6 +82,18 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       return Promise.resolve('unknown')
     }
     return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
+  }
+
+  /** Whether `agent` itself is the pane's foreground program now: the rest-title read where an old
+   *  local owner's adopted root scopes it, else the general exact read. */
+  protected readPaneAgentForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground> {
+    const pty = this.ptysById.get(ptyId)
+    return pty?.adoptedRootProcess
+      ? this.readRestTitleForeground(pty, ptyId, agent)
+      : readExactAgentForeground(this, this.ptyController, ptyId, agent)
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
