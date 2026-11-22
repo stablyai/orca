@@ -885,6 +885,8 @@ export class EdgeAssignments {
   // the row's cell, and no open migration or region rehome. The move then takes that unit off the
   // old cell (writeMove, releaseOldCellUnits). Anything else (splices, invites, installs,
   // confirmations, migration leases, a unit no lease backs, another lease) defers, as before.
+  // Under drain-stale (options.staleOnReserveCells), a row on a reserve-mode cell whose leases are
+  // all expired, or absent, moves with its counters dropped.
   private async heldUnits(
     transaction: RelayDatabase,
     identity: Identity,
@@ -903,7 +905,7 @@ export class EdgeAssignments {
     try {
       // After the assignment row, as every lease writer locks them (assignment, leases, cell).
       leases = await transaction.queryLocked(
-        `SELECT activity_id, activity_kind, cell_id, request_units FROM relay_assignment_activity_leases
+        `SELECT activity_id, activity_kind, cell_id, request_units, expires_at FROM relay_assignment_activity_leases
          WHERE user_id = ? AND relay_host_id = ? ORDER BY activity_id ASC`,
         [identity.userId, identity.relayHostId],
         { failIfUnavailable: true }
@@ -916,9 +918,12 @@ export class EdgeAssignments {
       }
       throw error
     }
-    if (staleCandidate && leases.length === 0) {
-      // No lease anywhere backs the counters, and the cell admits from memory: nothing live on the
-      // old cell is counted, so the move takes the host as if the row held no units.
+    const now = this.now()
+    if (staleCandidate && leases.every((lease) => integer(lease, 'expires_at') <= now)) {
+      // No live lease backs the counters (none, or only expired ones: the expired-lease sweep skips
+      // reserve-mode cells, so they stay), and the cell admits from memory: nothing live on the old
+      // cell is counted, so the move takes the host as if the row held no units. The expired lease
+      // rows stay as they are.
       await this.deferIfMigrating(transaction, identity)
       return { cellId, assignmentEpoch: integer(row, 'assignment_epoch'), activityId: null, units: 0 }
     }
