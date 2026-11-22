@@ -105,6 +105,9 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
+  state.sshConnectLinks.capture(argv, (link) => {
+    state.mainWindow?.webContents.send('ui:openSshConnectLink', link)
+  })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
@@ -204,6 +207,7 @@ if (preflightReady) {
   })
   state.deepLinks.capture(process.argv)
   state.pluginInstallLinks.capture(process.argv)
+  state.sshConnectLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()

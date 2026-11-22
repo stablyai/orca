@@ -17,6 +17,7 @@ import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { SshConnectLinkPromptHost } from '../components/ssh-connect-link/SshConnectLinkPrompt'
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
@@ -313,6 +314,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onboardingVisible={onboardingGate.shouldRender}
       />
       <PluginInstallTrustDialogHost />
+      <SshConnectLinkPromptHost />
       {/* Mount once per session; the internal gate selects pre-telemetry users (telemetry-plan.md §First-launch experience). */}
       <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />

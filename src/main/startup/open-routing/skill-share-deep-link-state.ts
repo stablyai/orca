@@ -1,4 +1,5 @@
 import { pluginInstallLinkFromArguments } from '../../../shared/plugins/catalog/plugin-install-link'
+import { sshConnectLinkFromArguments } from '../../../shared/remote-runtime/ssh/ssh-connect-link'
 
 const REPEAT_WINDOW_MS = 3_000
 const BURST_LIMIT = 5
@@ -40,5 +41,11 @@ export class PendingDeepLinkState {
 export class PluginInstallLinkState extends PendingDeepLinkState {
   constructor(now?: () => number) {
     super(pluginInstallLinkFromArguments, now)
+  }
+}
+
+export class SshConnectLinkState extends PendingDeepLinkState {
+  constructor(now?: () => number) {
+    super(sshConnectLinkFromArguments, now)
   }
 }

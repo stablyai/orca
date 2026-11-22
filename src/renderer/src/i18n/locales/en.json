@@ -30946,5 +30946,16 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "sshConnectLink": {
+    "host": "Host",
+    "address": "Address",
+    "title": "Connect to {{alias}}?",
+    "description": "A link asked Orca to connect to this SSH host. Only connect if you opened the link.",
+    "connect": "Connect",
+    "invalid": "That SSH link isn’t valid.",
+    "notFound": "No SSH host named {{alias}}",
+    "notFoundDetail": "It isn’t in ~/.ssh/config, or it was removed from Orca. Removed hosts can be restored in SSH settings.",
+    "openSettings": "Open SSH settings"
   }
 }

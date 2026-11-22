@@ -61,6 +61,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingPluginInstallLink: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingPluginInstallLink'),
+  onOpenSshConnectLink: (callback: (link: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on('ui:openSshConnectLink', listener)
+    return () => ipcRenderer.removeListener('ui:openSshConnectLink', listener)
+  },
+  consumePendingSshConnectLink: (): Promise<string | null> =>
+    ipcRenderer.invoke('ui:consumePendingSshConnectLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)

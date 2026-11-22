@@ -102,6 +102,9 @@ export type UiCommandEventApi = {
   /** Raw `orca://plugins/...` link; the renderer validates it. */
   onOpenPluginInstallLink: (callback: (link: string) => void) => () => void
   consumePendingPluginInstallLink: () => Promise<string | null>
+  /** Raw `orca://ssh/...` link; the renderer validates it. */
+  onOpenSshConnectLink: (callback: (link: string) => void) => () => void
+  consumePendingSshConnectLink: () => Promise<string | null>
   /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
   consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>

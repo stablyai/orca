@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store/index'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
+import { openSshConnectLink } from '../../components/ssh-connect-link/ssh-connect-link-open'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -64,6 +65,16 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       })
       .catch(() => {})
   }
+
+  unsubs.push(window.api.ui.onOpenSshConnectLink?.(openSshConnectLink) ?? (() => {}))
+  void window.api.ui
+    .consumePendingSshConnectLink?.()
+    .then((link) => {
+      if (link) {
+        openSshConnectLink(link)
+      }
+    })
+    .catch(() => {})
 
   unsubs.push(
     window.api.ui.onOpenSetupGuide?.(() => {
