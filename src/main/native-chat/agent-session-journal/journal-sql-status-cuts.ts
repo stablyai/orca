@@ -10,6 +10,7 @@ import {
   orcaStopCauseOfRow,
   type NativeChatOrcaStopCut
 } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
+import { isSentBackQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
@@ -19,6 +20,15 @@ import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   type HostUsageLimitCut
 } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
+
+/** Matches the in-memory read, which drops sends accepted at or before the floor. */
+function isSentBackQueuedInput(state: JournalSqlStatusContext, itemId: string, floor: number) {
+  const input = state.inputForItem(itemId)
+  return (
+    isSentBackQueuedAgentJournalSubmission(input) &&
+    (!floor || (input?.acceptedSequence ?? 0) > floor)
+  )
+}
 
 /** Merge only the two request-boundary families; command exclusions use current point lookups. */
 function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
@@ -47,17 +57,20 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
     const item = candidate.item
     if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
       if (item.body.kind === 'message' && item.body.role === 'user') {
-        return null
-      }
-      const lifecycle = readAgentJournalTurn(item.body)
-      if (lifecycle) {
-        return {
-          item,
-          lifecycle,
-          verdict: agentTurnVerdict({
-            state: lifecycle.state,
-            outcome: readAgentJournalTurnOutcome(lifecycle)
-          })
+        if (!isSentBackQueuedInput(state, item.itemId, floor)) {
+          return null
+        }
+      } else {
+        const lifecycle = readAgentJournalTurn(item.body)
+        if (lifecycle) {
+          return {
+            item,
+            lifecycle,
+            verdict: agentTurnVerdict({
+              state: lifecycle.state,
+              outcome: readAgentJournalTurnOutcome(lifecycle)
+            })
+          }
         }
       }
     }
@@ -159,7 +172,8 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
       if (
         compareJournalStatusPositions(candidate.position, currentPosition) >= 0 ||
         openerKeys.has(candidate.item.itemId) ||
-        isStructuredAgentSessionNonRequestRow(candidate.item, commands)
+        isStructuredAgentSessionNonRequestRow(candidate.item, commands) ||
+        (!useTurn && isSentBackQueuedInput(state, candidate.item.itemId, 0))
       ) {
         continue
       }

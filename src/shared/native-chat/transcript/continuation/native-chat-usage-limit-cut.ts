@@ -3,13 +3,15 @@
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
 import { readAgentSessionFailureFact } from '../../../agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionUsageLimit } from '../../../agent-session/failures/agent-session-usage-limit'
 import type { UsageLimitContinueIdentity } from '../../../agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
-import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
+import {
+  findInNativeChatTurn,
+  latestNativeChatTurnSinceRequest,
+  type NativeChatCutReadOptions,
+  type NativeChatCutSubmission
+} from './native-chat-orca-stop-cut'
 
 /** What the agent is sent when the person continues a turn its usage limit ended. */
 export const NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE = 'Continue where you left off.'
@@ -51,10 +53,10 @@ export function isNativeChatUsageLimitCutSchedulable(
 /** The latest root turn, when a usage limit ended it and nothing was sent since. Null otherwise. */
 export function latestNativeChatUsageLimitCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
-  bodyOf?: Parameters<typeof latestNativeChatTurnSinceRequest>[2]
+  submissions: readonly NativeChatCutSubmission[],
+  options?: NativeChatCutReadOptions
 ): NativeChatUsageLimitCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
+  const latest = latestNativeChatTurnSinceRequest(items, submissions, options)
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
@@ -73,7 +75,7 @@ export function latestNativeChatUsageLimitCut(
 /** The latest cut's automatic-continue identity, when its reset time is known. */
 export function latestUsageLimitContinueIdentity(snapshot: {
   items: readonly AgentJournalRenderItem[]
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly NativeChatCutSubmission[]
 }): UsageLimitContinueIdentity | undefined {
   return usageLimitContinueIdentity(
     latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)

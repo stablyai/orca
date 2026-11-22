@@ -26,6 +26,10 @@ import { readJournalSqlWork } from './journal-sql-work-read'
 import { readJournalSqlObserver } from './journal-sql-observer-read'
 import { readJournalDomainAcceptedSendUnopened } from './journal-domain-accepted-unopened'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
+import {
+  usageLimitContinueMessageId,
+  usageLimitContinueTag
+} from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const providerHandle = agentSessionJournalProviderHandle({
@@ -707,4 +711,90 @@ it('reopens stopped history when its only effective carrier is excluded and reta
     kind: 'latest-accepted-handover',
     sequence: 7
   })
+})
+
+const limitedTurn = (itemId: string, userItemId: string, resetsAt: number): JournalRow[] => [
+  {
+    ...base,
+    kind: 'item',
+    itemId,
+    revision: 1,
+    body: { kind: 'turn', turnId: itemId, state: 'completed', outcome: 'failure', userItemId }
+  },
+  {
+    ...base,
+    kind: 'item',
+    itemId: `limit-${itemId}`,
+    revision: 1,
+    turnScope: { kind: 'turn', turnItemId: itemId },
+    body: {
+      kind: 'status',
+      ...agentSessionFailureWords(
+        { kind: 'usageLimitReached', usageLimit: { resetsAt } },
+        { surface: 'row' }
+      )
+    }
+  }
+]
+const sentBack = (
+  kind: 'notDelivered' | 'cancelled' = 'notDelivered',
+  queued: string | null = 'card'
+): JournalRow[] => [
+  { ...base, kind: 'item', itemId: 'ask', revision: 1, body: message('Go') },
+  ...limitedTurn('turn', 'ask', 999),
+  {
+    ...base,
+    kind: 'submission',
+    clientMessageId: 'queued-handover',
+    payloadFingerprint: 'queued-handover',
+    providerHandle,
+    body: message('queued agent mail'),
+    handoverRecorded: true,
+    origin: 'host',
+    source: { kind: 'agent' },
+    ...(queued ? { queuedMessageId: queued } : {})
+  },
+  {
+    ...base,
+    kind: 'dispatch',
+    clientMessageId: 'queued-handover',
+    state: 'rejected',
+    providerItemId: null,
+    ...agentSessionFailureWords({ kind, neverReachedAgent: true }, { surface: 'rejection' })
+  }
+]
+
+it('passes over a queued send readiness sent back in the SQL cut and chain, not other refusals', () => {
+  const cut = (rows: JournalRow[]) => readJournalSqlUsageLimitCut(fixture(rows).context())
+  expect(cut(sentBack())).toMatchObject({ turnItemId: 'turn', resetsAt: 999, chain: 0 })
+  expect(cut(sentBack('cancelled'))).toBeNull()
+  expect(cut(sentBack('notDelivered', null))).toBeNull()
+  const continuation = usageLimitContinueMessageId(
+    1,
+    usageLimitContinueTag({ turnItemId: 'turn', resetsAt: 999 }),
+    '0'.repeat(16)
+  )
+  const continued: JournalRow[] = [
+    ...sentBack(),
+    {
+      ...base,
+      kind: 'submission',
+      clientMessageId: continuation,
+      payloadFingerprint: 'continue',
+      providerHandle,
+      body: message('Continue where you left off.'),
+      handoverRecorded: true,
+      origin: 'host'
+    },
+    {
+      ...base,
+      kind: 'dispatch',
+      clientMessageId: continuation,
+      state: 'accepted',
+      providerItemId: null,
+      reason: null
+    },
+    ...limitedTurn('again', `orca:${continuation}`, 2_000)
+  ]
+  expect(cut(continued)).toMatchObject({ turnItemId: 'again', chain: 1 })
 })

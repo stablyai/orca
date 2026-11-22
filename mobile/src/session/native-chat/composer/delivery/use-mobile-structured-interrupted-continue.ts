@@ -50,7 +50,11 @@ export function useMobileStructuredInterruptedContinue(
   const relayed = useRouteRelaysCapability(
     AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
   )
-  const cut = useMemo(() => latestNativeChatOrcaStopCut(items, submissions), [items, submissions])
+  const passOverSentBackQueuedSends = input.hostSupport?.cutPassesSentBackQueuedSends === true
+  const cut = useMemo(
+    () => latestNativeChatOrcaStopCut(items, submissions, { passOverSentBackQueuedSends }),
+    [items, submissions, passOverSentBackQueuedSends]
+  )
   const { continueAvailable, offeredTurnItemId, failed } = nativeChatInterruptedContinueState({
     capability: !input.hostSupport
       ? 'unknown'

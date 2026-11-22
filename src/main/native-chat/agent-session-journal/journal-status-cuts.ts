@@ -21,7 +21,9 @@ function snapshotSince(state: JournalReducerState, floor: number) {
 
 export function readJournalUsageLimitCut(state: JournalReducerState, floor = 0) {
   const snapshot = snapshotSince(state, floor)
-  return latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, snapshot.bodyOf)
+  return latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, {
+    bodyOf: snapshot.bodyOf
+  })
 }
 
 export function readJournalUsageLimitContinueIdentity(
@@ -35,5 +37,7 @@ export function readJournalUsageLimitContinueIdentity(
 
 export function readJournalOrcaStopCut(state: JournalReducerState, floor = 0) {
   const snapshot = snapshotSince(state, floor)
-  return latestNativeChatOrcaStopCut(snapshot.items, snapshot.submissions, snapshot.bodyOf)
+  return latestNativeChatOrcaStopCut(snapshot.items, snapshot.submissions, {
+    bodyOf: snapshot.bodyOf
+  })
 }

@@ -12,7 +12,14 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
+import {
+  appendRewindUsageLimitedTurn,
+  appendUsageLimitedTurn
+} from './structured-agent-session-rewind-usage-limit.test-fixture'
+import { journalSqlReads } from '../../../agent-session-journal/journal-sql-reads'
+import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 
 // Another agent's mail waits behind a failed turn, queued with the person's own follow-ups, until
 // the chat continues: Resume, the person's own send, or the automatic continue at a usage-limit reset.
@@ -66,6 +73,39 @@ async function failedChat(): Promise<void> {
   await openRigTurnFor(rig, working, 'completed', 'failure')
 }
 
+function autoContinueRig(now: () => number) {
+  return createQueuedMessageTestRig({
+    now,
+    usageLimitAutoContinue: {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
+  })
+}
+
+/** At the reset the host continues the limited turn; once that succeeds the held mail runs. */
+async function continuesThenRunsMail(card: string, heldAs: unknown): Promise<void> {
+  const current = rig
+  await current.host.usageLimitContinue.tick()
+  let continuation: string | undefined
+  await eventually(async () => {
+    continuation = (await readTestHostJournal(current.host, SESSION)).submissions.find(
+      (submission) =>
+        submission.origin === 'host' &&
+        submission.queuedMessageId === undefined &&
+        submission.handedOverAt !== undefined
+    )?.clientMessageId
+    expect(continuation).toBeDefined()
+  })
+  expect(await current.handoff(card)).toEqual(heldAs)
+  await current.settleAccepted(continuation!, 'continued')
+  await openRigTurnFor(current, continuation!, 'completed', 'success')
+  await eventually(async () =>
+    expect(await current.handoff(card)).toMatchObject({ dispatchState: 'pending' })
+  )
+}
+
 describe("a chat's hold on another agent's mail", () => {
   it('holds it once the last turn failed, until a newer turn runs', async () => {
     rig = await createQueuedMessageTestRig()
@@ -104,33 +144,50 @@ describe("a chat's hold on another agent's mail", () => {
 
   it('runs queued mail once the automatic continue at a usage-limit reset succeeds', async () => {
     let clock = HOST_TEST_NOW
-    rig = await createQueuedMessageTestRig({
-      now: () => clock,
-      usageLimitAutoContinue: {
-        isEnabled: () => true,
-        isWorkspaceAsleep: () => false,
-        subscribe: () => () => {}
-      }
-    })
-    const current = rig
+    rig = await autoContinueRig(() => clock)
     // Agent chats run without a tab.
-    await current.store.setSessionTabVisibility(SESSION, false, undefined, { background: true })
-    const journal = current.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await rig.store.setSessionTabVisibility(SESSION, false, undefined, { background: true })
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const cut = await appendRewindUsageLimitedTurn(journal, clock)
     const card = await mail('update the install docs')
     await stillWaiting(card)
     clock = cut.resetsAt + 15_000
-    await current.host.usageLimitContinue.tick()
-    let continuation: string | undefined
-    await eventually(async () => {
-      continuation = (await readTestHostJournal(current.host, SESSION)).submissions.find(
-        (submission) => submission.origin === 'host' && submission.handedOverAt !== undefined
-      )?.clientMessageId
-      expect(continuation).toBeDefined()
+    await continuesThenRunsMail(card, undefined)
+  })
+
+  it('still continues at the reset when mail handed over as the turn hit its limit was sent back', async () => {
+    let clock = HOST_TEST_NOW
+    rig = await autoContinueRig(() => clock)
+    await rig.store.setSessionTabVisibility(SESSION, false, undefined, { background: true })
+    const working = await rig.workingSend()
+    await rig.settleAccepted(working, 'working')
+    await openRigTurnFor(rig, working)
+    const card = await mail('update the install docs')
+    await openRigTurnFor(rig, working, 'completed')
+    await eventually(async () => expect((await rig.handoff(card))?.handedOverAt).toBeDefined())
+    const handover = await rig.handoffId(card)
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const cut = await appendUsageLimitedTurn(journal, clock, 'limited')
+    // What the host records when the failed turn's hold refuses mail it was handing over.
+    await rig.host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: handover,
+      state: 'rejected',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('notDelivered', { neverReachedAgent: true }),
+        { surface: 'rejection' }
+      )
     })
-    expect(await current.handoff(card)).toBeUndefined()
-    await current.settleAccepted(continuation!, 'continued')
-    await openRigTurnFor(current, continuation!, 'completed', 'success')
-    await eventually(async () => expect((await current.handoff(card))?.handedOverAt).toBeDefined())
+    expect(await rig.queuePause()).toEqual({ reason: 'failed' })
+    expect(await rig.drafts()).toEqual([{ messageId: card, state: 'waiting' }])
+    const sentBack = await rig.handoff(card)
+    expect(sentBack).toMatchObject({ clientMessageId: handover, dispatchState: 'rejected' })
+    const restored = await readTestHostJournal(rig.host, SESSION)
+    expect(latestNativeChatUsageLimitCut(restored.items, restored.submissions)).toMatchObject(cut)
+    expect(
+      await journalSqlReads(rig.host.deps.journalDatabase.readers, SESSION).usageLimitCut()
+    ).toMatchObject(cut)
+    clock = cut.resetsAt + 15_000
+    await continuesThenRunsMail(card, sentBack)
   })
 })

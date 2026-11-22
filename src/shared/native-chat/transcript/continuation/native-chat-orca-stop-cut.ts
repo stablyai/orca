@@ -5,10 +5,12 @@ import {
   type AgentSessionOrcaStopCause
 } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../agent-session/journal/agent-session-journal-types'
+import { isSentBackQueuedAgentJournalSubmission } from '../../../agent-session/requests/agent-session-queued-submission'
 import { STALE_SESSION_ROW_PREFIX } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
   readAgentJournalTurn,
@@ -47,16 +49,40 @@ export type NativeChatOrcaStopCut = {
   cause: AgentSessionOrcaStopCause
 }
 
-/** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
-export function latestNativeChatTurnSinceRequest(
-  items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+export type NativeChatCutSubmission = Pick<
+  AgentJournalSubmission,
+  'clientMessageId' | 'dispatchState' | 'queuedMessageId' | 'rejection' | 'answeredInTurn'
+>
+
+export type NativeChatCutReadOptions = {
   /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
   bodyOf?: AgentJournalBodyLookup
+  /** False for a host predating the pass-over: it would refuse Continue on that cut. */
+  passOverSentBackQueuedSends?: boolean
+}
+
+function sentBackQueuedSendKeys(submissions: readonly NativeChatCutSubmission[]): Set<string> {
+  const keys = new Set<string>()
+  for (const submission of submissions) {
+    if (isSentBackQueuedAgentJournalSubmission(submission)) {
+      keys.add(agentJournalSubmissionKey(submission.clientMessageId))
+    }
+  }
+  return keys
+}
+
+/** Latest root turn only if no later request or in-flight send exists; steers, conversation
+ *  commands and queued sends that never reached the agent do not count as new requests. */
+export function latestNativeChatTurnSinceRequest(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly NativeChatCutSubmission[],
+  { bodyOf, passOverSentBackQueuedSends = true }: NativeChatCutReadOptions = {}
 ): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
   if (submissions.some((submission) => submission.dispatchState === 'pending')) {
     return null
   }
+  // Built only once a user row is reached, so the usual turn-last read does no extra pass.
+  let sentBack: Set<string> | undefined
   const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
@@ -67,7 +93,14 @@ export function latestNativeChatTurnSinceRequest(
       continue
     }
     if (item.body.kind === 'message' && item.body.role === 'user') {
-      return null
+      if (!passOverSentBackQueuedSends) {
+        return null
+      }
+      sentBack ??= sentBackQueuedSendKeys(submissions)
+      if (!sentBack.has(item.itemId)) {
+        return null
+      }
+      continue
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
@@ -97,10 +130,10 @@ export function findInNativeChatTurn<T>(
 
 export function latestNativeChatOrcaStopCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
-  bodyOf?: AgentJournalBodyLookup
+  submissions: readonly NativeChatCutSubmission[],
+  options?: NativeChatCutReadOptions
 ): NativeChatOrcaStopCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
+  const latest = latestNativeChatTurnSinceRequest(items, submissions, options)
   if (!latest || latest.verdict !== 'interruption') {
     return null
   }
@@ -113,14 +146,14 @@ export function latestNativeChatOrcaStopCut(
 export function nativeChatStatusTurnOutcome(
   request: StructuredAgentSessionLatestRequest | null,
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  submissions: readonly NativeChatCutSubmission[],
   bodyOf?: AgentJournalBodyLookup
 ): AgentTurnOutcome | null {
   const verdict = request
     ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
     : null
   const stop =
-    verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions, bodyOf) : null
+    verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions, { bodyOf }) : null
   return nativeChatStatusRequestOutcome(request, stop)
 }
 
