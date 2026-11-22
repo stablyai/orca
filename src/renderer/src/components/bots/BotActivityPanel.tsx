@@ -134,7 +134,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
-  const gutterResize = useRightSidebarGutterResize()
+  const gutterResize = useRightSidebarGutterResize(scroll)
   const automationRows = useMemo(
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
@@ -183,7 +183,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <div
-      ref={scroll}
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""

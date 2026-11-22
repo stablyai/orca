@@ -145,6 +145,7 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
   const resizeHandleRef = useRef<HTMLDivElement | null>(null)
+  const gutterHoverOwnerRef = useRef<HTMLElement | null>(null)
   const onResizeStartRef = useRef(onResizeStart)
   useLayoutEffect(() => {
     onResizeStartRef.current = onResizeStart
@@ -154,7 +155,8 @@ function RightSidebarInner(): React.JSX.Element {
     () => ({
       startResize: (event: React.MouseEvent) => onResizeStartRef.current(event),
       containerRef,
-      handleRef: resizeHandleRef
+      handleRef: resizeHandleRef,
+      hoverOwnerRef: gutterHoverOwnerRef
     }),
     [containerRef]
   )

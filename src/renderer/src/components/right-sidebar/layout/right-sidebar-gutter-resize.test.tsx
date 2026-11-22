@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useRef } from 'react'
+import { act, useMemo, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -12,26 +12,37 @@ const startResize = vi.fn()
 let root: Root
 let host: HTMLDivElement
 
-function Scroller(): React.JSX.Element {
+function Scroller({ id }: { id: string }): React.JSX.Element {
+  const scroll = useRef<HTMLDivElement | null>(null)
   return (
-    <div data-testid="scroller" {...useRightSidebarGutterResize()}>
+    <div data-testid={id} {...useRightSidebarGutterResize(scroll)}>
       <button type="button">row</button>
     </div>
   )
 }
 
-function Sidebar(): React.JSX.Element {
+const ONE_SCROLLER = ['scroller']
+
+function Sidebar({ scrollers = ONE_SCROLLER }: { scrollers?: string[] }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const handleRef = useRef<HTMLDivElement | null>(null)
+  const hoverOwnerRef = useRef<HTMLElement | null>(null)
+  // Stable like RightSidebar's, so ref callbacks do not re-attach on every render.
+  const gutter = useMemo(() => ({ startResize, containerRef, handleRef, hoverOwnerRef }), [])
   return (
     <div ref={containerRef} data-testid="container">
       <div ref={handleRef} data-testid="handle" />
-      <RightSidebarGutterResizeProvider value={{ startResize, containerRef, handleRef }}>
-        <Scroller />
+      <RightSidebarGutterResizeProvider value={gutter}>
+        {scrollers.map((id) => (
+          <Scroller key={id} id={id} />
+        ))}
       </RightSidebarGutterResizeProvider>
     </div>
   )
 }
+
+const render = (scrollers: string[]): void =>
+  act(() => root.render(<Sidebar scrollers={scrollers} />))
 
 const find = (id: string): HTMLElement => host.querySelector(`[data-testid="${id}"]`)!
 
@@ -77,5 +88,20 @@ describe('right sidebar gutter resize', () => {
     mouse(find('scroller'), 'mousemove', 112)
     expect(find('scroller').style.cursor).toBe('')
     expect(find('handle').hasAttribute('data-gutter-hover')).toBe(false)
+  })
+
+  it('clears the seam tint when the hovered scroller unmounts without a mouseleave', () => {
+    mouse(find('scroller'), 'mousemove', 105)
+    render([])
+    expect(find('handle').hasAttribute('data-gutter-hover')).toBe(false)
+  })
+
+  it('keeps a newer scroller hovered when an older one unmounts', () => {
+    render(['old', 'new'])
+    mouse(find('old'), 'mousemove', 105)
+    mouse(find('new'), 'mousemove', 105)
+    render(['new'])
+    expect(find('handle').hasAttribute('data-gutter-hover')).toBe(true)
+    expect(find('new').style.cursor).toBe('col-resize')
   })
 })
