@@ -11,7 +11,7 @@ import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-write
 import type { AgentTokenSession } from './agent-token-usage'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
-// Unsent days stay bounded when capture keeps failing.
+// Unsent days older than this are dropped, so a capture that keeps failing stays bounded.
 const MAX_PENDING_DAYS = 90
 const COUNT_KEYS = [
   'input_tokens',
@@ -44,6 +44,8 @@ export class AgentTokenUsageReporter {
   private state: State | null = null
   private readonly writer: UsageCacheSnapshotWriter
   private pending: Promise<void> = Promise.resolve()
+  // Memory ahead of disk after a failed write; retried on the next scan even with no new growth.
+  private unsaved = false
 
   constructor(
     private readonly file: string,
@@ -81,7 +83,8 @@ export class AgentTokenUsageReporter {
     }
     const loaded = this.state ? { state: this.state, fresh: false } : await this.load()
     const { state } = loaded
-    const today = utcDay(this.now())
+    const now = this.now()
+    const today = utcDay(now)
     let changed = loaded.fresh
     for (const [index, { counts }] of rows.entries()) {
       const id = ids[index]
@@ -96,26 +99,33 @@ export class AgentTokenUsageReporter {
         addToDay(state, today, baseline, counts)
       }
     }
-    if (state.days.length > MAX_PENDING_DAYS) {
-      state.days.splice(0, state.days.length - MAX_PENDING_DAYS)
+    const oldestKept = utcDay(new Date(now.getTime() - MAX_PENDING_DAYS * 86_400_000))
+    const kept = state.days.filter((entry) => entry.day >= oldestKept)
+    if (kept.length !== state.days.length) {
+      state.days = kept
+      changed = true
     }
     this.state = state
-    if (changed) {
-      await this.persist(state)
-    }
+    this.unsaved ||= changed
+    await this.saveIfUnsaved(state)
     // Today's row keeps growing; only finished days leave the machine.
-    let sent = false
     while (state.days.length > 0 && state.days[0].day < today) {
       const { day, ...counts } = state.days[0]
       if (!(await this.telemetry.capture({ ...counts, provider: this.provider, usage_day: day }))) {
         break
       }
       state.days.shift()
-      sent = true
+      this.unsaved = true
     }
-    if (sent) {
-      await this.persist(state)
+    await this.saveIfUnsaved(state)
+  }
+
+  private async saveIfUnsaved(state: State): Promise<void> {
+    if (!this.unsaved) {
+      return
     }
+    await this.persist(state)
+    this.unsaved = false
   }
 
   private persist(state: State): Promise<void> {
