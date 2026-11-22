@@ -24,6 +24,7 @@ import {
   usePickedLocalPathsAutoAdd,
   type LocalPathAddMode,
   type LocalPathAddResult,
+  type PausedLocalPathAdd,
   type OfferWslHost
 } from './add-repo-local-path-batch'
 
@@ -154,21 +155,26 @@ export function useAddRepoLocalFolderFlow({
         }
         if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
           // Why: a single-folder decision point cannot queue competing batch review states.
-          showNestedRepoReview({
-            scan,
-            selectedPath: path,
-            connectionId: null,
-            attemptId,
-            runtimeKind: 'local',
-            inProgress: false,
-            scanId,
-            runtimeEnvironmentId: activeRuntimeEnvironmentId
+          // Review actions stay disabled until this final show, so it is the one that reports.
+          const projectAdded = new Promise<PausedLocalPathAdd | null>((reportProject) => {
+            showNestedRepoReview({
+              scan,
+              selectedPath: path,
+              connectionId: null,
+              attemptId,
+              runtimeKind: 'local',
+              inProgress: false,
+              scanId,
+              runtimeEnvironmentId: activeRuntimeEnvironmentId,
+              reportProject
+            })
           })
-          return { status: 'paused' }
+          return { status: 'paused', projectAdded }
         }
         if (scan?.selectedPathKind === 'non_git_folder') {
           closeModal()
-          return { status: 'paused', folderAdded: confirmNonGitFolderAdd(openModal, path) }
+          const folder = confirmNonGitFolderAdd(openModal, path)
+          return { status: 'paused', projectAdded: folder.then((repo) => (repo ? { repo } : null)) }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
         const repo = await addRepoPath(path, undefined, {
