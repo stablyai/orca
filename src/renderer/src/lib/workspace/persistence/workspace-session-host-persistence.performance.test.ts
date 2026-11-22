@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -162,32 +163,49 @@ function normalizingMainSessionApi() {
   return { api, sent }
 }
 
-it('after main keeps entries of its own, one tab switch still sends only that workspace', async () => {
+/** A saved session for `size` worktrees, one tab each; `title` names worktree 7's tab. */
+function fleetSessionPatch(size: number, title: string): WorkspaceSessionPatch {
+  const tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] = {}
+  for (let index = 0; index < size; index += 1) {
+    const worktreeId = `${TEST_REPO.id}::/wt-${index}`
+    const tab = makeTab({ id: `tab-${index}`, worktreeId, createdAt: 1, title: 'Terminal 1' })
+    tabsByWorktree[worktreeId] = [index === 7 ? { ...tab, title } : tab]
+  }
+  return { activeTabId: 'tab-7', tabsByWorktree }
+}
+
+it('after main keeps entries of its own, a one-tab edit still sends only that workspace', async () => {
   const store = createTestStore()
+  seedStore(store, {
+    worktreesByRepo: {
+      [TEST_REPO.id]: Array.from({ length: LARGE_FLEET_WORKTREES }, (_, index) =>
+        makeWorktree({
+          id: `${TEST_REPO.id}::/wt-${index}`,
+          repoId: TEST_REPO.id,
+          path: `/wt-${index}`
+        })
+      )
+    }
+  })
   const { api, sent } = normalizingMainSessionApi()
   const acknowledged = new AcknowledgedWorkspaceSessionEntries()
-  const stop = createSessionWriteSubscriber({
-    store,
-    debounceMs: DEBOUNCE_MS,
-    persist: ({ patch }) =>
-      patchWorkspaceSessionByHost(api, patch, store.getState(), acknowledged).written
-  })
-  try {
-    // The first save goes whole, and main answers that it kept entries the window doesn't have.
-    seedFleet(store, LARGE_FLEET_WORKTREES)
-    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-    store.getState().setActiveTab('tab-7-b')
-    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-    const before = { ...sent }
+  const save = (title: string) =>
+    patchWorkspaceSessionByHost(
+      api,
+      fleetSessionPatch(LARGE_FLEET_WORKTREES, title),
+      store.getState(),
+      acknowledged
+    ).written
 
-    store.getState().setActiveTab('tab-7-a')
-    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+  // The first save goes whole, and main answers that it kept an entry the window doesn't have.
+  await save('first')
+  for (const title of ['second', 'third']) {
+    const before = { ...sent }
+    await save(title)
 
     expect(sent.writes - before.writes).toBe(1)
-    expect(sent.entries - before.entries).toBe(4)
+    expect(sent.entries - before.entries).toBe(1)
     // Every workspace's tabs resent would be hundreds of kilobytes.
-    expect(sent.bytes - before.bytes).toBeLessThan(4_000)
-  } finally {
-    stop()
+    expect(sent.bytes - before.bytes).toBeLessThan(1_000)
   }
 })
