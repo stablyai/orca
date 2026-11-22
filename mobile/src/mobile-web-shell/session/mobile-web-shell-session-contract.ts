@@ -52,7 +52,11 @@ export type MobileWebShellBlockedVerdict =
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
   | PageRouteRefusalVerdict
 
-export type MobileWebShellReportedFailure = MobileWebShellFailureReason | 'host-profile-unreadable'
+// page-fault fails as itself only after paint, once per build: those bytes rendered, so Try again keeps the cache.
+export type MobileWebShellReportedFailure =
+  | MobileWebShellFailureReason
+  | 'host-profile-unreadable'
+  | 'page-fault'
 
 export type MobileWebShellFailureCause =
   | MobileWebShellReportedFailure
@@ -218,6 +222,10 @@ export type MobileWebShellSession = {
   readonly verdicted: boolean
   // A resume asked for a newer build while the host was not answering; the next open verdict asks.
   readonly resumeCheckDue?: boolean
+  // Try again after a page fault asks the host before reopening cache, so a fixed build replaces the faulting one.
+  readonly manifestFirst: boolean
+  // The build whose painted page already faulted; a repeat may be a damaged lazy chunk, so it fails as an unopened document.
+  readonly pageFaultBuildId: string | null
   /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
    *  run belongs to, and echoed back on their results. */
   // Stamp effects/results with the incremented flow to reject superseded work.

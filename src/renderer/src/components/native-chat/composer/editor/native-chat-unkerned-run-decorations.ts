@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state'
-import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import {
   NATIVE_CHAT_UNKERNED_STYLE,
   isHighSurrogate,
@@ -114,11 +114,22 @@ function rescan(doc: ProseMirrorNode, set: DecorationSet, [from, to]: Range): De
   return unchanged ? set : set.remove(stale).add(doc, fresh)
 }
 
+// One key for every editor: a remounted view keeps its decorations instead of rescanning the draft.
+const key = new PluginKey<UnkernedState>('nativeChatUnkernedRunDecorations')
+
+// A composition can end with no further doc change, or its view can unmount first; finish its rescan.
+function requestPendingRescan(view: EditorView): void {
+  setTimeout(() => {
+    if (!view.isDestroyed && !view.composing && key.getState(view.state)?.pending) {
+      view.dispatch(view.state.tr.setMeta(key, true).setMeta('addToHistory', false))
+    }
+  })
+}
+
 /** Turns kerning off only on runs long enough to stall layout; the text is untouched. */
 export const NativeChatUnkernedRunDecorations = Extension.create({
   name: 'nativeChatUnkernedRunDecorations',
   addProseMirrorPlugins() {
-    const key = new PluginKey<UnkernedState>('nativeChatUnkernedRunDecorations')
     return [
       new Plugin<UnkernedState>({
         key,
@@ -142,16 +153,16 @@ export const NativeChatUnkernedRunDecorations = Extension.create({
             return { set: pending ? rescan(tr.doc, set, pending) : set, pending: null }
           }
         },
+        // A view remounted with a composition's rescan still pending finishes it.
+        view: (view) => {
+          requestPendingRescan(view)
+          return {}
+        },
         props: {
           decorations: (state) => key.getState(state)?.set,
           handleDOMEvents: {
-            // A composition can end with no further doc change, so ask for its rescan.
             compositionend: (view) => {
-              setTimeout(() => {
-                if (!view.isDestroyed && !view.composing && key.getState(view.state)?.pending) {
-                  view.dispatch(view.state.tr.setMeta(key, true).setMeta('addToHistory', false))
-                }
-              })
+              requestPendingRescan(view)
               return false
             }
           }

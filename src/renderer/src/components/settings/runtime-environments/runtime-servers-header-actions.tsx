@@ -117,10 +117,7 @@ export function RuntimeServersHeaderActions({
             {canInstall ? (
               <AddServerMenuItem
                 icon={<TerminalSquare />}
-                label={t(
-                  'auto.components.settings.serverList.setUpOnSshHost',
-                  'Set up Orca on an SSH host'
-                )}
+                label={t('auto.components.settings.serverList.installViaSsh', 'Install via SSH')}
                 description={t(
                   'auto.components.settings.managedServers.description',
                   'Orca installs itself on an empty SSH host and keeps itself up to date.'

@@ -47,7 +47,7 @@ export function CodeHostSetupSteps(
                 ? t('auto.components.settings.TasksPane.openIntegrations', 'Integrations')
                 : t(
                     'auto.components.settings.TasksPane.connectInIntegrations',
-                    'Set up in Integrations'
+                    'Open Integrations'
                   )}
           </Button>
         }

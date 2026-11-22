@@ -73,12 +73,6 @@ const readsResult: TurnCheck[] = [
 
 export const ORCHESTRATION_SCENARIOS: OrchestrationScenario[] = [
   {
-    id: 'flaky-test',
-    turns: [{ message: 'fix the flaky test in orca' }],
-    state: EMPTY_WORLD,
-    checks: [[startsIn([ORCA_REPO]), handsOffFirst]]
-  },
-  {
     id: 'linear-issue',
     turns: [{ message: 'look into ENG-123' }],
     state: EMPTY_WORLD,

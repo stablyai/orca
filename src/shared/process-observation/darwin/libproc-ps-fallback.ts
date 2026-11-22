@@ -241,8 +241,3 @@ export function runArgvRecoveryPs(
     background
   )
 }
-
-export function resetPsFallbackForTests(): void {
-  fallbackBudget.reset()
-  argvRecoveryBudget.reset()
-}

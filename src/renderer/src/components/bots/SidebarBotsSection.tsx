@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
+import { callBotRpc } from '@/lib/bot-hosts'
 import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,7 +32,6 @@ import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
-import type { Bot } from '../../../../shared/bot-types'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
@@ -41,7 +40,6 @@ import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { openBotFromSidebar } from './BotRow'
 import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
@@ -57,12 +55,20 @@ import { useBotSidebarSearch } from './use-bot-sidebar-search'
 import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
+import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
+import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
 
-/** The sidebar's Bots section, its own top-level section above Projects: one row per bot, this computer's and each paired server's. */
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
 
-export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): React.JSX.Element {
+/** Lists bots from this computer and paired servers in the sidebar. */
+export function SidebarBotsSection({
+  onOpenBot,
+  reorderable = false
+}: {
+  onOpenBot: () => void
+  reorderable?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
@@ -94,7 +100,8 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   )
   const entries = useBotSidebarArrangement(savedEntries)
   const listRef = useRef<HTMLDivElement>(null)
-  // Search shows the list in place; while it is open the section shows unfolded and nothing drags.
+  // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
+  // unfolded header, so a search always starts unfolded.
   const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
   const searchOpen = search.open
   // Only the saved order can be dragged, as for workspaces.
@@ -103,8 +110,14 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
     [entries]
   )
-  const canCollapse = savedEntries.length > 0
-  const collapsed = canCollapse && savedCollapsed && !searchOpen
+  const hasEntries = savedEntries.length > 0
+  // Folds even while empty, so the onboarding card can be put away. A fold landing mid-search
+  // (another writer) still leaves the results showing until the search ends.
+  const collapsed = savedCollapsed && !searchOpen
+  // The + menu unmounts with the folded header's controls; a fold it didn't see must not reopen it on unfold.
+  if (collapsed && newMenuOpen) {
+    setNewMenuOpen(false)
+  }
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = collapsedBotPreview(facts)
@@ -156,7 +169,6 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   })
   const listShown = !collapsed && entries.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const label = t('bots.section.title', 'Bots')
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')
 
@@ -165,17 +177,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
       toggleCollapsedGroup(BOTS_GROUP_KEY)
     }
   }
-  // A face opens its bot as its row does, and unfolds the section so that row shows.
-  const openFromFace = (bot: Bot): void => {
-    if (openBotFromSidebar(bot, onOpenBot) && collapsed) {
-      toggleBots()
-    }
-  }
-  const collapseLabel = !canCollapse
-    ? label
-    : collapsed
-      ? t('bots.section.expand', 'Expand Bots')
-      : t('bots.section.collapse', 'Collapse Bots')
+  const collapseLabel = collapsed
+    ? t('bots.section.expand', 'Expand Bots')
+    : t('bots.section.collapse', 'Collapse Bots')
 
   return (
     // The sidebar's SidebarBotsSplit owns this section's height cap.
@@ -183,11 +187,11 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     <div className={cn('flex min-h-0 flex-col', searchOpen && 'grow')}>
       {/* Each folded face is a button of its own above the shared fold button. */}
       <SidebarSectionHeader
-        title={label}
+        title={t('bots.section.title', 'Bots')}
         sectionId="bots"
+        reorderable={reorderable}
         fold={{
           collapsed,
-          disabled: !canCollapse,
           label: t(
             'bots.section.summary',
             '{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working',
@@ -202,112 +206,108 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
           tooltip: collapseLabel,
           onToggle: toggleBots
         }}
+        titleAccessory={
+          !collapsed && collapseAll && !searchOpen ? (
+            <BotsCollapseAllButton collapseAll={collapseAll} />
+          ) : null
+        }
         summary={
           collapsed ? (
-            <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
-          ) : (
-            <span className="flex min-w-0 flex-1 items-center gap-0.5">
-              <span className="pointer-events-none text-left text-xs text-muted-foreground">
-                {entries.length}
-              </span>
-              {collapseAll && !searchOpen ? (
-                <BotsCollapseAllButton collapseAll={collapseAll} />
-              ) : null}
-            </span>
-          )
+            <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} onExpand={toggleBots} />
+          ) : null
         }
         actions={
-          <>
-            {canCollapse ? (
-              <BotSidebarSearchButton
-                open={searchOpen}
-                buttonRef={search.buttonRef}
-                onToggle={search.toggleOpen}
-              />
-            ) : null}
-            {canCollapse ? (
-              <BotSidebarOptionsMenu collapseAll={searchOpen ? null : collapseAll} />
-            ) : null}
-            <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="shrink-0"
-                      aria-label={newLabel}
-                    >
-                      <Plus className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {newLabel}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
-                {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    onClick={(event) => {
-                      event.preventDefault()
-                      openNewBot()
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
+          collapsed ? null : (
+            <>
+              {hasEntries ? (
+                <BotSidebarSearchButton
+                  open={searchOpen}
+                  buttonRef={search.buttonRef}
+                  onToggle={search.toggleOpen}
+                />
+              ) : null}
+              {hasEntries ? <BotSidebarOptionsMenu /> : null}
+              <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0"
+                        aria-label={newLabel}
+                      >
+                        <Plus className="size-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {newLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
+                  {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      onClick={(event) => {
                         event.preventDefault()
                         openNewBot()
-                      }
-                    }}
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openNewBot()
+                        }
+                      }}
+                    >
+                      <span className={BOT_MENU_ROW}>
+                        <BotIcon className="size-3.5" />
+                        {newBotLabel}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onSelect={openNewBot}>
+                        <span className={BOT_MENU_ROW}>
+                          <Plus className="size-3.5" />
+                          {t('bots.section.startFromScratch', 'Start from scratch')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => openBotTemplates()}>
+                        <span className={BOT_MENU_ROW}>
+                          <LayoutTemplate className="size-3.5" />
+                          {t('bots.templates.browse', 'Browse templates')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Link2 className="size-3.5" />
+                          {t('bots.share.receive.fromLinkMenu', 'From a link…')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Download className="size-3.5" />
+                          {t('bots.import.menu', 'Import from another app…')}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  {/* A group needs two bots to talk to each other. */}
+                  <DropdownMenuItem
+                    disabled={bots.length < 2}
+                    onSelect={() => setEditingGroup('new')}
                   >
                     <span className={BOT_MENU_ROW}>
-                      <BotIcon className="size-3.5" />
-                      {newBotLabel}
+                      <Users className="size-3.5" />
+                      {t('bots.groups.newGroup', 'New group')}
                     </span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={openNewBot}>
-                      <span className={BOT_MENU_ROW}>
-                        <Plus className="size-3.5" />
-                        {t('bots.section.startFromScratch', 'Start from scratch')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => openBotTemplates()}>
-                      <span className={BOT_MENU_ROW}>
-                        <LayoutTemplate className="size-3.5" />
-                        {t('bots.templates.browse', 'Browse templates')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
-                      <span className={BOT_MENU_ROW}>
-                        <Link2 className="size-3.5" />
-                        {t('bots.share.receive.fromLinkMenu', 'From a link…')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-                      <span className={BOT_MENU_ROW}>
-                        <Download className="size-3.5" />
-                        {t('bots.import.menu', 'Import from another app…')}
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                {/* A group needs two bots to talk to each other. */}
-                <DropdownMenuItem
-                  disabled={bots.length < 2}
-                  onSelect={() => setEditingGroup('new')}
-                >
-                  <span className={BOT_MENU_ROW}>
-                    <Users className="size-3.5" />
-                    {t('bots.groups.newGroup', 'New group')}
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )
         }
       />
       <BotSidebarSearchHost
@@ -327,7 +327,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             ref={listRef}
             data-bot-sidebar-list=""
             className={cn(
-              'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain',
+              'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
               entries.length > 0 && 'pb-1 pl-1',
               collapsed && 'hidden'
             )}
@@ -335,58 +335,55 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
-                <div className="px-4 pb-2 text-xs text-muted-foreground">
+                <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )
             ) : entries.length === 0 ? (
-              <div className="px-4 pb-2 text-xs text-muted-foreground">
-                {t('bots.section.empty', 'No bots yet.')}{' '}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="inlineText"
-                  onClick={() => openBotTemplates()}
-                >
-                  {t('bots.templates.browse', 'Browse templates')}
-                </Button>
-              </div>
+              collapsed ? null : (
+                <SidebarBotsEmptyState onNewBot={openNewBot} />
+              )
             ) : collapsed ? null : (
               <>
-                {entries.map((entry, index) => {
-                  const entryDrag: BotSidebarEntryDrag | undefined = draggable
-                    ? {
-                        index,
-                        dragging: drag.state.draggingGroupId === entry.id,
-                        settling: drag.state.draggingGroupId !== null,
-                        offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
-                        onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
-                      }
-                    : undefined
-                  return entry.kind === 'group' ? (
-                    <BotSidebarDragFrame key={entry.id} id={entry.id} drag={entryDrag}>
-                      <BotGroupRow
-                        group={entry.group}
+                <BotSidebarVirtualRows
+                  entries={entries}
+                  listRef={listRef}
+                  draggingId={drag.state.draggingGroupId}
+                  revealId={reveal.request?.target.entryKey}
+                  renderEntry={(entry, index) => {
+                    const entryDrag: BotSidebarEntryDrag | undefined = draggable
+                      ? {
+                          index,
+                          dragging: drag.state.draggingGroupId === entry.id,
+                          settling: drag.state.draggingGroupId !== null,
+                          offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
+                          onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
+                        }
+                      : undefined
+                    return entry.kind === 'group' ? (
+                      <BotSidebarDragFrame id={entry.id} drag={entryDrag}>
+                        <BotGroupRow
+                          group={entry.group}
+                          home={entry.home}
+                          members={botGroupMemberBots(entry.group, bots)}
+                          isActive={activeGroupId === entry.group.id}
+                          onOpen={onOpenBot}
+                          onManageMembers={() => setEditingGroup(entry.group)}
+                          onDelete={() => void deleteGroup(entry.group)}
+                          dragHandle={draggable}
+                        />
+                      </BotSidebarDragFrame>
+                    ) : (
+                      <BotSidebarEntry
+                        bot={entry.bot}
                         home={entry.home}
-                        members={botGroupMemberBots(entry.group, bots)}
-                        isActive={activeGroupId === entry.group.id}
+                        isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
                         onOpen={onOpenBot}
-                        onManageMembers={() => setEditingGroup(entry.group)}
-                        onDelete={() => void deleteGroup(entry.group)}
-                        dragHandle={draggable}
+                        drag={entryDrag}
                       />
-                    </BotSidebarDragFrame>
-                  ) : (
-                    <BotSidebarEntry
-                      key={botRefKey(entry.bot)}
-                      bot={entry.bot}
-                      home={entry.home}
-                      isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
-                      onOpen={onOpenBot}
-                      drag={entryDrag}
-                    />
-                  )
-                })}
+                    )
+                  }}
+                />
                 {drag.state.draggingGroupId !== null && drag.state.dropIndicatorY !== null ? (
                   <WorktreeSidebarDropIndicator y={drag.state.dropIndicatorY} />
                 ) : null}

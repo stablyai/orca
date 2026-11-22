@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/google/google-connect-types'
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { BotRef } from '@/lib/bot-hosts'
 import { cancelGoogleSignIn, connectGoogle, type GoogleSignInWay } from './google-connect-client'
 
 export type GoogleSignInState =
@@ -14,7 +15,11 @@ export type GoogleSignInState =
   | { kind: 'failed'; error: string }
 
 /** One Connect Google at a time from this surface: its state, and a cancel that stops it on the host. */
-export function useGoogleSignIn(target: RuntimeClientTarget): {
+export function useGoogleSignIn(
+  target: RuntimeClientTarget,
+  /** The bot it signs in for, so a server's page opens in that bot's workspace. */
+  bot?: BotRef
+): {
   state: GoogleSignInState
   connect: (
     services: readonly GoogleServiceChoice[],
@@ -44,7 +49,7 @@ export function useGoogleSignIn(target: RuntimeClientTarget): {
       try {
         const connected = await connectGoogle(
           target,
-          { services, ...(account ? { account } : {}) },
+          { services, ...(account ? { account } : {}), ...(bot ? { bot } : {}) },
           (prompt, way) => show({ kind: 'waiting', prompt, way })
         )
         show({ kind: 'idle' })
@@ -56,7 +61,7 @@ export function useGoogleSignIn(target: RuntimeClientTarget): {
         return null
       }
     },
-    [target]
+    [target, bot]
   )
   const cancel = useCallback(() => {
     runs.current += 1

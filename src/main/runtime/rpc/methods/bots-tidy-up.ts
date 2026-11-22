@@ -30,9 +30,18 @@ export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  const undone =
-    rowId != null &&
-    runtime.bots.memory.history(bot.id).some((row) => row.by.kind === 'undo' && row.by.of === rowId)
+  // From what history holds in memory, never waiting on the disk: before the bot's history was read,
+  // say not undone, read it once, and have the view read again then.
+  let undone = false
+  if (rowId != null) {
+    const known = runtime.bots.memory.undoneKnown(bot.id, rowId)
+    if (known === undefined) {
+      runtime.bots.memory.whenUndoneKnown(bot.id, () =>
+        runtime.notifyBotsChanged({ botIds: [bot.id], kinds: ['lookAround'] })
+      )
+    }
+    undone = known === true
+  }
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,

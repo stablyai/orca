@@ -32,7 +32,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren = false,
   deleteDisabled = false,
   canForceDelete,
-  deleteLabel,
   onForceDelete,
   onSavingChange,
   onDelete,
@@ -43,8 +42,6 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren?: boolean
   deleteDisabled?: boolean
   canForceDelete: boolean
-  /** The verb for this delete: "Delete workspace", "Delete 3 workspaces", "Delete all". */
-  deleteLabel: string
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
   onDelete: () => void
@@ -69,7 +66,7 @@ export function DeleteWorktreeDialogFooter({
         : t('worktree.delete.deletingEllipsis', 'Deleting…')
       : canForceDelete
         ? t('worktree.delete.forceDelete', 'Force delete')
-        : deleteLabel
+        : t('common.delete', 'Delete')
 
   // Why save first: the preference only counts when the user goes through with the delete.
   const confirm = async (): Promise<void> => {
@@ -97,6 +94,7 @@ export function DeleteWorktreeDialogFooter({
 
   return (
     <DialogFooter
+      className="mt-0"
       start={
         !isMainWorktree && saveRemembered ? (
           <>

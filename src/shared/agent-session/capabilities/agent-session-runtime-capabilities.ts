@@ -11,6 +11,7 @@ import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from '../lifecycle/resume/a
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from '../lifecycle/stopping/agent-session-stop-capabilities'
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../lifecycle/stopping/agent-session-workspace-sleep'
 import { STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES } from './structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_DELETE_RUNTIME_CAPABILITY } from '../chat-deletion/orca-chat-delete'
 
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
@@ -92,6 +93,9 @@ export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-re
 // Why: hosts before this advertise rewind.v1 but refuse agentSession.rewind from a phone.
 export const AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY =
   'agent-session.rewind.phone.v1' as const
+// Hosts before this refuse a phone's restart-offer reads and its Resume all.
+export const AGENT_SESSION_PHONE_RESTART_RESUME_RUNTIME_CAPABILITY =
+  'agent-session.restart-resume.phone.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 // Downgrade turn items to legacy status rows for incapable clients; remove only after every supported release understands turn items.
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
@@ -113,6 +117,9 @@ export const AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY =
   'agent-session.thread-goal.phone.v1' as const
 // The host answers agentSession.mcp, from desktops and phones alike.
 export const AGENT_SESSION_MCP_RUNTIME_CAPABILITY = 'agent-session.mcp.v1' as const
+// Why: hosts before this report accountUsage in options but refuse agentSession.accountUsage from a phone.
+export const AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY =
+  'agent-session.account-usage.phone.v1' as const
 // Why: hosts before this advertise usage-limit auto-continue but refuse its cancel from a phone.
 export const AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY =
   'agent-session.usage-limit-auto-continue.phone-cancel.v1' as const
@@ -173,9 +180,11 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,
     AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY,
+    AGENT_SESSION_DELETE_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
     AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_RESTART_RESUME_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
     AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
@@ -186,6 +195,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
     AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
     AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY,
     AGENT_SESSION_TURN_ITEM_CAPABILITY,

@@ -8,6 +8,12 @@ import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { useTranslate } from '@/i18n/use-translate'
 import { readBotAvatarPng, uploadBotAvatar } from '@/lib/bot-catalog'
 import {
+  generatedPictureDescription,
+  keepSavedPictureDescription,
+  savedPictureDescription,
+  useSavedPictureDescription
+} from '@/components/bots/generated-avatar-descriptions'
+import {
   isUploadAvatar,
   mascotAvatar,
   parseBotAvatar,
@@ -85,6 +91,9 @@ export function useBotPictureSetting(
   upload: (png: string, after: number) => void
   /** Puts back the picture the last upload replaced. */
   undo: () => void
+  /** The mascot's tile color shown; null is its own sky blue. */
+  color: string | null
+  pickColor: (color: string | null) => void
 } {
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
@@ -95,6 +104,11 @@ export function useBotPictureSetting(
     avatar: kept?.png ? null : (kept?.avatar ?? null)
   })
   const src = kept?.png ? `${PNG_DATA_URL_PREFIX}${kept.png}` : keptSrc
+  const savedDescription = useSavedPictureDescription({
+    id: bot.id,
+    hostId: bot.hostId,
+    avatar: kept?.avatar ?? null
+  })
 
   // The save loop reads these between awaits, so they live in a ref.
   const loop = useRef<SaveLoop>({
@@ -140,7 +154,14 @@ export function useBotPictureSetting(
       return !isUploadAvatar(target.avatar) && (await update({ avatar: target.avatar })) !== null
     }
     try {
+      // Read before the upload: a picture put back keeps the caption saved with its earlier avatar.
+      const known = savedPictureDescription({
+        id: bot.id,
+        hostId: bot.hostId,
+        avatar: target.avatar
+      })
       const saved = await uploadBotAvatar(bot, png)
+      keepSavedPictureDescription(saved, png, known)
       if (live.kept?.id === target.id) {
         setKept({ ...target, avatar: saved.avatar, replaced: undefined })
       }
@@ -260,7 +281,31 @@ export function useBotPictureSetting(
     })
   }
 
-  useSaveOnClose(commit)
+  // The color saves on its own, the latest pick after a pause; until it lands it is shown as picked.
+  const [pickedColor, setPickedColor] = useState<{ color: string | null } | null>(null)
+  const colorTimer = useRef<{ timer: ReturnType<typeof setTimeout>; save: () => void } | null>(null)
+  const saveColor = (color: string | null): void => {
+    colorTimer.current = null
+    void update({ avatarColor: color }).finally(() =>
+      setPickedColor((picked) => (picked?.color === color ? null : picked))
+    )
+  }
+  const pickColor = (color: string | null): void => {
+    setPickedColor({ color })
+    if (colorTimer.current) {
+      clearTimeout(colorTimer.current.timer)
+    }
+    const save = (): void => saveColor(color)
+    colorTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save }
+  }
+
+  useSaveOnClose(() => {
+    commit()
+    if (colorTimer.current) {
+      clearTimeout(colorTimer.current.timer)
+      colorTimer.current.save()
+    }
+  })
 
   // A picture set elsewhere (the CLI, another window) is adopted while nothing is pending here.
   useEffect(() => {
@@ -288,13 +333,18 @@ export function useBotPictureSetting(
       src,
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
+      // A generated picture's caption is the description that made it.
       description:
-        kept.png || isUploadAvatar(kept.avatar)
+        generatedPictureDescription(kept.png) ??
+        savedDescription ??
+        (kept.png || isUploadAvatar(kept.avatar)
           ? t('bots.new.pictureUpload', 'Your image')
-          : t('settings.bots.pictureCurrent', 'Current picture')
+          : t('settings.bots.pictureCurrent', 'Current picture'))
     },
     pick,
     upload,
-    undo
+    undo,
+    color: pickedColor ? pickedColor.color : (bot.avatarColor ?? null),
+    pickColor
   }
 }

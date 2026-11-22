@@ -25,6 +25,12 @@ export const PROVIDER_FAILURE_PIECES = {
       'components.native-chat.failureWords.providerResponseFailed',
       COPY.providerResponseFailed,
       values
+    ),
+  providerResponseFailedQuoted: (values) =>
+    translate(
+      'components.native-chat.failureWords.providerResponseFailedQuoted',
+      COPY.providerResponseFailedQuoted,
+      values
     )
 } satisfies Partial<
   Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string>

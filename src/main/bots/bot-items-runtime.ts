@@ -10,7 +10,12 @@ import {
   type BotItemEvent
 } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
-import type { BotChangeScope, BotNeedsYouCounts } from '../../shared/bots/bot-change-scope'
+import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
+import {
+  botItemsChangeScope,
+  type BotChangeScope,
+  type BotNeedsYouCounts
+} from '../../shared/bots/bot-change-scope'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { allLinks } from '../external-conversations/external-conversation-links'
@@ -165,9 +170,11 @@ export class BotItemsHost {
     return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
   }
 
-  changed(botIds: readonly string[]): void {
-    if (botIds.length > 0) {
-      this.deps.notify({ botIds: [...new Set(botIds)], kinds: ['items'] })
+  /** These items changed: their bots' lists re-read just them. */
+  changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
+    const scope = botItemsChangeScope(items)
+    if (scope) {
+      this.deps.notify(scope)
     }
   }
 
@@ -223,8 +230,9 @@ export class BotItemsHost {
     return rows && { ...botItemsNeedingOwnerByBot(rows, this.deps.bots(), now), at: now }
   }
 
-  /** Items as the wire shows them, links joined in one batch. */
-  async views(items: readonly BotItemRecord[]): Promise<BotItem[]> {
+  /** Items as the wire shows them, links joined in one batch; `summary` leaves out the long texts a
+   *  list doesn't show. */
+  async views(items: readonly BotItemRecord[], summary = false): Promise<BotItem[]> {
     if (items.length === 0) {
       return []
     }
@@ -245,17 +253,15 @@ export class BotItemsHost {
         number: item.number,
         owner: { botId: item.ownerBotId, name: nameOf(item.ownerBotId) },
         title: item.title,
-        description: item.description,
-        doneMeans: item.doneMeans,
+        description: summary ? null : item.description,
+        doneMeans: summary ? null : item.doneMeans,
         status: item.status,
         chat: this.owningChat(item),
         madeBy: madeBy
           ? { botId: madeBy.botId, name: nameOf(madeBy.botId), chatId: madeBy.chatId }
           : null,
-        question: question
-          ? { eventId: botItemEventId(question.id), text: str(question.data.text) ?? '' }
-          : null,
-        closeNote: item.closeNote,
+        question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
+        closeNote: summary ? null : item.closeNote,
         links: (rows.links[item.uid] ?? []).map((link) =>
           this.join.linkView(link, workers.get(link.ref))
         ),
@@ -292,12 +298,8 @@ export class BotItemsHost {
       return
     }
     const rows = await store.viewRows([...new Set(uids)])
-    this.changed(rows.items.map((item) => item.ownerBotId))
+    this.changed(rows.items)
   }
-}
-
-function str(value: unknown): string | null {
-  return typeof value === 'string' ? value : null
 }
 
 /** The runtime's items host, reading its store, records and bots per call. */

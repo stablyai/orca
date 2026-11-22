@@ -9,14 +9,13 @@ import { configureBrowserSiteDisplayStore } from '../site-settings/display/brows
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
-import {
-  configureBrowserSessionCookieSnapshots,
-  restoreBrowserSessionCookies
-} from '../cookies/session-restore/browser-session-cookie-restore'
+import { restoreBrowserSessionCookies } from '../cookies/session-restore/browser-session-cookie-restore'
+import { configureBrowserSessionCookieSnapshots } from '../cookies/session-restore/browser-session-cookie-snapshot-file'
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
+import { listenForBrowserGuestPageVisibility } from '../guest-lifecycle/visibility/browser-guest-page-visibility'
 
 let initialized = false
 
@@ -30,6 +29,7 @@ export function initializeBrowserSessionsForApp(
   }
   listenForBrowserPasskeyRequests()
   listenForBrowserSystemDialogs()
+  listenForBrowserGuestPageVisibility()
 
   if (activeProfile) {
     browserSessionRegistry.configureForOrcaProfile(activeProfile)

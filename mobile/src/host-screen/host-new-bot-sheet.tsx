@@ -15,11 +15,9 @@ export function HostNewBotSheet({ controller }: { controller: HostScreenControll
     () => newBotComputers({ desktopLabel: state.hostName, listings: bots, serverHosts: servers }),
     [state.hostName, bots, servers]
   )
-  const botNamesOn = (target: string) =>
+  const botsOn = (target: string) =>
     bots.flatMap((listing) =>
-      listing.kind === 'listed' && listing.hostId === target
-        ? listing.bots.map((bot) => bot.name)
-        : []
+      listing.kind === 'listed' && listing.hostId === target ? listing.bots : []
     )
   const clientFor = (target: string) =>
     newBotTargetClient({ client, hostCapabilities, target, servers })
@@ -28,10 +26,14 @@ export function HostNewBotSheet({ controller }: { controller: HostScreenControll
       visible={newBot.hostId !== null}
       computerId={newBot.hostId}
       computers={computers}
-      botNamesOn={botNamesOn}
+      botsOn={botsOn}
       clientFor={clientFor}
       pairedClientFor={() => clientFor(LOCAL_EXECUTION_HOST_ID)}
       onClose={() => newBot.open(null)}
+      onOpenBot={(bot, computer) => {
+        newBot.open(null)
+        openBotHome({ pairedHostId: hostId, executionHost: computer.hostId }, bot)
+      }}
       onCreated={(bot, computer) => {
         newBot.open(null)
         newBot.created()

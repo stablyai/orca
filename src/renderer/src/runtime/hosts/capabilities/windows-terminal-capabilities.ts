@@ -288,11 +288,3 @@ export function useLocalWindowsTerminalCapabilities(
   // Why: desktop-owned defaults must not follow the active remote environment.
   return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, ownerKey, { kind: 'local' })
 }
-
-export function resetWindowsTerminalCapabilitiesForTests(): void {
-  cachedCapabilitiesByOwnerKey.clear()
-  pendingCapabilitiesByOwnerKey.clear()
-  nextCapabilityRequestId = 0
-  latestCapabilityRequestIdByOwnerKey.clear()
-  subscribersByOwnerKey.clear()
-}

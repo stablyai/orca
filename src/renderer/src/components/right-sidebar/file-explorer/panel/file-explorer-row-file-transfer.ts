@@ -3,7 +3,6 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { downloadRuntimeFile } from '@/runtime/files/reads/runtime-file-read-client'
 import { showDownloadedFileToast } from '@/lib/files/download/downloaded-file-toast'
-import { downloadSshFolder } from '@/lib/files/download/ssh-folder-download'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { shouldShowCopyFileAction } from './file-explorer-row-action-visibility'
@@ -12,11 +11,6 @@ export async function downloadRemoteFile(
   node: TreeNode,
   connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
 ): Promise<void> {
-  // Folder downloads are only offered over SSH (see shouldShowRemoteDownloadAction).
-  if (node.isDirectory && typeof connectionIdOrRuntimeContext === 'string') {
-    await downloadSshFolder(node.path, node.name, connectionIdOrRuntimeContext)
-    return
-  }
   try {
     const result =
       typeof connectionIdOrRuntimeContext === 'string'

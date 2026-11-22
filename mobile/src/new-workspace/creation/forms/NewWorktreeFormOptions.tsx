@@ -24,10 +24,12 @@ export function NewWorktreeFormOptions(props: {
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: SetupDecision | null
   runSetup: boolean
+  waitForSetup: boolean | null
   onExpandedChange: (expanded: boolean) => void
   onNoteChange: (note: string) => void
   onSetupDecisionChange: (decision: SetupDecision) => void
   onRunSetupChange: (run: boolean) => void
+  onWaitForSetupChange: (wait: boolean) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -65,6 +67,8 @@ export function NewWorktreeFormOptions(props: {
               runSetup={props.runSetup}
               onDecisionChange={props.onSetupDecisionChange}
               onRunSetupChange={props.onRunSetupChange}
+              waitForSetup={props.waitForSetup}
+              onWaitForSetupChange={props.onWaitForSetupChange}
             />
           ) : null}
         </View>

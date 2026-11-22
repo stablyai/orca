@@ -85,8 +85,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.run((writer) => writer.assertCurrentRevision()).then(() => {})
   }
 
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void> {
-    return this.run((writer) => writer.writeSerializedDomains(replacements)).then(() => {})
+  writeSerializedDomains(
+    ...args: Parameters<AsyncProfileStateAuthority['writeSerializedDomains']>
+  ): Promise<void> {
+    return this.run((writer) => writer.writeSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedAutomationRuns(
@@ -99,9 +101,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeCompleteSerializedDomains(replacements)).then(() => {})
+    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {

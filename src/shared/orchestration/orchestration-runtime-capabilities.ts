@@ -34,15 +34,27 @@ export const ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY =
 /** ask can record a question and return at once; its answer arrives as Dispatch mail. */
 export const ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY =
   'orchestration.ask-returns-at-once.v1' as const
+/** Paired windows and phones read a chat's worker approvals and answer them as the person. */
+export const ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY =
+  'orchestration.paired-worker-approvals.v1' as const
+/** Sent by a paired window or phone, never by the orca CLI: its approvals are the person's. */
+export const ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY =
+  'orchestration.person-approvals.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 /** Receives agent mail a paired Orca carries for its agents, and queues replies for it to pull. */
 export const ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY = 'orchestration.peer-mail.v1' as const
+/** Peer mail also carries ordinary questions, dispatch instructions and merge-ready messages. */
+export const ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY =
+  'orchestration.peer-mail-types.v1' as const
 /** Peer mail also reaches its bots (`bot:`, `--chat`, questions), admitted as its own bot mail is. */
 export const ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY =
   'orchestration.peer-bot-mail.v1' as const
+/** Peer mail about a bot's item also carries files uploaded here for that item's chat. */
+export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
+  'orchestration.peer-mail-files.v1' as const
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
@@ -63,8 +75,11 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
 ] as const

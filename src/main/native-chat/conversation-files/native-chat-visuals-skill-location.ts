@@ -62,7 +62,3 @@ export async function resolveNativeChatVisualsSkillLocation(
   }
   return null
 }
-
-export function resetNativeChatVisualsSkillLocationForTests(): void {
-  found = null
-}
