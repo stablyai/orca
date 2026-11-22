@@ -202,7 +202,10 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                   ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
                   : 'unknown'
                 const workspace = projection?.workspace?.id ?? 'unknown'
-                const stage = projection?.stage.activity ?? worker.dispatchStatus
+                // A turn its own background tasks hold open reads as that wait, not as work.
+                const stage = projection?.stage.backgroundWait
+                  ? 'waiting-on-background-task'
+                  : (projection?.stage.activity ?? worker.dispatchStatus)
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection
