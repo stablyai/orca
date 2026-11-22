@@ -21,30 +21,39 @@ export async function appendClipboardImageUploadChunks(
   contentBase64: string,
   append: (chunk: ClipboardImageUploadChunk) => Promise<unknown>
 ): Promise<void> {
-  const inFlight =
-    slot.acceptsOutOfOrderChunks === true ? CLIPBOARD_IMAGE_UPLOAD_CHUNKS_IN_FLIGHT : 1
-  let nextOffset = 0
+  const window = slot.acceptsOutOfOrderChunks === true ? CLIPBOARD_IMAGE_UPLOAD_CHUNKS_IN_FLIGHT : 1
+  const sent: Promise<void>[] = []
   let failure: { error: unknown } | undefined
-  const sendChunks = async (): Promise<void> => {
-    while (!failure && nextOffset < contentBase64.length) {
-      const offset = nextOffset
-      nextOffset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-      try {
-        await append({
-          uploadId: slot.uploadId,
-          offset,
-          contentBase64: contentBase64.slice(
-            offset,
-            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-          )
-        })
-      } catch (error) {
-        failure ??= { error }
-      }
+  for (
+    let offset = 0;
+    offset < contentBase64.length;
+    offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+  ) {
+    // Waiting on the chunk a window back caps how many early chunks the host must hold.
+    if (sent.length >= window) {
+      await sent[sent.length - window]
     }
+    if (failure) {
+      break
+    }
+    sent.push(
+      append({
+        uploadId: slot.uploadId,
+        offset,
+        contentBase64: contentBase64.slice(
+          offset,
+          offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+        )
+      }).then(
+        () => undefined,
+        (error: unknown) => {
+          failure ??= { error }
+        }
+      )
+    )
   }
   // Settle every in-flight chunk first so the caller's abort is the last call the host sees.
-  await Promise.all(Array.from({ length: inFlight }, sendChunks))
+  await Promise.all(sent)
   if (failure) {
     throw failure.error
   }
