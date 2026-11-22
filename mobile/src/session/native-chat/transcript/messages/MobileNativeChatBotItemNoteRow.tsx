@@ -118,7 +118,7 @@ function ChatChip({
   )
 }
 
-/** The words before the items' chips: the lead, and the acting chat's chip with its words. */
+/** The words before the items' chips: the lead, the acting chat's chip with its words, and a linked worker. */
 function Lead({
   line,
   type,
@@ -128,12 +128,14 @@ function Lead({
   type: ReturnType<typeof scaledType>
   fontScale: number
 }): React.JSX.Element {
-  const { lead, chat } = line
+  const { chat } = line
+  const before = chat ? chat.after : line.lead
+  const words = [before, line.link?.name, line.link?.after].filter(Boolean).join(' ')
   return (
     <>
-      {lead ? <Text style={[styles.text, type]}>{lead}</Text> : null}
+      {chat && line.lead ? <Text style={[styles.text, type]}>{line.lead}</Text> : null}
       {chat ? <ChatChip chat={chat} fontScale={fontScale} /> : null}
-      {chat?.after ? <Text style={[styles.text, type]}>{chat.after}</Text> : null}
+      {words ? <Text style={[styles.text, type]}>{words}</Text> : null}
     </>
   )
 }
@@ -143,8 +145,12 @@ function lineEnd(line: BotItemNoteLine & { kind: 'line' }): string {
   return [line.tail, line.detail].filter(Boolean).join(': ')
 }
 
-function leadLength({ lead, chat }: BotItemNoteLine & { kind: 'line' }): number {
-  return lead.length + (chat ? chat.name.length + chat.after.length + 2 : 0)
+function leadLength({ lead, chat, link }: BotItemNoteLine & { kind: 'line' }): number {
+  return (
+    lead.length +
+    (chat ? chat.name.length + chat.after.length + 2 : 0) +
+    (link ? link.name.length + link.after.length + 2 : 0)
+  )
 }
 
 function QuietLine({
@@ -174,11 +180,7 @@ function QuietLine({
       <View style={styles.line}>
         {icon}
         <View style={styles.flow}>
-          {line.chat ? (
-            <Lead line={line} type={type} fontScale={fontScale} />
-          ) : line.lead ? (
-            <Text style={[styles.text, type]}>{line.lead}</Text>
-          ) : null}
+          <Lead line={line} type={type} fontScale={fontScale} />
           <View style={styles.flowChip}>
             <ItemChip item={line.items[0]!} fontScale={fontScale} open={open} />
             {glued ? <Text style={[styles.text, styles.lead, type]}>{glued}</Text> : null}
@@ -192,7 +194,7 @@ function QuietLine({
     <View style={styles.line}>
       {icon}
       <View style={leadLength(line) > LEAD_BESIDE_CHIPS_MAX ? styles.stacked : styles.beside}>
-        {line.chat ? (
+        {line.chat || line.link ? (
           <View style={styles.flow}>
             <Lead line={line} type={type} fontScale={fontScale} />
           </View>

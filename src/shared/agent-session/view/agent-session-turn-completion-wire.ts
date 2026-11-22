@@ -15,7 +15,8 @@ export type AgentSessionTurnCompletion = {
    *  send's journal item key. Neither is minted here. */
   turnId: string
   outcome: AgentJournalTurnOutcome
-  /** Provider turns coalesced while work was owed; absent for an ordinary single-turn end. */
+  /** Provider turns coalesced into a quiet-marker end (the only end that can drop an earlier
+   *  answer); absent for a single-turn end and for any end that says something. */
   mergedTurnCount?: number
   /** Execution host's clock at journal commit. */
   completedAt: number

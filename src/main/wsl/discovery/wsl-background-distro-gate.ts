@@ -1,4 +1,5 @@
-import { listRunningWslDistrosAsync, listWslDistrosAsync } from './distro-catalog'
+import { listRunningWslDistrosAsync } from './distro-catalog'
+import { resolveWslDefaultDistro } from './wsl-default-distro'
 import { outsideWslUserAct } from './wsl-user-act-scope'
 import {
   onConfirmedRunningWslDistros,
@@ -180,15 +181,15 @@ export async function isWslDistroRunning(
   return (await readWslDistroRunningState(distro, options)) === 'running'
 }
 
-/** Missing distro selects the default, matching wsl.exe. */
+/** Missing distro selects the default, matching wsl.exe and the exec gate; an unnamed default fails closed. */
 export async function isWslDistroRunningForBackgroundWork(
   distro: string | null | undefined
 ): Promise<boolean> {
   if (process.platform !== 'win32') {
     return false
   }
-  const target = distro?.trim() || (await listWslDistrosAsync())[0]
-  return target ? isWslDistroRunning(target) : false
+  const target = distro?.trim() || (await resolveWslDefaultDistro())
+  return typeof target === 'string' && target ? isWslDistroRunning(target) : false
 }
 
 /** In-memory deferred work is keyed per distro; callers must rediscover it after restart. Returns a cancel. */

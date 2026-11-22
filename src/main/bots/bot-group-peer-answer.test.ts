@@ -59,3 +59,23 @@ it('finds no room turn for an answer once the turn that sent it is not running',
   expect(turn).toBeNull()
   expect(saved).toBeUndefined()
 })
+
+it("shortens members' long answers on a room page so the page stays under the reply limit", async () => {
+  const { groups } = fixture()
+  const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
+  for (let i = 0; i < 5; i++) {
+    const post = await groups.send({
+      groupId: group.id,
+      revision: group.revision,
+      messageId: randomUUID(),
+      text: `@Scout dump log ${i}`
+    })
+    const answer = i === 0 ? 'Result: 42' : 'x'.repeat(2_000_000)
+    groups.store.update({ ...post, turns: post.turns.map((turn) => ({ ...turn, answer })) })
+  }
+  const page = groups.read(group.id)
+  expect(page.messages.map((message) => message.turns[0]?.answer?.length)).toEqual([
+    10, 16_000, 16_000, 16_000, 16_000
+  ])
+  expect(JSON.stringify(page).length).toBeLessThan(200_000)
+})

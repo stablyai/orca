@@ -4,12 +4,23 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 export function installSenderHost(
   sessionIds: string[],
   /** What every chat's usage-limit continue reads. */
-  status?: { usageLimitContinue: { state: 'scheduled' } }
+  status?: { usageLimitContinue: { state: 'scheduled' } },
+  /** Chats /clear continued in a session, by id; that session may have no record. */
+  clearedInto: Record<string, string> = {}
 ): void {
   const conversations = sessionIds.map((sessionId) => ({
     sessionId,
     location: { executionHostId: 'local' },
-    providerHandleChain: []
+    providerHandleChain: [],
+    ...(clearedInto[sessionId]
+      ? {
+          conversationCommand: {
+            command: 'clear',
+            phase: 'committed',
+            replacementSessionId: clearedInto[sessionId]
+          }
+        }
+      : {})
   }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sender resolution reads only the host's record store and usage-limit continue.
   setStructuredAgentSessionHost({

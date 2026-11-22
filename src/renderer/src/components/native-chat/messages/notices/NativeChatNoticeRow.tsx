@@ -1,9 +1,8 @@
-import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { nativeChatNoticeLookRow, toneClass } from './NativeChatNoticeLookRows'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatNoticeLook } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
-import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
+import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
 import { useTranslation } from 'react-i18next'
@@ -15,8 +14,8 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
-import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import * as Details from '../diagnostics/NativeChatProviderDetails'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import {
   isNativeChatFailureRowResolved,
@@ -35,6 +34,7 @@ import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
 import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 export function NativeChatNoticeRow({
   block,

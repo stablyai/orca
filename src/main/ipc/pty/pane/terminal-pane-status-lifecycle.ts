@@ -23,6 +23,7 @@ export function bindTerminalPaneStatusLifecycle(
 ): void {
   agentHookServer.setTerminalPaneLifecycle({
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
+    agentExited: (paneKey) => runtime?.observeWorkerAgentExit(paneKey),
     confirmProcessExit: async (paneKey, agent) => {
       if (!runtime) {
         return false

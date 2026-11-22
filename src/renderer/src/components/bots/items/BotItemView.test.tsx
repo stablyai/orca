@@ -154,6 +154,29 @@ afterEach(() => {
   fileContextOwners.mockReturnValue(new Map())
 })
 
+it('shows the skeleton only without an item, failure or deletion', () => {
+  show(0)
+  read.current = { ...read.current!, item: null, eventsRead: false }
+  const view = render(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
+
+  read.current = { ...read.current, failed: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('alert')).toBeTruthy()
+
+  read.current = { ...read.current, failed: false, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+
+  show(0, makeTestBotItem(190, { title: 'Keep the listed item visible' }))
+  read.current = { ...read.current!, eventsRead: false }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('heading', { level: 2 })).toBeTruthy()
+})
+
 it('follows new events until the reader scrolls up, then offers Jump to latest', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)

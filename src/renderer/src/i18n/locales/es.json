@@ -5693,7 +5693,7 @@
           "removeWithChildrenGit_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeWithChildrenGit_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeSingleFolderFromOrca": "Lo quita de Orca. La carpeta en el disco se conserva.",
-          "deleteSingleWorktreeAndBranch": "Elimina el worktree y su rama (se conserva si no está fusionada)."
+          "deleteSingleWorktreeAndBranch": "Elimina el worktree y los cambios locales. También elimina su rama si ya se fusionó."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Mostrar rutas cargadas",
@@ -6891,7 +6891,6 @@
           "stopped": "Detenida",
           "unverifiable": "Desconocido",
           "title": "Agregar distro WSL",
-          "description": "Orca ejecuta su servidor dentro de la distro, así que git, los archivos y las terminales se ejecutan de forma nativa en Linux. Los proyectos de esta distro que abriste a través de \\\\wsl.localhost se mueven a este host automáticamente cuando sus terminales están inactivas; los proyectos en una unidad de Windows (/mnt/…) se quedan en este equipo. Puedes devolver un proyecto movido desde la barra lateral.",
           "distro": "Distro",
           "loading": "Buscando distros WSL…",
           "placeholder": "Elige una distro",
@@ -19521,7 +19520,6 @@
         "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
-        "moreActions": "Más acciones",
         "editMessage": "Editar mensaje",
         "showFullMessage": "Mostrar el mensaje completo",
         "showLess": "Mostrar menos",
@@ -19542,8 +19540,6 @@
         "imageCount_one": "{{count}} imagen",
         "imageCount_other": "{{count}} imágenes",
         "imageCount_many": "{{count}} imágenes",
-        "collapse": "Contraer",
-        "expand": "Expandir",
         "queued": "En cola",
         "clearAll": "Borrar todo",
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
