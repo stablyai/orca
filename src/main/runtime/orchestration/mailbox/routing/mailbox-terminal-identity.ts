@@ -67,7 +67,7 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
       agent: this.getPaneTerminalAgent(pty.ptyId),
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(pty.ptyId),
       titleObservedAt: pty.lastAgentStatusObservedLive ? pty.lastOscTitleEpochMs : null,
-      isCurrentReport: (receivedAt) => isCurrentCommandReport(pty, receivedAt)
+      isCurrentReport: (reportedAt) => isCurrentCommandReport(pty, reportedAt)
     })
   }
 

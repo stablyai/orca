@@ -13,18 +13,20 @@ export function hookReportedAgentStatus(read: {
   respawnedAt: number | undefined
   /** A title seen after the report (a shell retitling its prompt) means the agent left. */
   titleObservedAt: number | null
-  isCurrentReport: (receivedAt: number) => boolean
+  isCurrentReport: (reportedAt: number) => boolean
 }): AgentStatus | null {
   const { row } = read
+  // A replayed report is restamped on receipt; its evidence time is when the agent said it.
+  const reportedAt = row ? (row.evidenceObservedAt ?? row.receivedAt) : 0
   // An ended agent's last report, one from an earlier program in the pane, or one from before a
   // respawn or reattach speaks for no one now.
   if (
     !row ||
     read.readEnded(row.paneKey) ||
     (read.agent !== null && row.agentType !== read.agent) ||
-    row.receivedAt < (read.respawnedAt ?? -1) ||
-    row.receivedAt < (read.titleObservedAt ?? -1) ||
-    !read.isCurrentReport(row.receivedAt)
+    reportedAt < (read.respawnedAt ?? -1) ||
+    reportedAt < (read.titleObservedAt ?? -1) ||
+    !read.isCurrentReport(reportedAt)
   ) {
     return null
   }
