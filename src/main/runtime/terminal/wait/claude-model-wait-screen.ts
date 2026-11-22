@@ -30,15 +30,14 @@ export function claudeToolRunsOnScreen(lines: readonly string[]): boolean {
   return lines.some((line) => TOOL_RUNNING_RE.test(line))
 }
 
-/** Claude's own status for the request, else the last line of the screen that is not chrome. */
+/** Claude's own status for the request (a stalled stream or a retry), else its spinner, else the
+ *  last line it drew that is not chrome. */
 export function claudeModelWaitLastSeen(lines: readonly string[]): string | undefined {
-  const status = lines.findLast((line) => SPINNER_LINE_RE.test(line) && MODEL_STATUS_RE.test(line))
+  const spinner = (line: string) => SPINNER_LINE_RE.test(line)
+  const status =
+    lines.findLast((line) => spinner(line) && MODEL_STATUS_RE.test(line)) ?? lines.findLast(spinner)
   if (status) {
     return status.replace(/^\s*[·✢✳✶✻✽*✦]\s+/u, '').trim()
   }
-  return lines
-    .findLast(
-      (line) => /[\p{L}\p{N}]/u.test(line) && !FOOTER_RE.test(line) && !SPINNER_LINE_RE.test(line)
-    )
-    ?.trim()
+  return lines.findLast((line) => /[\p{L}\p{N}]/u.test(line) && !FOOTER_RE.test(line))?.trim()
 }

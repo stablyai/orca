@@ -62,12 +62,15 @@ describe("terminal Claude's screen while it waits on the model", () => {
     expect(claudeToolRunsOnScreen(chrome('✶ Calculating… (5m 25s)'))).toBe(false)
   })
 
-  it("names Claude's retry, else the last line it drew", () => {
+  it("names Claude's retry, else its spinner, else the last line it drew", () => {
     expect(claudeModelWaitLastSeen(chrome('✻ API error · retrying… · attempt 1/8'))).toBe(
       'API error · retrying… · attempt 1/8'
     )
     expect(
       claudeModelWaitLastSeen(['⏺ Thinking about the plan', ...chrome('✶ Calculating… (10m 2s)')])
-    ).toBe('⏺ Thinking about the plan')
+    ).toBe('Calculating… (10m 2s)')
+    expect(claudeModelWaitLastSeen(['⏺ Thinking about the plan', ...chrome('')])).toBe(
+      '⏺ Thinking about the plan'
+    )
   })
 })
