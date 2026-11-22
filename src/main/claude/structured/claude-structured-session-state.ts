@@ -17,6 +17,7 @@ import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch
 import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
+import type { ClaudeUnstartedSendWatch } from './turns/claude-unstarted-send-watch'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -130,6 +131,8 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
+  /** Ends sends Claude took while idle but never started; set once the session is published. */
+  unstartedSends?: ClaudeUnstartedSendWatch
   /** Sends the frame being handled settled, until their settlements reach the host. */
   unreportedSettlements?: ReadonlySet<string>
   /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */

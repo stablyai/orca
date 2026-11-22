@@ -8,7 +8,9 @@ import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
+import { ClaudeUnstartedSendWatch } from './claude-unstarted-send-watch'
 import type {
+  ClaudeStructuredSessionAdapterDeps,
   ClaudeDispatchWaiter,
   ClaudeLateDispatchOutcome,
   ClaudeSession
@@ -24,7 +26,38 @@ export type ClaudeReplayTurnOrigin = {
   clientMessageId: string | null
 }
 
+/** Watches the published session for sends Claude takes while idle and never starts. */
+export function watchClaudeUnstartedSends(
+  sessionId: string,
+  session: ClaudeSession,
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  deps: Pick<
+    ClaudeStructuredSessionAdapterDeps,
+    'onDispatchSettledLate' | 'requestTimeoutMs' | 'logger'
+  >
+): void {
+  session.unstartedSends = new ClaudeUnstartedSendWatch({
+    sessionId,
+    session,
+    isCurrent: () => sessions.get(sessionId) === session,
+    settle: (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
+    ...(deps.requestTimeoutMs === undefined ? {} : { timeoutMs: deps.requestTimeoutMs }),
+    ...(deps.logger ? { logger: deps.logger } : {})
+  })
+}
+
 export function resolveClaudeReplayTurn(
+  session: ClaudeSession,
+  message: Record<string, unknown>,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): ClaudeReplayTurnOrigin | null {
+  const origin = resolveReplayTurn(session, message, onSettledLate)
+  // After lifecycle and echo settlement, so only sends still unstarted keep the grace running.
+  session.unstartedSends?.observe(message)
+  return origin
+}
+
+function resolveReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement

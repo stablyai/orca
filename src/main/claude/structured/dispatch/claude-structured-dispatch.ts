@@ -255,6 +255,7 @@ export async function dispatchClaudeTurn(
     }
     return { state: 'unknown', reason: dispatchWriteOutcomeUnknownReason(error) }
   }
+  session.unstartedSends?.admitted()
   // Admit on write: an echo may wait for the current turn; replay settles delivery later.
   return { state: 'admitted' }
 }
