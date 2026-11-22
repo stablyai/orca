@@ -15523,6 +15523,8 @@
             "scopeCompareTo": "Compare to {{ref}}",
             "scopeFilterCommits": "Filter commits",
             "scopeCommitsFailed": "Couldn't load commits.",
+            "scopeFilesFailed": "Couldn't load files.",
+            "scopeNoSharedHistory": "No shared history with {{ref}}",
             "scopeRetryCommits": "Retry",
             "scopeLoadingCommits": "Loading commits…",
             "scopeNoMatchingCommits": "No matching commits",

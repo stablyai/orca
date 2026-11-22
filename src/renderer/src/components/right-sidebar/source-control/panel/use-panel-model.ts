@@ -192,7 +192,7 @@ export function useSourceControlPanelModel() {
     activeRepoTarget,
     resolveSplitTargetGroupId
   })
-  useChangeScopeSync({
+  const retryCommitScopeFiles = useChangeScopeSync({
     changeScope: foundation.changeScope,
     setChangeScope: foundation.setChangeScope,
     setCommitScopeFiles: foundation.setCommitScopeFiles,
@@ -241,6 +241,7 @@ export function useSourceControlPanelModel() {
     ...noteOpening,
     ...entryMutations,
     ...discardConfirmation,
+    retryCommitScopeFiles,
     handleRelinkSuppressedGitHubPR
   }
 }

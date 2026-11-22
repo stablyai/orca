@@ -138,6 +138,7 @@ export function SourceControlChangeScopeMenuContent({
     <DropdownMenuContent
       align="start"
       density="compact"
+      collisionPadding={8}
       className="w-[min(340px,calc(100vw-16px))]"
       data-testid="source-control-change-scope-menu"
       onKeyDownCapture={(event) => moveThroughCommitFilter(event, filterRef.current)}
@@ -240,7 +241,7 @@ export function SourceControlChangeScopeMenuContent({
             )}
           </span>
           <DropdownMenuItem
-            className="shrink-0"
+            className="shrink-0 text-theme-accent focus:text-theme-accent focus:underline"
             onSelect={(event) => {
               // Retry in place; closing the menu would hide the result it fetches.
               event.preventDefault()

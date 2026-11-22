@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useReducer } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -25,9 +25,13 @@ export function useChangeScopeSync({
   gitHistoryState: GitHistoryPanelState
   statusHead: string | null
   loadCommitFiles: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
-}): void {
+}): () => void {
   const commitScope = changeScope.kind === 'commit' ? changeScope : null
   const commit = commitScope?.commit ?? null
+  const [commitFilesAttempt, retryCommitScopeFiles] = useReducer(
+    (attempt: number) => attempt + 1,
+    0
+  )
 
   useEffect(() => {
     if (!commit) {
@@ -60,7 +64,7 @@ export function useChangeScopeSync({
     return () => {
       live = false
     }
-  }, [commit, loadCommitFiles, setCommitScopeFiles])
+  }, [commit, commitFilesAttempt, loadCommitFiles, setCommitScopeFiles])
 
   const result = gitHistoryState.status === 'ready' ? gitHistoryState.result : undefined
   useEffect(() => {
@@ -68,4 +72,6 @@ export function useChangeScopeSync({
       setChangeScope(ALL_CHANGES_SCOPE)
     }
   }, [commitScope, result, setChangeScope, statusHead])
+
+  return retryCommitScopeFiles
 }

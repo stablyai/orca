@@ -64,6 +64,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     requestDiscardAllInArea,
     requestDiscardEntry,
     requestDiscardPaths,
+    retryCommitScopeFiles,
     revealInExplorer,
     selectedKeySet,
     setBaseRefDialogOpen,
@@ -283,7 +284,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           {commitScopeFilesStatus(
             t,
             currentCommitFiles,
-            hasFilteredBranchEntries || Boolean(normalizedFilter)
+            hasFilteredBranchEntries || Boolean(normalizedFilter),
+            retryCommitScopeFiles
           )}
         </SourceControlBranchSection>
       ) : null}

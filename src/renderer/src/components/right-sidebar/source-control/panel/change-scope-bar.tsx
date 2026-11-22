@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import { useGitGraphSupport } from '../sync/git-graph-open-button'
+import { formatSourceControlRefLabel } from './branch-context-stats'
 import { SourceControlChangeScopeMenuContent, commitMetaLine } from './change-scope-menu'
 import {
   ALL_CHANGES_SCOPE,
@@ -109,10 +110,17 @@ export function SourceControlChangeScopeBar({
         ? uncommitted
         : commitFiles
 
-  const allDetail =
+  let allDetail =
     commitsAhead > 0
       ? `${fileCountLabel(t, all.files)} · ${commitCountLabel(t, commitsAhead)}`
       : fileCountLabel(t, all.files)
+  if (branchSummary?.status === 'no-merge-base') {
+    allDetail = t(
+      'auto.components.right.sidebar.SourceControl.scopeNoSharedHistory',
+      'No shared history with {{ref}}',
+      { ref: formatSourceControlRefLabel(branchSummary.baseRef) }
+    )
+  }
   const uncommittedDetail =
     uncommitted.files > 0
       ? fileCountLabel(t, uncommitted.files)
@@ -144,47 +152,56 @@ export function SourceControlChangeScopeBar({
       changeScope.kind === 'uncommitted' ? { uncommittedOnly: true } : { wholeScope: true }
     )
   }
+  const openDiffLabel = t('auto.components.right.sidebar.SourceControl.scopeOpenDiff', 'Open diff')
   const openDiffButton = (
     <Button
       type="button"
       variant="outline"
       size="xs"
-      className="aria-disabled:cursor-default"
+      className="aria-disabled:cursor-default @max-[260px]/change-scope:w-6"
       disabled={openDiffDisabled && !branchCompareLoading}
       // Stays focusable while loading so the tooltip can say why.
       aria-disabled={branchCompareLoading || undefined}
+      aria-label={openDiffLabel}
       onClick={openDiff}
       data-testid="source-control-change-scope-open-diff"
     >
       <FileDiff className="size-3.5" />
-      {t('auto.components.right.sidebar.SourceControl.scopeOpenDiff', 'Open diff')}
+      <span className="@max-[260px]/change-scope:hidden">{openDiffLabel}</span>
     </Button>
   )
   const showAllLabel = t(
     'auto.components.right.sidebar.SourceControl.scopeShowAll',
     'Show all changes'
   )
-
+  const scopeLabel = scopeTriggerLabel(t, changeScope)
   return (
     <DropdownMenu open={changeScopeMenuOpen} onOpenChange={setChangeScopeMenuOpen}>
       <div
-        className="flex shrink-0 flex-col gap-1 border-b border-border px-2.5 py-1.5"
+        className="@container/change-scope flex shrink-0 flex-col gap-1 border-b border-border py-1.5"
         data-testid="source-control-change-scope"
       >
-        <div className="flex min-w-0 items-center gap-1">
-          <DropdownMenuTrigger asChild>
-            <Button
-              ref={scopeTriggerRef}
-              type="button"
-              variant="outline"
-              size="xs"
-              className="min-w-0 shrink justify-start"
-              data-testid="source-control-change-scope-trigger"
-            >
-              <span className="min-w-0 truncate">{scopeTriggerLabel(t, changeScope)}</span>
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
+        <div className="flex min-w-0 items-center gap-1 px-2.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  ref={scopeTriggerRef}
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="min-w-0 shrink justify-start"
+                  data-testid="source-control-change-scope-trigger"
+                >
+                  <span className="min-w-0 truncate">{scopeLabel}</span>
+                  <ChevronDown className="size-3 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            {changeScope.kind === 'commit' ? (
+              <TooltipContent className="max-w-xs break-words">{scopeLabel}</TooltipContent>
+            ) : null}
+          </Tooltip>
           {changeScope.kind !== 'all' ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -204,22 +221,27 @@ export function SourceControlChangeScopeBar({
               <TooltipContent>{showAllLabel}</TooltipContent>
             </Tooltip>
           ) : null}
-          <span className="min-w-0 flex-1" aria-hidden="true" />
-          {branchCompareLoading ? (
+          <div className="ml-auto flex shrink-0">
             <Tooltip>
-              <TooltipTrigger asChild>{openDiffButton}</TooltipTrigger>
-              <TooltipContent>
-                {t(
-                  'auto.components.right.sidebar.SourceControl.scopeLoadingBranchChanges',
-                  'Loading branch changes…'
+              <TooltipTrigger asChild>
+                {openDiffDisabled && !branchCompareLoading ? (
+                  <span className="inline-flex">{openDiffButton}</span>
+                ) : (
+                  openDiffButton
                 )}
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {branchCompareLoading
+                  ? t(
+                      'auto.components.right.sidebar.SourceControl.scopeLoadingBranchChanges',
+                      'Loading branch changes…'
+                    )
+                  : openDiffLabel}
               </TooltipContent>
             </Tooltip>
-          ) : (
-            openDiffButton
-          )}
+          </div>
         </div>
-        <div className="truncate text-2xs text-muted-foreground">
+        <div className="truncate px-2.5 text-2xs text-muted-foreground">
           {changeScope.kind === 'commit'
             ? `${commitMetaLine(changeScope.commit, intlLocale)} · `
             : null}
