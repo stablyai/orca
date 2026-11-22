@@ -14,6 +14,10 @@ import {
 } from '../../persistence/profile-state/database/profile-state-database'
 import { profileStateDatabaseFile } from '../../../shared/orca-profiles/profile-state-storage-paths'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+// Static, as in the persistence harness: these graphs load at collection, outside the test timeout.
+import { Store } from '../../persistence/loading-store/store'
+import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
+import { transferOrcaProfileProject } from './profile-project-transfer'
 
 const testState = { dir: '' }
 vi.mock('electron', () => ({
@@ -76,7 +80,6 @@ function storedSettings(id: string): Record<string, unknown> {
 }
 
 async function transferThenLoad(): Promise<Record<string, unknown>> {
-  const { transferOrcaProfileProject } = await import('./profile-project-transfer')
   expect(
     transferOrcaProfileProject(
       { sourceProfileId: 'personal', targetProfileId: 'target', repoId: 'repo-1', mode: 'copy' },
@@ -84,9 +87,6 @@ async function transferThenLoad(): Promise<Record<string, unknown>> {
     ).status
   ).toBe('transferred')
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store } = await import('../../persistence/loading-store/store')
-  const { ProfileStateSqliteAuthority } =
-    await import('../../persistence/profile-state/profile-state-sqlite-authority')
   const authority = new (class extends ProfileStateSqliteAuthority {
     override scheduleBackup(): void {}
   })(profileStateDatabaseFile(dirname(dataPath('target'))), 'target')

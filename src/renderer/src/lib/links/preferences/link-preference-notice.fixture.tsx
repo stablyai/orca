@@ -36,7 +36,8 @@ const notice = (
   language?: UiLanguage
 ): ReturnType<typeof defineFixture> =>
   defineFixture({
-    width: 420,
+    // The toast is min(26rem, 100vw - 2rem) wide, so this checks the narrowest 340px toast.
+    width: 372,
     render: () => <Notice notice={kind} {...(language ? { language } : {})} />
   })
 
