@@ -21,10 +21,12 @@ type CodexAsyncQuestionCall = {
 export type CodexAsyncQuestions = {
   /** By tool call id, oldest first. */
   calls: Map<string, CodexAsyncQuestionCall>
+  /** Question calls that started in the live turn and aren't accepted yet. */
+  asking: Set<string>
   /** The calls started since, by id, and what each would ask approval as. */
-  running: Map<string, string>
-  /** Approvals that may still be open, newest last. */
-  approvals: { asksAs: string; shown: ToolSnapshot }[]
+  running: Map<string, { toolName?: string; asksAs: string }>
+  /** Approvals that may still be open, newest last, each with the calls that could have asked. */
+  approvals: { shown: ToolSnapshot; askers: Set<string> }[]
 }
 
 // These take Codex's exclusive tool lock, so their start proves every earlier approval is over.
@@ -58,14 +60,25 @@ export function trackCodexAsyncQuestions(
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
     return undefined
   }
-  if (
-    eventName === 'PostToolUse' &&
-    readString(hookPayload, 'tool_name') === CODEX_ASYNC_QUESTION_TOOL &&
-    askedByLiveTurn(state, paneKey, hookPayload)
-  ) {
-    openCall(state, paneKey, hookPayload)
-  } else if (eventName === 'UserPromptSubmit') {
+  if (eventName === 'UserPromptSubmit') {
     answerCalls(state, paneKey, readString(hookPayload, 'prompt'))
+  }
+  const callId = readString(hookPayload, 'tool_use_id')
+  if (callId && readString(hookPayload, 'tool_name') === CODEX_ASYNC_QUESTION_TOOL) {
+    let open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
+    if (eventName === 'PreToolUse') {
+      if (!open) {
+        open = { calls: new Map(), asking: new Set(), running: new Map(), approvals: [] }
+        state.codexAsyncQuestionsByPaneKey.set(paneKey, open)
+      }
+      open.asking.add(callId)
+      // The call holds the exclusive lock, so whatever asked before it is over.
+      open.running.clear()
+      open.approvals = []
+    } else if (eventName === 'PostToolUse' && open?.asking.delete(callId)) {
+      // Asked in the live turn: a late hook of one that ended finds nothing asking.
+      openCall(open, callId, hookPayload)
+    }
   }
   return pendingCodexAsyncQuestion(state, paneKey)
 }
@@ -92,35 +105,31 @@ export function codexWaitBesideQuestion(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot | undefined {
   const open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
-  if (!open) {
+  if (!open?.calls.size) {
     return undefined
   }
   const { toolName, toolInput, interactivePrompt } = extractCodexToolFields(eventName, hookPayload)
   const asksAs = approvalAskedAs(toolName, toolInput, hookPayload['tool_input'])
   if (eventName === 'PermissionRequest') {
-    open.approvals.push({ asksAs, shown: { toolName, toolInput, interactivePrompt } })
-    // One call can ask again, for a sandbox retry or network access.
-    dropEndedApprovals(open, asksAs, 1)
+    open.approvals.push({
+      shown: { toolName, toolInput, interactivePrompt },
+      askers: possibleAskers(open.running, toolName, asksAs)
+    })
     return undefined
   }
   const callId = readString(hookPayload, 'tool_use_id')
-  if (eventName === 'PostToolUse') {
-    // Codex rewrites MCP file arguments after approval, so the call's PreToolUse says what it asked as.
-    const startedAs = (callId && open.running.get(callId)) || asksAs
-    if (callId) {
-      open.running.delete(callId)
-    }
-    dropEndedApprovals(open, startedAs)
-    // Another PreToolUse hook can rewrite input, so this call's unfinished twins can ask as it ended.
-    const twins = [...open.running.values()].filter((asked) => asked === startedAs).length
-    dropEndedApprovals(open, asksAs, twins)
-  } else {
+  if (eventName === 'PostToolUse' && callId) {
+    open.running.delete(callId)
+    open.approvals = open.approvals.filter(
+      ({ askers }) => !askers.delete(callId) || askers.size > 0
+    )
+  } else if (eventName !== 'PostToolUse') {
     if (eventName !== 'PreToolUse' || STARTS_AFTER_APPROVALS.has(toolName ?? '')) {
       open.approvals = []
       open.running.clear()
     }
     if (eventName === 'PreToolUse' && callId) {
-      open.running.set(callId, asksAs)
+      open.running.set(callId, { toolName, asksAs })
     }
   }
   const newest = open.approvals.at(-1)
@@ -134,9 +143,10 @@ export function codexWaitBesideQuestion(
 
 /** Codex's TUI skips the focused question, which is the oldest unless the user navigated. */
 export function skipCodexAsyncQuestion(state: HookListenerState, paneKey: string): boolean {
-  const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)?.calls
+  const open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
+  const calls = open?.calls
   const oldest = calls?.entries().next().value
-  if (!calls || !oldest) {
+  if (!open || !calls || !oldest) {
     return false
   }
   const [callId, call] = oldest
@@ -147,7 +157,7 @@ export function skipCodexAsyncQuestion(state: HookListenerState, paneKey: string
   if (call.unanswered.size === 0) {
     calls.delete(callId)
   }
-  if (calls.size === 0) {
+  if (calls.size === 0 && open.asking.size === 0) {
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   }
   return true
@@ -162,41 +172,28 @@ function approvalAskedAs(
   return JSON.stringify([toolName, toolName?.startsWith('mcp__') ? rawInput : toolInput])
 }
 
-// An approval names no call, so as many can wait as calls that could have asked for them still run.
-function dropEndedApprovals(open: CodexAsyncQuestions, asksAs: string, atLeast = 0): void {
-  const running = [...open.running.values()].filter((asked) => asked === asksAs).length
-  const alike = open.approvals.filter((approval) => approval.asksAs === asksAs)
-  const ended = new Set(alike.slice(0, Math.max(0, alike.length - Math.max(atLeast, running))))
-  open.approvals = open.approvals.filter((approval) => !ended.has(approval))
-}
-
-// Esc can end the turn, and a queued prompt open the next, while an accepted call's hooks run.
-function askedByLiveTurn(
-  state: HookListenerState,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): boolean {
-  const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  const turnId = readString(hookPayload, 'turn_id')
-  return lead?.state !== 'done' && (!lead?.turnId || !turnId || lead.turnId === turnId)
+// PermissionRequest names no call. Any running call with its input could have asked, or with none, any of its tool: another hook can rewrite input after PreToolUse.
+function possibleAskers(
+  running: CodexAsyncQuestions['running'],
+  toolName: string | undefined,
+  asksAs: string
+): Set<string> {
+  const calls = [...running]
+  const alike = calls.filter(([, call]) => call.asksAs === asksAs)
+  const could = alike.length > 0 ? alike : calls.filter(([, call]) => call.toolName === toolName)
+  return new Set(could.map(([id]) => id))
 }
 
 function openCall(
-  state: HookListenerState,
-  paneKey: string,
+  open: CodexAsyncQuestions,
+  callId: string,
   hookPayload: Record<string, unknown>
 ): void {
-  const callId = readString(hookPayload, 'tool_use_id')
   const input = hookPayload['tool_input']
   // Codex accepted every question, so parsed indexes match its reply ids.
   const questions = parseCodexAsyncQuestionsInput(input)?.questions
-  if (!callId || !questions) {
+  if (!questions) {
     return
-  }
-  let open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
-  if (!open) {
-    open = { calls: new Map(), running: new Map(), approvals: [] }
-    state.codexAsyncQuestionsByPaneKey.set(paneKey, open)
   }
   open.calls.set(callId, {
     prompt: JSON.stringify(input),
@@ -207,11 +204,12 @@ function openCall(
 
 // Each answer is `[{answer, question, questionItemId: '["request_user_input_async", callId, index]'}]`.
 function answerCalls(state: HookListenerState, paneKey: string, prompt: string | undefined): void {
-  const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)?.calls
+  const open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
   const body = prompt?.trim()
-  if (!calls) {
+  if (!open) {
     return
   }
+  const { calls } = open
   // A plain message answers or abandons them all, as native chat's transcript scan reads it.
   if (!body?.startsWith(REPLY_OPEN) || !body.endsWith(REPLY_CLOSE)) {
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
@@ -226,7 +224,7 @@ function answerCalls(state: HookListenerState, paneKey: string, prompt: string |
       calls.delete(callId)
     }
   }
-  if (calls.size === 0) {
+  if (calls.size === 0 && open.asking.size === 0) {
     state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   }
 }

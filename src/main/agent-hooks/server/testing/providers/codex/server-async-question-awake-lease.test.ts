@@ -67,10 +67,11 @@ it('keeps the awake lease while Codex works behind a question for over two hours
   expect(awake.getWorkingAgentCount()).toBe(1)
 
   const publish = { tool_name: 'Bash', tool_input: { command: 'pnpm publish' } }
+  await post({ hook_event_name: 'PreToolUse', ...publish, tool_use_id: 'publish' })
   await post({ hook_event_name: 'PermissionRequest', ...publish })
   expect(awake.getWorkingAgentCount()).toBe(0)
 
-  await post({ hook_event_name: 'PostToolUse', ...publish })
+  await post({ hook_event_name: 'PostToolUse', ...publish, tool_use_id: 'publish' })
   expect(awake.getWorkingAgentCount()).toBe(1)
   vi.setSystemTime(START + 271 * 60_000)
   expect(awake.getWorkingAgentCount()).toBe(0)

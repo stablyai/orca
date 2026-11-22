@@ -35,12 +35,15 @@ it('opens an accepted call on PostToolUse and shows its first unanswered questio
 
 it("names the oldest call's question, as Codex's TUI focuses it", () => {
   const state = createHookListenerState()
-  const ask = (id: string, title: string) =>
-    trackCodexAsyncQuestions(state, 'pane', 'PostToolUse', {
+  const ask = (id: string, title: string) => {
+    const call = {
       tool_name: 'request_user_input_async',
       tool_use_id: id,
       tool_input: { questions: [{ title }] }
-    })
+    }
+    trackCodexAsyncQuestions(state, 'pane', 'PreToolUse', call)
+    return trackCodexAsyncQuestions(state, 'pane', 'PostToolUse', call)
+  }
 
   ask('call-a', 'SQLite or Postgres?')
   expect(ask('call-b', 'Which port?')).toMatchObject({

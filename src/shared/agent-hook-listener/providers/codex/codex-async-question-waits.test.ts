@@ -141,6 +141,50 @@ it('keeps an MCP approval until its own call ends, even with rewritten arguments
   expect(agentWorksBehindQuestion(done)).toBe(true)
 })
 
+it('keeps a rewritten approval while any call that could have asked runs', () => {
+  const report = workingBehindQuestion()
+  report({ hook_event_name: 'PreToolUse', ...bash('git push', 'first') })
+  report({ hook_event_name: 'PreToolUse', ...bash('git push origin', 'second') })
+  // A hook rewrote two different commands into one.
+  const ran = (id: string) => bash('proxy push', id)
+  report({ hook_event_name: 'PermissionRequest', ...asked(ran('second')) })
+
+  const other = report({ hook_event_name: 'PostToolUse', ...ran('first') })
+  expect(agentWorksBehindQuestion(other)).toBe(false)
+  expect(
+    agentWorksBehindQuestion(report({ hook_event_name: 'PostToolUse', ...ran('second') }))
+  ).toBe(true)
+})
+
+it('lets a rewritten approval go once every call that could have asked ended', () => {
+  const report = workingBehindQuestion()
+  for (const id of ['first', 'second']) {
+    report({ hook_event_name: 'PreToolUse', ...bash('git push', id) })
+  }
+  // A hook rewrote one command in two ways.
+  report({ hook_event_name: 'PermissionRequest', ...asked(bash('proxy push a', 'first')) })
+  report({ hook_event_name: 'PostToolUse', ...bash('proxy push a', 'first') })
+
+  const last = report({ hook_event_name: 'PostToolUse', ...bash('proxy push b', 'second') })
+  expect(agentWorksBehindQuestion(last)).toBe(true)
+})
+
+// A late hook of any tool sets the lead back to working, on the turn it came from.
+it('holds no question after another late hook revived the ended turn', () => {
+  for (const nextPrompt of [false, true]) {
+    const report = codexPane()
+    report({ hook_event_name: 'UserPromptSubmit', prompt: 'Build the cache' })
+    report({ hook_event_name: 'PreToolUse', ...QUESTION })
+    report({ hook_event_name: 'Interrupt' })
+    if (nextPrompt) {
+      report({ hook_event_name: 'UserPromptSubmit', prompt: 'Use Postgres', turn_id: 'turn-2' })
+    }
+    report({ hook_event_name: 'PostToolUse', ...bash('pnpm lint', 'late') })
+
+    expect(report({ hook_event_name: 'PostToolUse', ...QUESTION }).state).not.toBe('waiting')
+  }
+})
+
 // Esc can land while an accepted call's hooks run; the TUI drops questions with the turn.
 it('holds no question accepted as the turn was interrupted', () => {
   const report = codexPane()
