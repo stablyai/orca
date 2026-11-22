@@ -152,6 +152,29 @@ const startedForItem: NativeChatMessage = {
   id: 'preview-started-item',
   agentStartItems: [{ uid: 'item-12', number: 12, title: 'Share dialog polish', status: 'working' }]
 }
+// A long worker title, item title and task: the task gives way first, then the title, then the item.
+const startedLong = projectStructuredAgentStartItem({
+  itemId: 'preview-started-long',
+  revision: 1,
+  sequence: 10,
+  observedAt: new Date().setHours(14, 9, 0, 0),
+  body: {
+    kind: 'agent-start',
+    dispatchId: 'start-long-dispatch',
+    task: 'Review stablyai/orca#47079 (head 9c1f7a2) for the usage switch and continue flow.',
+    worker: {
+      party: { address: 'dispatch:review-long', terminalHandle: null, orcaSessionId: null },
+      name: 'Review #47079 usage switch continue'
+    }
+  }
+})!
+const startedLongForItem: NativeChatMessage = {
+  ...startedLong,
+  id: 'preview-started-long-item',
+  agentStartItems: [
+    { uid: 'item-31', number: 31, title: 'Switch usage and continue', status: 'working' }
+  ]
+}
 const workers: OrchestrationSessionWorker[] = [
   {
     dispatchId: 'task-dispatch',
@@ -183,6 +206,12 @@ function rows() {
         />
         <MessageRow
           message={startedForItem}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+          runtimeContext={runtimeContext}
+        />
+        <MessageRow
+          message={startedLongForItem}
           expandSignal={false}
           onScrollMessageToTop={() => {}}
           runtimeContext={runtimeContext}
@@ -219,6 +248,7 @@ const focusFirst = (frame: HTMLElement) =>
 export const wide = defineFixture({ width: 720, store, render: rows })
 export const medium = defineFixture({ width: 480, store, render: rows })
 export const narrow = defineFixture({ width: 300, store, render: rows })
+export const panel = defineFixture({ width: 400, store, render: rows })
 export const openWide = defineFixture({
   width: 720,
   store,
