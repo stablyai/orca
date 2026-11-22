@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { MessageRow } from '../../db/orchestration-records'
 import { peerMailSenderSnapshot } from '../../federation/peer-mail/peer-mail-sender-snapshot'
-import { formatMessageBanner, formatMessageBannerWithContent } from './message-formatting'
+import {
+  formatMessageBanner,
+  formatMessageBannerWithContent,
+  type MessageFormattingOptions
+} from './message-formatting'
 
 const PAIRED_LABEL = 'orca_session_id:f2d72b85-0000-4000-8000-000000000000 on MacBook Pro (7)'
 
@@ -26,7 +30,14 @@ function message(overrides: Partial<MessageRow> = {}): MessageRow {
   }
 }
 
-const header = (row: MessageRow) => formatMessageBanner(row).split('\n')[0]
+const header = (row: MessageRow, options: MessageFormattingOptions = {}) =>
+  formatMessageBanner(row, options).split('\n')[0]
+
+const linkedPeer = (row: MessageRow): MessageFormattingOptions => ({
+  peerMail: {
+    getPeerMailMessage: (id) => (id === row.id ? { sender_label: row.from_handle } : undefined)
+  }
+})
 
 describe('the mail header', () => {
   it("names this Orca's own sender by its handle, as before", () => {
@@ -42,7 +53,9 @@ describe('the mail header', () => {
         bot: { id: 'eng', name: 'Eng-Bot-Builder', avatar: null }
       })
     })
-    expect(header(fromBot)).toBe('──── From: Eng-Bot-Builder on MacBook Pro (7) (handoff) ────')
+    expect(header(fromBot, linkedPeer(fromBot))).toBe(
+      '──── From: Eng-Bot-Builder on MacBook Pro (7) (handoff) ────'
+    )
     const fromAgent = message({
       from_handle: PAIRED_LABEL,
       answer_sender_snapshot: peerMailSenderSnapshot(PAIRED_LABEL, {
@@ -50,13 +63,24 @@ describe('the mail header', () => {
         computer: "Brennan's MacBook Pro"
       })
     })
-    expect(header(fromAgent)).toBe("──── From: an agent on Brennan's MacBook Pro (handoff) ────")
+    expect(header(fromAgent, linkedPeer(fromAgent))).toBe(
+      "──── From: an agent on Brennan's MacBook Pro (handoff) ────"
+    )
   })
 
   it('names an older paired Orca that sent no sender by the computer its label gives', () => {
     const older = message({ from_handle: PAIRED_LABEL })
-    expect(header(older)).toBe('──── From: an agent on MacBook Pro (7) (handoff) ────')
-    expect(header(older)).not.toMatch(/orca_session_id/i)
+    expect(header(older, linkedPeer(older))).toBe(
+      '──── From: an agent on MacBook Pro (7) (handoff) ────'
+    )
+  })
+
+  it('uses the recorded origin to tell identical local and paired sender labels apart', () => {
+    const row = message({ from_handle: 'Build on Call', type: 'status' })
+    expect(header(row, { peerMail: { getPeerMailMessage: () => undefined } })).toBe(
+      '──── From: BUILD ON CALL (Build on Call) (status) ────'
+    )
+    expect(header(row, linkedPeer(row))).toBe('──── From: an agent on Call (status) ────')
   })
 
   it('keeps priority and authority tags beside a paired sender', () => {
@@ -65,7 +89,7 @@ describe('the mail header', () => {
       priority: 'urgent',
       delivery_contract: 'legacy_direct'
     })
-    expect(header(urgent)).toBe(
+    expect(header(urgent, linkedPeer(urgent))).toBe(
       '──── From: an agent on MacBook Pro (7) [URGENT] [LEGACY READ-ONLY] (handoff) ────'
     )
   })
@@ -79,7 +103,7 @@ describe('the mail header', () => {
         computer: 'MacBook Pro (7)'
       })
     })
-    const { text, content } = formatMessageBannerWithContent(row)
+    const { text, content } = formatMessageBannerWithContent(row, linkedPeer(row))
     expect(text.split('\n')[0]).toBe('──── From: an agent on MacBook Pro (7) [HIGH] (handoff) ────')
     expect(text.slice(...content.subject)).toBe(row.subject)
     expect(text.slice(...content.body!)).toBe(row.body)

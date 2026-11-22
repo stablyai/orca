@@ -16,9 +16,12 @@ import {
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
 
-function pairedSenderOf(msg: MessageRow): string | null {
+function pairedSenderOf(
+  msg: MessageRow,
+  peerMail: MessageFormattingOptions['peerMail']
+): string | null {
   const computer = pairedLabelComputer(msg.from_handle)
-  if (!computer) {
+  if (!computer || peerMail?.getPeerMailMessage(msg.id)?.sender_label !== msg.from_handle) {
     return null
   }
   const saved = readAnswerSenderSnapshot(msg.answer_sender_snapshot)
@@ -40,6 +43,8 @@ export type MessageFormattingAuthority =
 
 export type MessageFormattingOptions = {
   authority?: MessageFormattingAuthority
+  /** Recorded links distinguish peer mail from local messages with similar sender labels. */
+  peerMail?: { getPeerMailMessage(id: string): { sender_label: string } | undefined }
   supportedActionHints?: readonly string[]
   /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
   cliCommand?: OrchestrationCliCommand
@@ -108,8 +113,7 @@ export function formatMessageBannerWithContent(
         : authority === 'legacy_read_only'
           ? ' [LEGACY READ-ONLY]'
           : ''
-  const paired = pairedSenderOf(msg)
-  // Mail from a paired computer is named as its Orca named the sender; its label is no address here.
+  const paired = pairedSenderOf(msg, options.peerMail)
   const from = paired ?? `${msg.from_handle.toUpperCase()} (${msg.from_handle})`
 
   const header = `──── From: ${from}${priorityTag}${authorityTag} (${msg.type}) ────`
