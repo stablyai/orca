@@ -8,7 +8,7 @@ export const BRIDGE_DIALOG_VERB = 'native.dialog.act'
 const MAX_TITLE_CHARS = 300
 const MAX_MESSAGE_CHARS = 2000
 const MAX_LABEL_CHARS = 100
-const MAX_FIELD_CHARS = 4000
+export const BRIDGE_DIALOG_MAX_FIELD_CHARS = 4000
 export const BRIDGE_DIALOG_MAX_PICK_OPTIONS = 500
 const MAX_OPTION_CHARS = 300
 
@@ -53,7 +53,7 @@ export const dialogPromptParamsSchema = z.strictObject({
   token: tokenSchema,
   title: titleSchema,
   message: messageSchema,
-  defaultValue: z.string().max(MAX_FIELD_CHARS),
+  defaultValue: z.string().max(BRIDGE_DIALOG_MAX_FIELD_CHARS),
   placeholder: z.string().max(MAX_LABEL_CHARS).optional(),
   submitLabel: labelSchema,
   cancelLabel: labelSchema,
@@ -111,7 +111,7 @@ export type BridgeDialogOutcome = (typeof BRIDGE_DIALOG_OUTCOMES)[number]
 
 export const dialogShowResultSchema = z.strictObject({
   outcome: z.enum(BRIDGE_DIALOG_OUTCOMES),
-  value: z.string().max(MAX_FIELD_CHARS).nullable()
+  value: z.string().max(BRIDGE_DIALOG_MAX_FIELD_CHARS).nullable()
 })
 
 export const dialogDismissResultSchema = z.strictObject({ dismissed: z.boolean() })

@@ -1,4 +1,5 @@
 import {
+  BRIDGE_DIALOG_MAX_FIELD_CHARS,
   dialogParamsSchema,
   type BridgeDialogAnswer,
   type BridgeDialogOutcome,
@@ -72,7 +73,9 @@ export function createPageDialogQueue(deps: { isFocused: () => boolean }): PageD
     },
     answer: (token, outcome, value) => {
       if (showing?.request.token === token) {
-        finish({ outcome, value: outcome === 'confirm' ? (value ?? null) : null })
+        // Native prompt fields take any length, so an answer past the schema's cap is cut rather than rejected.
+        const kept = value === undefined ? null : value.slice(0, BRIDGE_DIALOG_MAX_FIELD_CHARS)
+        finish({ outcome, value: outcome === 'confirm' ? kept : null })
       }
     },
     dismissAll: () => finish(DISMISSED)
