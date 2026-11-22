@@ -17,6 +17,7 @@ import {
   noteStreamedTextRevision,
   onlyStreamedTextChanged
 } from './structured-agent-session-streamed-text-rows'
+import { noteRevisedInPlace } from './revised-in-place-lists'
 import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
 import { agentSessionHasOlderTranscript } from '../conversation-context/agent-session-context-clear'
 
@@ -104,6 +105,7 @@ function replaceItemsInPlace(
 ): AgentJournalRenderItem[] | null {
   let next: AgentJournalRenderItem[] | null = null
   let textOnly = true
+  const at: number[] = []
   for (const item of incoming) {
     const index = rowIndexAt(current, item)
     const prior = current[index]
@@ -114,7 +116,11 @@ function replaceItemsInPlace(
       textOnly &&= onlyStreamedTextChanged(prior, item)
       next ??= current.slice()
       next[index] = item
+      at.push(index)
     }
+  }
+  if (next) {
+    noteRevisedInPlace(next, current, at)
   }
   if (next && textOnly) {
     noteStreamedTextRevision(next, current)

@@ -1,3 +1,4 @@
+import { noteRevisedInPlace, positionsRevisedFrom } from './revised-in-place-lists'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -86,7 +87,9 @@ function reuseMessages(
     return null
   }
   let output: NativeChatMessage[] | null = null
-  for (let index = 0; index < previous.items.length; index += 1) {
+  const revisedAt: number[] = []
+  // A revision in place names its rows; anything else is compared row by row.
+  for (const index of positionsRevisedFrom(items, previous.items) ?? previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {
@@ -119,10 +122,15 @@ function reuseMessages(
       return null
     }
     ;(output ??= previous.output.slice())[at] = row
+    revisedAt.push(at)
   }
   const appended = items.slice(previous.items.length)
   if (appended.length === 0) {
-    return output ? { ...previous, items, output } : { ...previous, items }
+    if (!output) {
+      return { ...previous, items }
+    }
+    noteRevisedInPlace(output, previous.output, revisedAt)
+    return { ...previous, items, output }
   }
   if (
     appended.some(

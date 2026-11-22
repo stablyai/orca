@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { agentSessionTranscriptRows } from '../conversation-context/agent-session-context-clear'
+import { noteRevisedInPlace, revisedInPlace } from './revised-in-place-lists'
 
 // A row list maps to the earlier list it differs from only by streamed message text.
 const textOnlyBases = new WeakMap<
@@ -34,8 +35,60 @@ export function noteStreamedTextRevision(
 
 const floorCuts = new WeakMap<
   readonly AgentJournalRenderItem[],
-  { floor: number; rows: readonly AgentJournalRenderItem[] }
+  { floor: number; rows: readonly AgentJournalRenderItem[]; tail: boolean }
 >()
+
+/** The rows at or past `floor`; a revision in place revises the cut of the rows it revised. */
+function cutFromFloor(
+  items: readonly AgentJournalRenderItem[],
+  floor: number
+): readonly AgentJournalRenderItem[] {
+  if (floor <= 0) {
+    return items
+  }
+  const cached = floorCuts.get(items)
+  if (cached?.floor === floor) {
+    return cached.rows
+  }
+  const revised = revisedInPlace(items)
+  const prior = revised && floorCuts.get(revised.from)
+  const rows =
+    (revised &&
+      prior?.floor === floor &&
+      prior.tail &&
+      reviseTailCut(items, revised.at, prior.rows, floor)) ||
+    agentSessionTranscriptRows(items, floor)
+  // A cut whose first row starts the list's tail is that whole tail, since it keeps order.
+  const tail = rows.length === 0 || rows[0] === items[items.length - rows.length]
+  floorCuts.set(items, { floor, rows, tail })
+  return rows
+}
+
+function reviseTailCut(
+  items: readonly AgentJournalRenderItem[],
+  at: readonly number[],
+  prior: readonly AgentJournalRenderItem[],
+  floor: number
+): readonly AgentJournalRenderItem[] | undefined {
+  const offset = items.length - prior.length
+  let rows: AgentJournalRenderItem[] | undefined
+  const positions: number[] = []
+  for (const index of at) {
+    const kept = index >= offset
+    if (kept !== items[index]!.sequence >= floor) {
+      return undefined
+    }
+    if (kept && prior[index - offset] !== items[index]) {
+      ;(rows ??= prior.slice())[index - offset] = items[index]!
+      positions.push(index - offset)
+    }
+  }
+  if (!rows) {
+    return prior
+  }
+  noteRevisedInPlace(rows, prior, positions)
+  return rows
+}
 
 /** Rows at or past a `/clear` floor. Streamed text never moves a row across it, so the cut of a
  *  text-only revision stays linked to the cut of its base, and memos over it hold while it streams. */
@@ -43,17 +96,10 @@ export function streamedRowsFromFloor(
   items: readonly AgentJournalRenderItem[],
   floor: number
 ): readonly AgentJournalRenderItem[] {
-  const fromFloor = (rows: readonly AgentJournalRenderItem[]) =>
-    agentSessionTranscriptRows(rows, floor)
-  const shown = fromFloor(items)
+  const shown = cutFromFloor(items, floor)
   const base = rowsBesideStreamedText(items)
   if (base !== items && shown !== items) {
-    let cut = floorCuts.get(base)
-    if (cut?.floor !== floor) {
-      cut = { floor, rows: fromFloor(base) }
-      floorCuts.set(base, cut)
-    }
-    noteStreamedTextRevision(shown, cut.rows)
+    noteStreamedTextRevision(shown, cutFromFloor(base, floor))
   }
   return shown
 }

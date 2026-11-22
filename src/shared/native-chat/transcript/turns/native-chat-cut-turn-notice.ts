@@ -28,6 +28,10 @@ import {
 import { isStructuredAgentSessionStartFailureRow } from '../../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
 import { rowsBesideStreamedText } from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  noteRevisedInPlace,
+  revisedInPlace
+} from '../../../agent-session/view/revised-in-place-lists'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 
@@ -184,9 +188,14 @@ function cutTurnNotice(
   return notice
 }
 
-const placedNotices = new WeakMap<
+type PlacedNotices = {
+  agentName: string | undefined
+  after: ReadonlyMap<number, AgentJournalRenderItem[]>
+}
+const placedNotices = new WeakMap<readonly AgentJournalRenderItem[], PlacedNotices>()
+const noticedRows = new WeakMap<
   readonly AgentJournalRenderItem[],
-  { agentName: string | undefined; after: ReadonlyMap<number, AgentJournalRenderItem[]> }
+  { placed: PlacedNotices; rows: readonly AgentJournalRenderItem[] }
 >()
 
 function cutTurnNoticesAfter(
@@ -222,5 +231,37 @@ export function withNativeChatCutTurnNotices(
   if (noticesAfter.size === 0) {
     return items
   }
-  return items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  const cached = noticedRows.get(items)
+  if (cached?.placed === placed) {
+    return cached.rows
+  }
+  const revised = revisedInPlace(items)
+  const prior = revised && noticedRows.get(revised.from)
+  const noticed =
+    (revised &&
+      prior?.placed === placed &&
+      reviseNoticedRows(items, revised.at, prior.rows, noticesAfter)) ||
+    items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  noticedRows.set(items, { placed, rows: noticed })
+  return noticed
+}
+
+/** Rows revised in place keep their notices, so each sits past the notices placed before it. */
+function reviseNoticedRows(
+  items: readonly AgentJournalRenderItem[],
+  at: readonly number[],
+  prior: readonly AgentJournalRenderItem[],
+  noticesAfter: ReadonlyMap<number, AgentJournalRenderItem[]>
+): readonly AgentJournalRenderItem[] {
+  const rows = prior.slice()
+  const positions = at.map((index) => {
+    let position = index
+    for (const [after, notices] of noticesAfter) {
+      position += after < index ? notices.length : 0
+    }
+    rows[position] = items[index]!
+    return position
+  })
+  noteRevisedInPlace(rows, prior, positions)
+  return rows
 }
