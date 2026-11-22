@@ -20,6 +20,21 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   protected abstract watchSleepingMail(): void
   /** Per slept leaf, its handle and the process it named; kept across graph reloads so the pane keeps its name. */
   protected readonly sleptLeafHandles = new Map<string, { handle: string; ptyId: string }>()
+  /** Processes the user's own Workspace Sleep stopped, known at the stop, before its records persist. */
+  private readonly workspaceSleepPtyIds = new Set<string>()
+
+  protected noteWorkspaceSleepStops(ptyIds: Iterable<string>): void {
+    for (const ptyId of ptyIds) {
+      this.workspaceSleepPtyIds.add(ptyId)
+    }
+    // Bounded: only the newest stops matter; an older one has long since persisted its manual record.
+    for (const ptyId of this.workspaceSleepPtyIds) {
+      if (this.workspaceSleepPtyIds.size <= 1024) {
+        break
+      }
+      this.workspaceSleepPtyIds.delete(ptyId)
+    }
+  }
 
   /** Graph sync rebinds handles; waits on a woken slept pane re-check here. */
   protected onSleptLeafGraphSynced(): void {}
@@ -236,6 +251,11 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   private sleptAgentLeafHandle(leaf: RuntimeLeafRecord): string | null {
     const handle = this.sleptLeafHandle(leaf)
     if (!handle) {
+      return null
+    }
+    const stopped =
+      this.sleptLeafHandles.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId ?? leaf.ptyId
+    if (stopped && this.workspaceSleepPtyIds.has(stopped)) {
       return null
     }
     this.watchSleepingMail()

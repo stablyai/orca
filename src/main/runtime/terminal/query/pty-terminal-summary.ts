@@ -297,6 +297,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     if (panePty?.connected) {
       return this.issuePtyHandle(panePty, context)
     }
+    // A slept pane keeps its own name: the stopped process's synthetic handle cannot wake it.
+    const slept = leaf && !leaf.ptyId ? this.sleptLeafHandle(leaf) : null
+    if (slept) {
+      return slept
+    }
     if (leaf?.ptyId) {
       return this.issueHandle(leaf, context)
     }

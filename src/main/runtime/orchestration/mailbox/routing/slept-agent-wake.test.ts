@@ -69,6 +69,13 @@ describe('Agent-slept window pane wake', () => {
     slept.db.close()
   })
 
+  it('names a slept pane by its own handle, which a copied Terminal ID wakes', async () => {
+    const { db, runtime, handle } = await sleptPane()
+
+    expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+    db.close()
+  })
+
   it('ends an exit wait as exited when the slept pane is closed', async () => {
     const { db, runtime, handle } = await sleptPane()
     const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
