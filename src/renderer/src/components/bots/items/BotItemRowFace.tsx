@@ -3,7 +3,7 @@ import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
-import { botMascotSrc } from '../bot-mascot-color'
+import { useBotMascotLayers } from '../bot-mascot-look'
 import {
   BotGroupFacePicturesContext,
   BotItemFaceFolded,
@@ -42,6 +42,17 @@ function BotPanelFace({
   const handle = parsed?.kind === 'upload' ? pictures.faceOf(bot, parsed.version) : NO_UPLOAD
   const picture = folded ? (handle.folded ?? handle) : handle
   const upload = useSyncExternalStore(picture.subscribe, picture.read, picture.read)
-  const src = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor) ?? upload
-  return <BotAvatarTile src={src} fallback={botFallback(bot)} className={FACE_CLASS} />
+  const look = useBotMascotLayers(
+    parsed?.kind === 'mascot' ? parsed.id : null,
+    bot.avatarColor,
+    bot.avatarOutfit
+  )
+  return (
+    <BotAvatarTile
+      src={look?.src ?? upload}
+      outfit={look?.outfit}
+      fallback={botFallback(bot)}
+      className={FACE_CLASS}
+    />
+  )
 }
