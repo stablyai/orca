@@ -8,7 +8,6 @@ import type { Automation } from './automations/automation-definition'
 /** GitHub events only an Orca Cloud listing `triggers.github2` sends; an older one never would. */
 export const GITHUB2_EVENT_KINDS: readonly string[] = [
   'ci_passed',
-  'ci_finished',
   'pr_conflicted',
   'pr_closed',
   'pr_ready',
@@ -24,6 +23,14 @@ export const PR_STATE_EVENT_KINDS: readonly string[] = ['ci_passed', 'ci_finishe
 
 /** GitHub events only an Orca Cloud listing `triggers.workflows` sends. */
 export const WORKFLOW_EVENT_KINDS: readonly string[] = ['workflow_finished']
+
+/** GitHub events only an Orca Cloud listing `triggers.ci_finished` sends. */
+export const CI_FINISHED_EVENT_KINDS: readonly string[] = ['ci_finished']
+
+/** Whether a rule needs an Orca Cloud that lists `triggers.ci_finished`. */
+export function needsCiFinished(trigger: AutomationEventTrigger): boolean {
+  return trigger.source === 'github' && CI_FINISHED_EVENT_KINDS.includes(trigger.event)
+}
 
 /** Whether a rule needs an Orca Cloud that lists `triggers.workflows`. */
 export function needsWorkflows(trigger: AutomationEventTrigger): boolean {

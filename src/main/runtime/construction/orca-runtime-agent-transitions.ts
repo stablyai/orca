@@ -201,7 +201,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
       github2:
         cloud?.cloudFeatures()?.has('triggers.github2' satisfies ConnectorCloudFeature) ?? false,
       workflows:
-        cloud?.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) ?? false
+        cloud?.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) ?? false,
+      ciFinished:
+        cloud?.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) ?? false
     })
   }
 

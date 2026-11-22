@@ -115,8 +115,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     positionalArgs: ['pr'],
     notes: [
-      'One --once wait (see `orca automations create --help`) on github.ci_finished, pr_conflicted, pr_merged, pr_closed, review, review_comment and comment for that pull request. It runs once, on the first of them, and is then deleted; to keep watching, run watch-pr again.',
-      'It also runs at its deadline if nothing came first: 2 hours after it is made, unless --by <ISO time> or --for <length> (45m, 2h, 1h30m) says otherwise. That run is told the deadline came, and to read the pull request fresh before acting.',
+      "One --once wait (see `orca automations create --help`) on github.ci_finished (ci_passed and ci_failed where the bot's Orca Cloud doesn't send it yet), pr_conflicted, pr_merged, pr_closed, review, review_comment and comment for that pull request. It runs once, on the first of them, and is then deleted; to keep watching, run watch-pr again.",
+      'It also runs at its deadline if nothing came first: 2 hours after it is made, unless --by <ISO time> or --for <length> (45m, 2h, 1h30m, up to a year) says otherwise. That run is told the deadline came, and to read the pull request fresh before acting.',
       'The name defaults to "PR <owner/repo#n>". Without --prompt, the run reads the pull request and says what it needs next.'
     ],
     examples: [

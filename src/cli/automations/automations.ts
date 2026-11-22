@@ -170,11 +170,15 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     printAutomationResult(result, json, formatAutomationShow)
   },
   // The same create, with the rules and deadline a pull request watch stands for.
-  'automations watch-pr': async (context) =>
-    AUTOMATION_HANDLERS['automations create']({
-      ...context,
-      flags: watchPrCreateFlags(context.flags, Date.now())
-    }),
+  'automations watch-pr': async (context) => {
+    const selector = getOptionalStringFlag(context.flags, 'bot')
+    if (!selector) {
+      throw new RuntimeClientError('invalid_argument', 'watch-pr needs --bot <name>')
+    }
+    const { githubCiFinished } = await findBot(context.client, selector)
+    const flags = watchPrCreateFlags(context.flags, Date.now(), githubCiFinished === true)
+    await AUTOMATION_HANDLERS['automations create']({ ...context, flags })
+  },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
     const target = await getExplicitTarget(flags, cwd, client)
