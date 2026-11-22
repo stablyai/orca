@@ -13,18 +13,28 @@ export type NativeChatGalleryBlock = Extract<NativeChatBlock, { type: 'image-ref
  *  a chat's image set: their ids or contents can still be replaced while a preview is open. */
 export const NativeChatGalleryMessageContext = createContext<string | null>(null)
 
-/** Rows a send or launch will still replace, whose ids do not survive the echo. */
-export function nativeChatGalleryMessageId(message: NativeChatMessage): string | null {
+/** Null for rows that can still be replaced under the same id: a send or launch the echo replaces,
+ *  and the agent's rows while its turn works, whose words and images may still be rewritten. */
+export function nativeChatGalleryMessageId(
+  message: NativeChatMessage,
+  turnIsWorking?: boolean
+): string | null {
   return message.id.startsWith('launch-pending:') ||
     message.pendingSend ||
     message.deliveryState ||
     message.unsent ||
     message.queued ||
     message.sentWhileStopping ||
-    message.awaitsRetry
+    message.awaitsRetry ||
+    (turnIsWorking === true && message.role !== 'user')
     ? null
     : message.id
 }
+
+/** Where focus goes when the list is covered (a subagent view) while its gallery had focus. */
+export const NativeChatGalleryCoveredFocusContext = createContext<
+  (() => HTMLElement | null) | null
+>(null)
 
 export type NativeChatGalleryImageSource =
   | { kind: 'url'; url: string }

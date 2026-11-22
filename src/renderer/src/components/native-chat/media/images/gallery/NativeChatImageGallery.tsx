@@ -11,6 +11,7 @@ import {
 } from '../native-chat-markdown-image-owner'
 import {
   NATIVE_CHAT_GALLERY_ROOT_ATTRIBUTE,
+  NativeChatGalleryCoveredFocusContext,
   NativeChatGalleryControllerContext,
   type NativeChatGalleryController,
   type NativeChatGalleryRecord
@@ -89,6 +90,7 @@ export function NativeChatImageGallery({
 }): React.JSX.Element {
   const t = useTranslate()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
+  const coveredFocus = useContext(NativeChatGalleryCoveredFocusContext)
   const fence = owner ? galleryFence(owner) : null
   const [records] = useState(() => new WeakMap<Element, NativeChatGalleryRecord>())
   const [session, setSession] = useState<GallerySession | null>(null)
@@ -165,7 +167,15 @@ export function NativeChatImageGallery({
   const next = session ? live.indexOf(true, session.index + 1) : -1
 
   const restoreFocus = (current: GallerySession): void => {
-    if (current.closedBy === 'hidden' || current.closedBy === 'handoff') {
+    if (current.closedBy === 'handoff') {
+      return
+    }
+    if (current.closedBy === 'hidden') {
+      // The view that covered the list opened while focus was in here, so it could not take it then.
+      const active = document.activeElement
+      if (!active || active === document.body) {
+        coveredFocus?.()?.focus({ preventScroll: true })
+      }
       return
     }
     if (useAppStore.getState().activeModal !== 'none') {

@@ -82,9 +82,9 @@ const dialogContentSurfaceVariants = cva('', {
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS,
       media: MEDIA_SURFACE_CLASS,
-      /** `media` stepping through a set: focus can rest on the dialog, so its edge, always over the dark
-       *  scrim, takes a light ring in either theme. An outline, because the full-window canvas covers shadows. */
-      'media-gallery': `${MEDIA_SURFACE_CLASS} focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-background focus-visible:outline-solid dark:focus-visible:outline-foreground`
+      /** `media` stepping through a set: focus can rest on the dialog, whose ring the content draws
+       *  above the image (`group-focus-visible/media-gallery`), since a zoomed image covers its edges. */
+      'media-gallery': `${MEDIA_SURFACE_CLASS} group/media-gallery`
     }
   },
   defaultVariants: { surface: 'default' }

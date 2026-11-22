@@ -13,6 +13,11 @@ import {
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
+import {
+  localImageSrcStatus,
+  type LocalImageSrcOutcome,
+  type LocalImageSrcStatus
+} from './local-image-src-status'
 import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
@@ -99,11 +104,6 @@ export function useLocalImageSrc(
     .src
 }
 
-export type LocalImageSrcStatus = 'loading' | 'ready' | 'failed'
-
-/** What produced the value on screen: a URL kept from an older read must not count as current. */
-type LocalImageSrcOutcome = { key: string; generation: number; found: boolean }
-
 /** `useLocalImageSrc`, plus whether its source belongs to the current read: `src` can still hold the
  *  previous generation's URL, which may already be revoked, while a reread is pending. */
 export function useLocalImageSrcResult(
@@ -187,20 +187,12 @@ export function useLocalImageSrcResult(
     }
   }, [cacheKey, externalSrc, generation, retryKey])
 
-  let status: LocalImageSrcStatus
-  if (externalSrc) {
-    status = 'ready'
-  } else if (!cacheKey) {
-    status = 'failed'
-  } else if (
-    outcome?.key !== cacheKey ||
-    outcome.generation !== generation ||
-    outcome.generation !== getLocalImageCacheGeneration()
-  ) {
-    status = 'loading'
-  } else {
-    status = outcome.found ? 'ready' : 'failed'
-  }
+  const status = localImageSrcStatus({
+    external: Boolean(externalSrc),
+    cacheKey,
+    outcome,
+    generation: Math.max(generation, getLocalImageCacheGeneration())
+  })
   return { src: displaySrc, status }
 }
 

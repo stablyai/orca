@@ -4,7 +4,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatImageAttachments } from '../NativeChatImageAttachments'
 import { NativeChatMarkdownImageOwnerContext } from '../native-chat-markdown-image-owner'
-import { NativeChatGalleryMessageContext } from './native-chat-image-gallery-context'
+import {
+  NativeChatGalleryCoveredFocusContext,
+  NativeChatGalleryMessageContext
+} from './native-chat-image-gallery-context'
 import { NativeChatImageGallery } from './NativeChatImageGallery'
 
 beforeEach(() => {
@@ -34,24 +37,34 @@ function image(name: string, url = `https://example.invalid/${name}`) {
 
 type Message = { id: string | null; images: ReturnType<typeof image>[] }
 
+const coveringView = () => document.getElementById('covering-view')
+
 function Chat({
   messages,
-  loaded = messages.flatMap(({ id }) => (id ? [id] : []))
+  loaded = messages.flatMap(({ id }) => (id ? [id] : [])),
+  covered = false
 }: {
   messages: Message[]
   loaded?: string[]
+  /** A subagent view drawn over the list, which makes it inert. */
+  covered?: boolean
 }): React.JSX.Element {
   return (
     <NativeChatMarkdownImageOwnerContext value={OWNER}>
-      <NativeChatImageGallery loadedMessageIds={new Set(loaded)}>
-        <div data-native-chat-gallery-root="">
-          {messages.map((message, at) => (
-            <NativeChatGalleryMessageContext key={at} value={message.id}>
-              <NativeChatImageAttachments blocks={message.images} runtimeContext={null} />
-            </NativeChatGalleryMessageContext>
-          ))}
-        </div>
-      </NativeChatImageGallery>
+      <NativeChatGalleryCoveredFocusContext value={coveringView}>
+        <NativeChatImageGallery loadedMessageIds={new Set(loaded)}>
+          <div inert={covered} data-native-chat-gallery-root="">
+            {messages.map((message, at) => (
+              <NativeChatGalleryMessageContext key={at} value={message.id}>
+                <NativeChatImageAttachments blocks={message.images} runtimeContext={null} />
+              </NativeChatGalleryMessageContext>
+            ))}
+          </div>
+        </NativeChatImageGallery>
+      </NativeChatGalleryCoveredFocusContext>
+      <button type="button" id="covering-view">
+        covering view
+      </button>
     </NativeChatMarkdownImageOwnerContext>
   )
 }
@@ -131,4 +144,42 @@ it('shows a repeated image afresh and keeps one live region across steps', () =>
   expect(dialog().querySelector('img')).not.toBe(before)
   expect(dialog().querySelector('[aria-live]')).toBe(live)
   expect(live?.textContent).not.toBe('')
+})
+
+it('shows an image that will not decode as unavailable and offers no copy of it', () => {
+  render(
+    <Chat
+      messages={[
+        { id: 'first', images: [image('a.png')] },
+        { id: 'second', images: [image('broken.png')] }
+      ]}
+    />
+  )
+  open('a.png')
+  right()
+  const broken = dialog().querySelector('img')
+  if (!broken) {
+    throw new Error('expected the broken image to be shown')
+  }
+  expect(broken.getAttribute('alt')).toBe('broken.png')
+  fireEvent.error(broken)
+  expect(dialog().querySelector('img')).toBeNull()
+  expect(screen.getByRole('status').textContent).toBe('broken.png')
+  expect(dialog().hasAttribute('data-native-chat-copy-image-src')).toBe(false)
+})
+
+it('hands focus to a view that covers the list while the viewer has it', async () => {
+  const messages: Message[] = [
+    { id: 'first', images: [image('a.png')] },
+    { id: 'second', images: [image('b.png')] }
+  ]
+  const { rerender } = render(<Chat messages={messages} />)
+  open('a.png')
+  dialog().focus()
+  rerender(<Chat messages={messages} covered />)
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement?.id).toBe('covering-view')
 })

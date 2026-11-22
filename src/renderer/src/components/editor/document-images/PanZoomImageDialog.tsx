@@ -47,6 +47,8 @@ type PanZoomImageDialogProps = Omit<
   liveContent?: React.ReactNode
   /** Steps across a chat's images: the dialog shows its own focus and keeps room for the title. */
   gallery?: boolean
+  /** The image failed to load or decode; it shows `fallback` from then on. */
+  onImageError?: () => void
 }
 
 async function copyImageAsPng(
@@ -101,6 +103,7 @@ export function PanZoomImageDialog({
   stepStatus,
   liveContent,
   gallery = false,
+  onImageError,
   onCloseAutoFocus,
   onKeyDown,
   busy,
@@ -171,9 +174,17 @@ export function PanZoomImageDialog({
           onNext={onNext}
           stepStatus={stepStatus}
           gallery={gallery}
+          onImageError={onImageError}
           onClose={() => onOpenChange(false)}
           closeOnBackdrop={!busy}
         />
+        {/* Above the image, so a zoomed picture of any color never hides where focus is. */}
+        {gallery ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 hidden shadow-[inset_0_0_0_2px_var(--background),inset_0_0_0_4px_var(--foreground)] group-focus-visible/media-gallery:block"
+          />
+        ) : null}
         {liveContent}
       </DialogContent>
     </Dialog>
@@ -192,6 +203,7 @@ function PanZoomImageCanvas({
   onNext,
   stepStatus,
   gallery,
+  onImageError,
   onClose,
   closeOnBackdrop
 }: Pick<
@@ -207,6 +219,7 @@ function PanZoomImageCanvas({
   | 'onNext'
   | 'stepStatus'
   | 'gallery'
+  | 'onImageError'
 > & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -240,7 +253,10 @@ function PanZoomImageCanvas({
             setLoaded({ src: imageSrc, size: { width, height } })
           }
         }}
-        onError={() => setFailedSrc(imageSrc)}
+        onError={() => {
+          setFailedSrc(imageSrc)
+          onImageError?.()
+        }}
       />
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>

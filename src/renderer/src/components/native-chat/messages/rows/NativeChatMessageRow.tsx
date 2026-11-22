@@ -108,7 +108,9 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 /** Memoize settled block identities so stream frames rerender only changed rows. */
 export const MessageRow = memo(function MessageRow(props: MessageRowProps): React.JSX.Element {
   return (
-    <NativeChatGalleryMessageContext value={nativeChatGalleryMessageId(props.message)}>
+    <NativeChatGalleryMessageContext
+      value={nativeChatGalleryMessageId(props.message, props.activeTurnIsWorking)}
+    >
       <MessageRowContent {...props} />
     </NativeChatGalleryMessageContext>
   )
