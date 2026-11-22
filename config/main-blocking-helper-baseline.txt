@@ -134,7 +134,7 @@
 5 src/main/browser/cookies/chromium/prepare-import.ts
 1 src/main/browser/cookies/chromium/scan-source-rows.ts
 4 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
+1 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 1 src/main/browser/cookies/imports/import-cookie-file.ts
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
 3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import

@@ -1,5 +1,6 @@
 import { app } from 'electron'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
@@ -9,7 +10,7 @@ const MAX_ENTRIES = 128
 
 type StoredSources = Record<string, BrowserSessionProfileSource & { authority?: string }>
 
-let cached: StoredSources | null = null
+let cached: Promise<StoredSources> | undefined
 
 function storePath(): string {
   return join(app.getPath('userData'), FILE_NAME)
@@ -19,13 +20,10 @@ function entryKey(environmentId: string, profileId: string): string {
   return `${environmentId}\u0000${profileId}`
 }
 
-function load(): StoredSources {
-  if (cached) {
-    return cached
-  }
+async function readSources(): Promise<StoredSources> {
+  const sources: StoredSources = {}
   try {
-    const parsed: unknown = JSON.parse(readFileSync(storePath(), 'utf-8'))
-    cached = {}
+    const parsed: unknown = JSON.parse(await readFile(storePath(), 'utf-8'))
     if (parsed && typeof parsed === 'object') {
       for (const [key, value] of Object.entries(parsed)) {
         if (
@@ -33,18 +31,17 @@ function load(): StoredSources {
           typeof value === 'object' &&
           typeof (value as { browserFamily?: unknown }).browserFamily === 'string'
         ) {
-          cached[key] = value as BrowserSessionProfileSource
+          sources[key] = value as BrowserSessionProfileSource
         }
       }
     }
   } catch {
-    cached = {}
+    // Older installs can have no source records.
   }
-  return cached
+  return sources
 }
 
 function persist(sources: StoredSources): void {
-  cached = sources
   try {
     const path = storePath()
     mkdirSync(dirname(path), { recursive: true })
@@ -54,36 +51,29 @@ function persist(sources: StoredSources): void {
   }
 }
 
-export function recordClientRouteCookieImportSource(args: {
-  environmentId: string
-  profileId: string
-  authority: string
-  source: BrowserSessionProfileSource
-}): void {
-  const next: StoredSources = {
-    ...load(),
-    [entryKey(args.environmentId, args.profileId)]: { ...args.source, authority: args.authority }
-  }
-  const keys = Object.keys(next)
-  if (keys.length > MAX_ENTRIES) {
-    const byAge = keys.sort((a, b) => (next[a]?.importedAt ?? 0) - (next[b]?.importedAt ?? 0))
-    for (const key of byAge.slice(0, keys.length - MAX_ENTRIES)) {
-      delete next[key]
-    }
-  }
-  persist(next)
-}
-
-export function clientRouteCookieImportSources(
-  environmentId: string,
-  authority: string
-): Record<string, BrowserSessionProfileSource> {
+export async function openClientRouteCookieImportSources(environmentId: string, authority: string) {
+  const stored = await (cached ??= readSources())
   const prefix = `${environmentId}\u0000`
-  const result: Record<string, BrowserSessionProfileSource> = {}
-  for (const [key, { authority: recordedAuthority, ...source }] of Object.entries(load())) {
+  const sources: Record<string, BrowserSessionProfileSource> = {}
+  for (const [key, { authority: recordedAuthority, ...source }] of Object.entries(stored)) {
     if (key.startsWith(prefix) && (!recordedAuthority || recordedAuthority === authority)) {
-      result[key.slice(prefix.length)] = source
+      sources[key.slice(prefix.length)] = recordedAuthority
+        ? source
+        : { ...source, chromeProfile: undefined }
     }
   }
-  return result
+
+  function record(profileId: string, source: BrowserSessionProfileSource): void {
+    stored[entryKey(environmentId, profileId)] = { ...source, authority }
+    const keys = Object.keys(stored)
+    if (keys.length > MAX_ENTRIES) {
+      const byAge = keys.sort((a, b) => (stored[a]?.importedAt ?? 0) - (stored[b]?.importedAt ?? 0))
+      for (const key of byAge.slice(0, keys.length - MAX_ENTRIES)) {
+        delete stored[key]
+      }
+    }
+    persist(stored)
+  }
+
+  return { sources, record }
 }

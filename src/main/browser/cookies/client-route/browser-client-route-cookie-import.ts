@@ -1,15 +1,13 @@
 import type {
   BrowserCookieImportResult,
-  BrowserCookieImportSelection
+  BrowserCookieImportSelection,
+  BrowserSessionProfileSource
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
 } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
-import {
-  clientRouteCookieImportSources,
-  recordClientRouteCookieImportSource
-} from './client-route-cookie-import-source-store'
+import { openClientRouteCookieImportSources } from './client-route-cookie-import-source-store'
 import {
   browserCookieImportSource,
   cookieFileImportSource,
@@ -33,13 +31,9 @@ export type ClientRouteCookieImportRequest = ClientRouteCookieImportTarget &
 export async function importCookiesIntoClientRoutePartition(
   request: ClientRouteCookieImportRequest
 ): Promise<BrowserCookieImportResult | null> {
-  return importIntoClientRoutePartition(request, async (authority) => {
-    const previous =
-      'refreshSourceId' in request
-        ? clientRouteCookieImportSources(request.environmentId, authority)[request.browserProfileId]
-        : undefined
-    return browserCookieImportSource(request, previous)
-  })
+  return importIntoClientRoutePartition(request, async (previous) =>
+    browserCookieImportSource(request, previous)
+  )
 }
 
 /** Null when this desktop does not host the environment's pages; a remote file is never read. */
@@ -53,7 +47,7 @@ export async function importCookieFileIntoClientRoutePartition(
 async function importIntoClientRoutePartition(
   target: ClientRouteCookieImportTarget,
   resolveSource: (
-    authority: string
+    previous: BrowserSessionProfileSource | undefined
   ) => Promise<RouteCookieImportSource | BrowserCookieImportFailure>
 ): Promise<BrowserCookieImportResult | null> {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(target.environmentId)
@@ -64,6 +58,10 @@ async function importIntoClientRoutePartition(
   if (!profile) {
     return browserCookieImportFailure('profileNotFound')
   }
+  const sourceStore = await openClientRouteCookieImportSources(
+    target.environmentId,
+    routeIdentity.authorityConnectionIdentity
+  )
   const imported = await importIntoRoutePartition(
     {
       // Bound to the pairing the request saw; a re-pair while picking must not redirect it.
@@ -73,18 +71,13 @@ async function importIntoClientRoutePartition(
       routeChanged: (settled) =>
         browserCookieImportFailure(settled === null ? 'connectionEnded' : 'serverRepaired')
     },
-    () => resolveSource(routeIdentity.authorityConnectionIdentity)
+    () => resolveSource(sourceStore.sources[target.browserProfileId])
   )
   if (!imported.ok) {
     return imported
   }
   // Badge this desktop’s server-route jar, rather than the local profile jar.
-  recordClientRouteCookieImportSource({
-    environmentId: target.environmentId,
-    profileId: target.browserProfileId,
-    authority: routeIdentity.authorityConnectionIdentity,
-    source: imported.source.importedSource()
-  })
+  sourceStore.record(target.browserProfileId, imported.source.importedSource())
   return {
     ...imported.result,
     profileId: target.browserProfileId,

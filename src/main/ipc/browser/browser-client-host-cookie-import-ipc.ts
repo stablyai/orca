@@ -9,7 +9,7 @@ import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
-import { clientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
+import { openClientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
@@ -57,14 +57,25 @@ export function registerClientHostCookieImportHandlers(): void {
   // Overlay desktop imports unavailable to the server's profile records.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
-    (event, args: { environmentId: string }) => {
+    async (event, args: { environmentId: string }) => {
       if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
         return {}
       }
       const route = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
-      return route
-        ? clientRouteCookieImportSources(args.environmentId, route.authorityConnectionIdentity)
-        : null
+      if (!route) {
+        return null
+      }
+      const { sources } = await openClientRouteCookieImportSources(
+        args.environmentId,
+        route.authorityConnectionIdentity
+      )
+      const current = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
+      if (!current) {
+        return null
+      }
+      return current.authorityConnectionIdentity === route.authorityConnectionIdentity
+        ? sources
+        : {}
     }
   )
 }
