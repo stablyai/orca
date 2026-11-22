@@ -53,7 +53,7 @@ const supportByRuntime = new WeakMap<object, Map<string, SupportRead>>()
 
 /** The server's answer as read already under its current pairing; undefined when not read yet. */
 export function knownServerAsksSupport(
-  runtime: object,
+  runtime: Runtime,
   server: OrchestrationWorkerServer
 ): ServerAsksSupport | undefined {
   const known = supportByRuntime.get(runtime)?.get(server.environmentId)
