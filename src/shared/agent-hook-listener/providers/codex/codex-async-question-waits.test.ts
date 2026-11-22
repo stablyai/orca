@@ -186,6 +186,24 @@ it('holds no question after another late hook revived the ended turn', () => {
   }
 })
 
+// write_stdin asks on behalf of the exec it types into, and that exec's PostToolUse reports for both.
+it('keeps a write_stdin approval until the exec it types into ends', () => {
+  const report = workingBehindQuestion()
+  const repl = bash('python -i', 'repl')
+  const lint = bash('pnpm lint', 'lint')
+  report({ hook_event_name: 'PreToolUse', ...repl })
+  report({ hook_event_name: 'PreToolUse', ...lint })
+  report({
+    hook_event_name: 'PermissionRequest',
+    tool_name: 'write_stdin',
+    tool_input: { session_id: 3, chars: 'exit()', parent_call_id: 'repl' }
+  })
+
+  const sibling = report({ hook_event_name: 'PostToolUse', ...lint })
+  expect(agentWorksBehindQuestion(sibling)).toBe(false)
+  expect(agentWorksBehindQuestion(report({ hook_event_name: 'PostToolUse', ...repl }))).toBe(true)
+})
+
 // Esc can land while an accepted call's hooks run; the TUI drops questions with the turn.
 it('holds no question accepted as the turn was interrupted', () => {
   const report = codexPane()

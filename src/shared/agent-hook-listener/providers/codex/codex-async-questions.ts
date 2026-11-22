@@ -109,11 +109,13 @@ export function codexWaitBesideQuestion(
     return undefined
   }
   const { toolName, toolInput, interactivePrompt } = extractCodexToolFields(eventName, hookPayload)
-  const asksAs = approvalAskedAs(toolName, toolInput, hookPayload['tool_input'])
+  const rawInput = hookPayload['tool_input']
+  const asksAs = approvalAskedAs(toolName, toolInput, rawInput)
   if (eventName === 'PermissionRequest') {
+    const parent = toolName === 'write_stdin' ? parentCallId(rawInput) : undefined
     open.approvals.push({
       shown: { toolName, toolInput, interactivePrompt },
-      askers: possibleAskers(open.running, toolName, asksAs)
+      askers: parent ? new Set([parent]) : possibleAskers(open.running, toolName, asksAs)
     })
     return undefined
   }
@@ -182,6 +184,16 @@ function possibleAskers(
   const alike = calls.filter(([, call]) => call.asksAs === asksAs)
   const could = alike.length > 0 ? alike : calls.filter(([, call]) => call.toolName === toolName)
   return new Set(could.map(([id]) => id))
+}
+
+// write_stdin alone names its caller: the exec it types into, whose PostToolUse reports for both.
+function parentCallId(rawInput: unknown): string | undefined {
+  return rawInput &&
+    typeof rawInput === 'object' &&
+    'parent_call_id' in rawInput &&
+    typeof rawInput.parent_call_id === 'string'
+    ? rawInput.parent_call_id
+    : undefined
 }
 
 function openCall(
