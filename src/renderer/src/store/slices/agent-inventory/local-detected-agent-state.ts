@@ -1,9 +1,16 @@
-import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  haveSameDisabledTuiAgents
+} from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
+import {
+  applyLocalAgentAvailabilityChange,
+  mergeEnabledProbeIntoCompleteInventory
+} from './local-agent-availability-change'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
 import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
@@ -152,6 +159,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         .detectAgents(wake ? { ...detectArgs, wakeWslDistro: true } : detectArgs)
         .then((ids) => {
           const typed = ids.filter(isTuiAgent)
+          // An agent disabled while this probe ran must not be published.
+          const published = includeDisabled
+            ? typed
+            : filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
@@ -164,10 +175,13 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               lifecycle.detectedContextKey = contextKey
             }
             set((state) => ({
-              ...(exposeToLegacy ? { detectedAgentIds: typed, isDetectingAgents: false } : {}),
+              ...(exposeToLegacy ? { detectedAgentIds: published, isDetectingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
                 ...state.localDetectedAgentIdsByContext,
-                [contextKey]: typed
+                ...(includeDisabled
+                  ? {}
+                  : mergeEnabledProbeIntoCompleteInventory(state, lifecycle, contextKey, typed)),
+                [contextKey]: published
               },
               isDetectingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isDetectingLocalAgentsByContext,
@@ -175,7 +189,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
-          return typed
+          return published
         })
         .catch((error: unknown): TuiAgent[] => {
           if (
@@ -187,6 +201,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
               lifecycle.legacyDetectContextKey = null
+              lifecycle.detectedContextKey = contextKey
             }
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: [], isDetectingAgents: false } : {}),
@@ -223,32 +238,20 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       refreshLocalAgentInventory(set, get, lifecycle, worktreeId, false, options),
 
     clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => {
-      const eviction = contextEviction.getLocalAgentContextEviction({
-        projectIds,
-        state: get(),
-        internalContextKeys: [
-          ...lifecycle.detectPromises.keys(),
-          ...lifecycle.refreshPromises.keys(),
-          ...lifecycle.failedDetectContextKeys,
-          ...lifecycle.refusedContextKeys
-        ],
-        detectedContextKey: lifecycle.detectedContextKey,
-        legacyDetectContextKey: lifecycle.legacyDetectContextKey,
-        legacyRefreshContextKey: lifecycle.legacyRefreshContextKey
-      })
-      if (!eviction) {
-        return
+      const prefixes = projectIds
+        .map((projectId) => projectId.trim())
+        .filter(Boolean)
+        .map((projectId) => `${projectId}:`)
+      const eviction =
+        prefixes.length > 0
+          ? contextEviction.getLocalAgentContextEviction(get(), lifecycle, (contextKey) =>
+              prefixes.some((prefix) => contextKey.startsWith(prefix))
+            )
+          : null
+      if (eviction) {
+        contextEviction.applyLocalAgentContextEviction(lifecycle, eviction)
+        set(eviction.statePatch)
       }
-      for (const contextKey of eviction.removedContextKeys) {
-        lifecycle.detectPromises.delete(contextKey)
-        lifecycle.refreshPromises.delete(contextKey)
-        lifecycle.failedDetectContextKeys.delete(contextKey)
-        lifecycle.refusedContextKeys.delete(contextKey)
-      }
-      lifecycle.detectedContextKey = eviction.detectedContextKey
-      lifecycle.legacyDetectContextKey = eviction.legacyDetectContextKey
-      lifecycle.legacyRefreshContextKey = eviction.legacyRefreshContextKey
-      set(eviction.statePatch)
     },
 
     clearLocalDetectedAgents: () => {
@@ -272,24 +275,30 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         state.settings?.agentCmdOverrides,
         previous.settings?.agentCmdOverrides
       )
-    if (
-      !overridesChanged &&
-      state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents
-    ) {
+    // Detection probes command overrides, so a changed override invalidates every local inventory.
+    if (overridesChanged) {
+      const reacquireNativeInventory = nativeInventoryRequested
+      actions.clearLocalDetectedAgents()
+      // Native consumers can remain mounted while workspace consumers reacquire only WSL.
+      if (reacquireNativeInventory) {
+        void actions.ensureNativeDetectedAgents()
+      }
       return
     }
-    // Detection probes command overrides, so a changed override invalidates every local inventory.
     if (
-      overridesChanged ||
+      state.settings?.disabledTuiAgents !== previous.settings?.disabledTuiAgents &&
       !haveSameDisabledTuiAgents(
         state.settings?.disabledTuiAgents,
         previous.settings?.disabledTuiAgents
       )
     ) {
-      const reacquireNativeInventory = nativeInventoryRequested
-      actions.clearLocalDetectedAgents()
-      // Native consumers can remain mounted while workspace consumers reacquire only WSL.
-      if (reacquireNativeInventory) {
+      const dropped = applyLocalAgentAvailabilityChange(
+        set,
+        get,
+        lifecycle,
+        previous.settings?.disabledTuiAgents
+      )
+      if (nativeInventoryRequested && dropped.has(localAgentInventoryContextKey(undefined))) {
         void actions.ensureNativeDetectedAgents()
       }
     }

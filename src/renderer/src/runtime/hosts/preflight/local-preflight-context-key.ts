@@ -24,6 +24,8 @@ export function localPreflightContextKey(context: LocalPreflightContextKeyInput)
   return context?.wslDefault ? 'wsl:default' : 'host'
 }
 
+const COMPLETE_INVENTORY_SUFFIX = '\u0000all-agents'
+
 /** Native agent detection uses process PATH, independent of the project's directory. */
 export function localAgentInventoryContextKey(
   context: LocalPreflightContextKeyInput,
@@ -33,5 +35,20 @@ export function localAgentInventoryContextKey(
     context?.projectRuntime?.status === 'resolved' && context.projectRuntime.runtime.kind !== 'wsl'
       ? 'host'
       : localPreflightContextKey(context)
-  return includeDisabled ? `${key}\u0000all-agents` : key
+  return includeDisabled ? completeLocalAgentInventoryKey(key) : key
+}
+
+/** The inventory key that also lists disabled agents for an enabled-only inventory key. */
+export function completeLocalAgentInventoryKey(enabledOnlyKey: string): string {
+  return `${enabledOnlyKey}${COMPLETE_INVENTORY_SUFFIX}`
+}
+
+export function isCompleteLocalAgentInventoryKey(contextKey: string): boolean {
+  return contextKey.endsWith(COMPLETE_INVENTORY_SUFFIX)
+}
+
+export function enabledOnlyLocalAgentInventoryKey(contextKey: string): string {
+  return isCompleteLocalAgentInventoryKey(contextKey)
+    ? contextKey.slice(0, -COMPLETE_INVENTORY_SUFFIX.length)
+    : contextKey
 }
