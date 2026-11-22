@@ -5,7 +5,8 @@ import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
-import { retireReplacedChat } from '../runtime/orchestration/db/runs/retired-chat-runs'
+import { retireChatRuns } from '../runtime/orchestration/db/runs/retired-chat-runs'
+import { dropUnreadBotRequests } from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
 
 type Closed = Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>
 
@@ -19,7 +20,18 @@ export async function closeReplacedBotChat(
 ): Promise<Closed> {
   const closed = await close(sessionId, { runtime })
   if (closed.stopped) {
-    retireReplacedChat(runtime, sessionId)
+    retireChatRuns(runtime, sessionId)
   }
   return closed
+}
+
+/** `/new` and an agent change alike: nothing reads the replaced Chat's unread mail again. */
+export async function dropReplacedChatMail(
+  runtime: OrcaRuntimeService,
+  botId: string,
+  replaced: string | null
+): Promise<void> {
+  if (replaced) {
+    await dropUnreadBotRequests(runtime, botId, 'new-chat', replaced)
+  }
 }

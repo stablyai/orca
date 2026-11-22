@@ -46,7 +46,9 @@ function wakePending(db: OrchestrationDb, facts: QuestionPartyFacts, party: stri
         db,
         mailboxHandle,
         waiters: undefined,
-        reservedTypes: new Set(['heartbeat'])
+        reservedTypes: new Set(['heartbeat']),
+        // As terminal delivery reads its own mailbox: a Run's rows there wait to be routed, not typed.
+        excludeRunOwnedDirect: party === `terminal:${mailboxHandle}`
       }).messages.length > 0
   )
 }

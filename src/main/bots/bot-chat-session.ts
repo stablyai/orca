@@ -32,7 +32,7 @@ import {
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
-import { closeReplacedBotChat } from './bot-chat-replacement'
+import { closeReplacedBotChat, dropReplacedChatMail } from './bot-chat-replacement'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
@@ -62,6 +62,8 @@ export type BotChatDependencies = {
   closeChat: (
     sessionId: string
   ) => Promise<Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>>
+  /** Ends the mail a replaced Chat never read; its senders hear the bot started a new Chat. */
+  dropUnreadMail: (bot: Bot, replacedSessionId: string | null) => Promise<void>
 }
 
 /** What Orca writes on an automation run's message: where what the bot learns came from, who did
@@ -122,6 +124,7 @@ export function botChatSessions(deps: BotChatDependencies) {
     await deps.createChat(bot, sessionId)
     // Saved before anything else can fail, so the bot never loses a Chat it made.
     await deps.bots.setChatSession(bot.id, sessionId)
+    await deps.dropUnreadMail(bot, bot.chatSessionId)
     await nameNewHome(host, { ...bot, chatSessionId: sessionId }, bot.chatSessionId)
     return sessionId
   }
@@ -359,6 +362,7 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
       await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
     },
     showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
-    closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId)
+    closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId),
+    dropUnreadMail: (bot, replaced) => dropReplacedChatMail(runtime, bot.id, replaced)
   })
 }
