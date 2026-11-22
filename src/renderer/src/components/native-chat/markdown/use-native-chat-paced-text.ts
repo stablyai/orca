@@ -87,11 +87,12 @@ export function useNativeChatPacedText(
   )
   // The text as of the reply's last save; state, so a save renders the reveal that shows it.
   // A remount keeps the save it was revealing; a save made while unmounted is taken in its effect.
-  const saved = useRef({
+  const [firstSave] = useState(() => ({
     revision: drawsWhole ? initial.savedAt : savedRevision,
     text: drawsWhole ? initial.source : text
-  })
-  const [savedText, setSavedText] = useState(saved.current.text)
+  }))
+  const saved = useRef(firstSave)
+  const [savedText, setSavedText] = useState(firstSave.text)
   const revealMs = reducedMotion && !drawsWhole ? PLAIN_REVEAL_MS : undefined
   const pace = useRef(initial)
   // Text already there when the reply mounts never fades.
@@ -144,7 +145,7 @@ export function useNativeChatPacedText(
     if (!streaming || caughtUp || saved.current.revision !== savedRevision) {
       saved.current = { revision: savedRevision, text }
       if (drawsWhole) {
-        setSavedText(text)
+        setSavedText(saved.current.text)
       }
     }
     const source = drawsWhole ? saved.current.text : text
