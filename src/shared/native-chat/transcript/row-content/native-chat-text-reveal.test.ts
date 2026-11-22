@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   nativeChatRevealStepFrames,
   receiveNativeChatText,
-  savePacedNativeChatText
+  savePacedNativeChatText,
+  savePacedNativeChatTextDue
 } from './native-chat-text-reveal'
 
 let clock = 0
@@ -115,6 +116,9 @@ describe('a reply redrawn whole each step', () => {
     expect(saved.arrivals).toEqual([])
     const ended = receiveNativeChatText(saved, text(1130), false, false, 0)
     expect(ended.shown).toBe(1130)
+    // Held-back text is due 6 s after the reply last moved; with nothing held back, nothing is due.
+    expect(savePacedNativeChatTextDue(held, text(1124))).toBe(6000)
+    expect(savePacedNativeChatTextDue(held, text(1000))).toBeUndefined()
     // Text short of the next save still shows once the reply has waited 6 s since it last moved.
     expect(receiveNativeChatText(held, text(1124), true, false, 5999).shown).toBe(1000)
     expect(receiveNativeChatText(held, text(1124), true, false, 6000).shown).toBe(1124)

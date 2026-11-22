@@ -11,6 +11,7 @@ import {
   playNativeChatTextReveal,
   receiveNativeChatText,
   savePacedNativeChatText,
+  savePacedNativeChatTextDue,
   startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
@@ -110,6 +111,30 @@ export function useMobileNativeChatPacedText(
       }
     }
   }, [shown, frames, list, rowKey])
+
+  // Held-back text still shows once the reply has waited its longest step, even if no more arrives.
+  useEffect(() => {
+    const due = savePaced && streaming ? savePacedNativeChatTextDue(pace.current, text) : undefined
+    if (due === undefined) {
+      return
+    }
+    const timer = setTimeout(
+      () => {
+        pace.current = receiveNativeChatText(
+          pace.current,
+          text,
+          true,
+          false,
+          frames.now(),
+          REVEAL_MS
+        )
+        list?.drawn.set(rowKey, pace.current)
+        setShown(pace.current.shown)
+      },
+      Math.max(0, due - frames.now())
+    )
+    return () => clearTimeout(timer)
+  }, [savePaced, streaming, text, list, rowKey, frames])
 
   return immediate
     ? { text, revealing: false }

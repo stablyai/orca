@@ -291,6 +291,16 @@ function savePacedAt(source: string, now: number): NativeChatTextReveal {
   return { source, shown: source.length, arrivals: [], savePaced: true, shownAt: now }
 }
 
+/** When a save-paced reply must show the `text` it is holding back, or undefined if it holds none. */
+export function savePacedNativeChatTextDue(
+  reveal: NativeChatTextReveal,
+  text: string
+): number | undefined {
+  return reveal.savePaced && text.length > reveal.source.length && text.startsWith(reveal.source)
+    ? (reveal.shownAt ?? 0) + MAX_STEP_MS
+    : undefined
+}
+
 function receiveSavePacedText(
   previous: NativeChatTextReveal,
   text: string,
