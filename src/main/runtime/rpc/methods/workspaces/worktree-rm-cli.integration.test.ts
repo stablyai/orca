@@ -24,6 +24,11 @@ import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import { STATUS_METHODS } from '../host-management/status'
+import { hashOrcaHookContent } from '../../../../../shared/hashing/orca-hook-content-hash'
+import type {
+  ArchiveHookApproval,
+  ArchiveHookReport
+} from '../../../../../shared/worktree/removal/archive-hook-decision'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -39,6 +44,8 @@ const cliPath = '../../../../../cli/index'
 const { main }: { main: (argv: string[], cwd: string) => Promise<void> } = await import(cliPath)
 
 const exec = promisify(execFile)
+// The marker path is fixed per run, so the script and its approved hash are known up front.
+const ARCHIVE_SCRIPT = 'echo archived > ../archived'
 let directory = ''
 let repoPath = ''
 let checkout = ''
@@ -170,8 +177,8 @@ it.each<{ flags: string[]; deleted: boolean }>([
     // Existing branches have preservation metadata; explicit opt-in must override it.
     meta[id].preserveBranchOnDelete = flags.includes('--delete-branch')
     const head = await git('rev-parse', 'task')
-    // A shared runtime keeps another test's exit code; this run's own is what it checks.
-    process.exitCode = undefined
+    // A shared worker keeps another test's exit code (Bun ignores resetting it to undefined).
+    process.exitCode = 0
     const output: string[] = []
     const capture = (chunk: string | Uint8Array) => (output.push(String(chunk)), true)
     vi.spyOn(process.stdout, 'write').mockImplementation(capture)
@@ -179,7 +186,8 @@ it.each<{ flags: string[]; deleted: boolean }>([
     await main(['worktree', 'rm', '--worktree', `id:${id}`, ...flags, '--json'], repoPath)
     vi.mocked(process.stdout.write).mockRestore()
     vi.mocked(process.stderr.write).mockRestore()
-    expect(process.exitCode, output.join('')).not.toBe(1)
+    const reply = vi.mocked(console.log).mock.calls.at(-1)?.[0]
+    expect(process.exitCode, `${output.join('')}${String(reply)}`).not.toBe(1)
     await _settlePendingWorktreeRemovalsForTests()
     expect(existsSync(checkout)).toBe(false)
     expect(await git('for-each-ref', '--format=%(refname:short)', 'refs/heads/task')).toBe(
@@ -206,9 +214,62 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
   expect(process.exitCode).not.toBe(1)
   expect(existsSync(checkout)).toBe(false)
   expect(await git('rev-parse', 'task')).toBe(head)
-  expect(vi.mocked(console.log)).toHaveBeenCalledWith('removed: true')
+  expect(vi.mocked(console.log)).toHaveBeenCalledWith('removed: true\narchiveHook: none ran')
   expect(vi.mocked(console.error)).toHaveBeenCalledWith(
     'warning: local branch "task" was kept because Git could not safely delete it'
   )
   expect(warnings()).toHaveLength(0)
 })
+
+it.each<{
+  label: string
+  answer: ArchiveHookApproval | null
+  report?: ArchiveHookReport
+  refusal?: string
+}>([
+  {
+    label: 'approved version',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent(ARCHIVE_SCRIPT) },
+    report: { decision: 'run', reason: 'approved', ran: true }
+  },
+  {
+    label: 'unapproved',
+    answer: { decision: 'needs-approval' },
+    report: { decision: 'skip', reason: 'not-approved', ran: false }
+  },
+  {
+    label: 'changed since approval',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent('echo older') },
+    refusal: 'worktree_archive_hook_changed'
+  },
+  {
+    label: 'added after the desktop found none',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent('') },
+    refusal: 'worktree_archive_hook_changed'
+  },
+  { label: 'no desktop window', answer: null, refusal: 'worktree_archive_hook_undecided' }
+])('runs the orca.yaml archive hook by default as the desktop would: $label', async (testCase) => {
+  await writeFile(join(repoPath, 'orca.yaml'), `scripts:\n  archive: |\n    ${ARCHIVE_SCRIPT}\n`)
+  const { answer } = testCase
+  if (answer) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal calls only requestArchiveHookApproval on this notifier.
+    runtime.setNotifier({ requestArchiveHookApproval: async () => answer } as never)
+  }
+  process.exitCode = 0
+  vi.mocked(console.log).mockClear()
+  await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force', '--json'], repoPath)
+  await _settlePendingWorktreeRemovalsForTests()
+  const reply = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
+  if (testCase.refusal) {
+    expect(reply.error.code).toBe(testCase.refusal)
+    expect(existsSync(checkout)).toBe(true)
+  } else {
+    expect(reply.result.archiveHook).toEqual(testCase.report)
+    expect(existsSync(checkout)).toBe(false)
+  }
+  expect(existsSync(archiveMarker())).toBe(testCase.report?.ran === true)
+})
+
+function archiveMarker(): string {
+  return join(directory, 'archived')
+}

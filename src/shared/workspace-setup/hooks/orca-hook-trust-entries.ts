@@ -76,6 +76,20 @@ export function isOrcaHookContentApproved(
   return approvedOrcaHookContentHashes(trust, repoId, kind).includes(contentHash)
 }
 
+/** Whether a client may run this script without asking: the repo is trusted or this version was approved. */
+export function isOrcaHookTrusted(
+  trust: PersistedTrustedOrcaHooks,
+  repos: readonly { id: string }[] | null,
+  repoId: string,
+  kind: OrcaHookTrustKind,
+  contentHash: string
+): boolean {
+  return (
+    (repos !== null && isOrcaHookRepoTrusted(trust, repos, repoId)) ||
+    isOrcaHookContentApproved(trust, repoId, kind, contentHash)
+  )
+}
+
 /** Returns `trust` itself when the approval is already the latest one recorded. */
 export function withOrcaHookScriptConfirmed(
   trust: PersistedTrustedOrcaHooks,

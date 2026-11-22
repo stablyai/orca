@@ -114,6 +114,8 @@ export const FolderWorkspaceSelector = z.object({
 export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
   requireUniqueId: RequireUniqueId,
   runHooks: z.boolean().optional(),
+  // The archive content the desktop approved; the host refuses when what would run differs. Older hosts strip it.
+  approvedArchiveHash: z.string().max(128).optional(),
   allowFailedArchiveHook: z.boolean().optional()
 })
 

@@ -233,6 +233,8 @@ export type RemoveWorktreeResult = {
   nestedPreservedBranches?: (PreservedWorktreeBranch & { worktreeId: string })[]
   /** Present only when an explicit waiver allowed removal despite an archive-hook failure (#19334). */
   archiveHookOverride?: ArchiveHookOverride
+  /** Whether the archive hook ran; null when it started but no exit was seen. Older hosts omit it. */
+  archiveHookRan?: boolean | null
   /** Legacy clients receive acceptance before deletion finishes; capable clients wait for completion. */
   removing?: true
 }

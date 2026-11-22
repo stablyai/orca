@@ -1,6 +1,9 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
+import type {
+  ArchiveHookRemovalOptions,
+  RuntimeWorktreeRemovalTarget
+} from '../catalog/runtime-worktree-selection'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeTeardownRuntime } from './worktree-teardown'
@@ -55,7 +58,7 @@ export async function removeOrphanOrFolderWorktree({
   removalHostId?: ExecutionHostId
   repo?: Repo
   /** Same opt-in as worktree removal: archive runs only when the caller asked for hooks. */
-  archive: { runHooks: boolean; allowFailedArchiveHook: boolean }
+  archive: ArchiveHookRemovalOptions
 }): Promise<(RemoveWorktreeResult & { warning?: string }) | undefined> {
   if (!repo) {
     const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
@@ -122,21 +125,23 @@ export async function removeOrphanOrFolderWorktree({
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
-  const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
-    repo,
-    worktreeId: removalTarget.id,
-    displayName:
-      (
-        readWorktreeMetaForRepo(store, removalTarget.id, repo) ??
-        store.getWorktreeMeta(removalTarget.id)
-      )?.displayName ?? repo.displayName,
-    runArchive: archive.runHooks,
-    allowFailure: archive.allowFailedArchiveHook,
-    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
-  })
+  const { ran: archiveHookRan, override: archiveHookOverride } =
+    await gateFolderWorkspaceRemovalOnArchiveHook({
+      repo,
+      worktreeId: removalTarget.id,
+      displayName:
+        (
+          readWorktreeMetaForRepo(store, removalTarget.id, repo) ??
+          store.getWorktreeMeta(removalTarget.id)
+        )?.displayName ?? repo.displayName,
+      runArchive: archive.runHooks === true,
+      allowFailure: archive.allowFailedArchiveHook === true,
+      approvedArchiveHash: archive.approvedArchiveHash,
+      runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
+    })
   // Without --run-hooks, look at the folder only to warn, and never start its stopped WSL distro for that.
   const archiveSkipped =
-    !archive.runHooks &&
+    archive.runHooks !== true &&
     isRepoOnCatalogHost(repo) &&
     !(await blockedWslDistroForPath(repo.path)) &&
     Boolean(getEffectiveHooks(repo)?.scripts.archive)
@@ -161,6 +166,7 @@ export async function removeOrphanOrFolderWorktree({
     runtime.notifyWorktreesChanged(repo.id)
     return {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
+      archiveHookRan,
       ...(archiveSkipped
         ? {
             warning:

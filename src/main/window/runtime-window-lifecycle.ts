@@ -9,6 +9,7 @@ import type { TerminalTabCreateReply } from '../../shared/workspace-layout/termi
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agent-launch-tab-publish-relay'
 import { requestAgentPaneActivityFromRenderer } from './renderer-relays/agent-pane-activity-relay'
+import { requestArchiveHookApprovalFromRenderer } from './renderer-relays/archive-hook-approval-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerRendererDocumentNavigation } from './security/renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './renderer-relays/runtime-renderer-notification-sender'
@@ -232,6 +233,8 @@ export function registerRuntimeWindowLifecycle(
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),
+    requestArchiveHookApproval: (request) =>
+      requestArchiveHookApprovalFromRenderer(mainWindow, request),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>

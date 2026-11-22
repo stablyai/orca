@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import {
+  WORKTREE_ARCHIVE_HOOK_PIN_RUNTIME_CAPABILITY,
+  WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY
+} from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import { ARCHIVE_HOOK_UNDECIDED_CODE } from '../../shared/worktree/removal/archive-hook-decision'
 import type { RuntimeWorktreeRemoveResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/removal/archive-hook-removal-gate'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -12,6 +16,8 @@ export type WorktreeRemovalRequest = {
   force: boolean
   deleteBranch?: boolean
   runHooks: boolean
+  /** The desktop-approved archive content; newer hosts refuse when what would run differs. */
+  approvedArchiveHash?: string
   allowFailedArchiveHook: boolean
 }
 
@@ -39,6 +45,9 @@ export async function requestWorktreeRemoval(
               'invalid_runtime_response',
               'The Orca host returned an invalid status response.'
             )
+          }
+          if (request.approvedArchiveHash !== undefined) {
+            assertArchiveHookPinSupported(parsed.data.capabilities)
           }
           if (
             parsed.data.capabilities?.includes(WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY)
@@ -68,3 +77,23 @@ export async function requestWorktreeRemoval(
 }
 
 const BranchPolicyStatus = z.object({ capabilities: z.array(z.string()).optional() })
+
+// Checked on the status the call dispatches to: a host restarted into an older build would drop the pin.
+function assertArchiveHookPinSupported(capabilities: readonly string[] | undefined): void {
+  if (!capabilities?.includes(WORKTREE_ARCHIVE_HOOK_PIN_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      ARCHIVE_HOOK_UNDECIDED_CODE,
+      "This Orca host can't check the approved archive hook. Nothing was deleted. Update Orca there, or pass --archive run or --archive skip."
+    )
+  }
+}
+
+/** Request selection for a mutation carrying approvedArchiveHash. */
+export function requireArchiveHookPin<T>(params: T): { paramsForStatus: (raw: unknown) => T } {
+  return {
+    paramsForStatus: (raw) => {
+      assertArchiveHookPinSupported(BranchPolicyStatus.safeParse(raw).data?.capabilities)
+      return params
+    }
+  }
+}

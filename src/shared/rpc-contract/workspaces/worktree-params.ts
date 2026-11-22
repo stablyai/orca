@@ -239,6 +239,8 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
+  // The archive content the desktop approved; the host refuses when what would run differs. Older hosts strip it.
+  approvedArchiveHash: z.string().max(128).optional(),
   // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
   allowFailedArchiveHook: OptionalBoolean,
   // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
