@@ -15,27 +15,34 @@ import {
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { importSshPageCookies } from './browser-ssh-page-cookie-import'
+import {
+  clientHostCookieImportTarget,
+  pageCookieImportHostId
+} from './browser-page-cookie-import-route'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, sshRoute?) => {
-      if (sshRoute) {
-        return importSshPageCookies(get, sshRoute, () =>
+    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, pageRoute?) => {
+      if (pageRoute?.kind === 'ssh') {
+        return importSshPageCookies(get, pageRoute, () =>
           window.api.browser.sessionImportFromBrowser({
             profileId,
             browserFamily,
             browserProfile,
-            sshTargetId: sshRoute.sshTargetId
+            sshTargetId: pageRoute.sshTargetId
           })
         )
       }
       const initialState = get()
-      const hostId = getBrowserSettingsHostId(initialState)
+      const hostId = pageCookieImportHostId(pageRoute) ?? getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         set((state) =>
           browserImportStateForHostUpdate(state, hostId, {
@@ -49,9 +56,14 @@ export function createBrowserCookieImportActions(
         let ranOnClient = false
         try {
           // Client-hosted pages use desktop login jars; headless remote detection/import finds nothing.
+          // A page's import never returns null, so it never falls back to the server's own store.
           const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
-            environmentId: runtimeEnvironmentId,
-            profileId,
+            ...clientHostCookieImportTarget(
+              initialState,
+              runtimeEnvironmentId,
+              profileId,
+              pageRoute
+            ),
             browserFamily,
             browserProfile
           })
@@ -74,11 +86,9 @@ export function createBrowserCookieImportActions(
                 error: null
               })
             )
-            if (getBrowserSettingsHostId(get()) === hostId) {
-              await get()
-                .fetchBrowserSessionProfiles()
-                .catch(() => {})
-            }
+            await get()
+              .fetchBrowserSessionProfiles(hostId)
+              .catch(() => {})
           } else {
             set((state) =>
               browserImportStateForHostUpdate(state, hostId, {
@@ -137,11 +147,9 @@ export function createBrowserCookieImportActions(
               error: null
             })
           )
-          if (getBrowserSettingsHostId(get()) === hostId) {
-            await get()
-              .fetchBrowserSessionProfiles()
-              .catch(() => {})
-          }
+          await get()
+            .fetchBrowserSessionProfiles(hostId)
+            .catch(() => {})
         } else {
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {
