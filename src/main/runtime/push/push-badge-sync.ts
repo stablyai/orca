@@ -34,6 +34,7 @@ export class PushBadgeSync {
   private running = false
   private dirty = false
   private retryDelayMs = BADGE_RETRY_BASE_MS
+  private backingOff = false
   private pausedUntil = 0
   private stopped = true
   private unsubscribe: (() => void) | null = null
@@ -71,8 +72,8 @@ export class PushBadgeSync {
   /** The count or the set of registrations may have changed. */
   request(delayMs = BADGE_SETTLE_MS): void {
     const dueAt = Date.now() + delayMs
-    // A change preempts a pending retry backoff.
-    if (this.stopped || (this.timer && this.timer.dueAt <= dueAt)) {
+    // A change brings a pending send forward, but not a backoff after the gateway failed.
+    if (this.stopped || (this.timer && (this.timer.dueAt <= dueAt || this.backingOff))) {
       return
     }
     this.timer?.cancel()
@@ -100,10 +101,7 @@ export class PushBadgeSync {
     } finally {
       this.running = false
     }
-    if (this.dirty) {
-      this.dirty = false
-      this.request()
-    }
+    this.backingOff = next !== 'done'
     if (next === 'paused') {
       this.request(this.pausedUntil - Date.now())
     } else if (next === 'retry') {
@@ -111,6 +109,10 @@ export class PushBadgeSync {
       this.retryDelayMs = Math.min(this.retryDelayMs * 2, BADGE_RETRY_MAX_MS)
     } else {
       this.retryDelayMs = BADGE_RETRY_BASE_MS
+    }
+    if (this.dirty) {
+      this.dirty = false
+      this.request()
     }
   }
 
@@ -126,7 +128,9 @@ export class PushBadgeSync {
     const live = this.registry
       .listDevices()
       .flatMap(({ deviceId, pushRegistration: registration }) =>
-        registration && registration.expiresAt > now ? [{ deviceId, registration }] : []
+        registration && registration.filter.badge === true && registration.expiresAt > now
+          ? [{ deviceId, registration }]
+          : []
       )
     const liveIds = new Set(live.map((target) => target.registration.registrationId))
     for (const registrationId of this.accepted.keys()) {
@@ -144,6 +148,10 @@ export class PushBadgeSync {
     let retry = false
     for (let start = 0; start < stale.length; start += MAX_REGISTRATIONS_PER_SEND) {
       const batch = stale.slice(start, start + MAX_REGISTRATIONS_PER_SEND)
+      // The gateway may store this count even when its push fails, so the old one is no longer known.
+      for (const target of batch) {
+        this.accepted.delete(target.registration.registrationId)
+      }
       const result = await this.client.send({
         registrationIds: batch.map((target) => target.registration.registrationId),
         notification: {

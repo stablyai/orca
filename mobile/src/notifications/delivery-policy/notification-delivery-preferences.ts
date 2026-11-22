@@ -47,6 +47,8 @@ export function notificationPreferencesFilter(
   return {
     onlyWhenDesktopAway: value.onlyWhenDesktopAway,
     onlyWhenAgentNeedsInput: value.onlyWhenAgentNeedsInput,
-    sound: value.sound
+    sound: value.sound,
+    // An app before this lowered no icon count in the foreground and never cleared one.
+    badge: true
   }
 }
