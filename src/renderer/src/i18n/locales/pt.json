@@ -1576,7 +1576,8 @@
       },
       "userAgent": {
         "title": "Identidade do navegador",
-        "description": "Escolha o user agent para cada perfil e página do navegador. As alterações têm efeito após reiniciar.",
+        "descriptionPageKinds": "Escolha o user agent para cada página que este computador mostra, incluindo páginas SSH e páginas remotas definidas como Este dispositivo. As alterações têm efeito após reiniciar.",
+        "serverPagesNote": "Páginas em Servidor (transmitido) usam a identidade desse servidor; altere-a lá com orca browser identity set.",
         "remoteUnsupported": "Gerencie a identidade do navegador no host remoto com a CLI do Orca.",
         "loading": "Carregando…",
         "resetRequired": "Os dados de identidade precisam ser redefinidos explicitamente antes de poderem ser alterados.",
