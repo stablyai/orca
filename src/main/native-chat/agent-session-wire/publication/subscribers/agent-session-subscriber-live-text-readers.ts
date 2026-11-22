@@ -39,17 +39,17 @@ export function liveTextFor(
  *  text; every other subscriber, older phones and desktops included, gets what main sent it. */
 export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveTextShown === true
 
-// Asked every streaming window, but its answer changes only when a subscriber joins, leaves, or
-// says it is shown or hidden; each reader's own state is read through it lazily.
-let readersGeneration = 0
-const sessionReaders = new WeakMap<
-  ReadonlyMap<string, Subscriber>,
-  { generation: number; readers: LiveTextReaders | null }
->()
+// Asked every streaming window, but its answer changes only when a subscriber of that session
+// joins, leaves, or says it is shown or hidden; each reader's own state is read through it lazily.
+const sessionReaders = new WeakMap<ReadonlyMap<string, Subscriber>, LiveTextReaders | null>()
 
-/** A subscriber joined or left a session, or a viewer said it is shown or hidden. */
-export function noteLiveTextReadersChanged(): void {
-  readersGeneration++
+/** A subscriber joined or left this session, or one of its viewers said it is shown or hidden. */
+export function noteLiveTextReadersChanged(
+  subscribers: ReadonlyMap<string, Subscriber> | undefined
+): void {
+  if (subscribers) {
+    sessionReaders.delete(subscribers)
+  }
 }
 
 /** Who would read a session's live text; null while it has no subscriber. */
@@ -60,11 +60,11 @@ export function sessionLiveTextReaders(
     return null
   }
   const cached = sessionReaders.get(subscribers)
-  if (cached?.generation === readersGeneration) {
-    return cached.readers
+  if (cached !== undefined) {
+    return cached
   }
   const readers = groupedLiveTextReaders([...subscribers.values()])
-  sessionReaders.set(subscribers, { generation: readersGeneration, readers })
+  sessionReaders.set(subscribers, readers)
   return readers
 }
 
@@ -151,6 +151,8 @@ export class LiveTextViewerShows {
       enqueue: (subscriber: Subscriber, deliver: () => Promise<unknown>) => void
       journal: (sessionId: string) => AgentSessionJournal | undefined
       sendTail: (subscriber: Subscriber, journal: AgentSessionJournal) => Promise<unknown>
+      /** The session's subscribers, whose readers a shown or hidden viewer changes. */
+      session: (sessionId: string) => ReadonlyMap<string, Subscriber> | undefined
     }
   ) {}
 
@@ -165,7 +167,7 @@ export class LiveTextViewerShows {
     }
     if (subscriber.liveTextShown !== shown) {
       subscriber.liveTextShown = shown
-      noteLiveTextReadersChanged()
+      noteLiveTextReadersChanged(this.deps.session(subscriber.sessionId))
       if (shown) {
         this.sendTail(subscriber, SHOWN_TAIL_ATTEMPTS)
       }

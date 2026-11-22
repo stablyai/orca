@@ -55,7 +55,8 @@ export class AgentSessionSubscribers {
     isActive: (subscriber) => this.isActive(subscriber),
     enqueue: (subscriber, deliver) => this.enqueue(subscriber, deliver),
     journal: (sessionId) => this.hooks.readSessionJournal?.(sessionId),
-    sendTail: (subscriber, journal) => this.sendLiveTail(subscriber, journal, subscriber.fence)
+    sendTail: (subscriber, journal) => this.sendLiveTail(subscriber, journal, subscriber.fence),
+    session: (sessionId) => this.bySession.get(sessionId)
   })
   readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
     subscribers: (sessionId) => this.subscribers(sessionId),
@@ -98,7 +99,7 @@ export class AgentSessionSubscribers {
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
-    liveText.noteLiveTextReadersChanged()
+    liveText.noteLiveTextReadersChanged(session)
     this.viewerShows.watch(subscriber, input.onLiveTextShown)
 
     this.forkMarkers.add(subscriber)
@@ -332,7 +333,7 @@ export class AgentSessionSubscribers {
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
-    liveText.noteLiveTextReadersChanged()
+    liveText.noteLiveTextReadersChanged(session)
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
