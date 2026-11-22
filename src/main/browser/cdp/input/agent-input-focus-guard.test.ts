@@ -24,18 +24,21 @@ import {
 } from './agent-input-focus-guard'
 
 function fakeRenderer(id: number, answer: boolean) {
-  const sent: { channel: string; data: { token: string; active: boolean } }[] = []
+  const sent: { channel: string; data: { token: string; active: boolean; holdFocus?: boolean } }[] =
+    []
   const renderer = {
     id,
     isDestroyed: () => false,
-    send: vi.fn((channel: string, data: { token: string; active: boolean }) => {
-      sent.push({ channel, data })
-      if (answer && data.active) {
-        for (const listener of ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []) {
-          listener({ sender: { id } }, { token: data.token })
+    send: vi.fn(
+      (channel: string, data: { token: string; active: boolean; holdFocus?: boolean }) => {
+        sent.push({ channel, data })
+        if (answer && data.active) {
+          for (const listener of ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []) {
+            listener({ sender: { id } }, { token: data.token })
+          }
         }
       }
-    })
+    )
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard only reads id, isDestroyed and send.
   return { sent, renderer: renderer as unknown as Electron.WebContents }
@@ -74,6 +77,14 @@ describe('guardPaneFocusForAgentInput', () => {
 
     await refusal
     expect(sent.map(({ data }) => data.active)).toEqual([true, false])
+  })
+  it('asks the pane only whether the user composes when focus need not be held', async () => {
+    const { sent, renderer } = fakeRenderer(7, true)
+
+    await expect(
+      guardPaneFocusForAgentInput(renderer, 'page-1', { holdFocus: false })
+    ).resolves.toBeTypeOf('function')
+    expect(sent[0].data).toMatchObject({ active: true, holdFocus: false })
   })
   it('refuses the input at once and ends the guard while the user composes', async () => {
     const { sent, renderer } = fakeRenderer(7, false)

@@ -255,10 +255,16 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     const args = parseShellArgs(command.trim())
     assertAgentBrowserPassthroughStaysOnPage(args)
+    const movesFocus = passthroughMovesPageFocus(args)
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
-      async (sessionName) => await this.execAgentBrowser(sessionName, args, { cliArgv: true }),
+      async (sessionName, target) => {
+        if (movesFocus) {
+          await this.refuseWhileUserComposes(this.requireTargetWebContents(target))
+        }
+        return await this.execAgentBrowser(sessionName, args, { cliArgv: true })
+      },
       // Raw commands and batches can click or press keys too.
       { elements: passthroughElementArgs(args), blockFileChooser: true }
     )
@@ -282,6 +288,42 @@ const ELEMENT_FIRST_COMMANDS = new Set([
   'download',
   'drag'
 ])
+
+// These focus an element or run page code that may. The proxy already guards the helper's mouse presses and Tab.
+const FOCUS_MOVING_COMMANDS = new Set(['eval', 'focus', 'fill', 'type', 'batch', 'pushstate'])
+// A page's WebMCP tool, a replayed flow and a wait condition also run in the page.
+const PAGE_CODE_OPERANDS = new Map([
+  ['webmcp', 'invoke'],
+  ['flow', 'run'],
+  ['wait', '--fn']
+])
+// Options of `find` that take a value, so neither word is positional.
+const FIND_VALUE_OPTIONS = new Set(['--name', '--session'])
+
+// `find <locator> <value> [action] [text]`, where `nth` takes two value words and the action defaults to click.
+// The values are required, so the helper takes them first even when they start with `--`.
+function findAction([locator, ...rest]: string[]): string | undefined {
+  const afterValues = rest.slice(locator === 'nth' ? 2 : 1)
+  return afterValues.find(
+    (arg, index) => !arg.startsWith('--') && !FIND_VALUE_OPTIONS.has(afterValues[index - 1] ?? '')
+  )
+}
+
+export function passthroughMovesPageFocus([command, ...operands]: string[]): boolean {
+  if (!command) {
+    return false
+  }
+  // The helper's fill focuses the element it found.
+  if (command === 'find') {
+    return findAction(operands) === 'fill'
+  }
+  const operand = PAGE_CODE_OPERANDS.get(command)
+  return (
+    FOCUS_MOVING_COMMANDS.has(command) ||
+    (operand !== undefined &&
+      operands.some((arg) => arg === operand || arg.startsWith(`${operand}=`)))
+  )
+}
 
 // Free text such as `keyboard type e2` is not a ref; explicit `@e2`/`ref=e2` are refs anywhere.
 function passthroughElementArgs([command, ...operands]: string[]): string[] {

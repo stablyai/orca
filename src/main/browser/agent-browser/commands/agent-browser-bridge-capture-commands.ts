@@ -76,6 +76,12 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         const wc = this.requireTargetWebContents(target)
         let releaseDebugger = (): void => {}
         try {
+          const checking = this.refuseWhileUserComposes(wc)
+          if (checking) {
+            await checking
+            // The caller can leave while the pane answers; its script must not run after that.
+            throwIfSignalAborted(signal)
+          }
           releaseDebugger = acquireElectronDebugger(wc).release
           // A caller leaving frees the page queue but does not terminate its script.
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime.evaluate with returnByValue always answers this CDP shape; unchanged from before the bound.

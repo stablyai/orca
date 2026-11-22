@@ -36,6 +36,19 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
     )
   }
 
+  /**
+   * Refuses page script while the user composes, since a guest focus move discards the window's macOS
+   * IME composition (Chromium 150). Null for pages outside the window, so their commands keep their timing.
+   */
+  protected refuseWhileUserComposes(wc: WebContents): Promise<void> | null {
+    if (!isEmbeddedGuest(wc)) {
+      return null
+    }
+    return this.browserManager
+      .guardUserFocusForAgentInput(wc.id, { holdFocus: false })
+      .then((release) => release())
+  }
+
   /** Resolves a ref or selector to the element the helper found, with the CDP session of its frame. */
   protected async captureElement(sessionName: string, element: string): Promise<CapturedTarget> {
     const session = this.sessions.get(sessionName)
