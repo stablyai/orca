@@ -207,13 +207,17 @@ export class PluginMarketplaceService {
   }
 
   /** Listings from the cached catalogs in catalog order, without waiting on any fetch. */
-  async listCachedPlugins(): Promise<PluginMarketplaceListing[]> {
+  async listCachedPlugins(pluginKeys?: ReadonlySet<string>): Promise<PluginMarketplaceListing[]> {
     const states = await this.listSnapshots()
     return states.flatMap(({ source, snapshot }) =>
       snapshot.marketplace.plugins
         // Why: hide packs whose contribution kind this build no longer
         // supports (themes/icons/skills) so users never reach a dead install.
-        .filter((entry) => isMarketplaceListingSupported(entry.categories))
+        .filter(
+          (entry) =>
+            (!pluginKeys || pluginKeys.has(entry.id)) &&
+            isMarketplaceListingSupported(entry.categories)
+        )
         .map((entry) => this.listingFromEntry(source, snapshot, entry))
     )
   }

@@ -8,7 +8,7 @@ import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
-import { isQuittingForUpdate } from '../../updater/updater-service'
+import { applyTeamPolicyBeforeQuit, isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -31,6 +31,7 @@ function installBeforeQuitHandler(): void {
     if (event.defaultPrevented) {
       return
     }
+    applyTeamPolicyBeforeQuit()
     if (isQuittingForUpdate()) {
       recordUpdaterLifecycle('before_quit_allowed', undefined, {
         message: 'before-quit allowed for update install'

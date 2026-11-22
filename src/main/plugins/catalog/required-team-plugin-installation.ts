@@ -7,7 +7,8 @@ import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active
 export async function installRequiredTeamPlugins(
   marketplace: PluginMarketplaceService,
   installer: PluginMarketplaceInstaller,
-  plugins: PluginService
+  plugins: PluginService,
+  refreshStaleCatalogs: () => Promise<void>
 ): Promise<void> {
   const policy = getActiveTeamCapabilities()?.teamPolicy
   if (!policy?.requiredPlugins?.length) {
@@ -22,12 +23,17 @@ export async function installRequiredTeamPlugins(
   if (missing.length === 0) {
     return
   }
-  await Promise.allSettled([marketplace.seedOfficialSource(), marketplace.seedCommunitySource()])
-  const sources = await marketplace.listSources()
-  await Promise.allSettled(
-    sources.filter(({ marketplace }) => !marketplace).map(({ id }) => marketplace.refreshSource(id))
-  )
-  const listings = await marketplace.listCachedPlugins()
+  if (!missing.some(stillRequired)) {
+    return
+  }
+  const keys = new Set(missing)
+  let listings = await marketplace.listCachedPlugins(keys)
+  const listedKeys = new Set(listings.map(({ pluginKey }) => pluginKey))
+  if (missing.some((key) => !listedKeys.has(key))) {
+    await Promise.allSettled([marketplace.seedOfficialSource(), marketplace.seedCommunitySource()])
+    await refreshStaleCatalogs()
+    listings = await marketplace.listCachedPlugins(keys)
+  }
   const internalId = policy.internalCatalog && marketplaceSourceId(policy.internalCatalog)
   let installed = false
   for (const pluginKey of missing) {
@@ -43,7 +49,10 @@ export async function installRequiredTeamPlugins(
       continue
     }
     try {
-      const preview = await installer.preview(listing.marketplaceSourceId, pluginKey)
+      // Catalog v2 already pins the commit. The installer still checks the tree and release.
+      const preview = listing.release
+        ? { ...listing, resolvedCommit: listing.release.commit }
+        : await installer.preview(listing.marketplaceSourceId, pluginKey)
       if (stillRequired(pluginKey)) {
         const result = await installer.install(preview, {
           requireMissing: true,

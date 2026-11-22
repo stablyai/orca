@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/updater/update-status-types'
 import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
-import type { TeamUpdatePolicy } from '../releases/updater-release-policy'
+import type { TeamUpdateApproval, TeamUpdatePolicy } from '../releases/updater-release-policy'
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -130,6 +130,9 @@ export abstract class UpdaterState {
   protected isPinnedBuildActive = false
   protected getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
   protected getTeamUpdatePolicy: (() => TeamUpdatePolicy | undefined) | null = null
+  protected teamUpdateApproval: TeamUpdateApproval | null = null
+  protected teamControlledPrerelease = false
+  protected implicitInstallOnQuit = false
   protected getUpdateDelayDays: (() => number) | null = null
   // Newest release the last release-feed check withheld for the user's delay.
   protected delayedUpdate: DelayedUpdate | null = null

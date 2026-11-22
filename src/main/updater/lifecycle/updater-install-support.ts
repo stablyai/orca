@@ -17,11 +17,61 @@ import type {
   UpdateStatus
 } from '../../../shared/updater/update-status-types'
 import { compareVersions } from '../releases/updater-fallback'
-import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
+import {
+  AUTO_UPDATE_RETRY_INTERVAL_MS,
+  PRE_QUIT_CLEANUP_TIMEOUT_MS,
+  REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS
+} from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
 import { releaseServeSupervisorPark } from './serve-supervisor-install-park'
+import { teamAllowsUpdate, type TeamUpdatePolicy } from '../releases/updater-release-policy'
 
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
+  protected configureTeamReleaseChannel(
+    team: TeamUpdatePolicy | undefined,
+    includePrerelease: boolean,
+    perfCheck: boolean
+  ): void {
+    if (team?.updateChannel !== undefined) {
+      this.getAutoUpdater().allowPrerelease = includePrerelease
+      this.teamControlledPrerelease = true
+    } else if (this.teamControlledPrerelease) {
+      this.getAutoUpdater().allowPrerelease = this.includePrereleaseActive || perfCheck
+      this.teamControlledPrerelease = false
+    }
+  }
+
+  protected pinTeamApprovedReleaseFeed(
+    url: string,
+    policy: TeamUpdatePolicy | undefined,
+    tags: readonly string[]
+  ): void {
+    this.teamUpdateApproval = { policy, tags }
+    this.getAutoUpdater().setFeedURL({ provider: 'generic', url })
+  }
+
+  protected allowsCurrentTeamUpdate(version: string): boolean {
+    return teamAllowsUpdate(
+      this.getTeamUpdatePolicy?.(),
+      this.teamUpdateApproval,
+      version,
+      this.activeUpdateSource === 'release' && !this.isPinnedBuildActive
+    )
+  }
+
+  protected holdUpdateForTeamPolicy(version: string): boolean {
+    if (this.allowsCurrentTeamUpdate(version)) {
+      return false
+    }
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
+    this.clearAvailableUpdateContext()
+    this.restoreReleaseUpdateSource()
+    this.sendStatus({ state: 'error', ...updaterCodedMessage('teamUpdatePolicy') })
+    this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+    return true
+  }
+
   protected getKnownReleaseUrl(): string | undefined {
     return this.availableReleaseUrl ?? undefined
   }
@@ -80,6 +130,11 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   }
 
   protected canProceedWithInstall(version: string, automatic: boolean): boolean {
+    if (this.holdUpdateForTeamPolicy(version)) {
+      this.resetQuitForUpdateState()
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      return false
+    }
     if (automatic && this.getAutomaticUpdates?.() !== true) {
       this.cancelAutomaticInstall(version)
       return false

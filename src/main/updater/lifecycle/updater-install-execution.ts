@@ -91,6 +91,22 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.addEvent('pre_quit_cleanup_start')
         await this.runBeforeUpdateQuitCleanup()
         span.addEvent('pre_quit_cleanup_done')
+        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
+          return
+        }
+        await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
+        // Deferred staging begins inside the native install call below.
+        await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
+        recordUpdaterLifecycle('quit_and_install_invoking_native', {
+          version: pendingVersion || null
+        })
+        // Recovery may have cleared the handoff; never invoke installation afterward.
+        if (!this.quitAndInstallInProgress) {
+          return
+        }
+        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+          return
+        }
         if (
           this.updateInstallMode === 'supervised-headless-serve' &&
           !requestServeUpdateHandoff(pendingVersion)
@@ -113,22 +129,6 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           return
         }
 
-        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
-          return
-        }
-        await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
-        // Deferred staging begins inside the native install call below.
-        await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
-        recordUpdaterLifecycle('quit_and_install_invoking_native', {
-          version: pendingVersion || null
-        })
-        // Recovery may have cleared the handoff; never invoke installation afterward.
-        if (!this.quitAndInstallInProgress) {
-          return
-        }
-        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
-          return
-        }
         // Mark before native invoke so synchronous errors can recover; pre-native errors cannot.
         setMacInstallPreflightInProgress(false)
         this.quitAndInstallNativeInvoked = true

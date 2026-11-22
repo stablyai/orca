@@ -7,6 +7,10 @@ import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-ma
 import type { PluginService } from '../../plugins/plugin-service'
 import { installRequiredTeamPlugins } from '../../plugins/catalog/required-team-plugin-installation'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import {
+  createStaleMarketplaceRefresh,
+  MISSING_SNAPSHOT_RETRY_MS
+} from '../../plugins/catalog/plugin-marketplace-stale-refresh'
 
 export function watchTeamPluginPolicy(
   plugins: PluginService,
@@ -18,20 +22,25 @@ export function watchTeamPluginPolicy(
   let disposed = false
   let lastAttemptAt = 0
   let pending = Promise.resolve()
+  const refreshStaleCatalogs = createStaleMarketplaceRefresh({
+    listSources: () => marketplace.listSources(),
+    refreshSource: marketplace.refreshSourceShared
+  })
 
   const reconcile = (): void => {
     const team = getActiveTeamCapabilities()
     const policy = team?.teamPolicy
-    const snapshot = policy
-      ? JSON.stringify([
-          policy.orgId,
-          policy.internalCatalog,
-          policy.requiredPlugins,
-          team?.flags[flags.plugins],
-          team?.flags[flags.officialPlugins],
-          team?.flags[flags.communityPlugins]
-        ])
-      : undefined
+    const pluginSettings = [
+      policy?.internalCatalog,
+      policy?.requiredPlugins,
+      team?.flags[flags.plugins],
+      team?.flags[flags.officialPlugins],
+      team?.flags[flags.communityPlugins]
+    ]
+    const snapshot =
+      policy && pluginSettings.some((value) => value !== undefined)
+        ? JSON.stringify([policy.orgId, ...pluginSettings])
+        : undefined
     const changed = snapshot !== lastSnapshot
     const retry = policy?.requiredPlugins?.length && Date.now() - lastAttemptAt >= 15 * 60_000
     if (!changed && !retry) {
@@ -47,7 +56,9 @@ export function watchTeamPluginPolicy(
         if (changed) {
           await plugins.refresh()
         }
-        await installRequiredTeamPlugins(marketplace, installer, plugins)
+        await installRequiredTeamPlugins(marketplace, installer, plugins, () =>
+          refreshStaleCatalogs(MISSING_SNAPSHOT_RETRY_MS)
+        )
       })
       .catch((error) => {
         console.warn('[plugins] could not apply the team plugin policy:', error)

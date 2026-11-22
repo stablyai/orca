@@ -43,6 +43,14 @@ export type UpdaterSetupOptions = {
 }
 
 export class UpdaterSetup extends UpdaterDownloadInstall {
+  applyTeamPolicyBeforeQuit(): void {
+    if (this.autoUpdater && this.implicitInstallOnQuit) {
+      this.autoUpdater.autoInstallOnAppQuit = this.allowsCurrentTeamUpdate(
+        this.getPendingInstallVersion()
+      )
+    }
+  }
+
   checkForUpdates(): void {
     this.checkForUpdatesInBackground()
   }
@@ -166,8 +174,10 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       autoUpdater.disableDifferentialDownload = false
     }
     // Implicit quit install requires interactive mode and an explicit non-root/AppImage marker; serve requires handoff.
-    autoUpdater.autoInstallOnAppQuit =
+    this.implicitInstallOnQuit =
       this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
+    autoUpdater.autoInstallOnAppQuit =
+      this.implicitInstallOnQuit && this.allowsCurrentTeamUpdate(this.getPendingInstallVersion())
     // MacUpdater ignores quitAndInstall arguments; only the surviving CLI supervisor may relaunch serve.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Keep native updater diagnostics visible through local logging.

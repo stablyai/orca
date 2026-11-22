@@ -27,7 +27,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
 
-    if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
+    const version = this.getPendingInstallVersion()
+    if (this.holdUpdateForTeamPolicy(version)) {
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      return
+    }
+    if (this.deferHeadlessServeInstall('install', version)) {
       return
     }
     // A queued check must not repoint the feed while native staging or installation is pending.
@@ -58,6 +63,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     status: UpdateStatus,
     { eligible, backgroundCheck }: { eligible: boolean; backgroundCheck: boolean }
   ): void {
+    if (status.state === 'available' && this.holdUpdateForTeamPolicy(status.version)) {
+      return
+    }
+    if (status.state === 'available' && this.autoUpdater && this.implicitInstallOnQuit) {
+      this.autoUpdater.autoInstallOnAppQuit = true
+    }
     this.automaticDownloadOfferVersion =
       eligible && backgroundCheck && status.state === 'available' ? status.version : null
     const autoDownload =
@@ -101,6 +112,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   protected publishDownloadStatus(status: UpdateStatus): void {
     if (status.state === 'downloaded') {
       this.stopWatchingMacStaging()
+      if (this.holdUpdateForTeamPolicy(status.version)) {
+        return
+      }
     }
     if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
       this.sendStatus(status)
@@ -158,7 +172,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
     const version =
       this.currentStatus.state === 'available' ? this.currentStatus.version : this.availableVersion
-    if (!version) {
+    if (!version || this.holdUpdateForTeamPolicy(version)) {
       return
     }
     // Enforce host installability in main for older renderers and direct IPC callers.
@@ -188,6 +202,10 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {
+      if (this.holdUpdateForTeamPolicy(version)) {
+        this.downloadInFlight = false
+        return
+      }
       this.getAutoUpdater()
         .downloadUpdate()
         .catch((err) => {

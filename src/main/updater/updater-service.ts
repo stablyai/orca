@@ -73,6 +73,10 @@ export function isQuittingForUpdate(): boolean {
   return updater.isQuittingForUpdate()
 }
 
+export function applyTeamPolicyBeforeQuit(): void {
+  updater.applyTeamPolicyBeforeQuit()
+}
+
 export async function getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
   return updater.getLinuxPackageInstallInstructions()
 }

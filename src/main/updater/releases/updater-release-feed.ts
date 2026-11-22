@@ -118,7 +118,6 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     variant: UpdateCheckVariant = 'default'
   ): Promise<'ready' | 'not-available'> {
     const attemptId = this.activeUpdateCheckAttemptId
-    const autoUpdater = this.getAutoUpdater()
     // Pin the concrete tag because latest/download can move between check and download; stable checks exclude prereleases.
     const currentVersion = app.getVersion()
     const team = this.getTeamUpdatePolicy?.()
@@ -130,9 +129,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       ignoreDelay: this.ignoreUpdateDelayOnce,
       getUpdateDelayDays: this.getUpdateDelayDays
     })
-    if (team?.updateChannel !== undefined) {
-      autoUpdater.allowPrerelease = includePrerelease
-    }
+    this.configureTeamReleaseChannel(team, includePrerelease, isPerfCheck)
     this.ignoreUpdateDelayOnce = false
     const now = Date.now()
     const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
@@ -176,7 +173,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       console.info(
         `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
       )
-      autoUpdater.setFeedURL({ provider: 'generic', url })
+      this.pinTeamApprovedReleaseFeed(url, team, releaseTagsResult.tags)
       return 'ready'
     }
     if (releaseTagsResult.state === 'not-ready') {
@@ -188,7 +185,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
           `[updater] release feed pinned to last-good: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
         )
         this.publishingWindowLastGoodCheck = { lastGoodTag: releaseTagsResult.lastGoodTag }
-        autoUpdater.setFeedURL({ provider: 'generic', url })
+        this.pinTeamApprovedReleaseFeed(url, team, [releaseTagsResult.lastGoodTag])
         return 'ready'
       }
       this.clearPublishingWindowLastGoodCheck()
@@ -251,7 +248,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     }
     const url = getReleaseDownloadUrl(stableTag)
     console.info(`[updater] stable fallback feed pinned: current=${currentVersion} → ${url}`)
-    autoUpdater.setFeedURL({ provider: 'generic', url })
+    this.pinTeamApprovedReleaseFeed(url, team, [stableTag])
     return 'ready'
   }
 
