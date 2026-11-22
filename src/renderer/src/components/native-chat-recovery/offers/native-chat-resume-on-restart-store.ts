@@ -127,5 +127,7 @@ export async function loadNativeChatLaunchOffer(
 
 export function _resetNativeChatRestartOffer(): void {
   launch = undefined
+  terminalWorkersOffered = false
+  offeredListeners.clear()
   localNativeChatRestartStore._resetNativeChatRestartOffer()
 }

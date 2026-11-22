@@ -3,7 +3,7 @@
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isWorkerRestartResumeOpen } from '../../db/worker-dispatch/worker-restart-resume'
-import type { TerminalWorkerRestartResumeDeps } from './terminal-worker-restart-resume'
+import type { TerminalWorkerRestartResumeDeps } from './restart-resume-holds'
 
 /** How long a resumed worker cut mid-turn has to take its continue prompt. */
 const RESTART_CONTINUE_BUDGET_MS = 60_000

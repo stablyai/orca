@@ -90,7 +90,7 @@ function advance(ms: number): void {
   })
 }
 
-const headline = (): HTMLElement | null => screen.queryByText(/Resumed 2 chats/)
+const headline = (): HTMLElement | null => screen.queryByText(/Resumed 2 agents/)
 
 describe('resume report auto-dismiss', () => {
   beforeEach(() => {

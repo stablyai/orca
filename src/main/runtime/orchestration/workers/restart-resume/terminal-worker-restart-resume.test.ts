@@ -1,38 +1,44 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { TerminalWorkerRestartResume } from './terminal-worker-restart-resume'
+import { TerminalWorkerRestartOffers } from './terminal-worker-restart-offers'
 import { observeWorker, reconsiderRestAfterWait } from '../turn-stops/worker-presence-report'
 import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
 
 let db: OrchestrationDb | undefined
 afterEach(() => db?.close())
 
-function lostWorker(presence: 'working' | 'resting' | 'prompt'): string {
-  db = new OrchestrationDb(':memory:')
-  const run = db.createRun({
+/** A worker a restart took; `index` adds another to the same database. */
+function lostWorker(presence: 'working' | 'resting' | 'prompt', index = 0): string {
+  if (index === 0) {
+    db = new OrchestrationDb(':memory:')
+  }
+  const d = db!
+  const suffix = index === 0 ? '' : String(index)
+  const run = d.createRun({
     objective: 'reboot',
     coordinatorHandle: 'term_coordinator',
     coordinatorPaneKey: 'tab_c:leaf_c'
   })
-  const task = db.createTask({ spec: 'keep working', runId: run.id })
-  const { dispatch } = db.createStartingWorkerDispatch({
+  const task = d.createTask({ spec: 'keep working', runId: run.id })
+  const { dispatch } = d.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
     taskId: task.id,
     startOptions: { topology: 'current', agent: 'codex' }
   })
-  db.prepareStartingWorkerAuthority({
+  d.prepareStartingWorkerAuthority({
     dispatchId: dispatch.id,
-    handle: 'term_lost',
-    paneKey: 'tab_lost:leaf_lost',
+    handle: `term_lost${suffix}`,
+    paneKey: `tab_lost:leaf_lost${suffix}`,
     processIncarnation: 'pty-lost:11111111-1111-4111-8111-111111111111',
     worktreeId: 'repo::/tmp/repo',
     setupState: 'not_applicable',
     effects: [],
     terminalOwnership: 'created'
   })
-  db.markWorkerDispatchReady(dispatch.id)
-  db.db
+  d.markWorkerDispatchReady(dispatch.id)
+  d.db
     .prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?')
     .run(
       JSON.stringify({
@@ -42,7 +48,7 @@ function lostWorker(presence: 'working' | 'resting' | 'prompt'): string {
       }),
       dispatch.id
     )
-  db.db
+  d.db
     .prepare('INSERT INTO worker_presence (dispatch_id, presence, generation) VALUES (?, ?, 1)')
     .run(dispatch.id, presence)
   return dispatch.id
@@ -58,14 +64,19 @@ function owner(
     closeTerminal?: () => Promise<undefined>
     decideHeldRest?: (dispatchId: string) => void
     offersChanged?: () => void
-    resumeWorkOnRestart?: boolean
+    resumeWorkOnRestart?: boolean | (() => boolean)
     paneConversation?: 'own' | 'other' | 'unknown'
+    paneSessions?: () => string[]
+    setTimer?: (run: () => void, delayMs: number) => { cancel: () => void }
   } = {}
 ) {
   const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
   const resume = new TerminalWorkerRestartResume({
     getDb: () => db ?? null,
-    resumeWorkOnRestart: () => overrides.resumeWorkOnRestart ?? true,
+    resumeWorkOnRestart: () =>
+      typeof overrides.resumeWorkOnRestart === 'function'
+        ? overrides.resumeWorkOnRestart()
+        : (overrides.resumeWorkOnRestart ?? true),
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
     closeTerminal: overrides.closeTerminal ?? (async () => undefined),
     reportResting: overrides.reportResting ?? (async () => undefined),
@@ -77,9 +88,10 @@ function owner(
     }),
     handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
     paneConversation: () => overrides.paneConversation ?? 'unknown',
+    paneSessions: overrides.paneSessions ?? (() => []),
     waitForAgentReady: overrides.waitForAgentReady ?? (async () => true),
     sendPrompt,
-    setTimer: () => ({ cancel: () => {} })
+    setTimer: overrides.setTimer ?? (() => ({ cancel: () => {} }))
   })
   return { resume, sendPrompt }
 }
@@ -179,12 +191,15 @@ describe('TerminalWorkerRestartResume', () => {
     const offersChanged = vi.fn()
     const { resume, sendPrompt } = owner({ offersChanged, resumeWorkOnRestart: false })
     expect(resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())).toBe(true)
-    // The person chose Resume before the window brought the conversation back in its pane.
-    await expect(resume.resumeOffered(dispatchId, vi.fn())).resolves.toBe(true)
+    // The person chose Resume before the window brought the conversation back in its pane: the
+    // answer waits for the agent, so the toast never says resumed before it is.
+    let answered: boolean | undefined
+    void resume.resumeOffered(dispatchId, vi.fn()).then((resumed) => (answered = resumed))
     expect(db!.getWorkerDispatch(dispatchId)?.stage).toBe('restart_resumed')
-    // A second Resume is the same resume.
-    await expect(resume.resumeOffered(dispatchId, vi.fn())).resolves.toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(answered).toBeUndefined()
     resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await vi.waitFor(() => expect(answered).toBe(true))
     await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1))
     expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
   })
@@ -258,7 +273,7 @@ describe('TerminalWorkerRestartResume', () => {
     expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_lost')
   })
 
-  it('starts nothing for a held Dispatch its coordinator stops before startup settles', () => {
+  it('starts nothing for a held Dispatch its coordinator stops before startup settles', async () => {
     const dispatchId = lostWorker('working')
     const reopen = vi.fn(async () => ({ handle: 'term_resumed' }))
     const { resume } = owner({ reopen })
@@ -268,9 +283,9 @@ describe('TerminalWorkerRestartResume', () => {
       .prepare("UPDATE worker_dispatches SET state = 'stopping' WHERE dispatch_id = ?")
       .run(dispatchId)
     resume.settleStartup()
-    expect(reopen).not.toHaveBeenCalled()
     // Today's outcome settles the stop for a terminal that is gone.
-    expect(fail).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(fail).toHaveBeenCalledTimes(1))
+    expect(reopen).not.toHaveBeenCalled()
   })
 
   it('never resumes a Dispatch its coordinator stopped', () => {
@@ -297,5 +312,90 @@ describe('TerminalWorkerRestartResume', () => {
       expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
     )
     expect(reopen).not.toHaveBeenCalled()
+  })
+
+  it('keeps a worker offered while the setting was off waiting on a person once it is turned on', async () => {
+    const reboot = lostWorker('working')
+    const crash = lostWorker('working', 1)
+    let setting = false
+    const reopen = vi.fn(async () => ({ handle: 'term_reopened' }))
+    const { resume, sendPrompt } = owner({ reopen, resumeWorkOnRestart: () => setting })
+    resume.holdForReopen(reboot, vi.fn())
+    resume.holdForReopen(crash, vi.fn())
+    setting = true
+    // Later sweeps in the same run find both offered, one reopening and one starting again in place.
+    expect(resume.holdForReopen(reboot, vi.fn())).toBe(true)
+    resume.settleStartup()
+    expect(resume.holdInPlace(crash, 'tab_lost:leaf_lost1', 'pty-lost:old', vi.fn())).toBe(true)
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost1', sessionId: 'thread-1' }])
+    await vi.waitFor(() =>
+      expect(db!.getDispatchContextById(crash)?.assignee_handle).toBe('term_resumed')
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(reopen).not.toHaveBeenCalled()
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(db!.getWorkerDispatch(reboot)?.stage).toBe('restart_offered')
+    expect(db!.getWorkerDispatch(crash)?.stage).toBe('restart_offered')
+  })
+
+  it('binds a pane whose agent reported its conversation before its new process registered', async () => {
+    const dispatchId = lostWorker('resting')
+    let reported: string[] = []
+    const { resume } = owner({ paneSessions: () => reported })
+    resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())
+    // Its hook named the conversation once; only the new process registering is left to see.
+    reported = ['thread-1']
+    resume.recheckHeldPanes()
+    await vi.waitFor(() =>
+      expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
+    )
+    // An agent that reported before the hold began is bound by the hold itself.
+    const early = lostWorker('resting', 1)
+    expect(resume.holdInPlace(early, 'tab_lost:leaf_lost1', 'pty-lost:old', vi.fn())).toBe(true)
+    await vi.waitFor(() => expect(resume.isHeld(early)).toBe(false))
+    expect(db!.getDispatchContextById(early)?.assignee_handle).toBe('term_resumed')
+  })
+
+  it('reopens the conversations a restart took three at a time', async () => {
+    const ids = [0, 1, 2, 3].map((index) => lostWorker('resting', index))
+    const answers: ((terminal: null) => void)[] = []
+    const reopen = vi.fn(() => new Promise<null>((resolve) => answers.push(resolve)))
+    const { resume } = owner({ reopen })
+    for (const dispatchId of ids) {
+      resume.holdForReopen(dispatchId, vi.fn())
+    }
+    resume.settleStartup()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(reopen).toHaveBeenCalledTimes(3)
+    answers[0]!(null)
+    await vi.waitFor(() => expect(reopen).toHaveBeenCalledTimes(4))
+  })
+
+  it('never binds a worker a person dismissed while its pane was starting again', async () => {
+    const dispatchId = lostWorker('working')
+    const { resume } = owner({ resumeWorkOnRestart: false })
+    const offers = new TerminalWorkerRestartOffers({ getDb: () => db!, resume, failLost: vi.fn() })
+    resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())
+    expect(offers.dismiss([dispatchId])).toBe(1)
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_lost')
+  })
+
+  it('asks a worker resumed in place to continue once its agent comes up', async () => {
+    const dispatchId = lostWorker('working')
+    const waitForAgentReady = vi.fn<() => Promise<boolean>>()
+    waitForAgentReady.mockResolvedValueOnce(false).mockResolvedValue(true)
+    const { resume, sendPrompt } = owner({
+      waitForAgentReady,
+      setTimer: (run, delayMs) => {
+        const timer = setTimeout(run, delayMs)
+        return { cancel: () => clearTimeout(timer) }
+      }
+    })
+    resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1), { timeout: 5_000 })
+    expect(waitForAgentReady).toHaveBeenCalledTimes(2)
   })
 })

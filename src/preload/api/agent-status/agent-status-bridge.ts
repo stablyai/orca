@@ -67,6 +67,7 @@ export const agentStatusApi = {
     ipcRenderer.on('agentStatus:restartOffersChanged', listener)
     return () => ipcRenderer.removeListener('agentStatus:restartOffersChanged', listener)
   },
+  hasRestartOffers: (): Promise<boolean> => ipcRenderer.invoke('agentStatus:hasRestartOffers'),
   getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
     ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
   drop: (paneKey: string): void => {

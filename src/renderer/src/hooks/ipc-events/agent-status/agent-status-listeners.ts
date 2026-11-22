@@ -188,4 +188,9 @@ export function registerAgentStatusListeners(args: {
   if (unsubscribeRestartOffers) {
     unsubs.push(unsubscribeRestartOffers)
   }
+  // A reload, a later window or a late mount missed the push: ask once what waits now.
+  void window.api.agentStatus
+    .hasRestartOffers?.()
+    .then((offered) => offered && noteTerminalWorkerRestartOffers())
+    .catch(() => undefined)
 }

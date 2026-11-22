@@ -123,41 +123,46 @@ export type WorkerRestartOffer = WorkerRestartResumeClaim & {
   offeredAt: number
 }
 
-/** Every open Dispatch whose lost worker waits on a person's Resume or dismissal. */
+/** Every open Dispatch whose lost worker waits on a person's Resume or dismissal, in one read. */
 export function listWorkerRestartOffers(db: OrchestrationDb): WorkerRestartOffer[] {
   return db.db
     .prepare(
       `SELECT w.dispatch_id AS dispatch_id, w.updated_at AS updated_at,
-              COALESCE(NULLIF(t.display_name, ''), NULLIF(t.task_title, ''), t.spec) AS spec
+              COALESCE(NULLIF(t.display_name, ''), NULLIF(t.task_title, ''), t.spec) AS name,
+              r.worktree_id AS worktree_id, r.resume_session AS resume_session,
+              p.presence AS presence
          FROM worker_dispatches w
          JOIN dispatch_contexts c ON c.id = w.dispatch_id
          JOIN tasks t ON t.id = c.task_id
-        WHERE w.stage = ?`
+         JOIN worker_terminal_resources r ON r.owner_dispatch_id = w.dispatch_id
+         LEFT JOIN worker_presence p ON p.dispatch_id = w.dispatch_id
+        WHERE w.state = 'ready' AND w.stage = ?
+          AND c.status IN ('pending', 'dispatched')
+          AND r.ownership_state = 'owned' AND r.release_state = 'not_requested'
+          AND (p.presence IS NULL OR p.presence != 'gone')`
     )
     .all(WORKER_RESTART_OFFERED_STAGE)
     .flatMap((row) => {
-      const dispatchId = typeof row.dispatch_id === 'string' ? row.dispatch_id : null
-      const claim =
-        dispatchId && isWorkerRestartResumeOpen(db, dispatchId) ? readOffer(db, dispatchId) : null
-      return claim
+      const session = readWorkerResumeSession({
+        resume_session: typeof row.resume_session === 'string' ? row.resume_session : null
+      })
+      const presence =
+        row.presence === 'working' || row.presence === 'resting' || row.presence === 'prompt'
+          ? row.presence
+          : null
+      return typeof row.dispatch_id === 'string' && typeof row.worktree_id === 'string' && session
         ? [
             {
-              ...claim,
-              taskName: typeof row.spec === 'string' ? row.spec : '',
+              dispatchId: row.dispatch_id,
+              worktreeId: row.worktree_id,
+              session,
+              presence,
+              taskName: typeof row.name === 'string' ? row.name : '',
               offeredAt: Date.parse(`${String(row.updated_at)}Z`) || Date.now()
             }
           ]
         : []
     })
-}
-
-function readOffer(db: OrchestrationDb, dispatchId: string): WorkerRestartResumeClaim | null {
-  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
-  const session = readWorkerResumeSession(resource)
-  const presence = readWorkerPresence(db, dispatchId)?.presence ?? null
-  return resource?.worktree_id && session && presence !== 'gone'
-    ? { dispatchId, worktreeId: resource.worktree_id, session, presence }
-    : null
 }
 
 /** A claimed resume may still start: its coordinator has not stopped or released the Dispatch since. */

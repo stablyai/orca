@@ -66,6 +66,8 @@ function createTerminalWorkerRestartResume(
     },
     handleForPane: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey),
     paneConversation: (paneKey, sessionId) => paneConversation(runtime, paneKey, sessionId),
+    paneSessions: (paneKey) =>
+      runtime.getAgentStatusRowsForPane(paneKey).flatMap((row) => row.providerSession?.id ?? []),
     // A resumed agent is a fresh launch: its composer must be up, or it drops the prompt.
     waitForAgentReady: (handle, agent) =>
       waitForWorkerAgentReady(runtime, handle, {
@@ -111,6 +113,10 @@ export abstract class OrcaRuntimeWithTerminalWorkerRestartResume extends OrcaRun
       }
     }
   })
+  // A graph sync places a restarted pane's new process: its resumed agent may have reported already.
+  protected readonly recheckAfterGraphSync = this.graphSyncCallbacks.push(() =>
+    this.terminalWorkerRestartResume.recheckHeldPanes()
+  )
   /** Offered terminal workers, shown and acted on beside the cut chats' restart offers. */
   readonly terminalWorkerRestartOffers = new TerminalWorkerRestartOffers({
     getDb: () => this.getExistingOrchestrationDb(),

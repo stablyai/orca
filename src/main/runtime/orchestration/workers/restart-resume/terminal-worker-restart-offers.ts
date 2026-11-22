@@ -14,7 +14,7 @@ import type { TerminalWorkerRestartResume } from './terminal-worker-restart-resu
 
 export type TerminalWorkerRestartOffersDeps = {
   getDb: () => OrchestrationDb | null
-  resume: Pick<TerminalWorkerRestartResume, 'resumeOffered'>
+  resume: Pick<TerminalWorkerRestartResume, 'resumeOffered' | 'forget'>
   /** Today's outcome for a lost worker: its Dispatch fails and its coordinator hears it was lost. */
   failLost: (dispatchId: string) => void
 }
@@ -66,6 +66,8 @@ export class TerminalWorkerRestartOffers {
     let dismissed = 0
     for (const dispatchId of dispatchIds) {
       if (db && isWorkerRestartOffered(db, dispatchId)) {
+        // A pane still restarting in place must not bind it after this.
+        this.deps.resume.forget(dispatchId)
         this.deps.failLost(dispatchId)
         dismissed += 1
       }
