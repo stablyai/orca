@@ -1,5 +1,10 @@
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
+import {
+  SETUP_COMPLETE_MESSAGE,
+  SETUP_FAILED_MESSAGE_PREFIX,
+  SETUP_WAIT_TIMEOUT_MESSAGE
+} from '../../../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { readTerminalStartFailure } from '../../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   RuntimeTerminalWait,
@@ -74,8 +79,6 @@ export type AwaitingWorkerStart = {
   /** When the agent was launched; its deadline counts from here unless Setup holds it. */
   launchedAt: number
   blockedReason?: RuntimeTerminalWaitBlockedReason
-  /** The wait-for-setup pane's Setup terminal while Setup still runs; its end starts the clock. */
-  setupTerminal?: string
   /** Types the brief and settles the start, as a start ready in time does. */
   handOver: (ready: RuntimeTerminalWait) => Promise<void>
   /** Fails the start as the caller's own failure would. */
@@ -91,7 +94,10 @@ export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): {
   waits.get(start.dispatchId)?.abort()
   waits.set(start.dispatchId, controller)
   // A screen already up means the agent runs, so Setup is over.
-  const gated = start.setupTerminal !== undefined && !start.blockedReason
+  const gated =
+    start.setup.startupPolicy === 'wait-for-setup' &&
+    start.setup.state === 'running' &&
+    !start.blockedReason
   void watch(start, controller.signal, gated)
     .catch((error: unknown) => {
       console.warn('[orchestration] waiting for a worker agent failed', start.dispatchId, error)
@@ -119,91 +125,169 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
     (!start.readiness.reusesTerminal &&
       freshLaunchPtyId(terminalHandle, start.readiness.creation)) ||
     runtime.getTerminalPtyIdForHandle(terminalHandle)
-  if (gated && start.setupTerminal) {
-    const setup = await setupEnd(runtime, start.setupTerminal, signal)
-    if (!awaiting()) {
-      return
-    }
-    if (setup === 'failed') {
-      await start.fail(new Error('Setup failed, so its agent never started.'), 'setup_wait')
-      return
-    }
+  const clock = readyClock(runtime, gated ? ptyId() : null, start.launchedAt)
+  // The clock ran out, or Setup failed and no agent will start: either way the start ends here.
+  const expire = async () => {
+    await (clock.setupFailed()
+      ? start.fail(new Error('Setup failed, so its agent never started.'), 'setup_wait')
+      : failNeverReady(start))
   }
-  const deadline = (gated ? Date.now() : start.launchedAt) + workerStartReadyDeadlineMs()
-  let blocked = start.blockedReason
-  if (blocked) {
-    await reportBlockedWorkerStart(runtime, db, dispatchId, terminalHandle, blocked, deadline)
-  }
-  for (;;) {
+  try {
+    let blocked = start.blockedReason
     if (blocked) {
-      // A screen only a person answers changes only when they do: each repaint gets one tail read,
-      // and the full wait starts again only once that screen is gone.
-      // Armed before each check, so a repaint during the check (or the report before it) is not missed.
-      while (awaiting() && Date.now() < deadline) {
-        const checked = new AbortController()
-        const repaint = nextOutput(
-          runtime,
-          terminalHandle,
-          ptyId(),
-          AbortSignal.any([signal, checked.signal]),
-          deadline
-        )
-        if (!(await stillBlocked(start))) {
-          checked.abort()
-          await repaint
-          break
-        }
-        await repaint
-      }
-    }
-    if (!awaiting()) {
-      return
-    }
-    const remaining = deadline - Date.now()
-    if (remaining <= 0) {
-      await failNeverReady(start)
-      return
-    }
-    let wait: RuntimeTerminalWait
-    try {
-      wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
-        ...start.readiness,
-        timeoutMs: remaining,
-        signal
-      })
-    } catch (error) {
-      if (!awaiting()) {
-        return
-      }
-      // Only time ran out (a screen a person must answer resolves the wait instead); else it failed.
-      await (readinessStillPending({ error })
-        ? failNeverReady(start)
-        : start.fail(error, 'agent_readiness'))
-      return
-    }
-    if (!awaiting()) {
-      return
-    }
-    if (wait.satisfied) {
-      db.recordWorkerStage({ dispatchId, stage: 'agent_readiness' })
-      await start.handOver(wait)
-      return
-    }
-    if (!wait.blockedReason) {
-      await start.fail(new Error(`Agent did not become ready (${wait.status}).`), 'agent_readiness')
-      return
-    }
-    if (!blocked) {
       await reportBlockedWorkerStart(
         runtime,
         db,
         dispatchId,
         terminalHandle,
-        wait.blockedReason,
-        deadline
+        blocked,
+        clock.readyBy()
       )
     }
-    blocked = wait.blockedReason
+    for (;;) {
+      if (blocked) {
+        // A screen only a person answers changes only when they do: each repaint gets one tail read,
+        // and the full wait starts again only once that screen is gone. Armed before each check, so
+        // a repaint during the check (or the report before it) is not missed.
+        while (awaiting() && !clock.expired.aborted) {
+          const checked = new AbortController()
+          const repaint = nextOutput(
+            runtime,
+            terminalHandle,
+            ptyId(),
+            AbortSignal.any([signal, checked.signal, clock.expired])
+          )
+          if (!(await stillBlocked(start))) {
+            checked.abort()
+            await repaint
+            break
+          }
+          await repaint
+        }
+      }
+      if (!awaiting()) {
+        return
+      }
+      if (clock.expired.aborted) {
+        await expire()
+        return
+      }
+      let wait: RuntimeTerminalWait
+      try {
+        wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
+          ...start.readiness,
+          timeoutMs: SETUP_WAIT_GATE_MAX_MS + workerStartReadyDeadlineMs(),
+          signal: AbortSignal.any([signal, clock.expired])
+        })
+      } catch (error) {
+        if (!awaiting()) {
+          return
+        }
+        // Time ran out (a screen a person must answer resolves the wait instead); else it failed.
+        await (clock.expired.aborted || readinessStillPending({ error })
+          ? expire()
+          : start.fail(error, 'agent_readiness'))
+        return
+      }
+      if (!awaiting()) {
+        return
+      }
+      if (wait.satisfied) {
+        db.recordWorkerStage({ dispatchId, stage: 'agent_readiness' })
+        await start.handOver(wait)
+        return
+      }
+      if (!wait.blockedReason) {
+        await start.fail(
+          new Error(`Agent did not become ready (${wait.status}).`),
+          'agent_readiness'
+        )
+        return
+      }
+      if (!blocked) {
+        await reportBlockedWorkerStart(
+          runtime,
+          db,
+          dispatchId,
+          terminalHandle,
+          wait.blockedReason,
+          clock.readyBy()
+        )
+      }
+      blocked = wait.blockedReason
+    }
+  } finally {
+    clock.dispose()
+  }
+}
+
+type ReadyClock = {
+  /** Aborts when the deadline passes, or when Setup fails. */
+  expired: AbortSignal
+  setupFailed: () => boolean
+  /** The deadline; while Setup runs, the latest it could be. */
+  readyBy: () => number
+  dispose: () => void
+}
+
+const SETUP_END_LINES = [
+  { line: SETUP_COMPLETE_MESSAGE, failed: false },
+  { line: SETUP_FAILED_MESSAGE_PREFIX, failed: true },
+  { line: SETUP_WAIT_TIMEOUT_MESSAGE, failed: true }
+] as const
+const SETUP_END_CARRY = Math.max(...SETUP_END_LINES.map(({ line }) => line.length)) - 1
+
+/** Runs from launch, or for a wait-for-setup pane (`setupPtyId`) from the line its wrapper prints in
+ *  that pane when Setup ends; until then only the wrapper's own 2-hour limit bounds it. */
+function readyClock(
+  runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData' | 'readRecentTerminalOutput'>,
+  setupPtyId: string | null,
+  launchedAt: number
+): ReadyClock {
+  const expire = new AbortController()
+  let deadline = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let failed = false
+  let unsubscribe = (): void => {}
+  const arm = (at: number): void => {
+    deadline = at
+    clearTimeout(timer)
+    timer = setTimeout(() => expire.abort(), Math.max(0, at - Date.now()))
+  }
+  if (!setupPtyId) {
+    arm(launchedAt + workerStartReadyDeadlineMs())
+  } else {
+    arm(Date.now() + SETUP_WAIT_GATE_MAX_MS + workerStartReadyDeadlineMs())
+    let carry = ''
+    let ended = false
+    const scan = (chunk: string): void => {
+      const window = carry + chunk
+      carry = window.slice(-SETUP_END_CARRY)
+      const end = ended ? undefined : SETUP_END_LINES.find(({ line }) => window.includes(line))
+      if (!end) {
+        return
+      }
+      ended = true
+      unsubscribe()
+      if (end.failed) {
+        failed = true
+        expire.abort()
+      } else {
+        arm(Date.now() + workerStartReadyDeadlineMs())
+      }
+    }
+    unsubscribe = runtime.subscribeToTerminalData(setupPtyId, scan)
+    // The line may have come before this wait began; the pane's recent bytes still hold it.
+    scan(runtime.readRecentTerminalOutput(setupPtyId) ?? '')
+  }
+  return {
+    expired: expire.signal,
+    setupFailed: () => failed,
+    readyBy: () => deadline,
+    dispose: () => {
+      clearTimeout(timer)
+      unsubscribe()
+    }
   }
 }
 
@@ -233,13 +317,12 @@ async function stillBlocked({ runtime, terminalHandle }: AwaitingWorkerStart): P
   return probe?.satisfied === false && probe.blockedReason !== undefined
 }
 
-/** Resolves on the pane's next output, its exit, an abort or the deadline, whichever is first. */
+/** Resolves on the pane's next output, its exit or an abort, whichever is first. */
 function nextOutput(
   runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData' | 'waitForTerminal'>,
   handle: string,
   ptyId: string | null,
-  signal: AbortSignal,
-  deadline: number
+  signal: AbortSignal
 ): Promise<void> {
   const stop = new AbortController()
   return new Promise<void>((resolve) => {
@@ -248,36 +331,11 @@ function nextOutput(
       return
     }
     const unsubscribe = ptyId ? runtime.subscribeToTerminalData(ptyId, () => resolve()) : () => {}
-    const timer = setTimeout(resolve, Math.max(0, deadline - Date.now()))
     signal.addEventListener('abort', () => resolve(), { once: true, signal: stop.signal })
     runtime.waitForTerminal(handle, { condition: 'exit', signal: stop.signal }).then(
       () => resolve(),
       () => resolve()
     )
-    stop.signal.addEventListener('abort', () => {
-      unsubscribe()
-      clearTimeout(timer)
-    })
+    stop.signal.addEventListener('abort', () => unsubscribe())
   }).finally(() => stop.abort())
-}
-
-/** How a wait-for-setup pane's Setup ended: by its own terminal's exit, as structured workers wait. */
-async function setupEnd(
-  runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
-  setupTerminal: string,
-  signal: AbortSignal
-): Promise<'started' | 'failed' | 'aborted'> {
-  const stop = new AbortController()
-  const both = AbortSignal.any([signal, stop.signal])
-  // The wrapper gives up by then itself, so no agent can start after it.
-  const cap = setTimeout(() => stop.abort(), SETUP_WAIT_GATE_MAX_MS)
-  try {
-    const { exitCode } = await runtime.waitForSetupTerminalCompletion(setupTerminal, both)
-    return exitCode === 0 ? 'started' : 'failed'
-  } catch {
-    // A Setup terminal already gone has ended; the readiness wait decides what came of it.
-    return signal.aborted ? 'aborted' : 'started'
-  } finally {
-    clearTimeout(cap)
-  }
 }

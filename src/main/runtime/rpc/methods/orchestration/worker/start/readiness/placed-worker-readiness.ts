@@ -56,10 +56,6 @@ export async function handOverWhenReady(
     timeoutMs: args.timeoutMs,
     launchedAt: args.launchedAt,
     blockedReason: pending.blockedReason,
-    setupTerminal:
-      setupStage.setup.startupPolicy === 'wait-for-setup' && setupStage.setup.state === 'running'
-        ? setupStage.effects.find((effect) => effect.kind === 'setup')?.terminalId
-        : undefined,
     handOver: async (ready) => {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait: ready })
       const handedOver = args.handOver(Date.now() + args.timeoutMs)
