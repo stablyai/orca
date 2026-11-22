@@ -151,14 +151,21 @@ export function useAccountOwnerUsage(
     const matchesRuntime =
       authFailureAccount.runtime === target.runtime &&
       (!target.wslDistro || authFailureAccount.wslDistro === target.wslDistro)
-    const activeAccountId = !ownerId
+    const selectedAccountId = !ownerId
       ? localActiveCodexId
       : hostCodexAccounts && getCodexStatusActiveId(hostCodexAccounts, authFailureAccount)
-    const codex = scopeCodexAuthFailure(
-      rateLimits.codex,
-      matchesRuntime ? (activeAccountId ?? null) : null
-    )
-    return codex === rateLimits.codex ? rateLimits : { ...rateLimits, codex }
+    const activeAccountId = matchesRuntime ? (selectedAccountId ?? null) : null
+    const codex = scopeCodexAuthFailure(rateLimits.codex, activeAccountId)
+    // An unpinned WSL read already resolved its distro in main.
+    const resolvedDistro =
+      activeAccountId === authFailureAccount.accountId ? authFailureAccount.wslDistro : null
+    const codexTarget =
+      target.runtime === 'wsl' && !target.wslDistro && resolvedDistro
+        ? { ...target, wslDistro: resolvedDistro }
+        : target
+    return codex === rateLimits.codex && codexTarget === target
+      ? rateLimits
+      : { ...rateLimits, codex, codexTarget }
   }, [authFailureAccount, hostCodexAccounts, localActiveCodexId, ownerId, rateLimits])
   return {
     owner,

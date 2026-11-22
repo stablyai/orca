@@ -234,6 +234,9 @@ async function readCodexRateLimits(
   // The pending check reads state.sqlite over UNC after the auth probe and HTTP read.
   const homeRefusal =
     isWslHome && options?.codexHomePath ? await stoppedWslHomeRefusal(options.codexHomePath) : null
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   if (homeRefusal) {
     return wslBackendResult ?? homeRefusal
   }
@@ -273,6 +276,9 @@ async function readCodexRateLimits(
     }
     if (isCodexAuthError(rpcResult.error)) {
       const rejection = await classifyCodexApiKeyUsageRejection(rpcResult, options)
+      if (options?.signal?.aborted) {
+        return abortedCodexRateLimitResult()
+      }
       return rejection.usageMetadata?.failureKind === 'usage-unavailable'
         ? rejection
         : (wslBackendResult ?? rejection)
