@@ -6,6 +6,8 @@ const WORKER_ENV_ALLOWLIST = [
   'PATH',
   'HOME',
   'USERPROFILE',
+  // The Windows CLI resolves the roaming Orca profile from APPDATA.
+  'APPDATA',
   'LANG',
   'LC_ALL',
   'LC_CTYPE',

@@ -67,4 +67,16 @@ describe('buildPluginWorkerEnv', () => {
       ELECTRON_RUN_AS_NODE: '1'
     })
   })
+
+  it('passes Windows APPDATA so the worker CLI can resolve the roaming profile', () => {
+    const env = buildPluginWorkerEnv(
+      {
+        appdata: 'C:\\Users\\me\\AppData\\Roaming',
+        GITHUB_TOKEN: 'secret'
+      },
+      'win32'
+    )
+    expect(env.APPDATA).toBe('C:\\Users\\me\\AppData\\Roaming')
+    expect(env.GITHUB_TOKEN).toBeUndefined()
+  })
 })
