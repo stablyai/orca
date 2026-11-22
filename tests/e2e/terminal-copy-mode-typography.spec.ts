@@ -8,9 +8,9 @@ import {
 } from './desktop/renderer-probes/store'
 import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
-import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import {
   expectCopyCursorReady,
+  pressShortcut,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
 } from './desktop/electron-fixtures/terminal-copy-mode-fixture'

@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { waitForActivePanePtyId } from '../../terminal/input/terminal'
 import { resolveActiveTabId } from '../../terminal/layout/terminal-pane-identity'
 import {
@@ -7,6 +8,93 @@ import {
   waitForTerminalOutput
 } from '../../terminal/layout/terminal-pane-operations'
 import { nodeTerminalCommand } from '../../terminal/input/terminal-node-command'
+
+type PtyWriteLogEntry = { id: string; data: string }
+
+declare global {
+  var __terminalPtyWriteLog: PtyWriteLogEntry[] | undefined
+  var __terminalPtyWriteSpyInstalled: boolean | undefined
+  var __terminalPtyWriteAcceptedSpyInstalled: boolean | undefined
+}
+
+const modifierKeyByPage = new WeakMap<Page, 'Meta' | 'Control'>()
+
+async function getModifierKey(page: Page): Promise<'Meta' | 'Control'> {
+  const cached = modifierKeyByPage.get(page)
+  if (cached) {
+    return cached
+  }
+  const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
+  const modifierKey = isMac ? 'Meta' : 'Control'
+  modifierKeyByPage.set(page, modifierKey)
+  return modifierKey
+}
+
+export async function pressShortcut(
+  page: Page,
+  key: string,
+  options: { shift?: boolean } = {}
+): Promise<void> {
+  const parts: string[] = [await getModifierKey(page)]
+  if (options.shift) {
+    parts.push('Shift')
+  }
+  parts.push(key)
+  await page.keyboard.press(parts.join('+'))
+}
+
+export async function installTerminalPtyWriteSpy(app: ElectronApplication): Promise<void> {
+  await retryTransientMainEvaluate(() =>
+    app.evaluate(({ ipcMain }) => {
+      if (globalThis.__terminalPtyWriteSpyInstalled) {
+        return
+      }
+      const log: PtyWriteLogEntry[] = []
+      globalThis.__terminalPtyWriteLog = log
+      globalThis.__terminalPtyWriteSpyInstalled = true
+      ipcMain.prependListener('pty:write', (_event: unknown, args: PtyWriteLogEntry) => {
+        log.push({ id: args.id, data: args.data })
+      })
+
+      // Playwright cannot observe ipcRenderer.invoke payloads, so this e2e spy wraps main's handler.
+      if (
+        !('_invokeHandlers' in ipcMain) ||
+        !(ipcMain._invokeHandlers instanceof Map) ||
+        globalThis.__terminalPtyWriteAcceptedSpyInstalled
+      ) {
+        return
+      }
+      const writeAcceptedHandler: unknown = ipcMain._invokeHandlers.get('pty:writeAccepted')
+      if (typeof writeAcceptedHandler !== 'function') {
+        return
+      }
+      globalThis.__terminalPtyWriteAcceptedSpyInstalled = true
+      ipcMain._invokeHandlers.set(
+        'pty:writeAccepted',
+        async (event: unknown, args: PtyWriteLogEntry) => {
+          log.push({ id: args.id, data: args.data })
+          return writeAcceptedHandler(event, args)
+        }
+      )
+    })
+  )
+}
+
+export async function clearTerminalPtyWriteLog(app: ElectronApplication): Promise<void> {
+  await retryTransientMainEvaluate(() =>
+    app.evaluate(() => {
+      if (globalThis.__terminalPtyWriteLog) {
+        globalThis.__terminalPtyWriteLog.length = 0
+      }
+    })
+  )
+}
+
+export async function readTerminalPtyWrites(app: ElectronApplication): Promise<string[]> {
+  return retryTransientMainEvaluate(() =>
+    app.evaluate(() => (globalThis.__terminalPtyWriteLog ?? []).map((entry) => entry.data))
+  )
+}
 
 export async function startCopyModeTerminalProbe(page: Page): Promise<void> {
   const ptyId = await waitForActivePanePtyId(page)

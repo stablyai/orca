@@ -5,20 +5,18 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './desktop/renderer-probes/store'
-import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
 import {
+  clearTerminalPtyWriteLog,
   configureCopyMode,
   expectCopyCursorReady,
   expectHiddenCopyModeWindow,
+  installTerminalPtyWriteSpy,
+  pressShortcut,
+  readTerminalPtyWrites,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
 } from './desktop/electron-fixtures/terminal-copy-mode-fixture'
-import {
-  clearTerminalPtyWriteLog,
-  installTerminalPtyWriteSpy,
-  readTerminalPtyWrites
-} from './terminal/input/terminal-pty-write-spy'
 
 test.beforeEach(async ({ orcaPage, electronApp }) => {
   await waitForSessionReady(orcaPage)

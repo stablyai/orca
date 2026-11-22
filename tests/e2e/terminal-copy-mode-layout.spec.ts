@@ -5,7 +5,6 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './desktop/renderer-probes/store'
-import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
 import {
@@ -14,6 +13,7 @@ import {
   expectCopyCursorReady,
   isolateCopyModeClipboard,
   pressCopyMotion,
+  pressShortcut,
   resetCopiedModeText,
   seedCopyModeScreen,
   startCopyModeTerminalProbe

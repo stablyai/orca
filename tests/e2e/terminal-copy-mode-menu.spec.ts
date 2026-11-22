@@ -7,21 +7,19 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './desktop/renderer-probes/store'
-import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import { waitForActiveTerminalManager } from './terminal/layout/terminal-pane-operations'
-import { setPaneTitleFromTerminalMenu } from './terminal/layout/terminal-pane-title-actions'
+import { setPaneTitleFromTerminalMenu } from './terminal/retention/terminal-restart-persistence'
 import {
   clearTerminalPtyWriteLog,
-  installTerminalPtyWriteSpy,
-  readTerminalPtyWrites
-} from './terminal/input/terminal-pty-write-spy'
-import {
   configureCopyMode,
   copiedModeText,
   expectCopyCursorReady,
   expectHiddenCopyModeWindow,
+  installTerminalPtyWriteSpy,
   isolateCopyModeClipboard,
+  pressShortcut,
+  readTerminalPtyWrites,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
 } from './desktop/electron-fixtures/terminal-copy-mode-fixture'

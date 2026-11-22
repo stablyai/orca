@@ -6,7 +6,6 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './desktop/renderer-probes/store'
-import { pressShortcut } from './desktop/renderer-probes/shortcuts'
 import { focusActiveTerminalInput, waitForActivePanePtyId } from './terminal/input/terminal'
 import { resolveActiveTabId } from './terminal/layout/terminal-pane-identity'
 import {
@@ -18,16 +17,15 @@ import {
 } from './terminal/layout/terminal-pane-operations'
 import {
   clearTerminalPtyWriteLog,
-  installTerminalPtyWriteSpy,
-  readTerminalPtyWrites
-} from './terminal/input/terminal-pty-write-spy'
-import {
   configureCopyMode,
   copiedModeText,
   copyCursorPosition,
   expectCopyCursorReady,
   expectHiddenCopyModeWindow,
+  installTerminalPtyWriteSpy,
   isolateCopyModeClipboard,
+  pressShortcut,
+  readTerminalPtyWrites,
   seedCopyModeScreen,
   startCopyModeTerminalProbe
 } from './desktop/electron-fixtures/terminal-copy-mode-fixture'
