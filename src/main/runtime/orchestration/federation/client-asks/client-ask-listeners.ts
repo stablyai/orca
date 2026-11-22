@@ -2,6 +2,7 @@
 // its first pull in a session until a pull's caller goes away or it leaves; an answered pull keeps it,
 // since it pulls again at once. Nothing is timed, and a server restart starts with none.
 import type { z } from 'zod'
+import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -16,9 +17,12 @@ export type ClientAskListener = {
 
 export type ClientAskPull = { key: string; session: string }
 
-const listenersByOwner = new WeakMap<object, Map<string, ClientAskListener>>()
+/** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
+export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
 
-function listenersOf(owner: object): Map<string, ClientAskListener> {
+const listenersByOwner = new WeakMap<ClientAskListenerOwner, Map<string, ClientAskListener>>()
+
+function listenersOf(owner: ClientAskListenerOwner): Map<string, ClientAskListener> {
   let listeners = listenersByOwner.get(owner)
   if (!listeners) {
     listeners = new Map()
@@ -31,7 +35,7 @@ const keyOf = (deviceId: string, installationId: string): string => `${deviceId}
 
 /** A pull naming a session begins; a leave ends the session and returns null. */
 export function clientAskPullStarted(
-  owner: object,
+  owner: ClientAskListenerOwner,
   caller: { deviceId: string; fingerprint: string },
   pull: z.infer<typeof PeerMailClientAsksPull>
 ): ClientAskPull | null {
@@ -58,7 +62,7 @@ export function clientAskPullStarted(
 
 /** An answered pull keeps its session; one whose caller went away ends it. Either touches only its own session. */
 export function clientAskPullEnded(
-  owner: object,
+  owner: ClientAskListenerOwner,
   pull: ClientAskPull,
   outcome: 'answered' | 'caller_gone'
 ): void {
@@ -75,7 +79,10 @@ export function clientAskPullEnded(
 }
 
 /** The listening computers a selector names: its installation id, or its name. */
-export function listeningClients(owner: object, selector: string): ClientAskListener[] {
+export function listeningClients(
+  owner: ClientAskListenerOwner,
+  selector: string
+): ClientAskListener[] {
   const wanted = selector.trim().toLowerCase()
   return [...listenersOf(owner).values()].filter(
     (listener) =>
@@ -83,7 +90,7 @@ export function listeningClients(owner: object, selector: string): ClientAskList
   )
 }
 
-export function forgetClientAskDevice(owner: object, deviceId: string): void {
+export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: string): void {
   const listeners = listenersOf(owner)
   for (const [key, listener] of listeners) {
     if (listener.deviceId === deviceId) {
