@@ -74,6 +74,10 @@ export function parseGitLabTrigger(
     throw invalid(`--on "${spec}": host= takes a GitLab host such as gitlab.example.com.`)
   }
   const from = listOf(spec, 'from', values.get('from'))
+  // An empty list would silently widen the rule to anyone.
+  if (values.has('from') && !from) {
+    throw invalid(`--on "${spec}" needs from= to name GitLab usernames, separated by commas.`)
+  }
   const rule: GitLabEventRule = Object.assign(
     { event, projects },
     host ? { host } : {},
@@ -117,7 +121,7 @@ export function describeGitLabTrigger(rule: GitLabEventRule): string {
 }
 
 export const GITLAB_TRIGGER_OPTIONS = [
-  "gitlab: through the automation's own webhook. Orca adds a signed webhook to each project in= names, with the glab sign-in on the bot's computer, which needs the Maintainer role there.",
+  "gitlab: through the automation's own webhook. Orca adds a signed webhook to each project in= names, with the glab sign-in on the bot's computer; it needs GitLab 19.0 or later and the Maintainer role there.",
   ...GITLAB_EVENT_KINDS.map((event) => `  gitlab.${event}  when ${EVENT_WORDS[event]}`),
   '  in=<group/project>,…  the GitLab projects to listen in; needed, up to 10',
   '  from=<people>  only these GitLab usernames, comma-separated; anyone by default',

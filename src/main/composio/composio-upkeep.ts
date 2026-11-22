@@ -38,6 +38,7 @@ export class ComposioUpkeep {
   private interval: ReturnType<typeof setInterval> | null = null
   private soonTimer: ReturnType<typeof setTimeout> | null = null
   private running: Promise<void> | null = null
+  private stopped = false
 
   constructor(
     private readonly pass: () => Promise<void>,
@@ -51,6 +52,10 @@ export class ComposioUpkeep {
   }
 
   soon(): void {
+    // A change heard after the host stopped must not start the pass again.
+    if (this.stopped) {
+      return
+    }
     if (this.soonTimer) {
       clearTimeout(this.soonTimer)
     }
@@ -59,6 +64,7 @@ export class ComposioUpkeep {
   }
 
   stop(): void {
+    this.stopped = true
     if (this.interval) {
       clearInterval(this.interval)
     }

@@ -119,17 +119,21 @@ describe('GitLabEventHooks', () => {
     expect(hooks.size).toBe(0)
   })
 
-  it('keeps a webhook GitLab already made when the next project is refused, and tells the bot once', async () => {
-    const { upkeep, gitlab, host } = setUp(mentions)
-    gitlab.create
-      .mockImplementationOnce(async () => 100)
-      .mockRejectedValueOnce(new Error('GitLab refused a webhook on acme/web'))
+  it('keeps the projects GitLab accepted signed when another refuses, and tells the bot once', async () => {
+    const { upkeep, gitlab, host, hooks } = setUp(mentions)
+    const refused = new Error('GitLab refused a webhook on acme/web')
+    gitlab.create.mockImplementationOnce(async (_host, project, hook) => {
+      hooks.set(project, hook)
+      return 100
+    })
+    gitlab.create.mockRejectedValueOnce(refused)
     await upkeep.reconcile()
-    gitlab.create.mockRejectedValueOnce(new Error('GitLab refused a webhook on acme/web'))
-    await upkeep.reconcile()
+    expect(host.setSecret.mock.calls[0][1]).toBe(hooks.get('acme/api')?.signingToken)
 
-    expect(host.setSecret).not.toHaveBeenCalled()
+    gitlab.create.mockRejectedValueOnce(refused)
+    await upkeep.reconcile()
     expect(gitlab.update).toHaveBeenCalledWith(undefined, 'acme/api', 100, expect.anything())
+    expect(host.setSecret.mock.calls[1][1]).toBe(hooks.get('acme/api')?.signingToken)
     expect(host.tell).toHaveBeenCalledTimes(1)
     expect(host.tell).toHaveBeenCalledWith(
       'bot-1',

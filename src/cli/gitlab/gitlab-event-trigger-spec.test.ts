@@ -18,6 +18,11 @@ describe('--on gitlab.<event>', () => {
       where: [
         { path: 'headers.x-gitlab-event', op: '=', values: ['Note Hook'] },
         { path: 'body.project.path_with_namespace', op: 'in', values: ['acme/api', 'acme/web'] },
+        {
+          path: 'body.object_attributes.noteable_type',
+          op: 'in',
+          values: ['Issue', 'MergeRequest']
+        },
         { path: 'body.user.username', op: 'in', values: ['dana'] },
         { path: 'body.object_attributes.note', op: 'contains', values: ['@scout'] }
       ],
@@ -30,7 +35,7 @@ describe('--on gitlab.<event>', () => {
         'body.user.username',
         'body.project.path_with_namespace'
       ],
-      subjectFrom: 'body.object_attributes.noteable_id'
+      subjectFrom: 'body.object_attributes.discussion_id'
     })
   })
 
@@ -55,5 +60,8 @@ describe('--on gitlab.<event>', () => {
       /contains= is for gitlab.comment only/
     )
     expect(() => parseAutomationEventTrigger('gitlab.pushed in=acme/web')).toThrow(/Unknown event/)
+    expect(() => parseAutomationEventTrigger('gitlab.comment in=acme/web from=@')).toThrow(
+      /needs from= to name GitLab usernames/
+    )
   })
 })

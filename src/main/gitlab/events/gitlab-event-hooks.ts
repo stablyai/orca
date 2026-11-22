@@ -162,7 +162,8 @@ export class GitLabEventHooks {
         )
       }
     }
-    // Every project's webhook gets the new secret before the Orca hook does, so none is left on the old one.
+    // Each project's webhook takes the new secret before the Orca hook does. A project GitLab refuses
+    // doesn't hold the others back: the hook takes the secret once any project has it.
     const hook = {
       url: await this.host.url(hookId),
       signingToken: signingSecret(),
@@ -170,33 +171,44 @@ export class GitLabEventHooks {
       name: `Orca: ${automationName}`.slice(0, 255)
     }
     const projects: Record<string, number> = {}
-    const progress = () => ({
-      host: rule.host,
-      flag,
-      keyGeneration: -1,
-      projects: { ...saved?.projects, ...projects }
-    })
-    try {
-      for (const project of rule.projects) {
-        const id = saved?.projects[project]
+    const failures: string[] = []
+    let signed = 0
+    for (const project of rule.projects) {
+      const id = saved?.projects[project]
+      try {
         if (id === undefined) {
           projects[project] = await this.gitlab.create(rule.host, project, hook)
         } else {
           await this.gitlab.update(rule.host, project, id, hook)
           projects[project] = id
         }
+        signed += 1
+      } catch (error) {
+        // Still GitLab's, on the earlier secret: the next pass updates it instead of adding another.
+        if (id !== undefined) {
+          projects[project] = id
+        }
+        failures.push(error instanceof Error ? error.message : String(error))
       }
-      for (const [project, id] of Object.entries(saved?.projects ?? {})) {
-        if (!rule.projects.includes(project)) {
+    }
+    for (const [project, id] of Object.entries(saved?.projects ?? {})) {
+      if (!rule.projects.includes(project)) {
+        try {
           await this.gitlab.remove(rule.host, project, id)
+        } catch (error) {
+          projects[project] = id
+          failures.push(error instanceof Error ? error.message : String(error))
         }
       }
-      await this.host.setSecret(hookId, hook.signingToken)
-    } catch (error) {
-      // What GitLab already has is kept, so the next pass updates it instead of adding another.
-      await this.store.write(hookId, progress())
-      throw error
     }
-    await this.store.write(hookId, { host: rule.host, flag, keyGeneration, projects })
+    const written = { host: rule.host, flag, projects }
+    await this.store.write(hookId, { ...written, keyGeneration: -1 })
+    if (signed > 0) {
+      await this.host.setSecret(hookId, hook.signingToken)
+    }
+    if (failures.length > 0) {
+      throw new Error(failures.join(' '))
+    }
+    await this.store.write(hookId, { ...written, keyGeneration })
   }
 }

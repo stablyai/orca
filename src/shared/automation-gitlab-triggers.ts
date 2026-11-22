@@ -57,9 +57,12 @@ const SPECS: Record<GitLabEventKind, GitLabEventSpec> = {
   comment: {
     header: 'Note Hook',
     flag: 'note_events',
-    where: [],
-    // The issue or merge request, by its instance-wide id, so a thread's comments fold into one run.
-    subjectFrom: 'body.object_attributes.noteable_id',
+    // GitLab also sends commit and snippet comments as Note Hook.
+    where: [
+      { path: 'body.object_attributes.noteable_type', op: 'in', values: ['Issue', 'MergeRequest'] }
+    ],
+    // The discussion, unique on the instance, so replies in one thread fold into one run.
+    subjectFrom: 'body.object_attributes.discussion_id',
     pick: [
       NOTE_PATH,
       'body.object_attributes.url',
