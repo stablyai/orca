@@ -1,7 +1,7 @@
 import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { formatCost, formatDayKey, formatTokens } from './usage-formatters'
 import type {
   UsageOverviewDailyPoint,
   UsageOverviewModel,
@@ -66,14 +66,7 @@ function providerSessionsSummary(
 }
 
 function formatDayLabel(day: string, intlLocale: string = getIntlLocale()): string {
-  const parsed = new Date(`${day}T12:00:00`)
-  if (Number.isNaN(parsed.getTime())) {
-    return day
-  }
-  return parsed.toLocaleDateString(intlLocale, {
-    month: 'short',
-    day: 'numeric'
-  })
+  return formatDayKey(day, { month: 'short', day: 'numeric' }, intlLocale)
 }
 
 export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {
@@ -118,7 +111,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
         </div>
         {overview.reasoningTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
-            {formatUsageTokens(overview.reasoningTokens, intlLocale)}{' '}
+            {formatTokens(overview.reasoningTokens, intlLocale)}{' '}
             {t('auto.components.stats.usage.overview.sections.e65084cb4b', 'reasoning')}
           </Badge>
         ) : null}
@@ -159,7 +152,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
           <div key={segment.key} className="flex min-w-0 items-center gap-2">
             <span className={`size-2 shrink-0 rounded-full ${segment.className}`} />
             <span className="min-w-0 truncate">
-              {segment.label}: {formatUsageTokens(segment.value, intlLocale)}
+              {segment.label}: {formatTokens(segment.value, intlLocale)}
             </span>
           </div>
         ))}
@@ -282,11 +275,11 @@ export function ProviderUsageRow({
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <span>
           {t('auto.components.stats.usage.overview.sections.tokenTotal', '{{tokens}} tokens', {
-            tokens: formatUsageTokens(provider.totalTokens, intlLocale)
+            tokens: formatTokens(provider.totalTokens, intlLocale)
           })}
         </span>
         <span>{providerSessionsSummary(provider, t, intlLocale)}</span>
-        <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
+        <span>{formatCost(provider.estimatedCostUsd)}</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
         <div

@@ -40,6 +40,9 @@ export function createUsageProviderApi(
     getBreakdown: (args: UsageRangeArgs & { kind: string }) =>
       ipc.invoke(`${prefix}:getBreakdown`, args),
     getRecentSessions: (args: UsageRangeArgs & { limit?: number }) =>
-      ipc.invoke(`${prefix}:getRecentSessions`, args)
+      ipc.invoke(`${prefix}:getRecentSessions`, args),
+    ...(prefix === 'claudeUsage'
+      ? { getStatsCache: () => ipc.invoke(`${prefix}:getStatsCache`) }
+      : {})
   } as UsageProviderApi
 }

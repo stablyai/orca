@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
+import { listClaudeStatsCacheHomes } from '../claude-usage/claude-stats-cache-homes'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
@@ -56,6 +57,9 @@ export function createBackendDesktopCapabilities(
     }
     if (method === 'usage.claudeProfileDirs') {
       return claudeProfileTranscriptDirs()
+    }
+    if (method === 'usage.claudeStatsCacheHomes') {
+      return listClaudeStatsCacheHomes()
     }
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()

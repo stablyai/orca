@@ -14,6 +14,7 @@ import type {
   ClaudeUsageScope
 } from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import { useAppStore } from '../../store'
+import { ClaudeStatsCacheSection, useClaudeStatsCache } from './ClaudeStatsCacheSection'
 import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { ShareUsageButton } from './ShareUsageButton'
@@ -75,6 +76,10 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useUsageObservation(observeClaudeUsage)
+  // Start and end both refresh, so a failed scan still re-reads Claude's own totals.
+  const statsCacheHomes = useClaudeStatsCache(
+    scanState?.enabled ? `${scanState.lastScanStartedAt}:${scanState.lastScanCompletedAt}` : null
+  )
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')
@@ -134,6 +139,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
       }
       isRefreshing={scanState.isScanning}
       hasData={hasAnyData}
+      titleAccessory={<ClaudeStatsCacheSection homes={statsCacheHomes} />}
       enableLabel={enableLabel}
       optionsLabel={t('auto.components.stats.ClaudeUsagePane.e9bf9fce0e', 'Claude usage options')}
       filtersLabel={t('auto.components.stats.ClaudeUsagePane.dd29209b21', 'Filters')}

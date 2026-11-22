@@ -13,6 +13,7 @@ export function createTestUsageStoreHost(options: {
     signal: options.signal ?? new AbortController().signal,
     readCatalog: async () => options.catalog ?? { repoIds: [], worktreesByRepo: [] },
     claudeProfileDirs: async () => options.profileDirs ?? [],
+    claudeStatsCacheHomes: async () => [],
     telemetry: {
       isEnabled: async () => options.telemetryEnabled ?? false,
       capture: options.capture ?? (async () => true)
