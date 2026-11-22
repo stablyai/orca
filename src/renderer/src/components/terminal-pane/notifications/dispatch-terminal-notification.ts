@@ -23,6 +23,10 @@ import {
   withApprovalTitle
 } from '../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { canonicalOrchestrationForRow } from '../../../runtime/agent-orchestration/visible-agent-orchestration'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { getFirstTerminalTab } from '../../../store/terminals/ownership/terminal-tab-owner-index'
+import { resolveTerminalTabTitle } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { isSupersededAgentCompletionSnapshot } from '../agent-completion/agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
 import type {
@@ -44,6 +48,33 @@ import {
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
+
+/** The pane's live title, as the sidebar names it: a single-pane tab falls back to its tab title. */
+function readPaneTitle(
+  state: ReturnType<typeof useAppStore.getState>,
+  paneKey: string | undefined
+): string | null {
+  const parsed = paneKey ? parsePaneKey(paneKey) : null
+  if (!parsed) {
+    return null
+  }
+  const layout = state.terminalLayoutsByTabId[parsed.tabId]
+  const paneTitles = state.runtimePaneTitlesByTabId[parsed.tabId]
+  // Undefined means a lone title with no layout is attributable; a multi-pane tab resolves by leaf.
+  const resolved = resolveRuntimePaneTitleForLeaf(layout, paneTitles, parsed.leafId)
+  if (resolved) {
+    return resolved
+  }
+  // As the sidebar publishes it: only a single-pane tab can stand in its own title (#33137).
+  if (layout?.root && layout.root.type !== 'leaf') {
+    return null
+  }
+  const tab = getFirstTerminalTab(state.tabsByWorktree, parsed.tabId)
+  if (!tab) {
+    return null
+  }
+  return resolveTerminalTabTitle(tab, state.settings?.tabAutoGenerateTitle === true)
+}
 
 /** Only a hook row proves a finish its coordinator hears about; a title waiting for approval outranks one. */
 function completionTurnState(
@@ -89,6 +120,9 @@ export function dispatchTerminalNotification(
   event: TerminalNotificationEvent
 ): boolean {
   const state = useAppStore.getState()
+  const terminalTitle =
+    event.terminalTitle ??
+    (event.source === 'terminal-bell' ? readPaneTitle(state, event.paneKey) : null)
   // Explicit completion-title identity rejects other-agent snapshot prompts/timing as pane-reuse residue.
   const explicitTitleAgentType =
     event.source === 'agent-task-complete' && event.terminalTitle
@@ -229,9 +263,9 @@ export function dispatchTerminalNotification(
         workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
-        ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
+        ...getNotificationWorkspaceLabels(state, request.workspaceId, terminalTitle ?? undefined),
         notificationSourceId: notificationSourceForOwner(owner, state),
-        terminalTitle: event.terminalTitle,
+        terminalTitle: terminalTitle ?? undefined,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
       },

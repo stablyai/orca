@@ -12,6 +12,8 @@ export type TerminalHooklessNewsItem = {
   paneKey: string
   worktreeId: string
   executionHostId: ExecutionHostId | null
+  /** The pane's terminal title at the moment of the bell, so the alert names the work. */
+  terminalTitle?: string
 }
 
 export type TerminalHooklessNewsDeps = {
@@ -39,13 +41,18 @@ export class TerminalHooklessNews {
 
   /** One chunk's facts, in order: the title tracker's working/idle edges, then its bell. */
   noteFacts(news: TerminalHooklessNewsItem, facts: readonly TerminalSideEffectFact[]): void {
+    // Held for the bell: a burst carries the title before the BEL it explains.
+    let latestTitle = news.terminalTitle
     for (const fact of facts) {
       if (fact.kind === 'agent-working') {
         this.noteWorking(news.paneKey)
       } else if (fact.kind === 'agent-idle' && !fact.staleWorkingTitleClear) {
+        latestTitle = fact.title
         this.holdTitleFinish(news, fact.title)
+      } else if (fact.kind === 'title') {
+        latestTitle = fact.normalizedTitle || fact.rawTitle
       } else if (fact.kind === 'bell') {
-        this.ringBell(news)
+        this.ringBell(latestTitle ? { ...news, terminalTitle: latestTitle } : news)
       }
     }
   }
