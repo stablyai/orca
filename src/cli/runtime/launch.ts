@@ -50,7 +50,8 @@ import { superviseServeService } from './serve/supervision/serve-supervised-serv
 import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
 import {
   resolveAppImageBuildWatch,
-  supervisedAppImageUpdate
+  supervisedAppImageUpdate,
+  withServeAppImageRelaunch
 } from './serve/updates/serve-appimage-update'
 import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
@@ -163,10 +164,10 @@ export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
         park: openServeBundlePark({ executable }),
         appImageUpdate: supervisedAppImageUpdate(executable, userDataPath, args.force === true),
         // --force overrides the brake once; later attempts use its updated state.
-        runOnce: () =>
+        runOnce: (appImageRelaunchTarget) =>
           serveOnce(
             executable,
-            { ...args, force: args.force === true && attempt++ === 0 },
+            { ...args, force: args.force === true && attempt++ === 0, appImageRelaunchTarget },
             userDataPath
           )
       })
@@ -262,7 +263,7 @@ function spawnElectronServe(
     args.recipeJson !== true && getMacAppBundlePath(executable)
       ? getServeUpdateHandoffPath(userDataPath)
       : null
-  const childEnv = pinned.env
+  const childEnv = withServeAppImageRelaunch(pinned.env, args.appImageRelaunchTarget ?? null)
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }

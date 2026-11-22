@@ -41,7 +41,8 @@ export type SupervisedServeOptions = {
   appRoot?: string
   force: boolean
   /** One full serve attempt: preflight, spawn, and the existing update-aware wait. */
-  runOnce: () => Promise<number>
+  /** Receives the AppImage this supervisor would restart from, or null once it no longer watches one. */
+  runOnce: (appImageRelaunchTarget: string | null) => Promise<number>
   readInstallEvidence?: (executable: string) => Promise<ServeInstallEvidence>
   buildIdentity?: (executable: string) => string
   readBrake?: (userDataPath: string) => ServeSupervisorBrake | null
@@ -64,6 +65,8 @@ export type SupervisedAppImageUpdate = {
   inspect: () => AppImageBuildState
   /** Re-execs into the new build and never returns; otherwise resolves with why it could not. */
   restart: (isStopped: () => boolean) => Promise<string>
+  /** The file a serve child may update in place; absent or null keeps remote updates manual. */
+  relaunchTarget?: string | null
 }
 
 export function getServeSuperviseValidationError(input: {
@@ -256,14 +259,20 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         return refuseGaveUp(record.gaveUp)
       }
 
+      // Read per launch: a failed restart drops the watch, and later children must not offer updates.
+      const run = () => options.runOnce(appImageUpdate?.relaunchTarget ?? null)
       const attempt = parkWatch
-        ? await parkWatch.during(options.runOnce)
-        : { parked: false, settled: await settle(options.runOnce) }
+        ? await parkWatch.during(run)
+        : { parked: false, settled: await settle(run) }
       if (stopped) {
         break
       }
       if (attempt.parked) {
         // Desktop update parks do not count against the crash brake.
+        continue
+      }
+      if ((appImageUpdate?.inspect() ?? 'current') !== 'current') {
+        // The child exited so the replaced AppImage can serve; the loop restarts from it.
         continue
       }
       let failure: string
