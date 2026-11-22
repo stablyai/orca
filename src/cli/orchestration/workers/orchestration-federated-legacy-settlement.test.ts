@@ -36,7 +36,6 @@ it('rejects an unattested relay settlement', async () => {
           ['from', 'term_worker'],
           ['subject', 'done'],
           ['type', 'worker_done'],
-          ['body', 'Completed the requested work.'],
           ['task-id', 'task_legacy'],
           ['dispatch-id', 'ctx_legacy'],
           ['outcome', 'succeeded']
