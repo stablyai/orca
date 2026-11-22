@@ -148,9 +148,10 @@ function ConnectedResumeToast({
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(
+  const { onDetailsOpened } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
-    close
+    close,
+    root
   )
 
   const feed = getStructuredAgentSessionStatusFeed(store.target)
@@ -187,7 +188,6 @@ function ConnectedResumeToast({
       ref={root}
       // Unstyled toasts aren't given the toaster's width; fill it rather than shrink to the text.
       className="w-[var(--width,100%)] max-w-full"
-      {...interactionHandlers}
     >
       {view.rows.length > 0 && (
         <NativeChatResumeToast
