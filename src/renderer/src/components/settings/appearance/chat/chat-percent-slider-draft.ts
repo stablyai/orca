@@ -27,6 +27,14 @@ export function sliderDraftAfterDrag(
   return { ...draft, value, dirty: true }
 }
 
+/** Radix skips the commit when a drag ends where it began, so the release itself ends the drag. */
+export function sliderDraftAfterRelease(draft: ChatPercentSliderDraft): ChatPercentSliderDraft {
+  if (!draft.dirty) {
+    return draft
+  }
+  return { ...draft, dirty: false, value: draft.owner ? draft.value : draft.saved }
+}
+
 export function sliderDraftAfterCommit(
   draft: ChatPercentSliderDraft,
   value: number,

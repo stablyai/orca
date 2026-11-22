@@ -18,6 +18,7 @@ import {
   initialSliderDraft,
   sliderDraftAfterCommit,
   sliderDraftAfterDrag,
+  sliderDraftAfterRelease,
   sliderDraftAfterSettle,
   sliderDraftWithSavedValue
 } from './chat-percent-slider-draft'
@@ -225,6 +226,7 @@ function ChatPercentSlider({
           thumbLabels={[label]}
           onValueChange={([next]) => setDraft((current) => sliderDraftAfterDrag(current, next))}
           onValueCommit={([next]) => commit(next)}
+          onLostPointerCapture={() => setDraft(sliderDraftAfterRelease)}
         />
       </div>
       <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
