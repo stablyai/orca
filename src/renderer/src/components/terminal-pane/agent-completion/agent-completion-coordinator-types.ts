@@ -76,8 +76,8 @@ export type AgentCompletionCoordinator = {
   observeOutputActivity: () => void
   /** Main dropped output for this hidden pane; it reports again at most once per notice window. */
   observeHiddenOutputActivity: () => void
-  /** The host saw the tracked agent's process exit; read the foreground as after output. */
-  observeForegroundExit: () => void
+  /** The host saw the foreground process exit or an agent appear; read the foreground as after output. */
+  observeForegroundChange: () => void
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void

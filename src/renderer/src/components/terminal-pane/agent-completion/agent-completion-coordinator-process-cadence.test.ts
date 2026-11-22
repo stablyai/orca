@@ -208,6 +208,33 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
+  it('arms no timer for a watched agent whose host child census reads empty', async () => {
+    // A Store-packaged shell hides the agent from the child census; the host watches its pid instead.
+    const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false,
+      childProcessEvidence: 'no-children',
+      foregroundExitWatched: true
+    }))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(5_000)
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(5_000)
+    const reads = inspectProcess.mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(reads)
+    expect(vi.getTimerCount()).toBe(0)
+    coordinator.dispose()
+  })
+
   it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
     let result = processResult('codex')
     const dispatchCompletion = vi.fn()

@@ -1,6 +1,4 @@
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
-import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -10,7 +8,6 @@ import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-ob
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
 import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
-import type { ForegroundAgentExitWatches } from '../../pty/process-retirement/foreground-agent-exit-watches'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
 import {
@@ -20,10 +17,7 @@ import {
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
-import {
-  steadyPollJudgesByJobMembership,
-  type PtyProcessInspectionOptions
-} from '../../providers/pty/process-inspection'
+import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-inspection'
 
 const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
 
@@ -36,7 +30,7 @@ export type TerminalHostProcessInspection = {
   foregroundExitWatched?: true
 }
 
-type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
+export type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
 /** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
@@ -255,46 +249,4 @@ function unverifiableEvidence(
     verdict: 'unverifiable',
     reason
   }
-}
-
-export function inspectTerminalHostSession(
-  sessions: ReadonlyMap<string, Session>,
-  retired: Map<string, RetiredIncarnation>,
-  sessionId: string,
-  options: PtyProcessInspectionOptions | undefined,
-  authorityGeneration: string,
-  nextObservationEpoch: () => number,
-  agentExitWatches?: ForegroundAgentExitWatches
-): Promise<TerminalHostProcessInspection> {
-  pruneRetiredPtyIncarnations(retired)
-  const session = getInspectableTerminalHostSession(
-    sessions,
-    retired,
-    sessionId,
-    options?.expectedIncarnationId
-  )
-  return inspectTerminalHostProcess({
-    sessionId,
-    currentSession: () => sessions.get(sessionId),
-    session: session?.isAlive ? session : null,
-    ...options,
-    retiredIncarnation: retired.get(sessionId),
-    authorityGeneration,
-    nextObservationEpoch
-  }).then((result) =>
-    agentExitWatches?.noteInspection(
-      sessionId,
-      sessions.get(sessionId),
-      result.foregroundProcess,
-      provenAgentPid(result.foregroundProcessEvidence)
-    )
-      ? { ...result, foregroundExitWatched: true as const }
-      : result
-  )
-}
-
-function provenAgentPid(evidence: RemoteForegroundEvidence | undefined): number | undefined {
-  return evidence?.verdict === 'live' && evidence.fence.platform === 'posix'
-    ? evidence.fence.process?.pid
-    : undefined
 }

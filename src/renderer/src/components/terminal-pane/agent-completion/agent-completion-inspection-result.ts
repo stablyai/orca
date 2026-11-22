@@ -144,13 +144,10 @@ export function handleAgentCompletionInspectionResult(args: {
   state.consecutiveInspectionErrors = 0
   const recognized = recognizeAgentProcess(result.foregroundProcess)
   if (recognized) {
-    const wasTracked =
-      state.lastForegroundAgent?.agent === recognized.agent && state.hasAgentRunEvidence
     handleRecognizedProcess(recognized)
-    // A cached name the host's own child census contradicts may outlive the agent; read until they agree.
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
+    // A watched pid also settles a cached name the child census contradicts: its exit is the notice.
     if (
-      (wasTracked && result.childProcessEvidence === 'no-children') ||
       result.foregroundExitWatched !== true ||
       options.receivesForegroundExitNotices?.() === false
     ) {

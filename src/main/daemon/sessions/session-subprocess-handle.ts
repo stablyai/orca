@@ -26,8 +26,8 @@ export type SubprocessHandle = {
   confirmShellForeground?(): Promise<boolean>
   /** The proven pid of the cached foreground agent (Windows keeps one; POSIX reads carry it in evidence). */
   foregroundAgentPid?(): number | null
-  /** Wait (bounded) for a foreground identity lookup already in flight. */
-  settleForegroundRefresh?(timeoutMs: number): Promise<unknown>
+  /** The foreground identity lookup in flight, if any. */
+  pendingForegroundRefresh?(): Promise<unknown> | null
   /** Skip stdin command delivery when shell arguments already delivered it. */
   startupCommandDeliveredInShellArgs?: boolean
   /** Report the actual fallback shell so unsupported readiness markers cannot stall startup. */

@@ -309,7 +309,7 @@ export function createAgentCompletionCoordinator(
     observeTitleWorking,
     observeOutputActivity,
     observeHiddenOutputActivity: () => processMonitor.recordHiddenOutputActivity(),
-    observeForegroundExit: recordPaneActivity,
+    observeForegroundChange: recordPaneActivity,
     observeHookStatus: hookObserver.observeHookStatus,
     seedHookStatus: hookObserver.seedHookStatus,
     startProcessTracking: () => processMonitor.start(),

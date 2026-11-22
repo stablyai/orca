@@ -49,8 +49,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
         return
-      case 'foreground-exit':
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-exit' })
+      case 'foreground-changed':
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed' })
     }
   }
 

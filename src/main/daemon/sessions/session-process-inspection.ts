@@ -1,3 +1,4 @@
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
@@ -65,7 +66,14 @@ export abstract class SessionProcessInspection {
   }
 
   async settleForegroundRefresh(timeoutMs: number): Promise<void> {
-    await this.subprocess.settleForegroundRefresh?.(timeoutMs)
+    const pending = this.pendingForegroundRefresh()
+    if (pending) {
+      await withTimeout(pending, timeoutMs, undefined)
+    }
+  }
+
+  pendingForegroundRefresh(): Promise<unknown> | null {
+    return this.subprocess.pendingForegroundRefresh?.() ?? null
   }
 
   foregroundAgentPid(): number | null {

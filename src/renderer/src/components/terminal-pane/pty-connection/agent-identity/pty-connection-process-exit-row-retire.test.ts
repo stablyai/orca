@@ -315,7 +315,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     _dispatchTerminalSideEffectBatchForTest({
       ptyId: 'pty-silent-exit',
       seq: 1,
-      facts: [{ kind: 'foreground-exit' }]
+      facts: [{ kind: 'foreground-changed' }]
     })
     await vi.advanceTimersByTimeAsync(10_000)
     await flushAsyncTicks()

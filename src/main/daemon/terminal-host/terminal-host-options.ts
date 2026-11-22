@@ -29,7 +29,7 @@ export type TerminalHostOptions = {
   // Login-session death detection needs exits even when no viewer is attached.
   onSessionReaped?: (sessionId: string) => void
   /** A watched foreground agent's process exited; the session itself lives on. */
-  onSessionAgentExit?: (sessionId: string) => void
+  onSessionForegroundChange?: (sessionId: string) => void
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   // Finish shutdown checkpoints in-process before native teardown.

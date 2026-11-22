@@ -85,7 +85,7 @@ describe('TerminalHost foreground agent exit watch', () => {
           },
           dispose: vi.fn()
         }) satisfies SubprocessHandle,
-      onSessionAgentExit: (sessionId) => agentExits.push(sessionId)
+      onSessionForegroundChange: (sessionId) => agentExits.push(sessionId)
     })
   })
 
@@ -185,9 +185,10 @@ describe('TerminalHost foreground agent exit watch', () => {
           pid: 99998,
           getForegroundProcess: () => name,
           // The lookup the shell name started lands while the read waits for it.
-          settleForegroundRefresh: async () => {
-            name = 'codex'
-          },
+          pendingForegroundRefresh: () =>
+            Promise.resolve().then(() => {
+              name = 'codex'
+            }),
           inspectChildProcesses: () => 'no-children',
           write: vi.fn(),
           resize: vi.fn(),

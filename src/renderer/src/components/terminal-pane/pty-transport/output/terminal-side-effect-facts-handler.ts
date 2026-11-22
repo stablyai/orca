@@ -66,7 +66,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  subscription registry so later theme flips stop pushing CSI 997. */
   onMode2031Unsubscribe?: () => void
   /** The host saw the tracked foreground agent exit, which may print nothing. */
-  onForegroundExit?: () => void
+  onForegroundChanged?: () => void
 }
 
 type ConsumerEntry = {
@@ -124,8 +124,8 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
     case '2031-unsubscribe':
       entry.callbacks.onMode2031Unsubscribe?.()
       return
-    case 'foreground-exit':
-      entry.callbacks.onForegroundExit?.()
+    case 'foreground-changed':
+      entry.callbacks.onForegroundChanged?.()
   }
 }
 

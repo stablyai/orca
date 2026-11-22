@@ -29,7 +29,6 @@ import {
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
-import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
@@ -47,7 +46,7 @@ export type PtyForegroundProcessTracker = {
   confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
   cachedAgentPid(): number | null
-  settleForegroundRefresh(timeoutMs: number): Promise<unknown>
+  pendingForegroundRefresh(): Promise<unknown> | null
 }
 
 export function createPtyForegroundProcessTracker(args: {
@@ -213,8 +212,7 @@ export function createPtyForegroundProcessTracker(args: {
       startupAgentForeground = null
     },
     cachedAgentPid: () => cachedAgentForeground?.pid ?? null,
-    settleForegroundRefresh: (timeoutMs) =>
-      withTimeout(foregroundRefresh ?? Promise.resolve(), timeoutMs, undefined),
+    pendingForegroundRefresh: () => foregroundRefresh,
     getForegroundProcess: (options) => {
       if (args.isDead()) {
         return null

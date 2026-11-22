@@ -31,10 +31,8 @@ import {
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
-import {
-  inspectTerminalHostSession,
-  type TerminalHostProcessInspection
-} from './terminal-host-process-inspection'
+import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import { inspectTerminalHostSession } from './terminal-host-session-inspection'
 
 import {
   confirmTerminalHostForegroundProcess,
@@ -46,7 +44,7 @@ import {
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
 
-import { ForegroundAgentExitWatches } from '../../pty/process-retirement/foreground-agent-exit-watches'
+import { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -66,7 +64,7 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
-  private readonly agentExitWatches: ForegroundAgentExitWatches
+  private readonly foregroundExitWatches: ForegroundExitWatches
   private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
@@ -77,7 +75,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.agentExitWatches = new ForegroundAgentExitWatches(opts.onSessionAgentExit)
+    this.foregroundExitWatches = new ForegroundExitWatches(opts.onSessionForegroundChange)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -196,7 +194,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
-    this.agentExitWatches.forget(sessionId)
+    this.foregroundExitWatches.forget(sessionId)
     this.onSessionReaped?.(sessionId)
   }
 
@@ -249,7 +247,7 @@ export class TerminalHost {
       options,
       this.authorityGeneration,
       () => ++this.observationEpoch,
-      this.agentExitWatches
+      this.foregroundExitWatches
     )
   }
 
@@ -326,7 +324,7 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
-    this.agentExitWatches.dispose()
+    this.foregroundExitWatches.dispose()
     if (this.disposePromise) {
       return this.disposePromise
     }

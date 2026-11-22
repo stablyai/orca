@@ -81,9 +81,9 @@ export class DaemonServer {
         options.onPtySessionExit?.(sessionId)
         this.lifecycle.reevaluateIdleShutdown()
       },
-      onSessionAgentExit: (sessionId) =>
+      onSessionForegroundChange: (sessionId) =>
         sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, {
-          kind: 'foreground-exit'
+          kind: 'foreground-changed'
         })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
