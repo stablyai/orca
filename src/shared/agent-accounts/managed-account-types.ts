@@ -103,6 +103,8 @@ export type ClaudeManagedAccountSummary = {
   needsSignIn?: true
   /** Its folder holds no login, so its launches run on System default, signed in to it. */
   runsOnSystemDefault?: true
+  /** The login it was added with, once its folder signs in to another one (e.g. `/login` in Claude). */
+  addedAs?: { email: string; organizationName: string | null }
   /** The host folder its launches use; a legacy account's saved path may name an older one. */
   home?: string
 }

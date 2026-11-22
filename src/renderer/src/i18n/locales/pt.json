@@ -23134,7 +23134,8 @@
         "title": "Consulta de uso do Claude",
         "description": "Usa seu login do Claude Code para consultar o uso, os créditos e as contas inativas. Desative para usar apenas as leituras em tempo real das sessões do terminal.",
         "about": "Sobre a consulta de uso do Claude"
-      }
+      },
+      "addedAs": "Adicionada como {{value0}}"
     },
     "managedData": {
       "description": "Adicione contas executando este comando em um terminal no host do Orca. A seleção se aplica a novos agentes iniciados explicitamente nesse host; relay SSH direto e agentes iniciados no WSL hospedado no Windows usam suas próprias credenciais.",

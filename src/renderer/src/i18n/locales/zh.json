@@ -23829,7 +23829,8 @@
         "title": "Claude 用量轮询",
         "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
         "about": "关于 Claude 用量轮询"
-      }
+      },
+      "addedAs": "添加时为 {{value0}}"
     },
     "hostSignIn": {
       "copied": "已复制",

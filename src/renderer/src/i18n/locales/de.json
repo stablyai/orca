@@ -22181,7 +22181,8 @@
         "title": "Claude-Nutzungsabfrage",
         "description": "Verwendet deine Claude-Code-Anmeldung, um Nutzung, Guthaben und inaktive Konten abzufragen. Deaktiviere diese Option, um nur Live-Daten aus Terminalsitzungen zu verwenden.",
         "about": "Über die Claude-Nutzungsabfrage"
-      }
+      },
+      "addedAs": "Hinzugefügt als {{value0}}"
     },
     "managedData": {
       "description": "Zum Hinzufügen von Konten diesen Befehl in einem Terminal auf dem Orca-Host ausführen. Die Auswahl gilt für neue explizite Agentenstarts auf diesem Host; direkte SSH-Weiterleitungen und WSL-Starts auf Windows-Hosts verwenden eigene Anmeldedaten.",

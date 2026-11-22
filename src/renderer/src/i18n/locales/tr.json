@@ -22300,7 +22300,8 @@
         "title": "Claude kullanımını sorgula",
         "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",
         "about": "Claude kullanım sorgulaması hakkında"
-      }
+      },
+      "addedAs": "{{value0}} olarak eklendi"
     },
     "managedData": {
       "description": "Orca ana makinesindeki bir terminalde bu komutu çalıştırarak hesap ekleyin. Seçim, o ana makinede açıkça başlatılan yeni ajanlar için geçerlidir; doğrudan SSH aktarması ve Windows ana makinesindeki WSL başlatmaları kendi kimlik bilgilerini kullanır.",
