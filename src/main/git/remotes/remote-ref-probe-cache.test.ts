@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
@@ -61,7 +65,8 @@ describe('remote ref probe cache (P1-D)', () => {
       .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
 
     const abandoned = cache.get('/repo', 'origin')
-    vi.setSystemTime(1_000_000 + PROBE_COALESCE_STALE_MS + 1)
+    await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    vi.setSystemTime(Date.now() + PROBE_COALESCE_STALE_MS + 1)
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
 
     // Abandoned probes still answer their caller but must not overwrite newer cached state.
@@ -89,5 +94,36 @@ describe('remote ref probe cache (P1-D)', () => {
     await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('remote ref probe cache against a real checkout', () => {
+  let repoPath: string
+
+  beforeEach(async () => {
+    const actual = await vi.importActual<{ gitExecFileAsync: typeof gitExecFileAsyncMock }>(
+      '../command-runner/git-exec-file'
+    )
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockImplementation(actual.gitExecFileAsync)
+    repoPath = mkdtempSync(join(tmpdir(), 'remote-ref-probe-cache-'))
+    execFileSync('git', ['init', '-q', repoPath])
+  })
+
+  afterEach(() => {
+    rmSync(repoPath, { recursive: true, force: true })
+  })
+
+  it('resolves the new repository after origin is changed in place', async () => {
+    const cache = createRemoteRefProbeCache(parseExampleRef)
+    execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:team/old.git'], {
+      cwd: repoPath
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/old' })
+
+    execFileSync('git', ['remote', 'set-url', 'origin', 'git@example.com:team/renamed.git'], {
+      cwd: repoPath
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/renamed' })
   })
 })
