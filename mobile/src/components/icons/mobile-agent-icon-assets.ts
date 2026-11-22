@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-a
 // Keep literal require paths: Metro cannot resolve dynamic agent-id asset paths.
 export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropType>> = {
   openclaude: require('../../../../src/shared/agent-icons/openclaude.png'),
+  bqagent: require('../../../../src/shared/agent-icons/bqagent.png'),
   grok: require('../../../../src/shared/agent-icons/grok.png'),
   copilot: require('../../../../src/shared/agent-icons/copilot.png'),
   opencode: require('../../../../src/shared/agent-icons/opencode.png'),
