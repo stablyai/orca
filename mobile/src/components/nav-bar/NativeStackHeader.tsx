@@ -109,7 +109,7 @@ export function NativeStackHeader({
     [options, title, largeTitle, customTitle, subtitle, onTitlePress, titleHint]
   )
   const all = [...leftItems, ...items]
-  const androidImages = useMaterialSymbolImages(
+  const androidSymbols =
     Platform.OS === 'android'
       ? all
           .flatMap((item) => [
@@ -119,7 +119,9 @@ export function NativeStackHeader({
           .map(platformSymbol)
           .filter((symbol): symbol is string => symbol !== undefined)
       : []
-  )
+  const androidImages = useMaterialSymbolImages(androidSymbols)
+  // Compose builds a menu with the icons it has at first and never updates them, so wait for all.
+  const iconsReady = androidSymbols.every((symbol) => androidImages.has(symbol))
   const iconOf = (symbol: HeaderSymbol | undefined) => {
     const name = platformSymbol(symbol)
     if (!name) {
@@ -174,10 +176,10 @@ export function NativeStackHeader({
   return (
     <>
       <Stack.Screen options={screenOptions} />
-      {leftItems.length > 0 ? (
+      {iconsReady && leftItems.length > 0 ? (
         <Stack.Toolbar placement="left">{leftItems.map(renderItem)}</Stack.Toolbar>
       ) : null}
-      {items.length > 0 ? (
+      {iconsReady && items.length > 0 ? (
         <Stack.Toolbar placement="right">{items.map(renderItem)}</Stack.Toolbar>
       ) : null}
     </>
