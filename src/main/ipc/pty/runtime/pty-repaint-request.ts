@@ -2,7 +2,7 @@ import { getProviderForPty } from '../provider/registry'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 /** The host owning the PTY redraws its program; a host that cannot leaves queued input held.
- *  Resolves whether that host was asked. */
+ *  Resolves false only when a later ask could still reach it. */
 export async function requestRepaintFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
@@ -17,10 +17,8 @@ export async function requestRepaintFromRuntimeController(
   }
   try {
     const provider = getProviderForPty(ptyId)
-    if (!provider.requestRepaint) {
-      return false
-    }
-    await provider.requestRepaint(ptyId)
+    // A host without the request (SSH, daemons before v60) never gains it, so asking again is moot.
+    await provider.requestRepaint?.(ptyId)
     return true
   } catch {
     // No provider owns this PTY any more, or its host could not be reached.
