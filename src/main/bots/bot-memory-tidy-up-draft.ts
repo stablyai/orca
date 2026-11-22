@@ -108,11 +108,6 @@ export function checkTidyUpDraft(
   before: string,
   draft: TidyUpDraft
 ): { plan: TidyUpPlan } | { refused: string } {
-  // Past the cap, any shrink helps: the next night carries on from there.
-  const lines = countBotMemoryLines(draft.index)
-  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
-    return { refused: TIDY_UP_FAILURES.tooLong }
-  }
   if (
     [...draft.topics.keys()].some(
       (name) => name === TIDY_UP_ARCHIVE || !TIDY_UP_TOPIC_NAME.test(name)
@@ -164,6 +159,12 @@ export function checkTidyUpDraft(
   const change = {
     added: diff.added,
     removed: diff.removed.filter(({ line }) => !undated.has(keyOf(line) ?? ''))
+  }
+  // Past the cap, any shrink helps: the next night carries on from there. Measured on the change,
+  // which keeps undated lines the draft left out.
+  const lines = countBotMemoryLines(applyBotMemoryChange(before, change))
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
+    return { refused: TIDY_UP_FAILURES.tooLong }
   }
   const filed = keysOf(filedLines)
   const archived = change.removed.filter(({ line }) => !filed.has(keyOf(line) ?? ''))

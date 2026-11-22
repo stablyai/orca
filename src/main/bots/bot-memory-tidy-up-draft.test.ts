@@ -58,4 +58,13 @@ describe('nightly memory tidy-up over the line cap', () => {
     expect(outcome).toEqual({ error: TIDY_UP_FAILURES.tooLong, alerted: false })
     expect(file).toBe(before)
   })
+
+  it('refuses an over-cap draft that shrinks only by leaving out undated lines, which stay', async () => {
+    const undated = `${range(0, 280)
+      .map((n) => `- note ${n}`)
+      .join('\n')}\n`
+    const { outcome, file } = await tidy(undated, `${undated.split('\n').slice(20).join('\n')}`)
+    expect(outcome).toEqual({ error: TIDY_UP_FAILURES.tooLong, alerted: false })
+    expect(file).toBe(undated)
+  })
 })

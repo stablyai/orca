@@ -289,7 +289,8 @@ export class BotTidyUpRunner {
       this.ownSessions.delete(sessionId)
     }
     // Failures before the owner last turned it on don't count, or one more would turn it off again.
-    const since = botTidyUp(bot).since ?? 0
+    const current = this.deps.bots().find((entry) => entry.id === bot.id) ?? bot
+    const since = botTidyUp(current).since ?? 0
     const runs = tidyUpState(this.deps.store.get(bot.id)).runs.filter(
       (run) => run.startedAt >= since
     )
