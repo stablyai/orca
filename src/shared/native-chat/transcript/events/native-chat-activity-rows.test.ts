@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTextBlock } from '../../native-chat-types'
+import type { AutomationRunMessage } from '../../../automations/automation-run-message'
+import type { BotAutomationFacts } from '../../../bots/bot-automation-rows'
+import { EVENT_ONLY_SCHEDULE } from '../../../automation-event-triggers'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../notices/native-chat-pull-request-event'
 import { nativeChatActivityRowJoins } from './native-chat-activity-rows'
 
@@ -16,7 +19,6 @@ const row = (
   ...fields
 })
 
-type Message = NativeChatMessage
 const notice = (block: Partial<NativeChatTextBlock>): NativeChatMessage =>
   row('system', { blocks: [{ type: 'text', text: 'line', ...block }] })
 
@@ -36,33 +38,55 @@ const update = (): NativeChatMessage =>
     }
   })
 
-const automation = { id: 'a1', name: 'CI result', enabled: true, once: {} }
+const automation: BotAutomationFacts = {
+  id: 'a1',
+  name: 'CI result',
+  enabled: true,
+  nextRunAt: 0,
+  updatedAt: 0,
+  ...EVENT_ONLY_SCHEDULE,
+  workspaceId: null,
+  once: {}
+}
+const run: AutomationRunMessage = {
+  runId: 'r1',
+  automation,
+  trigger: 'scheduled',
+  instructionsLength: 0
+}
 
 // Each row the chat draws as one line, which sits close to the one-line rows around it.
 const oneLineRows: Record<string, () => NativeChatMessage> = {
   waiting: () =>
     row('system', {
-      automationSaved: { change: 'created', automation } as Message['automationSaved']
+      automationSaved: { change: 'created', automation }
     }),
   waitOver: () =>
     row('system', {
-      waitEnded: { automation, ending: { kind: 'event', at: 1 } } as Message['waitEnded']
+      waitEnded: { automation, ending: { kind: 'event', at: 1 } }
     }),
   automationRun: () =>
     row('user', {
       blocks: [{ type: 'text', text: 'Run the morning triage.' }],
-      automationRun: { runId: 'r1', automation, trigger: 'scheduled' } as Message['automationRun']
+      automationRun: run
     }),
   automationNotStarted: () =>
     row('system', {
-      automationRunNotStarted: {
-        run: { runId: 'r2', automation }
-      } as Message['automationRunNotStarted']
+      automationRunNotStarted: { run, actsFor: [], error: 'Send failed', text: '', at: 1 }
     }),
   automationResult: () =>
     notice({
       presentation: 'automation-result',
-      automationResult: { automationId: 'a1' } as NativeChatTextBlock['automationResult']
+      automationResult: {
+        automationId: 'a1',
+        automationName: 'Triage',
+        botName: 'Helper',
+        runId: 'r1',
+        trigger: 'schedule',
+        outcome: 'finished',
+        result: 'Nothing new.',
+        at: 1
+      }
     }),
   memoryUpdated: () =>
     notice({
@@ -88,7 +112,11 @@ const oneLineRows: Record<string, () => NativeChatMessage> = {
     }),
   toolAdded: () =>
     row('system', {
-      toolAdded: { botId: 'b1', addedAt: 1 } as Message['toolAdded']
+      toolAdded: {
+        botId: 'b1',
+        tool: { name: 'Search', detail: 'https://search.example', remote: false },
+        addedAt: 1
+      }
     }),
   contextNote: () =>
     notice({ presentation: 'bot-context', botContext: { botId: 'b1', changed: ['soul'] } }),
