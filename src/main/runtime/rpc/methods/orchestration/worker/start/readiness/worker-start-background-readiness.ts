@@ -1,8 +1,5 @@
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
-import {
-  createSetupWaitGate,
-  SETUP_WAIT_GATE_MAX_MS
-} from '../../../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
+import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { readTerminalStartFailure } from '../../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   RuntimeTerminalWait,
@@ -71,8 +68,10 @@ export type AwaitingWorkerStart = {
   /** When the agent was launched; its deadline counts from here unless Setup holds it. */
   launchedAt: number
   blockedReason?: RuntimeTerminalWaitBlockedReason
+  /** The wait-for-setup pane's Setup terminal while Setup still runs; its end starts the clock. */
+  setupTerminal?: string
   /** Types the brief and settles the start, as a start ready in time does. */
-  handOver: () => Promise<void>
+  handOver: (ready: RuntimeTerminalWait) => Promise<void>
   /** Fails the start as the caller's own failure would. */
   fail: (error: unknown, failedStage: string) => Promise<void>
 }
@@ -83,7 +82,8 @@ export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): { read
   const controller = new AbortController()
   waits.get(start.dispatchId)?.abort()
   waits.set(start.dispatchId, controller)
-  const gated = start.setup.startupPolicy === 'wait-for-setup' && start.setup.effective === 'run'
+  // A screen already up means the agent runs, so Setup is over.
+  const gated = start.setupTerminal !== undefined && !start.blockedReason
   void watch(start, controller.signal, gated)
     .catch((error: unknown) => {
       console.warn('[orchestration] waiting for a worker agent failed', start.dispatchId, error)
@@ -111,17 +111,13 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
     (!start.readiness.reusesTerminal &&
       freshLaunchPtyId(terminalHandle, start.readiness.creation)) ||
     runtime.getTerminalPtyIdForHandle(terminalHandle)
-  if (gated) {
-    const id = ptyId()
-    const setup = id ? await setupEnd(runtime, id, signal) : 'started'
+  if (gated && start.setupTerminal) {
+    const setup = await setupEnd(runtime, start.setupTerminal, signal)
     if (!awaiting()) {
       return
     }
     if (setup === 'failed') {
-      await start.fail(
-        new Error('Setup failed or timed out, so its agent never started.'),
-        'setup_wait'
-      )
+      await start.fail(new Error('Setup failed, so its agent never started.'), 'setup_wait')
       return
     }
   }
@@ -134,12 +130,9 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
     if (blocked) {
       // A screen only a person answers changes only when they do: each repaint gets one tail read,
       // and the full wait starts again only once that screen is gone.
-      const id = ptyId()
       do {
-        if (id) {
-          await nextOutput(runtime, id, signal, deadline)
-        }
-      } while (id && awaiting() && Date.now() < deadline && (await stillBlocked(start)))
+        await nextOutput(runtime, terminalHandle, ptyId(), signal, deadline)
+      } while (awaiting() && Date.now() < deadline && (await stillBlocked(start)))
     }
     if (!awaiting()) {
       return
@@ -171,7 +164,7 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
     }
     if (wait.satisfied) {
       db.recordWorkerStage({ dispatchId, stage: 'agent_readiness' })
-      await start.handOver()
+      await start.handOver(wait)
       return
     }
     if (!wait.blockedReason) {
@@ -220,63 +213,51 @@ async function stillBlocked({ runtime, terminalHandle }: AwaitingWorkerStart): P
   return probe?.satisfied === false && probe.blockedReason !== undefined
 }
 
-/** Resolves on the pane's next output, an abort or the deadline, whichever is first. */
+/** Resolves on the pane's next output, its exit, an abort or the deadline, whichever is first. */
 function nextOutput(
-  runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData'>,
-  ptyId: string,
+  runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData' | 'waitForTerminal'>,
+  handle: string,
+  ptyId: string | null,
   signal: AbortSignal,
   deadline: number
 ): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
+  const stop = new AbortController()
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const unsubscribe = ptyId ? runtime.subscribeToTerminalData(ptyId, () => resolve()) : () => {}
+    const timer = setTimeout(resolve, Math.max(0, deadline - Date.now()))
+    signal.addEventListener('abort', () => resolve(), { once: true, signal: stop.signal })
+    runtime.waitForTerminal(handle, { condition: 'exit', signal: stop.signal }).then(
+      () => resolve(),
+      () => resolve()
+    )
+    stop.signal.addEventListener('abort', () => {
       unsubscribe()
       clearTimeout(timer)
-      signal.removeEventListener('abort', done)
-      resolve()
-    }
-    const unsubscribe = runtime.subscribeToTerminalData(ptyId, done)
-    const timer = setTimeout(done, Math.max(0, deadline - Date.now()))
-    signal.addEventListener('abort', done, { once: true })
-  })
+    })
+  }).finally(() => stop.abort())
 }
 
-/** How a wait-for-setup pane's Setup ended, read from the sequencing lines its wrapper prints. */
-function setupEnd(
-  runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData' | 'readRecentTerminalOutput'>,
-  ptyId: string,
+/** How a wait-for-setup pane's Setup ended: by its own terminal's exit, as structured workers wait. */
+async function setupEnd(
+  runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
+  setupTerminal: string,
   signal: AbortSignal
 ): Promise<'started' | 'failed' | 'aborted'> {
-  const gate = createSetupWaitGate()
-  return new Promise((resolve) => {
-    let unsubscribe: (() => void) | null = null
-    // The wrapper gives up by then itself; this only bounds a wait whose sequencing lines went unseen.
-    const cap = setTimeout(() => finish('started'), SETUP_WAIT_GATE_MAX_MS)
-    const finish = (phase: 'started' | 'failed' | 'aborted') => {
-      clearTimeout(cap)
-      unsubscribe?.()
-      signal.removeEventListener('abort', onAbort)
-      resolve(phase)
-    }
-    const onAbort = () => finish('aborted')
-    const observe = (chunk: string): boolean => {
-      const { phase } = gate.observe(chunk)
-      if (phase === 'started' || phase === 'failed') {
-        finish(phase)
-        return true
-      }
-      return false
-    }
-    if (signal.aborted) {
-      finish('aborted')
-      return
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    // The wrapper's wait line printed before this wait began; its recent bytes still hold it.
-    if (observe(runtime.readRecentTerminalOutput(ptyId) ?? '')) {
-      return
-    }
-    unsubscribe = runtime.subscribeToTerminalData(ptyId, (data) => {
-      observe(data)
-    })
-  })
+  const stop = new AbortController()
+  const both = AbortSignal.any([signal, stop.signal])
+  // The wrapper gives up by then itself, so no agent can start after it.
+  const cap = setTimeout(() => stop.abort(), SETUP_WAIT_GATE_MAX_MS)
+  try {
+    const { exitCode } = await runtime.waitForSetupTerminalCompletion(setupTerminal, both)
+    return exitCode === 0 ? 'started' : 'failed'
+  } catch {
+    // A Setup terminal already gone has ended; the readiness wait decides what came of it.
+    return signal.aborted ? 'aborted' : 'started'
+  } finally {
+    clearTimeout(cap)
+  }
 }

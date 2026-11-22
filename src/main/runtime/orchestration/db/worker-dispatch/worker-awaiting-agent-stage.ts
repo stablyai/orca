@@ -3,8 +3,10 @@
 export const WORKER_AWAITING_AGENT_STAGE = 'awaiting_agent'
 
 /** Such a start has typed nothing yet, so it stops as a running worker does. */
-export function isWorkerAwaitingAgent(worker: { state: string; stage: string }): boolean {
-  return worker.state === 'starting' && worker.stage === WORKER_AWAITING_AGENT_STAGE
+export function isWorkerAwaitingAgent(
+  worker: { state: string; stage: string } | undefined
+): boolean {
+  return worker?.state === 'starting' && worker.stage === WORKER_AWAITING_AGENT_STAGE
 }
 
 /** A worker a stop can begin on: running, of unknown start, or still waiting on its agent. */

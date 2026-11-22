@@ -56,7 +56,14 @@ export async function handOverWhenReady(
     timeoutMs: args.timeoutMs,
     launchedAt: args.launchedAt,
     blockedReason: pending.blockedReason,
-    handOver: async () => args.onHandedOver(await args.handOver().catch((e) => args.fail(e))),
+    setupTerminal:
+      setupStage.setup.startupPolicy === 'wait-for-setup' && setupStage.setup.state === 'running'
+        ? setupStage.effects.find((effect) => effect.kind === 'setup')?.terminalId
+        : undefined,
+    handOver: async (ready) => {
+      persistWorkerSetupWaitOutcome({ ...setupStage, wait: ready })
+      args.onHandedOver(await args.handOver().catch((error: unknown) => args.fail(error)))
+    },
     fail: async (error, failedStage) => {
       await args.fail(error, failedStage)
     }

@@ -1,3 +1,5 @@
+import { stopAwaitingWorker } from './awaiting-worker-stop'
+import { isWorkerAwaitingAgent } from '../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { cancelWorkerStartWait } from '../start/readiness/worker-start-background-readiness'
 import type { WorkerStopReceipt } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
@@ -129,6 +131,7 @@ export async function stopSingleWorker(
     }
   }
 
+  const awaitingAgent = isWorkerAwaitingAgent(db.getWorkerDispatch(dispatchId))
   const begun = db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
   cancelWorkerStartWait(dispatchId)
   if (begun.disposition === 'already_settled') {
@@ -153,6 +156,9 @@ export async function stopSingleWorker(
       db.markWorkerStopUnknown(dispatchId, 'The Dispatch has no recorded agent terminal.'),
       'unknown'
     )
+  }
+  if (awaitingAgent) {
+    return stopAwaitingWorker(runtime, db, dispatchId, handle)
   }
   if (isStructuredWorkerHandle(handle)) {
     // Install the structured host after restart or observation/close stay unknown forever.

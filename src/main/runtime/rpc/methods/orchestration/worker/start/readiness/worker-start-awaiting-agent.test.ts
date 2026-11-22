@@ -174,13 +174,17 @@ describe('a worker start whose agent is not ready in time', () => {
     h.setup()
     const ready = deferred()
     launch('timeout', ready.promise)
+    const close = vi
+      .spyOn(h.runtime, 'closeTerminal')
+      .mockResolvedValue({ handle: 'term_worker', tabId: 'tab', ptyKilled: true })
     const { dispatchId } = await start()
 
     await h.call('orchestration.workerStop', { dispatch: dispatchId })
     ready.resolve()
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(h.db.getWorkerDispatch(dispatchId)?.state).not.toBe('starting')
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
+    expect(close).toHaveBeenCalledWith('term_worker')
     expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
