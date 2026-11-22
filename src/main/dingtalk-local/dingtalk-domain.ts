@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import * as z from 'zod'
 
 const Profile = z
@@ -138,8 +138,18 @@ export function parseDingTalkSetup(raw: unknown, botIds: readonly string[] = [])
   return setup
 }
 
-export function readDingTalkSetup(path: string, botIds: readonly string[] = []): DingTalkSetup {
-  const raw: unknown = JSON.parse(readFileSync(path, 'utf8'))
+/** A missing file means the connector is off. */
+export async function readDingTalkSetup(
+  path: string,
+  botIds: readonly string[] = []
+): Promise<DingTalkSetup> {
+  const text = await readFile(path, 'utf8').catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  })
+  const raw: unknown = text === null ? { enabled: false } : JSON.parse(text)
   return parseDingTalkSetup(raw, botIds)
 }
 

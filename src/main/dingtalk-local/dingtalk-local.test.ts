@@ -71,7 +71,7 @@ describe('DingTalk local domain', () => {
     ).toBe('at')
   })
 
-  it('filters own messages and accepts a prefixed message', () => {
+  it('filters own messages and accepts a prefixed message', async () => {
     const setup = parseDingTalkSetup({
       groups: [{ profile: 'corp:user', groupId: 'group-1', botId: 'bot', selfOpenId: 'self' }]
     })
@@ -88,7 +88,7 @@ describe('DingTalk local domain', () => {
     expect(decideInbound(setup, inbound('hello'))).toEqual({ kind: 'drop', reason: 'trigger' })
   })
 
-  it('keeps stable conversation, delivery, reply, and send ids', () => {
+  it('keeps stable conversation, delivery, reply, and send ids', async () => {
     expect(stableExternalId(profile, conversationId)).toBe(
       stableExternalId(profile, conversationId)
     )
@@ -104,18 +104,20 @@ describe('DingTalk local domain', () => {
 })
 
 describe('DingTalk ledger', () => {
-  it('deduplicates an inbox event and persists atomically', () => {
+  it('deduplicates an inbox event and persists atomically', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'dingtalk-local-')), 'ledger.json')
     const ledger = new DingTalkLedger(file)
-    expect(ledger.putInbox(inbox())).toBe(true)
-    expect(ledger.putInbox(inbox())).toBe(false)
+    await ledger.load()
+    expect(await ledger.putInbox(inbox())).toBe(true)
+    expect(await ledger.putInbox(inbox())).toBe(false)
     expect(JSON.parse(readFileSync(file, 'utf8')).inbox['inbox-1'].state).toBe('pending')
   })
 
-  it('reconciles a delivering crash back to delivery', () => {
+  it('reconciles a delivering crash back to delivery', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'dingtalk-local-')), 'ledger.json')
     const ledger = new DingTalkLedger(file)
-    ledger.putInbox(inbox('delivering'))
+    await ledger.load()
+    await ledger.putInbox(inbox('delivering'))
     expect(
       reconcileLedger(ledger.snapshot(), { delivering: new Set(), sending: new Set() })
     ).toEqual([{ kind: 'recover-delivering', inboxKey: 'inbox-1' }])
@@ -123,18 +125,19 @@ describe('DingTalk ledger', () => {
 })
 
 describe('DingTalk turn attribution', () => {
-  it('ignores ambiguous delivered rows', () => {
+  it('ignores ambiguous delivered rows', async () => {
     const ledger = new DingTalkLedger(
       join(mkdtempSync(join(tmpdir(), 'dingtalk-local-')), 'ledger.json')
     )
-    ledger.putInbox(inbox('delivered'))
-    ledger.putInbox({
+    await ledger.load()
+    await ledger.putInbox(inbox('delivered'))
+    await ledger.putInbox({
       ...inbox('delivered'),
       key: 'inbox-2',
       event: { ...inbound(), messageId: schemas.MessageId.parse('message-2') },
       deliveryId: stableDeliveryId(profile, schemas.MessageId.parse('message-2'))
     })
-    ledger.putConversation({
+    await ledger.putConversation({
       externalId,
       profile,
       groupId,
@@ -156,12 +159,13 @@ describe('DingTalk turn attribution', () => {
     ).toEqual({ kind: 'ignore', reason: 'ambiguous_inbox' })
   })
 
-  it('creates one queued reply for one delivered turn', () => {
+  it('creates one queued reply for one delivered turn', async () => {
     const ledger = new DingTalkLedger(
       join(mkdtempSync(join(tmpdir(), 'dingtalk-local-')), 'ledger.json')
     )
-    ledger.putInbox(inbox('delivered'))
-    ledger.putConversation({
+    await ledger.load()
+    await ledger.putInbox(inbox('delivered'))
+    await ledger.putConversation({
       externalId,
       profile,
       groupId,
@@ -193,31 +197,33 @@ describe('DingTalk turn attribution', () => {
 describe('DingTalk ledger durability', () => {
   const tempDir = (): string => mkdtempSync(join(tmpdir(), 'dingtalk-ledger-'))
 
-  it('keeps memory unchanged when a write fails, so the same row can be retried', () => {
+  it('keeps memory unchanged when a write fails, so the same row can be retried', async () => {
     const root = tempDir()
     const blocker = join(root, 'dir')
     const ledger = new DingTalkLedger(join(blocker, 'ledger.json'))
+    await ledger.load()
     writeFileSync(blocker, 'not a directory')
-    expect(() => ledger.putInbox(inbox())).toThrow()
+    await expect(ledger.putInbox(inbox())).rejects.toThrow()
     expect(ledger.snapshot().inbox).toEqual({})
     rmSync(blocker)
-    expect(ledger.putInbox(inbox())).toBe(true)
-    expect(ledger.putInbox(inbox())).toBe(false)
-    expect(new DingTalkLedger(join(blocker, 'ledger.json')).snapshot().inbox['inbox-1']).toEqual(
-      inbox()
-    )
+    expect(await ledger.putInbox(inbox())).toBe(true)
+    expect(await ledger.putInbox(inbox())).toBe(false)
+    const reopened = new DingTalkLedger(join(blocker, 'ledger.json'))
+    await reopened.load()
+    expect(reopened.snapshot().inbox['inbox-1']).toEqual(inbox())
   })
 
-  it('refuses to overwrite an unreadable ledger', () => {
+  it('refuses to overwrite an unreadable ledger', async () => {
     const path = join(tempDir(), 'ledger.json')
     writeFileSync(path, '{ not json')
     const ledger = new DingTalkLedger(path)
+    await ledger.load()
     expect(ledger.readError).not.toBeNull()
-    expect(() => ledger.putInbox(inbox())).toThrow('unreadable')
+    await expect(ledger.putInbox(inbox())).rejects.toThrow('unreadable')
     expect(readFileSync(path, 'utf8')).toBe('{ not json')
   })
 
-  it('rejects a ledger whose rows are incomplete', () => {
+  it('rejects a ledger whose rows are incomplete', async () => {
     const path = join(tempDir(), 'ledger.json')
     const { event: _event, ...partial } = inbox()
     const bytes = JSON.stringify({
@@ -229,8 +235,9 @@ describe('DingTalk ledger durability', () => {
     })
     writeFileSync(path, bytes)
     const ledger = new DingTalkLedger(path)
+    await ledger.load()
     expect(ledger.readError).not.toBeNull()
-    expect(() => ledger.setWatermark('w', '1')).toThrow('unreadable')
+    await expect(ledger.setWatermark('w', '1')).rejects.toThrow('unreadable')
     expect(readFileSync(path, 'utf8')).toBe(bytes)
   })
 })

@@ -10,14 +10,16 @@ export async function recoverDingTalkLedger(
   const snapshot = ledger.snapshot()
   for (const row of Object.values(snapshot.inbox)) {
     if (row.state === 'delivering') {
-      ledger.transitionInbox(row.key, 'delivering', 'pending', {
+      await ledger.transitionInbox(row.key, 'delivering', 'pending', {
         reason: 'recovered after restart'
       })
     }
   }
   for (const row of Object.values(snapshot.replies)) {
     if (row.state === 'sending') {
-      ledger.transitionReply(row.key, 'sending', 'uncertain', { error: 'recovered after restart' })
+      await ledger.transitionReply(row.key, 'sending', 'uncertain', {
+        error: 'recovered after restart'
+      })
     }
   }
   if (!setup?.enabled || !setup.autoReply) {

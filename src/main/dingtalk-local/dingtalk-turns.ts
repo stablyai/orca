@@ -9,10 +9,10 @@ import {
 
 export type TurnObservation = {
   kind: 'turn-ended'
-  source: 'dingtalk' | string
-  externalId: DingTalkExternalId | string
+  source: string
+  externalId: string
   turnId: number | null
-  origin?: 'delivery' | 'local' | string
+  origin?: string
   lastAssistantMessage?: string
 }
 

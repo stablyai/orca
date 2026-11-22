@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import * as z from 'zod'
@@ -127,7 +128,7 @@ export class DwsBoundary {
         return
       }
       try {
-        child = spawn(this.path(), args, { stdio: ['pipe', 'pipe', 'pipe'], env: this.env() })
+        child = spawnProcess({ program: this.path(), args, stdio: 'pipe', env: this.env() })
       } catch {
         schedule()
         return
@@ -220,8 +221,10 @@ export class DwsBoundary {
     return new Promise((resolve) => {
       let child: ChildProcessWithoutNullStreams
       try {
-        child = spawn(this.path(), ['--profile', profile, ...args, '--format', 'json'], {
-          stdio: ['pipe', 'pipe', 'pipe'],
+        child = spawnProcess({
+          program: this.path(),
+          args: ['--profile', profile, ...args, '--format', 'json'],
+          stdio: 'pipe',
           env: this.env()
         })
       } catch (error) {

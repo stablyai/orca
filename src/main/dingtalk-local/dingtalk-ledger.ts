@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import * as z from 'zod'
 import {
@@ -76,111 +76,132 @@ function clone(state: DingTalkLedgerState): DingTalkLedgerState {
   return structuredClone(state)
 }
 
-export class DingTalkLedger {
-  private state: DingTalkLedgerState
-  private writing = false
-  /** Why an existing ledger could not be loaded; writes stay refused so the file is kept for diagnosis. */
-  readonly readError: string | null
+type Change<T> = { result: T; write: boolean }
 
-  constructor(private readonly filePath: string) {
-    const loaded = this.read()
-    this.state = loaded.state
-    this.readError = loaded.error
+export class DingTalkLedger {
+  private state: DingTalkLedgerState = empty()
+  private loaded = false
+  private queue: Promise<unknown> = Promise.resolve()
+  /** Why an existing ledger could not be loaded; writes stay refused so the file is kept for diagnosis. */
+  readError: string | null = null
+
+  constructor(private readonly filePath: string) {}
+
+  async load(): Promise<void> {
+    if (this.loaded) {
+      return
+    }
+    const read = await this.read()
+    this.state = read.state
+    this.readError = read.error
+    this.loaded = true
   }
 
   snapshot(): LedgerSnapshot {
     return clone(this.state)
   }
 
-  putInbox(row: InboxRow): boolean {
-    if (this.state.inbox[row.key]) {
-      return false
-    }
-    this.commit((next) => {
+  putInbox(row: InboxRow): Promise<boolean> {
+    return this.commit((next) => {
+      if (next.inbox[row.key]) {
+        return { result: false, write: false }
+      }
       next.inbox[row.key] = row
+      return { result: true, write: true }
     })
-    return true
   }
 
-  putConversation(row: ConversationRow): void {
-    this.commit((next) => {
+  putConversation(row: ConversationRow): Promise<void> {
+    return this.commit((next) => {
       next.conversations[row.externalId] = row
+      return { result: undefined, write: true }
     })
   }
 
-  putReply(row: ReplyRow): boolean {
-    if (this.state.replies[row.key]) {
-      return false
-    }
-    this.commit((next) => {
+  putReply(row: ReplyRow): Promise<boolean> {
+    return this.commit((next) => {
+      if (next.replies[row.key]) {
+        return { result: false, write: false }
+      }
       next.replies[row.key] = row
+      return { result: true, write: true }
     })
-    return true
   }
 
   transitionInbox(
     key: string,
     expected: InboxState,
-    next: InboxState,
+    state: InboxState,
     patch: Partial<InboxRow> = {}
-  ): InboxRow {
-    const row = this.state.inbox[key]
-    if (!row) {
-      throw new Error(`inbox row not found ${key}`)
-    }
-    if (row.state !== expected) {
-      throw new Error(`inbox row ${key} expected ${expected}, got ${row.state}`)
-    }
-    const updated = { ...row, ...patch, state: next, updatedAt: Date.now() }
-    this.commit((candidate) => {
-      candidate.inbox[key] = updated
+  ): Promise<InboxRow> {
+    return this.commit((next) => {
+      const row = next.inbox[key]
+      if (!row) {
+        throw new Error(`inbox row not found ${key}`)
+      }
+      if (row.state !== expected) {
+        throw new Error(`inbox row ${key} expected ${expected}, got ${row.state}`)
+      }
+      const updated = { ...row, ...patch, state, updatedAt: Date.now() }
+      next.inbox[key] = updated
+      return { result: updated, write: true }
     })
-    return updated
   }
 
   transitionReply(
     key: string,
     expected: ReplyState,
-    next: ReplyState,
+    state: ReplyState,
     patch: Partial<ReplyRow> = {}
-  ): ReplyRow {
-    const row = this.state.replies[key]
-    if (!row) {
-      throw new Error(`reply row not found ${key}`)
-    }
-    if (row.state !== expected) {
-      throw new Error(`reply row ${key} expected ${expected}, got ${row.state}`)
-    }
-    const updated = { ...row, ...patch, state: next, updatedAt: Date.now() }
-    this.commit((candidate) => {
-      candidate.replies[key] = updated
+  ): Promise<ReplyRow> {
+    return this.commit((next) => {
+      const row = next.replies[key]
+      if (!row) {
+        throw new Error(`reply row not found ${key}`)
+      }
+      if (row.state !== expected) {
+        throw new Error(`reply row ${key} expected ${expected}, got ${row.state}`)
+      }
+      const updated = { ...row, ...patch, state, updatedAt: Date.now() }
+      next.replies[key] = updated
+      return { result: updated, write: true }
     })
-    return updated
   }
 
-  setWatermark(key: string, value: string): void {
-    this.commit((next) => {
+  setWatermark(key: string, value: string): Promise<void> {
+    return this.commit((next) => {
       next.watermarks[key] = value
+      return { result: undefined, write: true }
     })
   }
 
-  // Memory changes only after the write lands, so a failed write can be retried.
-  private commit(mutate: (next: DingTalkLedgerState) => void): void {
-    if (this.readError) {
-      throw new Error(`DingTalk ledger unreadable: ${this.readError}`)
-    }
-    const next = clone(this.state)
-    mutate(next)
-    this.persist(next)
-    this.state = next
+  // Changes run one at a time and reach memory only after the write lands, so a failed write can be retried.
+  private commit<T>(change: (next: DingTalkLedgerState) => Change<T>): Promise<T> {
+    const run = this.queue.then(async () => {
+      if (!this.loaded) {
+        throw new Error('DingTalk ledger not loaded')
+      }
+      if (this.readError) {
+        throw new Error(`DingTalk ledger unreadable: ${this.readError}`)
+      }
+      const next = clone(this.state)
+      const { result, write } = change(next)
+      if (write) {
+        await this.persist(next)
+        this.state = next
+      }
+      return result
+    })
+    this.queue = run.catch(() => undefined)
+    return run
   }
 
-  private read(): { state: DingTalkLedgerState; error: string | null } {
+  private async read(): Promise<{ state: DingTalkLedgerState; error: string | null }> {
     let text: string
     try {
-      text = readFileSync(this.filePath, 'utf8')
+      text = await readFile(this.filePath, 'utf8')
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return { state: empty(), error: null }
       }
       return { state: empty(), error: error instanceof Error ? error.message : String(error) }
@@ -192,20 +213,13 @@ export class DingTalkLedger {
     }
   }
 
-  private persist(state: DingTalkLedgerState): void {
-    if (this.writing) {
-      throw new Error('DingTalk ledger write re-entry')
-    }
-    this.writing = true
-    try {
-      mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 })
-      chmodSync(dirname(this.filePath), 0o700)
-      const temporary = `${this.filePath}.${process.pid}.tmp`
-      writeFileSync(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 })
-      chmodSync(temporary, 0o600)
-      renameSync(temporary, this.filePath)
-    } finally {
-      this.writing = false
-    }
+  private async persist(state: DingTalkLedgerState): Promise<void> {
+    const directory = dirname(this.filePath)
+    await mkdir(directory, { recursive: true, mode: 0o700 })
+    await chmod(directory, 0o700)
+    const temporary = `${this.filePath}.${process.pid}.tmp`
+    await writeFile(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 })
+    await chmod(temporary, 0o600)
+    await rename(temporary, this.filePath)
   }
 }
