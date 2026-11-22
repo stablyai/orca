@@ -180,8 +180,11 @@ describe('a worker start whose agent is not ready in time', () => {
     const { dispatchId } = await start()
 
     await h.call('orchestration.workerStop', { dispatch: dispatchId })
+    // Readiness arriving after the stop must type nothing; the wait reacts within these turns.
     ready.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve()
+    }
 
     expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
     expect(close).toHaveBeenCalledWith('term_worker')
