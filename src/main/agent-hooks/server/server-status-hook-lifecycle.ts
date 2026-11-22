@@ -77,6 +77,8 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     // A row moving to another pane is not its Claude ending; the mod keeps its original pane key.
     if (before && (!after || after.agentPresence?.ended)) {
       this.claudeAgentViews.forget(before.paneKey, before.providerSession?.id)
+      // A moved pane's entry stays under the mod's launch pane key; its session id still names it.
+      this.claudeAgentViews.forgetSession(before.providerSession?.id)
     }
     return committed
   }

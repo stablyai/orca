@@ -12,7 +12,8 @@ let observedView
 let viewRevision = 0
 let retryDelay = 0
 let timerToken = 0
-let announcedAt = 0
+let attemptedAt = 0
+let announcing
 
   async function post($, action, data = {}, session = identity) {
     if (!session) return {}
@@ -54,8 +55,15 @@ let announcedAt = 0
     schedule($, retryDelay)
   }
 
-  async function announce($) {
+  // One registration in flight; concurrent triggers (parallel turns, renders, timers) share it.
+  function announce($) {
+    announcing ??= announceNow($).finally(() => { announcing = undefined })
+    return announcing
+  }
+
+  async function announceNow($) {
     try {
+      attemptedAt = await $.clock.now()
       if (!paneKey || !configDir) return {}
       const sessionId = await $.session.id()
       if (sessionId === endedSessionId) return {}
@@ -81,7 +89,6 @@ let announcedAt = 0
         return {}
       }
       retryDelay = 0
-      announcedAt = await $.clock.now()
       // An older Orca forgets a pane after 15 s of quiet; keep its 5 s heartbeat.
       if (!result.durable) schedule($, 5000)
       else timerToken++
@@ -133,7 +140,7 @@ export function register(on) {
     on('turn.start', async ($, event, next) => {
       const result = await next(event)
       try {
-        if (paneKey && (!identity || (await $.clock.now()) - announcedAt >= 30000)) void announce($)
+        if (paneKey && (!identity || (await $.clock.now()) - attemptedAt >= 30000)) void announce($)
       } catch {}
       return result
     })

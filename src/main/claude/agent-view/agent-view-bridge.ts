@@ -275,6 +275,14 @@ export class ClaudeAgentViewBridge {
   }
 
   /** Drops a pane's entry: its Claude ended, its binding went away, or Orca dropped the pane. */
+  forgetSession(sessionId: string | undefined): void {
+    for (const session of sessionId ? [...this.sessions.values()] : []) {
+      if (session.sessionId === sessionId) {
+        this.forget(session.paneKey)
+      }
+    }
+  }
+
   forget(paneKey: string, sessionId?: string): void {
     const session = this.sessions.get(paneKey)
     if (!session || (sessionId && session.sessionId !== sessionId)) {
