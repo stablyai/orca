@@ -7,6 +7,7 @@ import { waitForQuestionAnswer } from '../../../../orchestration/mailbox/questio
 import { testOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { workerAskNotices } from './worker-ask-notices'
+import { dropUnreadBotRequests } from './bot-request-outcome'
 import { QuestionReconciler } from '../../../../orchestration/mailbox/questions/question-reconciler'
 
 const COORDINATOR = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
@@ -105,6 +106,24 @@ describe("a worker's question its coordinator stopped on", () => {
     ])
     expect(db.getQuestionRaw(id)?.told).toBe('dropped')
     expect(db.getMessageById(id)?.read).toBe(0)
+  })
+
+  it('tells asks open when a /new replaced the coordinating Chat, and a later ask at once', async () => {
+    const reconciler = start()
+    const worker = workerIn(true)
+    const open = ask(worker)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the drop reads only the db.
+    const dropping = { ...runtime, questionReconciler: null } as unknown as OrcaRuntimeService
+    await dropUnreadBotRequests(dropping, 'docs', 'new-chat', COORDINATOR)
+    // A later ask, as admission sees it: the Run no longer names the retired Chat.
+    const later = ask(worker)
+    dropReaderlessRunQuestions(db, worker.runId)
+    await decided(reconciler)
+
+    expect(db.getRun(worker.runId)?.coordinator_orca_session_id).toBeNull()
+    expect(db.getQuestionRaw(open)?.told).toBe('dropped')
+    expect(db.getQuestionRaw(later)?.told).toBe('dropped')
+    expect(db.getAllMessagesForHandle(`dispatch:${worker.dispatchId}`)).toHaveLength(2)
   })
 
   it('returns a waiting ask with the notice, which then is not delivered again', async () => {
