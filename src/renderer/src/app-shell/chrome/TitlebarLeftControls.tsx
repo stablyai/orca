@@ -29,12 +29,12 @@ import {
   unregisterTitlebarSidebarToggle
 } from './titlebar-sidebar-toggle-ref'
 
-/** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 // Keeps the terminal's focus, but a rename typed in the sidebar blurs (and saves) before it collapses.
 const sidebarTogglePressProps = keepOutsideFocusPressProps(() =>
   document.getElementById(WORKSPACE_LIST_REGION_ID)
 )
 
+/** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const t = useTranslate()
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
