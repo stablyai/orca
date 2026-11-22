@@ -12,6 +12,7 @@ import {
   type BotItemQuestionShape
 } from './bot-item-ask'
 import type { BotItem, BotItemEvent } from './bot-items'
+import { IMAGE_PROMPT_MARKER } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 export type BotItemQuestionAnswers = {
   shape: BotItemQuestionShape
@@ -71,6 +72,10 @@ function answeredLines(
   const recorded = recordedLines(reply.data, shape.decisions.length)
   if (recorded) {
     return { lines: recorded, byOrder: false }
+  }
+  // Sent as a comment of its own, with no question named in the box.
+  if (reply.data.plain === true) {
+    return { lines: [], byOrder: false }
   }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
   // A line read by order is open to a comment that names it.
@@ -150,10 +155,9 @@ export function botItemQuestionPairing(
       answers[line] = event
       byOrder[line] = guessed
     }
-    // It quotes the first line it answers.
-    const first = lines[0]
-    if (first !== undefined) {
-      replies.set(event.id, { questionId: current.id, decision: shape.decisions[first]! })
+    const quoted = quotedLine(shape, event, lines)
+    if (quoted !== undefined) {
+      replies.set(event.id, { questionId: current.id, decision: shape.decisions[quoted]! })
     }
   }
   if (current) {
@@ -170,6 +174,20 @@ export function botItemQuestionPairing(
   return { questions, replies }
 }
 
+/** The line a reply quotes: the one its image is on, else the last it answers (answers held for
+ *  earlier lines post ahead of the one just given). */
+function quotedLine(
+  shape: BotItemQuestionShape,
+  reply: BotItemEvent,
+  lines: readonly number[]
+): number | undefined {
+  const named = botItemNamedAnswers(
+    shape,
+    typeof reply.data.text === 'string' ? reply.data.text : ''
+  )
+  return lines.find((line) => IMAGE_PROMPT_MARKER.test(named[line] ?? '')) ?? lines.at(-1)
+}
+
 /** The agent comment that came with this Needs you move: the last comment before it in its write. */
 function lastAsk(events: readonly BotItemEvent[], move: BotItemEvent): BotItemEvent | undefined {
   const at = events.indexOf(move)
@@ -182,19 +200,36 @@ function lastAsk(events: readonly BotItemEvent[], move: BotItemEvent): BotItemEv
   return undefined
 }
 
+/** The ask the agent waits on, by its event id, with its lines' answers so far. */
+export function botItemWaitingAsk(
+  item: Pick<BotItem, 'question' | 'status'>,
+  events: readonly BotItemEvent[]
+): ({ askId: string } & BotItemQuestionAnswers) | null {
+  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
+    if (entry.waiting) {
+      return { askId, ...entry }
+    }
+  }
+  return null
+}
+
+/** A line the comment box replies to; `eventId` is the comment that asks it. */
+export type BotItemWaitingLine = { id: string; eventId: string; line: string; replies: boolean }
+
 /** What the comment box replies to while the agent waits: the first open line of its ask, else its
  *  question asked in prose, by its first line; with `replies` when that line has quick replies. The
  *  item's own question stands in until its event is read. */
 export function botItemWaitingLine(
   item: Pick<BotItem, 'question' | 'status'>,
   events: readonly BotItemEvent[]
-): { id: string; line: string; replies: boolean } | null {
+): BotItemWaitingLine | null {
   for (const [questionId, entry] of botItemQuestionPairing(item, events).questions) {
     const index = entry.answers.indexOf(null)
     const decision = entry.shape.decisions[index]
     if (entry.waiting && decision) {
       return {
         id: `${questionId}:${index}`,
+        eventId: questionId,
         line: botItemQuestionLine(decision.question),
         replies: decision.replies.length > 0
       }
@@ -212,6 +247,7 @@ export function botItemWaitingLine(
   const decision = asked ? undefined : question.decisions?.[0]
   return {
     id: question.eventId,
+    eventId: question.eventId,
     line: botItemQuestionLine(decision?.question ?? question.gist ?? question.text),
     replies: (decision?.replies.length ?? 0) > 0
   }

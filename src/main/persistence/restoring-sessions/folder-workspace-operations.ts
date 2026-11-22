@@ -17,11 +17,15 @@ import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-ope
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { workspaceLinkWriteOptions } from '../loading-store/profile-writing/write-scheduling'
+import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
+import { applyDiffCommentWrite } from '../../../shared/file-review/diff-comment-mutation'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
-  scheduleSave: (domains: ProfileSaveDomains) => void
+  scheduleSave: (domains: ProfileSaveDomains, options?: StateWriteOptions) => void
   removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
   hydrateRepo: (repo: Repo) => Repo
@@ -32,22 +36,6 @@ export class FolderWorkspacePersistenceOperations {
 
   private get state(): PersistedState {
     return this.operations.state
-  }
-
-  private scheduleSave(domains: ProfileSaveDomains): void {
-    this.operations.scheduleSave(domains)
-  }
-
-  private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForRemovedFolder(folderWorkspaceId)
-  }
-
-  private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
-    this.operations.pruneMobileClientTabSelections(matchesWorktreeId)
-  }
-
-  private hydrateRepo(repo: Repo): Repo {
-    return this.operations.hydrateRepo(repo)
   }
 
   getFolderWorkspaces(): FolderWorkspace[] {
@@ -124,7 +112,7 @@ export class FolderWorkspacePersistenceOperations {
       updatedAt: now
     }
     this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
-    this.scheduleSave(['folderWorkspaces'])
+    this.operations.scheduleSave(['folderWorkspaces'])
     return workspace
   }
 
@@ -156,7 +144,8 @@ export class FolderWorkspacePersistenceOperations {
         | 'externalConversations'
       >
     > &
-      WorkspaceAttachmentMutation
+      WorkspaceAttachmentMutation &
+      DiffCommentBaseMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
@@ -263,13 +252,21 @@ export class FolderWorkspacePersistenceOperations {
       workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
     if (updates.diffComments !== undefined) {
-      workspace.diffComments = updates.diffComments
+      workspace.diffComments = applyDiffCommentWrite(workspace.diffComments, updates)
     }
     if (updates.externalConversations !== undefined) {
       workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
-    this.scheduleSave(['folderWorkspaces'])
+    this.operations.scheduleSave(
+      ['folderWorkspaces'],
+      workspaceLinkWriteOptions(
+        { worktreeId: folderWorkspaceKey(workspace.id), sshHostId: null },
+        'externalConversations' in updates,
+        workspace.externalConversations,
+        updates.sortOrder === undefined && updates.name === undefined
+      )
+    )
     return workspace
   }
 
@@ -282,9 +279,11 @@ export class FolderWorkspacePersistenceOperations {
       return false
     }
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
-    this.removeWorkspaceLineageForRemovedFolder(id)
-    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
-    this.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
+    this.operations.removeWorkspaceLineageForRemovedFolder(id)
+    this.operations.pruneMobileClientTabSelections(
+      (worktreeId) => worktreeId === folderWorkspaceKey(id)
+    )
+    this.operations.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
     return true
   }
 
@@ -307,7 +306,7 @@ export class FolderWorkspacePersistenceOperations {
       typeof order === 'number' && Number.isFinite(order)
         ? order
         : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave(['repos'])
-    return this.hydrateRepo(repo)
+    this.operations.scheduleSave(['repos'])
+    return this.operations.hydrateRepo(repo)
   }
 }

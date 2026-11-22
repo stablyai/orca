@@ -1,6 +1,7 @@
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../shared/worktree/removal/removal'
 import { gateFolderWorkspaceRemovalOnArchiveHook } from '../../workspaces/removal/folder-workspace-archive-hook'
 import {
   assertWslMoveProjectWritable,
@@ -15,6 +16,30 @@ import type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   runHooks?: boolean
   allowFailedArchiveHook?: boolean
+  /** Bot homes are torn down by the bot's own delete, which checks for unsaved drafts only before it starts. */
+  discardUnsavedDrafts?: boolean
+}
+
+function hasUnsavedDraft(
+  store: NonNullable<ReturnType<RuntimeProjectGroupDependencies['getStore']>>,
+  ownerKey: string
+): boolean {
+  return (store.getWorkspaceSessionHostIds?.() ?? []).some((hostId) =>
+    store
+      .getWorkspaceSession?.(hostId)
+      ?.openFilesByWorktree?.[ownerKey]?.some((file) => file.dirtyDraftContent !== undefined)
+  )
+}
+
+/** For the bot delete, before it starts: refuses when its listed home's session holds unsaved editor text. */
+export function refuseUnsavedFolderDrafts(
+  store: NonNullable<ReturnType<RuntimeProjectGroupDependencies['getStore']>>,
+  folderWorkspaceId: string
+): void {
+  const listed = store.getFolderWorkspaces?.().some((entry) => entry.id === folderWorkspaceId)
+  if (listed && hasUnsavedDraft(store, folderWorkspaceKey(folderWorkspaceId))) {
+    throw new Error(UNSAVED_DRAFTS_REMOVAL_REFUSAL)
+  }
 }
 
 export async function deleteFolderWorkspaceRow(
@@ -34,6 +59,18 @@ export async function deleteFolderWorkspaceRow(
   if (workspace && isLocalWslMoveRow(workspace)) {
     assertWslMoveProjectWritable(store, { folderWorkspaceId })
   }
+  // The purge drops the session's unsaved editor text, which lives nowhere else; desktop blocks first.
+  // Checked again before the purge: a draft can land while the archive hook or teardown runs.
+  const refuseUnsavedDrafts = (): void => {
+    if (
+      workspace &&
+      !options.discardUnsavedDrafts &&
+      hasUnsavedDraft(store, folderWorkspaceKey(folderWorkspaceId))
+    ) {
+      throw new Error(UNSAVED_DRAFTS_REMOVAL_REFUSAL)
+    }
+  }
+  refuseUnsavedDrafts()
   let gate:
     | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
     | undefined
@@ -75,6 +112,7 @@ export async function deleteFolderWorkspaceRow(
         options,
         'Its terminals may already be stopped; nothing else was changed.'
       )
+      refuseUnsavedDrafts()
       // Fired here (timing unchanged) but awaited at the end: the delete may
       // only resolve after the purge has landed. `folder:<uuid>` ids parse to
       // no filesystem path, so the pretrust drop inside the purge skips here —

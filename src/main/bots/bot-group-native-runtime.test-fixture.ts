@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { makeTestBot } from './bot.test-fixture'
@@ -14,18 +15,39 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('./bot-chat-session', () => ({
   startBotSession: (...args: unknown[]) => mocks.create(...args),
-  botMessageBody: (text: string, options?: { images?: readonly { path: string }[] }) => ({
+  botMessageBody: (
+    text: string,
+    options?: {
+      images?: readonly { path: string }[]
+      memorySource?: string
+      automationRun?: object
+    }
+  ) => ({
     kind: 'message',
     role: 'user',
     blocks: [
       { type: 'text', text },
       ...(options?.images ?? []).map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
+    ],
+    ...(options?.memorySource ? { memorySource: options.memorySource } : {}),
+    ...(options?.automationRun
+      ? { origin: 'automation-run', automationRun: options.automationRun }
+      : {})
   }),
   requireStructuredHost: async () => ({
     // The whole snapshot answers each bounded read: it holds every row a window would.
     journalReads: async (sessionId: string) => ({
       operationWindow: async () => ({ complete: true, snapshot: await mocks.snapshot(sessionId) }),
+      // The send whose user row `rowId` is: what a turn's root row resolves to.
+      acceptedSendOfRow: async (rowId: string | null) => {
+        const journal: { submissions: { clientMessageId: string }[] } =
+          await mocks.snapshot(sessionId)
+        return (
+          journal.submissions.find(
+            (submission) => agentJournalSubmissionKey(submission.clientMessageId) === rowId
+          ) ?? null
+        )
+      },
       operationSent: async (operationId: string) => {
         const journal: { submissions: { clientMessageId: string; queuedMessageId?: string }[] } =
           await mocks.snapshot(sessionId)
@@ -182,4 +204,58 @@ export function groupNativeMocks(): {
   sendAnswer: Mock
 } {
   return mocks
+}
+
+/** A member's journal with each given operation answered and completed at its time. */
+export function journal(
+  sessionId: string,
+  replies: { operationId: string; text: string; at: number }[]
+) {
+  const stamp = { sequence: 1, revision: 1, observedAt: 1 }
+  return {
+    sessionId,
+    cursor: { epoch: 'e', sequence: 1 },
+    // Each operation's send, accepted, so its turn maps back to the operation.
+    submissions: replies.map(({ operationId }) => ({
+      clientMessageId: operationId,
+      fence: 1,
+      payloadFingerprint: operationId,
+      dispatchState: 'accepted' as const,
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: 1
+    })),
+    items: replies.flatMap(({ operationId, text, at }) => {
+      const key = agentJournalSubmissionKey(operationId)
+      return [
+        {
+          ...stamp,
+          itemId: key,
+          body: { kind: 'message' as const, role: 'user' as const, blocks: [] }
+        },
+        {
+          ...stamp,
+          itemId: `turn-${operationId}`,
+          body: {
+            kind: 'turn' as const,
+            turnId: `t-${operationId}`,
+            state: 'completed' as const,
+            userItemId: key,
+            completedAt: at
+          }
+        },
+        {
+          ...stamp,
+          itemId: `reply-${operationId}`,
+          turnScope: { kind: 'turn' as const, turnItemId: `turn-${operationId}` },
+          body: {
+            kind: 'message' as const,
+            role: 'assistant' as const,
+            blocks: [{ type: 'text' as const, text }]
+          }
+        }
+      ]
+    })
+  }
 }

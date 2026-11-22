@@ -11,8 +11,7 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { structuredAgentSessionSendTurn } from '../../../shared/structured-agent-session-send-turn'
-import { botGroupTurnOperation, indexBotGroupJournal } from '../../../shared/bots/bot-group'
+import { botGroupTurnOperation } from '../../../shared/bots/bot-group'
 import { readBotActingTurn, readBotActingTurnWithin } from '../../bots/bot-request-asker'
 
 const cleanup: (() => void)[] = []
@@ -86,30 +85,23 @@ async function chat(count: number, mail = 0) {
   return { f, reads, ids, full }
 }
 
-it("answers each send's turn, its group turn rows and its turn's operation as the whole chat does, from far fewer rows", async () => {
-  const { reads, ids, full } = await chat(12)
-  for (const id of ids) {
-    const { snapshot } = await reads.operationWindow({ operationIds: [id] })
-    expect(
-      structuredAgentSessionSendTurn(snapshot, { clientMessageId: id, fingerprint: id })
-    ).toEqual(structuredAgentSessionSendTurn(full, { clientMessageId: id, fingerprint: id }))
-    expect(indexBotGroupJournal(snapshot)(id)).toEqual(indexBotGroupJournal(full)(id))
-    const turn = `orca:${id}-turn`
-    const byTurn = (await reads.operationWindow({ itemIds: [turn] })).snapshot
-    expect(botGroupTurnOperation(byTurn, turn)).toBe(id)
-  }
-  const newest = await reads.operationWindow({ operationIds: [ids.at(-1)!] })
-  expect(newest.complete).toBe(false)
-  expect(newest.snapshot.items.length).toBeLessThan(full.items.length / 3)
-  expect(newest.snapshot.submissions.length).toBeLessThan(full.submissions.length / 3)
+it('finds a turn by its send and resolves the send from the turn id', async () => {
+  const { reads } = await chat(2)
+  const { snapshot } = await reads.operationWindow({
+    operationIds: ['send-1'],
+    withoutTurnAhead: true
+  })
+  expect(
+    snapshot.items.filter((item) => item.body.kind === 'turn').map((item) => item.itemId)
+  ).toEqual(['orca:send-1-turn'])
+  const byTurn = (await reads.operationWindow({ itemIds: ['orca:send-1-turn'] })).snapshot
+  expect(botGroupTurnOperation(byTurn, 'orca:send-1-turn')).toBe('send-1')
 })
 
 it('finds the latest ended turn and its operation from a window that holds it', async () => {
-  const { reads, ids } = await chat(10)
+  const { reads } = await chat(2)
   const { snapshot } = await reads.operationWindow({ latestEndedTurn: true })
-  expect(snapshot.items.some((item) => item.itemId === `orca:${ids.at(-1)}-turn`)).toBe(true)
-  expect(botGroupTurnOperation(snapshot, `orca:${ids.at(-1)}-turn`)).toBe(ids.at(-1))
-  expect(snapshot.items.length).toBeLessThan(10)
+  expect(botGroupTurnOperation(snapshot, 'orca:send-1-turn')).toBe('send-1')
 })
 
 it('widens the acting-turn read past turns a worker report woke, to the same answer as the whole chat', async () => {

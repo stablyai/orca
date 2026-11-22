@@ -60,7 +60,7 @@ it('selects and answers the linked second question with its own revision', async
       agent: 'codex',
       hostSupport: null,
       onSendError: vi.fn(),
-      itemLink: { selection: target, navigation: { target, complete: () => {} } }
+      itemLink: { selection: target, navigation: { target, complete: () => {} }, access: null }
     })
     return null
   }

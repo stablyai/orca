@@ -1,6 +1,7 @@
 // A comment's images, fitted to the card: one at its own size, two side by side, more in rows of three,
-// read from the bot's host. One or two carry their file names. Past six, five show with a "+N" tile that
-// shows the rest. A click opens chat's viewer over all of the comment's images.
+// read from the bot's host. One or two carry their file names, except in chat, where images go unnamed.
+// Past six, five show with a "+N" tile that shows the rest. A click opens chat's viewer over all of the
+// comment's images.
 import { useContext, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -32,9 +33,11 @@ const LAYOUT = {
 } as const
 
 export function BotItemCommentImages({
-  images
+  images,
+  inChat = false
 }: {
   images: readonly BotItemCommentImage[]
+  inChat?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
@@ -49,7 +52,7 @@ export function BotItemCommentImages({
   }
   const folded = images.length > SHOWN + 1 && !all
   const layout = images.length === 1 ? LAYOUT.one : images.length === 2 ? LAYOUT.two : LAYOUT.many
-  const captioned = images.length <= 2
+  const captioned = !inChat && images.length <= 2
   const more =
     'flex aspect-square w-full items-center justify-center rounded-md border border-border bg-chat-canvas text-xs text-muted-foreground transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
   return (

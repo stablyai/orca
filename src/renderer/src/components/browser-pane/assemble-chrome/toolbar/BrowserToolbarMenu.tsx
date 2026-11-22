@@ -83,7 +83,7 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
-  // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
+  // The tour's fallback step points at the top Import Cookies row, so it holds the menu open.
   const [menuOpen, setMenuOpen] = useState(shouldForceMenuOpen)
   const [prevShouldForceMenuOpen, setPrevShouldForceMenuOpen] = useState(shouldForceMenuOpen)
   if (prevShouldForceMenuOpen !== shouldForceMenuOpen) {
@@ -282,15 +282,22 @@ export function BrowserToolbarMenu({
                 allProfiles,
                 effectiveProfileId,
                 onSwitchProfile: handleSwitchProfile,
-                onNewProfile: () => setNewProfileDialogOpen(true),
+                onNewProfile: () => setNewProfileDialogOpen(true)
+              }
+            : null
+        }
+        cookieImport={
+          showProfiles
+            ? {
+                browserPageId,
+                effectiveProfileId,
                 detectedBrowsers,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
                 sshRoute,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
-                onImportFromFile: () => void handleImportFromFile(),
-                forceOpen: shouldForceMenuOpen
+                onImportFromFile: () => void handleImportFromFile()
               }
             : null
         }

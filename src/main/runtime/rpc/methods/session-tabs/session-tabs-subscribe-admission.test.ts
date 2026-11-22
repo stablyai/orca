@@ -62,7 +62,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
         return stopListening
       }
     ),
-    onClientEvent: () => () => {},
+    onAgentListChanged: () => () => {},
     registerSubscriptionCleanup: registry.register.bind(registry),
     cleanupSubscription: registry.cleanup.bind(registry),
     cleanupSubscriptionsByPrefix: registry.cleanupByPrefix.bind(registry),

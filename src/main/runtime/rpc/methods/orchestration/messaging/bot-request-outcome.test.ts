@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
+import type { MailTaker } from '../../../../orchestration/db/messages/mail-taker'
 import {
   botAnswerPayload,
   dropUnreadBotRequests,
@@ -10,6 +11,8 @@ import {
   settleBotRequestTurn
 } from './bot-request-outcome'
 import { installSenderHost, removeSenderHost } from './bot-request-sender-host.test-fixture'
+import { botQuestionNotices } from './bot-question-notices'
+import { startRestingQuestionReconciler } from '../../../../orchestration/mailbox/questions/question-reconciler.test-fixture'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
@@ -67,7 +70,13 @@ describe('how a bot request ends', () => {
     runtime = {
       getOrchestrationDb: () => db,
       bots: { list: () => [{ id: 'docs' }] },
-      notifyMessageArrived: (to: string) => notified.push(to),
+      // As the real nudge does: it routes mail in its own transaction.
+      notifyMessageArrived: (to: string) => {
+        if (db.db.isTransaction) {
+          throw new Error('cannot start a transaction within a transaction')
+        }
+        notified.push(to)
+      },
       getLiveTerminalPaneKey: () => null,
       ensureStructuredAgentSessionHost: async () =>
         installSenderHost(['11111111-1111-4111-8111-111111111111'])
@@ -124,20 +133,66 @@ describe('how a bot request ends', () => {
     expect(JSON.parse(payload).botAnswer.next).toMatch(/don't post it again/)
   })
 
-  it('settles each unanswered request once and wakes the sender for each', async () => {
-    const handoff = request('handoff', 'a')
-    const question = request('question', 'b')
-    acting.requestIds = [handoff, question]
+  it('settles each unanswered handoff once and wakes the sender for each', async () => {
+    const first = request('handoff', 'a')
+    const second = request('handoff', 'b')
+    acting.requestIds = [first, second]
     await settleBotRequestTurn(runtime, 'docs-session')
     await settleBotRequestTurn(runtime, 'docs-session')
 
     expect(mailToRanger()).toHaveLength(2)
-    expect(db.getBotRequestOutcome(handoff)).toBe('unanswered')
-    expect(db.getBotRequestOutcome(question)).toBe('unanswered')
+    expect(db.getBotRequestOutcome(first)).toBe('unanswered')
+    expect(db.getBotRequestOutcome(second)).toBe('unanswered')
     expect(notified).toEqual([
       'orca_session_id:11111111-1111-4111-8111-111111111111',
       'orca_session_id:11111111-1111-4111-8111-111111111111'
     ])
+  })
+
+  it('leaves a question to whoever took it: the turn that read it ending tells no one', async () => {
+    const question = request('question')
+    acting.requestIds = [question]
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(mailToRanger()).toEqual([])
+    expect(db.getBotRequestOutcome(question)).toBeNull()
+  })
+
+  it('records an unanswered outcome only with its notice', async () => {
+    const id = request('handoff')
+    acting.requestIds = [id]
+    vi.spyOn(db, 'insertMessage').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    await expect(settleBotRequestTurn(runtime, 'docs-session')).rejects.toThrow('disk full')
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    expect(mailToRanger()).toHaveLength(1)
+  })
+
+  it("leaves a request open while its sender's /clear successor can't be read yet", async () => {
+    const id = request('handoff')
+    acting.requestIds = [id]
+    runtime.ensureStructuredAgentSessionHost = async () =>
+      installSenderHost(['11111111-1111-4111-8111-111111111111'], undefined, {
+        '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333'
+      })
+
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+
+    // Once the successor's record is readable, the sender is told there.
+    runtime.ensureStructuredAgentSessionHost = async () =>
+      installSenderHost(
+        ['11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333'],
+        undefined,
+        { '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333' }
+      )
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    expect(notified).toHaveLength(1)
   })
 
   it("says a failed turn failed and why, not that the bot read the owner's handoff", async () => {
@@ -203,6 +258,84 @@ describe('how a bot request ends', () => {
     expect(mailToRanger()[0]?.body).toMatch(/^Docs was paused before it read your handoff/)
     await dropUnreadBotRequests(runtime, 'docs', 'paused')
     expect(mailToRanger()).toHaveLength(1)
+  })
+
+  describe('a question, told by whoever took it', () => {
+    const DOCS: MailTaker = { kind: 'session', sessionId: '22222222-2222-4222-8222-222222222222' }
+    const start = () => {
+      const questions = startRestingQuestionReconciler(db, (taker, ids) =>
+        botQuestionNotices(runtime, taker, ids)
+      )
+      onTestFinished(questions.stop)
+      return questions.reconciler
+    }
+    const decided = async (reconciler: { settled(): Promise<void> }) => {
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setImmediate(resolve))
+        await reconciler.settled()
+      }
+    }
+
+    it('tells the asker once when the bot that read it stopped without answering', async () => {
+      const reconciler = start()
+      const id = request('question')
+      db.markAsRead([id], DOCS)
+      await decided(reconciler)
+      reconciler.decideAll()
+      await decided(reconciler)
+      expect(mailToRanger().map((mail) => mail.body)).toEqual([
+        "Docs ended its turn without answering your question, so do it yourself or tell Nora on Slack that Docs couldn't take it."
+      ])
+      expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    })
+
+    it('tells the asker a paused bot never read it', async () => {
+      const reconciler = start()
+      const id = request('question')
+      await dropUnreadBotRequests(runtime, 'docs', 'paused')
+      await decided(reconciler)
+      expect(db.getMessageById(id)?.read).toBe(1)
+      expect(mailToRanger()[0]?.body).toMatch(/^Docs was paused before it read your question/)
+      expect(db.getBotRequestOutcome(id)).toBe('dropped')
+    })
+
+    it('tells the asker of a question being handed over when its bot is deleted', async () => {
+      const reconciler = start()
+      const id = request('question')
+      db.reserveStructuredMailSend({
+        mailbox_handle: 'orca_session_id:22222222-2222-4222-8222-222222222222',
+        message_id: id,
+        session_id: '22222222-2222-4222-8222-222222222222',
+        operation_id: 'op-1',
+        minted_at_ms: 1_700_000_000_000
+      })
+      await dropUnreadBotRequests(runtime, 'docs', 'deleted')
+      await decided(reconciler)
+      expect(mailToRanger()[0]?.body).toMatch(/^Docs was deleted before it read your question/)
+    })
+
+    it("waits while the asker's /clear successor can't be read, then tells it once it can", async () => {
+      runtime.ensureStructuredAgentSessionHost = async () =>
+        installSenderHost(['11111111-1111-4111-8111-111111111111'], undefined, {
+          '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333'
+        })
+      const reconciler = start()
+      const id = request('question')
+      db.markAsRead([id], DOCS)
+      await decided(reconciler)
+      expect(db.getBotRequestOutcome(id)).toBeNull()
+
+      runtime.ensureStructuredAgentSessionHost = async () =>
+        installSenderHost(
+          ['11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333'],
+          undefined,
+          { '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333' }
+        )
+      reconciler.decideAll()
+      await decided(reconciler)
+      expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+      expect(notified).toHaveLength(1)
+    })
   })
 
   it('sends nothing back for status: not when its turn ends, nor when the bot is paused or deleted', async () => {

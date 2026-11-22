@@ -296,12 +296,15 @@ export async function readHostedReviewBranchCache(
     retireInflightLookup(key)
   }
 
+  // Stale reviews still block duplicates; stale absence cannot authorize creation.
+  const canServeStale = (entry: CacheEntry): boolean =>
+    !(options.requireFreshAbsence === true && entry.review === null)
   const settleForCaller = async (promise: Promise<HostedReviewForBranchOutcome>) => {
     try {
       return await promise
     } catch (error) {
       const stale = entries.get(key)
-      if (!options.userRefresh && stale) {
+      if (!options.userRefresh && stale && canServeStale(stale)) {
         return cachedHostedReviewOutcome(stale.review)
       }
       throw error
@@ -315,7 +318,7 @@ export async function readHostedReviewBranchCache(
 
   const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
   if (refusal !== null) {
-    if (cached) {
+    if (cached && canServeStale(cached)) {
       return cachedHostedReviewOutcome(cached.review)
     }
     throw new Error(refusal)

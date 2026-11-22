@@ -8,7 +8,7 @@ import type {
 import { type BotFirstRun, createBotTurnContext } from './bot-turn-context'
 import type { BotRecentChatsSection } from './bot-recent-chats'
 import { botSessionInstructions } from './bot-session-instructions'
-import { botRulesBlock } from './bot-preamble'
+import { botNameLine, botRulesBlock } from './bot-preamble'
 import { botRulesKey } from './bot-turn-rules-update'
 import { codexItemBody } from '../codex/structured/items/codex-structured-item-translation'
 
@@ -72,6 +72,73 @@ function home(
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
+
+describe("a bot's name in its running chats", () => {
+  const soul = '# Reviewer\n\nKeep this custom instruction.\n'
+  const fs = {
+    readText: async (path: string) => (path === join(FOLDER, 'SOUL.md') ? soul : null),
+    replaceText: async () => false,
+    writeText: async () => false
+  }
+  const say = { kind: 'message' as const, role: 'user' as const, blocks: [] }
+  const named = (name: () => string) =>
+    createBotTurnContext(
+      fs,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      name
+    )
+
+  it('sends a rename to a running chat once', async () => {
+    let name = 'Scout'
+    const context = named(() => name)
+    context.launched('s1', 'bot-1', FOLDER, { soul, memory: null }, true, HELD_BOT_RULES)
+    expect(await context.plan('s1', say)).toBeNull()
+    name = 'Critic'
+
+    const update = await context.plan('s1', say)
+    expect(update?.text).toContain(botNameLine('Critic'))
+    update?.given(TAKEN)
+    expect(await context.plan('s1', say)).toBeNull()
+  })
+
+  it('sends nothing to a running chat renamed and back before it took a turn', async () => {
+    let name = 'Critic'
+    const context = named(() => name)
+    context.launched('s1', 'bot-1', FOLDER, { soul, memory: null }, true, HELD_BOT_RULES)
+    expect(await context.plan('s1', say)).not.toBeNull()
+    name = 'Scout'
+    expect(await context.plan('s1', say)).toBeNull()
+  })
+
+  const bot = { id: 'bot-1', name: 'Critic', agent: 'codex' as const, folderWorkspaceId: 'ws' }
+  const resumedHolding = async (name: string) => {
+    const context = named(() => bot.name)
+    const instructionsKey = botRulesKey({ block: botRulesBlock('codex'), name })
+    const record = {
+      sessionId: 's1',
+      provider: 'codex',
+      instructionsKey,
+      providerHandleChain: [{}]
+    }
+    const location = { workspaceId: 'folder:ws' }
+    await botSessionInstructions(context, [bot], { ...record, location }, FOLDER, null, fs)
+    return (await context.plan('s1', say))?.text ?? ''
+  }
+
+  it('sends nothing to a resumed chat whose receipt holds its name', async () => {
+    expect(await resumedHolding('Critic')).not.toContain('Critic')
+  })
+
+  it('sends the name to a resumed chat whose receipt holds an older one', async () => {
+    expect(await resumedHolding('Reviewer')).toContain(botNameLine('Critic'))
+  })
+})
 
 describe('first-run rules in a bot chat', () => {
   const text = (value: string) => [{ type: 'text' as const, text: value }]
@@ -545,7 +612,7 @@ describe('a bot chat turn context', () => {
     })
 
     // Nothing is said; the turn only vouches for the Tools and Rules the launch gave.
-    it.each(['pi', 'copilot'])(
+    it.each(['pi', 'copilot', 'aug', 'goose', 'kilo', 'qwen-code'])(
       'a resumed %s conversation reads them again, so nothing is sent',
       async (provider) => {
         const { context, edit, fs, plan } = home('Old soul.', '- a fact')
@@ -682,7 +749,7 @@ describe('the empty linked-skills replacement on a resumed chat', () => {
     provider: 'codex',
     location: { workspaceId: 'folder:ws' },
     providerHandleChain: [{}],
-    instructionsKey: botRulesKey(botRulesBlock('codex'))
+    instructionsKey: botRulesKey({ block: botRulesBlock('codex'), name: 'Scout' })
   }
 
   it('is not sent for a bot that never linked a project', async () => {

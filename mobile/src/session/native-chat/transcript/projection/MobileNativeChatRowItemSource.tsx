@@ -9,9 +9,9 @@ import {
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
-import { MobileNativeChatItemNoteJoinContext } from '../messages/MobileNativeChatBotItemNoteRow'
+import { MobileNativeChatActivityJoinContext } from '../messages/mobile-native-chat-activity-join'
 import { MobileNativeChatQuietTurnContext } from '../message-content/MobileNativeChatAnswerProse'
-import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
+import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 import {
   resolveMobileNativeChatRowProps,
   type MobileNativeChatRowLookups
@@ -32,8 +32,8 @@ type Recovery = MobileNativeChatVisualSource & {
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
   turnDiff?: NativeChatTurnDiff
-  /** The sides where this item-note row touches another. */
-  itemNoteJoin?: BotItemNoteJoin
+  /** The sides where this activity row touches another. */
+  activityJoin?: NativeChatActivityJoin
   inAutomationTurn?: true
   inActingTurn?: true
   source: Recovery | null
@@ -50,7 +50,7 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   source,
   scope: _scope,
   turnDiff,
-  itemNoteJoin,
+  activityJoin,
   inAutomationTurn,
   inActingTurn,
   ...props
@@ -76,11 +76,11 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   )
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      <MobileNativeChatItemNoteJoinContext.Provider value={itemNoteJoin}>
+      <MobileNativeChatActivityJoinContext.Provider value={activityJoin}>
         <MobileNativeChatQuietTurnContext.Provider value={quietTurn}>
           <MobileNativeChatMessage {...props} />
         </MobileNativeChatQuietTurnContext.Provider>
-      </MobileNativeChatItemNoteJoinContext.Provider>
+      </MobileNativeChatActivityJoinContext.Provider>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )

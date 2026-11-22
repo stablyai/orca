@@ -49,6 +49,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     workingStartedAt?: number | null
     settledTurns?: NativeChatSettledTurns | null
     turnJournal?: NativeChatTurnJournal | null
+    /** A stored copy or the first read, until a live frame confirms the transcript. */
+    transcriptLoading?: boolean
     receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
     actionablePromptIds?: readonly string[]
     onStop?: () => void

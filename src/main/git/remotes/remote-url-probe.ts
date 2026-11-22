@@ -7,6 +7,7 @@ import { getConnectionExecutionHostId } from '../../../shared/execution-host/exe
 
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { isRemoteListedAbsent } from './remote-name-listing'
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 
 export { REMOTE_URL_PROBE_TIMEOUT_MS }
 
@@ -17,7 +18,10 @@ export type RemoteUrlProbeContext = {
   admissionTier?: GitAdmissionTier
 }
 
-type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<string>> }
+/** A URL with the repo config signature taken before Git read it; undefined when it cannot be signed. */
+export type SignedRemoteUrl = { url: string; configSignature: string | undefined }
+
+type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<SignedRemoteUrl>> }
 
 const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 
@@ -45,6 +49,36 @@ export async function readRemoteUrl(
   if (!scope?.open) {
     return readUncachedRemoteUrl(context, remoteName)
   }
+  return (
+    await readSharedRemoteUrl(scope, context, remoteName, () =>
+      readLocalGitConfigSignature(context)
+    )
+  ).url
+}
+
+/** Like readRemoteUrl, but pairs the URL with the config signature it was read under; a shared read
+ *  may predate the caller's own signature. `configSignature` is the caller's, taken just before. */
+export async function readSignedRemoteUrl(
+  context: RemoteUrlProbeContext,
+  remoteName: string,
+  configSignature: string | undefined
+): Promise<SignedRemoteUrl | null> {
+  if (context.connectionId) {
+    return null
+  }
+  const scope = sharedRemoteUrlReads.getStore()
+  if (!scope?.open) {
+    return { url: await readUncachedRemoteUrl(context, remoteName), configSignature }
+  }
+  return readSharedRemoteUrl(scope, context, remoteName, async () => configSignature)
+}
+
+function readSharedRemoteUrl(
+  scope: SharedRemoteUrlReads,
+  context: RemoteUrlProbeContext,
+  remoteName: string,
+  readSignature: () => Promise<string | undefined>
+): Promise<SignedRemoteUrl> {
   const key = [
     context.wslDistro ?? '',
     context.admissionTier ?? '',
@@ -53,7 +87,10 @@ export async function readRemoteUrl(
   ].join('\0')
   let read = scope.reads.get(key)
   if (!read) {
-    read = readUncachedRemoteUrl(context, remoteName)
+    read = (async () => {
+      const configSignature = await readSignature()
+      return { url: await readUncachedRemoteUrl(context, remoteName), configSignature }
+    })()
     scope.reads.set(key, read)
   }
   return read

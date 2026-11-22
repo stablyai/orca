@@ -277,7 +277,7 @@ describe('BotController', () => {
   it('renames the bot and its files but keeps its folder and soul', async () => {
     const bot = await bots.create({ name: 'Reviewer' })
     const folder = join(botsRoot(), 'reviewer')
-    writeFileSync(join(folder, 'SOUL.md'), 'Terse.\n')
+    writeFileSync(join(folder, 'SOUL.md'), '# Reviewer\n\nTerse.\n')
 
     const renamed = await bots.update(bot.id, {
       name: 'Critic',
@@ -291,7 +291,7 @@ describe('BotController', () => {
       folderPath: folder
     })
     expect(readFileSync(join(folder, 'AGENTS.md'), 'utf8')).toContain('You are Critic')
-    expect(readFileSync(join(folder, 'SOUL.md'), 'utf8')).toBe('Terse.\n')
+    expect(readFileSync(join(folder, 'SOUL.md'), 'utf8')).toBe('# Reviewer\n\nTerse.\n')
     await expect(bots.update('missing', { paused: true })).rejects.toThrow('bot_not_found')
   })
 
@@ -847,6 +847,22 @@ describe('BotController', () => {
       { ...saved, permissionMode: 'ask', updatedAt: expect.any(Number) },
       ...overrides
     ])
+  })
+
+  it('saves newer-agent bots apart and keeps saved order', async () => {
+    const saved = await bots.create({ name: 'Reviewer' })
+    store.saveBot({ ...saved, id: 'cursor-bot', agent: 'cursor' })
+    store.saveBot({ ...saved, id: 'last-bot' })
+    store.flush()
+    await closeTestStores()
+    const persisted = readPersistedState()
+    expect(persisted.bots?.map((bot) => bot.id)).toEqual([saved.id, 'last-bot'])
+    expect(persisted.botsNewerAgents?.map((bot) => bot.id)).toEqual(['cursor-bot'])
+    expect(
+      createStore()
+        .getBots()
+        .map((bot) => bot.id)
+    ).toEqual([saved.id, 'cursor-bot', 'last-bot'])
   })
 
   it('loads legacy bots with no Chat or Linear link', async () => {

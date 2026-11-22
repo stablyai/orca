@@ -155,33 +155,91 @@ function drawn(
       !message.automationRunNotStarted)
       ? []
       : [
-          message.mergedEvents
-            ? `${message.id}<${message.mergedEvents.map((each) => each.id).join(',')}`
-            : message.id
+          `${
+            message.mergedEvents
+              ? `${message.id}<${message.mergedEvents.map((each) => each.id).join(',')}`
+              : message.id
+          }${message.agentStartItems ? ` for ${message.agentStartItems.map((item) => item.title).join(' ')}` : ''}`
         ]
   )
 }
 
 describe('the Linked row of a worker the chat started', () => {
-  it('drops the agent’s own link when its turn holds the Started row, before or after it', () => {
+  it('joins the Started row as "for" its items when the link is in its turn, before or after it', () => {
     expect(
       drawn([prompt('t1'), link('l', 'bot', 'dispatch:d1'), started('s', 'd1', 5)], {
         turnKeys: ['t1', 't1', 't1']
       })
-    ).toEqual(['t1', 's'])
+    ).toEqual(['t1', 's for P0'])
     expect(
       drawn([prompt('t1'), started('s', 'd1', 5), link('l', 'bot', 'dispatch:d1')], {
         turnKeys: ['t1', 't1', 't1']
       })
-    ).toEqual(['t1', 's'])
+    ).toEqual(['t1', 's for P0'])
   })
 
-  it('drops it in a later turn too, once the Started row is above it', () => {
+  it('joins a link in a later turn only when nothing draws between it and the Started row', () => {
+    expect(
+      drawn([prompt('t1'), started('s', 'd1', 5), link('l', 'bot', 'dispatch:d1')], {
+        turnKeys: ['t1', 't1', 't2']
+      })
+    ).toEqual(['t1', 's for P0'])
     expect(
       drawn([prompt('t1'), started('s', 'd1', 5), prompt('t2'), link('l', 'bot', 'dispatch:d1')], {
         turnKeys: ['t1', 't1', 't2', 't2']
       })
-    ).toEqual(['t1', 's', 't2'])
+    ).toEqual(['t1', 's', 't2', 'l'])
+  })
+
+  it('joins a link that lands just before its Started row, whatever turn each is in', () => {
+    expect(
+      drawn([prompt('t1'), link('l', 'bot', 'dispatch:d1'), started('s', 'd1', 5)], {
+        turnKeys: ['t1', 't1', 't2']
+      })
+    ).toEqual(['t1', 's for P0'])
+    expect(
+      drawn([prompt('t1'), link('l', 'bot', 'dispatch:d1'), said('a'), started('s', 'd1', 5)], {
+        turnKeys: ['t1', 't1', 't1', 't2']
+      })
+    ).toEqual(['t1', 'l', 'a', 's'])
+  })
+
+  it('joins each worker a link names to its own Started row', () => {
+    expect(
+      drawn(
+        [
+          prompt('t1'),
+          started('s1', 'd1', 5),
+          started('s2', 'd2', 6),
+          link('l', 'bot', 'dispatch:d1', 'dispatch:d2')
+        ],
+        { turnKeys: ['t1', 't1', 't1', 't1'] }
+      )
+    ).toEqual(['t1', 's1 for P0', 's2 for P0'])
+  })
+
+  it('keeps the same joined Started row across passes that change nothing about its links', () => {
+    const rows = [prompt('t1'), started('s', 'd1', 5), link('l', 'bot', 'dispatch:d1')]
+    const turnKeys = ['t1', 't1', 't1']
+    const first = foldBotItemNotes(rows, turnKeys)[1]
+    expect(foldBotItemNotes([...rows, said('more')], [...turnKeys, 't1'])[1]).toBe(first)
+  })
+
+  it('gives each worker only the items linked to it', () => {
+    const both = link('l', 'bot', 'dispatch:d1')
+    both.botItemNote!.entries.push({
+      uid: 'p1',
+      number: 2,
+      title: 'P1',
+      status: 'working',
+      event: 'linked',
+      refs: ['dispatch:d2']
+    })
+    expect(
+      drawn([prompt('t1'), started('s1', 'd1', 5), started('s2', 'd2', 6), both], {
+        turnKeys: ['t1', 't1', 't1', 't1']
+      })
+    ).toEqual(['t1', 's1 for P0', 's2 for P1'])
   })
 
   it('keeps links by others, links to anything else, and links read before the Started row', () => {
