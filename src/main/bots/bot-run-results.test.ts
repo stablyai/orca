@@ -47,14 +47,18 @@ describe('a run answered together with another message', () => {
 
 describe('a run steered into a turn another message opened', () => {
   it('ends as that turn does: a failed turn leaves the run failed', async () => {
-    const turn = { state: 'running', outcome: undefined as string | undefined }
+    const turn: { state: string; outcome?: string } = { state: 'running' }
     const journal = () => ({
       items: [
         {
           itemId: 'T',
           body: { kind: 'turn', ...turn, userItemId: agentJournalSubmissionKey('u') }
         },
-        { itemId: agentJournalSubmissionKey('run'), turnScope: { kind: 'turn', turnItemId: 'T' } }
+        {
+          itemId: agentJournalSubmissionKey('run'),
+          body: { kind: 'message', role: 'user', text: 'run' },
+          turnScope: { kind: 'turn', turnItemId: 'T' }
+        }
       ],
       submissions: [
         { clientMessageId: 'u', dispatchState: 'accepted', providerItemId: null },
@@ -83,20 +87,13 @@ describe('a run steered into a turn another message opened', () => {
         }
       })
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every host read the watch makes for this send
     const watch = watchBotTurnEnds(host as never)
     const ended = watch.next({ sessionId: 's', clientMessageId: 'run', fingerprint: 'f' })
     await vi.waitFor(() => expect(reads).toBe(1))
     Object.assign(turn, { state: 'completed', outcome: 'failure' })
     emit({ type: 'completion', completion: { sessionId: 's' } })
-    const completion = await deliverBotRunResult(
-      { notify: () => {} } as unknown as BotRunDeliveryDependencies,
-      {
-        ended: await ended,
-        bot: { paused: true },
-        automation: { name: 'a' },
-        target: { runsIn: 'chat', resultsTo: 'none' }
-      } as unknown as BotRunResult
-    )
-    expect(completion.status).toBe('dispatch_failed')
+    // A failed ending, never the other message's answer: delivery records it failed, with Rerun.
+    expect(await ended).toMatchObject({ outcome: 'failure', message: '' })
   })
 })
