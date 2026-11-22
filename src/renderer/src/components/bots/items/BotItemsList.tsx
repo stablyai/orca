@@ -254,28 +254,29 @@ function BotItemGroup({
     [open, id, items, shown]
   )
   const section = useRef<HTMLElement | null>(null)
-  // Back's row until it has focus; one that left the group has nothing to return to.
-  const [backDone, setBackDone] = useState(false)
-  // Found by uid: an update can move it, or take it out of the group, before it is focused.
+  // Back's row, only in the group that held it at mount, until it has focus: found by uid, as an update
+  // can move it first. One that left the group, or the rows shown, has nothing to return to.
+  const [backDone, setBackDone] = useState(focusIndex < 0)
   const backItem = useMemo(
-    () => (backDone || !focusUid ? undefined : items.find((item) => item.uid === focusUid)),
-    [backDone, focusUid, items]
+    () => (backDone ? undefined : items.slice(0, shown).find((item) => item.uid === focusUid)),
+    [backDone, focusUid, items, shown]
   )
-  const needsYouBackDone = useRef(false)
+  const backFocused = useCallback(() => setBackDone(true), [])
   const unfold = useLatestHandler(() => setOpen(true))
   // Needs you's rows are all mounted, so its row is focused here; other groups' windows focus it as drawn.
   useEffect(() => {
-    const pending = backItem !== undefined && !needsYouBackDone.current
-    if (pending && !open) {
+    // Done already, or the row left the group (setting done again changes nothing).
+    if (!backItem) {
+      backFocused()
+    } else if (!open) {
       unfold()
-    } else if (pending && id === 'needs_you') {
-      needsYouBackDone.current = true
+    } else if (id === 'needs_you') {
+      backFocused()
       focusBotItemBackRow(
         section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)
       )
     }
-  }, [backItem, open, unfold, id])
-  const backFocused = useCallback(() => setBackDone(true), [])
+  }, [backItem, open, unfold, id, backFocused])
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
