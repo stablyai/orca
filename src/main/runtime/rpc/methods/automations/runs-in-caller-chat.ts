@@ -19,7 +19,7 @@ export async function targetInCallerChat(
   target: AutomationBotTarget,
   once: boolean
 ): Promise<AutomationBotTarget> {
-  // A new conversation is what a thread answer and an automation's own agent need.
+  // A recurring thread answer or own agent needs a new conversation; a wait runs in the chat that made it.
   const movable = once
     ? target.runsIn === 'chat'
     : target.runsIn === 'new' && target.resultsTo !== 'thread' && !target.agentSetup
