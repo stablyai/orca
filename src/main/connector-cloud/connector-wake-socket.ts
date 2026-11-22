@@ -12,6 +12,8 @@ import {
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
 
 const HANDSHAKE_TIMEOUT_MS = 15_000
+// A keepalive tick later than this ran after the process was held back (App Nap, sleep).
+const STALLED_TICK_MS = 1.5 * CONNECTOR_WAKE_KEEPALIVE_INTERVAL_MS
 
 /** How a socket ended: before it opened (`opened` false) or after. */
 export type ConnectorWakeSocketEnd = {
@@ -22,7 +24,10 @@ export type ConnectorWakeSocketEnd = {
   code: number | null
 }
 
-export type ConnectorWakeSocketLike = Pick<WebSocket, 'send' | 'close' | 'terminate'> & {
+export type ConnectorWakeSocketLike = Pick<
+  WebSocket,
+  'send' | 'close' | 'terminate' | 'readyState'
+> & {
   on(event: 'open', listener: () => void): unknown
   on(event: 'message', listener: (data: RawData) => void): unknown
   on(event: 'close', listener: (code: number) => void): unknown
@@ -78,9 +83,11 @@ export function openConnectorWakeSocket(
   let done = false
   let preUpgrade: { status: number; retryAfterMs: number | null } | null = null
   let timer: ReturnType<typeof setInterval> | null = null
-  // The App Nap guard (#40010): a tick that comes late says our timers stalled, not the link.
   let lastTickAt = 0
   let lastHeardAt = 0
+  let lastSentAt = 0
+  // Keepalives in a row with nothing heard back; two mean the link is dead.
+  let unanswered = 0
   const interval = CONNECTOR_WAKE_KEEPALIVE_INTERVAL_MS
 
   const finish = (end: ConnectorWakeSocketEnd | null): void => {
@@ -98,17 +105,24 @@ export function openConnectorWakeSocket(
   }
   const tick = (): void => {
     const now = Date.now()
-    const stalled = now - lastTickAt > 2 * interval
+    // The App Nap guard (#40010): a tick this late means this process didn't run, so an ack may be
+    // waiting unread. It doesn't count as a miss; this tick's keepalive is judged on the next one.
+    const stalled = now - lastTickAt > STALLED_TICK_MS
     lastTickAt = now
-    if (stalled) {
-      // Judge the link on this keepalive's ack, not on time this process didn't run.
-      lastHeardAt = now
-    } else if (now - lastHeardAt > 2 * interval) {
+    if (lastHeardAt >= lastSentAt) {
+      unanswered = 0
+    } else if (!stalled) {
+      unanswered++
+    }
+    if (unanswered >= 2) {
       socket.terminate()
       finish({ opened, action: 'backoff', retryAfterMs: null, code: null })
       return
     }
-    socket.send(CONNECTOR_WAKE_KEEPALIVE_FRAME)
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(CONNECTOR_WAKE_KEEPALIVE_FRAME)
+      lastSentAt = now
+    }
   }
 
   socket.on('open', () => {

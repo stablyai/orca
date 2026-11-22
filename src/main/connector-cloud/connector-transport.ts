@@ -16,6 +16,9 @@ export type ConnectorToken = {
 }
 
 /** Asks Orca's auth service for a short-lived connector token as this machine's signed-in account. */
+/** A wake token; `none` when the auth service issues none, `failed` when no mint succeeded just now. */
+export type ConnectorWakeTokenResult = { token: string } | 'none' | 'failed'
+
 export type ConnectorTokenMint = () => Promise<ConnectorResult<ConnectorToken>>
 
 /**
@@ -116,8 +119,10 @@ export class ConnectorAccountTransport {
     }
   }
 
-  /** The wake token, renewed with the connector token when refused or under a minute from expiry. */
-  async wakeToken(renew: boolean): Promise<string | null> {
+  /**
+   * The wake token, renewed with the connector token when refused or under a minute from expiry.
+   */
+  async wakeToken(renew: boolean): Promise<ConnectorWakeTokenResult> {
     const stale = (token: ConnectorToken | null): boolean =>
       renew ||
       (token?.wakeToken !== undefined &&
@@ -126,7 +131,11 @@ export class ConnectorAccountTransport {
       this.token = null
     }
     const token = await this.ensure()
-    return token.ok ? (token.value.wakeToken?.token ?? null) : null
+    if (!token.ok) {
+      return 'failed'
+    }
+    const { wakeToken } = token.value
+    return wakeToken ? { token: wakeToken.token } : 'none'
   }
 
   private async ensure(): Promise<ConnectorResult<ConnectorToken>> {

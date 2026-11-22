@@ -1,10 +1,14 @@
 // Wake sockets that a test opens, wakes and closes by hand.
 import { EventEmitter } from 'node:events'
+import WebSocket from 'ws'
 import type { ConnectorWakeSocketFactory, ConnectorWakeSocketLike } from './connector-wake-socket'
 
 export class FakeWakeSocket extends EventEmitter {
   readonly sent: string[] = []
   closed = false
+  readyState: WebSocket['readyState'] = WebSocket.CONNECTING
+  /** Answers each keepalive, as the wake service's runtime does. */
+  autoAck = true
 
   constructor(
     readonly url: string,
@@ -15,17 +19,22 @@ export class FakeWakeSocket extends EventEmitter {
 
   send(frame: string): void {
     this.sent.push(frame)
+    if (this.autoAck && frame === '{"type":"keepalive"}') {
+      queueMicrotask(() => this.emit('message', Buffer.from('{"type":"keepalive-ack"}')))
+    }
   }
 
   close(): void {
     this.closed = true
+    this.readyState = WebSocket.CLOSED
   }
 
   terminate(): void {
-    this.closed = true
+    this.close()
   }
 
   accept(): void {
+    this.readyState = WebSocket.OPEN
     this.emit('open')
   }
 
@@ -35,7 +44,7 @@ export class FakeWakeSocket extends EventEmitter {
 
   /** The server closes it with `code` after the upgrade. */
   end(code: number): void {
-    this.closed = true
+    this.close()
     this.emit('close', code)
   }
 

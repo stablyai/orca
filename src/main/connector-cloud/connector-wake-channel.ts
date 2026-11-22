@@ -6,6 +6,7 @@ import {
   type ConnectorWakeOffer
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
 import type { ConnectorPollClientOptions } from './connector-machine'
+import type { ConnectorWakeTokenResult } from './connector-transport'
 import {
   openConnectorWakeSocket,
   type ConnectorWakeSocketEnd,
@@ -25,8 +26,8 @@ const WAKE_POLL_HOLD_MS = Math.min(2_000, CONNECTOR_WAKE_MAX_HOLD_MS)
 export type ConnectorWakePoll = { holdMs: number }
 
 export type ConnectorWakeChannelDeps = {
-  /** The wake token, renewed first when `renew` (a 401) or when it has under a minute left; null if none. */
-  token: (renew: boolean) => Promise<string | null>
+  /** The wake token, renewed first when `renew` (a 401) or when it has under a minute left. */
+  token: (renew: boolean) => Promise<ConnectorWakeTokenResult>
   random: () => number
   socketFactory?: ConnectorWakeSocketFactory
 }
@@ -76,8 +77,9 @@ export class ConnectorWakeChannel {
     this.notify()
   }
 
-  /** A poll went out: the safety poll restarts from now. */
+  /** A poll went out: it covers whatever was owed, and the safety poll restarts from now. */
   polled(): void {
+    this.owed = null
     this.safetyDueAt = this.safetyDue()
   }
 
@@ -155,7 +157,7 @@ export class ConnectorWakeChannel {
     this.dialing = true
     void this.deps
       .token(renewed)
-      .catch(() => null)
+      .catch((): 'failed' => 'failed')
       .then((token) => {
         this.dialing = false
         if (this.refused || this.stopped || this.socket) {
@@ -166,13 +168,19 @@ export class ConnectorWakeChannel {
           this.dial(renewed)
           return
         }
-        if (!token) {
+        // An auth service without wake tokens: long-poll until the next hello.
+        if (token === 'none') {
           this.refused = true
           this.notify()
           return
         }
+        // A mint that failed (network, auth 5xx) is a failed connect: back off and dial again.
+        if (token === 'failed') {
+          this.ended({ opened: false, action: 'backoff', retryAfterMs: null, code: null }, renewed)
+          return
+        }
         const gapMs = this.closedAt === null ? null : Date.now() - this.closedAt
-        this.socket = this.connect(offer, token, gapMs, renewed)
+        this.socket = this.connect(offer, token.token, gapMs, renewed)
       })
   }
 
@@ -303,7 +311,7 @@ export class ConnectorWakePolls {
       return
     }
     this.channel ??= new ConnectorWakeChannel({
-      token: (renew) => transport.wakeToken?.(renew) ?? Promise.resolve(null),
+      token: (renew) => transport.wakeToken?.(renew) ?? Promise.resolve('none'),
       random: this.random,
       socketFactory: this.options.wakeSocketFactory
     })

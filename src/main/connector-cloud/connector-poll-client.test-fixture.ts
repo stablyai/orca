@@ -30,7 +30,7 @@ export function pollClientHarness() {
   const state = { userDataPath: '', fake: new FakeConnectorCloud(), wake: new FakeWakeSockets() }
   beforeEach(() => {
     vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'],
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance'],
       now: SERVER_NOW
     })
     state.userDataPath = mkdtempSync(join(tmpdir(), 'orca-connector-client-'))

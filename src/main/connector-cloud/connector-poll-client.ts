@@ -255,6 +255,8 @@ export class ConnectorPollClient {
           return this.respread.wait(this.random, this.stopped.signal)
         }
       }
+      // A failed poll on the wake channel goes again after the backoff, not at the safety poll.
+      this.wake.requestPoll()
       return polled.status === 409 ? null : (connectorStop(polled) ?? this.backoff(polled))
     }
     const answeredAt = performance.now()

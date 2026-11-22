@@ -44,7 +44,7 @@ export class ConnectorDeliveryAcks {
       /** The account whose reply outbox admits deliveries, while the hello's answer lists
        *  replies.outbox; null otherwise (they go the legacy way). */
       outbox?: () => string | null
-      /** The cloud took acks: a `received`, or the `done` of a delivery never received, lets the
+      /** The cloud took a `received`, or the `done` of a delivery never received: either lets the
        *  conversation's next delivery out, with no wake for it. */
       onUnblocked?: () => void
     }
@@ -52,7 +52,9 @@ export class ConnectorDeliveryAcks {
     this.acks = new ConnectorOutbox<ConnectorAck>({
       headSize: () => MAX_ACKS_PER_REQUEST,
       onAccepted: (sent) => {
-        deps.onUnblocked?.()
+        if (sent.some((ack) => ack.step === 'received' || this.onlyDone.has(ack.deliveryId))) {
+          deps.onUnblocked?.()
+        }
         for (const ack of sent.filter((sentAck) => sentAck.step === 'done')) {
           this.active.delete(ack.deliveryId)
           this.onlyDone.delete(ack.deliveryId)
@@ -141,7 +143,12 @@ export class ConnectorDeliveryAcks {
     void done.then((result) => {
       // Only a committed admission is received; a refusal before the journal is done alone. Both
       // go in one push, so no request carries the received without its done.
-      const admitted = this.unadmitted.delete(deliveryId) && result.outcome === 'accepted'
+      const unadmitted = this.unadmitted.delete(deliveryId)
+      const admitted = unadmitted && result.outcome === 'accepted'
+      // Refused before its admission: confirmed by done alone, like onlyDone.
+      if (unadmitted && !admitted) {
+        this.onlyDone.add(deliveryId)
+      }
       this.push(...(admitted ? [{ deliveryId, step: 'received' as const }] : []), {
         deliveryId,
         step: 'done',

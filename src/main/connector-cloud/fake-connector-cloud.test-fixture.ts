@@ -46,6 +46,8 @@ export class FakeConnectorCloud {
   wakeOffer: unknown
   /** The auth service mints a wake token beside each connector token. */
   mintsWakeTokens = false
+  /** How long a minted wake token lasts; the connector token's own TTL when unset. */
+  wakeTokenTtlMs: number | null = null
   /** Every wake token minted, in order. */
   readonly wakeTokens: string[] = []
   /** Hooks of this machine deleted while it was away, as the hello answer lists them. */
@@ -121,7 +123,10 @@ export class FakeConnectorCloud {
       if (!this.mintsWakeTokens) {
         return { ok: true, value: { connectorToken, expiresAt } }
       }
-      const wakeToken = { token: `wake-${this.wakeTokens.length}`, expiresAt }
+      const wakeToken = {
+        token: `wake-${this.wakeTokens.length}`,
+        expiresAt: this.wakeTokenTtlMs === null ? expiresAt : Date.now() + this.wakeTokenTtlMs
+      }
       this.wakeTokens.push(wakeToken.token)
       return { ok: true, value: { connectorToken, expiresAt, wakeToken } }
     }
