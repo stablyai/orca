@@ -6,7 +6,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { WorkerBackgroundWaits } from './worker-background-waits'
-import { reconsiderWorkerRest } from './worker-presence-report'
+import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 
 const PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_worker'
@@ -106,7 +106,8 @@ describe('a worker waiting on its own background task', () => {
 
   function notices(): string[] {
     return db.db
-      .prepare(`SELECT body FROM messages WHERE type = 'escalation' ORDER BY rowid`)
+      .prepare(`SELECT body FROM messages
+          WHERE subject = 'Worker is still waiting on its background task' ORDER BY rowid`)
       .all()
       .map((message) => String(message.body))
   }
@@ -135,6 +136,30 @@ describe('a worker waiting on its own background task', () => {
       at: 2
     })
     restarted.arm(db, dispatchId)
+    // A prompt mid-wait, then the same wait again: one fact still.
+    row = { ...heldRow(TURN_END), state: 'waiting', workingMode: undefined }
+    restarted.observe({
+      kind: 'moved',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/w', sshHostId: null },
+      from: 'working',
+      to: 'needs-you',
+      at: 3,
+      transition: null
+    })
+    observeWorker(
+      db,
+      { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
+      {
+        presence: 'at-rest',
+        fence: 'prompt:1',
+        legacyStopKey: 'prompt:1',
+        rest: { from: HANDLE, reason: 'needs-input', lastOutput: undefined }
+      },
+      { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+    )
+    row = heldRow(TURN_END)
+    restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
     advanceTo(TURN_END + 120 * MINUTE)
     reconsiderWorkerRest(db, dispatchId, {
       getDb: () => db,
@@ -167,8 +192,16 @@ describe('a worker waiting on its own background task', () => {
     // Orca was down while a finished task woke the worker: the restored row is already a new turn.
     timers = []
     row = leadWorkingRow(TURN_END + 10 * MINUTE)
-    startOrca().arm(db, dispatchId)
     advanceTo(TURN_END + 90 * MINUTE)
+    // The restart pass decides undecided rests before the re-armed timer runs.
+    reconsiderWorkerRest(db, dispatchId, {
+      getDb: () => db,
+      isWaitingForMail: () => false,
+      notify: () => {},
+      backgroundWaitShown: () => false
+    })
+    startOrca().arm(db, dispatchId)
+    advanceTo(TURN_END + 91 * MINUTE)
     expect(notices()).toEqual([])
   })
 

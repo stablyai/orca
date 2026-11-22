@@ -100,6 +100,8 @@ export type WorkerTurnStopReportDeps = {
   coordinatorApprovals?: () => boolean
   /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
   chatWaitsOnBackground?: (sessionId: string) => boolean
+  /** Whether a recorded background wait's pane still shows it; unknown reads as yes. */
+  backgroundWaitShown?: (wait: { since: number; paneKey?: string }) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
@@ -112,15 +114,18 @@ export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
   stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError' | 'backgroundWait'>,
-  deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
+  deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail' | 'backgroundWaitShown'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   if (stop.requestError && !stop.requestError.heldByWaits) {
     return false
   }
+  // Held until its bound; a wait its pane no longer shows waits for its timer to settle it unsent.
+  const wait = stop.reason === 'background-wait' ? stop.backgroundWait : undefined
   if (
-    stop.reason === 'background-wait' &&
-    Date.now() < workerBackgroundWaitDueAt(stop.backgroundWait?.since ?? 0)
+    wait &&
+    (Date.now() < workerBackgroundWaitDueAt(wait.since) ||
+      deps.backgroundWaitShown?.(wait) === false)
   ) {
     return true
   }

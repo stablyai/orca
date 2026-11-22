@@ -63,6 +63,10 @@ export class WorkerBackgroundWaits {
     if (!recorded) {
       return
     }
+    // Its pane is waiting from that turn end, so the turn that ends the wait supersedes it.
+    if (recorded.paneKey) {
+      this.waitingSince.set(recorded.paneKey, recorded.since)
+    }
     const dueAt = workerBackgroundWaitDueAt(recorded.since)
     if (this.timers.get(dispatchId)?.dueAt === dueAt) {
       return
@@ -121,7 +125,26 @@ export class WorkerBackgroundWaits {
       }
       return
     }
-    if (!this.waitingSince.delete(paneKey)) {
+    const since = this.waitingSince.get(paneKey)
+    if (since === undefined) {
+      return
+    }
+    this.waitingSince.delete(paneKey)
+    // A chat whose tasks ended without waking it is idle now: its held finish was never reported.
+    if (row?.structuredHost && row.state === 'done') {
+      for (const worker of this.workersOf(paneKey, row)) {
+        observeWorker(
+          worker.db,
+          worker.target,
+          {
+            presence: 'at-rest',
+            fence: `background-ended:${since}`,
+            legacyStopKey: `${paneKey}:background-ended:${since}`,
+            rest: { from: worker.from, reason: 'finished', lastOutput: row.lastAssistantMessage }
+          },
+          this.deps
+        )
+      }
       return
     }
     // Its lead took a turn again (a finished task woke it, or mail did): the wait is over. A rest,
@@ -147,7 +170,7 @@ export class WorkerBackgroundWaits {
     }
     try {
       const row = recorded.paneKey ? this.deps.readHookRow(recorded.paneKey) : null
-      if (row && agentBackgroundWait(row)?.since !== recorded.since) {
+      if (!rowsShowWait(row ? [row] : [], recorded.since)) {
         settleWorkerRestUnreported(db, dispatchId)
         return
       }
@@ -212,4 +235,17 @@ export function chatWaitsOnBackground(
   return rows
     .getStatusSnapshotForPane(structuredAgentSessionStatusPaneKey(sessionId))
     .some((row) => agentBackgroundWait(row) !== null)
+}
+
+/** No row yet (a pane not restored) proves nothing; a row that names another turn ends the wait. */
+function rowsShowWait(rows: readonly AgentStatusIpcPayload[], since: number): boolean {
+  return rows.length === 0 || rows.some((row) => agentBackgroundWait(row)?.since === since)
+}
+
+/** Whether a recorded wait's pane still shows it, by this host's status rows. */
+export function backgroundWaitShown(
+  rows: { getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[] },
+  wait: { since: number; paneKey?: string }
+): boolean {
+  return !wait.paneKey || rowsShowWait(rows.getStatusSnapshotForPane(wait.paneKey), wait.since)
 }

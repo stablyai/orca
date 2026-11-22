@@ -284,10 +284,13 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
     return false
   }
+  // A background wait is one fact however often a prompt interrupts it.
   const id =
     'approval' in rest && rest.approval
       ? approvalReportId(dispatchId, rest.approval.approvalId)
-      : presenceReportId(dispatchId, row.generation)
+      : 'backgroundWait' in rest && rest.backgroundWait
+        ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
+        : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )
