@@ -20,6 +20,7 @@ const CUT: NativeChatUsageLimitCut & { fence: number } = {
 
 function attributed(current: LegacyAgentSessionAccountHome, reading: ProviderRateLimits | null) {
   const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
   const host = {
     store: {
       getRecord: () => ({
