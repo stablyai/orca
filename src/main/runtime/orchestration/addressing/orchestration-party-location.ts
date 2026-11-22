@@ -64,7 +64,7 @@ function locateTerminal(
   return { location: null, lost: 'terminal' }
 }
 
-/** Resolve assignee pane, handle or remote attachment; absence at a federated Run home never proves worker exit. */
+/** Resolve assignee pane, handle, remote attachment or placed worker; absence at a federated Run home never proves worker exit. */
 function locateDispatchAssignee(
   dispatchId: string,
   deps: PartyLocationDeps
@@ -78,7 +78,9 @@ function locateDispatchAssignee(
   const handle =
     (paneKey ? deps.terminalHandleForPaneKey(paneKey) : null) ??
     dispatch?.assignee_handle ??
-    remote?.terminal_handle
+    remote?.terminal_handle ??
+    // A starting worker gets its assignee only at hand-over; its placed terminal or chat is recorded first.
+    (dispatch ? deps.db?.getWorkerDispatch(dispatchId)?.agent_terminal_handle : null)
   if (handle && !handle.startsWith('dispatch:')) {
     return locateOrchestrationParty(handle, deps)
   }
