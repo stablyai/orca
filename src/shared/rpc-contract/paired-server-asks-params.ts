@@ -21,7 +21,7 @@ export const PairedServerAllowancesParams = z.object({ botId: ID })
 
 export const PairedServerAllowParams = z.object({ botId: ID, environmentId: ID })
 
-export const PairedServerDisallowParams = z.object({ botId: ID, serverInstallationId: ID })
+export const PairedServerDisallowParams = z.object({ botId: ID, serverKey: ID })
 
 /** A waiting card: an agent on a paired server asked an agent here, and a person answers it. */
 export const PairedServerAskCard = z.object({

@@ -26,7 +26,9 @@ const ServerStatus = z.object({
 export type PairedServerAsks = {
   environmentId: string
   serverName: string
-  serverInstallationId: string
+  /** The server's host key fingerprint: what this computer keeps its choices about it by. Its
+   *  installation id is self-reported, so another server could claim it. */
+  serverKey: string
   /** The credential this computer is paired to the server with now. */
   pairing: string
   wire: z.infer<typeof PeerMailClientAsksPull>
@@ -129,9 +131,9 @@ export async function pairedServerAsksFor(
   if (!support) {
     return null
   }
-  const { serverInstallationId } = support
+  const serverKey = server.peerFingerprint
   const pairing = peerMailPairing(server)
-  const announced = getAnnouncedPairing(db, serverInstallationId)
+  const announced = getAnnouncedPairing(db, serverKey)
   // Named once a later pairing replaced it, so the server ends only that pairing's mail.
   const previousPairing =
     announced && announced.pairingFingerprint !== pairing
@@ -140,7 +142,7 @@ export async function pairedServerAsksFor(
   return {
     environmentId,
     serverName: server.name,
-    serverInstallationId,
+    serverKey,
     pairing,
     wire: {
       session: randomUUID(),
@@ -153,12 +155,12 @@ export async function pairedServerAsksFor(
 
 /** Whether this pairing has yet to be announced, so its loop pulls once with nothing else to do. */
 export function owesAnnouncement(db: OrchestrationDb, asks: PairedServerAsks): boolean {
-  return getAnnouncedPairing(db, asks.serverInstallationId)?.pairingFingerprint !== asks.pairing
+  return getAnnouncedPairing(db, asks.serverKey)?.pairingFingerprint !== asks.pairing
 }
 
 /** The server answered under this pairing: it is announced, and the one it replaced is ended. */
 export function noteAnnounced(db: OrchestrationDb, asks: PairedServerAsks, seenAs: string): void {
-  recordAnnouncedPairing(db, asks.serverInstallationId, {
+  recordAnnouncedPairing(db, asks.serverKey, {
     environmentId: asks.environmentId,
     pairingFingerprint: asks.pairing,
     serverSeenFingerprint: seenAs
@@ -167,18 +169,18 @@ export function noteAnnounced(db: OrchestrationDb, asks: PairedServerAsks, seenA
 }
 
 /** The same server answers under a pairing the old one's rows don't name: they follow it, but only
- *  once the old pairing is gone, so two servers sharing a copied id never pull rows back and forth. */
+ *  once the old pairing is gone, so two pairings to one server never pull rows back and forth. */
 export function followServerRoute(
   db: OrchestrationDb,
   asks: PairedServerAsks,
   pairedEnvironments: ReadonlySet<string>
 ): void {
-  const announced = getAnnouncedPairing(db, asks.serverInstallationId)
+  const announced = getAnnouncedPairing(db, asks.serverKey)
   if (
     announced &&
     announced.environmentId !== asks.environmentId &&
     !pairedEnvironments.has(announced.environmentId)
   ) {
-    rerouteServer(db, asks.serverInstallationId, asks.environmentId)
+    rerouteServer(db, asks.serverKey, asks.environmentId)
   }
 }

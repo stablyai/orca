@@ -100,6 +100,8 @@ export class PeerMailRelay {
     this.unwatch = null
     for (const loop of this.loops.values()) {
       loop.stopped = true
+      // Told now: a stopped loop's pull may wait out its full timeout first.
+      asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     }
     this.loops.clear()
   }
