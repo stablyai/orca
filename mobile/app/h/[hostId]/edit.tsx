@@ -12,7 +12,7 @@ import {
   type TextInputProps
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { Check } from '../../../src/components/icons/app-icons'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
 import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../../../src/components/nav-bar/ScreenHeader'
@@ -72,6 +72,8 @@ export default function EditHostScreen() {
     routeRevision.current += 1
     router.back()
   }
+  // The native header's Back pops without leave(), so a save finishing mid-pop must not pop again.
+  useFocusEffect(useCallback(() => () => void (routeRevision.current += 1), []))
 
   const load = useCallback(
     async (revision: number) => {
