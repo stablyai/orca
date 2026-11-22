@@ -35,13 +35,16 @@ export function inspectTerminalHostSession(
     authorityGeneration,
     nextObservationEpoch
   }).then((result) => {
-    const proven = provenAgentProcess(result.foregroundProcessEvidence)
+    const evidence = result.foregroundProcessEvidence
+    const proven = provenAgentProcess(evidence)
     return foregroundExitWatches?.noteInspection(
       sessionId,
       sessions.get(sessionId),
       result.foregroundProcess,
       proven?.pid,
-      proven?.startTime
+      proven?.startTime,
+      // Cheap anchored reads carry no evidence because the pane fingerprint still matches the full capture.
+      evidence === undefined || evidence.verdict === 'live' || process.platform === 'win32'
     )
       ? { ...result, foregroundExitWatched: true as const }
       : result

@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isSameForegroundAgent } from './foreground-agent-identity-check'
 
-const table = vi.hoisted(() => ({
-  rows: [] as { pid: number; name: string; creationTimeMs?: number }[]
-}))
+type Row = { pid: number; name: string; creationTimeMs?: number }
+const table = vi.hoisted((): { rows: Row[] } => ({ rows: [] }))
 vi.mock('../../windows/windows-process-table', () => ({
   readWindowsProcessIdentityTableFresh: async () => table.rows
 }))

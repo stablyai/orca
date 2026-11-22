@@ -84,6 +84,15 @@ describe('ForegroundExitWatches', () => {
     expect(recycled.noteInspection('pane', source, 'codex', 300, 'start-a')).toBe(false)
   })
 
+  it('does not lean on an earlier watch when a failed capture cannot tell the agent from a replacement', () => {
+    const source = { isAlive: true, foregroundAgent: () => null }
+    expect(watches.noteInspection('pane', source, 'codex', 10, 'start-a')).toBe(true)
+
+    expect(watches.noteInspection('pane', source, 'codex', undefined, undefined, false)).toBe(false)
+    expect(watched.size).toBe(1)
+    expect(watches.noteInspection('pane', source, 'codex')).toBe(true)
+  })
+
   it('announces once an agent a lookup names after the read returned', async () => {
     let agentPid: number | null = null
     let land: () => void = () => {}

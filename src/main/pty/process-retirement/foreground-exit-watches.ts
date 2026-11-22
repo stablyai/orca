@@ -46,7 +46,9 @@ export class ForegroundExitWatches {
     source: ForegroundPidSource | undefined,
     foreground: string | null,
     identifiedPid?: number,
-    identifiedStartTime?: string
+    identifiedStartTime?: string,
+    /** False when a full capture was attempted and failed: a same-name replacement may hold the foreground. */
+    foregroundUnchanged = true
   ): boolean {
     if (!source?.isAlive) {
       this.forget(ptyId)
@@ -78,6 +80,9 @@ export class ForegroundExitWatches {
     }
     const pid = identifiedPid ?? cached?.pid ?? null
     if (pid === null) {
+      if (!foregroundUnchanged) {
+        return false
+      }
       const current = this.current.get(ptyId)
       return current?.name === foreground && this.watches.get(ptyId)?.has(current.pid) === true
     }
