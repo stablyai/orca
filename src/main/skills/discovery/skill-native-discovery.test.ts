@@ -7,15 +7,38 @@ import { isNativeChatSkillForAgent } from '../../../shared/native-chat/input/com
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import '../../../shared/agent-launch/catalog/tui-agent-config'
 
+import type * as FsPromises from 'node:fs/promises'
 import type * as SkillRootFileWalk from './skill-root-file-walk'
 
 let unavailableRootPath: string | null = null
+let rootFailure: { path: string; call: 'stat' | 'realpath' | 'readdir'; code: string } | null = null
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  const failing =
+    <Args extends unknown[], Result>(
+      call: 'stat' | 'realpath' | 'readdir',
+      original: (...args: Args) => Promise<Result>
+    ) =>
+    (...args: Args): Promise<Result> =>
+      rootFailure?.call === call && args[0] === rootFailure.path
+        ? Promise.reject(Object.assign(new Error(rootFailure.code), { code: rootFailure.code }))
+        : original(...args)
+  return {
+    ...actual,
+    stat: failing('stat', actual.stat),
+    realpath: failing('realpath', actual.realpath),
+    readdir: failing('readdir', actual.readdir)
+  }
+})
 
 vi.mock('./skill-root-file-walk', async (importOriginal) => {
   const actual = await importOriginal<typeof SkillRootFileWalk>()
   return {
     ...actual,
-    findSkillFiles: (rootPath: string, maxDepth: number, signal?: AbortSignal) => {
+    findSkillFiles: (
+      ...[rootPath, ...rest]: Parameters<typeof SkillRootFileWalk.findSkillFiles>
+    ) => {
       if (unavailableRootPath !== null && rootPath === unavailableRootPath) {
         return Promise.reject(
           Object.assign(new Error('This operation was aborted'), {
@@ -23,7 +46,7 @@ vi.mock('./skill-root-file-walk', async (importOriginal) => {
           })
         )
       }
-      return actual.findSkillFiles(rootPath, maxDepth, signal)
+      return actual.findSkillFiles(rootPath, ...rest)
     }
   }
 })
@@ -41,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unavailableRootPath = null
+  rootFailure = null
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
@@ -88,6 +112,37 @@ describe('skill discovery', () => {
       skippedReason: 'unavailable'
     })
   })
+
+  it.each([
+    ['stat', 'EIO'],
+    ['realpath', 'EACCES'],
+    ['readdir', 'EPERM']
+  ] as const)(
+    'reports a root whose %s fails with %s as unavailable only while it retains skills',
+    async (call, code) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+      const home = join(root, 'home')
+      const cwd = join(root, 'missing-cwd')
+      const unreadableRoot = join(home, '.omp', 'agent', 'skills')
+      await mkdir(join(unreadableRoot, 'planning'), { recursive: true })
+      await writeFile(join(unreadableRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+      const sourceOf = (result: Awaited<ReturnType<typeof discoverSkills>>) =>
+        result.sources.find((source) => source.path === unreadableRoot)
+
+      rootFailure = { path: unreadableRoot, call, code }
+      const neverRead = await discoverSkills({ homeDir: home, cwd })
+      expect(neverRead.skills).toEqual([])
+      expect(sourceOf(neverRead)?.skippedReason).not.toBe('unavailable')
+
+      rootFailure = null
+      await discoverSkills({ homeDir: home, cwd, refresh: true })
+      rootFailure = { path: unreadableRoot, call, code }
+      const result = await discoverSkills({ homeDir: home, cwd, refresh: true })
+
+      expect(result.skills.map((skill) => skill.name)).toEqual(['Planning'])
+      expect(sourceOf(result)).toMatchObject({ exists: true, skippedReason: 'unavailable' })
+    }
+  )
 
   it('drops the retained copy once a root answers as absent', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
