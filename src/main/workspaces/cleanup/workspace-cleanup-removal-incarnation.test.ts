@@ -17,10 +17,12 @@ import { getDefaultWorkspaceCleanupRules } from '../../../shared/workspace-clean
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { WorkspaceLifecycleQueue } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-queue'
 import { queueWorkspaceDelete } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
-import { _resetWorktreeCatalogOwnerForTests } from '../catalog/repo-worktree-catalog-owner'
 import {
-  _resetPendingWorktreeRemovalsForTests,
-  _settlePendingWorktreeRemovalsForTests,
+  invalidateWorktreeCatalogForRepo,
+  retireObsoleteWorktreeCatalogs
+} from '../catalog/repo-worktree-catalog-owner'
+import {
+  drainBackgroundWorktreeRemovals,
   loadWorktreeRemovalRecords,
   resumeInterruptedWorktreeRemovals,
   waitForPendingWorktreeRemoval
@@ -60,11 +62,13 @@ beforeEach(async () => {
   vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2030, 0, 1))
   await loadWorktreeRemovalRecords(testState.dir)
 })
+// Each case's worktree id carries its own temp path, so settled jobs and records can't leak into the next.
+const settleRemovals = () => drainBackgroundWorktreeRemovals().catch(() => {})
 afterEach(async () => {
-  await _settlePendingWorktreeRemovalsForTests()
-  _resetPendingWorktreeRemovalsForTests()
+  await settleRemovals()
   await closeTestStores()
-  _resetWorktreeCatalogOwnerForTests()
+  invalidateWorktreeCatalogForRepo('repo')
+  retireObsoleteWorktreeCatalogs()
   vi.restoreAllMocks()
   rmSync(testState.dir, { recursive: true, force: true })
 })
@@ -256,7 +260,7 @@ it.each([true, false])(
     }
     resumeInterruptedWorktreeRemovals(() => job)
     await expect(pending).rejects.toThrow()
-    await _settlePendingWorktreeRemovalsForTests()
+    await settleRemovals()
     expect(await readWorktreeRemovalRecords(testState.dir)).toEqual([])
     expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
     expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({

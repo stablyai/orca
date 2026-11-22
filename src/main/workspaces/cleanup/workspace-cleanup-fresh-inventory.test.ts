@@ -9,7 +9,10 @@ import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-iden
 import { getDefaultWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
-import { _resetWorktreeCatalogOwnerForTests } from '../../workspaces/catalog/repo-worktree-catalog-owner'
+import {
+  invalidateWorktreeCatalogForRepo,
+  retireObsoleteWorktreeCatalogs
+} from '../../workspaces/catalog/repo-worktree-catalog-owner'
 const gate = vi.hoisted(() => ({
   sampled: Promise.withResolvers<void>(),
   release: Promise.withResolvers<void>(),
@@ -57,7 +60,8 @@ beforeEach(() => {
 afterEach(async () => {
   gate.release.resolve()
   await closeTestStores()
-  _resetWorktreeCatalogOwnerForTests()
+  invalidateWorktreeCatalogForRepo('repo')
+  retireObsoleteWorktreeCatalogs()
   vi.restoreAllMocks()
   rmSync(testState.dir, { recursive: true, force: true })
 })
