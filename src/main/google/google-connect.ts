@@ -14,6 +14,7 @@ import {
   GOOGLE_SERVICE_CHOICES,
   googleChoices,
   grantedGoogleChoices,
+  type GoogleAccess,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import { CallerOwnedSignInFlows } from '../runtime/caller-owned-sign-in-flows'
@@ -51,6 +52,7 @@ export function googleAccountView(record: GoogleAccountRecord): GoogleAccountVie
     status: record.status,
     ...(record.reason ? { reason: record.reason } : {}),
     services: record.services,
+    ...(record.access ? { access: record.access } : {}),
     ...(record.checkedAt ? { checkedAt: record.checkedAt } : {}),
     connectedAt: record.connectedAt
   }
@@ -207,23 +209,31 @@ export class GoogleConnect {
 
   /**
    * `services` defaults to what the named account already has, else everything; a named account
-   * keeps what it has, so adding a service asks Google for the union.
+   * keeps what it has, so adding a service asks Google for the union. `access` defaults to the
+   * named account's, else full.
    */
   async startSignIn(
     owner: string,
-    request: Omit<GoogleSignInOptions, 'choices'> & { services?: readonly GoogleServiceChoice[] }
+    request: Omit<GoogleSignInOptions, 'choices' | 'access'> & {
+      services?: readonly GoogleServiceChoice[]
+      access?: GoogleAccess
+    }
   ): Promise<GoogleSignInStatus> {
-    const { services, ...rest } = request
+    const { services, access, ...rest } = request
     const existing = rest.loginHint ? await readGoogleAccount(rest.loginHint) : null
     const had = existing ? (existing.choices ?? grantedGoogleChoices(existing.grantedScopes)) : []
     const choices = googleChoices([
       ...(services ?? (had.length > 0 ? had : GOOGLE_SERVICE_CHOICES)),
       ...had
     ])
-    const options: GoogleSignInOptions = { ...rest, choices }
+    const options: GoogleSignInOptions = {
+      ...rest,
+      choices,
+      access: access ?? existing?.access ?? 'full'
+    }
     const back =
       options.callerLoopbackPort === undefined ? 'host' : `caller-${options.callerLoopbackPort}`
-    const route: Route = `${back}:${choices.join(',')}`
+    const route: Route = `${back}:${options.access}:${choices.join(',')}`
     return toWire(this.flows.start(owner, route, options))
   }
 

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../google/google-client-config'
-import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
+import { GOOGLE_ACCESS_LEVELS, GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 /** The bot run's token, so the host can refuse owner-only changes made from a bot; and its chat. */
@@ -27,7 +27,9 @@ export const GoogleSignInStartParams = z.object({
   callerLoopbackPort: z.number().int().min(1024).max(65_535).optional(),
   account: Email.optional(),
   /** Gmail, Calendar, Files; absent: what the account already has, else all. Always adds to what it has. */
-  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional()
+  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional(),
+  /** read-draft: read-only scopes plus Gmail drafts; absent: the account's own, else full. */
+  access: z.enum(GOOGLE_ACCESS_LEVELS).optional()
 })
 
 export const GoogleSignInFlowParams = z.object({ flowId: z.string().min(1).max(64) })

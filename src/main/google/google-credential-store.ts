@@ -10,7 +10,11 @@ import {
   GoogleClientConfigSchema,
   type GoogleClientConfig
 } from '../../shared/google/google-client-config'
-import { GOOGLE_SERVICE_CHOICES, GOOGLE_SERVICES } from '../../shared/google/google-scopes'
+import {
+  GOOGLE_ACCESS_LEVELS,
+  GOOGLE_SERVICE_CHOICES,
+  GOOGLE_SERVICES
+} from '../../shared/google/google-scopes'
 import {
   CredentialDecryptionError,
   readStoredCredentialToken,
@@ -39,6 +43,8 @@ export const GoogleAccountRecordSchema = z.object({
   grantedScopes: z.array(z.string()),
   /** What the person picked at Connect; a picked service Google didn't grant shows Needs permission. */
   choices: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
+  /** What the sign-in asked for; absent is full. */
+  access: z.enum(GOOGLE_ACCESS_LEVELS).optional(),
   status: z.enum(['connected', 'reconnect']),
   reason: z.string().optional(),
   services: z.array(ServiceReadinessSchema),

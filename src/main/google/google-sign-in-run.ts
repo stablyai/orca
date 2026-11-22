@@ -6,6 +6,7 @@ import {
   googleChoices,
   googleSignInScopes,
   grantedGoogleChoices,
+  type GoogleAccess,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import type { GoogleClientConfig } from '../../shared/google/google-client-config'
@@ -58,6 +59,7 @@ export type GoogleSignInOptions = {
   loginHint?: string
   /** The services asked for; the base set (who signed in, name lookup) always comes too. */
   choices: readonly GoogleServiceChoice[]
+  access: GoogleAccess
   /** The person is at this host, so its browser opens. */
   openBrowser: boolean
 }
@@ -69,6 +71,7 @@ function authorizeUrl(
     state: string
     codeChallenge: string
     choices: readonly GoogleServiceChoice[]
+    access: GoogleAccess
     loginHint?: string
   }
 ): string {
@@ -76,9 +79,12 @@ function authorizeUrl(
   url.searchParams.set('client_id', client.clientId)
   url.searchParams.set('redirect_uri', args.redirectUri)
   url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', googleSignInScopes(args.choices).join(' '))
-  // Keeps what the account already allowed, so adding a service asks for the union.
-  url.searchParams.set('include_granted_scopes', 'true')
+  url.searchParams.set('scope', googleSignInScopes(args.choices, args.access).join(' '))
+  // Keeps what the account already allowed, so adding a service asks for the union; read-draft
+  // must not inherit an earlier broader grant.
+  if (args.access === 'full') {
+    url.searchParams.set('include_granted_scopes', 'true')
+  }
   url.searchParams.set('state', args.state)
   url.searchParams.set('code_challenge', args.codeChallenge)
   url.searchParams.set('code_challenge_method', 'S256')
@@ -115,6 +121,7 @@ export async function runGoogleSignIn(
       state,
       codeChallenge,
       choices: options.choices,
+      access: options.access,
       ...(options.loginHint ? { loginHint: options.loginHint } : {})
     })
     const opener = options.openBrowser ? deps.openBrowser : undefined
@@ -195,7 +202,7 @@ export async function runGoogleSignIn(
       throw new Error('The Google sign-in did not start.')
     }
     const code = readGoogleCallback(new URL(`${expectation.redirectUri}${query}`), expectation)
-    const record = await finishGoogleSignIn(deps, client, options.choices, {
+    const record = await finishGoogleSignIn(deps, client, options, {
       code,
       codeVerifier,
       redirectUri: expectation.redirectUri,
@@ -212,7 +219,7 @@ export async function runGoogleSignIn(
 async function finishGoogleSignIn(
   deps: GoogleSignInDeps,
   client: GoogleClientConfig,
-  asked: readonly GoogleServiceChoice[],
+  asked: Pick<GoogleSignInOptions, 'choices' | 'access'>,
   args: { code: string; codeVerifier: string; redirectUri: string; signal: AbortSignal }
 ): Promise<GoogleAccountRecord> {
   const tokens = await exchangeGoogleCode(deps.http, client, args, args.signal)
@@ -227,7 +234,7 @@ async function finishGoogleSignIn(
   const now = deps.now()
   // A reconnect keeps what was picked before, whichever account the browser signed in to.
   const choices = googleChoices([
-    ...asked,
+    ...asked.choices,
     ...((await readGoogleAccount(account.email))?.choices ?? []),
     ...grantedGoogleChoices(grantedScopes)
   ])
@@ -248,6 +255,7 @@ async function finishGoogleSignIn(
     expiresAt: now + tokens.expiresIn * 1000,
     grantedScopes,
     choices,
+    ...(asked.access === 'full' ? {} : { access: asked.access }),
     status: 'connected',
     services,
     checkedAt: now,
