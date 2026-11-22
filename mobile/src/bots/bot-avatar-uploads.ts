@@ -11,6 +11,7 @@ const waiting = new Map<string, string>()
 // picture whichever version asks, so an older version drawn in a room shows it too.
 const uploads = new Map<string, { uri: string | null; asked: Set<string> }>()
 const listeners = new Set<() => void>()
+let readsInTurn: Promise<void> = Promise.resolve()
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
@@ -43,8 +44,9 @@ function readUpload(botId: string, avatar: string): void {
   }
   upload.asked.add(avatar)
   uploads.set(botId, upload)
-  void botAvatarRead
-    .request(client, { botId })
+  // One read at a time: a long list must not pull every multi-MB picture over the link at once.
+  readsInTurn = readsInTurn
+    .then(() => botAvatarRead.request(client, { botId }))
     .then((reply) => readHostMethodReply(reply, botAvatarRead.interpret))
     .catch(() => null)
     .then((read) => {
