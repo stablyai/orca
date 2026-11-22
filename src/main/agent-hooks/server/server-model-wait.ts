@@ -3,6 +3,7 @@ import type { AgentHookSource } from '../../../shared/agent-hook-listener/transp
 import { PaneTimers } from './program-status/pane-timers'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 import type { NormalizedLocalHook } from './server-types'
+import { isValidPaneKey, paneCacheKeyMatchesTab } from './server-status-identity'
 
 /** Model time, the stopwatch Claude's hooks can keep: a turn is open, no lead tool runs, no one is asked. */
 export type TerminalModelWait = {
@@ -108,7 +109,8 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
         row.payload.agentType === 'claude' &&
         row.payload.state === 'working'
       ) {
-        this.startModelWait(paneKey, now)
+        // A tool begun before the restart sent its PreToolUse to the old server: the screen decides.
+        this.startModelWait(paneKey, now).tools.add('')
       }
     }
   }
@@ -117,10 +119,11 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     ...args: Parameters<AgentHookServerIngestNormalization['transferPaneAuthority']>
   ): void {
     const [fromPaneKey, toPaneKey] = args
+    // The owner the move takes the pane's state from, as the base resolves it.
     const from = this.resolvePaneKeyAlias(fromPaneKey)
     super.transferPaneAuthority(...args)
     const wait = this.modelWaits.get(from)
-    if (!wait || from === toPaneKey || this.resolvePaneKeyAlias(fromPaneKey) !== toPaneKey) {
+    if (!wait || from === toPaneKey || !isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
     }
     this.modelWaits.delete(from)
@@ -129,6 +132,17 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     if (this.batchingPanes.delete(from)) {
       this.batchingPanes.add(toPaneKey)
     }
+  }
+
+  // A pane's row cleared mid-turn (a tmux republish) keeps its wait; its timer drops one at rest.
+  override dropStatusEntriesByTabPrefix(tabId: string): void {
+    for (const paneKey of [...this.modelWaits.keys(), ...this.batchingPanes]) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        this.endModelWait(paneKey)
+        this.batchingPanes.delete(paneKey)
+      }
+    }
+    super.dropStatusEntriesByTabPrefix(tabId)
   }
 
   protected clearModelWaits(): void {

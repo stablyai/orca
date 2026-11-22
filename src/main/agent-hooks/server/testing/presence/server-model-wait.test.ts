@@ -128,6 +128,16 @@ describe("terminal Claude's model-time stopwatch", () => {
     expect(checks).toEqual([{ paneKey: moved, toolMaybeOpen: false }])
   })
 
+  it('follows the pane through a second move, made from the key the first one gave it', async () => {
+    const first = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+    const second = makePaneKey('tab-3', '33333333-3333-4333-8333-333333333333')
+    server.transferPaneAuthority(PANE, first, 'pty-1')
+    await hook({ hook_event_name: 'UserPromptSubmit', prompt: 'task', paneKey: first })
+    server.transferPaneAuthority(first, second, 'pty-1')
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    expect(checks).toEqual([{ paneKey: second, toolMaybeOpen: false }])
+  })
+
   it('starts the stopwatch for a turn still working when Orca restarts', async () => {
     await prompt()
     const before = server
@@ -141,7 +151,8 @@ describe("terminal Claude's model-time stopwatch", () => {
     })
     await boot()
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
-    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: false }])
+    // A tool begun before the restart left no hook here, so the screen judges it.
+    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: true }])
   })
 
   it('stops at the turn end', async () => {
