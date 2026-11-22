@@ -30,7 +30,7 @@ export function addTranscriptQuote(
   if (source) {
     rememberNativeChatQuoteSource(text, source)
   }
-  composer?.appendText(formatNativeChatQuote(text))
+  composer?.insertQuote(formatNativeChatQuote(text))
 }
 
 export function NativeChatSelectionQuote({

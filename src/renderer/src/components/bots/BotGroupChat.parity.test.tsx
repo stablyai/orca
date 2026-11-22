@@ -141,6 +141,7 @@ vi.mock('../native-chat/composer/NativeChatComposer', () => ({
       },
       acceptsText: () => true,
       appendText: () => {},
+      insertQuote: () => {},
       handlePasteEvent: () => {},
       pasteFromClipboard: () => {},
       contains: () => false

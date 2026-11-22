@@ -13,12 +13,13 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-const appendText = vi.fn<(text: string) => void>()
+const insertQuote = vi.fn<(text: string) => void>()
 const composer: NativeChatComposerHandle = {
   focus: () => true,
   insertAgentReferences: () => false,
   insertTypedText: () => true,
-  appendText,
+  appendText: vi.fn(),
+  insertQuote,
   acceptsText: () => true,
   handlePasteEvent: () => {},
   pasteFromClipboard: () => {},
@@ -46,7 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   window.getSelection()?.removeAllRanges()
-  appendText.mockClear()
+  insertQuote.mockClear()
   vi.useRealTimers()
 })
 
@@ -64,7 +65,7 @@ it('adds the quote and remembers the message it came from', () => {
     vi.runOnlyPendingTimers()
   })
   fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
-  expect(appendText).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
+  expect(insertQuote).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
   // The place is in the reply element's own text.
   expect(nativeChatQuoteSource('Use the draft store.\n\nIt already appends.')).toEqual({
     messageId: 'reply-1',

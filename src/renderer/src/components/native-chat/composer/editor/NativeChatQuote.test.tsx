@@ -240,12 +240,29 @@ describe('quote chips in the composer', () => {
         setActiveSuggestion: vi.fn()
       })
     )
-    act(() => result.current.appendText('> q\n\n'))
+    act(() => result.current.insertQuote('> q\n\n'))
     expect(input.value).toBe(added)
     expect(chips(editor)).toBe(1)
     // The caret is right after the chip, where the comment goes.
     const after = added.indexOf('> q\n\n') + '> q\n\n'.length
     expect([input.selectionStart, input.selectionEnd]).toEqual([after, after])
+  })
+
+  // Other text, such as a saved automation's note, still goes after the draft.
+  it('appends text after the draft and a blank line, wherever the caret is', () => {
+    const { input } = setup('top\nend')
+    act(() => input.setSelectionRange(1, 1))
+    const { result } = renderHook(() =>
+      useNativeChatTypedInsertion({
+        textareaRef: { current: input },
+        isComposing: () => false,
+        setDraft: vi.fn(),
+        setCaret: vi.fn(),
+        setActiveSuggestion: vi.fn()
+      })
+    )
+    act(() => result.current.appendText('note'))
+    expect(input.value).toBe('top\nend\n\nnote')
   })
 
   it('shows text written after a chip through the composer API on the chip line', () => {

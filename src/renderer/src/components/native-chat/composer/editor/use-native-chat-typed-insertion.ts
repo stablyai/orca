@@ -5,6 +5,7 @@ import {
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { withQuoteInserted } from '../../drafts/native-chat-selection-quote-draft'
+import { appendNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { dictationSeparators } from '../../../../../../shared/speech/dictation/dictation-transcript-spacing'
 
 /** Insert/focus through the composer input for paste and imperative callers. */
@@ -17,6 +18,7 @@ export function useNativeChatTypedInsertion(args: {
 }): {
   insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   appendText: (text: string) => void
+  insertQuote: (quote: string) => void
   acceptsText: () => boolean
   insertPastedText: (text: string) => boolean
   focus: (options?: { caretAtEnd?: boolean }) => boolean
@@ -71,10 +73,21 @@ export function useNativeChatTypedInsertion(args: {
     (text: string): void => {
       const textarea = usableInput()
       if (textarea) {
+        const next = appendNativeChatQuote(textarea.value, text)
+        showDraft(textarea, next, next.length)
+      }
+    },
+    [showDraft, usableInput]
+  )
+
+  const insertQuote = useCallback(
+    (quote: string): void => {
+      const textarea = usableInput()
+      if (textarea) {
         // A quote the user adds lands at the caret, as typing it would.
         const { value, selectionStart, selectionEnd } = textarea
         const from = selectionStart ?? value.length
-        const next = withQuoteInserted(value, text, from, selectionEnd ?? from)
+        const next = withQuoteInserted(value, quote, from, selectionEnd ?? from)
         showDraft(textarea, next.text, next.caret)
       }
     },
@@ -107,5 +120,13 @@ export function useNativeChatTypedInsertion(args: {
     [textareaRef]
   )
 
-  return { insertTypedText, appendText, acceptsText, insertPastedText, focus, contains }
+  return {
+    insertTypedText,
+    appendText,
+    insertQuote,
+    acceptsText,
+    insertPastedText,
+    focus,
+    contains
+  }
 }
