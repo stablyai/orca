@@ -8,6 +8,7 @@ import {
   NativeChatReplyRevealsContext
 } from './native-chat-reply-reveals'
 import { createNativeChatReplyRevealTracker } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
+import type { NativeChatTextReveal } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { documentViewerVisibility } from '../session/structured/read/document-viewer-visibility'
 
 function renderReply(chat: string) {
@@ -73,6 +74,69 @@ it('shows a reply redrawn whole only at its saves, revealed as main reveals them
     act(() => vi.advanceTimersByTime(300))
     expect(result.current.text).toBe('one two three four')
     expect(result.current.fadeFrom).toBeUndefined()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+function renderRemembered(
+  remembered: NativeChatTextReveal,
+  initialProps: { text: string; revision: number | undefined }
+) {
+  const { reveals } = createNativeChatReplyRevealTracker()
+  reveals.drawn.set('reply', remembered)
+  const root = { current: null }
+  return renderHook(
+    ({ text, revision }) => useNativeChatPacedText('reply', text, true, root, revision),
+    {
+      initialProps,
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <NativeChatReplyRevealsContext.Provider value={reveals}>
+          {children}
+        </NativeChatReplyRevealsContext.Provider>
+      )
+    }
+  )
+}
+
+it('finishes revealing a save after a remount part way through it', () => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  try {
+    const save = 'one two three four'
+    const { result } = renderRemembered(
+      {
+        source: save,
+        shown: 3,
+        arrivals: [{ from: 3, to: save.length, at: performance.now() }],
+        drawsWhole: true
+      },
+      { text: `${save} five six`, revision: 2 }
+    )
+    act(() => vi.advanceTimersByTime(600))
+    expect(result.current.text).toBe(save)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('keeps following a row with no saves to wait for, though it was redrawn whole', () => {
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
+  try {
+    const { result, rerender } = renderRemembered(
+      { source: 'one', shown: 3, arrivals: [], drawsWhole: true },
+      { text: 'one', revision: undefined }
+    )
+    rerender({ text: 'one two three', revision: undefined })
+    act(() => vi.advanceTimersByTime(2000))
+    expect(result.current.text).toBe('one two three')
   } finally {
     vi.useRealTimers()
   }

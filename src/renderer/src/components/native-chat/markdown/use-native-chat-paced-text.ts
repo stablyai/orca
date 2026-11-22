@@ -80,9 +80,15 @@ export function useNativeChatPacedText(
   )
   // A reply redrawn whole is shown as main shows it until it ends, so it doesn't switch back and
   // forth: only the text of each save, revealed by main's own reveal.
-  const [drawsWhole, setDrawsWhole] = useState(initial.drawsWhole === true)
+  // Only a row with saves to show can wait for them.
+  const [drawsWhole, setDrawsWhole] = useState(
+    initial.drawsWhole === true && savedRevision !== undefined
+  )
   // The text as of the reply's last save; state, so a save renders the reveal that shows it.
-  const saved = useRef({ revision: savedRevision, text: text.slice(0, initial.shown) })
+  const saved = useRef({
+    revision: savedRevision,
+    text: drawsWhole ? initial.source : text.slice(0, initial.shown)
+  })
   const [savedText, setSavedText] = useState(saved.current.text)
   const revealMs = reducedMotion && !drawsWhole ? PLAIN_REVEAL_MS : undefined
   const pace = useRef(initial)
@@ -202,7 +208,7 @@ export function useNativeChatPacedText(
         const startedAt = performance.now()
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
-        if (frames.redrawsWhole?.() && !pace.current.drawsWhole) {
+        if (savedRevision !== undefined && frames.redrawsWhole?.() && !pace.current.drawsWhole) {
           // From here it shows what is on screen, then each save as main does.
           const onScreenText = pace.current.source.slice(0, next.shown)
           saved.current = { revision: savedRevision, text: onScreenText }

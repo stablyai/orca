@@ -250,6 +250,10 @@ export function startNativeChatTextReveal(
   if (remembered?.source === text && streaming) {
     return advanceNativeChatText(remembered, now, revealMs)
   }
+  // A reply shown only at its saves resumes its save's reveal; newer live text waits for a save.
+  if (remembered?.drawsWhole && streaming && text.startsWith(remembered.source)) {
+    return advanceNativeChatText(remembered, now, revealMs)
+  }
   const shown = streaming && !remembered && begun ? 0 : text.length
   return arriveNativeChatText(
     {
