@@ -12,7 +12,7 @@ import { jwtVerify } from 'jose'
 import {
   CONNECTOR_WAKE_ADMIN_AUDIENCE,
   CONNECTOR_WAKE_ADMIN_BODY_MAX_BYTES,
-  CONNECTOR_WAKE_ADMIN_OP,
+  type CONNECTOR_WAKE_ADMIN_OP,
   CONNECTOR_WAKE_ADMIN_PURPOSE
 } from '../../../packages/connector-contract/src/wake-messages'
 import type { Env } from './env'

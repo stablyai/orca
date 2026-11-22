@@ -32,9 +32,13 @@ async function loadKeys(): Promise<SpikeKeys> {
   return keys
 }
 
+// A positive integer option; the fallback only when the option is absent.
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`)
-  return i > 0 ? Number(process.argv[i + 1]) : fallback
+  if (i < 0) { return fallback }
+  const value = Number(process.argv[i + 1])
+  if (!Number.isSafeInteger(value) || value <= 0) { throw new Error(`--${name} needs a positive integer`) }
+  return value
 }
 
 function pct(values: number[], p: number): number {
@@ -67,7 +71,13 @@ async function latency(ctx: Ctx, hostCount: number, rounds: number): Promise<voi
     const before = sockets[target].state.wakes.length
     const sentAt = Date.now()
     await adminWake(ctx.origin, [hosts[target].hostId], ctx.admin)
-    if (await waitFor(() => sockets[target].state.wakes.length > before, 5000)) { ms.push(sockets[target].state.wakes.at(-1)! - sentAt) }
+    // A timed-out round's late frame would pass for the next round's: stop instead.
+    if (!(await waitFor(() => sockets[target].state.wakes.length > before, 5000))) {
+      emit({ check: 'W1', error: 'wake not received within 5 s', round: r })
+      process.exitCode = 1
+      break
+    }
+    ms.push(sockets[target].state.wakes.at(-1)! - sentAt)
     await sleep(200)
   }
   emit({ check: 'W1', rounds, received: ms.length, p50: pct(ms, 0.5), p95: pct(ms, 0.95), open: sockets.filter((s) => s.state.open).length })

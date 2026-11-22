@@ -94,15 +94,17 @@ async function freePort(): Promise<number> {
   return port
 }
 
-// `wrangler dev` on a free port with the given vars (written to .dev.vars), until /health answers.
+// `wrangler dev` on a free port with the given vars, until /health answers.
 export async function startDev(vars: Record<string, string>): Promise<{ origin: string; stop: () => Promise<void>; log: () => string }> {
   const cwd = new URL('..', import.meta.url).pathname
-  writeFileSync(join(cwd, '.dev.vars'), Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n'))
   const port = await freePort()
+  // Per run, in its own temp dir: a developer's .dev.vars is never read, written or removed.
   const stateDir = mkdtempSync(join(tmpdir(), 'connector-wake-dev-'))
+  const envFile = join(stateDir, 'vars.env')
+  writeFileSync(envFile, Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n'))
   const wrangler = new URL('../node_modules/.bin/wrangler', import.meta.url).pathname
   // Its own process group, so stop() ends wrangler and workerd together.
-  const dev: ChildProcess = spawn(wrangler, ['dev', '--port', String(port), '--ip', '127.0.0.1', '--persist-to', stateDir], {
+  const dev: ChildProcess = spawn(wrangler, ['dev', '--port', String(port), '--ip', '127.0.0.1', '--persist-to', join(stateDir, 'state'), '--env-file', envFile], {
     cwd,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -124,7 +126,6 @@ export async function startDev(vars: Record<string, string>): Promise<{ origin: 
       process.kill(-dev.pid!, 'SIGKILL')
     } catch {}
     rmSync(stateDir, { recursive: true, force: true })
-    rmSync(join(cwd, '.dev.vars'), { force: true })
   }
   for (let i = 0; ; i++) {
     try {
