@@ -22,7 +22,7 @@ import {
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
-import { peerMailLocalCaller } from './peer-mail-send'
+import { peerMailLocalCaller } from './peer-mail-local-caller'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 

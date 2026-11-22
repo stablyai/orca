@@ -14,6 +14,7 @@ import {
 import type { RpcContext } from '../../../core'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
+import { peerMailLocalCaller } from './peer-mail-local-caller'
 import { sendClientAsk } from './client-ask-send'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
@@ -25,37 +26,6 @@ import {
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 
 const NOTHING_SENT = { effectsApplied: false } as const
-
-/** The agent on this Orca that mail sent elsewhere answers to: a chat by its session, a terminal by its live pane. */
-export function peerMailLocalCaller(args: {
-  runtime: OrcaRuntimeService
-  from: string | undefined
-  orchestrationCaller: OrchestrationEntryCaller | undefined
-  attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
-}): { address: string; paneKey: string | null } {
-  if (args.orchestrationCaller) {
-    return { address: args.orchestrationCaller.address, paneKey: null }
-  }
-  const paneKey =
-    args.from === undefined
-      ? null
-      : (args.attestedCaller?.paneKey ?? args.runtime.getLiveTerminalPaneKey(args.from))
-  if (!args.from || !paneKey) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--on needs a terminal or chat agent on this Orca to receive the replies. Run it from that agent. Nothing was sent.',
-      NOTHING_SENT
-    )
-  }
-  if (args.runtime.getOrchestrationDb().findActiveRemoteAttachmentForPane(paneKey)) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      "This terminal is a worker for another Orca's Run; its mail goes to that Run's coordinator, not to other servers. Nothing was sent.",
-      NOTHING_SENT
-    )
-  }
-  return { address: args.from, paneKey }
-}
 
 /** `send --on <server>`: this Orca carries the mail and keeps the conversation the replies come back on. */
 export async function sendPeerMail(args: {
