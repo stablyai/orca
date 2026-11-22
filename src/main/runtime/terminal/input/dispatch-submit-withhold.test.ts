@@ -27,7 +27,7 @@ it.each([
       getForegroundProcess: async () => 'codex',
       getSize: () => ({ cols: 100, rows: 30 })
     })
-    // Why the casts: these runtime internals are what a spawned worker terminal goes through.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the protected registration a spawned worker terminal goes through; no public seam exists.
     const internals = runtime as unknown as {
       registerPty: (ptyId: string, worktreeId: string) => void
       issuePtyHandle: (pty: unknown) => void
