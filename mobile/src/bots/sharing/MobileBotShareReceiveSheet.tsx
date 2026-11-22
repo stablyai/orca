@@ -34,6 +34,7 @@ import {
   type ReviewPage
 } from './MobileBotShareReview'
 import { MobileBotShareReviewPage } from './MobileBotShareReviewPages'
+import { keptToolTicks } from './bot-share-tool-ticks'
 
 type Step =
   | { kind: 'paste' }
@@ -67,6 +68,8 @@ export function MobileBotShareReceiveSheet(props: {
   const [nav, setNav] = useState<ReviewPage[]>([])
   const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [toolIds, setToolIds] = useState<string[]>([])
+  // The review the ticks were made on.
+  const shownReview = useRef<PhoneShareReview | null>(null)
   const [draft, setDraft] = useState<ShareCreateDraft>(EMPTY_SHARE_CREATE_DRAFT)
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -91,9 +94,12 @@ export function MobileBotShareReceiveSheet(props: {
     reviewPhoneBotShare(client, step.shareId).then(
       (review) => {
         if (current) {
-          // A new link starts clean; the same link read again keeps what the owner chose.
+          // A new link starts clean; the same link read again keeps what the owner chose, but a
+          // tool tick only while that tool's address is unchanged.
+          const shown = shownReview.current
+          shownReview.current = review
+          setToolIds((ticked) => (step.again && review ? keptToolTicks(shown, review, ticked) : []))
           if (!step.again) {
-            setToolIds([])
             setDraft(EMPTY_SHARE_CREATE_DRAFT)
           }
           setNav([])
