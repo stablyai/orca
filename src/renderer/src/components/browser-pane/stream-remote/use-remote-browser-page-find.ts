@@ -1,4 +1,4 @@
-import { useCallback, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { useLatestHandler } from '@/lib/use-latest-handler'
@@ -21,31 +21,49 @@ type RemoteFindSend = (
   params: { text?: string; forward?: boolean; findNext?: boolean }
 ) => Promise<BrowserFindInPageResult | null>
 
-/** The find bar's target for a page searched on its host: steps run in order, as Enter presses do locally. */
+type RemoteFindStep =
+  | { kind: 'find'; requestId: number; text: string; forward?: boolean; findNext?: boolean }
+  | { kind: 'stop' }
+
+/** The find bar's target for a page searched on its host, one step at a time so each Enter press is its own step. */
 export function createRemoteBrowserFindTarget(send: RemoteFindSend): BrowserFindTarget {
   const listeners = new Set<(event: BrowserFindResultEvent) => void>()
   let lastRequestId = 0
   let searching = false
-  let pending: Promise<unknown> = Promise.resolve()
-  const enqueue = (step: () => Promise<unknown>): void => {
-    pending = pending.then(step, step)
-  }
-  return {
-    findInPage(text, options = {}) {
-      const requestId = ++lastRequestId
-      searching = true
-      enqueue(async () => {
-        const result = await send('browser.findInPage', {
-          text,
-          forward: options.forward,
-          findNext: options.findNext
-        })
+  let running = false
+  let queue: RemoteFindStep[] = []
+  const drain = async (): Promise<void> => {
+    running = true
+    try {
+      for (let step = queue.shift(); step; step = queue.shift()) {
+        if (step.kind === 'stop') {
+          await send('browser.stopFindInPage', {})
+          continue
+        }
+        const { requestId, text, forward, findNext } = step
+        const result = await send('browser.findInPage', { text, forward, findNext })
         if (result) {
           for (const listener of listeners) {
             listener({ result: { requestId, ...result } })
           }
         }
-      })
+      }
+    } finally {
+      running = false
+    }
+  }
+  // A new search or a stop supersedes every step still waiting; a round trip each would replay old queries after the bar moved on.
+  const enqueue = (step: RemoteFindStep, supersedes: boolean): void => {
+    queue = supersedes ? [step] : [...queue, step]
+    if (!running) {
+      void drain()
+    }
+  }
+  return {
+    findInPage(text, options = {}) {
+      const requestId = ++lastRequestId
+      searching = true
+      enqueue({ kind: 'find', requestId, text, ...options }, options.findNext === true)
       return requestId
     },
     stopFindInPage() {
@@ -54,7 +72,7 @@ export function createRemoteBrowserFindTarget(send: RemoteFindSend): BrowserFind
         return
       }
       searching = false
-      enqueue(() => send('browser.stopFindInPage', {}))
+      enqueue({ kind: 'stop' }, true)
     },
     addEventListener(_type, listener) {
       listeners.add(listener)
@@ -107,7 +125,8 @@ export function useRemoteBrowserPageFind({
       const target = runtimeTarget()
       const pageId = lifecycle.tokens.remotePage
       const token = pageId ? createRemoteOperationToken(pageId) : null
-      if (!target || !pageId || !token) {
+      // A stop after unmount still clears the host page; only results need a current pane.
+      if (!target || !pageId || (!token && method === 'browser.findInPage')) {
         return null
       }
       try {
@@ -117,11 +136,11 @@ export function useRemoteBrowserPageFind({
           { worktree: runtimeWorktree, page: pageId, ...params },
           { timeoutMs: 10_000, suppressFeatureInteraction: true }
         )
-        return method === 'browser.findInPage' && isCurrentRemoteOperationToken(token)
+        return token && method === 'browser.findInPage' && isCurrentRemoteOperationToken(token)
           ? result
           : null
       } catch (error) {
-        if (method === 'browser.findInPage' && isCurrentRemoteOperationToken(token)) {
+        if (token && method === 'browser.findInPage' && isCurrentRemoteOperationToken(token)) {
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote browser command failed.'
@@ -132,6 +151,11 @@ export function useRemoteBrowserPageFind({
     }
   )
   const [findTargetRef] = useState(() => ({ current: createRemoteBrowserFindTarget(send) }))
+  // Switching tabs unmounts the pane but keeps the host page, which would keep this search's highlights.
+  useEffect(() => {
+    const findTarget = findTargetRef.current
+    return () => findTarget.stopFindInPage('clearSelection')
+  }, [findTargetRef])
   // Stable, so the pane's chord listener is not rebound on every render.
   const openFind = useCallback(() => setFindOpen(true), [])
 
