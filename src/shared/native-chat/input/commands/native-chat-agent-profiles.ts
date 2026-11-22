@@ -123,6 +123,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   devin: {
     skillPrefix: '/',
     skillSourceOwner: 'devin'
+  },
+  // CodeBuddy reports skills only once a session starts, so resting chats rely on the scan.
+  codebuddy: {
+    skillPrefix: '/',
+    skillSourceOwner: 'codebuddy'
   }
 }
 
