@@ -38,13 +38,23 @@ export function rowFocusControl(
   return (edge === 'first' ? controls[0] : controls.at(-1)) ?? title
 }
 
+/** Tab or Shift+Tab, with no other modifier and not already handled. */
+export function plainTab(event: React.KeyboardEvent<HTMLElement>): boolean {
+  return (
+    event.key === 'Tab' &&
+    !event.defaultPrevented &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  )
+}
+
 /** The row Tab goes on to: from a row's last control the next row, and with Shift from its first the one
  *  before (drawn, then focused at the end Tab came in from), so moving by Tab reaches every row as in a
  *  plain list. Null leaves Tab to the browser. */
 export function rowTabTarget(
   event: React.KeyboardEvent<HTMLElement>,
-  items: readonly BotItem[],
-  disabled: boolean
+  items: readonly BotItem[]
 ): { uid: string; at: number; edge: BotItemRowEdge } | null {
   const row =
     event.target instanceof HTMLElement
@@ -54,7 +64,7 @@ export function rowTabTarget(
     return null
   }
   const at = Number(row.dataset.botItemIndex) + (event.shiftKey ? -1 : 1)
-  const controls = disabled ? [row] : rowTabStops(row)
+  const controls = rowTabStops(row)
   const item = items[at]
   if ((event.shiftKey ? controls[0] : controls.at(-1)) !== event.target || !item) {
     return null

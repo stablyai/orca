@@ -30,6 +30,7 @@ import {
 import {
   focusBotItemBackRow,
   rowFocusControl,
+  plainTab,
   rowTabTarget,
   type BotItemRowEdge
 } from './bot-item-row-tab-stops'
@@ -229,8 +230,8 @@ export function BotItemRowsWindow({
     }
   }, [carried, drifted, measure, rebase])
 
-  // Focus inside a row keeps it drawn; the last row focused stays the group's Tab stop. A window losing
-  // focus (Orca in the background) keeps both, so the row is there when Orca comes back.
+  // Focus inside a row keeps it drawn and makes it the group's Tab stop until focus moves elsewhere on the
+  // page. A window losing focus (Orca in the background) keeps both, so the row is there when Orca comes back.
   const [focused, setFocused] = useState<RowPick | null>(null)
   // Until a row is focused, the Tab stop is the group's first row, whichever that is now.
   const [stop, setStop] = useState<RowPick | null>(null)
@@ -335,15 +336,9 @@ export function BotItemRowsWindow({
   )
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (
-      event.key === 'Tab' &&
-      !all &&
-      !event.defaultPrevented &&
-      !event.altKey &&
-      !event.ctrlKey &&
-      !event.metaKey
-    ) {
-      const next = rowTabTarget(event, items, disabled)
+    if (!all && plainTab(event)) {
+      // With its controls off (host offline) the group is one Tab stop, as main skipped its rows.
+      const next = disabled ? null : rowTabTarget(event, items)
       if (next) {
         event.preventDefault()
         setTarget(next)
@@ -400,11 +395,15 @@ export function BotItemRowsWindow({
         className="-mb-0.5"
         onKeyDown={onKeyDown}
         onFocus={() => setFocusWithin(true)}
-        onBlur={(event) =>
-          setFocusWithin(
+        onBlur={(event) => {
+          const within =
             event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)
-          )
-        }
+          setFocusWithin(within)
+          // Focus moving elsewhere on the page: Tab back in enters at the first row, as in a plain list.
+          if (!within && event.relatedTarget !== null) {
+            setStop(null)
+          }
+        }}
       >
         {drawn.map((index, at) => {
           const item = items[index]!
@@ -461,7 +460,7 @@ export function BotItemRowsWindow({
       </div>
       {/* Shift+Tab from below the group lands here while focus is outside it: on to the last row. It
           takes back the section's gap it adds. */}
-      {all || count === 0 ? null : (
+      {all || count === 0 || disabled ? null : (
         <div
           className="-mt-0.5"
           tabIndex={focusWithin ? -1 : 0}
