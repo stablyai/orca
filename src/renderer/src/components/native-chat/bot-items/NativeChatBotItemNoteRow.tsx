@@ -19,7 +19,10 @@ import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_CHIP } from '../messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
@@ -141,7 +144,7 @@ function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="min-w-0 truncate">{link.name}</span>
+        <span className={NATIVE_CHAT_ROW_SHARE}>{link.name}</span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {link.name}
@@ -188,7 +191,7 @@ function LineWords({
         </button>
       ) : null}
       {line.tail || line.detail ? (
-        <span ref={detailRef} className={line.detail ? 'min-w-0 truncate' : 'shrink-0'}>
+        <span ref={detailRef} className={line.detail ? NATIVE_CHAT_ROW_SHARE : 'shrink-0'}>
           {line.tail}
           {line.detail ? <span className="text-chat-foreground">: {line.detail}</span> : null}
         </span>

@@ -1,7 +1,10 @@
 import type { ReactNode, Ref } from 'react'
 import type { AutomationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_NAME } from '../messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatAutomationMark } from './NativeChatAutomationMark'
 
 /** An opened row's section heading, and its muted lines. */
@@ -66,7 +69,9 @@ export function NativeChatAutomationRowFrame({
         <span className={NATIVE_CHAT_INLINE_NAME} title={name}>
           {name}
         </span>
-        {status ? <span className="min-w-0 truncate whitespace-pre">{` · ${status}`}</span> : null}
+        {status ? (
+          <span className={`${NATIVE_CHAT_ROW_SHARE} whitespace-pre`}>{` · ${status}`}</span>
+        ) : null}
       </span>
     </NativeChatEventRow>
   )

@@ -23,7 +23,10 @@ import {
 } from '../../../../shared/bots/bot-request-card-view'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_NAME } from './messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 
 const COPY = BOT_REQUEST_CARD_COPY
 const PIECES: Record<keyof typeof COPY, (values?: BotCardCopyValues) => string> = {
@@ -162,7 +165,7 @@ function KnownBotRequestCard({
         </span>
       )}
       {subject ? (
-        <span className="min-w-0 max-w-max grow basis-0 truncate" title={subject}>
+        <span className={NATIVE_CHAT_ROW_SHARE} title={subject}>
           · {subject}
         </span>
       ) : null}
