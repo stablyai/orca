@@ -180,6 +180,9 @@ export type AgentJournalQuestion = {
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
   freeTextInput?: AgentJournalFreeTextInput
+  /** The provider takes a reply that leaves this question unanswered. Absent from older hosts, whose
+   *  questions must all be answered. */
+  skippable?: true
 }
 
 export type {
