@@ -58,7 +58,12 @@ describe('a run steered into a turn another message opened', () => {
       ],
       submissions: [
         { clientMessageId: 'u', dispatchState: 'accepted', providerItemId: null },
-        { clientMessageId: 'run', dispatchState: 'accepted', providerItemId: null }
+        {
+          clientMessageId: 'run',
+          dispatchState: 'accepted',
+          providerItemId: null,
+          answeredInTurn: { turnItemId: 'T', via: 'steer' }
+        }
       ]
     })
     let emit: (event: unknown) => void = () => {}

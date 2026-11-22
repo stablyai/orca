@@ -68,13 +68,15 @@ export function structuredAgentSessionSendTurn(
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }
     case 'accepted':
       // Answered, yet no ended turn after it names it: it went into a turn another send opened.
-      if (planned?.kind === 'turn') {
-        return { kind: 'shared', ...steeredInto(journal, planned.turnItemId) }
+      // The provider's record of the turn it steered into; the planned scope is never proof of it.
+      if (submission.answeredInTurn?.via === 'steer') {
+        return { kind: 'shared', ...steeredInto(journal, submission.answeredInTurn.turnItemId) }
       }
-      return journal.items.some((item, index) => {
-        const turn = index > sent ? rootTurn(item) : null
-        return turn !== null && turn.state !== 'running'
-      })
+      return planned?.kind === 'turn' ||
+        journal.items.some((item, index) => {
+          const turn = index > sent ? rootTurn(item) : null
+          return turn !== null && turn.state !== 'running'
+        })
         ? { kind: 'shared' }
         : { kind: 'pending' }
     case 'unknown':
