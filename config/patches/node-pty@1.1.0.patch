@@ -2385,7 +2385,7 @@ diff --git a/src/native.d.ts b/src/native.d.ts
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
-@@ -1347,10 +1347,151 @@
+@@ -1347,10 +1347,183 @@
    const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
    if (group > 0) return Napi::Number::New(env, group);
    return env.Null();
@@ -2399,7 +2399,6 @@ diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 + */
 +
 +#include <uv.h>
-+#include <unordered_map>
 +#if defined(__linux__)
 +#include <sys/syscall.h>
 +#endif
@@ -2408,11 +2407,44 @@ diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 +  uv_poll_t poll;
 +  int fd = -1;
 +  uint32_t id = 0;
++  OrcaExitWatch* prev = nullptr;
++  OrcaExitWatch* next = nullptr;
 +  Napi::FunctionReference callback;
 +};
 +
-+static thread_local std::unordered_map<uint32_t, OrcaExitWatch*> orcaExitWatches;
++// An intrusive list, not std::unordered_map: its allocator needs a newer libstdc++ than Orca's Linux floor.
++static thread_local OrcaExitWatch* orcaExitWatches = nullptr;
 +static thread_local uint32_t orcaLastExitWatchId = 0;
++
++static OrcaExitWatch* OrcaFindExitWatch(uint32_t id) {
++  for (OrcaExitWatch* watch = orcaExitWatches; watch != nullptr; watch = watch->next) {
++    if (watch->id == id) {
++      return watch;
++    }
++  }
++  return nullptr;
++}
++
++static void OrcaLinkExitWatch(OrcaExitWatch* watch) {
++  watch->next = orcaExitWatches;
++  if (orcaExitWatches != nullptr) {
++    orcaExitWatches->prev = watch;
++  }
++  orcaExitWatches = watch;
++}
++
++static void OrcaUnlinkExitWatch(OrcaExitWatch* watch) {
++  if (watch->prev != nullptr) {
++    watch->prev->next = watch->next;
++  } else if (orcaExitWatches == watch) {
++    orcaExitWatches = watch->next;
++  }
++  if (watch->next != nullptr) {
++    watch->next->prev = watch->prev;
++  }
++  watch->prev = nullptr;
++  watch->next = nullptr;
++}
 +
 +static void OrcaExitWatchClosed(uv_handle_t* handle) {
 +  OrcaExitWatch* watch = static_cast<OrcaExitWatch*>(handle->data);
@@ -2421,7 +2453,7 @@ diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 +}
 +
 +static void OrcaStopExitWatch(OrcaExitWatch* watch) {
-+  orcaExitWatches.erase(watch->id);
++  OrcaUnlinkExitWatch(watch);
 +  watch->callback.Reset();
 +  uv_poll_stop(&watch->poll);
 +  uv_close(reinterpret_cast<uv_handle_t*>(&watch->poll), OrcaExitWatchClosed);
@@ -2506,9 +2538,9 @@ diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 +  }
 +  do {
 +    watch->id = ++orcaLastExitWatchId;
-+  } while (watch->id == 0 || orcaExitWatches.count(watch->id) > 0);
++  } while (watch->id == 0 || OrcaFindExitWatch(watch->id) != nullptr);
 +  watch->callback = Napi::Persistent(info[1].As<Napi::Function>());
-+  orcaExitWatches[watch->id] = watch;
++  OrcaLinkExitWatch(watch);
 +  // A watch never keeps the process alive.
 +  uv_unref(reinterpret_cast<uv_handle_t*>(&watch->poll));
 +  if (uv_poll_start(&watch->poll, UV_READABLE, OrcaExitWatchReady) != 0) {
@@ -2523,9 +2555,9 @@ diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 +  if (info.Length() != 1 || !info[0].IsNumber()) {
 +    throw Napi::TypeError::New(env, "Expected an exit watch id");
 +  }
-+  auto found = orcaExitWatches.find(info[0].As<Napi::Number>().Uint32Value());
-+  if (found != orcaExitWatches.end()) {
-+    OrcaStopExitWatch(found->second);
++  OrcaExitWatch* found = OrcaFindExitWatch(info[0].As<Napi::Number>().Uint32Value());
++  if (found != nullptr) {
++    OrcaStopExitWatch(found);
 +  }
 +  return env.Undefined();
 +}
