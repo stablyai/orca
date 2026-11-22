@@ -1,15 +1,16 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
-import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import {
+  PeerMailItem,
+  PeerMailRelayPayload
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
 import { HeldPeerConversations } from './held-peer-conversations'
+import { storePeerReply } from './peer-reply-store'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
-import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
-import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   dueRemoteResendsNow,
@@ -20,7 +21,6 @@ import {
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
-import { settlePeerQuestionsOut } from './peer-questions-out'
 import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 
@@ -28,17 +28,7 @@ import { settleRemovedPairedServer, settleRepairedServer } from './paired-server
 const PULL_WAIT_MS = 20_000
 const PULL_TIMEOUT_MS = PULL_WAIT_MS + 15_000
 
-const PulledPeerMail = z.object({
-  items: z.array(
-    z.object({
-      conversationId: z.string(),
-      sequence: z.number().int().positive(),
-      messageId: z.string(),
-      kind: z.string().optional(),
-      payload: z.string()
-    })
-  )
-})
+const PulledPeerMail = z.object({ items: z.array(PeerMailItem) })
 
 /** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
 export type PeerServerAnswerStatus = {
@@ -295,29 +285,7 @@ export class PeerMailRelay {
       )
       return undefined
     }
-    const handle = peerMailLocalRecipient(this.runtime, conversation)
-    // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
-    const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const { from, body, ...carried } = presentImportedPeerItem({
-      kind: 'peer_mail',
-      ...payload.data
-    })
-    settlePeerQuestionsOut(db, conversation.conversation_id, payload.data)
-    const stored = db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.data.fromAddress,
-      message: {
-        id: item.messageId,
-        from,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.data.subject,
-        body,
-        threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined,
-        ...carried
-      }
-    })
-    return stored.duplicate ? undefined : stored.message
+    return storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
   }
 }
 

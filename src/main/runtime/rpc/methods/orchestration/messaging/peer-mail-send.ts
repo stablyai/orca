@@ -14,6 +14,7 @@ import {
 import type { RpcContext } from '../../../core'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
+import { sendClientAsk } from './client-ask-send'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { uploadPeerMailFiles } from './peer-mail-files'
@@ -158,16 +159,30 @@ export async function sendPeerMail(args: {
 
 type SendInput = z.infer<typeof SendParams>
 
-/** `send --on` goes to the paired server; every other send, and every replay, runs `send`. */
+/** `send --on` goes to the paired server and `send --on-client` to a paired computer; every other
+ *  send, and every replay, runs `send`. */
 export function withPeerMailSend<R>(
   send: (params: SendInput, ctx: RpcContext) => Promise<R>
 ): (params: SendInput, ctx: RpcContext) => Promise<unknown> {
   return async (params, ctx) => {
-    const on = params.on
-    if (on === undefined || ctx.replayedMutationReceipt !== undefined) {
+    const { on, onClient } = params
+    if ((on === undefined && onClient === undefined) || ctx.replayedMutationReceipt !== undefined) {
       return await send(params, ctx)
     }
     const attested = ctx.orchestrationCompatibilityCallerAuthority
+    if (onClient !== undefined) {
+      return sendClientAsk({
+        params: { ...params, onClient },
+        runtime: ctx.runtime,
+        orchestrationCaller: ctx.orchestrationCaller,
+        attestedCaller: attested?.terminalHandle === params.from ? attested : undefined,
+        orchestrationMutation: ctx.orchestrationMutation,
+        recordMutationReceipt: ctx.recordMutationReceipt
+      })
+    }
+    if (on === undefined) {
+      return await send(params, ctx)
+    }
     return await sendPeerMail({
       params: { ...params, on },
       runtime: ctx.runtime,

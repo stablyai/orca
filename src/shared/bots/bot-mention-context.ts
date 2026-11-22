@@ -16,13 +16,20 @@ export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
 // The name is escaped as markdown link text is, so no name can close the token early or carry an
 // id of its own: the id after it is always the one picked.
 const MENTION =
-  /\[Bot: ((?:\\[\\[\]]|[^\\[\]\n])+)\]\((?:bot:([\w-]+)(?:@([\w-]+))?|bot-chat:([\w-]+)\/([\w-]+))\)/g
+  /\[Bot: ((?:\\[\\[\]]|[^\\[\]\n])+)\]\((?:bot:([\w-]+)(?:@(client:)?([\w-]+))?|bot-chat:([\w-]+)\/([\w-]+))\)/g
 
 const escapeName = (name: string): string => name.replace(/[\\[\]]/g, '\\$&')
 
 /** A picked bot as its token holds it; `chatId` when one of its chats was picked, `server` (a paired
- *  server's id) when it runs on another computer. */
-export type BotMention = { name: string; id: string; chatId?: string; server?: string }
+ *  server's id) when it runs on another computer, `client` (a paired computer's installation id) when
+ *  it runs on a computer paired to this one, written `(bot:<id>@client:<installation id>)`. */
+export type BotMention = {
+  name: string
+  id: string
+  chatId?: string
+  server?: string
+  client?: string
+}
 
 /** What picking a bot, or one of its chats, puts in a workspace chat's draft; `server` names the
  *  paired server a bot on another computer runs on (its chats aren't offered). */
@@ -37,6 +44,15 @@ export function botMentionToken(
   return `[Bot: ${escapeName(bot.name)}](${target})`
 }
 
+/** A bot on a computer paired to the chat's host, named by that computer's installation id; an
+ *  older Orca matches no `@client:` token, so it stays plain link text there. */
+export function botClientMentionToken(
+  bot: Pick<Bot, 'id' | 'name'>,
+  clientInstallationId: string
+): string {
+  return `[Bot: ${escapeName(bot.name)}](${BOT_ADDRESS_PREFIX}${bot.id}@client:${clientInstallationId})`
+}
+
 /** Each bot token in `text`: the name it shows, the id it is bound to, and its chat if one. */
 export function botMentionTokens(text: string): BotMention[] {
   return splitBotMentions(text).filter((part) => typeof part !== 'string')
@@ -48,11 +64,14 @@ export function botMentionsAt(text: string): (BotMention & { start: number; end:
     const name = found[1].replace(/\\(.)/g, '$1')
     const at = { start: found.index, end: found.index + found[0].length }
     if (!found[2]) {
-      return { name, id: found[4], chatId: found[5], ...at }
+      return { name, id: found[5], chatId: found[6], ...at }
+    }
+    if (!found[4]) {
+      return { name, id: found[2], ...at }
     }
     return found[3]
-      ? { name, id: found[2], server: found[3], ...at }
-      : { name, id: found[2], ...at }
+      ? { name, id: found[2], client: found[4], ...at }
+      : { name, id: found[2], server: found[4], ...at }
   })
 }
 
@@ -95,7 +114,7 @@ export function mentionedBots<B extends Pick<Bot, 'id' | 'paused'>>(
   text: string,
   bots: readonly B[]
 ): { bot: B; chatId: string | null }[] {
-  const local = botMentionTokens(text).filter((mention) => !mention.server)
+  const local = botMentionTokens(text).filter((mention) => !mention.server && !mention.client)
   if (local.length === 0 || bots.length === 0) {
     return []
   }

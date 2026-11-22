@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  botClientMentionToken,
   botMentionContext,
   botMentionToken,
   mentionedBots,
@@ -110,4 +111,15 @@ it("names a paired server's bot by its server, sends it there with --on, and nev
   ).toBe(
     `<orca_context>Perf bot is the user's Orca bot on their computer "m4 air". To ask it, run \`orca orchestration send --on 'm4 air' --to "bot:Perf bot" --type question|handoff --subject … --body …\`; don't message it unless asked.</orca_context>`
   )
+})
+
+it("names a paired computer's bot by its installation, and never reads it as this host's or a server's", () => {
+  const token = botClientMentionToken({ id: 'perf-id', name: 'Perf bot' }, 'install-a')
+  expect(token).toBe('[Bot: Perf bot](bot:perf-id@client:install-a)')
+  expect(splitBotMentions(`ask ${token}`)).toEqual([
+    'ask ',
+    { name: 'Perf bot', id: 'perf-id', client: 'install-a' }
+  ])
+  expect(mentionedBots(token, [PERF])).toEqual([])
+  expect(mentionedServerBots(token)).toEqual([])
 })

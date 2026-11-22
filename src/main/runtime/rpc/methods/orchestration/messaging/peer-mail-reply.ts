@@ -16,6 +16,10 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { isClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import type { z } from 'zod'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -83,6 +87,32 @@ export async function replyOverPeerMail(args: {
       'request_mismatch',
       `${original.id} does not say who sent it. No reply was sent.`,
       NOTHING_SENT
+    )
+  }
+  const remoteParty = route.remote_party
+  if (isClientEnvironment(environmentId)) {
+    // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
+    runLifecycleWriteTransaction(db.db, 'client_reply', () => {
+      queueClientItem(db, {
+        conversationId: conversation.conversation_id,
+        messageId: id,
+        kind: 'client_reply',
+        payload: {
+          senderLabel,
+          to: remoteParty,
+          subject,
+          body: params.body,
+          threadId,
+          sender: peerMailSender(runtime, replier)
+        } satisfies z.infer<typeof ClientReplyPayload>
+      })
+      db.markAsRead([original.id], { kind: 'reply' })
+    })
+    return recordReceiptBeforeNudge(
+      args.recordMutationReceipt,
+      { message: { id, subject }, to: original.from_handle },
+      () => notifyPeerMailQueued(db.db),
+      { kind: 'messages', targets: [] }
     )
   }
   const server = await requirePeerMailServer(runtime, environmentId)
