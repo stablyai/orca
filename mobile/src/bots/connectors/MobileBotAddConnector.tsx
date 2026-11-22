@@ -21,6 +21,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { AppLogo } from './MobileBotComposio'
+import { useComposioCatalog } from './use-composio-catalog'
 
 type Category = 'coding' | 'chat' | 'docs' | 'mail'
 
@@ -34,6 +37,9 @@ export type AddConnectorOption = {
   add?: () => void
   manage: () => void
 }
+
+/** Popular apps the desktop offers through Composio before the full catalog. */
+const COMPOSIO_SHOWN = 6
 
 const CATEGORY: Record<AddConnectorOption['id'], Category | null> = {
   github: 'coding',
@@ -49,11 +55,20 @@ export function MobileBotAddConnector(props: {
   disabled: boolean
   banner: ReactNode
   onBack: () => void
+  composio: {
+    curated: readonly { slug: string; name: string; line: string }[]
+    /** Apps the bot is signed in to. */
+    active: readonly string[]
+    /** The host has a key, so Composio's whole catalog can be searched. */
+    catalog: { client: RpcClient | null; botId: string } | null
+    onPick: (app: { slug: string; name: string }) => void
+  }
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Category | 'mine' | null>(null)
+  const [browsing, setBrowsing] = useState(false)
   useBackClaim(() => {
     props.onBack()
     return true
@@ -100,6 +115,23 @@ export function MobileBotAddConnector(props: {
       (needle === '' ||
         `${copy[option.id].name} ${copy[option.id].line}`.toLocaleLowerCase().includes(needle))
   )
+  const { composio } = props
+  const added = (slug: string) => composio.active.includes(slug)
+  // Browsing or searching with a key reads Composio's whole catalog, as the desktop's does.
+  const fromCatalog = composio.catalog !== null && (browsing || needle !== '') && filter === null
+  const catalog = useComposioCatalog(
+    composio.catalog?.client ?? null,
+    composio.catalog?.botId ?? '',
+    fromCatalog ? query.trim() : null
+  )
+  const apps: readonly { slug: string; name: string }[] = fromCatalog
+    ? catalog.apps
+    : composio.curated.filter(
+        (app) =>
+          (filter === null || (filter === 'mine' && added(app.slug))) &&
+          (needle === '' || `${app.name} ${app.line}`.toLocaleLowerCase().includes(needle))
+      )
+  const appsShown = fromCatalog || browsing || needle !== '' ? apps : apps.slice(0, COMPOSIO_SHOWN)
   const categories = (['coding', 'chat', 'docs', 'mail'] as const).filter((category) =>
     listed.some((option) => CATEGORY[option.id] === category)
   )
@@ -140,50 +172,100 @@ export function MobileBotAddConnector(props: {
           : null}
         {categories.map((category) => chip(category, categoryLabel[category]))}
       </ScrollView>
-      {shown.length === 0 ? (
+      {shown.length === 0 && apps.length === 0 && !catalog.loading ? (
         <MobileNoMatchState
           message={t('bots.apps.noMatch', 'No app matches “{{query}}”.', { query: query.trim() })}
           onClear={() => setQuery('')}
         />
       ) : (
         <View>
-          <SectionHeader title={t('bots.apps.connectors', 'Connectors')} />
-          <ListGroup separatorInset={LIST_LEADING_INSET}>
-            {shown.map((option) => {
-              const { name, line, icon } = copy[option.id]
-              const action = option.added
-                ? option.addAnother
-                  ? {
-                      label:
-                        option.id === 'github'
-                          ? t('bots.connectors.addOrg', 'Add org')
-                          : t('bots.connectors.addWorkspace', 'Add workspace'),
-                      onPress: option.addAnother
-                    }
-                  : {
-                      label: t('bots.connectors.manage', 'Manage'),
-                      onPress: option.manage
-                    }
-                : { label: t('bots.apps.add', 'Add'), onPress: option.add! }
-              return (
-                <ListRow
-                  key={option.id}
-                  leading={icon}
-                  title={name}
-                  subtitle={line}
-                  onPress={option.added ? option.manage : option.add}
-                  disabled={props.disabled && !option.added}
-                  accessory={
-                    <MobileBotTextButton
-                      label={action.label}
-                      disabled={props.disabled}
-                      onPress={action.onPress}
+          {shown.length > 0 ? (
+            <>
+              <SectionHeader title={t('bots.apps.connectors', 'Connectors')} />
+              <ListGroup separatorInset={LIST_LEADING_INSET}>
+                {shown.map((option) => {
+                  const { name, line, icon } = copy[option.id]
+                  const action = option.added
+                    ? option.addAnother
+                      ? {
+                          label:
+                            option.id === 'github'
+                              ? t('bots.connectors.addOrg', 'Add org')
+                              : t('bots.connectors.addWorkspace', 'Add workspace'),
+                          onPress: option.addAnother
+                        }
+                      : {
+                          label: t('bots.connectors.manage', 'Manage'),
+                          onPress: option.manage
+                        }
+                    : { label: t('bots.apps.add', 'Add'), onPress: option.add! }
+                  return (
+                    <ListRow
+                      key={option.id}
+                      leading={icon}
+                      title={name}
+                      subtitle={line}
+                      onPress={option.added ? option.manage : option.add}
+                      disabled={props.disabled && !option.added}
+                      accessory={
+                        <MobileBotTextButton
+                          label={action.label}
+                          disabled={props.disabled}
+                          onPress={action.onPress}
+                        />
+                      }
                     />
-                  }
-                />
-              )
-            })}
-          </ListGroup>
+                  )
+                })}
+              </ListGroup>
+            </>
+          ) : null}
+          {apps.length > 0 || fromCatalog ? (
+            <>
+              <SectionHeader title={t('bots.composio.group', 'More apps with Composio')} />
+              <ListGroup separatorInset={LIST_LEADING_INSET}>
+                {appsShown.map((app) => (
+                  <ListRow
+                    key={app.slug}
+                    leading={<AppLogo slug={app.slug} size={20} />}
+                    title={app.name}
+                    subtitle={t('bots.composio.viaComposio', 'via Composio')}
+                    disabled={props.disabled}
+                    onPress={() => composio.onPick(app)}
+                    accessory={
+                      <MobileBotTextButton
+                        label={
+                          added(app.slug)
+                            ? t('bots.connectors.manage', 'Manage')
+                            : t('bots.apps.add', 'Add')
+                        }
+                        disabled={props.disabled}
+                        onPress={() => composio.onPick(app)}
+                      />
+                    }
+                  />
+                ))}
+                {fromCatalog && catalog.loading ? (
+                  <ListRow title={t('bots.composio.loading', 'Reading Composio’s apps…')} />
+                ) : fromCatalog && catalog.failed ? (
+                  <ListRow
+                    title={t('bots.composio.unreadShort', 'Couldn’t load Composio’s apps.')}
+                  />
+                ) : catalog.more ? (
+                  <ListRow
+                    title={t('bots.composio.showMore', 'Show more')}
+                    onPress={catalog.more}
+                  />
+                ) : !fromCatalog && appsShown.length < apps.length ? (
+                  <ListRow
+                    title={t('bots.apps.composio.browseAll', 'Browse Composio apps')}
+                    navigates
+                    onPress={() => setBrowsing(true)}
+                  />
+                ) : null}
+              </ListGroup>
+            </>
+          ) : null}
         </View>
       )}
     </>

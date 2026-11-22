@@ -1,8 +1,8 @@
 // The waiting ask of several questions, one line at a time: the lines answered so far fold above as
 // "Question → answer" (a held one reopens on click), then the open line with ‹ 2 of 4 › and its quick
-// replies. A quick reply answers the line and the step moves on; Type your answer leads to the box,
-// whose Enter answers the same line.
-import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
+// replies. A quick reply answers the line and the step moves on; picks wait until the last line or Send
+// now. The comment box below is the one place to type: its Enter sends at once, naming the line.
+import { ArrowUp, Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -209,7 +209,7 @@ export function BotItemQuestionStep({
             )
           })}
           {typed ? (
-            // Your words for this line: back into the box to change them.
+            // Words held by an older build for this line: back into the box, whose Enter sends them.
             <button
               type="button"
               className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_PICKED)}
@@ -218,22 +218,28 @@ export function BotItemQuestionStep({
               <Pencil className="size-3 shrink-0" />
               <span className="min-w-0 [overflow-wrap:anywhere]">{held}</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              className={cn(
-                BOT_ITEM_CHIP,
-                CHIP_ACTION,
-                'flex items-center gap-1.5 text-muted-foreground'
-              )}
-              onClick={actions.type}
-            >
-              <Pencil className="size-3 shrink-0" />
-              {t('bots.items.ask.typeAnswer', 'Type your answer')}
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
+      {steps.heldCount > 0 ? (
+        // Picks wait for the last line so the agent wakes once; this sends them sooner.
+        <div className="mt-3 flex items-center gap-2 text-[13px] leading-[19px] text-muted-foreground">
+          <span>
+            {t('bots.items.ask.heldCount', '{{count}} answers not sent yet', {
+              count: steps.heldCount,
+              defaultValue_one: '{{count}} answer not sent yet'
+            })}
+          </span>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={steps.sendHeld}
+          >
+            <ArrowUp className="size-3.5 shrink-0" />
+            {t('bots.items.ask.sendHeld', 'Send now')}
+          </button>
+        </div>
+      ) : null}
     </>
   )
 }

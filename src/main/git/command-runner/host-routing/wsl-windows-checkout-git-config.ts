@@ -183,7 +183,3 @@ export function withWslWindowsCheckoutGitConfig(
   )
   return config.length > 0 ? [...config, ...args] : args
 }
-
-export function resetWslWindowsCheckoutGitConfigForTests(): void {
-  states.clear()
-}

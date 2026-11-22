@@ -468,8 +468,16 @@ final class Provider {
             let inSpaces = WindowSpaces.windowsInAnySpace(unlisted) ?? Set(unlisted)
             // Why: kAXWindowsAttribute leaves out windows on other Spaces; skip the lookup when the app stopped answering.
             if status != .cannotComplete {
+                // Why: the app still returns its main and focused window from another Space, which the remote-token
+                // scan misses until something has read that window once.
+                for attribute in [kAXMainWindowAttribute, kAXFocusedWindowAttribute] where !inSpaces.isSubset(of: elements.keys) {
+                    if let window = copyElement(appElement, attribute), let id = windowNumber(window), inSpaces.contains(id) {
+                        elements[id] = window
+                    }
+                }
                 let live = Set(all.map(\.windowId))
-                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: inSpaces, live: live)) { listed, _ in listed }
+                let wanted = inSpaces.subtracting(elements.keys)
+                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: wanted, live: live)) { listed, _ in listed }
             }
             unreadable = inSpaces.subtracting(elements.keys)
         }

@@ -234,10 +234,3 @@ export async function retryPendingHostCredentialCleanups(
     storageUnreadable: remaining.storageUnreadable
   }
 }
-
-export function resetHostCredentialCleanupForTests(): void {
-  inflightDeletes.clear()
-  pendingListeners.clear()
-  unrecordedPendingIds.clear()
-  pendingMutation = Promise.resolve()
-}
