@@ -1,6 +1,7 @@
 import type { ReactNode, Ref } from 'react'
 import type { AutomationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
+import { NATIVE_CHAT_INLINE_NAME } from '../messages/events/native-chat-inline-chip'
 import { NativeChatAutomationMark } from './NativeChatAutomationMark'
 
 /** An opened row's section heading, and its muted lines. */
@@ -62,10 +63,7 @@ export function NativeChatAutomationRowFrame({
           {lead}
           {leadIsVerb ? ' ' : ' · '}
         </span>
-        <span
-          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
-          title={name}
-        >
+        <span className={NATIVE_CHAT_INLINE_NAME} title={name}>
           {name}
         </span>
         {status ? <span className="min-w-0 truncate whitespace-pre">{` · ${status}`}</span> : null}

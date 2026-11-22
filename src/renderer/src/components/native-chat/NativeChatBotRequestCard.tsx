@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/bots/bot-request-card-view'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import { NATIVE_CHAT_INLINE_NAME } from './messages/events/native-chat-inline-chip'
 
 const COPY = BOT_REQUEST_CARD_COPY
 const PIECES: Record<keyof typeof COPY, (values?: BotCardCopyValues) => string> = {
@@ -103,9 +104,6 @@ export function NativeChatBotRequestCard({
   return <KnownBotRequestCard bot={bot} card={card} cardId={cardId} timestamp={timestamp} />
 }
 
-/** The name, cut at a chip's width; the subject after it gives way first. */
-const NAME = 'min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground'
-
 function KnownBotRequestCard({
   bot,
   card,
@@ -152,14 +150,14 @@ function KnownBotRequestCard({
           onClick={openChat}
           title={bot.name}
           className={cn(
-            NAME,
+            NATIVE_CHAT_INLINE_NAME,
             'rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
           )}
         >
           {bot.name}
         </button>
       ) : (
-        <span className={NAME} title={bot.name}>
+        <span className={NATIVE_CHAT_INLINE_NAME} title={bot.name}>
           {bot.name}
         </span>
       )}
