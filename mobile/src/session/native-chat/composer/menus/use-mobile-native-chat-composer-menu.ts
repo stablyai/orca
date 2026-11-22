@@ -187,7 +187,7 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedSkills?.()
     }
   }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
-  const mentionQuery = autocomplete.mode === 'mention' && !roomMentions ? autocomplete.query : null
+  const mentionQuery = mention && !roomMentions ? botMenu.fileQuery(mention) : null
   useEffect(() => {
     if (mentionQuery !== null) {
       onNeedFiles?.(mentionQuery)

@@ -46,9 +46,9 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
   /** The `@` list: a bot's chats alone while they show, else the bots above the files. */
   const listed = useCallback(
     (mention: Mention, filePaths: readonly string[]): ComposerMenuRow[] => {
-      const files = filePaths
-        .slice(0, MENU_ROWS_PER_GROUP)
-        .map((path) => ({ kind: 'file' as const, id: `file:${path}`, path }))
+      const files = (
+        searchedFiles(bots, drill, mention) === null ? [] : filePaths.slice(0, MENU_ROWS_PER_GROUP)
+      ).map((path) => ({ kind: 'file' as const, id: `file:${path}`, path }))
       if (!bots) {
         return files
       }
@@ -120,7 +120,24 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
     }
   }
 
-  return { nameMatches, listed, openChats, pick, follow }
+  return {
+    nameMatches,
+    listed,
+    fileQuery: (mention: Mention) => searchedFiles(bots, drill, mention),
+    openChats,
+    pick,
+    follow
+  }
+}
+
+/** What files `@` searches for: none while a bot's chats show, or for a spaced query, which names
+ *  a bot (file names never hold a space). */
+function searchedFiles(
+  bots: MentionBots | undefined,
+  drill: Drill | null,
+  mention: Mention
+): string | null {
+  return (bots && openBot(bots, drill, mention)) || /\s/.test(mention.query) ? null : mention.query
 }
 
 function openBot(bots: MentionBots, drill: Drill | null, mention: Mention): MentionBot | undefined {

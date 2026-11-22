@@ -109,7 +109,8 @@ export function MobileNativeChatComposer({
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
-  const mentionBots = useMobileNativeChatMentionBots(!roomMentions)
+  // Only a structured chat's sends reach the host's mention context, as on the desktop.
+  const mentionBots = useMobileNativeChatMentionBots(!roomMentions && structured !== null)
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
   const orca = useMobileNativeChatOrcaCommands({
     structured,

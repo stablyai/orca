@@ -47,7 +47,7 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   const identity = useContext(MobileNativeChatBotIdentityContext)
   const listsBots = useRouteCapability(BOTS_MOBILE_RUNTIME_CAPABILITY) && enabled && host !== null
   const chatPicks = useRouteCapability(BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY)
-  const entry = useHostBotsEntry(listsBots ? (host?.hostKey ?? null) : null)
+  const listing = useHostBotsEntry(listsBots ? (host?.hostKey ?? null) : null)?.bots ?? null
   const [reads, setReads] = useState<ReadonlyMap<string, MentionBotChats>>(new Map())
   const latest = useRef(new Map<string, number>())
   const client = host?.client ?? null
@@ -56,10 +56,10 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   const callerSessionId = identity?.sessionId
 
   const bots = useMemo(() => {
-    if (!entry) {
+    if (!listing) {
       return NO_BOTS
     }
-    const listed = entry.bots.map((bot): MentionBot => ({
+    const listed = listing.map((bot): MentionBot => ({
       id: bot.id,
       name: bot.name,
       avatar: mobileBotAvatarSource(bot),
@@ -69,10 +69,10 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
     // The chat's own bot leads, for its other chats, only where chats can be picked.
     const own = listed.filter((bot) => bot.own && chatPicks)
     return [...own, ...listed.filter((bot) => !bot.own)]
-  }, [entry, selfId, chatPicks])
+  }, [listing, selfId, chatPicks])
 
   // `@` lists what the shared store holds; a chat opened before any screen read the host's bots reads them once.
-  const listed = entry !== null
+  const listed = listing !== null
   useEffect(() => {
     if (listsBots && !listed && client && hostKey) {
       void readHostBots(client, hostKey)
@@ -92,7 +92,10 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
           setReads((current) => new Map(current).set(botId, read))
         }
       }
-      settle({ status: 'loading' })
+      // Rows already read stay while they are read again, so the list never blanks.
+      if (reads.get(botId)?.status !== 'ready') {
+        settle({ status: 'loading' })
+      }
       void botChatsRead
         .request(client, { botId, ...(callerSessionId ? { callerSessionId } : {}) })
         .then((reply) => {
@@ -105,7 +108,7 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
         })
         .catch(() => settle({ status: 'error' }))
     },
-    [client, callerSessionId]
+    [client, callerSessionId, reads]
   )
 
   return useMemo(

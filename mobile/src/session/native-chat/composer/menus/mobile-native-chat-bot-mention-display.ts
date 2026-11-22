@@ -34,15 +34,16 @@ export function botMentionDisplay(source: string): BotMentionDisplay {
   return { text: text + source.slice(at), spans }
 }
 
-/** A field offset in the draft; one inside a token lands after it. */
-export function draftOffset(display: BotMentionDisplay, shown: number): number {
+/** A field offset in the draft; one inside a token lands after it, or before it for the start of a
+ *  selection, which so takes the whole token. */
+export function draftOffset(display: BotMentionDisplay, shown: number, before = false): number {
   let delta = 0
   for (const span of display.spans) {
     if (shown <= span.shownStart) {
       break
     }
     if (shown < span.shownEnd) {
-      return span.end
+      return before ? span.start : span.end
     }
     delta = span.end - span.shownEnd
   }
@@ -91,10 +92,7 @@ export function useBotMentionField(value: string) {
       end: shownOffset(display, pending.end)
     },
     onSelectionChange: (shown: Selection): void => {
-      selection.current = {
-        start: draftOffset(display, shown.start),
-        end: draftOffset(display, shown.end)
-      }
+      selection.current = draftSelection(display, shown)
       setCursor(selection.current.end)
       setPending(null)
     },
@@ -112,12 +110,12 @@ function draftAnchor(
   anchor: MobileDictationAnchor
 ): MobileDictationAnchor {
   return anchor.text === display.text
-    ? {
-        start: draftOffset(display, anchor.start),
-        end: draftOffset(display, anchor.end),
-        text: source
-      }
+    ? { ...draftSelection(display, anchor), text: source }
     : anchor
+}
+
+function draftSelection(display: BotMentionDisplay, { start, end }: Selection): Selection {
+  return { start: draftOffset(display, start, start !== end), end: draftOffset(display, end) }
 }
 
 /** Dictation's draft halves as the field shows them. */
