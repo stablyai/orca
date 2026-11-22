@@ -96,6 +96,8 @@
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
 1 src/main/bots/bot-access-request-watch.ts
+1 src/main/bots/bot-group-store-tables.ts # indexRemoteAsks at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
+1 src/main/bots/bot-group-store.ts # createBotGroupTables at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
 1 src/main/bots/bot-items-link-join.ts
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
