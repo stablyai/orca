@@ -24,7 +24,6 @@ function terminalOnlyWorktrees(count: number): WorktreeMemory[] {
 
 describe('terminal-only Resource Manager samples pay nothing for chats', () => {
   it.each([300, 3_000])('skips the shared-agent pass with no agents (%i workspaces)', (count) => {
-    const isListed = vi.fn(() => true)
     let visited = 0
     const worktrees = terminalOnlyWorktrees(count).map((worktree) =>
       Object.defineProperty(worktree, 'chats', {
@@ -40,9 +39,8 @@ describe('terminal-only Resource Manager samples pay nothing for chats', () => {
       agentProcesses: { cpu: 0, memory: 0 }
     } as unknown as MemorySnapshot
 
-    expect(sharedAgentProcessUsage(snapshot, isListed)).toBeNull()
+    expect(sharedAgentProcessUsage(snapshot)).toBeNull()
     expect(visited).toBe(0)
-    expect(isListed).not.toHaveBeenCalled()
   })
 
   it('never parses a paired reply that arrives after the view closed', async () => {

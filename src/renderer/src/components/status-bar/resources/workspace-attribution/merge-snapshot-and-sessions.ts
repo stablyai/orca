@@ -54,13 +54,15 @@ function chatPartOf(wt: WorktreeMemory): WorktreeMemory {
     sessions: []
   }
 }
-/** A workspace sample's terminals alone, for when its chats are not shown in its row. */
+/** A workspace sample's terminals alone, for when its chats get their own row. */
 function terminalPartOf(wt: WorktreeMemory): WorktreeMemory {
   const { privateMemory: _privateMemory, chats: _chats, ...rest } = wt
   return {
     ...rest,
     cpu: wt.sessions.reduce((sum, session) => sum + session.cpu, 0),
-    memory: wt.sessions.reduce((sum, session) => sum + session.memory, 0)
+    memory: wt.sessions.reduce((sum, session) => sum + session.memory, 0),
+    // The sampled history includes the chats, so it would not match this row.
+    history: []
   }
 }
 const LOCAL_SAMPLE = 'local'
@@ -142,15 +144,14 @@ export function mergeSnapshotAndSessions(
       terminalSamples?.push(wt)
     }
     const placement = localSamplePlacement(ctx, wt, false)
+    // Under a paired-stamped id, this machine's chats get their own host-qualified row.
+    const chatsApart =
+      Boolean(wt.chats?.length) && (!placement || stampedRuntimeHostId(ctx, wt.worktreeId) !== null)
     if (placement) {
       shownLocally.add(placement.worktreeId)
-      // Chats under a paired-stamped id stay shared, with or without terminals beside them.
-      ingestSampledWorktree(
-        wt.chats?.length && stampedRuntimeHostId(ctx, wt.worktreeId) ? terminalPartOf(wt) : wt,
-        placement
-      )
-    } else if (wt.chats?.length) {
-      // Its terminals follow a paired repo host, but its chats run here.
+      ingestSampledWorktree(chatsApart ? terminalPartOf(wt) : wt, placement)
+    }
+    if (chatsApart) {
       const chats = chatPartOf(wt)
       const chatPlacement = localSamplePlacement(ctx, chats, true)
       if (chatPlacement) {

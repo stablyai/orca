@@ -1,5 +1,8 @@
 import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
-import { canonicalExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  canonicalExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../../shared/execution-host/execution-host'
 import type {
   MergeContext,
   RuntimeHostResourceSample,
@@ -37,8 +40,8 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
 
 /**
  * Null for a workspace a paired machine hosts, so its load is never attributed here. Terminals follow
- * the workspace's host, as before. Chats run here, so only a record stamped with a paired host drops them:
- * a row under that id would carry the paired checkout's actions.
+ * the workspace's host, as before. Chats always run here: under an id whose record is stamped with a
+ * paired host they get a host-qualified row, so they never take that checkout's workspace actions.
  */
 export function localSamplePlacement(
   ctx: MergeContext,
@@ -48,7 +51,17 @@ export function localSamplePlacement(
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-  if (chatOnly ? stampedRuntimeHostId(ctx, wt.worktreeId) : runtimeHostId) {
+  if (chatOnly && stampedRuntimeHostId(ctx, wt.worktreeId)) {
+    return {
+      worktreeId: `${LOCAL_EXECUTION_HOST_ID}|${wt.worktreeId}`,
+      worktreeName: wt.worktreeName,
+      repoId,
+      repoName: ctx.repoDisplayNameById.get(repoId) || wt.repoName,
+      isRemote: false,
+      unplaced: true
+    }
+  }
+  if (!chatOnly && runtimeHostId) {
     return null
   }
   return {

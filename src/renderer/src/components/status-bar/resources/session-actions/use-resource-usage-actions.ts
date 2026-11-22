@@ -29,6 +29,7 @@ import {
 } from '../workspace-attribution/resource-session-bindings'
 import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
 import { focusResourceManagerTrigger } from '../popover/resource-usage-status-trigger'
+import { selectFrontTab } from '../../../../store/slices/tabs/active-tab-selection'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
@@ -153,8 +154,7 @@ export function useResourceUsageActions({
         }
         // Reselecting an already-shown room or chat moves no focus; its composer takes it. A failed
         // open leaves no chat in front, so the trigger takes focus back.
-        const state = useAppStore.getState()
-        const tab = state.activeWorktreeId ? state.getActiveTab(state.activeWorktreeId) : null
+        const tab = selectFrontTab(useAppStore.getState())
         if (tab && (tab.contentType === 'room' || tab.contentType === 'agent-session')) {
           requestNativeChatComposerFocus(tab.id)
         } else {

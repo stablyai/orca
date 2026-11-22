@@ -203,7 +203,7 @@ describe('folder Resource Manager rows', () => {
     ])
   })
 
-  it('never gives a chat a row under a same-id record stamped with a paired machine, with or without terminals', () => {
+  it("shows this machine's chats under a same-id record stamped with a paired machine in a host-qualified row", () => {
     const chat = { agentSessionId: 'chat-6', agent: 'claude', name: null, cpu: 1, memory: 128 }
     const worktree: Worktree = {
       ...workspace,
@@ -226,11 +226,19 @@ describe('folder Resource Manager rows', () => {
         [],
         context({ worktreeById: new Map([[worktree.id, worktree]]) })
       ).flatMap((repo) => repo.worktrees)
+    const chatRow = expect.objectContaining({
+      worktreeId: 'local|repo-1::/shared',
+      memory: 128,
+      chats: [chat],
+      unplaced: true
+    })
 
-    const [withTerminal] = merge(sample)
-    expect(withTerminal).toMatchObject({ worktreeId: 'repo-1::/shared', cpu: 2, memory: 2048 })
-    expect(withTerminal.chats).toBeUndefined()
-    expect(merge({ ...sample, sessions: [] })).toEqual([])
+    expect(merge(sample)).toEqual([
+      expect.objectContaining({ worktreeId: 'repo-1::/shared', memory: 2048, history: [] }),
+      chatRow
+    ])
+    expect(merge(sample)[0].chats).toBeUndefined()
+    expect(merge({ ...sample, sessions: [], cpu: 1, memory: 128 })).toEqual([chatRow])
   })
 
   it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {
