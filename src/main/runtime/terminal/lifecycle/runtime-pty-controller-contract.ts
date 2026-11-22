@@ -181,8 +181,8 @@ export type RuntimePtyController = {
   resetInputModes?(ptyId: string): Promise<void>
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
-  /** Asks the foreground program to redraw itself, sending it no input. */
-  requestRepaint?(ptyId: string): void
+  /** Asks the foreground program to redraw itself, sending it no input; resolves whether its host was asked. */
+  requestRepaint?(ptyId: string): Promise<boolean>
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null

@@ -73,3 +73,28 @@ it('asks a reattached idle agent to repaint once, then delivers the mail it held
   expect(requestRepaint).toHaveBeenCalledTimes(1)
   db.close()
 })
+
+it('asks again on the next recheck when no host was asked, then delivers on the paint', async () => {
+  const { db, runtime, write, requestRepaint } = await reattachedIdleClaude()
+  // A phone owned the grid (or the host could not be reached) at the first ask.
+  requestRepaint.mockResolvedValueOnce(false)
+  const run = createBoundRun(db, 'Reattached Run')
+  const message = insertDirectRunMessage(db, run.id, 'After restart')
+
+  runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+  expect(requestRepaint).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(requestRepaint).toHaveBeenCalledTimes(2)
+  expect(pointerCount(write)).toBe(0)
+
+  // The second ask reached the host: later rechecks ask nothing more.
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(requestRepaint).toHaveBeenCalledTimes(2)
+
+  runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER, 2)
+  await runtime.serializeMainTerminalBuffer(PTY_ID)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(pointerCount(write)).toBe(1)
+  expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+  db.close()
+})
