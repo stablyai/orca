@@ -34,7 +34,7 @@ export async function scanCodexLeaseProcesses(
   watcherPid?: number
 ): Promise<CodexLeaseProcessScan | null> {
   if (platform === 'linux') {
-    return scanLinux(envName, serverPid)
+    return scanLinux(envName, serverPid, watcherPid)
   }
   if (platform === 'darwin') {
     return scanDarwin(serverPid, watcherPid)
@@ -126,7 +126,8 @@ async function walkOwnLinuxProcesses(): Promise<Map<number, LinuxProcess> | null
 
 async function readLinuxTags(
   pids: readonly number[],
-  envName: string
+  envName: string,
+  gone: Set<number>
 ): Promise<Map<number, string | null | typeof UNREADABLE_TAG>> {
   const tags = new Map<number, string | null | typeof UNREADABLE_TAG>()
   for (let at = 0; at < pids.length; at += PROC_READ_BATCH) {
@@ -136,7 +137,9 @@ async function readLinuxTags(
           const environ = await readFile(`/proc/${pid}/environ`, 'utf-8')
           tags.set(pid, spawnTokenFromEnvironBlock(environ, envName))
         } catch (error) {
-          if (errnoCodeOrUnknown(error) !== 'ENOENT') {
+          if (errnoCodeOrUnknown(error) === 'ENOENT') {
+            gone.add(pid)
+          } else {
             tags.set(pid, UNREADABLE_TAG)
           }
         }
@@ -155,7 +158,8 @@ async function readLinuxTags(
  *  go to init, so nothing is proven and nothing is read. */
 async function scanLinux(
   envName: string,
-  serverPid: number
+  serverPid: number,
+  watcherPid: number | undefined
 ): Promise<CodexLeaseProcessScan | null> {
   const processes = await readOwnLinuxProcesses()
   if (!processes) {
@@ -172,8 +176,11 @@ async function scanLinux(
     return { tagged: () => [], unreadable: [], bounded: false }
   }
   const children = childrenByParent([...processes].map(([pid, { parent }]) => [pid, parent]))
+  // The launcher reports its watcher's pid; a command can share the launcher's name.
   const watchers = new Set(
-    (children.get(launcher) ?? []).filter((pid) => isLauncherName(processes.get(pid)?.name))
+    (children.get(launcher) ?? []).filter(
+      (pid) => pid === watcherPid && isLauncherName(processes.get(pid)?.name)
+    )
   )
   const roots = new Set(
     launcher === serverPid
@@ -181,7 +188,9 @@ async function scanLinux(
       : [serverPid]
   )
   const scope = descendants(children, launcher)
-  const tags = await readLinuxTags(scope, envName)
+  // A process that exited between the two reads leaves its children's ancestry stale.
+  const gone = new Set<number>()
+  const tags = await readLinuxTags(scope, envName, gone)
   const attached = new Set([...roots].flatMap((root) => [root, ...descendants(children, root)]))
   const owners = new Map<number, string | null | typeof UNREADABLE_TAG>()
   const ownerOf = (pid: number): string | null | typeof UNREADABLE_TAG => {
@@ -194,15 +203,16 @@ async function scanLinux(
     const owner =
       own !== null || roots.has(pid) || parent === null || !attached.has(parent)
         ? own
-        : ownerOf(parent)
+        : gone.has(parent)
+          ? UNREADABLE_TAG
+          : ownerOf(parent)
     owners.set(pid, owner)
     return owner
   }
   const entries: (readonly [number, string | null])[] = []
   const unreadable: number[] = []
   for (const pid of scope) {
-    // A process with the launcher's name but a lease tag is a chat's command, not the watcher.
-    if (watchers.has(pid) && (tags.get(pid) ?? null) === null) {
+    if ((watchers.has(pid) && (tags.get(pid) ?? null) === null) || gone.has(pid)) {
       continue
     }
     const owner = ownerOf(pid)

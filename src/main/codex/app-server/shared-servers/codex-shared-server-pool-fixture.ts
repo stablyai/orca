@@ -1,5 +1,8 @@
 import { expect } from 'vitest'
-import { CodexAppServerUnsupportedError } from '../codex-app-server-request-error'
+import {
+  CodexAppServerTimeoutError,
+  CodexAppServerUnsupportedError
+} from '../codex-app-server-request-error'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -76,6 +79,10 @@ export function fakeCodex(
           await new Promise<void>((resume) => held.push(resume))
         }
         server.requests.push({ method, ...(params ? { params } : {}) })
+        if (method === 'turn/start' && params?.timesOut === true) {
+          // Codex never answered; the transport gave up, and Codex may still run it.
+          throw new CodexAppServerTimeoutError('codex app-server turn/start exceeded 30000ms')
+        }
         if (method === 'turn/start' && params?.hang === true) {
           // A send Codex has not answered yet.
           return new Promise(() => {})

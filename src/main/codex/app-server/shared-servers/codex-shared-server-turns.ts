@@ -1,3 +1,4 @@
+import { CodexAppServerTimeoutError } from '../codex-app-server-request-error'
 import { codexFrameThreadId, codexTurnId } from './codex-shared-server-frames'
 
 const MAX_RECENT_COMPLETED_TURNS = 1_024
@@ -11,6 +12,9 @@ export class CodexSharedServerTurns {
    *  ends hold nothing. */
   private readonly waiters = new Set<() => void>()
   private readonly pendingStarts = new Map<string, Set<Promise<unknown>>>()
+  /** Threads whose turn/start timed out unanswered: Codex may still run it, so a Stop stays
+   *  unproven until that turn is seen starting or the server exits. */
+  private readonly unansweredStarts = new Set<string>()
 
   trackStart(threadId: string, request: Promise<unknown>): void {
     const pending = this.pendingStarts.get(threadId) ?? new Set()
@@ -23,10 +27,16 @@ export class CodexSharedServerTurns {
       }
       this.changed()
     }
-    request.then(settle, settle)
+    request.then(settle, (error: unknown) => {
+      if (error instanceof CodexAppServerTimeoutError) {
+        this.unansweredStarts.add(threadId)
+      }
+      settle()
+    })
   }
 
   noteStarted(threadId: string, turnId: string): void {
+    this.unansweredStarts.delete(threadId)
     if (!this.recentlyCompleted.has(turnId)) {
       this.running.set(threadId, turnId)
       this.changed()
@@ -51,7 +61,9 @@ export class CodexSharedServerTurns {
   }
 
   anyStartPending(threads: readonly string[]): boolean {
-    return threads.some((threadId) => this.pendingStarts.has(threadId))
+    return threads.some(
+      (threadId) => this.pendingStarts.has(threadId) || this.unansweredStarts.has(threadId)
+    )
   }
 
   /** true once `done()` holds, false at the deadline (none when null); re-checked whenever a turn,
@@ -86,6 +98,7 @@ export class CodexSharedServerTurns {
   endAll(): void {
     this.running.clear()
     this.pendingStarts.clear()
+    this.unansweredStarts.clear()
     this.changed()
   }
 

@@ -276,6 +276,29 @@ describe('shared Codex app-servers', () => {
     expect(connA.processTreeUnproven).toBe(false)
   })
 
+  it('never proves a Stop while a timed-out turn/start may still run, until that turn is seen', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    await expect(
+      connA.request('turn/start', { threadId: threadA, timesOut: true })
+    ).rejects.toThrow()
+    const firstClose = connA.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await expect(firstClose).resolves.toBe(false)
+    // Codex runs the late start after all; Stop interrupts it and then proves.
+    servers[0]!.handlers.onNotification?.('turn/started', {
+      threadId: threadA,
+      turn: { id: 'late' }
+    })
+    const retry = connA.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await expect(retry).resolves.toBe(true)
+    expect(servers[0]!.requests.some((r) => r.method === 'turn/interrupt')).toBe(true)
+  })
+
   it('keeps a chat whose turn ignores Stop on the server until a retry finds it alone, then stops that server', async () => {
     vi.useFakeTimers()
     const { servers, pool } = fakeCodex('ignored')
