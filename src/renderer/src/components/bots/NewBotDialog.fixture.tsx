@@ -10,7 +10,7 @@ import {
   newBotFixture,
   seedNewBotFixture,
   typeInto
-} from './new-bot-fixture-stage'
+} from './new-bot-stage-fixture'
 
 const dialog = () => (
   <div className="h-[720px] bg-background">

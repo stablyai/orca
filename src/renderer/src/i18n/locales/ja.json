@@ -25406,10 +25406,10 @@
         "addName": "名前を入力",
         "botsUnavailable": "ボットを利用できません",
         "computerOffline": "オフライン",
-        "findingAgents": "エージェントを検索中…",
+        "findingAgents": "Agent を検索中…",
         "identityTooLong": "長すぎます",
-        "noAgents": "エージェントなし",
-        "noAgentsAvailable": "エージェントがいません",
+        "noAgents": "Agent なし",
+        "noAgentsAvailable": "Agent がいません",
         "pictureLoading": "画像を読み込み中…",
         "updateOrca": "Orca を更新"
       }

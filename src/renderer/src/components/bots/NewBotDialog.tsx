@@ -195,20 +195,16 @@ export function NewBotDialog({
     }
     createInFlight.current = true
     setCreating(true)
-    let bot: Bot
+    let bot: Bot | null
     try {
       if (fromShare) {
         const { setup, intent } = agentSetup
-        const shared = await createNewBotFromShare(
+        bot = await createNewBotFromShare(
           fromShare,
           hostId,
           { name: trimmedName, setup, intent },
           picture
         )
-        if (!shared) {
-          return
-        }
-        bot = shared
       } else {
         const made = editedProposal(proposal, draft, trimmedName)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
@@ -232,11 +228,15 @@ export function NewBotDialog({
         bot = await picture.saveUpload(bot)
       }
     } catch (error) {
-      toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
-      return
-    } finally {
       createInFlight.current = false
       setCreating(false)
+      toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
+      return
+    }
+    createInFlight.current = false
+    setCreating(false)
+    if (!bot) {
+      return
     }
     // Closes once the bot exists, as a new workspace's composer does; its page opens next and shows
     // its agent starting.

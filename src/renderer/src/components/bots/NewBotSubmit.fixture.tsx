@@ -10,7 +10,7 @@ import {
   newBotFixture,
   seedNewBotFixture,
   typeInto
-} from './new-bot-fixture-stage'
+} from './new-bot-stage-fixture'
 
 const NAME_FIELD = 'input[aria-label="Name"]'
 
