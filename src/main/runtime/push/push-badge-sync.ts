@@ -1,14 +1,18 @@
 // Keeps the gateway's copy of this host's unread count current; the gateway sums every host's count into the phone's icon badge.
 import { randomUUID } from 'node:crypto'
 import type { PushGatewayClient } from './push-gateway-client'
-import type { PushDispatcherRegistry } from './push-dispatcher'
+import {
+  dropDeadPushRegistrations,
+  MAX_REGISTRATIONS_PER_SEND,
+  type PushDispatcherRegistry
+} from './push-dispatcher'
 
 // Coalesces a burst of record writes into one recount, under the gateway's per-host event quota.
 const BADGE_SETTLE_MS = 1_000
-const BADGE_RETRY_MS = 30_000
+const BADGE_RETRY_BASE_MS = 30_000
+const BADGE_RETRY_MAX_MS = 10 * 60_000
 // An older gateway refuses the badge kind; ask again later instead of on every write.
 const BADGE_REFUSED_PAUSE_MS = 60 * 60_000
-const MAX_REGISTRATIONS_PER_SEND = 20
 
 type PushBadgeSyncOptions = {
   client: Pick<PushGatewayClient, 'send'>
@@ -17,8 +21,6 @@ type PushBadgeSyncOptions = {
     countUnreadWorkspaces: () => number
     onWorkspaceRecordsWritten: (listener: () => void) => () => void
   }
-  /** Test seam: drives the settle and retry delays without real time. */
-  schedule?: (run: () => void, delayMs: number) => () => void
 }
 
 export class PushBadgeSync {
@@ -26,29 +28,21 @@ export class PushBadgeSync {
   private seq = 0
   /** The count the gateway holds for each registration. */
   private readonly accepted = new Map<string, number>()
-  private cancelTimer: (() => void) | null = null
+  private timer: { cancel: () => void; dueAt: number } | null = null
   private running = false
   private dirty = false
+  private retryDelayMs = BADGE_RETRY_BASE_MS
   private pausedUntil = 0
   private stopped = true
   private unsubscribe: (() => void) | null = null
   private readonly client: Pick<PushGatewayClient, 'send'>
   private readonly registry: PushDispatcherRegistry
   private readonly runtime: PushBadgeSyncOptions['runtime']
-  private readonly schedule: (run: () => void, delayMs: number) => () => void
 
   constructor(options: PushBadgeSyncOptions) {
     this.client = options.client
     this.registry = options.registry
     this.runtime = options.runtime
-    this.schedule =
-      options.schedule ??
-      ((run, delayMs) => {
-        // Why: a pending badge update must never hold the app open at quit.
-        const timer = setTimeout(run, delayMs)
-        timer.unref?.()
-        return () => clearTimeout(timer)
-      })
   }
 
   start(): void {
@@ -61,19 +55,31 @@ export class PushBadgeSync {
     this.stopped = true
     this.unsubscribe?.()
     this.unsubscribe = null
-    this.cancelTimer?.()
-    this.cancelTimer = null
+    this.timer?.cancel()
+    this.timer = null
+  }
+
+  /** A phone (re)registered: a badge push it missed while offline is gone, so send the count again. */
+  noteRegistered(registrationId: string): void {
+    this.accepted.delete(registrationId)
+    this.request()
   }
 
   /** The count or the set of registrations may have changed. */
   request(delayMs = BADGE_SETTLE_MS): void {
-    if (this.stopped || this.cancelTimer) {
+    const dueAt = Date.now() + delayMs
+    // A change preempts a pending retry backoff.
+    if (this.stopped || (this.timer && this.timer.dueAt <= dueAt)) {
       return
     }
-    this.cancelTimer = this.schedule(() => {
-      this.cancelTimer = null
+    this.timer?.cancel()
+    const timer = setTimeout(() => {
+      this.timer = null
       void this.flush()
     }, delayMs)
+    // Why: a pending badge update must never hold the app open at quit.
+    timer.unref?.()
+    this.timer = { cancel: () => clearTimeout(timer), dueAt }
   }
 
   private async flush(): Promise<void> {
@@ -95,7 +101,10 @@ export class PushBadgeSync {
       this.dirty = false
       this.request()
     } else if (retry) {
-      this.request(BADGE_RETRY_MS)
+      this.request(this.retryDelayMs)
+      this.retryDelayMs = Math.min(this.retryDelayMs * 2, BADGE_RETRY_MAX_MS)
+    } else {
+      this.retryDelayMs = BADGE_RETRY_BASE_MS
     }
   }
 
@@ -107,11 +116,12 @@ export class PushBadgeSync {
     }
     const live = this.registry
       .listDevices()
-      .flatMap(({ pushRegistration: registration }) =>
-        registration && registration.expiresAt > now ? [registration.registrationId] : []
+      .flatMap(({ deviceId, pushRegistration: registration }) =>
+        registration && registration.expiresAt > now ? [{ deviceId, registration }] : []
       )
+    const liveIds = new Set(live.map((target) => target.registration.registrationId))
     for (const registrationId of this.accepted.keys()) {
-      if (!live.includes(registrationId)) {
+      if (!liveIds.has(registrationId)) {
         this.accepted.delete(registrationId)
       }
     }
@@ -119,11 +129,14 @@ export class PushBadgeSync {
       return false
     }
     const count = this.runtime.countUnreadWorkspaces()
-    const stale = live.filter((registrationId) => this.accepted.get(registrationId) !== count)
+    const stale = live.filter(
+      (target) => this.accepted.get(target.registration.registrationId) !== count
+    )
     let retry = false
     for (let start = 0; start < stale.length; start += MAX_REGISTRATIONS_PER_SEND) {
+      const batch = stale.slice(start, start + MAX_REGISTRATIONS_PER_SEND)
       const result = await this.client.send({
-        registrationIds: stale.slice(start, start + MAX_REGISTRATIONS_PER_SEND),
+        registrationIds: batch.map((target) => target.registration.registrationId),
         notification: {
           kind: 'badge',
           badge: count,
@@ -152,6 +165,7 @@ export class PushBadgeSync {
           retry = true
         }
       }
+      dropDeadPushRegistrations(this.registry, batch, result.results)
     }
     return retry
   }

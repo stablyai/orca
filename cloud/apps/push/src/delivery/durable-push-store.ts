@@ -110,6 +110,24 @@ export class DurablePushStore {
     })
   }
 
+  /** Charges a badge update to the host's event quota; badge pushes bypass the queue. */
+  async admitBadge(host: string): Promise<boolean> {
+    const now = this.now()
+    return this.database.transaction(async (tx) => {
+      await tx.lockQuotaScope(`push-events:${host}`)
+      const [count] = await tx.query(
+        "SELECT COUNT(*) AS total FROM push_events WHERE host_fingerprint = ? AND kind = 'badge' AND created_at > ?",
+        [host, now - PUSH_LIMITS.eventQuotaWindowMs]
+      )
+      if (Number(count?.total ?? 0) >= PUSH_LIMITS.hostEventsPerWindow) return false
+      await tx.query(
+        "INSERT INTO push_events(event_id, host_fingerprint, kind, fingerprint, created_at, expires_at) VALUES (?, ?, 'badge', '', ?, ?)",
+        [randomUUID(), host, now, now]
+      )
+      return true
+    })
+  }
+
   async claim(canClaim?: () => boolean): Promise<QueuedPushDelivery | null> {
     return this.claims.transaction(async (tx) => {
       if (canClaim && !canClaim()) return null

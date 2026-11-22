@@ -83,7 +83,12 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
     registeredHostIds: [...value.registered],
     pendingUnregisterHostIds: [...value.pending]
   })
-  if (value.registered.size === 0) {
+  clearBadgeWithoutHosts(value)
+}
+
+// Hosts set the icon's count through their pushes; with none registered, nothing would lower it.
+function clearBadgeWithoutHosts(records: RegistrationRecords): void {
+  if (records.registered.size === 0) {
     clearAppIconBadge()
   }
 }
@@ -289,6 +294,10 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 
 // Provider token rollover invalidates delivery, so refresh every connected host immediately.
 export function startPushTokenSync(): () => void {
+  // Also covers a badge an app version without this clear left behind.
+  void readRecords()
+    .then(clearBadgeWithoutHosts)
+    .catch(() => undefined)
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
   const stopToken = addPushTokenListener((token) => {
     tokenPromise = Promise.resolve(token)

@@ -202,8 +202,9 @@ export class DesktopPushService {
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
     }
     void this.flushUnregisterOutbox()
-    // A new registration has no count at the gateway yet.
-    this.badgeSync.request()
+    if (!failure) {
+      this.badgeSync.noteRegistered(result.registrationId)
+    }
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }

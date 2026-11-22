@@ -24,6 +24,7 @@ import { DurablePushWorker } from './delivery/durable-push-worker.js'
 import type { PushConfig } from './config.js'
 import { PushDeviceRegistryStore } from './devices/device-registry-store.js'
 import { PushBadgeCountStore } from './devices/push-badge-count-store.js'
+import { sendHostBadge, sendRemovalBadge } from './delivery/push-badge-send.js'
 import { createFcmAccessTokenProvider } from './providers/fcm/fcm-access-token.js'
 import {
   createFcmFetchTransport,
@@ -102,6 +103,7 @@ export function createPushServer(
         status === 'sent' ? 'delivery_sent' : status === 'dead' ? 'delivery_dead' : 'delivery_error'
       )
   })
+  const badgeDeps = { devices, badges, deliveryStore, dispatcher, now }
   const worker = new DurablePushWorker(deliveryStore, dispatcher, {
     now,
     onRetry: () => observability.record('delivery_retry')
@@ -249,24 +251,12 @@ export function createPushServer(
     const hostFingerprint = context.get('hostFingerprint')
     const registrationId = context.req.param('registrationId')
     const device = (await devices.findOwned(hostFingerprint, [registrationId])).get(registrationId)
+    const share = device ? await badges.shareOf(registrationId) : 0
     const deleted = await devices.deleteOwned(hostFingerprint, registrationId)
     if (!deleted) return context.json({ error: 'not_found' }, 404)
     observability.record('device_deleted')
-    const carrier = device ? await badges.forget(device) : null
-    if (carrier) {
-      // The phone's icon still holds this host's share until another of its hosts sends the new total.
-      const queued = await deliveryStore.accept(carrier.hostFingerprint, carrier.registrationId, {
-        kind: 'badge',
-        badge: 0,
-        notificationEpoch: `removed:${registrationId}`,
-        notificationSeq: 0,
-        source: 'agent-task-complete',
-        agentState: null,
-        title: 'Orca',
-        body: '',
-        sound: false
-      })
-      if (queued === 'queued') worker.wake()
+    if (device) {
+      await sendRemovalBadge(badgeDeps, device, share).catch(() => undefined)
     }
     return context.body(null, 204)
   })
@@ -279,6 +269,13 @@ export function createPushServer(
     const body = PushSendRequestSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const hostFingerprint = context.get('hostFingerprint')
+    const { notification } = body.data
+    if (notification.kind === 'badge' && notification.badge !== undefined) {
+      const badge = { ...notification, badge: notification.badge }
+      return context.json({
+        results: await sendHostBadge(badgeDeps, hostFingerprint, body.data.registrationIds, badge)
+      })
+    }
     const owned = await devices.findOwned(hostFingerprint, body.data.registrationIds)
     const results: PushSendResult[] = []
     for (const registrationId of body.data.registrationIds) {
@@ -292,10 +289,6 @@ export function createPushServer(
         observability.record('send_dead')
         results.push({ registrationId, status: 'dead' })
         continue
-      }
-      // Recorded even when the push is throttled: the next push to this phone carries the total.
-      if (body.data.notification.badge !== undefined) {
-        await badges.record(device, body.data.notification.badge)
       }
       const reservation = await deliveryStore.accept(
         hostFingerprint,

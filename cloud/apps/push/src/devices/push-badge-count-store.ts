@@ -19,13 +19,14 @@ export class PushBadgeCountStore {
     )
   }
 
-  /** The phone's icon: each host's latest count, over registrations still live on this token. Null when no host has sent one. */
+  /** The phone's icon: each host's latest count over its live registrations. Null when no host has sent one. */
   async total(token: string): Promise<number | null> {
+    // A host the phone stopped renewing (removed while offline, or unused past the lease) drops out.
     const rows = await this.database.query(
       `SELECT c.host_fingerprint, c.badge, c.updated_at FROM push_badge_counts c
       JOIN push_devices d ON d.registration_id = c.registration_id
-      WHERE c.token = ? AND d.token = ? AND d.dead_at IS NULL`,
-      [token, token]
+      WHERE c.token = ? AND d.token = ? AND d.dead_at IS NULL AND d.updated_at > ?`,
+      [token, token, this.leaseStart()]
     )
     // A host holding two registrations for one phone (a re-pair) counts once.
     const latest = new Map<string, { badge: number; at: number }>()
@@ -44,30 +45,31 @@ export class PushBadgeCountStore {
     return Math.min(total, PUSH_LIMITS.maxBadgeCount)
   }
 
-  /** Drops a removed registration's count; returns a live one on the same phone to carry the new total. */
-  async forget(device: BadgeDevice): Promise<BadgeDevice | null> {
-    const [removed] = await this.database.query(
+  async shareOf(registrationId: string): Promise<number> {
+    const [row] = await this.database.query(
       'SELECT badge FROM push_badge_counts WHERE registration_id = ?',
-      [device.registrationId]
+      [registrationId]
     )
-    await this.database.query('DELETE FROM push_badge_counts WHERE registration_id = ?', [
-      device.registrationId
-    ])
-    if (!Number(removed?.badge ?? 0)) {
-      return null
-    }
-    const [carrier] = await this.database.query(
-      `SELECT d.registration_id, d.host_fingerprint FROM push_badge_counts c
-      JOIN push_devices d ON d.registration_id = c.registration_id
-      WHERE c.token = ? AND d.token = ? AND d.dead_at IS NULL LIMIT 1`,
-      [device.token, device.token]
+    return Number(row?.badge ?? 0)
+  }
+
+  /** Any live registration of this phone, from any host, to carry a new total. */
+  async carrier(token: string): Promise<{ registrationId: string; hostFingerprint: string } | null> {
+    // Unindexed on token; only a removal that held a count reaches it.
+    const [row] = await this.database.query(
+      `SELECT registration_id, host_fingerprint FROM push_devices
+      WHERE token = ? AND platform = 'ios' AND dead_at IS NULL AND updated_at > ? LIMIT 1`,
+      [token, this.leaseStart()]
     )
-    return carrier
+    return row
       ? {
-          registrationId: String(carrier.registration_id),
-          hostFingerprint: String(carrier.host_fingerprint),
-          token: device.token
+          registrationId: String(row.registration_id),
+          hostFingerprint: String(row.host_fingerprint)
         }
       : null
+  }
+
+  private leaseStart(): number {
+    return this.now() - PUSH_LIMITS.registrationLeaseMs
   }
 }
