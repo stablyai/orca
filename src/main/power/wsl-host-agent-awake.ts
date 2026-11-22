@@ -1,3 +1,5 @@
+import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
+import { agentWorksBehindQuestion } from '../../shared/agent-status/lifecycle/agent-works-behind-question'
 import type { WslHostAwakeStatus } from './agent-awake-service'
 
 type HostConnection = { environmentId: string; state: string }
@@ -252,8 +254,14 @@ function workingHostObservedAt(tab: unknown): number | null {
   }
   const status = tab.agentStatus
   // Restored and sleeping rows keep identity only, matching what local keep-awake ignores.
-  if (status.state !== 'working' || status.restoredUnconfirmed === true || status.paneSleep) {
+  if (status.restoredUnconfirmed === true || status.paneSleep) {
     return null
+  }
+  if (status.state !== 'working') {
+    const row = status.state === 'waiting' ? normalizeAgentStatusPayload(status) : null
+    if (!row || !agentWorksBehindQuestion(row)) {
+      return null
+    }
   }
   const observedAt =
     typeof status.evidenceObservedAt === 'number' ? status.evidenceObservedAt : status.updatedAt

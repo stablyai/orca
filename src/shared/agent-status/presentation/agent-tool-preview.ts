@@ -1,3 +1,5 @@
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../native-chat/input/questions/codex-async-question-input'
+
 // Share the `tool: input` line across agent rows, child rows and activity threads.
 
 type AgentToolPreviewFields = { toolName?: string | null; toolInput?: string | null }
@@ -18,6 +20,10 @@ export function formatAgentToolPreviewLine(
   const toolName = entry.toolName?.trim() ?? ''
   const toolInput = agentToolPreviewInput(entry, allowsBareInput)
   if (toolName && toolInput) {
+    // The question is the news; its tool id would push it out of a narrow row.
+    if (toolName === CODEX_ASYNC_QUESTION_TOOL) {
+      return toolInput
+    }
     return `${toolName}: ${toolInput}`
   }
   return toolName || toolInput

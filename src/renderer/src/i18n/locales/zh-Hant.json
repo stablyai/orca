@@ -18621,6 +18621,7 @@
         "monitoring": "正在監控背景工作",
         "blocked": "受阻",
         "waiting": "等待輸入",
+        "asking": "工作中，有問題需要你回答",
         "interrupted": "已中斷",
         "failed": "失敗",
         "done": "已完成",

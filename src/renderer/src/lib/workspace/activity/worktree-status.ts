@@ -230,3 +230,14 @@ export function resolveWorktreeStatus(args: {
   )
   return rankWorktreeStatus(heuristic, args)
 }
+
+/** Only questions their agents work behind make this `permission`; any agent stopped for you, by row or title, outweighs them. */
+export function resolvesToAsking(
+  args: Parameters<typeof resolveWorktreeStatus>[0] & { hasBlockingWait: boolean }
+): boolean {
+  return (
+    args.hasPermission &&
+    !args.hasBlockingWait &&
+    resolveWorktreeStatus({ ...args, hasPermission: false }) !== 'permission'
+  )
+}

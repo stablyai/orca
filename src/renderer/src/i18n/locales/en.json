@@ -20425,6 +20425,7 @@
         "monitoring": "Monitoring background tasks",
         "blocked": "Blocked",
         "waiting": "Waiting for input",
+        "asking": "Working, with a question for you",
         "interrupted": "Interrupted",
         "failed": "Failed",
         "done": "Done",

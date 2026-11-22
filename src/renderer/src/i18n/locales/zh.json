@@ -19374,6 +19374,7 @@
         "monitoring": "正在监控后台任务",
         "blocked": "受阻",
         "waiting": "等待输入",
+        "asking": "工作中，有问题需要你回答",
         "interrupted": "已中断",
         "failed": "失败",
         "done": "完成",

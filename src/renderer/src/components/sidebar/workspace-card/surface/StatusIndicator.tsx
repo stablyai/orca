@@ -2,7 +2,8 @@ import React from 'react'
 import { Activity } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
-import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { AgentStateDot, agentStateLabel } from '@/components/agent/status/AgentStateDot'
+import { AgentWorkingQuestionIcon } from '@/components/agent/status/AgentWorkingQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import {
   StateIndicatorTooltip,
@@ -15,6 +16,8 @@ export type Status = WorktreeStatus
 
 type StatusIndicatorProps = Omit<React.ComponentProps<'span'>, 'title'> & {
   status: Status
+  /** With `permission`: an agent here keeps working behind its question. */
+  asking?: boolean
   showTooltip?: boolean
   tooltipSide?: StateIndicatorTooltipSide
 }
@@ -31,13 +34,18 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
 
 const StatusIndicator = React.memo(function StatusIndicator({
   status,
+  asking = false,
   className,
   showTooltip = true,
   tooltipSide,
   ...rest
 }: StatusIndicatorProps) {
   const tooltipLabel =
-    showTooltip && AGENT_STATUS_TOOLTIP_STATUSES.has(status) ? getWorktreeStatusLabel(status) : null
+    showTooltip && AGENT_STATUS_TOOLTIP_STATUSES.has(status)
+      ? asking
+        ? agentStateLabel('asking')
+        : getWorktreeStatusLabel(status)
+      : null
   let indicator: React.JSX.Element
 
   if (status === 'working') {
@@ -93,7 +101,11 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
-        <AgentQuestionIcon className="size-3" />
+        {asking ? (
+          <AgentWorkingQuestionIcon className="size-3" />
+        ) : (
+          <AgentQuestionIcon className="size-3" />
+        )}
       </span>
     )
   } else {

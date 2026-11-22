@@ -39,3 +39,13 @@ export function extractCodexToolFields(
   }
   return {}
 }
+
+/** When only an open question holds the wait, an approval is Codex's own reviewer's, not the user's. */
+export function codexToolUpdate(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>,
+  questionHoldsWait?: boolean
+): ToolSnapshot {
+  const fields = extractCodexToolFields(eventName, hookPayload)
+  return questionHoldsWait ? { ...fields, interactivePrompt: undefined } : fields
+}

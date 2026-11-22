@@ -9,6 +9,7 @@ import { readString } from '../../tool-input-preview'
 type CodexAsyncQuestionCall = {
   /** The tool input as Codex sent it, published as the row's interactivePrompt. */
   prompt: string
+  titles: string[]
   unanswered: Set<number>
 }
 
@@ -19,12 +20,13 @@ const REPLY_OPEN = '<send_user_message_question_reply>'
 const REPLY_CLOSE = '</send_user_message_question_reply>'
 
 /** The questions Codex's TUI is holding open for the user; the newest call is shown. */
-export type CodexPendingAsyncQuestion = { toolName: string; prompt: string }
+export type CodexPendingAsyncQuestion = { toolName: string; toolInput?: string; prompt: string }
 
 /**
  * Codex asks a non-blocking question mid-turn: its status stays working, PostToolUse lands ~20 ms
- * after PreToolUse, and each answer arrives as a UserPromptSubmit reply. Only the hooks show it,
- * so track it here. A skip (Ctrl+]) sends no hook; Orca infers it from the keystroke.
+ * after PreToolUse once it accepts the call (a refused one sends none and shows no question), and
+ * each answer arrives as a UserPromptSubmit reply. Only the hooks show it, so track it here. A skip
+ * (Ctrl+]) sends no hook; Orca infers it from the keystroke.
  */
 export function trackCodexAsyncQuestions(
   state: HookListenerState,
@@ -38,7 +40,7 @@ export function trackCodexAsyncQuestions(
     return undefined
   }
   if (
-    eventName === 'PreToolUse' &&
+    eventName === 'PostToolUse' &&
     readString(hookPayload, 'tool_name') === CODEX_ASYNC_QUESTION_TOOL
   ) {
     openCall(state, paneKey, hookPayload)
@@ -54,7 +56,15 @@ export function pendingCodexAsyncQuestion(
 ): CodexPendingAsyncQuestion | undefined {
   const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
   const newest = calls ? [...calls.values()].at(-1) : undefined
-  return newest ? { toolName: CODEX_ASYNC_QUESTION_TOOL, prompt: newest.prompt } : undefined
+  if (!newest) {
+    return undefined
+  }
+  const [next = 0] = newest.unanswered
+  return {
+    toolName: CODEX_ASYNC_QUESTION_TOOL,
+    toolInput: newest.titles[next],
+    prompt: newest.prompt
+  }
 }
 
 /** Codex's TUI skips the focused question, which is the oldest unless the user navigated. */
@@ -89,7 +99,8 @@ function openCall(
     input && typeof input === 'object' && 'questions' in input && Array.isArray(input.questions)
       ? input.questions
       : null
-  if (!callId || !questions || !parseCodexAsyncQuestionsInput(input)) {
+  const parsed = parseCodexAsyncQuestionsInput(input)
+  if (!callId || !questions || !parsed) {
     return
   }
   let calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
@@ -99,6 +110,7 @@ function openCall(
   }
   calls.set(callId, {
     prompt: JSON.stringify(input),
+    titles: parsed.questions.map(({ question }) => question),
     unanswered: new Set(questions.keys())
   })
 }

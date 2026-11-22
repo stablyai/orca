@@ -7,6 +7,7 @@ import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
 import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
+import { isAgentExecuting } from '../../shared/agent-status/lifecycle/agent-works-behind-question'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
@@ -97,7 +98,7 @@ export function initializeMainProcessObservers(store: Store): void {
           row
             ? {
                 paneKey,
-                state: row.state,
+                state: isAgentExecuting(row) ? 'working' : row.state,
                 receivedAt: row.receivedAt,
                 observedInCurrentRuntime:
                   row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep

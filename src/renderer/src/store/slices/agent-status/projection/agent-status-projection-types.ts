@@ -11,6 +11,7 @@ export const EMPTY_ICONS: readonly TabAgentPane[] = Object.freeze([])
 
 export const FLAGS = [
   'hasPermission',
+  'hasBlockingWait',
   'hasLiveWorking',
   'hasLiveMonitoring',
   'hasFailed',
@@ -21,6 +22,7 @@ export const FLAGS = [
 
 export const emptySummary = (): WorktreeAgentActivitySummary => ({
   hasPermission: false,
+  hasBlockingWait: false,
   hasLiveWorking: false,
   hasLiveMonitoring: false,
   hasFailed: false,

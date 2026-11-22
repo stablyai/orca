@@ -9,7 +9,8 @@ import {
   AgentStateDot,
   agentStateLabel,
   agentStateProgressLabel,
-  type AgentDotState
+  type AgentDotState,
+  type AgentGlyphState
 } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -36,6 +37,7 @@ import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { agentWorksBehindQuestion } from '../../../../shared/agent-status/lifecycle/agent-works-behind-question'
 import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -68,7 +70,7 @@ function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
 
 function stateDotTooltipLabel(
   agent: DashboardAgentRowData,
-  dotState: AgentDotState,
+  dotState: AgentGlyphState,
   now: number
 ): string {
   if (dotState === 'interrupted') {
@@ -214,7 +216,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
-  const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  const baseDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  const dotState: AgentGlyphState =
+    baseDotState === 'waiting' && agentWorksBehindQuestion(agent.entry) ? 'asking' : baseDotState
   const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
