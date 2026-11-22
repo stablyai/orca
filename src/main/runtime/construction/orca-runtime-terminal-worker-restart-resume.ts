@@ -39,12 +39,39 @@ export function unrefTimer(run: () => void, delayMs: number): { cancel: () => vo
   return { cancel: () => clearTimeout(timer) }
 }
 
+/** Like a start's brief, the continue prompt's Enter is held while it would answer a dialog or
+ *  submit someone's typing. */
+export async function sendRestartContinuePrompt(
+  runtime: Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>,
+  handle: string,
+  prompt: string,
+  requestId: string
+): ReturnType<TerminalWorkerRestartResumeDeps['sendPrompt']> {
+  const sent = await runtime.sendTerminalAgentPrompt(handle, prompt, {
+    inputKind: 'orchestration',
+    acceptQueued: true,
+    observationTimeoutMs: RESTART_CONTINUE_OBSERVE_MS,
+    requestId,
+    withholdSubmitOnDialog: true
+  })
+  const submit = sent.prompt?.submit
+  if (submit && 'withheldFor' in submit) {
+    return { withheldFor: submit.withheldFor }
+  }
+  // Only a provider that reports turns can prove a dropped prompt.
+  return sent.prompt?.observation !== 'supported' || sent.prompt.stages.includes('turn_started')
+}
+
 /** A resumed worker comes back the way a follow-up reopens a closed one, in its own conversation. */
 function createTerminalWorkerRestartResume(
   runtime: RestartResumeRuntime,
   owners: Pick<
     TerminalWorkerRestartResumeDeps,
-    'resumeWorkOnRestart' | 'reportResting' | 'decideHeldRest' | 'offersChanged'
+    | 'resumeWorkOnRestart'
+    | 'reportResting'
+    | 'reportContinueWithheld'
+    | 'decideHeldRest'
+    | 'offersChanged'
   >
 ): TerminalWorkerRestartResume {
   const resume = new TerminalWorkerRestartResume({
@@ -80,16 +107,8 @@ function createTerminalWorkerRestartResume(
         (wait) => wait.satisfied,
         () => false
       ),
-    sendPrompt: async (handle, prompt, requestId) => {
-      const sent = await runtime.sendTerminalAgentPrompt(handle, prompt, {
-        inputKind: 'orchestration',
-        acceptQueued: true,
-        observationTimeoutMs: RESTART_CONTINUE_OBSERVE_MS,
-        requestId
-      })
-      // Only a provider that reports turns can prove a dropped prompt.
-      return sent.prompt?.observation !== 'supported' || sent.prompt.stages.includes('turn_started')
-    }
+    sendPrompt: (handle, prompt, requestId) =>
+      sendRestartContinuePrompt(runtime, handle, prompt, requestId)
   })
   // A pane started again in place is bound once its resumed agent reports its conversation there.
   runtime.subscribeAgentProviderSessionChangesFn?.((sessions) => resume.observePaneAgents(sessions))
@@ -102,6 +121,8 @@ export abstract class OrcaRuntimeWithTerminalWorkerRestartResume extends OrcaRun
   protected readonly terminalWorkerRestartResume = createTerminalWorkerRestartResume(this, {
     resumeWorkOnRestart: () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
     reportResting: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
+    reportContinueWithheld: (dispatchId, handle, hold) =>
+      this.reportWithheldRestartContinue(dispatchId, handle, hold),
     decideHeldRest: (dispatchId) =>
       reconsiderRestAfterWait(`dispatch:${dispatchId}`, this.workerTurnStopReportDeps),
     // One notice per sweep, however many workers it offered.
