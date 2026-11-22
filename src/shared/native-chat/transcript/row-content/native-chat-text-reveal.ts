@@ -17,6 +17,8 @@ export type NativeChatTextReveal = {
   arrivals: TextArrival[]
   /** The reply redraws whole each step, so for the rest of it, it shows only its saves, as main does. */
   drawsWhole?: true
+  /** The save revision such a reply's text is from, so a remount takes any save made since. */
+  savedAt?: number
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -192,8 +194,10 @@ export function pacedTextEnd(text: string, position: number, holdPartialWord: bo
 }
 
 /** A reply redrawn whole stays so when its text is replaced. */
-function keptMode(previous: NativeChatTextReveal): Pick<NativeChatTextReveal, 'drawsWhole'> {
-  return previous.drawsWhole ? { drawsWhole: true } : {}
+function keptMode(
+  previous: NativeChatTextReveal
+): Pick<NativeChatTextReveal, 'drawsWhole' | 'savedAt'> {
+  return previous.drawsWhole ? { drawsWhole: true, savedAt: previous.savedAt } : {}
 }
 
 export function arriveNativeChatText(

@@ -85,8 +85,9 @@ export function useNativeChatPacedText(
     initial.drawsWhole === true && savedRevision !== undefined
   )
   // The text as of the reply's last save; state, so a save renders the reveal that shows it.
+  // A remount keeps the save it was revealing; a save made while unmounted is taken in its effect.
   const saved = useRef({
-    revision: savedRevision,
+    revision: drawsWhole ? initial.savedAt : savedRevision,
     text: drawsWhole ? initial.source : text.slice(0, initial.shown)
   })
   const [savedText, setSavedText] = useState(saved.current.text)
@@ -152,6 +153,9 @@ export function useNativeChatPacedText(
       performance.now(),
       revealMs
     )
+    if (drawsWhole) {
+      pace.current = { ...pace.current, savedAt: saved.current.revision }
+    }
     // While text is still to reveal, only the reveal steps it, so arrivals don't add renders.
     if (caughtUp || pace.current.shown >= source.length) {
       setShown(pace.current.shown, caughtUp || drawsWhole)
@@ -213,7 +217,13 @@ export function useNativeChatPacedText(
           const onScreenText = pace.current.source.slice(0, next.shown)
           saved.current = { revision: savedRevision, text: onScreenText }
           setSavedText(onScreenText)
-          pace.current = { source: onScreenText, shown: next.shown, arrivals: [], drawsWhole: true }
+          pace.current = {
+            source: onScreenText,
+            shown: next.shown,
+            arrivals: [],
+            drawsWhole: true,
+            savedAt: savedRevision
+          }
           reveals?.drawn.set(rowKey, pace.current)
           setDrawsWhole(true)
         }
