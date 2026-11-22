@@ -1,6 +1,7 @@
 import { selectWorktreesByRepo } from '../../../../store/workspaces/catalog/workspace-record-fields'
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -182,12 +183,17 @@ export function useResourceUsageActions({
     queueMicrotask(() => openModal('workspace-cleanup'))
   }, [openModal, setOpen])
 
+  // Read when an end is asked for, so a reread starting or ending keeps these callbacks and their rows unchanged.
+  const sessionsRereadingRef = useRef(sessionsRereading)
+  useEffect(() => {
+    sessionsRereadingRef.current = sessionsRereading
+  }, [sessionsRereading])
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
       if (session.readOnly) {
         return
       }
-      if (!sessionsRereading && !requiresKillConfirmation(session)) {
+      if (!sessionsRereadingRef.current && !requiresKillConfirmation(session)) {
         setActionError(null)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
@@ -208,11 +214,11 @@ export function useResourceUsageActions({
       }
       setKillConfirm(session)
     },
-    [refreshSessions, removeSession, setKillConfirm, sessionsRereading]
+    [refreshSessions, removeSession, setKillConfirm]
   )
 
   const handleKillOrphans = useCallback(async () => {
-    if (!workspaceSessionReady || sessionsRereading) {
+    if (!workspaceSessionReady || sessionsRereadingRef.current) {
       return
     }
     // Use the badge’s exact orphan selector so bulk cleanup cannot destroy sessions excluded from its count.
@@ -232,14 +238,7 @@ export function useResourceUsageActions({
       )
     }
     void refreshSessions()
-  }, [
-    sessions,
-    resourceSessionBindings,
-    workspaceSessionReady,
-    sessionsRereading,
-    refreshSessions,
-    removeSessions
-  ])
+  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions, removeSessions])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {

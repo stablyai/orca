@@ -19,7 +19,11 @@ import {
 } from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
 import { recordPairedReplyParts } from './memory-snapshot-paired-reply'
-import { readWorkspaceHistory, recordWorkspaceMemorySeries } from './workspace-memory-series'
+import {
+  hasChatSeries,
+  readWorkspaceHistory,
+  recordWorkspaceMemorySeries
+} from './workspace-memory-series'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
@@ -270,11 +274,22 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   pushAppMemoryHistory(appBuckets.memory, now)
   const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now, hasChats)
 
+  // Without chats or a chat series still drawn, every row draws its terminal history, as it always did.
+  const historyOf = hasChats || hasChatSeries() ? readWorkspaceHistory : readMemoryHistory
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
     ...optionalCommitField(hasPrivateMemory, privateMemory),
-    history: readWorkspaceHistory(b.worktreeId)
+    history: historyOf(b.worktreeId)
   }))
+  // Rows holding restored pane keys, so a paired reply replaces only them.
+  const restoredRows: number[] = []
+  if (restoredSessionIds.size > 0) {
+    bucketList.forEach((bucket, index) => {
+      if (restoredSessionIds.has(bucket.worktreeId)) {
+        restoredRows.push(index)
+      }
+    })
+  }
   // With no agent process, restored pane key or chat series, this is the snapshot paired clients have always received.
   const asPaired =
     agentTrees.length === 0 && restoredSessionIds.size === 0 && terminalSeries.length === 0
@@ -304,6 +319,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     hasPrivateMemory,
     readTerminalHistory: readMemoryHistory,
     restoredSessionIds,
+    restoredRows,
     totals: {
       ...snapshotCommitFields(
         hasPrivateMemory,

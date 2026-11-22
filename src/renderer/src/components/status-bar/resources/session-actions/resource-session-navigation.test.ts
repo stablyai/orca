@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const open = vi.hoisted(() => vi.fn(async () => true))
-const groupsListed = vi.hoisted(() => vi.fn(async () => {}))
+const unavailable = vi.hoisted(() => vi.fn())
+const groupsListed = vi.hoisted(() => vi.fn(async () => true))
+const roomOf = vi.hoisted(() => vi.fn((): object | null => ({ roomId: 'g' })))
 vi.mock('@/lib/agent-session/open/activate-ai-vault-structured-session', () => ({
-  activateAiVaultStructuredSession: open
+  activateAiVaultStructuredSession: open,
+  structuredSessionOpenFeedback: { unavailable }
 }))
 vi.mock('@/lib/bot-group-catalog', () => ({ BotGroupRoomUnavailableError: class extends Error {} }))
 vi.mock('@/lib/bot-group-list', () => ({ whenLocalBotGroupsListed: groupsListed }))
+vi.mock('@/lib/bot-group-catalog-snapshot', () => ({ readBotGroups: () => [] }))
+vi.mock('@/lib/bot-group-room-history', () => ({ botGroupRoomOfRow: roomOf }))
 
 import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
 
@@ -22,18 +27,23 @@ describe('opening a chat row', () => {
     )
   })
 
-  it("waits for the group list before opening a group member, so it opens the member's room", async () => {
-    groupsListed.mockImplementationOnce(async () => {
-      expect(open).toHaveBeenCalledTimes(1)
-    })
+  it('opens a group member once the group list has its room', async () => {
+    open.mockClear()
     await openResourceChat('home::/bots', 'bot-group-member-a')
 
     expect(groupsListed).toHaveBeenCalledTimes(1)
-    expect(open).toHaveBeenLastCalledWith(
-      { structuredSession: { workspaceId: 'home::/bots', sessionId: 'bot-group-member-a' } },
-      undefined,
-      { kind: 'local' }
-    )
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  it("reports a group member whose room can't be found instead of opening it as a chat", async () => {
+    open.mockClear()
+    groupsListed.mockResolvedValueOnce(false)
+    await openResourceChat('home::/bots', 'bot-group-member-a')
+    roomOf.mockReturnValueOnce(null)
+    await openResourceChat('home::/bots', 'bot-group-member-a')
+
+    expect(open).not.toHaveBeenCalled()
+    expect(unavailable).toHaveBeenCalledTimes(2)
   })
 
   it("opens a paired machine's chat on that machine", async () => {

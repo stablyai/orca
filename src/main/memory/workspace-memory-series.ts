@@ -79,6 +79,11 @@ export function recordWorkspaceMemorySeries(
   return terminalSeries
 }
 
+/** Whether any workspace still draws a chat-inclusive series. */
+export function hasChatSeries(): boolean {
+  return chatSeries.size > 0
+}
+
 /** The history this machine's row for the workspace draws. */
 export function readWorkspaceHistory(worktreeId: string): number[] {
   return readMemoryHistory(

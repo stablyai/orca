@@ -19,7 +19,24 @@ let watchers = 0
 const requests = new Map<ExecutionHostId, number>()
 
 /** Re-reads one host's groups; a slower earlier read never undoes a later one. */
-export async function refreshBotHostGroups(hostId: ExecutionHostId): Promise<void> {
+export function refreshBotHostGroups(hostId: ExecutionHostId): Promise<void> {
+  const read = readBotHostGroups(hostId)
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    localRead = read
+    const clear = (): void => {
+      if (localRead === read) {
+        localRead = null
+      }
+    }
+    read.then(clear, clear)
+  }
+  return read
+}
+
+// This machine's newest group read while it is pending.
+let localRead: Promise<void> | null = null
+
+async function readBotHostGroups(hostId: ExecutionHostId): Promise<void> {
   const revision = (requests.get(hostId) ?? 0) + 1
   requests.set(hostId, revision)
   const result = await callRuntimeRpc<{ groups: BotGroup[] }>(
@@ -36,23 +53,37 @@ export async function refreshBotGroups(): Promise<void> {
   await forEachBotHost(({ hostId }) => refreshBotHostGroups(hostId).catch(console.error))
 }
 
-let localListing: Promise<void> | null = null
-/** Settles once this machine's groups are listed, or the listing fails; callers in the meantime share it. */
-export function whenLocalBotGroupsListed(): Promise<void> {
+/** Settles true once this machine's groups are published, false if the latest read for them fails. */
+export function whenLocalBotGroupsListed(): Promise<boolean> {
   if (hasListedLocalBotGroups()) {
-    return Promise.resolve()
+    return Promise.resolve(true)
   }
-  localListing ??= (async () => {
-    // A newer read can supersede ours without it publishing, so read again until a list is published.
-    for (let attempt = 0; attempt < 2 && !hasListedLocalBotGroups(); attempt++) {
-      await refreshBotHostGroups(LOCAL_EXECUTION_HOST_ID)
+  return new Promise((resolve) => {
+    const finish = (listed: boolean): void => {
+      stop()
+      resolve(listed)
     }
-  })()
-    .catch(console.error)
-    .finally(() => {
-      localListing = null
+    const stop = subscribeToBotGroupChanges(() => {
+      if (hasListedLocalBotGroups()) {
+        finish(true)
+      }
     })
-  return localListing
+    // Follows whichever read is newest, so a read another caller started is joined, never repeated.
+    const follow = (read: Promise<void>): void => {
+      const next = (): void => {
+        const newer = localRead && localRead !== read ? localRead : null
+        if (hasListedLocalBotGroups()) {
+          finish(true)
+        } else if (newer) {
+          follow(newer)
+        } else {
+          finish(false)
+        }
+      }
+      read.then(next, next)
+    }
+    follow(localRead ?? refreshBotHostGroups(LOCAL_EXECUTION_HOST_ID))
+  })
 }
 
 let stopListening: (() => void) | null = null

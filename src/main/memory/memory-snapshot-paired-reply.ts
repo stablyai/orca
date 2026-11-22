@@ -14,6 +14,8 @@ export type PairedReplyParts = {
   readTerminalHistory: (worktreeId: string) => number[]
   /** Per workspace, sessions whose pane key came from startup restore; paired replies send them without one. */
   restoredSessionIds: ReadonlyMap<string, ReadonlySet<string>>
+  /** Indexes of the rows holding those sessions. */
+  restoredRows: readonly number[]
   totals: Pick<
     MemorySnapshot,
     'processCommitMetric' | 'totalCpu' | 'totalMemory' | 'totalPrivateMemory'
@@ -86,10 +88,8 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
   } else if (!parts.hasChatOnlyRows && parts.terminalSeries.length === 0) {
     // Only restored pane keys differ, so only their workspaces' rows are rebuilt.
     worktrees = snapshot.worktrees.slice()
-    for (const [index, wt] of snapshot.worktrees.entries()) {
-      if (parts.restoredSessionIds.has(wt.worktreeId)) {
-        worktrees[index] = pairedRow(wt, parts, terminalUsage)
-      }
+    for (const index of parts.restoredRows) {
+      worktrees[index] = pairedRow(snapshot.worktrees[index], parts, terminalUsage)
     }
   } else {
     snapshot.worktrees.forEach((wt, i) => {

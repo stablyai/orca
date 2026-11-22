@@ -24,7 +24,7 @@ export function settleChatOpenFocus(worktreeId: string, agentSessionId: string):
   const opened =
     tab?.contentType === 'agent-session'
       ? tab.entityId === agentSessionId
-      : tab?.contentType === 'room' && tab.entityId === room?.group.id
+      : tab?.contentType === 'room' && tab.entityId === room?.roomId
   if (tab && opened) {
     requestNativeChatComposerFocus(tab.id)
   } else {

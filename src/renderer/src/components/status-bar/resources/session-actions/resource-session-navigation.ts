@@ -3,7 +3,12 @@ import { collectLeafIds } from '../../../../../../shared/workspace-layout/termin
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback
+} from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { botGroupRoomOfRow } from '@/lib/bot-group-room-history'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import { BotGroupRoomUnavailableError } from '@/lib/bot-group-catalog'
 import { whenLocalBotGroupsListed } from '@/lib/bot-group-list'
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
@@ -56,31 +61,35 @@ export function navigateResourceSessionToTab(
 }
 
 /** Opens a chat row the way a history click does: a background chat is revealed, a group member opens its room. */
-export function openResourceChat(
+export async function openResourceChat(
   worktreeId: string,
   agentSessionId: string,
   /** The paired host that sampled the row; without one, this machine sampled it. A same-id twin never takes the open. */
   runtimeHostId?: string
-): Promise<unknown> {
+): Promise<void> {
   const host = parseExecutionHostId(runtimeHostId)
-  // A group member's chat opens its room, so the group list must be read before the open looks for it.
-  const groupsListed = isBotGroupMemberSession(agentSessionId)
-    ? whenLocalBotGroupsListed()
-    : Promise.resolve()
+  // A group member's chat opens only as its room, so the open waits for the group list; a member
+  // whose room can't be found is reported, never opened as a chat of its own.
+  if (isBotGroupMemberSession(agentSessionId)) {
+    const listed = await whenLocalBotGroupsListed()
+    const session = { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } }
+    if (!listed || !botGroupRoomOfRow(readBotGroups(), session)) {
+      structuredSessionOpenFeedback.unavailable('')
+      return
+    }
+  }
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
-  return groupsListed
-    .then(() =>
-      activateAiVaultStructuredSession(
-        { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
-        undefined,
-        host?.kind === 'runtime'
-          ? { kind: 'environment', environmentId: host.environmentId }
-          : { kind: 'local' }
-      )
+  try {
+    await activateAiVaultStructuredSession(
+      { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
+      undefined,
+      host?.kind === 'runtime'
+        ? { kind: 'environment', environmentId: host.environmentId }
+        : { kind: 'local' }
     )
-    .catch((error: unknown) => {
-      if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
-        toast.error(error instanceof Error ? error.message : String(error))
-      }
-    })
+  } catch (error: unknown) {
+    if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+  }
 }

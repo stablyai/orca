@@ -47,6 +47,7 @@ describe('the memory snapshot a paired machine receives', () => {
       ],
       hasPrivateMemory: false,
       restoredSessionIds: new Map([['repo::/mixed', new Set(['s1'])]]),
+      restoredRows: [0],
       totals: { totalCpu: 2, totalMemory: 1_100 }
     })
 
