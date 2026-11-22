@@ -14,7 +14,8 @@ export const storedConnectorAsker = z.object({
   avatarUrl: text,
   messageRef: text,
   noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
-  via: z.object({ userId: z.string(), name: z.string() }).optional()
+  via: z.object({ userId: z.string(), name: z.string() }).optional(),
+  app: z.literal(true).optional()
 })
 
 export const storedAutomationResultNote = z.object({

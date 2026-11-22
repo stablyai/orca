@@ -23,6 +23,26 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+const bot: Bot = {
+  id: 'reviewer',
+  name: 'Reviewer',
+  hostId: 'local',
+  folder: 'reviewer',
+  folderWorkspaceId: 'w1',
+  agent: 'codex',
+  avatar: null,
+  paused: false,
+  permissionMode: 'ask',
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  chatSessionId: null,
+  linear: null,
+  github: null,
+  createdAt: 1,
+  updatedAt: 1
+}
+
 // Slack's search as the cloud answers it: a person, and another app labelled so.
 const service: BotWhoCanAskService = {
   listed: (members) => [...members],
@@ -50,20 +70,13 @@ const service: BotWhoCanAskService = {
   outsiders: null,
   notYet: '',
   accessRequests: null
-} as BotWhoCanAskService
+}
 
 describe('the Who can ask picker', () => {
   it('offers other Slack apps beside people, and saves a picked one as an app', async () => {
     const picked = vi.fn<(members: BotMember[]) => void>()
     act(() => {
-      root.render(
-        <BotWhoCanAskPicker
-          bot={{ members: [] } as unknown as Bot}
-          service={service}
-          owner="You"
-          onPicked={picked}
-        />
-      )
+      root.render(<BotWhoCanAskPicker bot={bot} service={service} owner="You" onPicked={picked} />)
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300)
