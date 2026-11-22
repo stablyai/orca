@@ -15,13 +15,22 @@ import {
   PeerMailDeliverParams,
   PeerMailPullParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  clientEnvironmentId,
+  isClientEnvironment
+} from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import {
+  clientAskPullEnded,
+  clientAskPullStarted
+} from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { settleReplacedClientPairing } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 const MAX_PULL_WAIT_MS = 25_000
 const PULL_PAGE_SIZE = 50
 
 /** Mail between servers comes only from a paired computer's Orca, never a phone or this Orca's own clients. */
-function requireRuntimePairing(
+export function requireRuntimePairing(
   ctx: Pick<RpcContext, 'clientKind' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'>
 ): string {
   if (
@@ -46,10 +55,11 @@ const pullRotations = new WeakMap<object, Map<string, number>>()
 function pendingReplies(
   db: OrchestrationDb,
   peerFingerprint: string,
-  holdBack: ReadonlySet<string>
+  holdBack: ReadonlySet<string>,
+  clientEnvironment: string | null
 ): FederationRelayItemRow[] {
   const pending = db
-    .listPeerConversationIdsWithPendingReplies(peerFingerprint)
+    .listPeerConversationIdsWithPendingReplies(peerFingerprint, clientEnvironment)
     .filter((id) => !holdBack.has(id))
   const share = Math.max(1, Math.floor(PULL_PAGE_SIZE / pending.length))
   const pullRotation = pullRotations.get(db.db) ?? new Map<string, number>()
@@ -58,8 +68,13 @@ function pendingReplies(
   pullRotation.set(peerFingerprint, (start + PULL_PAGE_SIZE) % Math.max(1, pending.length))
   return [...pending.slice(start), ...pending.slice(0, start)]
     .slice(0, PULL_PAGE_SIZE)
-    .flatMap((id) => db.listPendingFederationRelay(id, 'to_home', share))
+    .flatMap((id) => db.listPendingFederationRelay(id, relayDirectionOf(db, id), share))
     .slice(0, PULL_PAGE_SIZE)
+}
+
+/** A conversation this Orca opened with a paired computer carries asks to it; any other, replies home. */
+function relayDirectionOf(db: OrchestrationDb, conversationId: string): 'to_home' | 'to_worker' {
+  return db.getPeerMailConversation(conversationId)?.role === 'home' ? 'to_worker' : 'to_home'
 }
 
 export const ORCHESTRATION_PEER_MAIL_METHODS = [
@@ -200,24 +215,66 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
     params: PeerMailPullParams,
     handler: async (params, ctx) => {
       const peerFingerprint = requireRuntimePairing(ctx)
-      const db = ctx.runtime.getOrchestrationDb()
-      const holdBack = new Set(params.holdBack)
-      let items = pendingReplies(db, peerFingerprint, holdBack)
-      const waitMs = Math.min(Math.max(params.waitMs ?? 0, 0), MAX_PULL_WAIT_MS)
-      const deadline = Date.now() + waitMs
-      // A wake is any queued change on this Orca, so one that queued nothing for this peer waits on.
-      while (items.length === 0 && Date.now() < deadline && !ctx.signal?.aborted) {
-        await waitForPeerMail(db.db, deadline - Date.now(), ctx.signal)
-        items = pendingReplies(ctx.runtime.getOrchestrationDb(), peerFingerprint, holdBack)
+      const asks = params.clientAsks
+      // A paired computer taking asks listens for as long as its session's pulls keep coming.
+      const listening =
+        asks && ctx.pairedDeviceId
+          ? clientAskPullStarted(
+              ctx.runtime,
+              { deviceId: ctx.pairedDeviceId, fingerprint: peerFingerprint },
+              asks
+            )
+          : null
+      if (asks && ctx.pairedDeviceId && asks.previousPairing) {
+        settleReplacedClientPairing(ctx.runtime, {
+          previousPairing: asks.previousPairing,
+          currentFingerprint: peerFingerprint,
+          installationId: asks.installationId,
+          name: asks.name
+        })
       }
-      return {
-        items: items.map((item) => ({
-          conversationId: item.dispatch_id,
-          sequence: item.sequence,
-          messageId: item.message_id,
-          kind: item.kind,
-          payload: item.payload
-        }))
+      const seenAs = asks ? { clientAsks: { seenAs: peerFingerprint } } : {}
+      if (asks?.leave) {
+        return { items: [], ...seenAs }
+      }
+      const clientEnvironment =
+        asks && ctx.pairedDeviceId
+          ? clientEnvironmentId(ctx.pairedDeviceId, asks.installationId)
+          : null
+      try {
+        const db = ctx.runtime.getOrchestrationDb()
+        const holdBack = new Set(params.holdBack)
+        let items = pendingReplies(db, peerFingerprint, holdBack, clientEnvironment)
+        const waitMs = Math.min(Math.max(params.waitMs ?? 0, 0), MAX_PULL_WAIT_MS)
+        const deadline = Date.now() + waitMs
+        // A wake is any queued change on this Orca, so one that queued nothing for this peer waits on.
+        while (items.length === 0 && Date.now() < deadline && !ctx.signal?.aborted) {
+          await waitForPeerMail(db.db, deadline - Date.now(), ctx.signal)
+          items = pendingReplies(
+            ctx.runtime.getOrchestrationDb(),
+            peerFingerprint,
+            holdBack,
+            clientEnvironment
+          )
+        }
+        return {
+          items: items.map((item) => ({
+            conversationId: item.dispatch_id,
+            sequence: item.sequence,
+            messageId: item.message_id,
+            kind: item.kind,
+            payload: item.payload
+          })),
+          ...seenAs
+        }
+      } finally {
+        if (listening) {
+          clientAskPullEnded(
+            ctx.runtime,
+            listening,
+            ctx.signal?.aborted ? 'caller_gone' : 'answered'
+          )
+        }
       }
     }
   }),
@@ -231,12 +288,18 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       const db = ctx.runtime.getOrchestrationDb()
       for (const ack of params.acknowledgments) {
         const conversation = db.getPeerMailConversation(ack.conversationId)
-        if (conversation?.role !== 'peer' || conversation.peer_fingerprint !== peerFingerprint) {
+        if (!conversation || conversation.peer_fingerprint !== peerFingerprint) {
+          continue
+        }
+        // Asks it took from this Orca's conversation with it, or replies it took home.
+        const asks =
+          conversation.role === 'home' && isClientEnvironment(conversation.environment_id)
+        if (conversation.role !== 'peer' && !asks) {
           continue
         }
         db.acknowledgeFederationRelay({
           dispatchId: ack.conversationId,
-          direction: 'to_home',
+          direction: asks ? 'to_worker' : 'to_home',
           throughSequence: ack.throughSequence
         })
       }

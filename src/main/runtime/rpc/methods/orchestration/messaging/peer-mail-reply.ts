@@ -16,6 +16,14 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import {
+  clientEnvironmentId,
+  clientInstallationOf
+} from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { requireListeningClient } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import type { z } from 'zod'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -83,6 +91,38 @@ export async function replyOverPeerMail(args: {
       'request_mismatch',
       `${original.id} does not say who sent it. No reply was sent.`,
       NOTHING_SENT
+    )
+  }
+  const installation = clientInstallationOf(environmentId)
+  if (installation !== null) {
+    // Under the pairing the computer pulls with now; after a re-pair the old conversation is never pulled.
+    const client = requireListeningClient(runtime, installation, 'No reply was sent.')
+    const current = db.openHomePeerMailConversation({
+      environmentId: clientEnvironmentId(client.deviceId, client.installationId),
+      peerFingerprint: client.fingerprint,
+      localParty: conversation.local_party ?? '',
+      localPaneKey: conversation.local_pane_key
+    })
+    // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
+    queueClientItem(db, {
+      conversationId: current.conversation_id,
+      messageId: id,
+      kind: 'client_reply',
+      payload: {
+        senderLabel,
+        to: route.remote_party,
+        subject,
+        body: params.body,
+        threadId,
+        sender: peerMailSender(runtime, replier)
+      } satisfies z.infer<typeof ClientReplyPayload>
+    })
+    db.markAsRead([original.id], { kind: 'reply' })
+    return recordReceiptBeforeNudge(
+      args.recordMutationReceipt,
+      { message: { id, subject }, to: original.from_handle },
+      () => notifyPeerMailQueued(db.db),
+      { kind: 'messages', targets: [] }
     )
   }
   const server = await requirePeerMailServer(runtime, environmentId)
