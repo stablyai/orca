@@ -22,6 +22,10 @@ export function revokeJournalTruncate(liveness: Int32Array): boolean {
   return was === JOURNAL_TRUNCATE_RUNNING
 }
 
+export function journalTruncateRunning(liveness: Int32Array): boolean {
+  return Atomics.load(liveness, JOURNAL_CHECKPOINT_TRUNCATE) === JOURNAL_TRUNCATE_RUNNING
+}
+
 /** A reply from the checkpoint worker. */
 export type CheckpointResponse = {
   type: 'checked' | 'truncate-request' | 'hello'
@@ -104,6 +108,8 @@ try {
         try {
           busy = truncate.get().busy !== 0;
         } finally {
+          // SQLite's write lock is free again; the owner may hand writes back before this reply lands.
+          Atomics.store(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, 0);
           db.exec('PRAGMA busy_timeout = ' + timeout);
         }
       }
@@ -112,8 +118,6 @@ try {
       // succeed is reported blocked, and the worker's next retry measures the WAL again.
       const blocked = busy || (ceiling(state) && state.checkpointed < state.log);
       pendingTruncate = undefined;
-      // Writes stay parked until this reply; the slot clears just before it, so no gap reads as done.
-      Atomics.store(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, 0);
       reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });
       schedule(state, blocked);

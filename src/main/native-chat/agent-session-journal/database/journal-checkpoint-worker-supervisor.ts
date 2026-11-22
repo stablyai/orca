@@ -5,6 +5,7 @@ import {
   JOURNAL_CHECKPOINT_PROGRESS,
   grantJournalTruncate,
   journalCheckpointWorkerSource,
+  journalTruncateRunning as truncateRunning,
   revokeJournalTruncate
 } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
@@ -182,12 +183,12 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.watch(progress)
   }
 
-  watch(progress = this.progress()): void {
+  watch(progress = this.progress(), ms = this.options.timeoutMs ?? HEALTH_TIMEOUT_MS): void {
     this.unwatch()
     if (this.current) {
       this.current.seen = progress
     }
-    this.deadline = setTimeout(() => this.expired(), this.options.timeoutMs ?? HEALTH_TIMEOUT_MS)
+    this.deadline = setTimeout(() => this.expired(), ms)
     this.deadline.unref()
   }
 
@@ -310,6 +311,8 @@ export class JournalCheckpointWorkerSupervisor<Message> {
         return
       }
       attached.silent = true
+      // Nothing moved for a deadline: a truncate it hasn't started is revoked, a late request handed back.
+      this.host.late(false)
       this.watch(progress)
       return
     }
@@ -322,8 +325,12 @@ export class JournalCheckpointWorkerSupervisor<Message> {
         this.openOutage(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
       }
       this.host.late(attached.stuck)
-      // Only its reply, error or exit can end a stuck native call, so polling it adds nothing.
       if (attached.stuck) {
+        // Only its reply, error or exit ends a stuck native call; inside a truncate, writes wait on the
+        // lock, so it is looked at once a minute to release them soon after the call returns.
+        if (truncateRunning(attached.liveness)) {
+          this.watch(progress, RESTART_MAX_MS)
+        }
         return
       }
     }

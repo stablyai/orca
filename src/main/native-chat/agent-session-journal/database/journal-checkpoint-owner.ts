@@ -24,7 +24,7 @@ export class JournalCheckpointOwner {
   private frames: ReturnType<Database.Database['prepare']> | undefined
   private unknown = true
   private blocked = false
-  private truncate: { id: number; acknowledged: boolean } | undefined
+  private truncate: { id: number; acknowledged: boolean; granted: boolean } | undefined
   private readonly waiters = new JournalWalWaiters()
   private restoreNeeded = false
   private closePromise: Promise<void> | undefined
@@ -186,7 +186,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.truncate.acknowledged = true
-    this.worker.grantTruncate()
+    if (this.truncate.granted) {
+      this.worker.grantTruncate()
+    }
     this.worker.post({ type: 'truncate', truncateId: this.truncate.id })
   }
 
@@ -194,9 +196,10 @@ export class JournalCheckpointOwner {
     if (this.closing) {
       return
     }
-    if (this.stopped) {
-      // A starting or late worker answered: it takes checkpoints with fresh state, then this reply
-      // is read as any other, so a truncate it asks for is still acknowledged.
+    const reattached = this.stopped
+    if (reattached) {
+      // A starting or late worker answered: it takes checkpoints with fresh state. A truncate this reply
+      // asks for was measured before the writer took over, so it is acknowledged but never granted.
       this.worker.unwatch()
       this.attach()
       if (this.stopped) {
@@ -207,7 +210,7 @@ export class JournalCheckpointOwner {
     this.worker.recovered()
     try {
       if (message.type === 'truncate-request' && Number.isSafeInteger(message.truncateId)) {
-        this.truncate = { id: message.truncateId!, acknowledged: false }
+        this.truncate = { id: message.truncateId!, acknowledged: false, granted: !reattached }
         this.blocked = true
         this.acknowledge()
         return
