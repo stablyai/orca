@@ -2,6 +2,7 @@
 // mechanism, beside the ones it inherits from its owner's Claude Code or Codex.
 import * as z from 'zod'
 import type { BotToolSignInStatus } from './bot-tool-sign-in'
+import type { BotAgent } from './bot-types'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
@@ -122,7 +123,7 @@ export type BotToolDetails = {
 export type BotToolContext = {
   folder: string
   platform: NodeJS.Platform
-  agent: 'claude' | 'codex'
+  agent: BotAgent
 }
 
 /** What a row says is wrong; a working tool shows nothing. */
@@ -141,18 +142,12 @@ export type BotOwnTool = {
 /** A tool the bot gets from its owner's own config; read-only here. */
 export type BotInheritedTool = { name: string; plugin?: true }
 
-export type BotTools =
-  | {
-      agent: 'claude' | 'codex'
-      own: BotOwnTool[]
-      inherited: BotInheritedTool[]
-    }
-  // Another agent: the section says tools come from that agent's own setup.
-  | { agent: string; unsupported: true }
-
-export const BOT_TOOL_AGENTS = ['claude', 'codex'] as const
-export const botToolsSupported = (agent: string): agent is (typeof BOT_TOOL_AGENTS)[number] =>
-  BOT_TOOL_AGENTS.some((entry) => entry === agent)
+export type BotTools = {
+  agent: BotAgent
+  own: BotOwnTool[]
+  /** Read from Claude Code's or Codex's config; another agent's own config isn't read, so none. */
+  inherited: BotInheritedTool[]
+}
 
 export const botToolDetail = (server: BotToolServer): string =>
   'url' in server ? server.url : [server.command, ...server.args].join(' ')

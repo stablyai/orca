@@ -7,8 +7,9 @@ import {
 } from '../../shared/automation-google-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
+import { mailboxAddresses } from '../../shared/google/email-address-list'
 import type { UpcomingEvent } from './google-calendar-changes'
-import { addressesIn, type NewMail } from './google-gmail-changes'
+import { senderAddress, type NewMail } from './google-gmail-changes'
 
 type GmailRule = Extract<AutomationGoogleTrigger, { source: 'gmail' }>
 type CalendarRule = Extract<AutomationGoogleTrigger, { source: 'calendar' }>
@@ -76,14 +77,14 @@ export function gmailRuleMatches(
   labelIds: ReadonlyMap<string, string> | null
 ): boolean {
   if (rule.from?.length) {
-    const sender = addressesIn(mail.from)[0]
+    const sender = senderAddress(mail.from)
     // A forged sender must never start a run, so a from= rule needs Gmail's domain check.
     if (!sender || !mail.senderVerified || !rule.from.some((w) => addressMatches(sender, w))) {
       return false
     }
   }
   if (rule.to?.length) {
-    const recipients = addressesIn(`${mail.to}, ${mail.cc}`)
+    const recipients = mailboxAddresses(`${mail.to}, ${mail.cc}`)
     if (!recipients.some((address) => rule.to?.some((w) => addressMatches(address, w)))) {
       return false
     }

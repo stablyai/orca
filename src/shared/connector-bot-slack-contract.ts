@@ -7,6 +7,22 @@ import type { BotMascotId } from './bot-avatar'
 export const SLACK_CONFIG_REFRESH_TOKEN_PREFIX = 'xoxe-'
 export const SLACK_CONFIG_REFRESH_TOKEN_MAX_LENGTH = 2048
 
+// Slack shows two tokens side by side; the access token is the one Orca can't keep using.
+const SLACK_CONFIG_ACCESS_TOKEN_PREFIX = 'xoxe.xoxp-'
+const TOKEN_SHAPE = /^[\w.-]+$/
+
+/** What copied or pasted text is, when it is one of Slack's two configuration tokens. */
+export function slackConfigTokenKind(text: string): 'refresh' | 'access' | null {
+  const value = text.trim()
+  if (!TOKEN_SHAPE.test(value)) {
+    return null
+  }
+  if (value.startsWith(SLACK_CONFIG_ACCESS_TOKEN_PREFIX)) {
+    return 'access'
+  }
+  return value.startsWith(SLACK_CONFIG_REFRESH_TOKEN_PREFIX) ? 'refresh' : null
+}
+
 // PUT `${bots}/<bot id>/avatar`: a mascot by id, or an upload's PNG (base64) and the version naming it.
 export type ConnectorBotAvatarRequest =
   | { v: 1; kind: 'mascot'; id: BotMascotId }
@@ -58,6 +74,9 @@ export const ConnectorBotSlackState = z.discriminatedUnion('state', [
     installerName: z.string().optional(),
     // The app's manifest predates this cloud's: setting it up again adds the new scopes and events.
     updateNeeded: z.literal(true).optional(),
+    // The app works as it is, yet predates permissions this cloud's manifest asks for: setting it up
+    // again grants them. Offered, never asked for.
+    updateAvailable: z.literal(true).optional(),
     // What messages typed at the bot's computer post as here, and a change waiting on the Slack
     // approval of whoever set it up; an older cloud leaves them out (no choice to offer).
     postAs: z.enum(['person', 'computer']).optional(),
@@ -76,6 +95,21 @@ export const ConnectorBotSlackStateResponse = ConnectorBotSlackState.and(
   z.object({ teams: z.array(ConnectorBotSlackState).optional() })
 )
 export type ConnectorBotSlackStateResponse = z.infer<typeof ConnectorBotSlackStateResponse>
+
+/** The bot's Slack in one workspace; with no team, its first. An older cloud lists no teams. */
+export function slackTeamState(
+  slack: ConnectorBotSlackStateResponse,
+  teamId: string | undefined
+): ConnectorBotSlackState {
+  if (teamId === undefined) {
+    return slack
+  }
+  const listed = slack.teams?.find((team) => 'teamId' in team && team.teamId === teamId)
+  return (
+    listed ??
+    ('teamId' in slack && slack.teamId === teamId ? slack : { state: 'not_created' as const })
+  )
+}
 
 export type SlackPostAs = 'person' | 'computer'
 
@@ -97,7 +131,9 @@ export const ConnectorBotSlackMembersResponse = z.object({
       id: z.string(),
       name: z.string(),
       // Left out when they have none, or by a cloud that predates it.
-      avatarUrl: optionalConnectorAvatarUrl
+      avatarUrl: optionalConnectorAvatarUrl,
+      // Another Slack app's bot user, not a person; its name already says "(app)".
+      app: z.literal(true).optional().catch(undefined)
     })
   ),
   complete: z.boolean()

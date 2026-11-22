@@ -1,3 +1,4 @@
+import type { SessionPartyReader } from '../../addressing/session-party-reader'
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
@@ -34,7 +35,7 @@ export type ChatAssigneeObservation =
 /** Idle chats remain live; only closed chats exited, while missing or remote records are unverifiable. */
 export function observeChatAssignee(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined,
+  db: SessionPartyReader | null | undefined,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): ChatAssigneeObservation {
   if (!store) {

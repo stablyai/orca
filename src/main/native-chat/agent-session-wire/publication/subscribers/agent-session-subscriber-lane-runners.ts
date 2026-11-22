@@ -98,18 +98,18 @@ export class SubscriberLanes {
     this.lanes.get(subscriber)?.clear()
   }
 
-  /** Busy lanes of every live subscriber; `measured` spans one diagnostics sample. */
+  /** Busy lanes of every live subscriber. */
   retention(
     bySession: ReadonlyMap<string, ReadonlyMap<string, Subscriber>>,
     now: number,
-    measured: Map<object, number>
+    counted: Set<object>
   ): SubscriberDeliveryRetention[] {
     const retained: SubscriberDeliveryRetention[] = []
     for (const session of bySession.values()) {
       for (const subscriber of session.values()) {
         const lane = this.lanes.get(subscriber)
         if (lane && !lane.idle) {
-          retained.push(lane.retention(now, measured))
+          retained.push(lane.retention(now, counted))
         }
       }
     }

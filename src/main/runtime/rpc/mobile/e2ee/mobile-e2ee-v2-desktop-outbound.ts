@@ -1,7 +1,8 @@
 import type { WebSocket } from 'ws'
 import {
   createWsOutboundBackpressureQueue,
-  type WsOutboundBackpressureQueue
+  type WsOutboundBackpressureQueue,
+  type WsOutboundOverflowEvidence
 } from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import {
@@ -30,7 +31,7 @@ export function desktopMobileE2EEV2OutboundItemBytes(
 export function createDesktopMobileE2EEV2OutboundQueue(args: {
   ws: WebSocket
   session: DesktopMobileE2EEV2Session
-  onOverflow: () => void
+  onOverflow: (evidence: WsOutboundOverflowEvidence) => void
   memoryBudget: MobileE2EEOutboundMemoryBudget
   socketMemory: MobileE2EEOutboundSocketMemory
 }): WsOutboundBackpressureQueue<DesktopMobileE2EEV2OutboundItem> {

@@ -29,12 +29,6 @@ function isRowControl(target: EventTarget): boolean {
   return target instanceof Element && target.closest('[data-activity-thread-control]') !== null
 }
 
-export function _resetActivityHoverCardIntentForTest(): void {
-  lastPointerPosition = null
-  openCardCount = 0
-  lastCardClosedAt = Number.NEGATIVE_INFINITY
-}
-
 type OpenTimers = { progress: number | undefined; open: number }
 
 // Owns opening from pointer rest and keyboard focus; Radix owns closing and card traversal.
@@ -42,11 +36,14 @@ export function useActivityThreadHoverCardIntent({
   open,
   onOpenChange,
   openDelay = 200,
+  pointerOpenMode,
   enabled = true
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   openDelay?: number
+  /** A group can own the warm handoff instead of using Activity's warm window. */
+  pointerOpenMode?: 'rest' | 'immediate'
   enabled?: boolean
 }) {
   const [resting, setResting] = useState(false)
@@ -54,9 +51,9 @@ export function useActivityThreadHoverCardIntent({
   const openTimersRef = useRef<OpenTimers | null>(null)
   const detachScrollWatchRef = useRef<(() => void) | null>(null)
   const closedByScrollRef = useRef(false)
-  const latestRef = useRef({ open, onOpenChange, openDelay, enabled })
+  const latestRef = useRef({ open, onOpenChange, openDelay, pointerOpenMode, enabled })
   useEffect(() => {
-    latestRef.current = { open, onOpenChange, openDelay, enabled }
+    latestRef.current = { open, onOpenChange, openDelay, pointerOpenMode, enabled }
   })
 
   const clearOpenTimers = useCallback(() => {
@@ -167,8 +164,9 @@ export function useActivityThreadHoverCardIntent({
   const onPointerEnter = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       triggerRef.current = event.currentTarget
-      // Blocks Radix's open-on-enter. While open, let it through so returning from the card cancels its close.
-      if (!latestRef.current.open || isRowControl(event.target)) {
+      const { open, pointerOpenMode } = latestRef.current
+      // Radix clears its close timer on entry, including when switching back to an avatar.
+      if ((!open && pointerOpenMode !== 'immediate') || isRowControl(event.target)) {
         event.preventDefault()
       }
       if (isRowControl(event.target)) {
@@ -209,8 +207,15 @@ export function useActivityThreadHoverCardIntent({
         return
       }
       clearOpenTimers()
+      const { pointerOpenMode } = latestRef.current
+      if (pointerOpenMode === 'immediate') {
+        openFromIntent()
+        return
+      }
       setResting(false)
-      const warm = openCardCount > 0 || window.performance.now() - lastCardClosedAt < WARM_WINDOW_MS
+      const warm =
+        pointerOpenMode === undefined &&
+        (openCardCount > 0 || window.performance.now() - lastCardClosedAt < WARM_WINDOW_MS)
       openTimersRef.current = warm
         ? {
             progress: undefined,

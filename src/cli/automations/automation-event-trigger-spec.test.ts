@@ -6,6 +6,8 @@ import {
   parseAutomationEventTrigger
 } from './automation-event-trigger-spec'
 
+const WORKFLOW_RUN = 'https://github.com/acme/widgets/actions/runs/9000000001'
+
 describe('--on trigger specs', () => {
   it('reads an event with its filters', () => {
     expect(
@@ -27,6 +29,36 @@ describe('--on trigger specs', () => {
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(trigger))).toEqual(trigger)
   })
 
+  it('parses and formats webhook filters for a new hook', () => {
+    const trigger = parseAutomationEventTrigger(
+      'webhook.call where="body.action in opened, reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
+    expect(trigger).toEqual({
+      id: '',
+      source: 'webhook',
+      event: 'call',
+      rev: 0,
+      where: [
+        { path: 'body.action', op: 'in', values: ['opened', 'reopened'] },
+        { path: 'headers.X-GitHub-Event', op: '=', values: ['pull_request'] },
+        { path: 'body.draft', op: '!exists' }
+      ],
+      textContains: 'deploy now',
+      pick: ['body.number', 'body.title'],
+      subjectFrom: 'body.number',
+      subject: '4512'
+    })
+    expect(formatAutomationEventTrigger(trigger)).toBe(
+      'webhook.call where="body.action in opened,reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
+    // One value may hold commas; only `in` lists.
+    expect(
+      parseAutomationEventTrigger('webhook.call where="body.title contains a, b"')
+    ).toMatchObject({
+      where: [{ path: 'body.title', op: 'contains', values: ['a, b'] }]
+    })
+  })
+
   it('keeps one id for the same rule however it is written', () => {
     const a = parseAutomationEventTrigger('slack.message in=C1,C2')
     const b = parseAutomationEventTrigger('  slack.message   in=C2,C1,C2 ')
@@ -39,9 +71,6 @@ describe('--on trigger specs', () => {
     ['', '--on needs an event'],
     ['slack', 'Unknown event "slack"'],
     ['slack.pinged', 'Unknown event "slack.pinged"'],
-    // Offered once their events reach automations.
-    ['linear.pinged', 'Unknown event "linear.pinged"'],
-    ['slack.message in=,', 'needs in= to list places'],
     ['slack.message in=C1,', 'needs in= to list places'],
     ['slack.mentioned.extra', 'Unknown event'],
     ['slack.mentioned on=mine', 'on=mine is for slack.reaction only'],
@@ -50,7 +79,10 @@ describe('--on trigger specs', () => {
     ['slack.mentioned who=me', 'Unknown filter "who=me"'],
     ['slack.mentioned deploy', 'Unknown filter "deploy"'],
     ['slack.mentioned in=C1 in=C2', 'needs one value for in='],
-    ['slack.mentioned contains=', 'needs one value for contains=']
+    ['slack.mentioned contains=', 'needs one value for contains='],
+    ['webhook.call in=C0123', 'Unknown filter "in="'],
+    ['webhook.call where="body.action ~ x"', 'where= takes "<path> <op> <value>"'],
+    ['webhook.call pick=a pick=b', 'needs one value for pick=']
   ])('refuses %j', (spec, message) => {
     expect(() => parseAutomationEventTrigger(spec)).toThrow(message)
   })
@@ -107,6 +139,48 @@ describe('--on trigger specs', () => {
     expect(mixed).toMatchObject({ in: ['acme/web'], subject: 'acme/web#1' })
   })
 
+  it('normalizes a GitHub run link and round-trips the workflow filter', () => {
+    const parse = (spec: string) => parseAutomationEventTrigger(`github.workflow_finished ${spec}`)
+    const rule = parse(`run=${WORKFLOW_RUN} contains="[conclusion=failure]"`)
+    expect(rule).toMatchObject({
+      source: 'github',
+      event: 'workflow_finished',
+      in: ['acme/widgets'],
+      run: '9000000001'
+    })
+    for (const suffix of ['/job/132625440486', '/', '?pr=8']) {
+      expect(parse(`in=Acme/Widgets run=${WORKFLOW_RUN}${suffix}`)).toMatchObject({
+        in: ['acme/widgets'],
+        run: '9000000001'
+      })
+    }
+    const spec = formatAutomationEventTrigger(rule)
+    expect(spec).toBe(
+      'github.workflow_finished in=acme/widgets contains=[conclusion=failure] run=9000000001'
+    )
+    expect(parseAutomationEventTrigger(spec)).toEqual(rule)
+    expect(parseAutomationEventTrigger(spec.replace('9000000001', '9000000002')).id).not.toBe(
+      rule.id
+    )
+  })
+
+  it('rejects ambiguous, unrelated or misplaced GitHub workflow run filters', () => {
+    const parse = (spec: string) => parseAutomationEventTrigger(`github.workflow_finished ${spec}`)
+    expect(() => parse(`run=${WORKFLOW_RUN}/attempts/2`)).toThrow('without /attempts/')
+    for (const run of [
+      'https://github.com/acme/widgets/pull/8',
+      'https://example.com/a/b/actions/runs/1',
+      'latest'
+    ]) {
+      expect(() => parse(`run=${run}`)).toThrow("run= takes the run's link")
+    }
+    expect(() => parseAutomationEventTrigger(`github.ci_failed run=${WORKFLOW_RUN}`)).toThrow(
+      'run= is for github.workflow_finished only'
+    )
+    expect(() => parse(`in=acme/infra run=${WORKFLOW_RUN}`)).toThrow('the run is in acme/widgets')
+    expect(() => parse('run=42')).toThrow('run=<id> needs in=')
+  })
+
   it('reads label= on github.labeled only, keeping the id of a rule without it', () => {
     const bug = parseAutomationEventTrigger('github.labeled in=acme/web label="Needs review"')
     expect(bug).toMatchObject({ event: 'labeled', label: 'Needs review' })
@@ -153,7 +227,7 @@ describe('--on trigger specs', () => {
     }
   })
 
-  it("offers GitHub's newer events and label= only where the bot's Orca Cloud sends them", () => {
+  it("offers newer GitHub events and webhooks according to the bot's cloud capabilities", () => {
     const bot = { name: 'Scout', github: {} }
     const older = formatAutomationTriggerOptions('github', bot)
     expect(older).not.toContain('github.ci_passed  when')
@@ -168,5 +242,36 @@ describe('--on trigger specs', () => {
     expect(formatAutomationTriggerOptions('github', newer)).not.toContain("doesn't send")
     expect(offeredEvents('github', newer)).toContain('security_alert')
     expect(offeredEvents('slack', bot)).toEqual(['mentioned', 'message', 'reaction'])
+    expect(formatAutomationTriggerOptions(undefined, { name: 'Scout' })).not.toContain(
+      'webhook.call'
+    )
+    expect(formatAutomationTriggerOptions(undefined, { name: 'Scout', webhooks: true })).toContain(
+      'webhook.call'
+    )
+  })
+
+  it('says which host is not signed in to Orca Cloud, and on a headless server how it signs in', () => {
+    const desktop = formatAutomationTriggerOptions(undefined, {
+      name: 'Scout',
+      cloudSignedOut: true,
+      signInServer: null
+    })
+    expect(desktop).toContain(
+      "This computer isn't signed in to Orca Cloud, and Slack, GitHub, Linear and webhook events reach Scout through Orca Cloud"
+    )
+    expect(desktop).not.toContain('orca auth login')
+    // An older host doesn't say whether it has a window: its terminal sign-in stays in view.
+    const older = formatAutomationTriggerOptions(undefined, { name: 'Scout', cloudSignedOut: true })
+    expect(older).toContain(
+      "This computer isn't signed in to Orca Cloud, and Slack, GitHub, Linear and webhook events reach Scout through Orca Cloud"
+    )
+    expect(older).toContain('On a server with no Orca window, `orca auth login` on it signs it in.')
+    const server = formatAutomationTriggerOptions(undefined, {
+      name: 'Scout',
+      cloudSignedOut: true,
+      signInServer: 'box1'
+    })
+    expect(server).toContain("This Orca server (box1) isn't signed in to Orca Cloud")
+    expect(server).toContain('`orca auth login` in a terminal on box1')
   })
 })

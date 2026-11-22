@@ -34,8 +34,8 @@ export type GoogleTriggerCheckerDeps = {
   automations(): readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[]
   bots(): readonly Pick<Bot, 'id' | 'google'>[]
   /** Accounts signed in here that Google still accepts. */
-  accounts(): string[]
-  api(account: string): GoogleApi
+  accounts(): string[] | Promise<string[]>
+  api(account: string): GoogleApi | Promise<GoogleApi>
   runForEvent(automationId: string, event: AutomationRunEvent): Promise<unknown>
   readState(): GoogleTriggerState
   writeState(state: GoogleTriggerState): void
@@ -81,7 +81,7 @@ export class GoogleTriggerChecker {
     const targets = googleRuleTargets(
       this.deps.automations(),
       this.deps.bots(),
-      this.deps.accounts()
+      await this.deps.accounts()
     )
     const state = this.deps.readState()
     const before = JSON.stringify(state)
@@ -160,7 +160,7 @@ export class GoogleTriggerChecker {
     now: number
   ): Promise<void> {
     const saved = (state.accounts[account] ??= {})
-    const api = this.deps.api(account)
+    const api = await this.deps.api(account)
     if (!saved.historyId) {
       saved.historyId = await gmailHistoryNow(api)
       return
@@ -208,7 +208,7 @@ export class GoogleTriggerChecker {
       delete state.accounts[account]?.calendars
       return
     }
-    const api = this.deps.api(account)
+    const api = await this.deps.api(account)
     const calendars = ((state.accounts[account] ??= {}).calendars ??= {})
     for (const calendarId of ids) {
       const events = await this.schedule(

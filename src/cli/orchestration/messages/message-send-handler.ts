@@ -8,7 +8,12 @@ import {
   type WorkerFollowUpReceipt
 } from '../workers/worker-start-agent-view'
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
+import { resolve } from 'node:path'
+import {
+  getOptionalStringFlag,
+  getRepeatedStringFlag,
+  getRequiredStringFlag
+} from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -108,6 +113,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       to,
       chat: getOptionalStringFlag(flags, 'chat'),
       item: getOptionalStringFlag(flags, 'item'),
+      ...attachedFiles(flags, cwd),
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
       subject: getRequiredStringFlag(flags, 'subject'),
@@ -231,4 +237,10 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
     recipients: value.recipients,
     ...common
   }
+}
+
+/** `--file`, each by its full path from the caller's folder. */
+function attachedFiles(flags: Map<string, string | boolean>, cwd: string): { files?: string[] } {
+  const files = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
+  return files.length > 0 ? { files } : {}
 }

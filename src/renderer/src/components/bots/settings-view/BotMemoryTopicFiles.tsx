@@ -60,7 +60,7 @@ export function BotMemoryTopicFiles({
   const open = (name: string) => () => openBotHomeFileTab(bot, home, memoryPath(name))
   const openIcon = <ExternalLink className="size-3.5 text-muted-foreground" />
   return (
-    <div className="mt-4 flex flex-col gap-4">
+    <div className="flex flex-col gap-3.5">
       {listing.topics.length > 0 ? (
         <SettingsInsetGroup title={t('bots.settingsView.topicFiles', 'Topic files')}>
           {listing.topics.map((name) => (

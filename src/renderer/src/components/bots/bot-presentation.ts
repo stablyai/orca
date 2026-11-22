@@ -1,6 +1,16 @@
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
+import {
+  agentSessionRefusalFailure,
+  readAgentSessionErrorRefusal
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { agentSessionStartRefusalParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
+import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { useAppStore } from '@/store'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
 export function botAgentLabel(agent: TerminalAgent): string {
@@ -25,6 +35,28 @@ export function botErrorMessage(error: unknown): string {
     return translate(
       'bots.errors.avatarInvalid',
       'That picture could not be used. Pick a PNG or JPG image.'
+    )
+  }
+  if (error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL) {
+    return translate(
+      'bots.errors.unsavedDrafts',
+      'Its folder has unsaved editor changes. Save or close them, then delete again.'
+    )
+  }
+  // A chat the agent refused to open names why, as native chat words it.
+  const refusal = readAgentSessionErrorRefusal(error)
+  if (refusal) {
+    // The bot's host calls itself this computer; name it as this reader does.
+    const target = error instanceof RuntimeRpcCallError ? error.target : undefined
+    return agentSessionWriteNoticeText(
+      agentSessionStartRefusalParts(
+        agentSessionRefusalFailure(refusal),
+        target
+          ? {
+              hostName: structuredAgentSessionTargetPlace(useAppStore.getState(), target, translate)
+            }
+          : {}
+      )
     )
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')

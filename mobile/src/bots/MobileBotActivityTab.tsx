@@ -1,47 +1,19 @@
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator } from 'react-native'
 import { Activity } from 'lucide-react-native'
-import { AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
-import type { SheetActivity, SheetActivityRow } from './bot-sheet-operations'
-import { activityRowView, workersHeading } from './mobile-bot-sheet-copy'
-import { workingWorkerRowCount } from '../../../src/shared/bots/bot-activity-recorded-workers'
-import { MobileLoadErrorState, MobileStateView } from '../components/feedback/MobileStateView'
+import type { SheetActivity } from './bot-sheet-operations'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/feedback/MobileStateView'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { MobileBotChatTree, type BotChatTreeActions } from './MobileBotChatTree'
 import type { PhoneBotChatTree } from './use-phone-bot-chat-tree'
 
-function ActivityRow({ row }: { row: SheetActivityRow }) {
-  const view = activityRowView(row)
-  return (
-    <ListRow
-      title={view.title}
-      subtitle={view.detail || undefined}
-      leading={<AgentStateDot state={view.dot} />}
-    />
-  )
-}
-
-function ActivitySection({ title, rows }: { title: string; rows: readonly SheetActivityRow[] }) {
-  if (rows.length === 0) {
-    return null
-  }
-  return (
-    <View>
-      <SectionHeader title={title} />
-      <ListGroup>
-        {rows.map((row) => (
-          <ActivityRow key={row.key} row={row} />
-        ))}
-      </ListGroup>
-    </View>
-  )
-}
-
-/** The desktop's Activity panel: Up next, then the bot's chats with their workers; an older host
- *  without the chats tree lists running workers, then in-progress and completed threads and runs. */
+/** The desktop's Activity panel: Up next, then the bot's chats with their workers. */
 export function MobileBotActivityTab({
   bot,
   hostKey,
@@ -50,8 +22,10 @@ export function MobileBotActivityTab({
   treeActions,
   upNextActions,
   loading = false,
-  error = false,
+  error,
   onRetry,
+  online,
+  hostName,
   withoutUpNext = false
 }: {
   bot: { id: string; name: string }
@@ -61,17 +35,22 @@ export function MobileBotActivityTab({
   treeActions: BotChatTreeActions
   upNextActions: UpNextActions
   loading?: boolean
-  error?: boolean
+  /** Null while the last read landed; why it failed otherwise. */
+  error: string | null
   onRetry?: () => void
+  online: boolean
+  hostName: string
   /** The bot panel shows Up next at the end of Items instead, as the desktop does. */
   withoutUpNext?: boolean
 }) {
   const botName = bot.name
   const t = useMobileTranslation()
   if (!activity) {
-    return error ? (
+    return !online ? (
+      <MobileOfflineState hostName={hostName} />
+    ) : error !== null ? (
       <MobileLoadErrorState
-        error={null}
+        error={error}
         title={t('bots.activity.readFailedTitle', 'Couldn’t load activity')}
         onRetry={onRetry}
       />
@@ -85,7 +64,7 @@ export function MobileBotActivityTab({
       />
     )
   }
-  const { workers, inProgress, completed, upNext } = activity
+  const { upNext } = activity
   const upNextSection =
     upNext && !withoutUpNext ? (
       <MobileBotUpNext botName={botName} upNext={upNext} actions={upNextActions} />
@@ -113,26 +92,14 @@ export function MobileBotActivityTab({
       </>
     )
   }
-  if (workers.length + inProgress.length + completed.length === 0) {
-    return (
-      <>
-        {upNextSection}
-        <MobileStateView
-          icon={Activity}
-          title={t('bots.activity.emptyTitle', 'No activity yet')}
-          message={t('bots.activity.empty', '{{name}}’s workers, threads and runs show up here.', {
-            name: botName
-          })}
-        />
-      </>
-    )
-  }
   return (
     <>
       {upNextSection}
-      <ActivitySection title={workersHeading(workingWorkerRowCount(workers))} rows={workers} />
-      <ActivitySection title={t('bots.activity.inProgress', 'In progress')} rows={inProgress} />
-      <ActivitySection title={t('bots.activity.completed', 'Completed')} rows={completed} />
+      <MobileLoadErrorState
+        error={null}
+        title={t('bots.chats.readFailedTitle', 'Couldn’t load chats')}
+        onRetry={tree.retry}
+      />
     </>
   )
 }

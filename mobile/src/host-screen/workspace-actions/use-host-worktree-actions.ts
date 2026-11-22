@@ -26,6 +26,7 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
 import { workspaceRename } from './workspace-rename-mutation'
 
@@ -72,7 +73,8 @@ export function useHostWorktreeActions(args: {
 
   // Route server-workspace actions through the desktop to their owning server.
   const clientForRow = useCallback(
-    (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
+    (item: Pick<Worktree, 'hostId'>) =>
+      client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
     [client, hostCapabilities]
   )
 
@@ -209,6 +211,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
+  const rowWrites = useHostWorktreeRowWrites({ clientForRow, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -257,7 +260,8 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree, paneKey?: string) => {
+    // A row not listed yet (a bot's home just made) opens from these fields alone.
+    (item: Pick<Worktree, 'worktreeId' | 'hostId' | 'displayName' | 'repo'>, paneKey?: string) => {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))
@@ -308,6 +312,7 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    ...rowWrites,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
