@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
@@ -51,7 +52,21 @@ export function getPluginManifest(): string {
   ].join('\n')
 }
 
+/** Each process the plugin loads in, with session env registered, writes `<prefix><pid>` here. */
+export const HERMES_PLUGIN_LOADED_PREFIX = '.loaded-'
+const GENERATION_PLACEHOLDER = '__ORCA_PLUGIN_GENERATION__'
+
+/** This build's plugin, by its source: a gateway marked with another one runs an older plugin. */
+export const HERMES_PLUGIN_GENERATION = createHash('sha256')
+  .update(pluginInitTemplate())
+  .digest('hex')
+  .slice(0, 16)
+
 export function getPluginInitSource(): string {
+  return pluginInitTemplate().replace(GENERATION_PLACEHOLDER, HERMES_PLUGIN_GENERATION)
+}
+
+function pluginInitTemplate(): string {
   return `# ${HERMES_PLUGIN_MARKER}
 from __future__ import annotations
 
@@ -79,6 +94,7 @@ EVENTS = ${JSON.stringify(HERMES_EVENTS)}
 SESSION_ENV_NAMES = ${JSON.stringify(SHARED_TOOL_PROCESS_SESSION_ENV_NAMES)}
 SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "${HERMES_SESSION_ENV_DIR}")
 SESSION_ID = re.compile(r"${HERMES_SESSION_ID_PATTERN}")
+GENERATION = "${GENERATION_PLACEHOLDER}"
 # Why: hook args/results can include full tool payloads. Bound traversal before
 # JSON encoding so status hooks stay best-effort and cheap.
 MAX_JSONABLE_DEPTH = 5
@@ -268,6 +284,17 @@ def register(ctx: Any) -> None:
             ctx.register_session_env(SESSION_ENV_NAMES, _session_env)
         except ValueError:
             # Another plugin holds one of these names; status hooks still report.
-            pass
+            return
+        _mark_loaded()
+
+
+def _mark_loaded() -> None:
+    # Orca reads the gateway's mark to know its tools get this plugin's session env.
+    try:
+        os.makedirs(SESSION_ENV_DIR, exist_ok=True)
+        with open(os.path.join(SESSION_ENV_DIR, "${HERMES_PLUGIN_LOADED_PREFIX}%d" % os.getpid()), "w", encoding="utf-8") as f:
+            f.write(GENERATION)
+    except OSError:
+        pass
 `
 }

@@ -40,6 +40,10 @@ export type PublishSharedToolProcessSessionEnv = (input: {
   values: Readonly<Record<string, string | null>>
   /** False once the child ended: a write still waiting must not land. */
   live: () => boolean
+  /** A bot's session, whose limits its tools must carry: rejects unless they will reach them. */
+  mustReach: boolean
+  /** The launched program's version, when known. */
+  agentVersion?: string
 }) => Promise<() => Promise<void>>
 
 /** A sealed child's caller identity, and the environment a shared process gives that session's

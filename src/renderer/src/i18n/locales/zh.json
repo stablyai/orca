@@ -19948,6 +19948,8 @@
         "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}，请在最新版本的 Orca 中从聊天里安装",
         "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天",
+        "botToolsNeedStatusHooks": "{{agent}} 机器人需要代理状态钩子：机器人的工具正是通过它们以机器人身份运行。请在“设置”→“智能体”中为 {{agent}} 开启，然后开始新的聊天。",
+        "botToolsGatewayOutdated": "{{agent}} 的网关仍在运行旧版 Orca 插件，因此此机器人的工具无法以机器人身份运行。请运行 `hermes gateway stop`，然后开始新的聊天。",
         "launchPreparationFailed": "Orca 无法在运行此聊天的计算机上准备启动 {{agent}}",
         "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端",
         "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续",

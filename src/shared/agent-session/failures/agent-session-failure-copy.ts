@@ -100,6 +100,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   fullAccessAsRoot:
     "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  botToolsNeedStatusHooks:
+    "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+  botToolsGatewayOutdated:
+    "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
   launchPreparationFailed:
     "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
   conversationOpenElsewhere:

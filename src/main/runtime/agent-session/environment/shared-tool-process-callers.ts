@@ -1,6 +1,7 @@
 // A chat whose tools run in a process other chats share gets a token in place of its identity. Tokens
 // live only in this run's memory, so a token from a closed chat or an earlier run of Orca names no one.
 import { createHash, randomBytes } from 'node:crypto'
+import { BOT_TOOLS_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   sharedToolProcessSessionEnv,
   type PublishSharedToolProcessSessionEnv
@@ -24,13 +25,15 @@ export class SharedToolProcessSession {
     private readonly key: string,
     private readonly sealed: Readonly<Record<string, string>>,
     private readonly tools: Readonly<Record<string, string | null>>,
-    private readonly publishSessionEnv: PublishSharedToolProcessSessionEnv
+    private readonly publishSessionEnv: PublishSharedToolProcessSessionEnv,
+    private readonly agentVersion: string | undefined
   ) {}
 
   /** A token for a launch whose tools run in a shared process; null for any other launch. */
   static forLaunch(
     spec: { sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv } },
-    sealed: Readonly<Record<string, string>>
+    sealed: Readonly<Record<string, string>>,
+    agentVersion?: string
   ): SharedToolProcessSession | null {
     if (!spec.sharedToolProcess) {
       return null
@@ -43,11 +46,14 @@ export class SharedToolProcessSession {
       key,
       sealed,
       tools,
-      spec.sharedToolProcess.publishSessionEnv
+      spec.sharedToolProcess.publishSessionEnv,
+      agentVersion
     )
   }
 
-  /** `opened` once its session's tools have their identity; a failure leaves them with none. */
+  /** `opened` once its session's tools have their identity. A chat that fails to publish keeps no
+   *  identity and refuses; a bot's session doesn't start, since without its token it would pass as
+   *  the owner, past the bot's own limits. */
   async publishFor<T extends { link?: { handle: { nativeId: string } } }>(opened: T): Promise<T> {
     await this.publish(opened.link?.handle.nativeId)
     return opened
@@ -58,16 +64,20 @@ export class SharedToolProcessSession {
       return
     }
     const publish = this.publishSessionEnv
-    this.withdraw = publish({
+    const mustReach = this.sealed[BOT_TOOLS_TOKEN_ENV] !== undefined
+    const published = publish({
       env: this.sealed,
       providerSessionId,
       values: this.tools,
-      live: () => !this.ended
-    }).catch((error: unknown) => {
+      live: () => !this.ended,
+      mustReach,
+      ...(this.agentVersion ? { agentVersion: this.agentVersion } : {})
+    })
+    this.withdraw = published.catch((error: unknown) => {
       console.warn('[agent-session] Could not give a shared tool process its session', error)
       return null
     })
-    await this.withdraw
+    await (mustReach ? published : this.withdraw)
   }
 
   end(): void {
