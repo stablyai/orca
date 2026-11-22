@@ -4,7 +4,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
 import { useWorkspaceCleanupBulkSelection } from './use-workspace-cleanup-bulk-selection'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
@@ -15,8 +14,32 @@ afterEach(() => {
   root = null
 })
 
-function candidate(name: string, blockers: WorkspaceCleanupCandidate['blockers'] = []) {
-  return makeCandidate({ worktreeId: `repo-1::/repo/${name}`, displayName: name, blockers })
+function candidate(
+  name: string,
+  blockers: WorkspaceCleanupCandidate['blockers'] = []
+): WorkspaceCleanupCandidate {
+  return {
+    worktreeId: `repo-1::/repo/${name}`,
+    repoId: 'repo-1',
+    repoName: 'Repo',
+    connectionId: null,
+    displayName: name,
+    branch: name,
+    path: `/repo/${name}`,
+    reasons: ['inactive'],
+    blockers,
+    lastActivityAt: 1_700_000_000_000,
+    localContext: {
+      terminalTabCount: 0,
+      cleanEditorTabCount: 0,
+      browserTabCount: 0,
+      diffCommentCount: 0,
+      newestDiffCommentAt: null,
+      finishedAgentCount: 0
+    },
+    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1_700_000_000_000 },
+    fingerprint: name
+  }
 }
 function facet(c: WorkspaceCleanupCandidate): {
   candidate: WorkspaceCleanupCandidate
