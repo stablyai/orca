@@ -167,6 +167,33 @@ describe('a reused skill listing on disk', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'reads again on a pick when a linked project path now resolves to another folder',
+    async () => {
+      await write(root, 'checkouts/a/.agents/skills/alpha/SKILL.md', skillText('alpha'))
+      await write(root, 'checkouts/b/.agents/skills/beta/SKILL.md', skillText('beta'))
+      await symlink(join(root, 'checkouts/a'), project)
+      const skillReads = new BotShareSkillReads()
+      const build = async (reuseSkills: boolean) =>
+        (
+          await readBotShareable({
+            bot,
+            home,
+            automations: [],
+            repos: repos(),
+            skillReads,
+            session: 'dialog-1',
+            reuseSkills
+          })
+        ).skills.map((skill) => skill.name)
+      await expect(build(false)).resolves.toEqual(['alpha'])
+      await rm(project)
+      await symlink(join(root, 'checkouts/b'), project)
+
+      await expect(build(true)).resolves.toEqual(['beta'])
+    }
+  )
+
   it('stops a replaced read without recording anything', async () => {
     await write(home, 'skills/triage/SKILL.md', skillText('triage'))
     await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy'))

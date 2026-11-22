@@ -270,7 +270,17 @@ export async function readBotShareable(
     const skills = await readShareSkills(input.bot, home, skillsLeftOut, skillProjects, signal)
     return { skills, leftOut: skillsLeftOut }
   }
-  const sources = JSON.stringify([input.bot.agent, home.path, home.real, skillProjects])
+  // A project path that now resolves elsewhere lists that folder's skills, so it reads again.
+  const projectRoots = await Promise.all(
+    skillProjects.map((project) => realpath(project.path).catch(() => null))
+  )
+  const sources = JSON.stringify([
+    input.bot.agent,
+    home.path,
+    home.real,
+    skillProjects,
+    projectRoots
+  ])
   const readSkills = async (): Promise<BotShareSkill[]> => {
     const listing = await (input.skillReads && input.session
       ? input.skillReads.read(
