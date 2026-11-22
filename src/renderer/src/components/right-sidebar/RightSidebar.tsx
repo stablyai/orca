@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
+import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -219,6 +220,7 @@ function RightSidebarInner(): React.JSX.Element {
           type="button"
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
+          {...keepFocusPressProps}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <SidebarToggleIcon side="right" size={16} />

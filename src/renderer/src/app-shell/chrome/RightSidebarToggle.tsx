@@ -1,6 +1,7 @@
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../store'
 import { useBotForWorkspace } from '../../components/bots/bot-workspace'
@@ -28,6 +29,7 @@ export function RightSidebarToggle(): React.JSX.Element {
         <button
           className="sidebar-toggle relative mr-2"
           onClick={toggleRightSidebar}
+          {...keepFocusPressProps}
           aria-label={needsYouLabel ?? t('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >
           <SidebarToggleIcon side="right" size={16} />
