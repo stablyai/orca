@@ -10,8 +10,6 @@ import type { BrowserPage as BrowserPageState } from '../../../../../shared/brow
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
-import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { useBrowserPageChromeFocus } from '../assemble-chrome/focus/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import { useElementGuestFocus } from '../assemble-chrome/focus/browser-page-guest-focus'
@@ -41,6 +39,7 @@ import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
 } from './remote-browser-page-context-menu'
+import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
 import { useRemoteBrowserPageAnnotate } from './use-remote-browser-page-annotate'
@@ -331,28 +330,15 @@ export function RemoteBrowserPagePane({
           history={history}
           actions={{
             edit: runRemoteEditCommand,
-            openInNewTab: (url, activate) => {
-              const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-                useAppStore.getState(),
-                browserTab.id,
-                worktreeId
-              )
-              void openWorkspaceBrowserTab({
-                workspaceId: worktreeId,
+            openInNewTab: (url, activate) =>
+              openRemoteBrowserLinkInNewTab({
                 url,
-                ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-                focusOnCreate: activate,
-                selectWorktree: false,
-                intent: { kind: 'url' },
-                expectedRuntimeEnvironmentId: runtimeEnvironmentId,
-                placementPreference: 'server'
-              }).catch((error) => {
-                setPaneNotice({
-                  kind: 'direct',
-                  text: error instanceof Error ? error.message : String(error)
-                })
-              })
-            },
+                activate,
+                browserPageId: browserTab.id,
+                worktreeId,
+                runtimeEnvironmentId,
+                setPaneNotice
+              }),
             // The server's loopback address would open this machine's, not the page's.
             externalUrl: resolveRemoteFailureExternalUrl,
             goBack: () => void runRemoteNavigation('browser.back'),
