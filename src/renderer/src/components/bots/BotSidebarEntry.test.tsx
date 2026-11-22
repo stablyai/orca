@@ -25,6 +25,8 @@ import {
 const mocks = vi.hoisted(
   (): {
     statusById: Record<string, WorktreeStatus>
+    // The bot's own home.
+    homeStatus: WorktreeStatus
     // The PR state each line's own badge would show, by workspace id.
     reviewById: Record<string, string>
     // Stands in for the project list's Smart sort; null keeps the real one.
@@ -37,6 +39,7 @@ const mocks = vi.hoisted(
     chatTreeReads: Promise<unknown>[]
   } => ({
     statusById: {},
+    homeStatus: 'inactive',
     reviewById: {},
     smartOrder: null,
     offline: false,
@@ -81,7 +84,7 @@ vi.mock('@/components/sidebar/AttachedWorktreeCards', () => ({
   )
 }))
 vi.mock('@/components/sidebar/workspace-card/activity/use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'inactive'
+  useWorktreeActivityStatus: () => mocks.homeStatus
 }))
 vi.mock('@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses', () => ({
   useWorktreeActivityStatuses: (ids: readonly string[]) =>
@@ -123,6 +126,7 @@ vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => (
   useConfirmationDialog: () => vi.fn()
 }))
 
+import { BotRow } from './BotRow'
 import { BotSidebarEntry } from './BotSidebarEntry'
 
 let home = makeFolderWorkspace({ id: 'bot-home' })
@@ -222,6 +226,7 @@ function lines(): string[] {
 beforeEach(() => {
   home = makeFolderWorkspace({ id: `bot-home-${++homeSequence}` })
   mocks.smartOrder = null
+  mocks.homeStatus = 'inactive'
   mocks.offline = false
   mocks.reviewById = {}
   mocks.chatTree = { state: 'failed', chats: [], workspaceChats: {} }
@@ -299,14 +304,10 @@ describe('BotSidebarEntry', () => {
     renderEntry()
 
     const fold = screen.getByRole('button', { name: 'Fold Scout' })
-    expect(fold.textContent).toBe('')
     fireEvent.click(fold)
     expect(lines()).toEqual([])
-    // Folded, it shows only its most urgent workspace's status, not a count of every one.
-    const toggle = screen.getByRole('button', { name: 'Unfold Scout' })
-    expect(toggle.textContent).toBe('')
 
-    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
     expect(lines()).toHaveLength(5)
   })
 
@@ -466,6 +467,59 @@ describe('BotSidebarEntry', () => {
       backgroundPane.remove()
       vi.unstubAllGlobals()
     }
+  })
+
+  it.each([
+    ['without workers', {}, false],
+    ['with its working workers folded', { run: 'working' as const }, true],
+    ['with its workers unfolded', { run: 'working' as const }, false]
+  ])("shows a working bot's spinner once, at its row's end, %s", (_case, workers, folded) => {
+    seed(workers)
+    if (folded) {
+      useAppStore.setState({
+        collapsedGroups: new Set([getLineageGroupKey(folderWorkspaceKey(home.id))])
+      })
+    }
+    mocks.homeStatus = 'working'
+    const { container } = renderEntry()
+
+    const spinners = botRow(container).querySelectorAll('[data-agent-spinner]')
+    expect(spinners).toHaveLength(1)
+    // After the name, not on the picture before it.
+    expect(
+      screen.getByText('Scout').compareDocumentPosition(spinners[0]) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it('shows one accessible trailing spinner when the working bot has no fold control', () => {
+    mocks.homeStatus = 'working'
+    const { container } = render(
+      <TooltipProvider>
+        <BotRow bot={bot()} home={home} isActive={false} onOpen={() => {}} fold={null} />
+      </TooltipProvider>
+    )
+
+    const indicator = screen.getByRole('img', { name: 'Working' })
+    const spinners = botRow(container).querySelectorAll('[data-agent-spinner]')
+    expect(spinners).toHaveLength(1)
+    expect(indicator.contains(spinners[0])).toBe(true)
+    expect(screen.getByText('Scout').compareDocumentPosition(indicator)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  })
+
+  it('exposes the working indicator on the fold button to screen readers', () => {
+    seed({ run: 'working' })
+    useAppStore.setState({
+      collapsedGroups: new Set([getLineageGroupKey(folderWorkspaceKey(home.id))])
+    })
+    mocks.homeStatus = 'working'
+    renderEntry()
+
+    expect(
+      screen.queryByRole('button', { name: 'Unfold Scout', description: 'Working' })
+    ).not.toBeNull()
   })
 
   it('lists nothing under a bot whose server is down, and gives it no fold', () => {

@@ -9,6 +9,7 @@ import {
   awaitingTakers,
   linkedDispatches,
   reconcileQuestions,
+  remoteAskTakers,
   takersLinkedTo,
   type QuestionNoticeWriter,
   type QuestionPartyFacts
@@ -135,6 +136,11 @@ export class QuestionReconciler {
         return this.mailboxChanged(edge.mailbox)
       case 'pane':
         return this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
+      case 'reachable':
+        if (this.awaiting.size > 0) {
+          remoteAskTakers(this.db, edge.environmentId).forEach((taker) => this.request(taker))
+        }
+        return
       case 'mail':
         if (this.watched.size > 0 || this.changing.size > 0) {
           this.mailboxesOf(edge.ids).forEach((mailbox) => this.mailboxChanged(mailbox))

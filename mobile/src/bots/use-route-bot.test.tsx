@@ -33,8 +33,6 @@ vi.mock('./host-bots-read', async (importOriginal) => {
   }
 })
 
-vi.mock('./bot-avatar-uploads', () => ({ readBotAvatarUploads: async () => new Map() }))
-
 const { useRouteBot } = await import('./use-route-bot')
 
 const LISTED: HostBotsRead = {

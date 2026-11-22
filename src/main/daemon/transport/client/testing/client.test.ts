@@ -25,6 +25,10 @@ function splitInsideUtf8Sequence(payload: string, needle: string): [Buffer, Buff
   return [encoded.subarray(0, offset + 1), encoded.subarray(offset + 1)]
 }
 
+function failureListenerCounts(socket: Socket): { error: number; close: number } {
+  return { error: socket.listenerCount('error'), close: socket.listenerCount('close') }
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
@@ -66,9 +70,9 @@ describe('DaemonClient', () => {
     closeOnConnect?: boolean
     closeOnHello?: boolean
     onControlMessage?: (msg: unknown) => string | null
-    onHello?: (msg: HelloMessage) => void
+    onHello?: (msg: HelloMessage, socket: Socket) => void
     rejectVersion?: boolean
-    suppressHelloResponse?: boolean
+    suppressHelloResponse?: boolean | 'stream'
     omitHelloIdentity?: boolean
     helloIdentity?: (role: 'control' | 'stream') => {
       pid: number
@@ -101,12 +105,15 @@ describe('DaemonClient', () => {
 
             if (msg.type === 'hello') {
               const hello = msg as HelloMessage
-              opts?.onHello?.(hello)
+              opts?.onHello?.(hello, socket)
               if (opts?.closeOnHello) {
                 socket.destroy()
                 return
               }
-              if (opts?.suppressHelloResponse) {
+              if (
+                opts?.suppressHelloResponse === true ||
+                (opts?.suppressHelloResponse === 'stream' && hello.role === 'stream')
+              ) {
                 return
               }
               if (opts?.rejectVersion) {
@@ -195,6 +202,63 @@ describe('DaemonClient', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('rejects when the control socket fails while the stream hello is pending', async () => {
+      let resolveStreamHello: () => void = () => {}
+      const streamHelloReceived = new Promise<void>((resolve) => {
+        resolveStreamHello = resolve
+      })
+      await startMockDaemon({
+        suppressHelloResponse: 'stream',
+        onHello: (hello) => {
+          if (hello.role === 'stream') {
+            resolveStreamHello()
+          }
+        }
+      })
+      client = new DaemonClient({ socketPath, tokenPath })
+      const attempt = client.ensureConnected().catch((error: Error) => error.message)
+      await streamHelloReceived
+
+      const { controlSocket } = client as unknown as { controlSocket: Socket }
+      const reset = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })
+      expect(() => controlSocket.emit('error', reset)).not.toThrow()
+      await expect(attempt).resolves.toBe('read ECONNRESET')
+      expect(client.isConnected()).toBe(false)
+      expect(failureListenerCounts(controlSocket)).toEqual({ error: 0, close: 0 })
+    })
+
+    it('keeps only the permanent control listeners once connected', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const { controlSocket } = client as unknown as { controlSocket: Socket }
+      expect(failureListenerCounts(controlSocket)).toEqual({ error: 1, close: 1 })
+    })
+
+    it('rejects when the daemon closes the control socket during stream bootstrap', async () => {
+      let daemonControlSocket: Socket | null = null
+      let resolveControlClosed: () => void = () => {}
+      const controlClosed = new Promise<void>((resolve) => {
+        resolveControlClosed = resolve
+      })
+      await startMockDaemon({
+        suppressHelloResponse: 'stream',
+        onHello: (hello, socket) => {
+          if (hello.role === 'control') {
+            daemonControlSocket = socket
+            return
+          }
+          daemonControlSocket?.on('close', resolveControlClosed).destroy()
+        }
+      })
+      client = new DaemonClient({ socketPath, tokenPath })
+      const attempt = client.ensureConnected().catch((error: Error) => error.message)
+
+      await controlClosed
+      await expect(attempt).resolves.toBe('Control socket closed during connection')
+      expect(client.isConnected()).toBe(false)
     })
 
     it('bounds a waiter on an existing connection attempt and prevents socket resurrection', async () => {

@@ -165,6 +165,14 @@ export function buildSkillDiscoverySources(
     ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(
+      'home-gemini',
+      'Gemini CLI home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'gemini'
+    ),
+    source(
       'home-opencode',
       'OpenCode home',
       pathApi.join(home, '.config', 'opencode', 'skills'),

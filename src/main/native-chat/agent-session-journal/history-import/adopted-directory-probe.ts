@@ -43,8 +43,14 @@ async function main() {
       ? (resolved.endsWith(sep) ? resolved.slice(0, -1) : resolved) +
         (suffix.startsWith(sep) || (sep === '\\' && suffix.startsWith('/')) ? '' : sep) + suffix
       : resolved);
-    if (candidate && comparison(candidate) === source) {
+    const compared = candidate && comparison(candidate);
+    if (compared === source) {
       process.stdout.write(JSON.stringify({version:1, matched:true}));
+      return;
+    }
+    // A conversation saved in a sub-folder belongs to the workspace, as Session History lists it.
+    if (compared && source.startsWith(/^(?:[a-z]:)?\/$/.test(compared) ? compared : compared + '/')) {
+      process.stdout.write(JSON.stringify({version:1, matched:true, inside:true}));
       return;
     }
     const parent = dirname(prefix);
@@ -65,7 +71,12 @@ export class AdoptedDirectoryProbes {
     return this.owned.size
   }
 
-  async matches(workspaceCwd: string, sourceCwd: string, signal?: AbortSignal): Promise<boolean> {
+  /** Whether the source folder is the workspace, inside it, or neither, after resolving the workspace's links. */
+  async relate(
+    workspaceCwd: string,
+    sourceCwd: string,
+    signal?: AbortSignal
+  ): Promise<'same' | 'inside' | null> {
     const job = {}
     this.owned.add(job)
     const env = pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, process.env, process.platform)
@@ -97,7 +108,7 @@ export class AdoptedDirectoryProbes {
       ) {
         throw new Error('Invalid directory verification response')
       }
-      return value.matched
+      return value.matched ? ('inside' in value && value.inside === true ? 'inside' : 'same') : null
     } catch {
       throw new Error('The conversation directory could not be verified. Try Resume again.')
     }

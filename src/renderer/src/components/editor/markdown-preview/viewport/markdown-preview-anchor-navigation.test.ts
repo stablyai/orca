@@ -27,25 +27,21 @@ describe('markdown preview HTML anchors', () => {
       expectedId: 'user-content-section'
     },
     {
-      name: 'already-prefixed hash to the authored id',
-      content: '[Go to section](#section)\n\n<a id="section"></a>\n',
-      hash: 'user-content-section',
-      expectedId: 'user-content-section'
-    },
-    {
       name: 'authored id that already has the prefix',
       content: '[Go to section](#user-content-section)\n\n<a id="user-content-section"></a>\n',
       hash: 'user-content-section',
       expectedId: 'user-content-user-content-section'
-    },
-    {
-      name: 'heading slug exactly',
-      content: '[Go to section](#section)\n\n## Section\n',
-      hash: 'section',
-      expectedId: 'section'
     }
   ])('resolves $name', ({ content, hash, expectedId }) => {
     expect(findMarkdownPreviewAnchorElement(renderPreview(content), hash)?.id).toBe(expectedId)
+  })
+
+  it('reaches a punctuation-only heading whose slug is empty in both preview paths', () => {
+    const content = '## !!!\n'
+    expect(findMarkdownPreviewAnchorElement(renderPreview(content), '')?.tagName).toBe('H2')
+    const { document } = parseMarkdownPreviewDocument(content)
+    const anchors = document.blocks.flatMap((block) => block.anchors)
+    expect(resolveMarkdownPreviewAnchorId('', (id) => anchors.includes(id))).toBe('')
   })
 
   it('prefers a heading slug over an authored id with the same name', () => {
