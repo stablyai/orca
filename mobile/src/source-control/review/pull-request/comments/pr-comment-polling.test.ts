@@ -70,7 +70,9 @@ describe('pollPrComments', () => {
         )
       })
       expect(queryClient.getQueryData(key)).toMatchObject({ comments: [] })
-      await act(async () => vi.advanceTimersByTimeAsync(100))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
       expect(queryClient.getQueryData(key)).toMatchObject({
         body: 'Original description',
         comments: [{ id: 7, body: 'New reply' }]
