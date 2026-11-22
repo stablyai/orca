@@ -199,18 +199,16 @@ export function useRuntimeEnvironmentMutationActions({
             { value0: trimmedName }
           )
         )
+        setRenamingId(null)
       }
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to rename server.'
       if (mountedRef.current) {
         setRenameError(message)
-      }
-      return false
-    } finally {
-      if (mountedRef.current) {
         setRenamingId(null)
       }
+      return false
     }
   }
 

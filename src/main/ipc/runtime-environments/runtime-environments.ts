@@ -29,6 +29,7 @@ import {
 import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
 import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { registerRuntimeEnvironmentRecoveryHandler } from './connectivity/runtime-environment-recovery-handler'
+import { registerRuntimeEnvironmentRenameHandler } from './connectivity/runtime-environment-rename-handler'
 import { registerRuntimeEnvironmentRepairHandler } from './pairing/runtime-environment-repair-handler'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
@@ -174,6 +175,7 @@ export async function registerRuntimeEnvironmentHandlers(
     getSettings: () => store.getSettings()
   })
   registerRuntimeEnvironmentRecoveryHandler()
+  registerRuntimeEnvironmentRenameHandler(getUserDataPath)
   registerRuntimeEnvironmentRepairHandler({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
