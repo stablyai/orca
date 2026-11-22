@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
@@ -52,7 +53,8 @@ it.each(['single', 'bulk'])('keeps workspace removal out of the %s Activity row 
       compactMode={false}
       showJumpAction
       groupBy="none"
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
 
   const row = screen.getByRole('listitem')
