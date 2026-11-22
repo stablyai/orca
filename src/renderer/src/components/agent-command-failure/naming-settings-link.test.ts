@@ -61,11 +61,17 @@ function generationReads(settings: NamingSettings, generationRepo: TargetRepo | 
   }
 }
 
-function changedParams(a: object, b: object): string[] {
-  const left = a as { params?: Record<string, unknown> }
-  const right = b as { params?: Record<string, unknown> }
-  const keys = new Set([...Object.keys(left.params ?? {}), ...Object.keys(right.params ?? {})])
-  return [...keys].filter((key) => left.params?.[key] !== right.params?.[key])
+type GenerationRead = ReturnType<typeof generationReads>
+
+function paramsOf(read: GenerationRead): Record<string, unknown> {
+  return 'params' in read ? { ...read.params } : {}
+}
+
+function changedParams(withRepo: GenerationRead, withoutRepo: GenerationRead): string[] {
+  const left = paramsOf(withRepo)
+  const right = paramsOf(withoutRepo)
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+  return [...keys].filter((key) => left[key] !== right[key])
 }
 
 describe('branchNamingSettingsTarget agrees with branch-name generation', () => {
