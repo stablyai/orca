@@ -81,6 +81,8 @@ const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: s
 
 export type PaneTopBannerProps = {
   title: React.ReactNode
+  /** Moves the live region to one hidden node that announces this; pass it (empty until there is news) in every phase so the node persists. */
+  announcement?: string
   body?: React.ReactNode
   tone?: PaneTopBannerTone
   /** Replaces the warning icon; neutral and accent show none without it. */
@@ -102,6 +104,7 @@ export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Eleme
 /** The pane-top banner's look without the terminal's height reservation, for panes that lay it out in flow. */
 export function PaneTopBanner({
   title,
+  announcement,
   body,
   tone = 'warning',
   icon,
@@ -117,6 +120,13 @@ export function PaneTopBanner({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const announcementRef = useRef<HTMLSpanElement>(null)
+  // Register the empty live region before announcing a worker that has already finished.
+  useEffect(() => {
+    if (announcementRef.current) {
+      announcementRef.current.textContent = announcement ?? ''
+    }
+  }, [announcement])
   useEffect(() => {
     onShown?.()
   }, [onShown])
@@ -126,7 +136,7 @@ export function PaneTopBanner({
   return (
     <div
       ref={ref}
-      role="status"
+      role={announcement === undefined ? 'status' : undefined}
       // Why pr-24: an agent pane floats four controls (hand off, chat, split, close) over its top-right corner.
       className={cn(
         '@container border-b py-2 pr-24 pl-3 text-xs',
@@ -134,6 +144,9 @@ export function PaneTopBanner({
         className
       )}
     >
+      {announcement === undefined ? null : (
+        <span ref={announcementRef} role="status" className="sr-only" />
+      )}
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">

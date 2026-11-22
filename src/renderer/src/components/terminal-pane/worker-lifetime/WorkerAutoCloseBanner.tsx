@@ -39,6 +39,6 @@ export function WorkerAutoCloseBanner({
     isVisible,
     worktreeId
   )
-  const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t)
+  const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t, environmentId)
   return banner ? <PaneTopWarningBanner {...banner} /> : null
 }
