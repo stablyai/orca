@@ -5861,7 +5861,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "all": "All chats",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters",
