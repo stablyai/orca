@@ -16,6 +16,8 @@ export const CONNECTOR_PATHS = {
   // `${bots}/<bot id>/slack`: GET its Slack state, DELETE its install. POST `…/slack/apps` creates
   // or resumes its Slack app and answers the link that installs it. GET `…/slack/members?q=` lists
   // the installed app's workspace's full members whose names match, for the bot's Who can ask.
+  // POST `…/slack/thread-link` changes the link in new replies for the named workspace. Advertise
+  // it in that install's state only after the write and every reply path honor the preference.
   // POST `…/posts` posts as the bot. PUT `…/avatar` sets the bot's picture, which its app's icon follows.
   // POST `…/linear/comments` comments on a Linear issue as the bot.
   bots: '/v1/connector/bots',

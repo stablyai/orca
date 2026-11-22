@@ -81,6 +81,8 @@ export const ConnectorBotSlackState = z.discriminatedUnion('state', [
     // approval of whoever set it up; an older cloud leaves them out (no choice to offer).
     postAs: z.enum(['person', 'computer']).optional(),
     postAsPending: z.enum(['person', 'computer']).optional(),
+    // An explicit boolean also advertises support for changing it on this install.
+    showOrcaThreadLink: z.boolean().optional().catch(undefined),
     // What each choice shows as: the bot's account's Slack name and picture (left out without its
     // Slack link) and the computer's name as Orca shows it.
     poster: z.object({ name: z.string(), avatarUrl: optionalConnectorAvatarUrl }).optional(),
@@ -123,6 +125,16 @@ export const ConnectorBotSlackPostAsResponse = z.union([
   ConnectorBotSlackAppResponse
 ])
 export type ConnectorBotSlackPostAsResponse = z.infer<typeof ConnectorBotSlackPostAsResponse>
+
+export type ConnectorBotSlackThreadLinkRequest = {
+  v: 1
+  teamId: string
+  showOrcaThreadLink: boolean
+}
+export const ConnectorBotSlackThreadLinkResponse = z.object({ showOrcaThreadLink: z.boolean() })
+export type ConnectorBotSlackThreadLinkResponse = z.infer<
+  typeof ConnectorBotSlackThreadLinkResponse
+>
 
 // complete is false when the workspace is too large to read whole, so someone may be missing.
 export const ConnectorBotSlackMembersResponse = z.object({

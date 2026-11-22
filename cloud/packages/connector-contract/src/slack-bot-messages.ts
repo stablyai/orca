@@ -46,7 +46,9 @@ export const ConnectorBotSlackStateSchema = z.discriminatedUnion('state', [
     updateNeeded: z.literal(true).optional(),
     // The app works as it is, yet predates optional scopes this cloud's manifest asks for: setting it
     // up again grants them. Offered, never asked for.
-    updateAvailable: z.literal(true).optional()
+    updateAvailable: z.literal(true).optional(),
+    // Omitted until the cloud can persist and apply this setting for the install. Defaults to true.
+    showOrcaThreadLink: z.boolean().optional()
   })
 ])
 
@@ -56,6 +58,18 @@ export const ConnectorBotSlackStateSchema = z.discriminatedUnion('state', [
 export const ConnectorBotSlackStateResponseSchema = ConnectorBotSlackStateSchema.and(
   z.object({ teams: z.array(ConnectorBotSlackStateSchema).optional() })
 )
+
+// POST `…/slack/thread-link`: the authenticated bot's install in the specified workspace.
+export const ConnectorBotSlackThreadLinkRequestSchema = z.object({
+  v: z.literal(1),
+  teamId: z.string().min(1),
+  showOrcaThreadLink: z.boolean()
+})
+
+// Echo the saved setting after it takes effect for the install's new replies.
+export const ConnectorBotSlackThreadLinkResponseSchema = ConnectorBotSlackThreadLinkRequestSchema.pick({
+  showOrcaThreadLink: true
+})
 
 // The people of the bot's workspace who may be on Who can ask, and other Slack apps, by name.
 // complete is false when the workspace is too large to read whole, so someone may be missing.

@@ -27349,6 +27349,11 @@
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect."
+      },
+      "threadLink": {
+        "saveFailed": "Couldn’t save the Slack reply link setting.",
+        "label": "Show “Open this thread in Orca” link",
+        "description": "Include the link in new bot replies in this workspace."
       }
     },
     "whoCanAsk": {

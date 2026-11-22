@@ -11,6 +11,7 @@ import { clickWhenShown, settle, slackOnly, stub } from '../bot-connectors-host-
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 import portrait from '../../../component-fixtures/assets/slack-avatar.jpg'
 import { connectorAvatarSrc } from '../../../../../shared/connector-avatar-scheme'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 
 // The Slack photo's address; the host's avatar cache is played by a bundled portrait wherever its
 // cached src is drawn, so the shot never waits on the network.
@@ -48,14 +49,29 @@ const installed = (fields: Record<string, unknown> = {}) => ({
   ...fields
 })
 
-function host(bot: Bot, options: { requests?: boolean; photo?: boolean } = {}): void {
+function host(
+  bot: Bot,
+  options: { requests?: boolean; photo?: boolean; threadLink?: boolean } = {}
+): void {
   stub({ linearLinked: false, composio: false })
   serveCachedAvatars()
   const poster = options.photo === false ? { name: 'Alice' } : { name: 'Alice', avatarUrl: PHOTO }
+  let showOrcaThreadLink = options.threadLink
   publishBots([bot])
   Reflect.set(window.api, 'botSlack', {
     members: async () => ({ ok: false, error: 'fixture' }),
-    state: async () => ({ ok: true, value: installed({ poster }) }),
+    state: async () => ({ ok: true, value: installed({ poster, showOrcaThreadLink }) }),
+    setThreadLink: async (params: {
+      botId: string
+      teamId: string
+      showOrcaThreadLink: boolean
+    }) => {
+      if (params.botId !== bot.id || params.teamId !== 'T1' || showOrcaThreadLink === undefined) {
+        throw new Error('Wrong Slack install')
+      }
+      showOrcaThreadLink = params.showOrcaThreadLink
+      return { ok: true, value: { showOrcaThreadLink } }
+    },
     setPostAs: async () => ({
       ok: true,
       value: { appId: 'A1', authorizeUrl: 'https://slack.com/oauth/v2/authorize?state=fixture' }
@@ -149,6 +165,27 @@ export const panel280OnePerson = panel(280, shared)
 export const panel280Request = panel(280, builder, undefined, true)
 export const panel280Picker = panel(280, builder, openPicker)
 export const panel280Approval = panel(280, builder, pickComputer)
+
+const replyLinkPage = (threadLink?: boolean, turnOff = false) =>
+  defineFixture({
+    width: 440,
+    store: { settings: { ...getDefaultSettings('/fixture'), uiLanguage: 'en' } },
+    setup: () => host(builder, { threadLink }),
+    render: () => <Sidebar bot={builder} width={400} />,
+    interact: async () => {
+      await clickWhenShown((button) => button.textContent?.includes('Globex') === true)
+      if (turnOff) {
+        await clickWhenShown(
+          (button) => button.role === 'switch' && button.getAttribute('aria-checked') === 'true'
+        )
+      }
+      await settle(300)
+    }
+  })
+
+export const replyLinkUnsupported = replyLinkPage()
+export const replyLinkOn = replyLinkPage(true)
+export const replyLinkOff = replyLinkPage(true, true)
 
 const dialog = (interact?: () => Promise<void>, photo = true) =>
   defineFixture({

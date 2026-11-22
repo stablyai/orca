@@ -22,6 +22,7 @@ export const BotSlackTeam = z.object({ teamId: Id })
 /** Without a team, the bot's first workspace (remove: every workspace). */
 export const BotSlackBot = z.object({ botId: Id, teamId: Id.optional() })
 export const BotSlackSetUp = z.object({ botId: Id, teamId: Id })
+export const BotSlackThreadLink = BotSlackSetUp.extend({ showOrcaThreadLink: z.boolean() })
 export const BotSlackMembers = z.object({ botId: Id, query: Query, teamId: Id.optional() })
 /** What messages typed at the bot's computer post as; `setupState` is the after-install pick's. */
 export const BotSlackPostAs = z.union([
