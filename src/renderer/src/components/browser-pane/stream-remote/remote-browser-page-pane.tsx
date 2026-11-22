@@ -141,11 +141,9 @@ export function RemoteBrowserPagePane({
   )
 
   // Stopped streams cannot clear paneBusy with frames; staged pages remain busy until creation. Stream notices outrank consequent RPC failures.
-  const busy = stagedPage
-    ? true
-    : streamStatus.kind === 'stopped'
-      ? false
-      : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+  const busy =
+    stagedPage ||
+    (streamStatus.kind !== 'stopped' && (paneBusy || isRemoteBrowserStreamBusy(streamStatus)))
   const streamNotice = remoteBrowserStreamNotice(streamStatus)
   const remoteError =
     paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
@@ -200,7 +198,7 @@ export function RemoteBrowserPagePane({
 
   const { reconnectRemoteStream, resyncRemoteViewport } = useRemoteBrowserPageStream({
     activeRuntimeEnvironmentId: runtimeEnvironmentId,
-    browserPageId: browserTab.id,
+    page: browserTab,
     isActive,
     lifecycle,
     stagedPage,
