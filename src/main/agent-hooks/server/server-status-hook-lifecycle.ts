@@ -101,7 +101,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     )
   }
 
-  // A pane's agent-view entry goes when its status row does, or when the row records the agent's exit.
+  // A pane's agent-view entry goes with its status row, the row's recorded exit, or another agent taking it.
   protected override commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
@@ -109,7 +109,9 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   ): boolean {
     const committed = super.commitStatusRowMutation(before, after, emit)
     // A row moving to another pane is not its Claude ending; the mod keeps its original pane key.
-    if (before && (!after || after.agentPresence?.ended)) {
+    const replaced =
+      before?.payload.agentType === 'claude' && after && after.payload.agentType !== 'claude'
+    if (before && (!after || after.agentPresence?.ended || replaced)) {
       const sessionId = before.providerSession?.id
       const forgotten = this.claudeAgentViews.forget(before.paneKey, sessionId)
       // A moved pane's entry stays under the mod's launch key: find it by session, sparing any
