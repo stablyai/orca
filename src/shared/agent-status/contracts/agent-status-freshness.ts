@@ -3,6 +3,13 @@ import type { AgentStatusEntry } from './agent-status-types'
 /** Retain explicit status past this threshold so silent hook streams decay working dots back to active. */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
+/**
+ * How long a silent lead with live children may keep the row held instead of collapsing to done
+ * (#46585 review). Stored child states never age, so a hold that never ends can outlive the run it
+ * describes; past this window the row returns to the existing title-only behavior.
+ */
+export const AGENT_STATUS_HELD_ROW_MAX_AGE_MS = 4 * 60 * 60 * 1000
+
 /** Hydrated nonterminal rows stay unverifiable throughout retention; missing exit evidence must not let the live window end them. */
 export const AGENT_STATUS_HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 

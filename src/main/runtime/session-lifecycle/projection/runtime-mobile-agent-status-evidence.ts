@@ -1,4 +1,7 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_HELD_ROW_MAX_AGE_MS,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { foldMainAgentWithRowChildWork } from '../../../../shared/agent-hook-listener/state/agent-hook-row-child-work-fold'
 
@@ -28,6 +31,34 @@ export function workingHookOwnsIdleTitleInterval(
         ) ||
       rowChildWorkHoldsIdleLead(status, observedAt, pty)) &&
     Date.now() - observedAt <= AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
+/**
+ * Silence never upgrades a row to done (#46585). A quiet lead whose last hook row is
+ * still `working` and whose children are still live keeps the row unverifiable past the
+ * freshness window: the same children that hold the turn open inside the window hold it
+ * open after it. Provider-neutral — the child fold is shared, and no provider-specific
+ * branch is added here.
+ *
+ * The hold is bounded twice (#46585 review): past `AGENT_STATUS_HELD_ROW_MAX_AGE_MS` it
+ * returns to the title-only path, and a provider generation reset (the agent was replaced
+ * in the same PTY) invalidates older rows through `rowChildWorkHoldsIdleLead`. Stored
+ * child states never age, so an unbounded hold could outlive the run it describes.
+ */
+export function staleWorkingHookHoldsLiveChildren(
+  status: HookTurnFacts,
+  observedAt: number,
+  pty: RuntimePtyWorktreeRecord | null
+): boolean {
+  const age = Date.now() - observedAt
+  return (
+    status.state === 'working' &&
+    pty?.lastAgentStatus === 'idle' &&
+    !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle) &&
+    age > AGENT_STATUS_STALE_AFTER_MS &&
+    age <= AGENT_STATUS_HELD_ROW_MAX_AGE_MS &&
+    rowChildWorkHoldsIdleLead(status, observedAt, pty)
   )
 }
 

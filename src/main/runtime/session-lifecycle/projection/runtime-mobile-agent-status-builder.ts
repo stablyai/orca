@@ -17,6 +17,7 @@ import {
   resolveRuntimeHookLiveAgentRow,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import { maybeBuildHeldStaleWorkingAgentStatus } from './runtime-mobile-agent-status-stale-working'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -260,6 +261,22 @@ export function buildRuntimeMobileAgentStatus(
         ownerOptions
       )
     }
+  }
+  // Silence never upgrades a working row with live children to done (#46585). The helper
+  // publishes unverifiable with the children retained; other paths stay untouched.
+  const heldStale = maybeBuildHeldStaleWorkingAgentStatus({
+    hookRow,
+    pty,
+    paneKey,
+    terminalHandle,
+    terminalTitle,
+    tabId: tab.parentTabId,
+    providerSession,
+    ownerAgent,
+    ownerOptions
+  })
+  if (heldStale) {
+    return heldStale
   }
   // Rejected/stale/resume hook evidence proves identity only; title-derived done retires exited cards.
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.

@@ -154,6 +154,12 @@ export type RuntimeHookAgentRowLookup = {
   live: HookLiveAgentRow | null
   /** Latest nonterminal row hydrated across a host restart: unverifiable, never live. */
   restored: HookLiveAgentRow | null
+  /**
+   * Latest `working` row past the freshness window (not restored, not asleep). The
+   * builder decides from it, with the PTY, whether live children keep the turn open
+   * and the row must stay unverifiable instead of collapsing to a title-only done (#46585).
+   */
+  staleWorking: HookLiveAgentRow | null
 }
 
 /** Resume identity stays valid until relaunch; ownership and live status remain freshness-bounded. */
@@ -164,6 +170,7 @@ export function selectRuntimeHookAgentRowForPane(
   let agent: AgentStatusIpcPayload | null = null
   let live: AgentStatusIpcPayload | null = null
   let restored: AgentStatusIpcPayload | null = null
+  let staleWorking: AgentStatusIpcPayload | null = null
   let confirmedReceivedAt = -Infinity
   const now = Date.now()
   const freshAfter = now - AGENT_STATUS_STALE_AFTER_MS
@@ -201,6 +208,17 @@ export function selectRuntimeHookAgentRowForPane(
     ) {
       restored = entry
     }
+    if (
+      entry.providerSessionOnly !== true &&
+      entry.restoredUnconfirmed !== true &&
+      entry.state === 'working' &&
+      !entry.paneSleep &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) < freshAfter &&
+      // Stale rows are still evidence for the children-held turn; the PTY decides in the builder.
+      (!staleWorking || entry.receivedAt > staleWorking.receivedAt)
+    ) {
+      staleWorking = entry
+    }
   }
   // A confirmed row at least as new as the restored one supersedes it, stale or not.
   if (restored && confirmedReceivedAt >= restored.receivedAt) {
@@ -214,7 +232,8 @@ export function selectRuntimeHookAgentRowForPane(
     agentType: agent?.agentType ?? null,
     agentIsLive: agent != null && agent.state !== 'done',
     live: live ? toHookLiveAgentRow(live) : null,
-    restored: restored ? toHookLiveAgentRow(restored) : null
+    restored: restored ? toHookLiveAgentRow(restored) : null,
+    staleWorking: staleWorking ? toHookLiveAgentRow(staleWorking) : null
   }
 }
 
