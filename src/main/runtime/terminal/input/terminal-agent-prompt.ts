@@ -5,14 +5,13 @@ import {
   waitForAgentPromptPromise
 } from './agent-prompt-signals'
 import { assertTerminalInputAdmitted } from './terminal-input-admission'
-import type {
-  AgentPromptExpectedBinding,
-  RuntimeAgentPromptWriteOptions
-} from './agent-prompt-write-options'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import type {
   RuntimeTerminalPromptDelivery,
+  RuntimeTerminalPromptSubmit,
   RuntimeTerminalSend
 } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
@@ -31,40 +30,13 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
-import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
-import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import { OrcaRuntimeWithAgentPromptWriteGuards } from './terminal-agent-prompt-guards'
 import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
-export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithAgentPromptWriteGuards {
   protected abstract createAgentPromptRenderGate(
     ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
   ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
-
-  protected assertAgentPromptExpectedBinding(
-    handle: string,
-    expected: AgentPromptExpectedBinding | undefined
-  ): void {
-    if (!expected) {
-      return
-    }
-    const current = this.getTerminalPromptRequestBinding(handle)
-    if (
-      current.ptyId !== expected.ptyId ||
-      current.processIncarnation !== expected.processIncarnation
-    ) {
-      throw new Error('terminal_handle_stale')
-    }
-  }
-
-  /** Under `wait`, a pre-paste refusal is the hold's to resume rather than the caller's to see. */
-  private throwIfAgentPromptPermissionReturned(
-    baseline: AgentPromptActivity,
-    current: AgentPromptActivity
-  ): void {
-    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
-      throw new AgentPromptPermissionReturnedError()
-    }
-  }
 
   protected async writeTerminalAgentPrompt(
     handle: string,
@@ -129,6 +101,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       assertWritable(signal)
     }
     let baseline: AgentPromptActivity
+    let pastedAt = 0
+    let enteredAt = 0
+    let renderWait: RuntimeTerminalPromptSubmit['renderWait']
+    // Why only acceptQueued: its receipt carries the withheld Enter back to a caller that reports it.
+    const mayWithhold =
+      options.withholdSubmitOnDialog === true &&
+      options.acceptQueued === true &&
+      !!options.requestId
+    let withheldFor: RuntimeTerminalWaitBlockedReason | null = null
     try {
       await beforeWrite(admissionSignal)
       assertWritable(admissionSignal)
@@ -149,13 +130,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
+      pastedAt = Date.now()
       if (submitWithPaste) {
+        enteredAt = pastedAt
         options.onSubmitWritten?.()
       }
       if (!submitWithPaste) {
         // Once paste is accepted, only host cancellation can suppress its first Enter.
         if (renderGate) {
-          await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
+          renderWait = await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
         } else if (options.composerReady) {
           await waitForAgentPromptDelay(
             AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs,
@@ -175,6 +158,10 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
         }
+        // An Enter now would answer a dialog that opened over the paste, not submit it.
+        withheldFor = mayWithhold
+          ? await this.readAgentPromptSubmitHold(handle, ptyId, permissionBaseline)
+          : null
         try {
           await beforeWrite(deliverySignal)
         } catch (error) {
@@ -186,14 +173,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       }
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
-      this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-      if (
-        !submitWithPaste &&
-        !this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
-      ) {
-        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+      // A withheld Enter leaves the pasted brief for the caller to report, not a failed send.
+      if (!withheldFor) {
+        this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
       }
-      if (!submitWithPaste) {
+      if (!submitWithPaste && !withheldFor) {
+        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+          throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+        }
+        enteredAt = Date.now()
         options.onSubmitWritten?.()
       }
     } catch (error) {
@@ -202,28 +190,30 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     } finally {
       renderGate?.dispose()
     }
-    const submits = submitWithPaste
-      ? 1
-      : 1 +
-        (await this.resubmitHeldAgentPromptForSend(
-          ptyId,
-          generation,
-          {
-            ...options,
-            signal: admissionSignal,
-            beforeWrite: () => beforeWrite(admissionSignal)
-          },
-          {
-            baseline,
-            readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-            prompt: options.promptForSchedule,
-            heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
-              writeHostPlatform,
-              this.getPtyAgent(ptyId),
-              pastePayload
-            )
-          }
-        ))
+    const submits = withheldFor
+      ? 0
+      : submitWithPaste
+        ? 1
+        : 1 +
+          (await this.resubmitHeldAgentPromptForSend(
+            ptyId,
+            generation,
+            {
+              ...options,
+              signal: admissionSignal,
+              beforeWrite: () => beforeWrite(admissionSignal)
+            },
+            {
+              baseline,
+              readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+              prompt: options.promptForSchedule,
+              heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
+                writeHostPlatform,
+                this.getPtyAgent(ptyId),
+                pastePayload
+              )
+            }
+          ))
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
@@ -251,7 +241,10 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       generation,
       baselineWorkingSequence: baseline.workingSequence,
       baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
-      baselinePermissionSequence: baseline.permissionSequence
+      baselinePermissionSequence: baseline.permissionSequence,
+      submit: withheldFor
+        ? { pastedAt, renderWait, withheldFor }
+        : { pastedAt, renderWait, enteredAt }
     }
     const checkpoint: RuntimeTerminalSend = {
       handle,
@@ -261,7 +254,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
     options.onInputAccepted?.(checkpoint)
     // Without a lifecycle verifier, report accepted input; inability to prove submission must not fail Dispatch.
-    if (!settlementAgent) {
+    if (!settlementAgent || withheldFor) {
       return { submits, prompt: inputAccepted }
     }
     this.registerAgentPromptRequest(

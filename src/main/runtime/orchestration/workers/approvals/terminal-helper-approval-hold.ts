@@ -9,7 +9,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
 import { isDeliberateRest, sendWorkerReport } from '../turn-stops/worker-turn-stop-report'
-import { approvalReportId } from '../turn-stops/worker-presence-report'
+import { approvalReportId } from '../turn-stops/worker-turn-stop-report'
 import {
   holdPayload,
   type TerminalWorkerApprovalHold,

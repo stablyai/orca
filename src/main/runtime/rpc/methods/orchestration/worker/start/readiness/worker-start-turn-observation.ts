@@ -39,6 +39,17 @@ export async function observeWorkerTurnStart(args: {
   if (!args.prompt) {
     return { verdict: 'unsupported' }
   }
+  const submit = args.prompt.submit
+  if (submit && 'withheldFor' in submit) {
+    // No Enter was written, so no turn can start to observe.
+    return {
+      verdict: 'unobserved',
+      prompt: args.prompt,
+      reason:
+        `Orca typed the brief but did not press Enter: the screen showed a dialog ` +
+        `(${submit.withheldFor}). Answer it in the worker's terminal, then submit the brief.`
+    }
+  }
   const verdict = classifyPromptDelivery(args.prompt)
   if (verdict !== 'unobserved') {
     return { verdict, prompt: args.prompt }

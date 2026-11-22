@@ -126,9 +126,14 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       effects
     )
     // The coordinator may end its turn on this receipt; a start that never begins must still reach it.
-    void runtime.reportUnconfirmedWorkerStart(args.dispatchId).catch((error: unknown) => {
-      console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
-    })
+    void runtime
+      .reportUnconfirmedWorkerStart(args.dispatchId, {
+        readyAt: deliveryStartedAt,
+        prompt: deliveredPrompt
+      })
+      .catch((error: unknown) => {
+        console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
+      })
     return {
       runId: run.id,
       taskId: task.id,

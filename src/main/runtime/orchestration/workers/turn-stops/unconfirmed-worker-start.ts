@@ -6,6 +6,7 @@ import {
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
+import type { UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
@@ -23,6 +24,8 @@ export type UnconfirmedWorkerStart =
   | {
       surface: 'terminal'
       /** The terminal's last lines, when they could be read. */ screen?: string
+      /** How the brief went in and what followed; see describeUnconfirmedStartEvidence. */
+      evidence?: UnconfirmedStartEvidence
     }
   | { surface: 'chat' }
 
@@ -72,7 +75,8 @@ export function observeUnconfirmedWorkerStart(
         from,
         reason: 'start-unconfirmed',
         startSurface: start.surface,
-        lastOutput: start.surface === 'terminal' ? start.screen : undefined
+        lastOutput: start.surface === 'terminal' ? start.screen : undefined,
+        ...(start.surface === 'terminal' && start.evidence ? { startEvidence: start.evidence } : {})
       }
     },
     deps
