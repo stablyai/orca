@@ -132,11 +132,14 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
   }
   for (;;) {
     if (blocked) {
-      // A screen only a person answers changes only when they do: nothing to read until it repaints.
+      // A screen only a person answers changes only when they do: each repaint gets one tail read,
+      // and the full wait starts again only once that screen is gone.
       const id = ptyId()
-      if (id) {
-        await nextOutput(runtime, id, signal, deadline)
-      }
+      do {
+        if (id) {
+          await nextOutput(runtime, id, signal, deadline)
+        }
+      } while (id && awaiting() && Date.now() < deadline && (await stillBlocked(start)))
     }
     if (!awaiting()) {
       return
@@ -207,6 +210,14 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   reportNeverReadyWorkerStart(db, failed, screen, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
+}
+
+/** Whether the pane still shows a screen only a person can answer: one tail read, no waiter kept. */
+async function stillBlocked({ runtime, terminalHandle }: AwaitingWorkerStart): Promise<boolean> {
+  const probe = await runtime
+    .waitForTerminal(terminalHandle, { condition: 'tui-idle', launchReadiness: true, timeoutMs: 1 })
+    .catch(() => null)
+  return probe?.satisfied === false && probe.blockedReason !== undefined
 }
 
 /** Resolves on the pane's next output, an abort or the deadline, whichever is first. */
