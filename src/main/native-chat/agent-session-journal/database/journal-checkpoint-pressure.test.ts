@@ -500,3 +500,34 @@ it('hands parked writes back at the next deadline once a long truncate returns b
   await vi.waitFor(() => expect(admitted).toBe(true), { timeout: 500 })
   await write
 }, 10000)
+
+it('hands parked writes back at the first deadline even while unrelated worker progress keeps moving', async () => {
+  const { filename, writer } = fixture()
+  let worker!: LivenessCheckpoint
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    factory: (workerData) => {
+      worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  worker.busy(false)
+  worker.ready()
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  owner.afterCommit()
+  let admitted = false
+  const write = new JournalSqlBatch(writer, owner).run([2], (id) => {
+    admitted = true
+    writer.prepare("INSERT INTO writes VALUES(?, 'parked')").run(id)
+  })
+  // The idle worker finishes other work (a paced retry, an old request) without answering this one.
+  const ticks = setInterval(() => Atomics.add(worker.liveness, 0, 2), 5)
+  try {
+    await vi.waitFor(() => expect(admitted).toBe(true), { timeout: 300 })
+  } finally {
+    clearInterval(ticks)
+  }
+  await write
+})

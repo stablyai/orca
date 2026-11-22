@@ -326,7 +326,9 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     }
     attached.silent = false
     if (!busy) {
+      // Progress unrelated to the request only keeps the worker; what waits on it is handed back, as on main.
       attached.busyDeadlines = 0
+      this.host.late()
       this.watch(progress)
       return
     }

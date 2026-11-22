@@ -115,8 +115,8 @@ try {
       }
       const state = frames.get();
       // Nothing that touches the filesystem runs between a truncate and its reply; one that didn't
-      // succeed is reported blocked, and the worker's next retry measures the WAL again.
-      const blocked = busy || (ceiling(state) && state.checkpointed < state.log);
+      // succeed blocks only above the ceiling, as on main, and the worker's next retry measures again.
+      const blocked = ceiling(state) && (busy || state.checkpointed < state.log);
       pendingTruncate = undefined;
       reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });
