@@ -46,7 +46,11 @@ const DockedAgentRow = memo(
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px]">
             <span className="text-muted-foreground">{card.repoName} · </span>
-            {card.conversationName ?? card.worktreeName}
+            {card.worktreeName}
+            {/* The workspace stays: two conversations in one project would otherwise read alike. */}
+            {card.conversationName ? (
+              <span className="text-muted-foreground"> · {card.conversationName}</span>
+            ) : null}
           </span>
           {secondary ? (
             <span
@@ -61,9 +65,12 @@ const DockedAgentRow = memo(
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
           <AgentStateDot state={dashboardCardDisplayState(card)} />
-          <span className="text-[11px] tabular-nums text-muted-foreground">
-            {formatStartedAgo(displayTimestamp(card), now, t)}
-          </span>
+          {/* Title-derived rows have no start time; an age from 0 would read as decades. */}
+          {displayTimestamp(card) > 0 ? (
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {formatStartedAgo(displayTimestamp(card), now, t)}
+            </span>
+          ) : null}
         </span>
       </button>
     )

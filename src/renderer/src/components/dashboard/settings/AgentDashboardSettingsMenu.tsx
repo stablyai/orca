@@ -35,21 +35,24 @@ export function AgentDashboardSettingsMenu({
     if (next === mode) {
       return
     }
-    updateSettings({ experimentalAgentDashboardMode: next })
+    const saved = updateSettings({ experimentalAgentDashboardMode: next })
     if (next === 'popout') {
       onSwitchToPopout()
       return
     }
-    // Move the open board to the new host so the switch does not just make it vanish.
-    const state = useAppStore.getState()
-    if (next === 'right-sidebar') {
-      state.setAgentDashboardDrawerOpen(false)
-      state.setRightSidebarTab('agent-dashboard')
-      state.setRightSidebarOpen(true)
-    } else {
-      state.setSidebarOpen(true)
-      state.setAgentDashboardDrawerOpen(true)
-    }
+    // Move the open board to the new host once the mode is in the store; earlier, Sidebar still sees the
+    // old mode and closes the drawer we just opened.
+    void saved.then(() => {
+      const state = useAppStore.getState()
+      if (next === 'right-sidebar') {
+        state.setAgentDashboardDrawerOpen(false)
+        state.setRightSidebarTab('agent-dashboard')
+        state.setRightSidebarOpen(true)
+      } else {
+        state.setSidebarOpen(true)
+        state.setAgentDashboardDrawerOpen(true)
+      }
+    })
   }
 
   return (
