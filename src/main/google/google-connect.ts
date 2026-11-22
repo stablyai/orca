@@ -24,7 +24,9 @@ import {
   readGoogleAccount,
   removeGoogleAccount,
   resolveGoogleClient,
+  resolveGoogleDefaultAccount,
   saveGoogleAccount,
+  saveGoogleDefaultAccount,
   saveImportedGoogleClient,
   type GoogleAccountRecord
 } from './google-credential-store'
@@ -78,6 +80,8 @@ export class GoogleConnect {
           throw new Error('The Google sign-in did not start.')
         }
         const record = await runGoogleSignIn(this.deps, options, channel)
+        // The first account becomes the default now, before a later sign-in could look older.
+        await resolveGoogleDefaultAccount()
         return { account: googleAccountView(record) }
       },
       {
@@ -161,6 +165,15 @@ export class GoogleConnect {
     )
   }
 
+  /** The account calls and triggers without `--account` use. */
+  defaultAccount(): Promise<string | null> {
+    return resolveGoogleDefaultAccount()
+  }
+
+  setDefaultAccount(email: string): Promise<string> {
+    return saveGoogleDefaultAccount(email)
+  }
+
   /** Re-reads every connected account's services; a grant Google ended shows as Reconnect. */
   async checkAccounts(): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
@@ -234,11 +247,14 @@ export class GoogleConnect {
     return toWire(await this.flows.cancel(owner, flowId))
   }
 
-  /** Removes the account from this host; `revoke` also cancels the grant at Google first. */
+  /**
+   * Removes the account from this host; `revoke` also cancels the grant at Google first. Removing the
+   * default promotes the oldest account left.
+   */
   async disconnect(
     email: string,
     revoke: boolean
-  ): Promise<{ removed: string; revoked: boolean | null }> {
+  ): Promise<{ removed: string; revoked: boolean | null; defaultAccount: string | null }> {
     if (!(await hasGoogleAccount(email))) {
       throw new Error(`${email} isn't connected on this computer.`)
     }
@@ -252,7 +268,7 @@ export class GoogleConnect {
         : record !== null
     }
     await removeGoogleAccount(email)
-    return { removed: email.toLowerCase(), revoked }
+    return { removed: email.toLowerCase(), revoked, defaultAccount: await this.defaultAccount() }
   }
 }
 

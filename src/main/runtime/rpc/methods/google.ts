@@ -13,6 +13,7 @@ import {
   GoogleBotAccessSetParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
+  GoogleDefaultSetParams,
   GoogleDisconnectParams,
   GoogleFinishSignInParams,
   GoogleSignInFlowParams,
@@ -102,6 +103,7 @@ export const GOOGLE_METHODS = [
       return {
         ...(await statusView(runtime, connect)),
         accounts,
+        defaultAccount: await connect.defaultAccount(),
         ...(clientKey ? { clientKey } : {})
       }
     }
@@ -168,6 +170,15 @@ export const GOOGLE_METHODS = [
       refuseFromBot(botToken, ctx)
       const connect = google()
       return connect.disconnect(await pickAccount(connect, account), revoke === true)
+    }
+  }),
+  defineMethod({
+    name: 'google.default.set',
+    permission: 'workspace',
+    params: GoogleDefaultSetParams,
+    handler: async ({ botToken, account }, ctx) => {
+      refuseFromBot(botToken, ctx)
+      return { defaultAccount: await google().setDefaultAccount(account) }
     }
   }),
   defineMethod({

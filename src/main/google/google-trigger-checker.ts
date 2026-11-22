@@ -35,6 +35,8 @@ export type GoogleTriggerCheckerDeps = {
   bots(): readonly Pick<Bot, 'id' | 'google'>[]
   /** Accounts signed in here that Google still accepts. */
   accounts(): string[] | Promise<string[]>
+  /** Where a rule without an account listens. */
+  defaultAccount(): Promise<string | null>
   api(account: string): GoogleApi | Promise<GoogleApi>
   runForEvent(automationId: string, event: AutomationRunEvent): Promise<unknown>
   readState(): GoogleTriggerState
@@ -81,7 +83,8 @@ export class GoogleTriggerChecker {
     const targets = googleRuleTargets(
       this.deps.automations(),
       this.deps.bots(),
-      await this.deps.accounts()
+      await this.deps.accounts(),
+      await this.deps.defaultAccount()
     )
     const state = this.deps.readState()
     const before = JSON.stringify(state)

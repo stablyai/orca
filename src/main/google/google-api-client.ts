@@ -11,7 +11,7 @@ import {
   refreshGoogleAccount,
   type GoogleTokenDeps
 } from './google-account-tokens'
-import { listGoogleAccounts, readGoogleAccount } from './google-credential-store'
+import { readGoogleAccount, resolveGoogleDefaultAccount } from './google-credential-store'
 import { classifyGoogleApiError, readGoogleApiError } from './google-readiness'
 
 const REQUEST_TIMEOUT_MS = 20_000
@@ -28,7 +28,7 @@ export class GoogleToolError extends Error {
   }
 }
 
-/** The account a command acts as: the one named, else the only one connected here. */
+/** The account a command acts as: the one named, else this computer's default. */
 export async function resolveGoogleAccount(wanted: string | undefined): Promise<string> {
   if (wanted) {
     const record = await readGoogleAccount(wanted)
@@ -39,15 +39,13 @@ export async function resolveGoogleAccount(wanted: string | undefined): Promise<
     }
     return record.email
   }
-  const emails = (await listGoogleAccounts()).map((entry) => entry.email)
-  if (emails.length === 1 && emails[0]) {
-    return emails[0]
+  const fallback = await resolveGoogleDefaultAccount()
+  if (!fallback) {
+    throw new GoogleToolError(
+      'No Google account is connected on this computer. Ask your owner to connect one in Orca.'
+    )
   }
-  throw new GoogleToolError(
-    emails.length === 0
-      ? 'No Google account is connected on this computer. Ask your owner to connect one in Orca.'
-      : `Several Google accounts are connected; pick one with --account: ${emails.join(', ')}.`
-  )
+  return fallback
 }
 
 /** A body read with a schema: the value, or null when Google answered in another shape. */
