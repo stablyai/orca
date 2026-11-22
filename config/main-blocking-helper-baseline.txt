@@ -472,6 +472,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+1 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: the Windows process-table module reads its addon file once on first load (cached); the per-watch table read is async native
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
