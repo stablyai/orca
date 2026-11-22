@@ -14,4 +14,9 @@ describe('countWholeGitStatusPills', () => {
   it('keeps the blocking first pill even when it cannot fit beside the +N chip', () => {
     expect(countWholeGitStatusPills([200, 60], 150, 28, 6)).toBe(1)
   })
+
+  it('collapses everything into the +N chip when even a truncated first pill would be too narrow', () => {
+    expect(countWholeGitStatusPills([45], 30, 20, 6)).toBe(0)
+    expect(countWholeGitStatusPills([200, 60], 41, 28, 6)).toBe(1)
+  })
 })

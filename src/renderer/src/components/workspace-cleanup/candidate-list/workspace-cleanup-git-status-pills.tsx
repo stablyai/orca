@@ -5,9 +5,13 @@ import { StatusPill } from './workspace-cleanup-status-pill'
 
 type GitStatusPill = { label: string; tone: StatusPillTone }
 
+/** Narrowest a truncated first pill may get while its ellipsis still reads as one. */
+const MIN_TRUNCATED_PILL_WIDTH = 40
+
 /**
  * How many pills to show, in priority order. Whole pills while they fit with a "+N" chip for the
- * rest; if not even the first fits beside the chip, keep it (truncated) so the warning never hides.
+ * rest; if the first fits only truncated, keep it that way down to a readable width, below which
+ * every pill collapses into the "+N" chip (its tooltip still lists them all).
  */
 export function countWholeGitStatusPills(
   widths: readonly number[],
@@ -29,7 +33,7 @@ export function countWholeGitStatusPills(
       return shown
     }
   }
-  return 1
+  return available >= MIN_TRUNCATED_PILL_WIDTH ? 1 : 0
 }
 
 /**
@@ -95,7 +99,7 @@ export function WorkspaceCleanupGitStatusPills({
             tone={status.tone}
             tabIndex={firstTruncated ? 0 : undefined}
             className={cn(
-              'min-w-[min(4rem,100%)] shrink',
+              'min-w-[min(2.5rem,100%)] shrink',
               firstTruncated &&
                 'rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
             )}
@@ -126,7 +130,7 @@ export function WorkspaceCleanupGitStatusPills({
           <StatusPill
             key={status.label}
             tone={status.tone}
-            className={index === 0 ? 'min-w-[min(4rem,100%)]' : undefined}
+            className={index === 0 ? 'min-w-[min(2.5rem,100%)]' : undefined}
           >
             {status.label}
           </StatusPill>
