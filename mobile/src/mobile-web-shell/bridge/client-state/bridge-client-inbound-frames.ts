@@ -26,7 +26,7 @@ export type BridgeInboundFramePort = {
   acceptAppInactive: () => void
   acceptAppResumed: (round: number, reloading: boolean) => void
   acceptTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => void
-  acceptHeaderAction: (actionId: string) => void
+  acceptHeaderAction: (actionId: string, revision: number) => void
 }
 
 function describeStreamFailure(error: unknown): string {
@@ -85,7 +85,7 @@ export function createBridgeInboundFrameReader(
         port.acceptTerminalKey(message.key, message.inputOwner)
         return
       case 'headerAction':
-        port.acceptHeaderAction(message.actionId)
+        port.acceptHeaderAction(message.actionId, message.revision)
         return
       case 'reply':
         if (!requests.has(message.id)) {

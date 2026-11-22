@@ -1,16 +1,27 @@
-import type { BridgePageHeader } from '../native-capabilities/bridge-page-header'
+import type {
+  BridgePageHeader,
+  BridgePageHeaderContent
+} from '../native-capabilities/bridge-page-header'
 
-type HeaderClaim = { header: BridgePageHeader; onAction: (actionId: string) => void }
+type HeaderClaim = { header: BridgePageHeaderContent; onAction: (actionId: string) => void }
 
 // The newest claim is the bar the shell draws; releasing it hands the bar to the one beneath, or back to the page.
 export function createBridgeClientPageHeader(publish: (header: BridgePageHeader | null) => void) {
   const claims: HeaderClaim[] = []
-  const publishTop = () => publish(claims.at(-1)?.header ?? null)
+  // Every send of the top claim's header gets the next one, so the last sent names the header in effect.
+  let revision = 0
+  const publishTop = () => {
+    const top = claims.at(-1)
+    revision += 1
+    publish(top ? { ...top.header, revision } : null)
+  }
   return {
-    accept: (actionId: string) => {
-      claims.at(-1)?.onAction(actionId)
+    accept: (actionId: string, pressedRevision: number) => {
+      if (pressedRevision === revision) {
+        claims.at(-1)?.onAction(actionId)
+      }
     },
-    claim: (header: BridgePageHeader, onAction: (actionId: string) => void) => {
+    claim: (header: BridgePageHeaderContent, onAction: (actionId: string) => void) => {
       const entry: HeaderClaim = { header, onAction }
       claims.push(entry)
       publishTop()
@@ -25,7 +36,7 @@ export function createBridgeClientPageHeader(publish: (header: BridgePageHeader 
         }
       }
       return Object.assign(release, {
-        update: (next: BridgePageHeader) => {
+        update: (next: BridgePageHeaderContent) => {
           if (entry.header === next) {
             return
           }

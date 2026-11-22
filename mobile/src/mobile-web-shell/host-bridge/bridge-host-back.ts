@@ -35,7 +35,7 @@ export type BridgeHostBack = {
   // The shell-drawn header is the page's other way back, so it starts and ends with the document too.
   readonly readHeader: (header: BridgePageHeader | null) => void
   // False while no document holds a header claim.
-  readonly sendHeaderAction: (actionId: string) => boolean
+  readonly sendHeaderAction: (actionId: string, revision: number) => boolean
 }
 
 export function createBridgeHostBack(args: {
@@ -82,11 +82,16 @@ export function createBridgeHostBack(args: {
     drop,
     read: () => ({ claimed, ...(headerClaimed ? { pageHeaderClaimed: true as const } : {}) }),
     readHeader,
-    sendHeaderAction: (actionId) => {
+    sendHeaderAction: (actionId, revision) => {
       if (!headerClaimed || !args.deliverable()) {
         return false
       }
-      args.send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_PAGE_HEADER_ACTION_FRAME, actionId })
+      args.send({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: BRIDGE_PAGE_HEADER_ACTION_FRAME,
+        actionId,
+        revision
+      })
       return true
     }
   }

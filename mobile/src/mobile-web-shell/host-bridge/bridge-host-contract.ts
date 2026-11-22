@@ -173,8 +173,8 @@ export type BridgeHost = {
    * which is every page older than it, or when no document holds the view.
    */
   sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => boolean
-  /** Hands the page one press on its shell-drawn header. False while no document holds a header claim. */
-  sendHeaderAction: (actionId: string) => boolean
+  /** Hands the page one press on the header of `revision`. False while no document holds a header claim. */
+  sendHeaderAction: (actionId: string, revision: number) => boolean
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.

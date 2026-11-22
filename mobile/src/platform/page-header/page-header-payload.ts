@@ -13,8 +13,8 @@ import {
 import {
   BRIDGE_PAGE_HEADER_BACK_ID,
   BRIDGE_PAGE_HEADER_TITLE_ID,
-  BridgePageHeaderSchema,
-  type BridgePageHeader,
+  BridgePageHeaderContentSchema,
+  type BridgePageHeaderContent,
   type BridgePageHeaderMenuItem
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-page-header'
 
@@ -35,7 +35,7 @@ function hexColor(color: string | undefined): string | undefined {
 }
 
 export type PageHeaderPayload = {
-  header: BridgePageHeader
+  header: BridgePageHeaderContent
   /** The press each id the shell may send back stands for. */
   handlers: ReadonlyMap<string, () => void>
 }
@@ -46,9 +46,8 @@ function iconName(icon: AppIcon | undefined): string | undefined {
 }
 
 /**
- * The header as data for the shell, or null when it holds something the shell can't draw. Menu
- * ids come from the item's own id or label, not its position, so a press on a menu the page has
- * since changed reaches the item that was pressed or nothing.
+ * The header as data for the shell, or null when it holds something the shell can't draw. Ids are
+ * unique within this header only; the client's revision drops a press made on an earlier one.
  */
 export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload | null {
   const handlers = new Map<string, () => void>()
@@ -84,7 +83,7 @@ export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload
           submenu: item.actions.map((action) => menuAction(`${prefix}/${item.label}`, action))
         }
       : menuAction(prefix, item)
-  const header: BridgePageHeader = {
+  const header: BridgePageHeaderContent = {
     title: request.title,
     titleVisible: request.titleVisible ?? true,
     back: request.onBack !== undefined,
@@ -112,6 +111,6 @@ export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload
           }
     )
   }
-  const parsed = BridgePageHeaderSchema.safeParse(header)
+  const parsed = BridgePageHeaderContentSchema.safeParse(header)
   return parsed.success ? { header: parsed.data, handlers } : null
 }

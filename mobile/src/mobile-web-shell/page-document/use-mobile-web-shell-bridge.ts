@@ -68,8 +68,8 @@ export type MobileWebShellBridgeView = {
   readonly publishTerminalKeyRail: (keys: BridgeTerminalKeyRail) => void
   /** Hands the page one rail press. False with no host, or a page not granted the rail. */
   readonly sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => boolean
-  /** Hands the page one press on its shell-drawn header. False with no host or no header claim. */
-  readonly sendHeaderAction: (actionId: string) => boolean
+  /** Hands the page one press on the header of `revision`. False with no host or no header claim. */
+  readonly sendHeaderAction: (actionId: string, revision: number) => boolean
   /**
    * Hands the mounted host one Back press. False when there is no host, or when the document it
    * serves never said it takes one — the caller then leaves the key to the navigator.
@@ -338,8 +338,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       [buildId, client, sessionId, snapshot]
     ),
     sendHeaderAction: useCallback(
-      (actionId: string) =>
-        hostRef.current?.sessionId === sessionId && hostRef.current.host.sendHeaderAction(actionId),
+      (actionId: string, revision: number) =>
+        hostRef.current?.sessionId === sessionId &&
+        hostRef.current.host.sendHeaderAction(actionId, revision),
       [sessionId]
     ),
     // Fenced on the session the way inbound frames are, and answering false rather than throwing

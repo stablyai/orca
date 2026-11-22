@@ -115,7 +115,10 @@ export function PageHeaderLayer({
   bridge
 }: {
   state: ShellPageHeader
-  bridge: { sendBack: () => boolean; sendHeaderAction: (actionId: string) => boolean }
+  bridge: {
+    sendBack: () => boolean
+    sendHeaderAction: (actionId: string, revision: number) => boolean
+  }
 }) {
   const t = useMobileTranslation()
   const navigation = useNavigation()
@@ -127,7 +130,16 @@ export function PageHeaderLayer({
       repeat()
     }
   })
-  const send = useCallback((actionId: string) => void sendAction(actionId), [sendAction])
+  const revision = header?.revision
+  // Stamped with the header these items were drawn from, so the page can drop a press on one it replaced.
+  const send = useCallback(
+    (actionId: string) => {
+      if (revision !== undefined) {
+        sendAction(actionId, revision)
+      }
+    },
+    [revision, sendAction]
+  )
   const items = useMemo<NativeHeaderItem[]>(
     () =>
       (header?.actions ?? []).map((action) =>

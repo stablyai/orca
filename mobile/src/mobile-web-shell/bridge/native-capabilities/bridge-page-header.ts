@@ -12,7 +12,11 @@ export const BRIDGE_PAGE_HEADER_GRANT = 'nativeHeader'
  */
 export const BRIDGE_PAGE_HEADER_NOTIFY = 'page-header'
 
-/** Shell to page, a frame: one press on a header button or menu item, named by its id. */
+/**
+ * Shell to page, a frame: one press on a header button or menu item, named by its id and the
+ * revision of the header it was drawn from. A press must never run a handler for a header other
+ * than the one that produced it, so the page drops one whose revision is no longer in effect.
+ */
 export const BRIDGE_PAGE_HEADER_ACTION_FRAME = 'headerAction'
 
 /** The id a press on the shell's own Back carries when the native stack has nothing to pop. */
@@ -72,7 +76,10 @@ const actionSchema = z.discriminatedUnion('kind', [
   })
 ])
 
-export const BridgePageHeaderSchema = z.strictObject({
+// Required both ways: no build without it ever drew the header, so a frame lacking one is refused, never guessed at.
+export const BridgePageHeaderRevisionSchema = z.number().int().nonnegative()
+
+export const BridgePageHeaderContentSchema = z.strictObject({
   title: z.string().max(300),
   // False while the page's own title still shows in its content, as a collapsing title does.
   titleVisible: z.boolean(),
@@ -83,6 +90,12 @@ export const BridgePageHeaderSchema = z.strictObject({
   titlePressable: z.boolean().optional()
 })
 
+// Stamped by the page on each header it sends, new per claim and per change, so ids are only read against it.
+export const BridgePageHeaderSchema = BridgePageHeaderContentSchema.extend({
+  revision: BridgePageHeaderRevisionSchema
+})
+
+export type BridgePageHeaderContent = z.infer<typeof BridgePageHeaderContentSchema>
 export type BridgePageHeader = z.infer<typeof BridgePageHeaderSchema>
 export type BridgePageHeaderAction = BridgePageHeader['actions'][number]
 export type BridgePageHeaderMenuItem = z.infer<typeof menuItemSchema>

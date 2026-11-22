@@ -175,7 +175,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       notifications.notifySwapSafe(safe, round)
     },
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner),
-    acceptHeaderAction: (actionId) => pageHeader.accept(actionId)
+    acceptHeaderAction: (actionId, revision) => pageHeader.accept(actionId, revision)
   })
 
   function receive(json: string): void {

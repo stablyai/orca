@@ -24,7 +24,8 @@ import {
 } from '../native-capabilities/bridge-terminal-key'
 import {
   BRIDGE_PAGE_HEADER_ACTION_FRAME,
-  BridgePageHeaderIdSchema
+  BridgePageHeaderIdSchema,
+  BridgePageHeaderRevisionSchema
 } from '../native-capabilities/bridge-page-header'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
@@ -255,7 +256,8 @@ const BridgeHostMessageSchema = z.union([
     v: versionSchema,
     type: z.literal(BRIDGE_PAGE_HEADER_ACTION_FRAME),
     // Not `id`: that names an exchange, which a refused frame's salvage would try to settle.
-    actionId: BridgePageHeaderIdSchema
+    actionId: BridgePageHeaderIdSchema,
+    revision: BridgePageHeaderRevisionSchema
   }),
   z.object({
     v: versionSchema,

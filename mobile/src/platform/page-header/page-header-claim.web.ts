@@ -3,11 +3,11 @@ import { useFocusEffect } from 'expo-router'
 import { usePageBridgeClientIfPresent } from '../../transport/connection/client-context.web'
 import {
   BRIDGE_PAGE_HEADER_GRANT,
-  type BridgePageHeader
+  type BridgePageHeaderContent
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-page-header'
 import { pageHeaderPayload, type PageHeaderRequest } from './page-header-payload'
 
-type Sent = { key: string; header: BridgePageHeader }
+type Sent = { key: string; header: BridgePageHeaderContent }
 
 /**
  * True while the shell draws this header natively, so the caller draws nothing. False on an older
