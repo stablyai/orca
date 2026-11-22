@@ -270,7 +270,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.trackClientRequest(() =>
+        void this.trackSocketRequest(socket, () =>
           this.handleWebSocketMessage(
             plaintext,
             reply,

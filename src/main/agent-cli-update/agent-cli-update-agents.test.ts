@@ -1,21 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { agentCliUpdateDefinition } from './agent-cli-update-agents'
 
-describe('agentCliUpdateDefinition', () => {
-  it("reads Cursor's dated build without its hash", () => {
-    expect(agentCliUpdateDefinition('cursor').parseVersion?.('2026.11.17-f532c45\n')).toBe(
-      '2026.11.17'
-    )
-  })
+const SELF_UPDATE = { runnable: true, args: ['update'] }
 
-  it('looks up the latest OpenCode on the installed major', () => {
-    expect(agentCliUpdateDefinition('opencode').latest('1.19.5')).toEqual({
-      kind: 'npm',
-      package: 'opencode-ai'
-    })
-    expect(agentCliUpdateDefinition('opencode').latest('2.3.1')).toEqual({
-      kind: 'npm',
-      package: '@opencode/cli'
-    })
+describe('claude update plan', () => {
+  it.each([
+    [
+      '/opt/homebrew/Caskroom/claude-code@latest/2.1.330/claude',
+      { runnable: false, command: 'brew upgrade --cask claude-code@latest' }
+    ],
+    // The stable cask lags the latest channel Orca compares against.
+    ['/opt/homebrew/Caskroom/claude-code/2.1.323/claude', SELF_UPDATE],
+    // A mise shim on PATH resolves into mise's own keg.
+    ['/opt/homebrew/Cellar/mise/2026.11.0/bin/mise', SELF_UPDATE],
+    [
+      'C:\\Users\\a\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe\\claude.exe',
+      { runnable: false, command: 'winget upgrade Anthropic.ClaudeCode' }
+    ]
+  ])('%s', (realPath, plan) => {
+    expect(agentCliUpdateDefinition('claude').plan('2.1.323', realPath)).toEqual(plan)
   })
 })

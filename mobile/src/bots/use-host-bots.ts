@@ -10,7 +10,6 @@ import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
-import { readBotAvatarUploads } from './bot-avatar-uploads'
 import {
   botHomeLinksRead,
   botOwnChatsRead,
@@ -39,7 +38,6 @@ export type ListingTarget = {
 /** A host's bots with their workers' lineage; a server older than the page gets a line instead. */
 export async function readHostBotListing(
   target: ListingTarget,
-  avatarCache: Map<string, string>,
   isServer: boolean,
   /** Whether to read thread links and side chats too. */
   threads = true
@@ -92,7 +90,6 @@ export async function readHostBotListing(
     view: bots.view,
     workspaceLineage: links.workspaceLineage,
     worktreeLineage: links.lineage,
-    avatarUris: await readBotAvatarUploads(target.client, bots.bots, avatarCache),
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
@@ -113,11 +110,10 @@ type BotListingReads = {
  *  after, so the answer postdates the ask without reads piling up behind each other. */
 function startBotListingReads(args: {
   hosts: readonly ListingTarget[]
-  avatarCache: Map<string, string>
   setListings: (update: (previous: readonly HostBotListing[]) => readonly HostBotListing[]) => void
   setGroupsUnread: (unread: boolean) => void
 }): BotListingReads {
-  const { hosts, avatarCache, setListings, setGroupsUnread } = args
+  const { hosts, setListings, setGroupsUnread } = args
   // Each host with a read out, and whether it was asked again meanwhile.
   const askedAgain = new Map<ExecutionHostId, boolean>()
   // Each host whose threads' facts the next read owes.
@@ -173,7 +169,6 @@ function startBotListingReads(args: {
       const withThreads = threadsOwed.delete(host.hostId)
       const listing = await readHostBotListing(
         host,
-        avatarCache,
         host.hostId !== LOCAL_EXECUTION_HOST_ID,
         withThreads
       ).catch(() => null)
@@ -243,7 +238,6 @@ export function useHostBots(args: {
   }
   const [groupsUnread, setGroupsUnread] = useState(false)
   const [groupsRetry, setGroupsRetry] = useState(0)
-  const avatarCache = useRef(new Map<string, string>())
   const reads = useRef<BotListingReads | null>(null)
   const readyServers = serverHosts.filter((host) => host.relay === 'ready')
   const serversKey = readyServers
@@ -290,7 +284,6 @@ export function useHostBots(args: {
     }
     const started = startBotListingReads({
       hosts,
-      avatarCache: avatarCache.current,
       setListings,
       setGroupsUnread
     })

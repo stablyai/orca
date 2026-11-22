@@ -1,0 +1,26 @@
+// `orchestration send` flags; `on-client` stays out of its usage until paired computers take those asks.
+export const ORCHESTRATION_SEND_FLAGS = [
+  'to',
+  'chat',
+  'item',
+  'file',
+  'on',
+  'on-client',
+  'run',
+  'from',
+  'subject',
+  'body',
+  'body-file',
+  'type',
+  'priority',
+  'thread-id',
+  'payload',
+  'task-id',
+  'dispatch-id',
+  'dispatch-capability',
+  'retry-request',
+  'outcome',
+  'files-modified',
+  'report-path',
+  'phase'
+] as const

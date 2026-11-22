@@ -10,10 +10,6 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
-  protected abstract recheckHookAgentPresenceForPty(
-    ptyId: string,
-    exitedSince?: number
-  ): Promise<'live' | 'unverifiable' | 'exited' | null>
   protected abstract applyTrackedPtyTitle(
     ptyId: string,
     rawTitle: string,

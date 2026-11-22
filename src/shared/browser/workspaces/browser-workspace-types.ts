@@ -186,6 +186,9 @@ export type BrowserCookieImportSummary = {
   }
 }
 
+/** `sshTargetId` fills that SSH host's page jar instead of the profile's own. */
+export type BrowserProfileCookieImportArgs = { profileId: string; sshTargetId?: string }
+
 export type BrowserCookieImportResult =
   | {
       ok: true
