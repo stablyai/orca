@@ -2948,6 +2948,7 @@
       "loadFailed": "페어링된 데스크톱 목록을 불러오지 못했습니다.",
       "pairDesktop": "데스크톱을 페어링한 후 다시 시도하세요.",
       "pushServiceFailed": "Orca 푸시 서비스를 통해 전송하지 못했습니다. 다시 시도하세요.",
+      "hostClockSkew": "컴퓨터 시계가 {{seconds}}초 어긋나 있어 Orca 푸시 서비스가 거부했습니다. 시계를 정확한 시간으로 맞춘 후 다시 시도하세요.",
       "rateLimited": "알림이 너무 많습니다. 나중에 다시 시도하세요.",
       "sendButton": "테스트 알림 보내기",
       "sendFailed": "테스트 푸시 알림을 전송하지 못했습니다.",

@@ -147,6 +147,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       }
       const pushHosts = connected.filter(({ hostId }) => getHostPushSupported(hostId) !== false)
       let unavailable = unsupportedHost
+      let clockSkewMessage: string | null = null
       for (const { client } of pushHosts) {
         const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
@@ -175,6 +176,15 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           )
           return
         }
+        // Another host may still deliver; the clock message shows only if none does, ahead of "not ready".
+        if (result?.clockSkewSeconds !== undefined) {
+          clockSkewMessage = t(
+            'settings.notificationDisplayTest.hostClockSkew',
+            'The computer’s clock is off by {{seconds}} seconds, so Orca’s push service refused it. Set its clock to the correct time and try again.',
+            { seconds: Math.abs(result.clockSkewSeconds) }
+          )
+          continue
+        }
         if (result?.reason === 'not_registered') {
           unavailable = t(
             'settings.notificationDisplayTest.registrationPending',
@@ -194,7 +204,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
               )
         )
       }
-      await localTest(unavailable)
+      await localTest(clockSkewMessage ?? unavailable)
     } catch (error) {
       if (!isCurrent()) {
         return

@@ -2952,6 +2952,7 @@
       "loadFailed": "Die gekoppelten Desktops konnten nicht geladen werden.",
       "pairDesktop": "Einen Desktop koppeln und erneut versuchen.",
       "pushServiceFailed": "Die Benachrichtigung konnte nicht über den Push-Dienst von Orca gesendet werden. Erneut versuchen.",
+      "hostClockSkew": "Die Uhr des Computers geht um {{seconds}} Sekunden falsch, daher hat Orcas Push-Dienst ihn abgelehnt. Stelle die Uhr richtig und versuche es erneut.",
       "rateLimited": "Zu viele Benachrichtigungen. Später erneut versuchen.",
       "sendButton": "Testbenachrichtigung senden",
       "sendFailed": "Die Push-Testbenachrichtigung konnte nicht gesendet werden.",

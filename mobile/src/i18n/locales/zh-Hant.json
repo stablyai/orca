@@ -2946,6 +2946,7 @@
       "loadFailed": "無法載入已配對的電腦。",
       "pairDesktop": "請先配對電腦，再試一次。",
       "pushServiceFailed": "無法透過 Orca 的推播服務傳送，請再試一次。",
+      "hostClockSkew": "電腦的時鐘偏差了 {{seconds}} 秒，因此 Orca 的推播服務拒絕了它。請將時鐘設定為正確時間後再試一次。",
       "rateLimited": "通知過多，請稍後再試。",
       "sendButton": "傳送測試通知",
       "sendFailed": "無法傳送測試推播。",

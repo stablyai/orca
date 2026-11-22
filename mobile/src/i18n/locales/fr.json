@@ -3029,6 +3029,7 @@
       "loadFailed": "Impossible de charger les ordinateurs appairés.",
       "pairDesktop": "Appairez un ordinateur, puis réessayez.",
       "pushServiceFailed": "Impossible d'envoyer le test via le service de notifications push d'Orca. Réessayez.",
+      "hostClockSkew": "L’horloge de l’ordinateur est décalée de {{seconds}} secondes, le service push d’Orca l’a donc refusé. Réglez l’heure correcte et réessayez.",
       "rateLimited": "Trop de notifications. Réessayez plus tard.",
       "sendButton": "Envoyer une notification de test",
       "sendFailed": "Impossible d'envoyer la notification push de test.",

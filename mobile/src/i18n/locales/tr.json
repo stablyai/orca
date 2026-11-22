@@ -2952,6 +2952,7 @@
       "loadFailed": "Eşleştirilmiş masaüstü bilgisayarlar yüklenemedi.",
       "pairDesktop": "Bir masaüstü bilgisayarla eşleştirin ve yeniden deneyin.",
       "pushServiceFailed": "Orca'nın anlık bildirim hizmeti üzerinden gönderilemedi. Yeniden deneyin.",
+      "hostClockSkew": "Bilgisayarın saati {{seconds}} saniye kaymış, bu yüzden Orca’nın anlık bildirim hizmeti onu reddetti. Saati doğru zamana ayarlayıp tekrar deneyin.",
       "rateLimited": "Çok fazla bildirim gönderildi. Daha sonra yeniden deneyin.",
       "sendButton": "Test bildirimi gönder",
       "sendFailed": "Anlık bildirim testi gönderilemedi.",

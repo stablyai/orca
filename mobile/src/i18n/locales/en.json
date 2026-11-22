@@ -114,6 +114,7 @@
       "accepted": "Accepted by Orca’s push service. Check for the notification.",
       "rateLimited": "Too many notifications. Try again later.",
       "pushServiceFailed": "Could not send through Orca’s push service. Try again.",
+      "hostClockSkew": "The computer’s clock is off by {{seconds}} seconds, so Orca’s push service refused it. Set its clock to the correct time and try again.",
       "sendFailed": "Could not send push test.",
       "troubleReceivingAlerts": "Having trouble receiving alerts?",
       "description": "Test push delivery, or a local notification when push is unavailable.",
