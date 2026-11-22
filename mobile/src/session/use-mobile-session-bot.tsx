@@ -7,6 +7,8 @@ import { botItemUidOfPaneKey } from '../../../src/shared/bots/bot-notification-p
 import type { BotPanelOpen } from '../bots/MobileBotPanel'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { botHomeChatReset, botSessionStart } from '../bots/bot-sheet-operations'
+import { mobileBotRefusalText } from '../bots/mobile-bot-refusal-text'
+import { readAgentSessionErrorRefusal } from '../../../src/shared/agent-session/failures/agent-session-write-failure'
 import { readBotAgentChoices } from '../bots/new-bot-host-reads'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
@@ -138,11 +140,16 @@ export function useMobileSessionBot(
         sessionId
       })
       void fetchSessionTabs()
-    } catch {
+    } catch (error) {
       pendingSelectionRef.current = withoutUnansweredLaunch(pendingSelectionRef.current, lock)
       triggerError()
-      // The host's refusals are codes, not sentences for the owner.
-      showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
+      // A refused chat says why in chat's words; other host errors are codes, not sentences for the owner.
+      const refusal = readAgentSessionErrorRefusal(error)
+      if (refusal) {
+        showToast(mobileBotRefusalText(refusal), 2400)
+      } else {
+        showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
+      }
     }
   }
 
