@@ -32,6 +32,18 @@ const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
 ])
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithBindPtyIncarnationHandle>) {
+    super(...args)
+    // A hook report is live status for mail when the title names none, so it is a delivery edge too.
+    this.subscribeAgentStatusRowChanges((paneKey) => {
+      const pty = this.getPtyRecordForPaneKey(paneKey)
+      if (pty && !(pty.lastAgentStatusObservedLive && pty.lastAgentStatus !== null)) {
+        // Why deferred: the hook server is still mid-mutation.
+        queueMicrotask(() => this.deliverPendingMessagesForPty(pty.ptyId))
+      }
+    })
+  }
+
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
       if (waiter.condition === 'exit') {
@@ -192,8 +204,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const evidence = ptyTuiIdleEvidence(
+      this.tuiIdleEvidenceSource,
+      pty,
+      () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+      // Settles on the same status the mail gate read.
+      this.readMailboxAgentStatus(pty).lastAgentStatus ?? undefined
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.

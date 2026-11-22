@@ -118,6 +118,7 @@ export async function createRuntime(
     /** A headless serve: no window, only the empty headless graph. */
     headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+    subscribeAgentStatusRowChanges?: (listener: (paneKey: string) => void) => () => void
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
     foregroundProcess?: string
@@ -128,6 +129,7 @@ export async function createRuntime(
     undefined,
     {
       getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+      subscribeAgentStatusRowChanges: options.subscribeAgentStatusRowChanges,
       checkHookAgentPresence: options.checkHookAgentPresence,
       attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
         paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)

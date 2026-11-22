@@ -168,7 +168,9 @@ function paintAgent(
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
-  readWaitText: () => string
+  readWaitText: () => string,
+  /** The agent's own hook report, standing in for a title that names no status. */
+  reportedStatus?: AgentStatus
 ): TuiIdleEvaluationInput {
   const tailText = lazyWaitText(readWaitText)
   // Why only after a tail block: the screen may clear one (#24187), and a clear tail never pays the read.
@@ -179,7 +181,10 @@ export function ptyTuiIdleEvidence(
   // Why: an agent's own ready report (explicit idle title, adopted idle, first-party done) from a
   // finished command or from before a reattach speaks for a program that may no longer be there.
   const titleIsCurrent = isCurrentCommandStatus(pty, pty.lastOscTitleEpochMs)
-  const fullRecord = evidenceRecord(source, pty)
+  const fullRecord = {
+    ...evidenceRecord(source, pty),
+    ...(reportedStatus ? { lastAgentStatus: reportedStatus } : {})
+  }
   // Why not with the shell in front: once a command finished, the shell is itself at rest; only an
   // agent's own explicit rest title must not speak for it.
   const statusRetired =

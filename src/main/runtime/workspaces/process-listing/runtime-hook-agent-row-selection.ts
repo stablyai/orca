@@ -96,6 +96,32 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
   return best
 }
 
+/** The terminal's latest reported hook row of any age, ended agents' included: a turn end stays true
+ *  until the agent's next report. Restored rows cannot prove a running agent; resume rows carry no status. */
+export function selectLatestReportedAgentStatusRow(
+  args: HookRowJoin
+): AgentStatusIpcPayload | null {
+  const handles = new Set(args.handles)
+  const paneKeys = new Set(args.paneKeys)
+  let latest: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    if (
+      (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) ||
+      !row.state ||
+      typeof row.receivedAt !== 'number' ||
+      row.structuredHost ||
+      row.restoredUnconfirmed === true ||
+      row.providerSessionOnly === true
+    ) {
+      continue
+    }
+    if (!latest || row.receivedAt > latest.receivedAt) {
+      latest = row
+    }
+  }
+  return latest
+}
+
 /** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. A row bound to another terminal handle is not this one's. */
 export function selectLatestAgentStatusRow(args: {
   handles: ReadonlySet<string>

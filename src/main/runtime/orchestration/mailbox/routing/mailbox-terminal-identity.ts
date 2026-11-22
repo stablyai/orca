@@ -3,6 +3,10 @@ import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
+import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
+import { selectLatestReportedAgentStatusRow } from '../../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { isCurrentCommandReport } from '../../../terminal/input/terminal-command-paint'
+import { hookReportedAgentStatus } from '../../../terminal/wait/hook-reported-agent-status'
 
 /** Which live terminal orchestration types mail into, and the handle it is known by. */
 export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntimeWithGetPtyRecordForPaneKey {
@@ -35,10 +39,36 @@ export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntime
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationMailboxTerminal | null {
     const paneKeys = this.getMailboxPaneKeysForPty(pty)
-    const { ptyId, lastAgentStatus, lastAgentStatusObservedLive } = pty
-    return paneKeys.length > 0
-      ? { ptyId, handle, paneKeys, lastAgentStatus, lastAgentStatusObservedLive }
-      : null
+    if (paneKeys.length === 0) {
+      return null
+    }
+    return { ptyId: pty.ptyId, handle, paneKeys, ...this.readMailboxAgentStatus(pty) }
+  }
+
+  /** A live title that names a status rules; otherwise the agent's own hook report is its live status. */
+  protected readMailboxAgentStatus(
+    pty: RuntimePtyWorktreeRecord
+  ): Pick<OrchestrationMailboxTerminal, 'lastAgentStatus' | 'lastAgentStatusObservedLive'> {
+    const { lastAgentStatus, lastAgentStatusObservedLive } = pty
+    const hookStatus =
+      lastAgentStatusObservedLive && lastAgentStatus !== null
+        ? null
+        : this.readHookReportedAgentStatus(pty)
+    return hookStatus
+      ? { lastAgentStatus: hookStatus, lastAgentStatusObservedLive: true }
+      : { lastAgentStatus, lastAgentStatusObservedLive }
+  }
+
+  private readHookReportedAgentStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
+    const join = this.readHookRowJoinForPty(pty.ptyId)
+    return hookReportedAgentStatus({
+      row: join ? selectLatestReportedAgentStatusRow(join) : null,
+      readEnded: (paneKey) => this.readPaneAgentIdentity(paneKey)?.ended === true,
+      agent: this.getPaneTerminalAgent(pty.ptyId),
+      respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(pty.ptyId),
+      titleObservedAt: pty.lastAgentStatusObservedLive ? pty.lastOscTitleEpochMs : null,
+      isCurrentReport: (receivedAt) => isCurrentCommandReport(pty, receivedAt)
+    })
   }
 
   /** The handle a terminal is known by: its own, else the one its window pane issued. */
