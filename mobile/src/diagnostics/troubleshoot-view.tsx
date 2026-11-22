@@ -22,6 +22,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { NATIVE_SCREEN_HEADER } from '../components/nav-bar/ScreenHeader'
 import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
@@ -73,7 +74,13 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+    <View
+      ref={rootRef}
+      style={[
+        settingsScreenStyles.container,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
       <SettingsNavBar
         title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
         onBack={onBack}

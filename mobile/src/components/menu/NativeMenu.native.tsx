@@ -4,7 +4,8 @@ import { MenuView, type MenuAction, type MenuComponentRef } from '@expo/ui/commu
 import type { SFSymbol } from 'expo-symbols'
 import type { ActionSheetAction } from '../sheets/ActionSheetModal'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMaterialSymbolMenuImages } from './material-symbol-menu-images'
+import { useMaterialSymbolImages } from '../icons/material-symbol-images'
+import { runAfterMenuDismiss } from './run-after-menu-dismiss'
 import {
   isMenuSubmenu,
   visibleMenuGroups,
@@ -13,17 +14,6 @@ import {
 } from './native-menu-items'
 
 export type { MenuItem, MenuSubmenu, NativeMenuProps } from './native-menu-items'
-
-// The iOS menu is still fading out when its action fires, and a sheet can't present over it.
-const IOS_MENU_DISMISS_MS = 300
-
-function runAfterDismiss(run: () => void) {
-  if (Platform.OS === 'ios') {
-    setTimeout(run, IOS_MENU_DISMISS_MS)
-  } else {
-    requestAnimationFrame(run)
-  }
-}
 
 function itemSymbol(item: MenuItem): string | undefined {
   return Platform.OS === 'ios' ? item.icon?.nativeSymbol?.ios : item.icon?.nativeSymbol?.android
@@ -34,7 +24,7 @@ export function NativeMenu({ groups, children, onOpenChange, style, testID }: Na
   const scheme = useMobileColorScheme()
   const menuRef = useRef<MenuComponentRef>(null)
   const shown = visibleMenuGroups(groups)
-  const androidImages = useMaterialSymbolMenuImages(
+  const androidImages = useMaterialSymbolImages(
     Platform.OS === 'android'
       ? shown
           .flat()
@@ -95,7 +85,7 @@ export function NativeMenu({ groups, children, onOpenChange, style, testID }: Na
           return
         }
         if (action.closeBeforePress) {
-          runAfterDismiss(action.onPress)
+          runAfterMenuDismiss(action.onPress)
         } else {
           action.onPress()
         }

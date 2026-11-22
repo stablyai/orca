@@ -1,49 +1,33 @@
 import type { ReactNode } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft } from '../components/icons/app-icons'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import {
+  NATIVE_SCREEN_HEADER,
+  ScreenHeader,
+  type ScreenHeaderProps
+} from '../components/nav-bar/ScreenHeader'
 import { ListGroup, LIST_ROW_PADDING, SectionHeader } from '../components/list/ListGroup'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-type SettingsNavBarProps = {
-  title: string
-  onBack: () => void
-  /** At most two NavBarButtons. */
-  trailing?: ReactNode
+type SettingsHeaderProps = Pick<ScreenHeaderProps, 'title' | 'onBack' | 'actions' | 'largeTitle'>
+
+/** A settings screen's header, for screens that lay out their own body. */
+export function SettingsNavBar(props: SettingsHeaderProps) {
+  return <ScreenHeader {...props} />
 }
 
-/** A settings screen's top bar: Back, the centred title, and up to two buttons. */
-export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps) {
-  const t = useMobileTranslation()
-  return (
-    <NavBar
-      leading={
-        <NavBarButton
-          icon={ChevronLeft}
-          accessibilityLabel={t('common.back', 'Back')}
-          onPress={onBack}
-        />
-      }
-      title={title}
-      trailing={trailing}
-    />
-  )
-}
-
-/** A native settings screen: the bar inside the top safe area, then scrolling grouped sections. */
+/** A settings screen: its header, then scrolling grouped sections. */
 export function SettingsScreen({
   title,
   onBack,
-  trailing,
+  actions,
+  largeTitle,
   children,
   overlays,
   fillContent = false
-}: SettingsNavBarProps & {
+}: SettingsHeaderProps & {
   children: ReactNode
   /** Lets a centred loading or empty state fill the space under the bar. */
   fillContent?: boolean
@@ -53,9 +37,13 @@ export function SettingsScreen({
   useMobileColorScheme()
   const insets = useSafeAreaInsets()
   return (
-    <SafeAreaView style={settingsScreenStyles.container} edges={['top']}>
-      <SettingsNavBar title={title} onBack={onBack} trailing={trailing} />
+    <SafeAreaView
+      style={settingsScreenStyles.container}
+      edges={NATIVE_SCREEN_HEADER ? [] : ['top']}
+    >
+      <ScreenHeader title={title} onBack={onBack} actions={actions} largeTitle={largeTitle} />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           settingsScreenStyles.scrollContent,
           fillContent && settingsScreenStyles.fill,

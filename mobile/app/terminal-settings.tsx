@@ -34,6 +34,7 @@ import {
 import { TerminalFontPreview } from '../src/terminal/preferences/settings/TerminalFontPreview'
 import { getResponsiveLayoutMetrics } from '../src/layout/responsive-layout-metrics'
 import { themedStyleSheet } from '../src/theme/themed-styles'
+import { NATIVE_SCREEN_HEADER } from '../src/components/nav-bar/ScreenHeader'
 import {
   SettingsEmptyRow,
   SettingsNavBar,
@@ -231,7 +232,10 @@ export default function TerminalSettingsScreen() {
 
   return (
     <GestureHandlerRootView style={settingsScreenStyles.container}>
-      <SafeAreaView style={settingsScreenStyles.container} edges={['top']}>
+      <SafeAreaView
+        style={settingsScreenStyles.container}
+        edges={NATIVE_SCREEN_HEADER ? [] : ['top']}
+      >
         <SettingsNavBar
           title={t('app.terminalSettings.title', 'Terminal')}
           onBack={() => router.back()}

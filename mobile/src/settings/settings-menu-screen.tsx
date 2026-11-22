@@ -22,6 +22,7 @@ export default function SettingsMenuScreen({
   return (
     <SettingsScreen
       title={t('common.settings', 'Settings')}
+      largeTitle
       onBack={onBack ?? (() => router.back())}
     >
       <SettingsMenuSections push={push} openExternal={openExternal}>

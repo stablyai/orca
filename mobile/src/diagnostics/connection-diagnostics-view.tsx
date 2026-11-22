@@ -11,6 +11,7 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { NATIVE_SCREEN_HEADER } from '../components/nav-bar/ScreenHeader'
 import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
 
 export function ConnectionDiagnosticsView({
@@ -52,7 +53,12 @@ export function ConnectionDiagnosticsView({
     'auth-failed': t('diagnostics.connectionDiagnosticsView.authFailed', 'auth-failed')
   }
   return (
-    <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        settingsScreenStyles.container,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
       <SettingsNavBar
         title={t('diagnostics.connectionDiagnosticsView.title', 'Network diagnostics')}
         onBack={onBack}

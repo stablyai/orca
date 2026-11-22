@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ImageSourcePropType } from 'react-native'
 import { unstable_getMaterialSymbolSourceAsync, type AndroidSymbol } from 'expo-symbols'
 
-// Large enough to stay sharp at the menu's 20 dp; Compose tints it with the item's content colour.
+// Large enough to stay sharp at 24 dp; Compose tints it with the content colour.
 const RENDER_SIZE = 72
 const images = new Map<string, Promise<ImageSourcePropType | null>>()
 const loaded = new Map<string, ImageSourcePropType | null>()
@@ -21,8 +21,8 @@ function loadImage(symbol: string): Promise<ImageSourcePropType | null> {
   return pending
 }
 
-/** Compose menus take an image, not a font glyph, so each Material Symbol is drawn to one once. */
-export function useMaterialSymbolMenuImages(
+/** Compose menus and toolbars take an image, not a font glyph, so each Material Symbol is drawn once. */
+export function useMaterialSymbolImages(
   symbols: readonly string[]
 ): ReadonlyMap<string, ImageSourcePropType | null> {
   const [, setRevision] = useState(0)
