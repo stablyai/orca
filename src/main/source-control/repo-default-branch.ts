@@ -181,8 +181,3 @@ export async function shouldHideNonOpenReviewOnDefaultBranch(input: {
   )
   return defaultBranchName !== null && input.branchName === defaultBranchName
 }
-
-export function __resetRepoDefaultBranchCacheForTests(): void {
-  repoDefaultBranchCache.clear()
-  repoDefaultBranchInFlight.clear()
-}

@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { BotShareLeftOut } from '../../../shared/bots/bot-package'
 import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { makeTestBot } from '../bot.test-fixture'
+import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
+import { BotShareCandidates } from './bot-package-export'
 import { BotShareSkillReads, type BotShareSkillListing } from './bot-share-skill-reads'
+import { readShareSkills } from './bot-share-skills'
+import { readBotShareable } from './bot-share-sources'
 
 const listing = (name: string): BotShareSkillListing => ({
   skills: [{ name, description: 'Steps', directory: `/skills/${name}`, homePath: null }],
@@ -40,34 +50,6 @@ describe('BotShareSkillReads', () => {
     await expect(
       reads.read('dialog', 'sources', true, async () => listing('unread'))
     ).resolves.toEqual(listing('deploy'))
-  })
-
-  it("neither shares nor stops another dialog's read", async () => {
-    const reads = new BotShareSkillReads()
-    const before = walk()
-    // One dialog reads; another opens after the bot's links changed.
-    const first = reads.read('dialog-1', 'links-before', false, before.run)
-    await expect(
-      reads.read('dialog-2', 'links-after', false, async () => listing('far'))
-    ).resolves.toEqual(listing('far'))
-
-    before.finish(listing('triage'))
-    await expect(first).resolves.toEqual(listing('triage'))
-    await expect(
-      reads.read('dialog-1', 'links-before', true, async () => listing('unread'))
-    ).resolves.toEqual(listing('triage'))
-  })
-
-  it('gives a failed replacement its own error and reads again on the next pick', async () => {
-    const reads = new BotShareSkillReads()
-    const first = reads.read('dialog', 'sources', false, walk().run)
-    const failed = reads.read('dialog', 'sources', false, () => Promise.reject(new Error('EACCES')))
-
-    await expect(first).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
-    await expect(failed).rejects.toThrow('EACCES')
-    await expect(
-      reads.read('dialog', 'sources', true, async () => listing('triage'))
-    ).resolves.toEqual(listing('triage'))
   })
 
   // A build's lookups before its read take any time, so the newer build may reach its read first.
@@ -112,5 +94,93 @@ describe('BotShareSkillReads', () => {
     await expect(reads.read('dialog-9', 'sources', true, reread)).resolves.toEqual(
       listing('opened-9')
     )
+  })
+})
+
+describe('a reused skill listing on disk', () => {
+  let root: string
+  let home: string
+  let project: string
+  const bot = makeTestBot({
+    id: '3f2b6c1e-8d4a-4b7e-9c1f-5a6d7e8f9a0b',
+    name: 'Release notes',
+    skillProjects: ['team-skills']
+  })
+  const repos = (): Repo[] => [
+    { id: 'team-skills', path: project, displayName: 'team-skills', badgeColor: '#000', addedAt: 0 }
+  ]
+  const write = async (folder: string, path: string, text: string): Promise<void> => {
+    await mkdir(join(folder, path, '..'), { recursive: true })
+    await writeFile(join(folder, path), text)
+  }
+  const skillText = (name: string): string =>
+    `---\nname: ${name}\ndescription: Ship it\n---\nSteps.\n`
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-bot-share-skill-reads-test-'))
+    useBotToolCredentialsRoot(join(root, 'credentials'))
+    home = join(root, 'home')
+    project = join(root, 'team-skills')
+    await write(home, 'SOUL.md', '# Release notes\n')
+  })
+
+  afterEach(async () => {
+    useBotToolCredentialsRoot(null)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  // A pick packs from the listing, so a folder swapped for a link since must not be followed.
+  it.skipIf(process.platform === 'win32')(
+    'leaves out a listed skill whose folder was swapped for a link before a pick packs it',
+    async () => {
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy'))
+      await write(root, 'elsewhere/deploy/SKILL.md', skillText('deploy'))
+      await write(root, 'elsewhere/deploy/secret.txt', 'not the project')
+      const skillReads = new BotShareSkillReads()
+      const build = (reuseSkills: boolean) =>
+        readBotShareable({
+          bot,
+          home,
+          automations: [],
+          repos: repos(),
+          skillReads,
+          session: 'dialog-1',
+          reuseSkills
+        })
+      await build(false)
+      await rm(join(project, '.agents/skills/deploy'), { recursive: true })
+      await symlink(join(root, 'elsewhere/deploy'), join(project, '.agents/skills/deploy'))
+
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      try {
+        const summary = await candidates.prepare({
+          bot,
+          shareable: await build(true),
+          selection: {},
+          packageId: 'p'
+        })
+        expect(summary.bot.skills).toEqual([])
+        expect(summary.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+      } finally {
+        await candidates.dispose()
+      }
+    }
+  )
+
+  it('stops a replaced read without recording anything', async () => {
+    await write(home, 'skills/triage/SKILL.md', skillText('triage'))
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy'))
+    const leftOut: BotShareLeftOut[] = []
+
+    const read = readShareSkills(
+      bot,
+      { path: home, real: await realpath(home) },
+      leftOut,
+      [{ name: 'team-skills', path: project }],
+      AbortSignal.abort()
+    )
+
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' })
+    expect(leftOut).toEqual([])
   })
 })

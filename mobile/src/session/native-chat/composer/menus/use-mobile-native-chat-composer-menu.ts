@@ -26,9 +26,11 @@ import {
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
 import type { ComposerMenuRow, ComposerRoomMention } from './MobileNativeChatComposerMenu'
+import type { SlashCommandSuggestion } from '../../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 import { rankNativeChatRoomMembers } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
 
 type Selection = { start: number; end: number }
+const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
 /** Opening the menu from the + sheet narrows it to what that row named. */
 type MenuKind = 'skill' | 'command'
 
@@ -43,13 +45,15 @@ export function useMobileNativeChatComposerMenu(input: {
   /** Set in a room: `@` lists these members instead of files. */
   roomMentions?: readonly ComposerRoomMention[]
   onNeedFiles?: (query: string) => void
+  /** How a picked file is written when the chat runs in a workspace sub-folder. */
+  fileReference?: (path: string) => string | undefined
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void
   /** The `/` menu opened; the session's list may have changed since it was read. */
   onSlashMenuOpen?: () => void
   onSlashMenuDemand?: (open: boolean) => void
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
-  onPickSkill?: (skill: { token: string; path?: string }) => void
+  onPickSkill?: (skill: Extract<ComposerMenuRow, { kind: 'skill' }>) => void
   /** An Orca command row was picked; it outranks an earlier skill pick of the same token. */
   onPickOrcaCommand?: (token: string) => void
   editing?: boolean
@@ -57,6 +61,8 @@ export function useMobileNativeChatComposerMenu(input: {
   admitsInteractionMode?: (mode: AgentSessionInteractionMode) => boolean
   onPickInteractionMode?: (mode: AgentSessionInteractionMode) => void
   refuseCommand?: (text: string) => boolean
+  /** `/` lists skills only: the text goes somewhere no chat command acts on. */
+  skillsOnly?: boolean
   /** Picking `/goal` enters goal mode instead of inserting the command; an edit has no goal mode. */
   goalMode?: { hostSetsGoals: boolean; enter?: () => void }
   focusField: () => void
@@ -124,7 +130,7 @@ export function useMobileNativeChatComposerMenu(input: {
       deriveComposerAutocomplete(
         beforeCaret,
         beforeCaret.length,
-        catalog.commands,
+        input.skillsOnly ? NO_COMMANDS : catalog.commands,
         catalog.discovery.skills,
         catalog.profile,
         catalog.discovery,
@@ -132,7 +138,7 @@ export function useMobileNativeChatComposerMenu(input: {
         catalog.sessionSkills,
         commandAvailable
       ),
-    [beforeCaret, catalog, commandAvailable]
+    [beforeCaret, catalog, commandAvailable, input.skillsOnly]
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
     if (autocomplete.mode === 'mention' && roomMentions) {
@@ -231,7 +237,7 @@ export function useMobileNativeChatComposerMenu(input: {
     if (row.kind === 'file' || row.kind === 'member') {
       const next =
         row.kind === 'file'
-          ? applyMentionSuggestion(value, cursor, row.path)
+          ? applyMentionSuggestion(value, cursor, row.path, input.fileReference?.(row.path))
           : applyMentionSuggestion(value, cursor, row.name, `@${row.name}`)
       setDraft(next.draft)
       placeCaret(next.caret)

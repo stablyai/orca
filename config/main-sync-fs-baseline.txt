@@ -19,7 +19,6 @@
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
 2 src/main/antigravity/native-credential-backend.ts
@@ -297,7 +296,6 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts

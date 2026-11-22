@@ -224,7 +224,6 @@ export function useMobileNativeChatSessionOptions(
     if (!surface || !scopeKey || !catalog || !reportedModel) {
       return
     }
-    // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
     // OMP reports exact selectors, including models absent from cached discovery.
     const matched =
       agent === 'omp'

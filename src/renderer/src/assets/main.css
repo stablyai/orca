@@ -1945,6 +1945,29 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
+/* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
+[data-worktree-lineage-guides] {
+  --worktree-lineage-guide-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 22%,
+    transparent
+  );
+}
+
+[data-worktree-lineage-guide='rail'],
+[data-worktree-lineage-guide='stem'] {
+  background-color: var(--worktree-lineage-guide-color);
+}
+
+[data-worktree-lineage-guide='branch'] {
+  border-color: var(--worktree-lineage-guide-color);
+}
+
+/* Why: title-only cards use py-2 instead of pt-1.25, which drops the title center by 3px. */
+[data-worktree-lineage-row]:has(> * [data-worktree-card-single-line]) {
+  --worktree-lineage-title-center: 19px;
+}
+
 /* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
 [data-worktree-family-segment],
 .dark [data-worktree-family-segment] {
@@ -2251,8 +2274,16 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner[data-animation-offscreen],
-.loading-spinner[data-animation-offscreen] {
+.loading-spinner[data-animation-offscreen],
+[data-animation-offscreen] .stale-review-shimmer {
   animation: none;
+}
+
+/* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
+[data-row-offscreen] .animate-spin,
+[data-row-offscreen] .animate-pulse,
+[data-row-offscreen] .shimmer:not(.shimmer-once) {
+  animation-play-state: paused;
 }
 
 /* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
@@ -4370,6 +4401,11 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   50% {
     opacity: 1;
   }
+}
+
+/* The descendant pause above doesn't reach pseudo-elements. */
+[data-animation-offscreen] .browser-agent-cursor-layer::before {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -69,5 +69,7 @@ export const PeerMailRelayPayload = z.object({
   threadId: z.string().nullable(),
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
-  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional()
+  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
+  /** A notice that a request the opening Orca sent went unanswered; an older Orca ignores it. */
+  notice: z.object({ requestId: LINE }).optional()
 })
