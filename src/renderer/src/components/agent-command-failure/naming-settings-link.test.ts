@@ -40,6 +40,16 @@ function agent(agentId: 'claude' | 'codex' | 'custom', customAgentCommand = '') 
   }
 }
 
+function emptyGlobalTemplate(settings: NamingSettings): NamingSettings {
+  const { actions } = settings.sourceControlAi
+  return {
+    sourceControlAi: {
+      ...settings.sourceControlAi,
+      actions: { ...actions, branchName: { ...actions?.branchName, commandInputTemplate: '' } }
+    }
+  }
+}
+
 // Main's branch rename reads the workspace host's repo (its store holds no paired twins) through
 // resolveCommitMessageSettings(settings, getCommitMessageModelDiscoveryHostKey(null), 'branchName', repo),
 // which forwards to this resolver. A null repo is the same run without the repo's settings.
@@ -122,6 +132,24 @@ describe('branchNamingSettingsTarget agrees with branch-name generation', () => 
       settings: agent('claude'),
       repo: repo({ sourceControlAi: { actionOverrides: { branchName: { agentId: 'codex' } } } }),
       expected: repoBranchTarget
+    },
+    {
+      // The empty template fails the run before the repo command is read.
+      name: 'repo command with empty repo template, custom agent',
+      settings: agent('custom', 'global-namer {prompt}'),
+      repo: repo({
+        sourceControlAi: {
+          customAgentCommand: 'repo-namer {prompt}',
+          actionOverrides: { branchName: { commandInputTemplate: '' } }
+        }
+      }),
+      expected: repoBranchTarget
+    },
+    {
+      name: 'repo command with empty global template, custom agent',
+      settings: emptyGlobalTemplate(agent('custom', 'global-namer {prompt}')),
+      repo: repoCommand,
+      expected: globalTarget
     },
     { name: 'no repo settings', settings: agent('claude'), repo: repo(), expected: globalTarget }
   ]

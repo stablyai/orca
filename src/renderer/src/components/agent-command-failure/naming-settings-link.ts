@@ -90,6 +90,11 @@ function repoBranchNamingOwner(
     settings?.commitMessageAi
   )
   const recipe = resolveActionRecipeForTextOperation(source, repoOverrides, 'branchName')
+  // Generation rejects an empty template before it reads any agent or command: the row whose template is empty owns it.
+  if (!recipe.commandInputTemplate.trim()) {
+    const globalTemplate = resolveActionRecipeForTextOperation(source, null, 'branchName')
+    return globalTemplate.commandInputTemplate.trim() ? 'recipe' : null
+  }
   const agent = resolveCommitMessageAgentChoice(
     hasActionAgentRecipe(recipe) ? recipe.agentId : source.agentId,
     settings?.defaultTuiAgent,
