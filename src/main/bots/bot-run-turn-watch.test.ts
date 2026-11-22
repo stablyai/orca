@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -38,13 +38,16 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { watchBotTurnEnds } from './bot-run-turn-watch'
+import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
+import { PiRpcTurns } from '../pi/rpc/rpc-turns'
+import { PiRpcJoinedTurns } from '../pi/rpc/rpc-joined-turns'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
 /** A real chat journal, written by the same writers the host uses. */
-function chatJournal(agent: 'codex' | 'claude', turn: AgentJournalItemIdentity) {
+function chatJournal(agent: 'codex' | 'claude' | 'pi', turn: AgentJournalItemIdentity) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-bot-run-turn-'))
   const db = new Database(join(directory, 'journal.sqlite'))
   cleanups.push(() => {
@@ -279,5 +282,67 @@ it('a Claude run steered into a turn waits for it, and fails when that turn fail
       }
       return receipt
     }
+  })
+})
+
+it('a Pi run steered into a turn waits for it, and fails when that turn fails', async () => {
+  // Frames Pi sent when a prompt arrived while its turn ran a tool (rpc/__fixtures__/steer-followup.jsonl).
+  const frames = readFileSync(
+    join(__dirname, '../pi/rpc/__fixtures__/steer-followup.jsonl'),
+    'utf8'
+  )
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { dir: 'in' | 'out'; raw: string })
+    .map(({ dir, raw }) => ({ dir, frame: JSON.parse(raw) as Record<string, unknown> }))
+  const accepted = new Map<string, AcceptedReceipt>()
+  let joined: PiRpcJoinedTurns | undefined
+  const lane = new JsonlRpcTimelineLane({
+    sink: { tryAppendTransition: () => ({ accepted: true }) },
+    sessionId: 'chat',
+    agent: 'pi',
+    generation: 'g',
+    namespace: 'chat',
+    pauseReading: () => {},
+    resumeReading: () => {},
+    onInputAccepted: (id) => accepted.set(id, joined!.accepted(id)),
+    onFailed: (reason) => {
+      throw new Error(reason)
+    }
+  })
+  const turns = new PiRpcTurns({
+    lane,
+    generation: 'g',
+    send: async () => {},
+    request: () => new Promise(() => {}),
+    settled: () => {},
+    accepting: (id) => joined!.accepting(id),
+    idle: () => {},
+    failed: (error) => {
+      throw error
+    }
+  })
+  joined = new PiRpcJoinedTurns(turns, lane)
+  // The person's prompt opens the turn; the run's is sent while it runs; a follow-up comes after.
+  const ids = ['person', 'run', 'later']
+  let turn: AgentJournalItemIdentity | null = null
+  for (const { dir, frame } of frames) {
+    if (dir === 'in' && frame.type === 'prompt') {
+      const { id: _requestId, ...prompt } = frame
+      void turns.submit(ids.shift()!, Date.now(), prompt)
+      await Promise.resolve()
+    } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
+      turns.receive(frame)
+      turn ??= lane.openTurnIdentity
+    }
+    if (accepted.has('run')) {
+      break
+    }
+  }
+  expect(turn).not.toBeNull()
+  expect(accepted.get('run')).toMatchObject({ answeredInTurn: { turn, via: 'steer' } })
+  await steeredRunEndsWithFailedTurn(chatJournal('pi', turn!), {
+    person: accepted.get('person')!,
+    run: () => accepted.get('run')!
   })
 })

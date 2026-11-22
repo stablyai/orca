@@ -26,6 +26,8 @@ export type PiRpcTurnDeps = {
     options?: JsonlRpcRequestOptions
   ) => Promise<unknown>
   settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
+  /** Pi took this send, before it opens a turn for it; while one runs, it steers it into that turn. */
+  accepting?: (id: string) => void
   idle: () => void
   /** Called after the timeline accepts the turn end. */
   turnEnded?: () => void
@@ -68,6 +70,7 @@ export class PiRpcTurns {
       settled: deps.settled,
       failed: deps.failed,
       accepted: (id, at) => {
+        deps.accepting?.(id)
         this.open(at)
         this.deps.lane.apply([{ type: 'input.accepted', clientMessageId: id, requestedAt: at }])
       },
