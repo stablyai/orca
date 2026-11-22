@@ -35,12 +35,13 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
 
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow'>,
+    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserCommandTarget' | 'resolveBrowserPageWebContents'
@@ -97,8 +98,11 @@ export class RuntimeBrowserScreencasts {
         appliedBudget: budget
       }
       // Hidden host compositors stop producing guest frames when throttled.
-      const win = this.host.getAvailableAuthoritativeWindow()
-      const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      const windowId = this.host.getAvailableAuthoritativeWindowId()
+      const releaseThrottle =
+        windowId !== null
+          ? (getRuntimeDesktopSurface().holdRendererPublication?.(windowId) ?? (() => {}))
+          : () => {}
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {

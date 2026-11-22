@@ -40,6 +40,7 @@ export const EXECUTION_HOST_METHODS = [
   'connector.slackMirror.status',
   // Transcripts live on the host that ran the agent, which is also where resume launches it.
   'aiVault.listSessions',
+  'aiVault.prepareSessionHandoffPrompt',
   'aiVault.prepareSessionResume',
   'aiVault.resolveSessionTitles',
   'aiVault.searchSessions',
@@ -191,6 +192,7 @@ export const EXECUTION_HOST_METHODS = [
   'host.wsl.listDistros',
   'preflight.check',
   'preflight.detectAgents',
+  'preflight.installedAgents',
   'preflight.detectRemoteAgents',
   'preflight.refreshAgents',
   'hostedReview.create',

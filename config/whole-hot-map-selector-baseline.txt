@@ -2,11 +2,6 @@
 # This is a RATCHET: counts may only go DOWN. Select a stable derived answer instead.
 # Prune after a fix: pnpm check:whole-hot-map-selector-ratchet --prune
 1 src/renderer/src/app-shell/storage/use-persisted-ui-writer.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:agentStatusByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:ptyIdsByTabId
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:tabsByWorktree
-1 src/renderer/src/components/activity/threads/use-agent-pane-threads.ts:runtimeStatusByEnvironmentId
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts:ptyIdsByTabId
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts:terminalLayoutsByTabId
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts:unifiedTabsByWorktree
@@ -19,7 +14,6 @@
 1 src/renderer/src/components/cmd-j/palette-live-status.tsx:tabsByWorktree
 1 src/renderer/src/components/cmd-j/palette-live-status.tsx:terminalLayoutsByTabId
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:agentStatusByPaneKey
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:paneForegroundAgentByPaneKey
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:ptyIdsByTabId
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:runtimeAgentOrchestrationByPaneKey
@@ -32,14 +26,11 @@
 1 src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-original-pane-actions.ts:tabsByWorktree
 1 src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-original-pane-actions.ts:terminalLayoutsByTabId
 1 src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-original-pane-actions.ts:unifiedTabsByWorktree
-1 src/renderer/src/components/settings/notifications/use-notification-source-options.ts:runtimeStatusByEnvironmentId
 1 src/renderer/src/components/settings/terminal/session-management/ManageSessionsSection.tsx:ptyIdsByTabId
 1 src/renderer/src/components/settings/terminal/session-management/ManageSessionsSection.tsx:tabsByWorktree
 1 src/renderer/src/components/sidebar/workspace-actions/deletion/use-delete-worktree-dirty-changes.ts:gitStatusByWorktree
-1 src/renderer/src/components/sidebar/workspace-actions/parenting/use-eligible-folder-parents.ts:runtimeStatusByEnvironmentId
 1 src/renderer/src/components/sidebar/workspace-board/surface/use-visible-workspace-kanban-worktree-ids.ts:browserTabsByWorktree
 1 src/renderer/src/components/sidebar/workspace-board/surface/use-visible-workspace-kanban-worktree-ids.ts:ptyIdsByTabId
-1 src/renderer/src/components/sidebar/workspace-board/surface/use-visible-workspace-kanban-worktree-ids.ts:runtimeStatusByEnvironmentId
 1 src/renderer/src/components/sidebar/workspace-board/surface/use-visible-workspace-kanban-worktree-ids.ts:tabsByWorktree
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts:agentStatusByPaneKey
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts:ptyIdsByTabId
@@ -77,4 +68,3 @@
 1 src/renderer/src/components/wsl-move/WslMoveDialog.tsx:terminalLayoutsByTabId
 1 src/renderer/src/components/wsl-move/WslMoveDialog.tsx:unifiedTabsByWorktree
 1 src/renderer/src/components/wsl-move/WslMovedProjectsSection.tsx:unifiedTabsByWorktree
-1 src/renderer/src/runtime/web-session-tabs-sync/subscriptions/use-runtime-session-mirror-environment-key.ts:runtimeStatusByEnvironmentId

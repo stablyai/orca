@@ -53,6 +53,8 @@ class OrchestrationDbCore {
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** PTYs whose pointers were released this session; title edges skip the release write for them. */
+  readonly releasedPointerPtyIds = new Set<string>()
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
@@ -74,7 +76,8 @@ class OrchestrationDbCore {
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
-      ['federation_relay_items', ['answer_sender_report']]
+      ['federation_relay_items', ['answer_sender_report']],
+      ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
       const existing = new Set(
         this.db

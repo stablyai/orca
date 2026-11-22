@@ -180,6 +180,8 @@ export type KeybindingDefinition = {
   allowInTerminal?: boolean
   // Leaving it out means a focused text field keeps every key.
   allowInTextField?: 'non-default-chords'
+  // The chat prompt mirrors the terminal, so it yields even the default chords.
+  runsInChatPrompt?: boolean
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string

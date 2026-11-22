@@ -14,6 +14,7 @@ type UseFileExplorerAutoRevealParams = {
   openFiles: OpenFile[]
   hasNameFilterQuery: boolean
   rowProjection: FileExplorerRowProjection
+  selectedPath: string | null
   setSelectedPath: (path: string | null) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
@@ -28,10 +29,13 @@ export function useFileExplorerAutoReveal({
   openFiles,
   hasNameFilterQuery,
   rowProjection,
+  selectedPath,
   setSelectedPath,
   virtualizer
 }: UseFileExplorerAutoRevealParams): void {
   const prevActiveFileIdRef = useRef<string | null>(null)
+  const realTreeRevealedFileIdRef = useRef<string | null>(null)
+  const handledSelectionRef = useRef<string | null>(null)
   const scrollFrameRef = useRef<number | null>(null)
 
   const cancelScrollFrame = useCallback((): void => {
@@ -45,16 +49,22 @@ export function useFileExplorerAutoReveal({
   useEffect(() => cancelScrollFrame, [cancelScrollFrame])
 
   useEffect(() => {
-    if (activeFileId === prevActiveFileIdRef.current) {
-      return
-    }
-    // Why: while the tree is hidden, leave the file unhandled so it is revealed when the tree is shown,
-    // unless a kept name filter would be cleared by that reveal.
-    if (!worktreePath && !hasNameFilterQuery) {
+    const realTreeVisible = Boolean(worktreePath) && !hasNameFilterQuery
+    // Why: a file handled among name-filter rows is revealed in the real tree once the filter clears.
+    // A hidden tree leaves it unhandled, unless a kept name filter would be cleared by that reveal.
+    const sameActiveFile = activeFileId === prevActiveFileIdRef.current
+    if (sameActiveFile) {
+      if (!realTreeVisible || realTreeRevealedFileIdRef.current === activeFileId) {
+        return
+      }
+    } else if (!worktreePath && !hasNameFilterQuery) {
       prevActiveFileIdRef.current = null
       return
+    } else {
+      handledSelectionRef.current = selectedPath
     }
     prevActiveFileIdRef.current = activeFileId
+    realTreeRevealedFileIdRef.current = realTreeVisible ? activeFileId : null
 
     if (!activeFileId || !activeWorktreeId || !worktreePath) {
       return
@@ -79,9 +89,18 @@ export function useFileExplorerAutoReveal({
     if (getRelativePathInsideRoot(filePath, displayRootPath) === null) {
       return
     }
+    // Why: after the name filter clears, keep a row the user selected since the file was handled.
+    if (
+      sameActiveFile &&
+      selectedPath !== filePath &&
+      selectedPath !== handledSelectionRef.current
+    ) {
+      return
+    }
 
     if (rowProjection.hasPath(filePath)) {
       setSelectedPath(filePath)
+      handledSelectionRef.current = filePath
       const targetIndex = rowProjection.getIndexByPath(filePath)
       if (targetIndex !== null) {
         cancelScrollFrame()
@@ -91,6 +110,8 @@ export function useFileExplorerAutoReveal({
         })
       }
     } else {
+      // Queuing the reveal expands the real tree and clears a name filter, so it is handled.
+      realTreeRevealedFileIdRef.current = activeFileId
       useAppStore.setState({
         pendingExplorerReveal: {
           worktreeId: activeWorktreeId,
@@ -110,6 +131,7 @@ export function useFileExplorerAutoReveal({
     openFiles,
     hasNameFilterQuery,
     rowProjection,
+    selectedPath,
     setSelectedPath,
     virtualizer
   ])

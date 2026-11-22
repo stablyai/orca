@@ -1,5 +1,6 @@
 import { recordRecentTerminalImage } from '../recent-terminal-images'
 import { useAppStore } from '../../../../store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
@@ -122,6 +123,7 @@ export function createTerminalPanePasteExecution(
       hostPlatform: resolveTerminalInputHostPlatform({
         clientPlatform: shortcutPlatform,
         state,
+        statuses: readRuntimeStatuses(),
         worktreeId,
         transport: paneTransportsRef.current.get(pane.id) ?? null
       }),

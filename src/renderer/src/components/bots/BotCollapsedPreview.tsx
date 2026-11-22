@@ -1,9 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { LayoutTemplate } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import {
   readBotHostState,
@@ -27,9 +27,10 @@ import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session
 import { useAppStore } from '@/store'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { BotAvatar } from './BotAvatar'
+import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
+import { openBotHomePanelFromSidebar } from './BotRow'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
-import { openBotTemplates } from './templates/bot-templates-open'
 import { useBotHomeWorkers } from './use-bot-sidebar-arrangement'
 
 export function useBotPreviewFacts(rows: { bot: Bot; home: FolderWorkspace }[]) {
@@ -61,6 +62,7 @@ export function useBotPreviewFacts(rows: { bot: Bot; home: FolderWorkspace }[]) 
     return {
       ...facts,
       bot,
+      home,
       attention: facts.attention || itemsAttention.has(botSidebarEntryKey(bot))
     }
   })
@@ -105,6 +107,7 @@ export function BotCollapsedPreview({
   )
   const ref = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
+  const [openCardKey, setOpenCardKey] = useState<string | null>(null)
   useLayoutEffect(() => {
     const node = ref.current
     if (!node) {
@@ -120,12 +123,19 @@ export function BotCollapsedPreview({
       activeChat.hostId === bot.hostId
   )
   const preview = collapsedBotPreview(facts, botPreviewCapacity(width, facts.length), current)
+  if (
+    openCardKey !== null &&
+    !preview.shown.some(({ bot }) => botSidebarEntryKey(bot) === openCardKey)
+  ) {
+    setOpenCardKey(null)
+  }
   const hiddenAttention = preview.hidden.filter((fact) => botPreviewSignal(fact) === 'attention')
   const overflowLabel = t('bots.section.showMore', 'Show {{count}} more bots', {
     count: preview.hidden.length,
     defaultValue_one: 'Show {{count}} more bot'
   })
   const openChat = (bot: Bot): void => {
+    setOpenCardKey(null)
     void openBotHomeTab(bot)
       .then((opened) => {
         if (opened) {
@@ -134,82 +144,102 @@ export function BotCollapsedPreview({
       })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
+  const openHomePanel = (bot: Bot): void => {
+    setOpenCardKey(null)
+    openBotHomePanelFromSidebar(bot, onOpenBot)
+  }
   return (
-    <>
-      <span
-        ref={ref}
-        className="pointer-events-none flex min-w-0 flex-1 items-center justify-center overflow-hidden p-1"
-        data-bot-preview=""
-      >
-        <span className="isolate flex items-center gap-1">
-          {preview.shown.map((fact) => {
-            const name = label(fact, t)
-            const isCurrent = fact === current
-            return (
-              <Tooltip key={botSidebarEntryKey(fact.bot)}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={name}
-                    aria-current={isCurrent || undefined}
-                    className={cn(
-                      FACE_CLASS_NAME,
-                      isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
-                    )}
-                    onClick={() => openChat(fact.bot)}
-                  >
-                    <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
-                    <PreviewPip signal={botPreviewSignal(fact)} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{name}</TooltipContent>
-              </Tooltip>
-            )
-          })}
-          {preview.hidden.length > 0 ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
+    <span
+      ref={ref}
+      className="pointer-events-none flex min-w-0 flex-1 items-center justify-start overflow-hidden p-1"
+      data-bot-preview=""
+    >
+      <span className="isolate flex items-center gap-1">
+        {preview.shown.map((fact) => {
+          const key = botSidebarEntryKey(fact.bot)
+          const isCurrent = fact === current
+          const cardOpen = key === openCardKey
+          return (
+            <ActivityThreadHoverCardRoot
+              key={key}
+              open={cardOpen}
+              onOpenChange={(open) =>
+                setOpenCardKey(
+                  open ? key : (currentKey) => (currentKey === key ? null : currentKey)
+                )
+              }
+              pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
+              closeDelay={120}
+              trigger={
                 <button
                   type="button"
-                  aria-label={
-                    hiddenAttention.length === 0
-                      ? overflowLabel
-                      : `${overflowLabel} · ${t('bots.connectors.needYou', '{{count}} need you', {
-                          count: hiddenAttention.length,
-                          defaultValue_one: '{{count}} needs you'
-                        })}`
-                  }
+                  aria-label={label(fact, t)}
+                  aria-current={isCurrent || undefined}
                   className={cn(
                     FACE_CLASS_NAME,
-                    'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground ring-sidebar hover:ring-sidebar-ring'
+                    isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
                   )}
-                  onClick={onExpand}
+                  onClick={() => openChat(fact.bot)}
                 >
-                  +{preview.hidden.length}
-                  <PreviewPip signal={preview.hiddenSignal} />
+                  <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
+                  <PreviewPip signal={botPreviewSignal(fact)} />
                 </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {preview.hidden.map((fact) => label(fact, t)).join(', ')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </span>
+              }
+            >
+              {cardOpen ? (
+                <HoverCardContent
+                  side="top"
+                  sideOffset={8}
+                  collisionPadding={8}
+                  variant="workspace-details"
+                  motion="none"
+                  className="max-h-(--radix-hover-card-content-available-height)"
+                >
+                  <CollapsedBotHoverDetails
+                    fact={fact}
+                    onOpenHome={() => openHomePanel(fact.bot)}
+                  />
+                </HoverCardContent>
+              ) : null}
+            </ActivityThreadHoverCardRoot>
+          )
+        })}
+        {preview.hidden.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={
+                  hiddenAttention.length === 0
+                    ? overflowLabel
+                    : `${overflowLabel} · ${t('bots.connectors.needYou', '{{count}} need you', {
+                        count: hiddenAttention.length,
+                        defaultValue_one: '{{count}} needs you'
+                      })}`
+                }
+                className={cn(
+                  FACE_CLASS_NAME,
+                  'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground ring-sidebar hover:ring-sidebar-ring'
+                )}
+                onClick={onExpand}
+              >
+                +{preview.hidden.length}
+                <PreviewPip signal={preview.hiddenSignal} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {preview.hidden.map((fact) => label(fact, t)).join(', ')}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </span>
-      {facts.length <= 2 ? (
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="relative max-w-24"
-          onClick={() => openBotTemplates()}
-        >
-          <LayoutTemplate />
-          <span className="truncate">{t('bots.section.emptyTemplates', 'Templates')}</span>
-        </Button>
-      ) : null}
-    </>
+    </span>
   )
+}
+
+function CollapsedBotHoverDetails({ fact, onOpenHome }: { fact: Facts; onOpenHome: () => void }) {
+  const details = useBotRowDetails(fact.bot, fact.home)
+  return <BotHoverDetails bot={fact.bot} details={details} onOpenHome={onOpenHome} />
 }
 
 function PreviewPip({ signal }: { signal: ReturnType<typeof botPreviewSignal> }) {

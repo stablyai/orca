@@ -47,12 +47,16 @@ export function MobileNativeChatComposerAttachments({
   images,
   files,
   onRemoveImage,
-  onRemoveFile
+  onRemoveFile,
+  numbered = false
 }: {
+  /** An image with no path yet is still uploading. */
   images: readonly PendingNativeChatImage[]
   files: readonly PendingNativeChatFile[]
   onRemoveImage?: (id: string) => void
   onRemoveFile?: (id: string) => void
+  /** Each image shows its number, the N of the [Image #N] the words name it by. */
+  numbered?: boolean
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -69,7 +73,7 @@ export function MobileNativeChatComposerAttachments({
       style={styles.strip}
       contentContainerStyle={styles.stripContent}
     >
-      {images.map((image) => (
+      {images.map((image, index) => (
         <View key={image.id} style={styles.thumb}>
           {isRenderableImageUri(image.previewUri) ? (
             <Image
@@ -89,6 +93,19 @@ export function MobileNativeChatComposerAttachments({
               <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
             </View>
           )}
+          {image.path ? null : (
+            <View
+              style={styles.uploading}
+              accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
+            >
+              <ActivityIndicator size="small" color={colors.onAccent} />
+            </View>
+          )}
+          {numbered ? (
+            <View style={styles.number}>
+              <Text style={styles.numberText}>{index + 1}</Text>
+            </View>
+          ) : null}
           {onRemoveImage ? (
             <RemoveBadge
               label={t('chat.composerAttachments.removeImage', 'Remove image')}
@@ -218,6 +235,24 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
+  },
+  number: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)'
+  },
+  numberText: {
+    color: colors.onAccent,
+    fontSize: 10,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums']
   },
   // Keep most of the badge inside its item for Android touch delivery; strip padding protects the overhang.
   remove: {

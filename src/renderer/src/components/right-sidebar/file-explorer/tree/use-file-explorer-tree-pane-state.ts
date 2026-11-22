@@ -1,5 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
@@ -23,6 +23,7 @@ import { useFileExplorerRowScrolling } from '../selection/use-file-explorer-row-
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
+import { useClearNameFilterForReveal } from '../navigation/use-clear-name-filter-for-reveal'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
@@ -118,12 +119,12 @@ export function useFileExplorerTreePaneState({
     selectedPaths
   } = selection
 
-  const pendingReveal = useAppStore((s) => s.pendingExplorerReveal)
-  useEffect(() => {
-    if (pendingReveal?.worktreeId === activeWorktreeId && hasNameFilter) {
-      setNameFilterQuery('')
-    }
-  }, [pendingReveal, activeWorktreeId, hasNameFilter, setNameFilterQuery])
+  useClearNameFilterForReveal({
+    activeWorktreeId,
+    visibleFilesWorktreePath,
+    hasNameFilter,
+    setNameFilterQuery
+  })
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
@@ -245,6 +246,7 @@ export function useFileExplorerTreePaneState({
     rootCache,
     loadDir,
     loadMoreDir,
+    selectedPath: selection.selectedPath,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles,

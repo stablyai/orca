@@ -39,10 +39,7 @@ const FEATURE_TIP_COPY: Record<
         'Find any past conversation by what was said in it, then pick up where the agent left off.'
       ),
     ctaLabel: () =>
-      translate(
-        'auto.components.feature.tips.feature.tip.copy.91e2719807',
-        'Turn on session search'
-      )
+      translate('auto.components.feature.tips.feature.tip.copy.91e2719807', 'Enable session search')
   },
   'orca-cli': {
     title: () =>
@@ -84,10 +81,7 @@ const FEATURE_TIP_COPY: Record<
         'Start voice dictation in any focused pane, then use the shortcut again to stop.'
       ),
     ctaLabel: () =>
-      translate(
-        'auto.components.feature.tips.feature.tip.copy.24aaad376f',
-        'Set up voice dictation'
-      )
+      translate('auto.components.feature.tips.feature.tip.copy.24aaad376f', 'Set up dictation')
   }
 }
 

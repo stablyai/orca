@@ -110,7 +110,7 @@
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
-      "confirm": "Adjust filters and reveal",
+      "confirm": "Adjust & reveal",
       "cancel": "Keep filters"
     },
     "revealCurrent": {
@@ -431,7 +431,7 @@
       "errorDescription": "Pages in this workspace browse through its SSH host, and routing could not be set up.",
       "retry": "Retry",
       "tryAnyway": "Try anyway",
-      "browseLocally": "Browse from this device instead",
+      "browseLocally": "Browse locally",
       "forwardingBlockedTitle": "The SSH server blocks browser traffic",
       "sshUnavailableTitle": "SSH connection unavailable",
       "forwardingBlockedDescription": "This server refuses TCP forwarding (often “AllowTcpForwarding no” in its sshd config), which browsing through it requires. Ask its administrator to allow forwarding, or browse from this device instead.",
@@ -500,7 +500,7 @@
       "manage": "Manage extensions"
     },
     "history": {
-      "clear": "Clear browsing history",
+      "clear": "Clear history",
       "clearAllTime": "All time",
       "clearLastHour": "Last hour",
       "clearRange": "Clear history from",
@@ -556,7 +556,8 @@
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -564,6 +565,13 @@
         "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browsers on this device",
+        "destination": "Imports into the browser for {{host}}.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "stored": "Stored in the browser for {{host}}.",
+        "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
     },
     "passwords": {
@@ -596,6 +604,9 @@
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
       "profile": "Profile"
+    },
+    "loadStall": {
+      "waitingForHost": "Waiting for {{host}}…"
     }
   },
   "editor": {
@@ -851,6 +862,10 @@
           "syntax": "syntax"
         }
       },
+      "tilingWindowMode": {
+        "title": "Tiling window manager mode",
+        "description": "Hide the minimize and maximize buttons and bring workspace tabs to the top edge. Move and resize the window with your window manager."
+      },
       "reduceVisualEffects": {
         "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
         "keywords": {
@@ -983,7 +998,7 @@
           "add": "Add",
           "adding": "Adding…",
           "added": "Added {{name}}",
-          "browse": "Browse the Chrome Web Store",
+          "browse": "Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
         },
         "enabledToggleLabel": "Turn browser extensions on or off"
@@ -1138,6 +1153,7 @@
       "permissionWithoutAuto": "Agents without Approve for me",
       "permissionMixed": "Mixed",
       "permissionSurfaceDifference": "Terminals use the agent’s own settings; new chats use {{mode}}.",
+      "permissionModeSurfaceDifference": "Terminals use {{terminal}}; new chats use {{mode}}.",
       "permissionSameAsAll": "Same as all agents",
       "choiceChipRemove": "Remove {{flag}}",
       "choiceChipTooltip": "Added by {{choice}}. Remove it to use the default.",
@@ -1182,7 +1198,8 @@
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
       "defaultAutoBadge": "Default · Auto",
-      "newAgentsTitle": "New agents"
+      "newAgentsTitle": "New agents",
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1331,7 +1348,8 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "chat": "Deleting a chat"
       },
       "pages": {
         "folder": "Workspace folder",
@@ -1473,7 +1491,6 @@
       "permissions": "Permissions",
       "permissionsDescription": "The starting permission for new sessions. Anything beyond it asks in the session.",
       "active": "Active",
-      "activeDescription": "Answers messages and runs automations.",
       "memoryFact": "Memory",
       "cancel": "Cancel",
       "save": "Save",
@@ -1562,7 +1579,6 @@
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
       "memorySource": "From {{source}}",
-      "memorySourceLink": "link",
       "lookAround": {
         "firstLook": "First look: {{time}}",
         "notArmed": "The first look comes a few hours after your first conversation.",
@@ -1660,7 +1676,6 @@
         "missing": "This project is no longer in Orca.",
         "notYet": "Not available yet",
         "none": "No skills in this project yet. Run your project’s setup to add its skills; they load in {{bot}}’s next chat.",
-        "more": "and {{count}} more",
         "openFolder": "Open folder",
         "noneShort": "No skills",
         "link": "Link a project",
@@ -1669,7 +1684,14 @@
         "title": "Skills",
         "listedTitle": "{{agent}} can’t load these skills directly.",
         "listedBody": "{{bot}} gets a list of them in its instructions and reads one when it fits. They won’t appear in its / menu.",
-        "remoteSsh": "On {{host}} over SSH. {{bot}} runs on this computer, so it can’t load these yet."
+        "remoteSsh": "On {{host}} over SSH. {{bot}} runs on this computer, so it can’t load these yet.",
+        "claudeOnly": "Claude only",
+        "notClaude": "Not for Claude",
+        "own": "{{bot}}’s own skills",
+        "ownNone": "No skills of its own yet.",
+        "ownShort": "Own skills",
+        "showMore": "Show {{count}} more",
+        "notLoaded": "No agent loads it"
       },
       "askNewHomeChat": "Ask before a new Home Chat",
       "askNewHomeChatDescription": "Confirm before New Home Chat replaces the conversation a bot carries.",
@@ -1729,7 +1751,19 @@
       "composioKeyOnHost": "One key for every bot on {{host}}, for the apps you connect at Composio. Your app sign-ins are held by Composio.",
       "serverEnableFailed": "Couldn’t change bots on {{host}}.",
       "composioEventsElsewhere": "Composio events for this key go to {{holder}}. Use a separate key on {{host}}.",
-      "composioEventsAnotherComputer": "another computer"
+      "composioEventsAnotherComputer": "another computer",
+      "editMemory": "Edit",
+      "addMemoryPlaceholder": "Remember something new…",
+      "memoryEmpty": "No facts saved yet.",
+      "saving": "Saving…",
+      "unsaved": "Unsaved",
+      "saved": "Saved",
+      "soulView": "Soul view",
+      "soulRead": "Read",
+      "soulEdit": "Edit",
+      "soulStats": "{{lines}} lines · {{words}} words",
+      "soulDoubleClickHint": "Double-click to edit",
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -1909,12 +1943,39 @@
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
     },
+    "notifications": {
+      "perfNotices": {
+        "disk": {
+          "label": "Disk almost full",
+          "description": "Suggest cleaning up workspaces when your disk is almost full."
+        },
+        "hiddenTabs": {
+          "label": "Hidden browser tabs",
+          "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
+        },
+        "search": {
+          "disk": "disk",
+          "warning": "warning",
+          "tabs": "tabs",
+          "memory": "memory"
+        }
+      }
+    },
     "automaticUpdates": {
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
-      "info": "About automatic updates",
-      "installingStatus": "is being installed."
+      "info": "About automatic updates"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Manage in browser",
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage your team in your browser."
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
@@ -2435,7 +2496,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "Could not launch {{value0}} in a new terminal.",
-                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready.",
+                "agentExited": "The agent exited before your prompt was sent."
               }
             }
           },
@@ -3222,8 +3284,8 @@
         "e30a5470c9": "Conversation",
         "3fdf777817": "Open on GitHub",
         "c43fe79ee0": "Copy GitHub link",
-        "0caac1a18f": "Start workspace from PR",
-        "0ab4664a8b": "Start workspace from issue",
+        "0caac1a18f": "Start workspace",
+        "0ab4664a8b": "Start workspace",
         "36182aa57f": "Start new workspace",
         "fe6ff12dc2": "More issue workspace actions",
         "726db41722": "Open workspace",
@@ -3596,7 +3658,7 @@
         "someoneUpdatedIssue": "Someone updated the issue · {{time}}"
       },
       "LinearItemDrawer": {
-        "04008e6c46": "Start workspace from issue",
+        "04008e6c46": "Start workspace",
         "a4fcc57522": "No comments yet.",
         "fde849b2b6": "Comments",
         "9dc54172db": "Close · Esc",
@@ -3746,7 +3808,7 @@
         "161d91ef02": "Send comment",
         "d2030fc8cd": "Add a comment…",
         "1208347ac0": "Failed to add comment",
-        "61452f2143": "Start workspace from issue",
+        "61452f2143": "Start workspace",
         "14c9fc70ed": "+ Assignee",
         "bc215fea4d": "+ Label",
         "b936cc51a4": "Closed",
@@ -4287,7 +4349,7 @@
         "05ad78a6d1": "Orca v{{value0}} is ready.",
         "318d3b4bc7": "Dismiss update",
         "9abc59f814": "Update Available",
-        "aad383aecc": "Read the full release notes",
+        "aad383aecc": "Release notes",
         "b1d867f4fb": "Your terminal sessions won't be interrupted during the update.",
         "09a55c39b5": "Installing...",
         "ea2a41adbe": "You're on the latest version.",
@@ -5131,7 +5193,7 @@
             "openInNewTab": "Open in new tab"
           },
           "TerminalSessionStateSaveFailureDialog": {
-            "6bee0c8f17": "Open Disk Space Analyzer",
+            "6bee0c8f17": "Disk Space Analyzer",
             "ae20d0ffc2": "Dismiss",
             "38c282a2c4": "The analyzer opens directly from here. You can also open it later from the lower-left toolbox menu by choosing Space Analyzer."
           },
@@ -5386,6 +5448,7 @@
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
             "terminalListFailed": "Couldn’t list terminal agents for this workspace",
             "chatNotInstalled": "Not installed",
+            "chatInstallRequired": "Install required",
             "chatNotOverSsh": "No chat over SSH",
             "chatNotInWsl": "No chat in WSL",
             "chatNotInSubfolder": "No chat in a subfolder",
@@ -5803,7 +5866,7 @@
             "09960d86bd": "Scanned",
             "eee5240810": "Workspaces deleted",
             "9afc97f9a3": "Workspace deleted",
-            "792a214457": "Delete workspace",
+            "792a214457": "Delete",
             "a998501630": "Force",
             "9155381019": "Sparse",
             "f39d291997": "Select",
@@ -6011,13 +6074,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
-                "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
-                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
-                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process.",
                 "memColumn": "Mem",
-                "memorySummary": "Σ Memory",
-                "privateSummary": "Σ Private"
+                "memorySummary": "Σ Memory"
               }
             },
             "manager": {
@@ -6796,7 +6854,7 @@
           "releaseNotesVersion": "Release notes",
           "releaseNotesOptional": "Add release notes (optional)",
           "releaseNotesFirst": "Describe this release",
-          "manageLinks": "Manage or revoke this link in Settings",
+          "manageLinks": "Manage link",
           "noExecutableContent": "No scripts or executables",
           "newVersionDescriptionPlain": "Adds a new version to the existing link.",
           "accessSummaryPlain": "Unlisted link — anyone with it can install this.",
@@ -6896,8 +6954,8 @@
           "cancel": "Cancel",
           "confirmRemove": "Confirm remove",
           "remove": "Remove",
-          "discardEditsRemove": "Discard my edits and remove",
-          "discardEdits": "Discard my edits and reinstall",
+          "discardEditsRemove": "Discard & remove",
+          "discardEdits": "Discard & reinstall",
           "titleMore": "{{name}} +{{count}}",
           "scopeWorkspace": "This workspace",
           "scopeGlobal": "Everywhere",
@@ -7060,7 +7118,7 @@
           "fb33359f69": "Group these repositories?",
           "d75170194e": "Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.",
           "39d51212cc": "Group name",
-          "aa0247680d": "No, import separately",
+          "aa0247680d": "Import separately",
           "a0bc4d1f8e": "Yes, import as group",
           "24eda6c8b2": "Scanning... {{value0}}",
           "6149d5203f": "No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.",
@@ -7078,7 +7136,7 @@
           "91b93a90a4": "Open project on SSH host",
           "007651bdf9": "Navigate to a directory and click Select to choose it.",
           "dd3ff65486": "Browse remote filesystem",
-          "36d427bb66": "Add project on SSH host",
+          "36d427bb66": "Add SSH project",
           "35831a7312": "Adding..."
         },
         "AddRepoServerStartStep": {
@@ -7090,7 +7148,7 @@
           "867692f505": "Host path",
           "423b5d3d31": "Add a Git repository or folder that already exists on the selected host.",
           "3d0c035483": "Open host project",
-          "438493f214": "Or enter a host path manually",
+          "438493f214": "Enter host path",
           "6b9958492a": "Want to import many repos at once? Browse to the parent folder.",
           "d40d751517": "New repo or folder",
           "a81ffa0a99": "Create on host",
@@ -7190,7 +7248,7 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree, local changes, and its branch if merged."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
@@ -7212,7 +7270,7 @@
           "moreChildren_other": "+{{count}} more"
         },
         "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Show in worktree list",
+          "b7a87dc32f": "Show worktree",
           "ad99f4eea9": "Keep hidden",
           "9f4f14e821": "Change this later from the project menu.",
           "b47ba1a9d2": "{{value0}} preview",
@@ -7838,7 +7896,7 @@
           "tryDifferentSearch": "Try a different name or path.",
           "disableSource": "Disable a source to manage its worktrees individually.",
           "appearWhenDetected": "New worktrees will appear here when Orca detects them.",
-          "openGlobalSettings": "Manage in Global Settings",
+          "openGlobalSettings": "Global settings",
           "globalSettingsSources": "These sources have a global setting you can override here:",
           "searchHiddenPlaceholder_one": "Search {{count}} worktree…",
           "searchHiddenPlaceholder_other": "Search {{count}} worktrees…"
@@ -8155,7 +8213,7 @@
           "a4c2d8f1b0": "Hide external worktrees?",
           "6e91b3c4d2": "External worktrees will not be shown in the sidebar or this list anymore for {{value0}}, including ones created later.",
           "1f8a5d9e73": "You can turn this back on later from project settings.",
-          "8c0b2e7a41": "Open Non-Orca worktrees settings",
+          "8c0b2e7a41": "Worktree settings",
           "5d1c9f0a82": "Cancel",
           "3b7e4a1c96": "Hide external worktrees"
         },
@@ -8222,7 +8280,7 @@
           "sshConfigPickerBack": "Back",
           "fillFromSshConfig": "Fill from ~/.ssh/config…",
           "sshConfigPickerAddingAll": "Adding hosts…",
-          "sshConfigPickerAddAll": "Add all {{value0}} to Orca",
+          "sshConfigPickerAddAll": "Add all ({{value0}})",
           "sshConfigPickerNoNewHosts": "No new hosts to add",
           "sshConfigPickerAddAllEmpty": "Add all to Orca",
           "identityFileFromConfigHint": "Left empty on purpose: Orca uses every key ~/.ssh/config resolves for {{value0}}. Type a path to use just that key.",
@@ -8379,7 +8437,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "description": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
+          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -8572,7 +8631,7 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Finish the core workflows that make Orca useful for parallel agent work.",
             "48a9e5ef2d": "Getting started",
-            "f3b5ffb2a6": "Hide checklist from sidebar"
+            "f3b5ffb2a6": "Hide checklist"
           },
           "SetupGuideProgressRing": {
             "dac3a4724a": "{{value0}} of {{value1}} setup steps complete"
@@ -8765,7 +8824,7 @@
           "retrySetup": "Retry",
           "installing": "Installing...",
           "hostUnavailable": "Orca can't install skills on this workspace's machine yet.",
-          "replaceWithOrcaCopy": "Replace with Orca's copy",
+          "replaceWithOrcaCopy": "Replace with Orca’s",
           "copyCommandAria": "Copy command",
           "ed197f59a2": "Copy command",
           "failedToCopyCommand": "Failed to copy command.",
@@ -8956,7 +9015,7 @@
           "a602d43069": "Copied {{value0}}."
         },
         "BrowserUsePane": {
-          "67d9a53f47": "Manage profiles for separate logins",
+          "67d9a53f47": "Manage profiles",
           "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
@@ -9186,6 +9245,12 @@
             "ariaLabel": "Card style",
             "classic": "Classic",
             "experimental": "Experimental"
+          },
+          "appRail": {
+            "title": "App rail",
+            "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+            "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
+            "toggleLabel": "Toggle app rail"
           }
         },
         "FloatingWorkspacePane": {
@@ -9281,21 +9346,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",
-          "d89806cc89": "is ready to install.",
-          "a6b37929dc": "Version",
-          "8311da27ba": "is available.",
           "02dc082e70": "Could not start the update download.",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
-          "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
           "f40d88390d": "You’re on the latest version.",
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
-          "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself.",
           "6d27bd46e3": "Check for updates",
-          "857ca887da": "Download update (",
-          "c0a8f827c7": "Restart to update ("
+          "downloadUpdate": "Download update",
+          "restartToUpdate": "Restart to update",
+          "versionAvailable": "Version {{version}} is available.",
+          "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.",
+          "versionReadyToInstall": "Version {{version}} is ready to install.",
+          "versionInstalling": "Version {{version}} is being installed.",
+          "downloadingVersion": "Downloading version {{version}} ({{percent}}%)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -10390,7 +10455,7 @@
           "connectionCheckUnavailable": "Orca couldn't check this connection. Try again, or open Integrations for setup details.",
           "retryConnection": "Try again",
           "openIntegrations": "Integrations",
-          "connectInIntegrations": "Set up in Integrations",
+          "connectInIntegrations": "Open Integrations",
           "connectJiraTitle": "Connect Jira",
           "connectJiraDescription": "Add a Jira Cloud site or self-hosted instance with an API token or PAT.",
           "manageJira": "Manage keys",
@@ -11400,6 +11465,14 @@
             "worktreeCardStyle": {
               "title": "Card style",
               "description": "Choose how workspace cards look in the sidebar."
+            },
+            "appRail": {
+              "title": "App rail",
+              "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+              "rail": "rail",
+              "navigation": "navigation",
+              "sidebar": "sidebar",
+              "icons": "icons"
             }
           }
         },
@@ -12961,7 +13034,7 @@
           "none": "No recipes found yet.",
           "cloudVmSkillTitle": "Cloud VM setup skill",
           "cloudVmRefresh": "Refresh Cloud VM recipes",
-          "setUpWithAgent": "Set up with an agent",
+          "setUpWithAgent": "Set up with agent",
           "setUpWithAgentHint": "Starts your default agent in {{repo}}. It edits orca.yaml, runs the doctors until they pass, and opens a PR.",
           "setUpWithAgentNoRepo": "Add a project first."
         },
@@ -13049,7 +13122,7 @@
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.",
           "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in for Relay",
-          "signInAgain": "Sign in again for Relay",
+          "signInAgain": "Sign in again",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
@@ -13108,19 +13181,19 @@
           "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca servers",
-          "e4e5937469": "Check for server updates",
+          "e4e5937469": "Check for updates",
           "newerCount": "{{value0}} newer than this app"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
           "restartingHelp": "Waiting for the replacement server to reconnect on the new version.",
           "retry": "Retry",
-          "update": "Update this server",
+          "update": "Update server",
           "description": "Review paired servers and update supported installs from this Orca client.",
           "restartWarning": "Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.",
           "checking": "Checking paired servers…",
           "empty": "No paired Remote Orca Servers.",
-          "updateAll": "Update all {{value0}} servers",
+          "updateAll": "Update all ({{value0}})",
           "noUpdates": "All servers are up to date.",
           "downloadProgress": "{{value0}} download progress",
           "liveTabOne": "1 live tab",
@@ -13463,7 +13536,7 @@
           "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing.",
           "loopbackRecoveryTunnel": "On the other computer, open Share this computer and create a link for Another device with its Tailscale or LAN address. If you reach it through an SSH tunnel, turn on the option below.",
           "sshTunnelReach": "I reach this address through an SSH tunnel",
-          "addServerWithTunnel": "Add server using tunnel",
+          "addServerWithTunnel": "Add via tunnel",
           "addServer": "Add server",
           "nameLabel": "Name",
           "optional": "(optional)",
@@ -13482,13 +13555,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
-          "title": "Release channel",
+          "title": "Update channel",
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
-          "channelAriaLabel": "Update channel",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
+          "adhocWarning": "Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",
@@ -13498,9 +13568,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "devChannelUnsupportedAria": "{{value0}} ({{value1}} only)",
-          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.",
+          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on {{stable}} or {{rc}}.",
           "downloadInstaller": "Download installer",
-          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here."
+          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to {{stable}}, works from here.",
+          "stableLabel": "Stable",
+          "stableDescription": "Stable releases for general use.",
+          "rcLabel": "RC",
+          "rcDescription": "Release candidates published before a stable release.",
+          "hourlyLabel": "Hourly",
+          "hourlyDescription": "Built every hour from main.",
+          "dailyLabel": "Daily",
+          "dailyDescription": "Built once a day from main.",
+          "adhocLabel": "Ad hoc",
+          "adhocDescription": "One-off builds from a branch for trying changes before they merge.",
+          "devChannelPlatforms": "macOS and Windows",
+          "scheduledWarning": "These builds ship with no test gate. Windows builds are unsigned. Keep a stable build handy."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "System default",
@@ -13711,7 +13793,7 @@
               "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
-              "replaceCredentials": "Add or replace credentials",
+              "replaceCredentials": "Manage credentials",
               "credentialName": "Your Bitbucket credential"
             }
           }
@@ -13753,6 +13835,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS Keychain (cursor-agent)",
+            "keyring": "Linux keyring (cursor-agent)",
             "cli": "Cursor CLI auth file",
             "desktop": "Cursor IDE"
           },
@@ -13780,7 +13863,7 @@
         },
         "sshManagedHostRemove": {
           "descriptionServerHost": "Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.",
-          "2ca95e9fd7": "Open remote Orca servers"
+          "2ca95e9fd7": "Manage remote servers"
         },
         "managedServers": {
           "row": {
@@ -13808,7 +13891,8 @@
             "updateOrcaOnHost": "Update Orca on this host",
             "updateAnyway": "Update anyway",
             "notNow": "Not now",
-            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts."
+            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.",
+            "forceUpdateUncounted": "Orca couldn’t count the terminals on this host. The update goes ahead only if no terminal daemon is running there, and any terminals Orca’s server runs itself will end."
           },
           "description": "Orca installs itself on an empty SSH host and keeps itself up to date.",
           "deploy": {
@@ -14011,7 +14095,7 @@
           "nothingNew": "Nothing new to add.",
           "notReflected": "Changed or removed on the older version; the server keeps its own copy",
           "cancel": "Cancel",
-          "confirm": "Move the new projects",
+          "confirm": "Move new projects",
           "kind": {
             "repository": "Repository {{name}}",
             "folder": "Folder {{name}}",
@@ -14023,7 +14107,7 @@
           "title": "Keep the server’s version",
           "description": "This host keeps using its Orca server as it is. What the older version of Orca added or changed here is not moved; it stays only in this computer’s saved settings until they are cleaned up.",
           "cancel": "Cancel",
-          "confirm": "Keep the server’s version"
+          "confirm": "Keep server version"
         },
         "moveAnyway": {
           "action": "Move anyway…",
@@ -14058,8 +14142,16 @@
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
-          "turnOn": "Turn on in Experimental",
-          "chip": "WSL"
+          "turnOn": "Open Experimental",
+          "chip": "WSL",
+          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "restartAsWslHost": {
+            "button": "Restart as WSL host",
+            "title": "Restart as WSL host?",
+            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "cancel": "Cancel",
+            "action": "End terminals and restart"
+          }
         },
         "restartServer": {
           "action": "Restart Orca’s server…",
@@ -14218,7 +14310,8 @@
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
           "overYourSsh": "Over your SSH connection",
-          "newerThanApp": "Newer than this app (v{{version}})"
+          "newerThanApp": "Newer than this app (v{{version}})",
+          "installViaSsh": "Install via SSH"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -14270,7 +14363,7 @@
         "recoverServer": {
           "checking": "Checking the lock…",
           "cancel": "Cancel",
-          "confirm": "Clear lock and restart",
+          "confirm": "Clear lock & restart",
           "host": "Host",
           "lockBoot": "Written during boot",
           "currentBoot": "Current boot",
@@ -14296,7 +14389,7 @@
           }
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Use its terminal colors",
+          "useTerminalTheme": "Use theme colors",
           "dynamic": "dynamic",
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
@@ -16157,7 +16250,7 @@
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit",
-            "c3d4e5f6a7": "Open all changes together"
+            "c3d4e5f6a7": "Open all changes"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",
@@ -16728,7 +16821,7 @@
           "pairThisMac": "Pair this Mac.",
           "pairThisPc": "Pair this PC.",
           "pairThisComputer": "Pair this computer.",
-          "directAddressDisclosure": "Also use a faster local path",
+          "directAddressDisclosure": "Local connection",
           "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.",
           "androidHelp": {
             "guide": "Install guide"
@@ -17356,7 +17449,7 @@
               "copy": {
                 "f98e9d1bad": "Search every agent session",
                 "990cc29865": "Find any past conversation by what was said in it, then pick up where the agent left off.",
-                "91e2719807": "Turn on session search",
+                "91e2719807": "Enable session search",
                 "3eacedec93": "Let agents drive Orca with the Orca CLI",
                 "8d54d0ff53": "Enable agents to coordinate child worktrees and communicate between worktrees.",
                 "0080bc86eb": "Install CLI & Skills",
@@ -17365,7 +17458,7 @@
                 "eb5e9e90ec": "Got it",
                 "5221facada": "Dictate into any pane",
                 "5d69275490": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-                "24aaad376f": "Set up voice dictation"
+                "24aaad376f": "Set up dictation"
               }
             }
           }
@@ -17443,7 +17536,7 @@
             "6d950431d2": "Hide",
             "ebceac65a4": "Set up",
             "installSkillPrompt": "Install the Orca CLI skill when you want agents to drive this simulator.",
-            "3f003507f4": "Open full setup in Settings"
+            "3f003507f4": "Open setup"
           },
           "MobileEmulatorAgentSetupGuideSteps": {
             "21f5687c07": "Orca CLI skill",
@@ -17457,7 +17550,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Paste is too large for emulator keyboard input.",
-            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
             "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
@@ -17780,7 +17872,9 @@
           "close": "Close",
           "copiedPng": "Copied as PNG",
           "copyPngFailed": "Could not copy image",
-          "copyPng": "Copy as PNG"
+          "copyPng": "Copy as PNG",
+          "previous": "Previous image",
+          "next": "Next image"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
@@ -18354,7 +18448,7 @@
         "BinaryFileDefaultAppButton": {
           "downloadFailed": "Failed to download '{{value0}}'.",
           "open": "Open with default app",
-          "downloadOpen": "Download & open with default app",
+          "downloadOpen": "Download & open",
           "openFailed": "No app on this computer opened this file."
         }
       },
@@ -18763,8 +18857,6 @@
             "27d863542c": "Browser annotations",
             "e48569ac6d": "This site could not be reached.",
             "bbe8f15e83": "This pane is rendered from the active runtime server.",
-            "8b7e6d1f5a": "Browser annotations are only available in local browser tabs.",
-            "deb5293610": "Browser annotations unavailable in remote runtime",
             "90d021f2ad": "Add",
             "0cb3bd6221": "Annotation intent",
             "532bac48c5": "Describe what the agent should change here...",
@@ -19065,11 +19157,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -19139,7 +19229,6 @@
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
-          "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
@@ -19409,7 +19498,6 @@
           "failed7d": "Failed · 7d",
           "automation": "Automation",
           "triggered": "Triggered",
-          "trigger": "Trigger",
           "loading": "Loading runs…",
           "noRuns": "No runs yet",
           "emptyDescription": "Runs appear here after an automation is triggered.",
@@ -19488,7 +19576,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} spent",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19535,7 +19626,6 @@
           "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
           "signIn": "Sign in to {{host}}",
           "output": "Output",
-          "details": "Details",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
@@ -19642,10 +19732,6 @@
           "hideOtherClients": "Hide other-client agents"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Path copied to clipboard",
-          "copyPathFailed": "Failed to copy path",
-          "workspace": "Workspace",
-          "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
         },
         "ActivityThreadRow": {
@@ -20081,7 +20167,7 @@
           "loadMoreFailed": "Could not load more artifacts.",
           "publishingOff": "Publishing is turned off",
           "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
-          "openArtifactsSettings": "Open Settings → Artifacts",
+          "openArtifactsSettings": "Artifact settings",
           "retry": "Retry",
           "reconnectHeading": "Sign in to Orca again",
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
@@ -20328,7 +20414,7 @@
         "cancel": "Cancel"
       },
       "plainSshTerminal": {
-        "open": "Open plain SSH terminal",
+        "open": "Plain SSH terminal",
         "unmanaged": "Plain SSH — unmanaged. Not an Orca workspace: agents and tabs here aren’t tracked, and this terminal isn’t restored. Closing it ends the SSH session.",
         "ended": "ssh exited with code {{code}}. Close this window when you’re done reading.",
         "title": "Plain SSH · {{host}}",
@@ -20514,7 +20600,6 @@
         "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
         "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
         "promptsNotResent": "Resuming won’t send your prompts again.",
-        "promptsNotSent": "Your prompts weren’t sent again.",
         "resume": "Resume",
         "details": "Details",
         "close": "Close",
@@ -20811,6 +20896,7 @@
         "checking": "Checking whether {{agent}} is ready on this host…",
         "cliInstall": "Install",
         "cliRecheck": "Check again",
+        "openAgentSettings": "Open Settings",
         "cliRecheckFailed": "Could not check installed agents on this host. Try again."
       },
       "reasoning": "Reasoning",
@@ -20853,6 +20939,7 @@
         "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
+        "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
@@ -21113,7 +21200,12 @@
         "placeholder": "Ask anything, @ to mention files, / for commands",
         "loadingFiles": "Loading files...",
         "noFiles": "No matching files",
-        "noMembers": "No matching bots",
+        "noBots": "No bots",
+        "noBotsMatch": "No bots match \"{{query}}\"",
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "filesLoadFailed": "Couldn't load files",
         "attach": "Attach file",
         "startDictation": "Start dictation",
@@ -21178,6 +21270,7 @@
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
           "none": "None",
+          "off": "Off",
           "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
@@ -21210,6 +21303,10 @@
         "permissionAuto": "Approve for me",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccess": "Full access",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionAgentSettingsUsedHint": "Uses your {{agent}} permission settings.",
+        "permissionAgentSettingsUnnamedHint": "Uses your {{agent}} permission settings. Orca can't show this mode.",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings",
         "permissionFullAccessDescription": "Never asks before edits or commands",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
         "permissionFullAccessSharedDescription": "Never asks before edits or commands",
@@ -21224,6 +21321,7 @@
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
         "agents": "Agents",
+        "recent": "Recent",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21239,7 +21337,7 @@
         "noMatchingChats": "No matching chats",
         "noOtherChats": "No other chats",
         "retryChats": "Retry",
-        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },
@@ -21494,7 +21592,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21654,12 +21762,20 @@
         "open": "Open {{name}}",
         "row": {
           "started": "Started",
+          "forItems": "for",
           "reopened": "Reopened",
           "followedUp": "Sent follow-up to",
           "handedOff": "Handed off to",
           "task": "Task from",
           "update": "Update from",
           "message": "Message from"
+        },
+        "kind": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Follow-up",
+          "handedOff": "Handed off",
+          "task": "Task"
         }
       },
       "goal": {
@@ -21677,7 +21793,10 @@
         "paused": "Paused goal",
         "blocked": "Goal blocked",
         "limited": "Goal limited",
-        "attachmentsUnsupported": "Remove attachments before setting a goal."
+        "attachmentsUnsupported": "Remove attachments before setting a goal.",
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks",
+        "last-check": "Last goal check"
       },
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
@@ -21716,7 +21835,6 @@
         "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
-        "moreActions": "More actions",
         "moveChanged": "The queue changed before this move. Try dragging the message again.",
         "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
         "reorderMessage": "Reorder message",
@@ -21726,7 +21844,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",
@@ -21741,13 +21858,17 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
-        "collapse": "Collapse",
-        "expand": "Expand",
         "queued": "Queued",
         "clearAll": "Clear all",
         "editReturned": "Your edit is in the chat box.",
         "commandsUnsupported": "Commands can't be saved in a queued message.",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -21972,6 +22093,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
@@ -22001,7 +22123,7 @@
         "loading": "Loading",
         "deleted": "This automation was deleted",
         "loadFailed": "Couldn’t read this automation",
-        "openFullPage": "Open full page",
+        "openFullPage": "Open page",
         "onAgent": "on {{name}}"
       },
       "botContext": {
@@ -22013,9 +22135,11 @@
         "again": "{{name}} started setting up again"
       },
       "connectorOffer": {
+        "heading": "Connect a service",
+        "connectService": "Connect {{service}}",
         "connected": "Connected",
-        "connect": "Connect",
         "connectedIn": "Connected in {{places}}",
+        "pausedStatus": "Paused",
         "addOrg": "Add org",
         "addWorkspace": "Add workspace",
         "githubAsYou": "It can also work in GitHub as you, through your gh login.",
@@ -22040,7 +22164,7 @@
         "showDetails": "Show details",
         "copyError": "Copy error",
         "settingsMenu": "Auto-continue settings…",
-        "handOff": "Hand off to another agent",
+        "handOff": "Hand off to agent",
         "more": "More actions",
         "statusUnknown": "Reset time unknown.",
         "statusCanContinueAtAuto": "You can continue at {{time}}. Orca will continue this chat at {{autoTime}}.",
@@ -22060,7 +22184,7 @@
         "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
         "statusCanContinueNow": "{{agent}} can continue now.",
         "titleCanContinueNow": "{{agent}} can continue now",
-        "turnOnAutoContinue": "Continue automatically when limits reset"
+        "turnOnAutoContinue": "Auto-continue on reset"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
@@ -22096,7 +22220,6 @@
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
         "detachedCommit": "Commit {{head}} (not a branch)",
-        "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
@@ -22127,7 +22250,6 @@
         "changed": "Comes over with changes",
         "already": "Already here",
         "stays": "Stays in {{app}}",
-        "heading": "Import plan",
         "fromAgain": "From {{app}}, again",
         "from": "From {{app}}",
         "selected": "{{chosen}} of {{total}} selected · keys and logins are never copied",
@@ -22145,11 +22267,17 @@
         "paused": "Automations are paused so nothing runs twice. Turn them on once the old bot is switched off in {{app}}."
       },
       "botCreateOffer": {
+        "heading": "New bot",
         "takesOverOne": "Takes over 1 workspace",
         "takesOverMany": "Takes over {{count}} workspaces",
         "created": "Created",
         "createdTookOverOne": "Created · took over 1 workspace",
         "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverMany": "Took over {{count}} workspaces",
         "watches": "Watches",
         "reports": "Reports",
         "takesOver": "Takes over",
@@ -22166,7 +22294,8 @@
         "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
         "deleted": "Created, then deleted",
         "does": "Does",
-        "willPropose": "Will propose"
+        "willPropose": "Will propose",
+        "details": "Details of {{name}}"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -22284,6 +22413,7 @@
         "finishedWith": "Sign-in finished · {{message}}"
       },
       "offerCard": {
+        "notNow": "Not now",
         "dismiss": "Dismiss",
         "notSent": "Couldn't send that to the bot. Try again."
       },
@@ -22474,13 +22604,60 @@
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
         "thenSlashCommand": "Sign in, then type {{slashCommand}}."
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity signs in with {{method}}. Change",
+        "chipTitle": "Antigravity signs in with {{method}}",
+        "menuTitle": "Antigravity signs in with",
+        "detected": "Detected",
+        "settings": "Sign-in settings…",
+        "switched": "Antigravity now uses {{method}}.",
+        "switchFailed": "Orca couldn't change how Antigravity signs in. Try again.",
+        "confirmTitle": "Switch to {{method}}?",
+        "confirmBody": "Antigravity chats running on this host restart. A reply in progress stops; your conversations stay.",
+        "cancel": "Cancel",
+        "confirm": "Switch",
+        "otherWays": "You can sign in with an API key or gcloud instead.",
+        "moreOptions": "More options…",
+        "useApiKey": "Use your Gemini API key",
+        "useGcloud": "Use gcloud ({{project}})",
+        "useGoogle": "Use your Google sign-in",
+        "apiKeyFromEnvironment": "Found GEMINI_API_KEY in your environment",
+        "apiKeySaved": "Saved in Orca",
+        "gcloudFound": "Found your gcloud login (Application Default Credentials)",
+        "googleFound": "You signed in with Google on this host before",
+        "askApiKeyEnvironment": "Use the Gemini API key found in your environment instead?",
+        "askApiKeySaved": "Use the Gemini API key saved in Orca instead?",
+        "askGcloud": "Use your gcloud login (project {{project}}) instead?",
+        "askGoogle": "Use your Google sign-in instead?",
+        "noSubscription": "This Google account has no Antigravity subscription.",
+        "ineligible": "This Google account can't use Antigravity.",
+        "signedOut": "Antigravity isn't signed in.",
+        "refused": "Google refused this chat's credentials.",
+        "usageLimit": "This sign-in reached its usage limit.",
+        "foundLead": "Orca found credentials on this host you can use instead:",
+        "signInGoogle": "Sign in with Google",
+        "useKeyOrGcloud": "API key or gcloud",
+        "yourAgy": "Your agy",
+        "yourAgyVersion": "Your agy · v{{version}}",
+        "orcaCopy": "Orca's copy",
+        "orcaCopyVersion": "Orca's copy · v{{version}}",
+        "orcasAgy": "Orca's agy",
+        "orcasAgyVersion": "Orca's agy · v{{version}}",
+        "runsOn": "Runs on: {{program}}",
+        "agyItem": "agy's own login",
+        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
+        "confirmSignIn": "Sign in with Google?"
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Continue with Terminal Agent",
-          "switchToChatView": "Continue in Chat UI",
+          "switchToTerminalView": "Continue in terminal",
+          "switchToChatView": "Continue in chat",
           "allowAutoClose": "Allow Auto-Close"
         },
         "BrowserTab": {
@@ -22512,9 +22689,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -22770,12 +22944,12 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
           "unavailableDetails": "Details unavailable",
-          "none": "No uncommitted changes"
+          "none": "No uncommitted changes",
+          "noUnsaved": "No unsaved files"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -22803,8 +22977,7 @@
           "morePaths_other": "and {{count}} more ignored paths",
           "listLabel": "Ignored local files that will be lost",
           "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
-        },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -22813,7 +22986,7 @@
     },
     "agentSessionContinuation": {
       "preparingContext": "Preparing saved chat context…",
-      "handOffToAnotherAgent": "Hand Off to Another Agent",
+      "handOffToAnotherAgent": "Hand off to agent",
       "untitledSession": "Current session",
       "agent": "Agent",
       "selectAgent": "Select an Agent",
@@ -23446,6 +23619,20 @@
           "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
           "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
         }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "The Orca account {{host}} runs as, for its bots’ Slack, GitHub, Linear and webhooks.",
+          "unread": "Can’t read {{host}}’s Orca account. Update or reconnect {{host}}.",
+          "signInThere": "Run `orca auth login` on {{host}} to sign it in."
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "Update Orca on {{host}} to change this setting there.",
+        "updateFailed": "Couldn't update the setting on {{host}}."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Git username on {{host}}"
       }
     },
     "agentChildRow": {
@@ -23551,7 +23738,6 @@
       "cancelFailed": "Couldn't cancel the installation. Try again.",
       "install": "Install {{agent}}",
       "installManaged": "Install Orca's copy",
-      "installed": "Installed",
       "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
@@ -23745,7 +23931,7 @@
       },
       "DictationIndicator": {
         "cleaningUp": "Cleaning up…",
-        "skipCleanup": "Skip cleanup and insert as heard"
+        "skipCleanup": "Skip cleanup"
       }
     },
     "link": {
@@ -23779,7 +23965,7 @@
           "stopAgentInWorkspaceTitle": "Stop the agent in “{{name}}”?",
           "stopRunningCommandTitle": "Stop the running command?",
           "agentWorkStops": "Its current work stops and won’t resume.",
-          "sleepWorkspaceInstead": "Sleep workspace instead",
+          "sleepWorkspaceInstead": "Sleep workspace",
           "stopAgentSentence": "Stop agent",
           "stopAndClose": "Stop and close"
         }
@@ -23910,7 +24096,7 @@
       "changeInSettings": "Change the model, dictation mode, or shortcut anytime in <link>Settings → Voice</link>.",
       "title": "Dictate into any pane",
       "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-      "cta": "Set up voice dictation",
+      "cta": "Set up dictation",
       "demoFirstPhrase": "The checkout button overlaps the footer on small screens.",
       "demoSecondPhrase": "Can you add a test?",
       "demoUserPrompt": "Add payment badges",
@@ -23963,7 +24149,7 @@
       "changeInSettings": "Change or turn it off anytime in <link>Settings → Agent Session Search</link>.",
       "title": "Search every agent session",
       "description": "Find any past conversation by what was said in it, then pick up where the agent left off.",
-      "cta": "Turn on session search"
+      "cta": "Enable session search"
     },
     "eyebrowNew": "New",
     "eyebrowTip": "Tip",
@@ -24547,7 +24733,7 @@
       "openInSidebar": "Open in the sidebar",
       "openInSidebarCopy": "Type what you remember, or ask an agent: “find the session where we fixed the login timeout.”",
       "open": "Open",
-      "enableOnAll": "Enable on all computers"
+      "enableOnAll": "Enable everywhere"
     },
     "dialog": {
       "select": "Select",
@@ -24563,7 +24749,7 @@
     "antigravity2ToCli": "2.0 → CLI",
     "antigravityChatToCli": "Chat → CLI",
     "continueInCli": "Continue in CLI",
-    "continueInCliNewTab": "Continue in CLI in New Tab",
+    "continueInCliNewTab": "Continue in CLI tab",
     "subagents": {
       "loading": "Loading subagents…",
       "loadError": "Could not load all subagents.",
@@ -24611,7 +24797,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
@@ -24707,7 +24894,7 @@
       "confirmTitle": "Restart the terminal daemon?",
       "confirmBody": "Restarting ends every process running in {{sessions}}. Agents that support resume can be resumed afterwards; shells and other jobs cannot and must be started again. Do this when your agents are idle.",
       "cancel": "Cancel",
-      "confirm": "Restart and end processes",
+      "confirm": "Restart & end processes",
       "count_one": "{{count}} running terminal",
       "count_other": "{{count}} running terminals",
       "count": "{{count}} running terminals"
@@ -24861,6 +25048,22 @@
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
+      "apiKeyOption": "A key from Google AI Studio",
+      "agentPlatformOption": "Your gcloud login (ADC)",
+      "apiKey": "Gemini API key",
+      "agentPlatform": "Google Agent Platform",
+      "projectFromGcloud": "From gcloud",
+      "locationGlobal": "global",
+      "adcHint": "Optional. Orca uses your gcloud project and the global location. Run gcloud auth application-default login once first.",
+      "apiKeySaveFailed": "Orca couldn't save the key. Try again.",
+      "apiKeySaved": "Key saved on this host, encrypted.",
+      "apiKeyFromEnvironment": "Using GEMINI_API_KEY from your environment. Paste a key to use a different one.",
+      "apiKeyLabel": "Gemini API key",
+      "apiKeyPlaceholder": "Paste your API key",
+      "apiKeySave": "Save",
+      "apiKeyReplace": "Replace key",
+      "apiKeyRemove": "Remove",
+      "apiKeyGet": "Get API key",
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
@@ -24881,12 +25084,26 @@
       "chatTitle": "Antigravity Chat",
       "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
       "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
+      "chatDescriptionAgyVersion": "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
+      "chatDescriptionManagedVersion": "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
+      "chatDescriptionAgySignedOut": "New chats use agy, which isn't signed in yet. Run agy on this host to sign in.",
+      "chatDescriptionOrcaAgy": "Chats run on Orca's copy of agy and use agy's own sign-in.",
+      "chatDescriptionAgyOwnSignIn": "Chats run on agy and use agy's own sign-in.",
+      "chatDescriptionInstallAgy": "Install agy below to use Chat. It signs in with its own account.",
+      "chatDescriptionOrcaAgyVersion": "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
+      "chatDescriptionAgyOwnSignInVersion": "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
       "terminalTitle": "agy in the terminal",
       "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
       "terminalDescriptionChats": "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats.",
       "terminalDescriptionNoChats": "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats.",
-      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
+      "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
+      "googleSignIn": "Google account sign-in",
+      "googleSignInAgy": "agy's own sign-in",
+      "googleSignInAgyOption": "Sign in by running agy",
+      "googleSignInOrca": "Orca's built-in sign-in",
+      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
+      "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -24965,7 +25182,7 @@
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
       "copied": "Copied",
-      "add": "Copy add account command",
+      "add": "Copy setup command",
       "refresh": "Refresh accounts",
       "upgrade": "If accounts do not appear, update or restart the Orca host.",
       "system": "System default",
@@ -25072,7 +25289,6 @@
         "withIgnored": "{{what}} and ignored files will be lost",
         "ignoredOnly": "Ignored files will be lost"
       },
-      "showChanges": "Show changes",
       "unsavedSuffix": "(unsaved)",
       "onHost": "On {{host}}",
       "forceDeletingEllipsis": "Force deleting…",
@@ -25512,7 +25728,7 @@
       "actions": "Actions"
     },
     "breakdown": {
-      "viewAll": "Show more folder details"
+      "viewAll": "Folder details"
     },
     "compact": {
       "linkedAndUnavailable": "{{value0}} in linked worktrees · {{value1}} unavailable",
@@ -25574,8 +25790,8 @@
     "blockers": {
       "title": "Before these projects can move",
       "inProjects": "In {{names}}",
-      "skipOne": "Leave {{name}} out of this move",
-      "skipMany": "Leave these {{n}} projects out of this move"
+      "skipOne": "Skip {{name}}",
+      "skipMany": "Skip {{n}} projects"
     },
     "title": "Move projects to the {{distro}} host",
     "loading": "Checking the projects in {{distro}}…",
@@ -25654,6 +25870,8 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "hostLaunchUnproven": "The Orca server in {{distro}} runs this version of Orca but can't take these projects, so updating won't help. It may have been started outside WSL hosts, such as by an SSH host. Remove the {{distro}} host in Settings, then add it again.",
+      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
       "exportIncompletePreview": "Some saved state in these projects can't move yet:",
@@ -25799,12 +26017,10 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
-    "metricDetails": "Metric details",
     "owner": {
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
       "privateBytes": "Committed by Orca and terminals"
     }
   },
@@ -25865,10 +26081,13 @@
     "linkedMessageMissing": "Couldn't find that message.",
     "math": {
       "scrollDisplayEquation": "Scroll display equation"
+    },
+    "messageTime": {
+      "yesterday": "Yesterday {{time}}"
     }
   },
   "quitAndStopAllSessions": {
-    "confirm": "Stop Sessions and Quit",
+    "confirm": "Stop & Quit",
     "cancel": "Cancel",
     "title": "Quit Completely",
     "message": "Stop all terminal sessions and quit Orca?",
@@ -26006,14 +26225,14 @@
   },
   "gpuFallback": {
     "recoveredLaunch": {
-      "keepSafeButton": "Keep Safe Graphics Mode",
+      "keepSafeButton": "Keep Safe Mode",
       "tryHardwareButton": "Try Hardware Acceleration",
       "title": "Safe Graphics Mode is Active",
       "message": "Orca recovered in Safe Graphics Mode.",
       "detail": "Safe Graphics Mode was enabled after repeated graphics crashes. Keep it for stability, or restart and try hardware acceleration again."
     },
     "restartPrompt": {
-      "restartButton": "Restart in Safe Graphics Mode",
+      "restartButton": "Restart in Safe Mode",
       "keepRunningButton": "Keep Running",
       "title": "Restart Orca in Safe Graphics Mode?",
       "message": "Orca's graphics process has crashed repeatedly.",
@@ -26417,6 +26636,7 @@
   },
   "automations": {
     "runFailures": {
+      "botProviderErrorNotSaved": "The bot's turn failed, but this run did not save the provider's error. The original Chat may contain more details.",
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
       "noRunnableHost": "This automation has no host to run on.",
@@ -26482,7 +26702,7 @@
       "approved": "Setup approved. Later runs of this automation will run it.",
       "skippedSinceApproved": "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them.",
       "skippedReview": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs.",
-      "reviewAction": "Review and approve setup",
+      "reviewAction": "Review setup",
       "listSkipped": "Setup skipped",
       "listSkippedTitle": "The last run skipped setup because its branch's orca.yaml setup commands changed. Review them from the actions menu."
     },
@@ -26503,11 +26723,14 @@
       "when": "When",
       "option": "Bot · {{name}}",
       "channelMissing": "Enter the channel to send results to.",
-      "hostUnavailable": "This computer can't hold a new automation yet. Try again in a moment.",
+      "hostUnavailable": "The bot's computer can't hold a new automation yet. Try again in a moment.",
+      "hostNeedsUpdate": "Update the Orca server on {host} so its bots can have automations.",
       "promptMissing": "Enter what it should do.",
       "deletedBot": "Deleted bot",
       "fieldLabel": "Bot or project",
       "fieldPlaceholder": "Select bot or project",
+      "search": "Search bots and projects...",
+      "searchEmpty": "No bots or projects match your search.",
       "resultsToLinear": "A Linear issue",
       "resultsToLinearNeedsLinear": "A Linear issue (connect Linear first)",
       "linearIssuePlaceholder": "Issue key (e.g. ENG-123) or a Linear link",
@@ -26938,7 +27161,6 @@
       "hostReconnecting": "Reconnecting…",
       "hostUpdateAction": "Update",
       "title": "New bot",
-      "description": "Your AI teammate, with a name, memory and automations. It lives in a folder on one computer.",
       "name": "Name",
       "namePlaceholder": "Name your bot",
       "picture": "Picture",
@@ -26979,22 +27201,34 @@
       "reports": "Reports",
       "takesOver": "Takes over",
       "agentsKeepRunning": "Their agents keep running.",
-      "fromTemplate": "Start from a template",
+      "fromTemplate": "Template",
       "uploadDropOrPaste": "<upload>Upload</upload>, drop, or paste an image",
-      "createBot": "Create bot",
-      "purposeLabel": "Purpose",
-      "purposePlaceholder": "Describe its job (optional)",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
-      "pasteHint": "Paste an image with {{shortcut}}"
+      "pasteHint": "Paste an image with {{shortcut}}",
+      "changePicture": "Change picture",
+      "parts": {
+        "olderHost": "{{host}} needs an Orca update to add skills and schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills",
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "needsApp": "Needs {{app}}",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "setUpInFirstChat": "Set up in first chat"
+      }
     },
     "section": {
       "title": "Bots",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
-      "emptyTitle": "Meet your AI teammate",
-      "emptyBody": "Ask from anywhere. It runs a fleet of agents and remembers what it learns.",
-      "emptySeeHow": "See how it works",
-      "emptyCreate": "Create a bot",
+      "emptyCardTitle": "Your AI teammate",
       "emptyTemplates": "Templates",
       "expand": "Expand Bots",
       "collapse": "Collapse Bots",
@@ -27008,15 +27242,14 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
-      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image."
+      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
+      "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
     "slack": {
       "setup": {
         "checking": "Checking Slack…",
         "retry": "Try again",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
-        "reconnectSubmit": "Reconnect Slack workspace",
         "create": "Create Slack app",
         "waiting": "Waiting for Slack…",
         "waitingDetail": "Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
@@ -27027,7 +27260,7 @@
         "again": "Set up again",
         "done": "Done",
         "pick": "Choose a Slack workspace.",
-        "another": "Connect another Slack workspace",
+        "another": "Connect another workspace",
         "isIn": "{{name}} is in Slack",
         "ready": "Your Slack app is ready. Approve it in Slack to finish.",
         "approve": "Approve in Slack",
@@ -27041,9 +27274,18 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
-        "connect": "Connect Slack"
+        "connect": "Connect Slack",
+        "openInSlack": "Message it in Slack",
+        "cancel": "Cancel"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -27057,15 +27299,20 @@
         "update": "Update in Slack",
         "installedBy": "installed by {{installer}}",
         "removeFromTitle": "Remove {{name}} from {{place}}?",
-        "signIn": "Sign in"
+        "signIn": "Sign in",
+        "updatePermissions": "Update Slack permissions…"
       },
       "token": {
-        "open": "Get your configuration token",
+        "open": "Get config token",
         "step1": "In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.",
         "step2": "Select the workspace for your bot.",
         "step3": "Copy the Refresh Token and paste it below.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
-        "label": "Configuration refresh token"
+        "label": "Configuration refresh token",
+        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
+        "openSettings": "Open Slack app settings",
+        "generate": "Generate a token for this workspace",
+        "copyRefresh": "Copy the Refresh Token"
       },
       "workspaces": {
         "otherTeam": "That token is for another workspace. Orca keeps it for that workspace.",
@@ -27089,7 +27336,7 @@
         "unknownBot": "Orca Cloud has not seen this bot yet. Try again in a minute.",
         "wrongWorkspace": "This bot’s Slack app is in another workspace. Remove it from Slack first.",
         "notInstalled": "Add this bot to Slack first.",
-        "signedOut": "Sign in to Orca to connect Slack.",
+        "signedOut": "Sign in to Orca Cloud to connect Slack.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
         "handOffExpired": "That hand-off expired or was already used. Try again."
       },
@@ -27097,7 +27344,6 @@
       "handOff": {
         "confirmMac": "Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
-        "reconnect": "Slack no longer accepts the token {{email}} has for this workspace. Paste a new one to reconnect.",
         "offerMac": "This Mac is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "offer": "This computer is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "use": "Use it →"
@@ -27115,7 +27361,26 @@
         "waitingOn": "Switching to {{name}} needs {{installer}} to approve in Slack.",
         "waiting": "Switching to {{name}} needs approval in Slack."
       },
-      "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM."
+      "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM.",
+      "reconnect": {
+        "expiredTitle": "Slack token expired",
+        "useTitleMac": "Use your Mac’s token?",
+        "useTitle": "Use this computer’s token?",
+        "whyMine": "Each computer keeps its own Slack token. Slack stopped accepting the one {{email}} uses.",
+        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
+        "why": "Slack stopped accepting this workspace’s saved token.",
+        "submit": "Reconnect",
+        "about": "About Slack tokens",
+        "useDetail": "Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.",
+        "hostExpiredMac": "<host>{{host}}</host>’s token expired. This Mac’s works.",
+        "hostExpired": "<host>{{host}}</host>’s token expired. This computer’s works.",
+        "pasteInstead": "Paste a token instead",
+        "use": "Use it",
+        "kept": "Orca Cloud keeps the new token encrypted, so your next bots here need one click.",
+        "mineMac": "This Mac’s token expired. Paste a new one.",
+        "mine": "This computer’s token expired. Paste a new one.",
+        "paste": "Paste a new token to reconnect."
+      }
     },
     "whoCanAsk": {
       "searching": "Searching…",
@@ -27267,7 +27532,7 @@
       "description": "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
       "kept": "Kept: soul, memory, automations, connectors",
       "notKept": "Not kept: the current conversation",
-      "threads": "Slack threads already running stay on {{agent}} until they finish",
+      "threads": "Slack threads with an existing Orca chat keep that chat's agent",
       "action": "Switch to {{agent}}"
     },
     "avatar": {
@@ -27279,6 +27544,24 @@
         "saved": "Picture updated",
         "undo": "Undo",
         "drop": "Drop to use"
+      },
+      "generate": {
+        "placeholder": "Describe your bot's look…",
+        "describe": "Picture description",
+        "button": "Generate",
+        "generating": "Generating…",
+        "cancel": "Cancel",
+        "cancelRunning": "Cancel generating",
+        "edit": "Edit description",
+        "realPerson": "Avatars can't show real people. Describe a character instead.",
+        "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
+        "usageLimit": "{{agent}} hit its usage limit. Try again later.",
+        "noImage": "{{agent}} didn't make an image. Try rewording your description.",
+        "timedOut": "{{agent}} took too long. Try again.",
+        "unavailable": "No installed agent can make images.",
+        "failed": "{{agent}} couldn't make an image. Try again.",
+        "face": "Generate a picture",
+        "agent": "Generate with {{agent}}"
       }
     },
     "linear": {
@@ -27290,7 +27573,7 @@
       },
       "setup": {
         "copied": "Link copied.",
-        "copyForAdmin": "Copy link for an admin",
+        "copyForAdmin": "Copy admin link",
         "close": "Close",
         "checking": "Checking Linear…",
         "retry": "Try again",
@@ -27332,7 +27615,7 @@
         "notAMember": "Only full members of the Linear workspace can pick people from it.",
         "rateLimited": "Too many tries. Wait a minute, then try again.",
         "unavailable": "Linear did not answer. Try again.",
-        "signedOut": "Sign in to Orca to connect Linear.",
+        "signedOut": "Sign in to Orca Cloud to connect Linear.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
         "wrongAccount": "This sign-in was started from another Orca account. Connect Linear again from this one.",
         "replaced": "Linear didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again."
@@ -27372,7 +27655,8 @@
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
         "finishSetup": "Finish setup",
-        "orgDescription": "{{repos}} · signed in as @{{login}}"
+        "orgDescription": "{{repos}} · signed in as @{{login}}",
+        "addAccount": "Add another GitHub account"
       },
       "setup": {
         "install": "Install the Orca app",
@@ -27394,7 +27678,14 @@
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
-        "tryIt": "Try it on any issue or pull request",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "label": "Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”.",
+          "commented": "commented now",
+          "ask": "review this PR",
+          "bot": "bot",
+          "reply": "On it."
+        },
         "connectTitle": "Connect GitHub",
         "manage": "Manage"
       },
@@ -27408,6 +27699,8 @@
         "unlink": "Unlink",
         "unlinked": "Add GitHub from a bot’s Connectors to link your account.",
         "descriptionOnHost": "The GitHub user {{host}}’s bots work as and are owned by.",
+        "descriptionPlural": "Your GitHub accounts, so your bots know which comments are yours.",
+        "descriptionOnHostPlural": "The GitHub users {{host}}’s bots work as and are owned by.",
         "linkedAs": "Linked as {{login}}",
         "reconnect": "Reconnect",
         "linkFromApp": "Link GitHub from Orca on a computer paired to {{host}}.",
@@ -27417,7 +27710,7 @@
         "off": "GitHub is coming soon.",
         "rateLimited": "Too many tries. Wait a minute, then try again.",
         "unavailable": "GitHub did not answer. Try again.",
-        "signedOut": "Sign in to Orca to connect GitHub.",
+        "signedOut": "Sign in to Orca Cloud to connect GitHub.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
         "wrongAccount": "This sign-in was started from another Orca account. Sign in with GitHub again from this one.",
         "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.",
@@ -27522,6 +27815,7 @@
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "confirm": "Give access",
+      "reject": "Reject",
       "confirmWarning": "They’ll act as you on {{computer}}.",
       "confirmComputer": "Run commands and change files",
       "confirmNoApprovals": "Acts without asking first",
@@ -27539,6 +27833,10 @@
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
       "reachHeading": "What {{name}} can reach",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
@@ -27678,7 +27976,12 @@
         "title": "Delete the webhook for “{{automation}}”?",
         "note": "Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.",
         "confirm": "Delete webhook",
-        "done": "Webhook deleted"
+        "done": "Webhook deleted",
+        "withAutomation": {
+          "title": "Delete “{{automation}}” and its webhook?",
+          "note": "Nothing else starts this automation, so it's deleted with its run history. The webhook's URL stops working, and calls still waiting are cancelled.",
+          "confirm": "Delete both"
+        }
       },
       "recentCalls": "Recent calls",
       "showFewer": "Show fewer",
@@ -27838,10 +28141,6 @@
       "reading": "Getting to know your setup…",
       "read": "Getting to know your setup"
     },
-    "header": {
-      "runs": "runs your {{agent}}",
-      "newBot": "Your new bot"
-    },
     "lookSteps": {
       "slackThread": "a Slack thread",
       "slackChannel": "a Slack channel",
@@ -27864,6 +28163,7 @@
       "needsYou": "· Needs you",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
       "useEachBotSNativeSessionForCommands": "Use each bot’s native session for commands.",
+      "attachmentsHostTooOld": "{{host}} needs an update to attach files in group chats.",
       "loadEarlierMessages": "Load earlier messages",
       "loadingGroup": "Loading group…",
       "manageMembers": "Manage members",
@@ -27890,6 +28190,8 @@
       "peerAsked": "{{from}} asked {{to}}",
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
+      "peerReadItems": "{{bot}} read an update to its items",
+      "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
       "deleteDescription": "Its bots are not deleted.",
@@ -27905,6 +28207,23 @@
       "picked": "{{count}} picked",
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
+      "sameComputer": "Bots in a group must be on the same computer.",
+      "pairedComputersOnly": "Groups can add bots only from paired computers.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "thisComputer": "This computer",
+      "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "homeUnavailable": "The home workspace for “{{name}}” on {{host}} is unavailable.",
+      "createdNotOpened": "Created “{{name}}”, but couldn’t open it.",
+      "retryOpen": "Retry",
       "nameIt": "Name the group",
       "suggestTwo": "{{a}} & {{b}}",
       "suggestThree": "{{a}}, {{b}} & {{c}}",
@@ -28045,7 +28364,7 @@
       },
       "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
       "disconnectMenu": "Disconnect",
-      "shareButton": "Share with teammates",
+      "shareButton": "Share setup",
       "setUpTime": "About 10 minutes",
       "haveSetupFile": "Have a setup file from your team?",
       "importSetupFile": "Import file",
@@ -28071,7 +28390,7 @@
       },
       "setUp": "Set up Google",
       "setUpOpens": "Opens {{bot}}’s chat",
-      "createBotToSetUp": "Create a bot to set up Google",
+      "createBotToSetUp": "New bot",
       "notes": {
         "project": {
           "account": "Check the account at the top right is the one you want.",
@@ -28130,7 +28449,6 @@
         "guideHereNote": "You click, in Orca",
         "guideBrowserNote": "You click, in your browser"
       },
-      "dismiss": "Dismiss",
       "account": {
         "title": "Which Google account should I use?",
         "note": "Every Google Cloud page opens as the account you pick.",
@@ -28154,7 +28472,7 @@
         "heading": "Google connected",
         "canUse": "{{bot}} can use {{services}}.",
         "add": "Add a service",
-        "share": "Share setup with teammates"
+        "share": "Share setup"
       },
       "progress": {
         "done": "Done",
@@ -28174,8 +28492,10 @@
       },
       "takeOver": "Take over from here",
       "ownerStep": "Step {{step}} of 3",
-      "otherAccount": "Use a different account",
+      "otherAccount": "Switch account",
       "keyMissed": "Downloaded the key and Orca didn’t pick it up?",
+      "pickHostKey": "Pick the key file to import:",
+      "pickKeyHere": "Choose a file on this computer",
       "action": {
         "makeNewKey": "Make a new key",
         "importKey": "Import a key file",
@@ -28204,7 +28524,9 @@
         "apiOff": "{{services}} is turned off in Google Cloud.",
         "adminBlocked": "Your company’s Google admin blocked {{services}}.",
         "checkFailed": "Orca couldn’t check {{services}}."
-      }
+      },
+      "notNow": "Not now",
+      "importSetupFile": "Import setup file"
     },
     "import": {
       "nudgeOne": "We found a bot in {{app}}.",
@@ -28326,7 +28648,7 @@
         "replaceNote": "Your Composio project already sends its events to another address. Setting this up sends them here instead, and that address stops getting them.",
         "replace": "Replace and set up",
         "setUp": "Set it up",
-        "byHand": "I’ll do it in Composio",
+        "byHand": "Manual setup",
         "done": "✓ Set up",
         "chosenByHand": "Doing it in Composio",
         "oneAddressNote": "Orca turns on {{trigger}} for your sign-in. Your Composio project’s events come to Orca at one address, and each goes to the bot it’s for."
@@ -28389,7 +28711,6 @@
       "close": "Close",
       "comesWith": "Comes with",
       "comesWithHelp": "About template schedules and setup",
-      "olderHost": "{{host}} runs an older Orca, so this template’s skills and schedules won’t be added. Update Orca there to get them, or create the bot with just its instructions.",
       "comesWithNote": "Schedules start turned off. Automations and connectors are set up in its first chat, once you pick the repo or channel.",
       "keepSkill": "Add the {{skill}} skill",
       "stateOff": "Off",
@@ -28410,7 +28731,6 @@
       "closeTooltip": "Close · Esc",
       "fromLink": "From a link",
       "search": "Search templates",
-      "originTemplateNamed": "From the {{template}} template",
       "aboutTemplate": "About {{name}}",
       "allTemplates": "All templates",
       "filterCategory": "Filter by category",
@@ -28461,7 +28781,6 @@
       "publishing": "Publishing…",
       "previewChanged": "The preview changed. Review it before publishing.",
       "manageSharing": "Manage sharing…",
-      "sharedUpdated": "Shared · updated {{date}}",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",
       "view": "View",
@@ -28477,10 +28796,19 @@
       "lines": "{{count}} lines",
       "flagOnLine": "{{flag}} on line {{line}}",
       "memory": "Memory",
+      "all": "All",
+      "previewFile": "Preview {{name}}",
+      "memoryLimit": "Up to {{count}} files",
       "linkCopied": "Link copied",
       "stopped": "Stopped sharing {{name}}",
       "webhookNotShared": "Webhook · not shared",
       "commandNotShared": "Command · not shared",
+      "fileLinkNotShared": "Has a symlink or hard link · not shared",
+      "outsideSkill": "From outside {{project}}",
+      "outsideSkillWith": "From outside {{project}} · {{description}}",
+      "tooLargeNotShared": "Too large · not shared",
+      "unreadableNotShared": "Can't be read · not shared",
+      "overLimitNotShared": "Over the skill limit · not shared",
       "notShared": "Not shared",
       "setupNote": "Setup note",
       "skills": "Skills",
@@ -28533,15 +28861,6 @@
         "open": "Open",
         "stopped": "This link no longer works",
         "stoppedDetail": "Ask whoever shared it for a new one.",
-        "ask": "Ask for approval",
-        "askDetail": "Picked for bots made from a link",
-        "full": "Full access",
-        "fullDetail": "Runs commands without asking",
-        "chatsDetail": "Starts from your chat permission setting",
-        "askLine": "Asks before running commands. Your own allow rules still apply.",
-        "fullLine": "Runs commands without asking.",
-        "chatsLine": "Asks as your chats do.",
-        "change": "(Change)",
         "origin": "From {{who}}'s link",
         "originAnonymous": "From a shared link",
         "back": "Back",
@@ -28585,7 +28904,8 @@
         "unavailable": "Orca Cloud doesn't accept bot shares yet.",
         "avatarRefused": "Orca Cloud refused the bot's picture. Pick another picture, then try again.",
         "tooLarge": "This bot is too large to share. Leave out some memory or skills, then try again."
-      }
+      },
+      "duplicateSkill": "Same name, in {{folder}} · not shared"
     },
     "apps": {
       "title": "Add to {{bot}}",
@@ -28594,7 +28914,7 @@
       "add": "Add",
       "composio": {
         "note": "These connect through your Composio account.",
-        "browseAll": "Browse all Composio apps",
+        "browseAll": "Browse Composio apps",
         "searchCaption": "Composio apps",
         "allCaption": "All Composio apps",
         "withComposio": "With Composio",
@@ -28625,7 +28945,8 @@
       "back": "Back",
       "paste": {
         "title": "Signing in on another computer?",
-        "line": "Sign in to {{app}} there, then copy the address of the page that didn’t load."
+        "line": "Sign in to {{app}} there, then copy the address of the page that didn’t load.",
+        "remoteSignIn": "Remote sign-in"
       },
       "signInAllow": "Sign in to {{app}} and allow access.",
       "viaComposio": "via Composio",
@@ -28656,7 +28977,29 @@
         "google": "Gmail, Calendar and Drive, as you"
       },
       "mcp": {
-        "adding": "Adding {{app}}…"
+        "adding": "Adding {{app}}…",
+        "addTitle": "Add {{app}}",
+        "advanced": "Advanced",
+        "hostInvalid": "Enter a host name, like {{example}}.",
+        "datadog": {
+          "siteLabel": "Datadog site"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab address (optional)",
+          "hostHint": "For self-managed or Dedicated. Leave empty for GitLab.com."
+        },
+        "place": {
+          "usEast": "US East",
+          "usWest": "US West",
+          "usCentral": "US Central",
+          "europe": "Europe",
+          "japan": "Japan",
+          "australia": "Australia",
+          "unitedKingdom": "United Kingdom"
+        },
+        "elsewhereTitle": "{{app}} is already on {{bot}}",
+        "elsewhereLine": "It’s added at {{place}}. Remove it in Manage to add another.",
+        "elsewhereOther": "Remove it in Manage to add another."
       },
       "unsupported": "This app isn’t supported yet",
       "cantReach": "Can’t reach {{app}}",
@@ -28679,7 +29022,9 @@
       "tomorrowAt": "tomorrow {{time}}",
       "idleNext": "Idle · next {{when}} · {{name}}",
       "runningNamed": "Running {{name}}",
-      "nextAt": "Next {{when}}"
+      "nextAt": "Next {{when}}",
+      "runsOn": "Runs on {{host}}",
+      "disconnected": "Disconnected"
     },
     "needs": {
       "access": "{{person}} asked for access",
@@ -28780,7 +29125,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, show everything",
       "searchEverything": "Search everything for \"{{text}}\"",
-      "searchBotsFor": "Search bots for \"{{text}}\"",
       "noMatch": "No bots match \"{{text}}\"",
       "noBotsYet": "No bots yet",
       "filtersPaused": "Filters apply to workspaces, not bots",
@@ -28801,11 +29145,8 @@
       "yesterday": "yesterday",
       "lastLooked": "last looked {{when}}",
       "lastTidied": "last tidied {{when}}",
-      "memoryFiles_one": "MEMORY.md and {{count}} topic file",
-      "memoryFiles_other": "MEMORY.md and {{count}} topic files",
       "toolsFrom": "{{count}} from {{agent}}",
       "toolsMore": "{{count}} more from {{agent}}",
-      "withAccess": "{{service}} {{people}} with access",
       "onlyYou": "Only you"
     },
     "page": {
@@ -28817,13 +29158,14 @@
     },
     "host": {
       "errors": {
-        "signedOut": "Sign {{host}} in to Orca to connect {{service}}.",
+        "signedOut": "Sign {{host}} in to Orca Cloud to connect {{service}}.",
         "accountChanged": "{{host}}’s Orca sign-in changed. Start again.",
         "accountChangedHere": "This computer’s Orca sign-in changed. Start again.",
         "notRouted": "{{service}}’s page has to open in Orca’s browser for {{host}}. Reconnect {{host}}, then start again."
       },
       "thisComputer": "this computer",
       "pageUnrouted": "Can’t reach {{host}} to open this page in its browser. Reconnect {{host}}, then try again.",
+      "botWorkspaceUnavailable": "This agent’s workspace isn’t available here now, so the page can’t open in it.",
       "signIn": {
         "waitingFirst": "Log in with the Orca account {{host}} should use, in Orca’s browser for {{host}}. Check the page shows {{code}}.",
         "waiting": "Approve in Orca’s browser for {{host}}. Check the page shows {{code}}.",
@@ -28831,8 +29173,12 @@
         "copyLink": "Copy link",
         "cancel": "Cancel",
         "again": "Sign {{host}} in again",
-        "start": "Sign {{host}} in to Orca",
-        "trust": "Anyone paired to {{host}} can use its account’s connectors."
+        "start": "Sign in on {{host}}",
+        "trust": "Anyone paired to {{host}} can use its account’s connectors.",
+        "updateFirst": "Update Orca on {{host}}, then sign it in from here.",
+        "unconfigured": "Orca on {{host}} was built without Orca Cloud sign-in. Install Orca’s release build there to sign it in.",
+        "unread": "Couldn’t read {{host}}’s Orca sign-in.",
+        "readAgain": "Try again"
       },
       "notice": {
         "notReachingHost": "Slack, Linear and GitHub aren’t reaching bots on {{host}}.",
@@ -28897,7 +29243,10 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "delete": "Delete chat",
+      "open": "Open",
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -28911,15 +29260,19 @@
       "cancel": "Cancel",
       "paused": "Paused while signed out",
       "needsSignIn": "Needs sign-in",
-      "toldBot": "I’m signed in to Orca now.",
+      "toldBot": "I’m signed in to Orca Cloud now.",
       "signedIn": "Signed in to Orca",
       "continue": "Continue",
-      "webhooksChat": "Webhooks need Orca sign-in. I’ll make it once you’re in.",
-      "eventsChat": "{{source}} events need Orca sign-in. I’ll save this rule once you’re in."
+      "webhooksChat": "Webhooks need Orca Cloud sign-in. I’ll make it once you’re in.",
+      "eventsChat": "{{source}} events need Orca Cloud sign-in. I’ll save this rule once you’re in.",
+      "webhooksHostChat": "Webhooks need {{host}} signed in to Orca Cloud. I’ll make it once it is.",
+      "eventsHostChat": "{{source}} events need {{host}} signed in to Orca Cloud. I’ll save this rule once it is.",
+      "webhooksNotReaching": "Orca Cloud isn’t reaching {{name}}, so it can’t make webhooks yet."
     },
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
-      "sideDetail": "Side chat: a separate topic with this bot."
+      "sideDetail": "Side chat: a separate topic with this bot.",
+      "homeBanner": "Open {{name}}'s page"
     },
     "settingsView": {
       "pathCopied": "Path copied",
@@ -28932,14 +29285,11 @@
       "copyPath": "Copy path",
       "topicFiles": "Topic files",
       "schedule": "Schedule",
-      "automationsFoot": "Automations are in Home › Automations.",
       "soulAndMemory": "Soul and memory",
       "access": "Access",
       "whoCanAsk": "Who can ask",
-      "chatDefault": "your chat default",
       "name": "Bot name",
       "rename": "Rename {{name}}",
-      "share": "Share…",
       "agent": "Agent and model",
       "computer": "Computer",
       "deleteBot": "Delete bot…",
@@ -28958,10 +29308,26 @@
       "items": "Items",
       "itemsStale": {
         "days": "{{days}} days",
-        "detail": "No activity for this long. Planned items get 3 times as long.",
         "never": "Never",
-        "title": "Mark items stale after"
-      }
+        "title": "Mark items stale after",
+        "shortTitle": "Stale after"
+      },
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "lookAroundShort": {
+        "every4h": "4h",
+        "every2h": "2h",
+        "twiceDaily": "Twice a day",
+        "mornings": "Mornings"
+      },
+      "tidyUpShort": {
+        "night": "Nightly",
+        "week": "Weekly"
+      },
+      "youAndOthers_one": "You and {{count}} other",
+      "youAndOthers_other": "You and {{count}} others",
+      "shareAction": "Share",
+      "sharingOn": "On"
     },
     "items": {
       "activity": {
@@ -28969,7 +29335,6 @@
         "changed": "changed {{field}}",
         "closed": "marked this done",
         "commentLabel": "{{name}}, {{time}}",
-        "goToAnswer": "Answered at {{time}}. Go to the answer",
         "replyingTo": "Replying to: {{question}}. Go to the question",
         "linked": "linked {{links}}",
         "made": "added this item",
@@ -28980,7 +29345,6 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
-        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -29046,12 +29410,17 @@
         "label": "Comment",
         "showLess": "Show less",
         "submit": "Comment",
-        "thisServer": "This server"
+        "thisServer": "This server",
+        "replyOrPick": "Reply in your own words, or pick an option",
+        "replyingTo": "Replying to:",
+        "hideReplyingTo": "Hide",
+        "replyingToShow": "Replying to: {{question}}. Show question",
+        "showQuestion": "Show question",
+        "replyTo": "Reply to {{name}}…"
       },
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
-        "chatNeedsYou": "Nothing in {{chat}} needs you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
@@ -29065,7 +29434,6 @@
         "title": "title"
       },
       "filter": {
-        "all": "All chats",
         "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
@@ -29127,7 +29495,7 @@
         "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
-        "sub": "Item {{number}} · {{chat}} · {{when}}",
+        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -29139,7 +29507,8 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links"
+        "moreLinks": "{{count}} more links",
+        "loading": "Loading item…"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",
@@ -29161,32 +29530,19 @@
         "week": "In a week",
         "inHours_one": "In {{count}} hours",
         "inHours_other": "In {{count}} hours",
-        "pickCustom": "Pick a date and time"
+        "pickCustom": "Custom time"
       },
       "ask": {
-        "closed": "That question closed before your answer went. Your answer is kept on the item.",
-        "asks": "{{name}} asks",
-        "asksAt": "{{name}} asks · {{time}}",
-        "answeredInComment": "Answered in a comment",
-        "notAnswered": "Not answered",
-        "youAnswered": "You answered:",
-        "skipped": "Skipped",
-        "answeredEarlier": "You answered an earlier question",
-        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
-        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
-        "changed": "This question changed before your answer went. Your answer is kept here.",
-        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
-        "copied": "Copied",
-        "copy": "Copy",
-        "toComment": "Put in the comment box",
-        "dismiss": "Dismiss",
-        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
-        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
-        "reply": "Reply",
-        "replyPlaceholder": "Reply to {{name}}…",
-        "cancelReply": "Cancel",
-        "sendReply": "Send"
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet",
+        "next": "Next question",
+        "notSentYet": "not sent yet",
+        "sendHeld": "Send now",
+        "previous": "Previous question",
+        "recommended": "Recommended",
+        "step": "{{n}} of {{total}}",
+        "typeAnswer": "Type your answer",
+        "replaced": "The agent asked a new question. Read it, then reply."
       }
     },
     "search": {
@@ -29517,6 +29873,11 @@
     "kimiProduct": "Kimi Code",
     "cursorProduct": "Cursor CLI",
     "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
@@ -29546,10 +29907,45 @@
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
   },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "Save memory from inactive tabs",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory.",
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "disk": {
+      "title": "Your disk is almost full",
+      "description": "Find workspaces you no longer need in Settings > Workspace Cleanup.",
+      "reviewOld": "Review old workspaces"
+    },
+    "dontShowAgain": "Don't show again"
+  },
   "ui": {
     "monthCalendar": {
       "previous": "Previous month",
       "next": "Next month"
+    }
+  },
+  "appRail": {
+    "navigationLabel": "App navigation",
+    "toolsLabel": "App tools",
+    "workspaces": "Workspaces",
+    "more": "More"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Update {{host}} to delete chats",
+      "failed": "Couldn't delete the chat",
+      "undone": "This can't be undone.",
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "groupRoom": "A group room's chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat",
+      "home": "A managed agent's Home Chat can't be deleted"
     }
   }
 }

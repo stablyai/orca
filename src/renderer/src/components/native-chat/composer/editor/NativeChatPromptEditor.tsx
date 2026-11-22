@@ -1,8 +1,10 @@
+import { nativeChatCaretOnVisualEdge } from './native-chat-prompt-caret-edge'
 import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
 import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
 } from '../../drafts/native-chat-composer-draft-memory'
+import { createPromptTextPositionTracking } from './native-chat-prompt-text-position'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
@@ -72,6 +74,7 @@ function NativePromptEditor({
   className,
   ...events
 }: NativeChatPromptEditorProps): React.JSX.Element {
+  const textPositions = useMemo(() => createPromptTextPositionTracking(), [])
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
   const [initialContent] = useState(() =>
     openingPromptContent(adopted.current?.document, initialValue)
@@ -111,8 +114,9 @@ function NativePromptEditor({
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
       Placeholder.configure({
         placeholder: ({ editor }) => {
+          // The live placeholder, not the aria-label: a caller may name the box apart from its hint.
           const attributes = editor.options.editorProps?.attributes
-          return typeof attributes === 'object' ? (attributes['aria-label'] ?? '') : ''
+          return typeof attributes === 'object' ? (attributes['data-placeholder-text'] ?? '') : ''
         },
         showOnlyWhenEditable: false
       })
@@ -125,6 +129,7 @@ function NativePromptEditor({
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': placeholder,
+        'data-placeholder-text': placeholder,
         spellcheck: spellcheck ? 'true' : 'false',
         // Chromium on macOS still applies system text replacements under spellcheck=false; autocorrect=off stops them.
         ...(spellcheck ? {} : { autocorrect: 'off', autocapitalize: 'off' }),
@@ -154,7 +159,8 @@ function NativePromptEditor({
           true
         )
     },
-    onTransaction: ({ editor: current, transaction }, history) => {
+    onTransaction: ({ editor: current, transaction, appendedTransactions }, history) => {
+      textPositions.apply([transaction, ...appendedTransactions])
       if (
         !transaction.getMeta('preventUpdate') &&
         (transaction.docChanged || transaction.selectionSet)
@@ -251,6 +257,8 @@ function NativePromptEditor({
     () =>
       editor
         ? {
+            trackTextPosition: (offset, changed) =>
+              textPositions.track(editor.state.doc, offset, changed),
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
@@ -320,24 +328,7 @@ function NativePromptEditor({
             },
             focus: () => focusMountedNativeChatEditor(editor),
             contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
-            isCaretOnVisualEdge: (edge) => {
-              const { selection, doc } = editor.state
-              if (!selection.empty) {
-                return false
-              }
-              const before = promptText(doc, 0, selection.from)
-              const after = promptText(doc, selection.from)
-              // An empty composer has one line: no layout read on the path every recall starts from.
-              if (before === '' && after === '') {
-                return true
-              }
-              const beyond = edge === 'start' ? before : after
-              // Why both: the text check covers other paragraphs, the view covers soft wraps.
-              return (
-                !beyond.includes('\n') &&
-                mountedEditorView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
-              )
-            },
+            isCaretOnVisualEdge: (edge) => nativeChatCaretOnVisualEdge(editor, edge),
             select: () => {
               editor.commands.selectAll()
             },
@@ -397,7 +388,7 @@ function NativePromptEditor({
             }
           }
         : null,
-    [editor, scopeKey, applyPosition]
+    [editor, scopeKey, applyPosition, textPositions]
   )
   useNativeChatPromptEditorHandle(inputRef, editor, input)
   useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)

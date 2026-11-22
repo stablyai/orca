@@ -1,4 +1,5 @@
-import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { defineMethod, type RpcContext } from '../../core'
+import { ACCOUNT_SUBSCRIPTION_METHOD } from './account-subscription-method'
 import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
@@ -26,9 +27,6 @@ import {
 } from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
-
-// Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.
-let accountsSubscriptionSeq = 0
 
 // Why 10s: well under the CLI's 60s request timeout even when several Codex homes probe slowly.
 const STALE_USAGE_WAIT_MS = 10_000
@@ -246,56 +244,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     handler: async ({ flowId }, ctx) =>
       hostSignInFlows(ctx.runtime).cancel(signInOwner(ctx), flowId)
   }),
-  // Stream rate-limit polls and account switches to mobile without reopening the screen.
-  defineStreamingMethod({
-    name: 'accounts.subscribe',
-    permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime, connectionId, signal, caller }, emit) => {
-      if (signal?.aborted) {
-        return
-      }
-      const stopped = Promise.withResolvers<void>()
-      const unsubscribe = runtime.onAccountsChanged((snapshot) => {
-        emit({ type: 'snapshot', snapshot })
-      })
-      // A paired client watching keeps polls running without a window; the host's own renderer follows window focus.
-      const releaseUsageViewer =
-        caller?.kind === 'paired-device'
-          ? runtime.getUsageRateLimits()?.addUsageViewer()
-          : undefined
-
-      // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
-      const seq = ++accountsSubscriptionSeq
-      const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
-      const release = (): void => runtime.cleanupSubscription(subscriptionId)
-      runtime.registerSubscriptionCleanup(
-        subscriptionId,
-        () => {
-          signal?.removeEventListener('abort', release)
-          unsubscribe()
-          releaseUsageViewer?.()
-          stopped.resolve()
-        },
-        connectionId
-      )
-
-      try {
-        if (signal?.aborted) {
-          release()
-        } else {
-          signal?.addEventListener('abort', release, { once: true })
-          // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
-          emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsStreamSnapshot() })
-          void runtime.refreshAccountsForMobileSubscriber()
-        }
-        await stopped.promise
-        emit({ type: 'end' })
-      } finally {
-        release()
-      }
-    }
-  }),
+  ACCOUNT_SUBSCRIPTION_METHOD,
   defineMethod({
     name: 'accounts.unsubscribe',
     permission: 'workspace',

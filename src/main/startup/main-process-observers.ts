@@ -1,8 +1,10 @@
+import { app, powerMonitor, powerSaveBlocker } from 'electron'
+import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
 import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
-import { app, powerMonitor, powerSaveBlocker } from 'electron'
-import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
@@ -14,7 +16,7 @@ import {
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
-import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
+import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
@@ -22,13 +24,6 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/dur
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
-import { initCohortClassifier } from '../telemetry/cohort-classifier'
-import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
-import { StatsCollector } from '../stats/collector'
-import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
-import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
@@ -48,11 +43,8 @@ function feedWakeSignalClock(): () => void {
   }
 }
 
-export function initializeMainProcessObservers(): void {
-  const store = state.store
-  if (!store) {
-    throw new Error('Store must be initialized before observers')
-  }
+/** Main's power, presence, awake, telemetry and hang observers; core observers start in composition. */
+export function initializeMainProcessObservers(store: Store): void {
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   if (process.platform === 'darwin') {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
@@ -91,10 +83,6 @@ export function initializeMainProcessObservers(): void {
   )
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
-  state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({
-    isQuitting: () => state.isQuitting,
-    getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
-  })
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
     ({ before, after }) => {
       for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
@@ -122,14 +110,12 @@ export function initializeMainProcessObservers(): void {
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })
-  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
-    agentHookServer,
-    () => state.runtime
-  )
+  // WSL-host agents never reach the hook server; their host's own stream reports them.
+  const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeStatusFreshness()
-    uninstallHookStatusRepublish()
+    stopWslHostAgentAwake()
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
@@ -183,41 +169,19 @@ export function initializeMainProcessObservers(): void {
       report({})
     }
   }
-  state.skillTransactionRecovery = recoverPendingSkillTransactions(
-    join(app.getPath('userData'), 'skill-installs')
-  )
-  void state.skillTransactionRecovery
-    .then((report) => {
-      const result = report as {
-        scanned: number
-        recovered: number
-        failures: { code: string }[]
-        truncated: boolean
-      }
-      if (result.scanned || result.failures.length || result.truncated) {
-        console.info('[skills] startup transaction recovery:', {
-          scanned: result.scanned,
-          recovered: result.recovered,
-          failures: result.failures.map((failure) => failure.code),
-          truncated: result.truncated
-        })
-      }
-    })
-    .catch((error) => console.warn('[skills] startup transaction recovery failed:', error))
-  // Hydrate repo count before IPC/window tracking; cohort classification reads it synchronously.
-  initCohortClassifier(store)
-  initOnboardingCohortClassifier(store)
-  state.stats = new StatsCollector()
-  feedAgentSessionStats(state.stats, agentHookServer)
-  const usageWorktrees = new UsageWorktreeHistory(
-    store,
-    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
-  )
-  state.usageWorktreeHistory = usageWorktrees
+}
+
+/** The usage utility process stays a main-owned child; core supplies its worktree history. */
+export function startUsageBackend(usageWorktrees: UsageWorktreeHistory): {
+  claudeUsage: AutomationUsageClient
+  codexUsage: AutomationUsageClient
+} {
   const backend = new BackendSupervisor(usageWorktrees)
   state.backend = backend
   // Paired clients get a renderer's usage privileges, never the automation-only methods.
   provideHostUsageAnalytics((call) => backend.callControl(BACKEND_PUBLIC_USAGE_METHOD, call))
-  state.claudeUsage = state.backend.automationClient('claudeUsage')
-  state.codexUsage = state.backend.automationClient('codexUsage')
+  return {
+    claudeUsage: backend.automationClient('claudeUsage'),
+    codexUsage: backend.automationClient('codexUsage')
+  }
 }

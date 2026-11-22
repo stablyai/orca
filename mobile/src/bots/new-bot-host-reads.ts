@@ -44,12 +44,19 @@ const orcaAccountStatusRead = bindDeferredRpcOperation(
   })
 )
 
-/** The account a host is signed in to, or null when it isn't (or can't say). */
-export async function readSignedInEmail(client: RpcClient): Promise<string | null> {
+/** The host's Orca sign-in, as its status says it; null when it can't say (an older host, a failed read). */
+export async function readOrcaAccount(
+  client: RpcClient
+): Promise<{ state: string; email?: string } | null> {
   try {
-    const status = orcaAccountStatusRead.interpret(await orcaAccountStatusRead.request(client))
-    return status.state === 'signed-in' && status.email ? status.email : null
+    return orcaAccountStatusRead.interpret(await orcaAccountStatusRead.request(client))
   } catch {
     return null
   }
+}
+
+/** The account a host is signed in to, or null when it isn't (or can't say). */
+export async function readSignedInEmail(client: RpcClient): Promise<string | null> {
+  const account = await readOrcaAccount(client)
+  return account?.state === 'signed-in' && account.email ? account.email : null
 }

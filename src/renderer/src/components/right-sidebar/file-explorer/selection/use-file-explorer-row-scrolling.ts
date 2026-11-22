@@ -23,6 +23,7 @@ type UseFileExplorerRowScrollingParams = {
   rootCache: DirCache | undefined
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
   loadMoreDir?: (dirPath: string) => Promise<void>
+  selectedPath: string | null
   setSelectedPath: (path: string | null) => void
   activeFileId: string | null
   openFiles: OpenFile[]
@@ -53,6 +54,7 @@ export function useFileExplorerRowScrolling({
   rootCache,
   loadDir,
   loadMoreDir,
+  selectedPath,
   setSelectedPath,
   activeFileId,
   openFiles,
@@ -124,6 +126,7 @@ export function useFileExplorerRowScrolling({
     openFiles,
     hasNameFilterQuery,
     rowProjection,
+    selectedPath,
     setSelectedPath,
     virtualizer
   })

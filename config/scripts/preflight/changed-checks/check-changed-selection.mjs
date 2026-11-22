@@ -203,10 +203,15 @@ export const VERIFY_CHECKS = [
     ]
   },
   {
-    // CI's own predicate, so local and CI select this check identically.
+    // CI's predicate, narrowed locally to sources with translation evidence.
     name: 'localization extraction',
     args: ['config/scripts/localization/source-extraction/verify-localization-extraction.mjs'],
-    matches: (files) => affectsLocalizationExtraction(files)
+    matches: (files, { readVersions }) => {
+      const evidence = translationEvidence(readVersions)
+      return files.some(
+        (file) => affectsLocalizationExtraction([file]) && evidence.mayChangeExtractedKeys(file)
+      )
+    }
   },
   {
     name: 'reliability gates',
@@ -265,6 +270,59 @@ export const VERIFY_CHECKS = [
     inputs: ['src/renderer/', 'config/oxlint-dead-classes.json']
   }
 ]
+
+const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
+// Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
+const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
+const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
+
+function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
+  if (typeof value === 'string') {
+    keys.add(prefix.replace(/_(?:zero|one|two|few|many|other)$/, ''))
+  } else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      flattenCatalogKeys(child, prefix ? `${prefix}.${key}` : key, keys)
+    }
+  }
+  return keys
+}
+
+// Why: extraction re-parses all of src/ (~1-2 min); a source that names no translation API and no
+// catalog key before or after cannot move its result. CI still runs it on every such change.
+function translationEvidence(readVersions) {
+  let catalogKeys
+  const namesCatalogKey = (text) => {
+    if (catalogKeys === undefined) {
+      const english = readVersions(`${LOCALES}locales/en.json`)[0]
+      try {
+        catalogKeys = english === null ? null : flattenCatalogKeys(JSON.parse(english))
+      } catch {
+        catalogKeys = null
+      }
+    }
+    return (
+      catalogKeys === null ||
+      [...text.matchAll(KEY_LITERAL)].some((match) => catalogKeys.has(match[1]))
+    )
+  }
+  return {
+    mayChangeExtractedKeys(file) {
+      if (!file.startsWith('src/') || !SCRIPT_SOURCE.test(file) || !readVersions) {
+        return true
+      }
+      return readVersions(file).some(
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
+      )
+    }
+  }
+}
 
 // Projects of run-typecheck-projects-in-parallel.mjs and the source trees whose types reach them.
 const TYPECHECK_INPUTS = [
@@ -377,12 +435,12 @@ function listRatchetChecks(scriptsDir) {
     }))
 }
 
-function isSelected(check, files) {
+function isSelected(check, files, context) {
   const stem = ownScriptStem(check)
   return (
     (stem !== undefined && files.some((file) => file.startsWith(stem))) ||
     files.some((file) => matchesPrefix(file, check.inputs ?? [])) ||
-    (check.matches?.(files) ?? false)
+    (check.matches?.(files, context) ?? false)
   )
 }
 
@@ -411,7 +469,7 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
 }
 
 /** Decides which checks a set of changed paths needs; CI's classifier gates the expensive jobs. */
-export function planChangedChecks(files, { scriptsDir, listDirectory }) {
+export function planChangedChecks(files, { scriptsDir, listDirectory, readVersions }) {
   const jobs = classifyPrJobs(files)
   const selectAll = files.some(
     (file) => SELECT_ALL_FILES.has(file) || matchesPrefix(file, SELECT_ALL_PREFIXES)
@@ -424,7 +482,7 @@ export function planChangedChecks(files, { scriptsDir, listDirectory }) {
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },
     checks: jobs.static_analysis
-      ? checks.filter((check) => selectAll || isSelected(check, files))
+      ? checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
       : []
   }
 }

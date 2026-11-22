@@ -32,6 +32,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   const record = readStructuredAgentLaunchRecord(sessionId)
   const surfaceAddress = state?.intent.surfaceAddress ?? record?.surfaceAddress
+  const slotTabId = state?.intent.params.tabId ?? record?.tabId
   const matchingState = state?.intent.worktreeId === worktreeId ? state : undefined
   const host = matchingState?.intent.executionHostId ?? record?.executionHostId ?? executionHostId
   const target = matchingState?.intent.target ?? structuredAgentSessionTargetForHost(host)
@@ -65,7 +66,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     retireStructuredAgentSessionReadOwner(sessionId, target, host)
   }
   if (owner && surfaceAddress) {
-    removeStructuredLaunchSlot(owner, worktreeId, sessionId)
+    removeStructuredLaunchSlot(owner, worktreeId, sessionId, slotTabId)
   }
   if (!alreadyCancelled && owner) {
     notifyStructuredLaunchListeners(sessionId)

@@ -10,13 +10,13 @@ import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'
 
-/** Copy-on-write: returns a new session and never edits `previous` or its containers. */
+/** Copy-on-write: returns a new session, never editing `previous` or its containers, and the workspaces it changed. */
 export function applyPtyBinding(
   args: PersistPtyBindingArgs,
   previous: WorkspaceSessionState,
   bindingWorktreeId: string,
   paneKey: string
-): WorkspaceSessionState {
+): { session: WorkspaceSessionState; workspaces: ReadonlySet<string> } {
   const session = { ...previous }
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
@@ -161,5 +161,5 @@ export function applyPtyBinding(
   }
   session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
-  return session
+  return { session, workspaces: new Set([bindingWorktreeId, ...(unbound?.workspaces ?? [])]) }
 }

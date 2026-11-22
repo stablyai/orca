@@ -60,6 +60,7 @@ export const SSH_HOST_SERVER_FAILURE_VALUES = [
   ...UNAVAILABLE_REASONS,
   'activation_recovery_required',
   'candidate_preflight_failed',
+  'candidate_preflight_unanswered',
   'candidate_launch_failed',
   'incumbent_identity_unverifiable',
   'outgoing_stop_incomplete',

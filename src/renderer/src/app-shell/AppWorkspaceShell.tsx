@@ -8,12 +8,14 @@ import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-o
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
+import { AppRail } from '../components/app-rail/AppRail'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
@@ -207,37 +209,17 @@ export function AppWorkspaceShell(props: {
             </div>
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-            {layout.showSidebar ? (
-              layout.leftTitlebarChromeLayout.shouldMount ? (
-                /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
-                <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                >
-                  <div
-                    // The floating header covers the center border; restore the seam and size to its own controls.
-                    className={`titlebar-left${
-                      layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : ''
-                    }`}
-                    style={{
-                      // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
-                      // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
-                    }}
-                  >
-                    {titlebarLeftControls}
-                  </div>
-                  {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
-                  <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  </div>
-                </div>
-              ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-              )
-            ) : null}
+            <AppShellLeftColumn
+              layout={layout}
+              titlebarLeftControls={titlebarLeftControls}
+              rail={
+                <AppRail
+                  listVisible={layout.showSidebar && layout.sidebarOpen}
+                  style={layout.leftSidebarStyle}
+                />
+              }
+              list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
+            />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
@@ -249,7 +231,7 @@ export function AppWorkspaceShell(props: {
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
                 {showsFloatingRightSidebarToggle(layout) && (
                   <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
+                    className="absolute top-0 z-10 flex h-(--app-header-height) items-center"
                     style={
                       {
                         // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.

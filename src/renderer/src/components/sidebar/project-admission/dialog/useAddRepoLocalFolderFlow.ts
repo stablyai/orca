@@ -12,6 +12,7 @@ import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
 import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNestedReviewState'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
+import { confirmNonGitFolderAdd } from './non-git-folder-confirmation'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -23,6 +24,7 @@ import {
   usePickedLocalPathsAutoAdd,
   type LocalPathAddMode,
   type LocalPathAddResult,
+  type PausedLocalPathAdd,
   type OfferWslHost
 } from './add-repo-local-path-batch'
 
@@ -153,22 +155,26 @@ export function useAddRepoLocalFolderFlow({
         }
         if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
           // Why: a single-folder decision point cannot queue competing batch review states.
-          showNestedRepoReview({
-            scan,
-            selectedPath: path,
-            connectionId: null,
-            attemptId,
-            runtimeKind: 'local',
-            inProgress: false,
-            scanId,
-            runtimeEnvironmentId: activeRuntimeEnvironmentId
+          // Review actions stay disabled until this final show, so it is the one that reports.
+          const projectAdded = new Promise<PausedLocalPathAdd | null>((reportProject) => {
+            showNestedRepoReview({
+              scan,
+              selectedPath: path,
+              connectionId: null,
+              attemptId,
+              runtimeKind: 'local',
+              inProgress: false,
+              scanId,
+              runtimeEnvironmentId: activeRuntimeEnvironmentId,
+              reportProject
+            })
           })
-          return { status: 'paused' }
+          return { status: 'paused', projectAdded }
         }
         if (scan?.selectedPathKind === 'non_git_folder') {
           closeModal()
-          openModal('confirm-non-git-folder', { folderPath: path })
-          return { status: 'paused' }
+          const folder = confirmNonGitFolderAdd(openModal, path)
+          return { status: 'paused', projectAdded: folder.then((repo) => (repo ? { repo } : null)) }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
         const repo = await addRepoPath(path, undefined, {
