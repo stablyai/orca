@@ -73,7 +73,10 @@ export function launchPromptAsMessage(
   const represented = matchingNativeChatUserContentCounts(
     existingMessages.filter(
       (message) => message.timestamp === null || message.timestamp >= entry.createdAt
-    )
+    ),
+    undefined,
+    undefined,
+    entry.text
   )
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
     return null
@@ -96,7 +99,9 @@ export function shouldPruneLaunchPrompt(
     (message) => message.timestamp === null || message.timestamp >= entry.createdAt
   )
   return (
-    (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
+    (advancedNativeChatUserContentCounts(relevant, undefined, undefined, entry.text).get(
+      nativeChatPendingContentKey(entry)
+    ) ?? 0) > 0
   )
 }
 

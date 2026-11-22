@@ -2,6 +2,8 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
+  // Counts V8 Promise allocations through async_hooks, which Bun does not emit.
+  'src/main/ipc/worktrees/removal/registered-worktree-root-match.performance.test.ts',
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
   // The Node host closes only its own copy of a shared socket; Bun's destroy shuts it down.

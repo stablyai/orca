@@ -254,6 +254,17 @@ export function useMobileNativeChatDrafts(args: {
     () => (hasPending ? normalizeImageTranscriptMessages(messages) : messages),
     [hasPending, messages]
   )
+  const landedImagePreviews = useMemo(
+    () =>
+      transcriptSettled && pending.some((entry) => entry.images?.length)
+        ? findLandedImagePreviewEchoes(messages, pending)
+        : [],
+    [transcriptSettled, messages, pending]
+  )
+  const landedImagePendingIds = useMemo(
+    () => new Set(landedImagePreviews.map((preview) => preview.pendingId)),
+    [landedImagePreviews]
+  )
   useEffect(() => {
     if (!pendingKey) {
       return
@@ -264,11 +275,6 @@ export function useMobileNativeChatDrafts(args: {
     if (pending.length === 0) {
       return
     }
-    // Bind previews only against own-session reads; hydrating rows may be another tab's photos.
-    const landedImagePreviews = transcriptSettled
-      ? findLandedImagePreviewEchoes(messages, pending)
-      : []
-    const landedImagePendingIds = new Set(landedImagePreviews.map((preview) => preview.pendingId))
     if (landedImagePreviews.length > 0) {
       setImagePreviewsBySession((previous) =>
         mergeSentImagePreviews(previous, pendingKey, landedImagePreviews)
@@ -287,10 +293,10 @@ export function useMobileNativeChatDrafts(args: {
       delete remaining[pendingKey]
       return remaining
     })
-  }, [echoRows, messages, pending, pendingKey, transcriptSettled])
+  }, [echoRows, messages, pending, pendingKey, landedImagePreviews, landedImagePendingIds])
   const visiblePending = useMemo(
-    () => visibleMobileNativeChatPending(echoRows, pending),
-    [echoRows, pending]
+    () => visibleMobileNativeChatPending(echoRows, pending, landedImagePendingIds),
+    [echoRows, pending, landedImagePendingIds]
   )
 
   return {

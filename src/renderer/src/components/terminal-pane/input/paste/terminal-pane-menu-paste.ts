@@ -1,3 +1,7 @@
+import {
+  captureTerminalAgentImageTarget,
+  prepareTerminalAgentImagePaths
+} from '@/runtime/files/agent-image-preparation'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -103,14 +107,38 @@ export const pasteTerminalPaneMenuClipboard = async (
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
+  const imageTargetPtyId = transport?.getPtyId() ?? null
   const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
     state,
     worktreeId,
     transport
   )
+  let imageTarget: ReturnType<typeof captureTerminalAgentImageTarget> = null
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+    prepareImagePath: async (path) => {
+      imageTarget = captureTerminalAgentImageTarget(tabId, pane.leafId)
+      return (
+        (
+          await prepareTerminalAgentImagePaths(
+            tabId,
+            pane.leafId,
+            transport?.getPtyId() ?? null,
+            [path],
+            runtimeEnvironmentId,
+            {
+              executionHostId: transport?.getExecutionHostId?.(),
+              cwd: transport?.getLocalSessionMetadata?.()?.cwd,
+              isCurrent: () =>
+                imageTarget?.isCurrent() !== false &&
+                context.paneTransportsRef.current.get(pane.id) === transport &&
+                transport?.getPtyId() === imageTargetPtyId
+            }
+          )
+        )[0] ?? path
+      )
+    },
     copiedFiles: createTerminalClipboardCopiedFiles({
       managerRef: context.managerRef,
       paneTransportsRef: context.paneTransportsRef,
@@ -137,7 +165,9 @@ export const pasteTerminalPaneMenuClipboard = async (
       leafId: pane.leafId
     }),
     pasteText: (text, options) =>
-      executeTerminalPaneMenuPasteText(context, pane, source, text, options),
+      imageTarget?.isCurrent() === false
+        ? Promise.resolve(false)
+        : executeTerminalPaneMenuPasteText(context, pane, source, text, options),
     onTextPasteError: () =>
       onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
     onImagePasteError: (error) => {

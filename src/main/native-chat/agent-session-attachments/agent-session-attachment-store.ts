@@ -4,7 +4,7 @@ import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentUploadCommitResult
@@ -193,7 +193,12 @@ export class AgentSessionAttachmentStore {
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {
     if (
       !IMAGE_FILE_MIME_TYPES[extname(filePath).toLowerCase()] ||
-      !parseAgentSessionAttachmentStorePath(this.rootDir, filePath)
+      !(
+        parseAgentSessionAttachmentStorePath(this.rootDir, filePath) ||
+        (basename(dirname(filePath)) === '.agent-images' &&
+          /^v2-[0-9a-f]{64}\.(png|jpg)$/.test(basename(filePath)) &&
+          parseAgentSessionAttachmentStorePath(this.rootDir, dirname(filePath)))
+      )
     ) {
       throw new Error(NOT_AN_IMAGE)
     }

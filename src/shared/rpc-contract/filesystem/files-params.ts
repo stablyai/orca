@@ -19,6 +19,11 @@ export const FilePathSearch = WorktreeSelector.extend({
   mode: z.literal('quick-open').optional()
 })
 
+export const PrepareAgentImages = z.object({
+  paths: z.array(z.string().min(1).max(4096)).max(256),
+  wslDistro: z.string().min(1).max(256).optional()
+})
+
 export const ChatImageRead = WorktreeSelector.extend({ path: z.string().min(1).max(4096) })
 
 export const ResolveTerminalPath = WorktreeSelector.extend({

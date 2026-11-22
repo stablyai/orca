@@ -1,3 +1,5 @@
+import { captureTerminalAgentImageTarget } from '@/runtime/files/agent-image-preparation'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
@@ -17,6 +19,7 @@ import {
   type NativeChatSendHandle
 } from '../../session/terminal/send/native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from '../../session/terminal/send/native-chat-runtime-image-send'
+import { resolveNativeChatAttachmentOwner } from '../../attachments/uploads/native-chat-attachment-owner'
 import { resolveNativeChatLaunchDraftSend } from '../../drafts/native-chat-launch-draft-send'
 import {
   nativeChatComposerTargetIsRemote,
@@ -34,6 +37,7 @@ import {
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
+  paneKey: string
   draft: string
   draftScopeKey: string
   imageAttachments: readonly { path: string }[]
@@ -98,7 +102,7 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       let pendingId: string | undefined
-      const sendOptions =
+      const observedSendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
               ...launchSendOptions,
@@ -114,6 +118,14 @@ export function useNativeChatPtyComposerSend(args: {
               }
             }
           : launchSendOptions
+      const sendOptions = {
+        ...observedSendOptions,
+        onImagesPrepared: (paths: readonly string[]) => {
+          if (pendingId) {
+            args.optimisticSendOutcome?.recordImageDelivery?.(pendingId, paths)
+          }
+        }
+      }
       let pendingHandle: NativeChatSendHandle | null = null
       // Why: slash-like text must not silently drop its attached images.
       if (classification !== 'chat' && imagePaths.length === 0) {
@@ -122,12 +134,23 @@ export function useNativeChatPtyComposerSend(args: {
             ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
             : sendNativeChatMessage(target.ptyId, text, sendOptions)
       } else if (imagePaths.length > 0) {
+        const pane = parsePaneKey(args.paneKey)
+        const imageTarget = pane ? captureTerminalAgentImageTarget(pane.tabId, pane.leafId) : null
+        if (pane && !imageTarget) {
+          args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
+          return false
+        }
+        const owner = resolveNativeChatAttachmentOwner(useAppStore.getState(), args.terminalTabId)
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           args.agent,
           target.ptyId,
           text,
           imagePaths,
-          sendOptions
+          {
+            ...sendOptions,
+            isCurrent: imageTarget?.isCurrent,
+            executionHostId: owner.kind === 'remote' ? owner.staging?.executionHostId : undefined
+          }
         )
       } else if (text.trim().length > 0) {
         pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
@@ -149,7 +172,7 @@ export function useNativeChatPtyComposerSend(args: {
         pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
         if (pendingHandle) {
           args.trackPendingSend(pendingHandle, pendingId)
-          if (retry && pendingId) {
+          if ((retry || imagePaths.length > 0) && pendingId) {
             const id = pendingId
             void pendingHandle.outcome?.then((outcome) => {
               if (outcome === 'not-submitted') {

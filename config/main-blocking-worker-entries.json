@@ -31,5 +31,6 @@
   "src/main/bots/bot-items-tables.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-items-store.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
-  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main."
+  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
+  "src/main/native-chat/agent-images/agent-image-fit-worker-entry.ts": "Dedicated worker-thread entry; image decoding and send diagnostics stay off Electron main and orcad."
 }

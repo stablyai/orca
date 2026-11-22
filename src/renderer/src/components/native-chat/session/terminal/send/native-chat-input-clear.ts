@@ -7,6 +7,8 @@ import { readNativeChatInputLine } from './native-chat-paste-landed'
 export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
 
 export type NativeChatSendOptions = {
+  isCurrent?: () => boolean
+  onImagesPrepared?: (paths: readonly string[]) => void
   /** The host refused a write; nothing after it was sent. */
   onWriteRejected?: () => void
   /** A write's acknowledgment was lost; it may or may not have landed. */
@@ -21,7 +23,11 @@ export type NativeChatSendOptions = {
 
 /** Clear a cancelled send's own body; the pre-send clear is sized for the old line, not the body. */
 export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSendOptions): void {
-  if (options?.clearInput === '' || options?.clearInput === null) {
+  if (
+    options?.isCurrent?.() === false ||
+    options?.clearInput === '' ||
+    options?.clearInput === null
+  ) {
     return
   }
   sendRuntimePtyInput(ptyId, AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
@@ -41,7 +47,7 @@ export function clearThenWrite(
     options?.onDeliverySettled?.(false)
     rejectClear()
   }
-  if (options?.clearInput === null) {
+  if (options?.isCurrent?.() === false || options?.clearInput === null) {
     refuse()
     return
   }
@@ -52,21 +58,30 @@ export function clearThenWrite(
   }
   // Time the gap from the host's acknowledgment so transport latency cannot rejoin clear and body.
   const clearAlone = (bytes: string, then: () => void): void => {
+    if (options?.isCurrent?.() === false) {
+      refuse()
+      return
+    }
     void sendRuntimePtyInputVerified(ptyId, bytes, 'driving').then(
       // Through delay so a send cancelled meanwhile stays silent.
       (accepted) => delay(accepted ? NATIVE_CHAT_CLEAR_CONFIRM_MS : 0, accepted ? then : refuse),
       () => delay(NATIVE_CHAT_CLEAR_CONFIRM_MS, then)
     )
   }
+  const writeIfCurrent = () => (options?.isCurrent?.() === false ? refuse() : writeBody())
   clearAlone(options?.clearInput ?? AGENT_TUI_CLEAR_INPUT_MAX, () => {
+    if (options?.isCurrent?.() === false) {
+      refuse()
+      return
+    }
     const line = readNativeChatInputLine(options?.readInputLine)
     // Unreadable is unconfirmed; typed residue means direct TUI edits outgrew the sized clear.
     if (line === null || line === '') {
-      writeBody()
+      writeIfCurrent()
       return
     }
     // A refusal here would drop non-Claude sends silently, and a slow redraw would refuse a clear that landed.
-    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, writeBody)
+    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, writeIfCurrent)
   })
 }
 

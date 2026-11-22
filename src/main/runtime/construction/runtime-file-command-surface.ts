@@ -28,6 +28,7 @@ export type RuntimeFileCommandSurface = Pick<
     | 'readMobileFile'
     | 'readFileExplorerPreview'
     | 'readChatImagePreview'
+    | 'prepareAgentImages'
     | 'readFileExplorerChunk'
     | 'readDocPreviewFile'
     | 'readDocPreviewChunk'
@@ -90,6 +91,7 @@ export function installRuntimeFileCommandSurface(
     watchFileExplorer: fileWatches.watchFileExplorer.bind(fileWatches),
     readFileExplorerPreview: fileReads.readFileExplorerPreview.bind(fileReads),
     readChatImagePreview: fileReads.readChatImagePreview.bind(fileReads),
+    prepareAgentImages: fileReads.prepareAgentImages.bind(fileReads),
     readFileExplorerChunk: fileReads.readFileExplorerChunk.bind(fileReads),
     readDocPreviewFile: fileReads.readDocPreviewFile.bind(fileReads),
     readDocPreviewChunk: fileReads.readDocPreviewChunk.bind(fileReads),

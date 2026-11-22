@@ -1,3 +1,7 @@
+import {
+  captureTerminalAgentImageTarget,
+  prepareTerminalAgentImagePaths
+} from '@/runtime/files/agent-image-preparation'
 import { recordRecentTerminalImage } from '../recent-terminal-images'
 import { useAppStore } from '../../../../store/index'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
@@ -156,16 +160,43 @@ export function createTerminalPanePasteExecution(
       paneTransportsRef.current.get(pane.id)
     )
     const activeElementAtDispatch = document.activeElement
+    const imageTransport = paneTransportsRef.current.get(pane.id)
+    const imageTargetPtyId = imageTransport?.getPtyId() ?? null
+    let imageTarget: ReturnType<typeof captureTerminalAgentImageTarget> = null
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      prepareImagePath: async (path) => {
+        imageTarget = captureTerminalAgentImageTarget(tabId, pane.leafId)
+        return (
+          (
+            await prepareTerminalAgentImagePaths(
+              tabId,
+              pane.leafId,
+              imageTargetPtyId,
+              [path],
+              runtimeEnvironmentId,
+              {
+                executionHostId: imageTransport?.getExecutionHostId?.(),
+                cwd: imageTransport?.getLocalSessionMetadata?.()?.cwd,
+                isCurrent: () =>
+                  imageTarget?.isCurrent() !== false &&
+                  paneTransportsRef.current.get(pane.id) === imageTransport &&
+                  imageTransport?.getPtyId() === imageTargetPtyId
+              }
+            )
+          )[0] ?? path
+        )
+      },
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,
       onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
-        executePanePasteText(pane, source, activeElementAtDispatch, text, options),
+        imageTarget?.isCurrent() === false
+          ? Promise.resolve(false)
+          : executePanePasteText(pane, source, activeElementAtDispatch, text, options),
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))

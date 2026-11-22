@@ -7,7 +7,7 @@ import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
 } from './filesystem-auth'
-import { isDescendantOrEqual } from '../../../filesystem/local-file-io/filesystem-path-containment'
+import { isDescendantOrEqualAsync } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { getFloatingWorkspaceFileRoots } from '../../worktrees/floating-workspace-directory'
 import {
   isDeviceNamespacePath,
@@ -35,7 +35,7 @@ export async function resolveDesktopAuthorizedPath(
 ): Promise<string> {
   return resolveAuthorizedPath(targetPath, store, {
     ...options,
-    ...getFloatingWorkspaceFileRoots(store)
+    ...(await getFloatingWorkspaceFileRoots(store))
   })
 }
 
@@ -83,12 +83,18 @@ async function resolveDocumentResourcePath(
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   const documentFolder = dirname(resolve(documentPath))
-  if (isNetworkSharePath(resolvedTarget) || !isDescendantOrEqual(resolvedTarget, documentFolder)) {
+  if (
+    isNetworkSharePath(resolvedTarget) ||
+    !(await isDescendantOrEqualAsync(resolvedTarget, documentFolder))
+  ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   const realTarget = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
   if (
-    !isDescendantOrEqual(realTarget, resolve(await realpathAcrossWslDriveMount(documentFolder)))
+    !(await isDescendantOrEqualAsync(
+      realTarget,
+      resolve(await realpathAcrossWslDriveMount(documentFolder))
+    ))
   ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
@@ -142,13 +148,16 @@ async function resolveDocumentFolderPath(
   const documentFolder = dirname(resolve(documentPath))
   if (
     isRefusedAutomaticLoadPath(resolvedTarget) ||
-    !isDescendantOrEqual(resolvedTarget, documentFolder)
+    !(await isDescendantOrEqualAsync(resolvedTarget, documentFolder))
   ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   const realTarget = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
   const realFolder = resolve(await realpathAcrossWslDriveMount(documentFolder))
-  if (isRefusedAutomaticLoadPath(realTarget) || !isDescendantOrEqual(realTarget, realFolder)) {
+  if (
+    isRefusedAutomaticLoadPath(realTarget) ||
+    !(await isDescendantOrEqualAsync(realTarget, realFolder))
+  ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   return realTarget
@@ -257,6 +266,9 @@ export async function resolveLocalRequestPath(
   const automaticLoad = fileAccess.kind === 'document-resource' || fileAccess.kind === 'chat-image'
   if (automaticLoad && isRefusedAutomaticLoadPath(resolve(targetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  if (fileAccess.kind === 'chat-image' && !isNetworkSharePath(resolve(targetPath))) {
+    return kindRule(targetPath)
   }
   // The default textual root check refuses outside paths without contacting shares.
   const insideRoots = await resolveDesktopAuthorizedPath(targetPath, store, options).catch(

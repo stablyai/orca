@@ -120,6 +120,7 @@ export async function handleInternalTerminalFileDrop({
 
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
     dropTarget: dropTargetSnapshot,
+    tabId,
     manager,
     paneTransports,
     paths,

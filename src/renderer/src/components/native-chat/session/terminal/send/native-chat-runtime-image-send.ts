@@ -1,9 +1,14 @@
 import {
+  prepareAgentImagePaths,
+  type AgentImagePreparationOptions
+} from '@/runtime/files/agent-image-preparation'
+import {
   sendNativeChatObservedWrites,
   type NativeChatObservedWrite
 } from './native-chat-observed-send'
 import {
   agentImagePasteWrites,
+  agentImageDeliveryText,
   getAgentImageHandling
 } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { agentImagePastePath } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste-path'
@@ -36,88 +41,135 @@ export function sendNativeChatMessageWithImageAttachments(
   ptyId: string,
   text: string,
   imagePaths: readonly string[],
-  options?: NativeChatSendOptions
+  options?: NativeChatSendOptions & Pick<AgentImagePreparationOptions, 'executionHostId'>
 ): NativeChatSendHandle {
   if (imagePaths.length === 0) {
     return sendNativeChatMessage(ptyId, text, options)
   }
-  const trimmedText = text.trim()
-  if (options?.onWriteRejected) {
-    const writes: NativeChatObservedWrite[] = agentImagePasteWrites(
-      agent,
-      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
-      trimmedText.length > 0
-    ).map((data) => ({ data, delayBeforeMs: 0 }))
-    const mentions = typedImageMentions(agent, writes)
-    if (trimmedText) {
-      writes.push({
-        data: buildNativeChatPasteBytes(text),
-        delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
-      })
-    }
-    writes.push({
-      data: NATIVE_CHAT_SUBMIT,
-      delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
-      afterPasteOf: mentions + text
+  const preparePaths = async (signal: AbortSignal): Promise<string[]> => {
+    const prepared = await prepareAgentImagePaths(ptyId, imagePaths, undefined, {
+      signal,
+      executionHostId: options?.executionHostId,
+      isCurrent: options?.isCurrent
     })
-    return sendNativeChatObservedWrites(ptyId, writes, options)
+    signal.throwIfAborted()
+    options?.onImagesPrepared?.(prepared)
+    return prepared
+  }
+  if (options?.onWriteRejected) {
+    const buildWrites = (preparedPaths: readonly string[]): NativeChatObservedWrite[] => {
+      const deliveryText = agentImageDeliveryText(text, imagePaths, preparedPaths)
+      const writes: NativeChatObservedWrite[] = agentImagePasteWrites(
+        agent,
+        preparedPaths.map((path) =>
+          buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+        ),
+        deliveryText.trim().length > 0
+      ).map((data) => ({ data, delayBeforeMs: 0 }))
+      const mentions = typedImageMentions(agent, writes)
+      if (deliveryText.trim()) {
+        writes.push({
+          data: buildNativeChatPasteBytes(deliveryText),
+          delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
+        })
+      }
+      writes.push({
+        data: NATIVE_CHAT_SUBMIT,
+        delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
+        afterPasteOf: mentions + deliveryText
+      })
+      return writes
+    }
+    return sendNativeChatObservedWrites(ptyId, buildWrites(imagePaths), options, async (signal) =>
+      buildWrites(await preparePaths(signal))
+    )
   }
   const durationMs =
-    (trimmedText.length > 0
-      ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-      : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
+    NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS +
+    NATIVE_CHAT_SUBMIT_DELAY_MS +
+    clearConfirmDurationMs(options)
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
-    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
+    ({ isCancelled, signal, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
-      clearThenWrite(
-        ptyId,
-        options,
-        delay,
+      void preparePaths(signal).then(
+        (preparedPaths) => {
+          const deliveryText = agentImageDeliveryText(text, imagePaths, preparedPaths)
+          if (isCancelled()) {
+            return
+          }
+          clearThenWrite(
+            ptyId,
+            options,
+            delay,
+            () => {
+              if (isCancelled()) {
+                return
+              }
+              markWriteStarted()
+              const lineWasEmpty = readNativeChatInputLine(options?.readInputLine) === ''
+              const imageWrites = agentImagePasteWrites(
+                agent,
+                preparedPaths.map((path) =>
+                  buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+                ),
+                deliveryText.trim().length > 0
+              )
+              const rejectSuccessor = (): boolean => {
+                if (options?.isCurrent?.() !== false) {
+                  return false
+                }
+                options?.onDeliverySettled?.(false)
+                markSubmitted('uncertain')
+                return true
+              }
+              const submitAfterPasteLands = (): void =>
+                afterNativeChatPasteLands({
+                  readInputLine: options?.readInputLine,
+                  lineWasEmpty,
+                  text:
+                    typedImageMentions(
+                      agent,
+                      imageWrites.map((data) => ({ data }))
+                    ) + deliveryText,
+                  delay,
+                  submit: () => {
+                    if (rejectSuccessor()) {
+                      return
+                    }
+                    sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+                    markSubmitted()
+                  }
+                })
+              for (const payload of imageWrites) {
+                sendRuntimePtyInput(ptyId, payload, 'driving')
+              }
+              if (deliveryText.trim().length > 0) {
+                delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+                  if (rejectSuccessor()) {
+                    return
+                  }
+                  sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(deliveryText), 'driving')
+                  delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
+                })
+                return
+              }
+              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
+            },
+            () => markSubmitted('not-submitted')
+          )
+        },
         () => {
           if (isCancelled()) {
             return
           }
-          markWriteStarted()
-          const lineWasEmpty = readNativeChatInputLine(options?.readInputLine) === ''
-          const imageWrites = agentImagePasteWrites(
-            agent,
-            imagePaths.map((path) =>
-              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-            ),
-            trimmedText.length > 0
-          )
-          const submitAfterPasteLands = (): void =>
-            afterNativeChatPasteLands({
-              readInputLine: options?.readInputLine,
-              lineWasEmpty,
-              text:
-                typedImageMentions(
-                  agent,
-                  imageWrites.map((data) => ({ data }))
-                ) + text,
-              delay,
-              submit: () => {
-                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-                markSubmitted()
-              }
-            })
-          for (const payload of imageWrites) {
-            sendRuntimePtyInput(ptyId, payload, 'driving')
-          }
-          if (trimmedText.length > 0) {
-            delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-              sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
-            })
-            return
-          }
-          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
-        },
-        () => markSubmitted('not-submitted')
+          options?.onWriteRejected?.()
+          options?.onDeliverySettled?.(false)
+          markSubmitted('not-submitted')
+        }
       )
     },
     {

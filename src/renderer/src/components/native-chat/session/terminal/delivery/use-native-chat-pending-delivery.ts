@@ -103,6 +103,23 @@ export function useNativeChatPendingDelivery(args: {
       ),
     [save]
   )
+  const recordImageDelivery = useCallback(
+    (id: string, paths: readonly string[]) =>
+      save((entries) => {
+        const target = entries.find((entry) => entry.id === id)
+        if (
+          !target ||
+          (target.deliveredImagePaths?.length === paths.length &&
+            target.deliveredImagePaths.every((path, index) => path === paths[index]))
+        ) {
+          return entries
+        }
+        return entries.map((entry) =>
+          entry === target ? { ...entry, deliveredImagePaths: paths } : entry
+        )
+      }),
+    [save]
+  )
   const holdUnconfirmed = useCallback(
     (id: string) =>
       save((entries) =>
@@ -209,7 +226,7 @@ export function useNativeChatPendingDelivery(args: {
     return result
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [pending, cancel, paneKey, composerRef, languageRevision, t])
-  return { pending, record, cancel, reject, holdUnconfirmed, clear, notices }
+  return { pending, record, cancel, reject, recordImageDelivery, holdUnconfirmed, clear, notices }
 }
 
 export function useNativeChatOptimisticSend(

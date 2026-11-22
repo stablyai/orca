@@ -9,16 +9,22 @@ import {
 describe('terminal clipboard paste', () => {
   it('records a preview only after an image path reaches a local terminal', async () => {
     const onLocalImagePasted = vi.fn()
+    const pasteText = vi.fn(() => true)
     const deps = {
       readClipboardText: async () => '',
       saveClipboardImageAsTempFile: async () => '/tmp/preview.png',
+      prepareImagePath: async () => '/tmp/viewing-copy.png',
       onLocalImagePasted
     }
     await pasteTerminalClipboard({ ...deps, pasteText: () => true, connectionId: 'ssh-target' })
     await pasteTerminalClipboard({ ...deps, pasteText: () => true, runtimeEnvironmentId: 'paired' })
     expect(onLocalImagePasted).not.toHaveBeenCalled()
 
-    await pasteTerminalClipboard({ ...deps, pasteText: () => true })
+    await pasteTerminalClipboard({ ...deps, pasteText })
+    expect(pasteText).toHaveBeenCalledWith('/tmp/viewing-copy.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
     expect(onLocalImagePasted).toHaveBeenCalledWith('/tmp/preview.png')
   })
 

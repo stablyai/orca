@@ -25,7 +25,11 @@ export type StructuredAgentSessionAdmitHostInput = (
   enqueue: Parameters<StructuredAgentSessionAdmitFreshInput>[0],
   signal: AbortSignal | undefined,
   prepare: (fence: number) => Promise<AgentJournalMessageItem>,
-  kind?: 'fresh' | 'steer'
+  kind?: 'fresh' | 'steer',
+  prepareImages?: (
+    body: AgentJournalMessageItem,
+    signal?: AbortSignal
+  ) => Promise<AgentJournalMessageItem>
 ) => ReturnType<StructuredAgentSessionAdmitFreshInput>
 
 export type StructuredAgentSessionContinueInput = (

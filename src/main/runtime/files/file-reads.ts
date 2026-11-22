@@ -1,3 +1,4 @@
+import { prepareAgentImagePathsOnHost } from './agent-image-preparation'
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -201,6 +202,14 @@ export class RuntimeFileReads {
     requireLocalRuntimeFileRoute(target)
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     return readLocalFileRange(filePath, offset, length)
+  }
+
+  prepareAgentImages(
+    paths: readonly string[],
+    signal?: AbortSignal,
+    wslDistro?: string
+  ): Promise<string[]> {
+    return prepareAgentImagePathsOnHost(paths, this.host.requireStore(), signal, wslDistro)
   }
 
   /** A host image a chat names, under desktop's chat-image rule; the path must be on this machine. */

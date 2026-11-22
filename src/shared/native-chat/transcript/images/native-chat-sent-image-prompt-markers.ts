@@ -1,3 +1,4 @@
+import { withoutAgentImageSourceContexts } from './native-chat-image-source-context'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../input/composer/agent-image-paste'
 import {
   imageReferenceToken,
@@ -159,9 +160,11 @@ export function withoutSentImagePromptMarkers(
   if (cached) {
     return cached
   }
-  const imageCount = message.blocks.filter((block) => block.type === 'image-ref').length
-  let changed = false
-  const blocks = message.blocks.flatMap((block): NativeChatBlock[] => {
+  const sourceBlocks = withoutAgentImageSourceContexts(message.blocks)
+  const images = sourceBlocks.filter((block) => block.type === 'image-ref')
+  const imageCount = images.length
+  let changed = sourceBlocks !== message.blocks
+  const blocks = sourceBlocks.flatMap((block): NativeChatBlock[] => {
     if (!isTextBlock(block)) {
       return [block]
     }
