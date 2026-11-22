@@ -14,6 +14,10 @@ path = "src/main.rs"
 name = "orca-administrator-restart"
 path = "src/administrator_launcher.rs"
 
+[[bin]]
+name = "orca-portable-updater"
+path = "src/portable_updater_launcher.rs"
+
 [build-dependencies]
 winresource = "0.1"
 

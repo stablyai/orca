@@ -4,7 +4,10 @@ import { pathToFileURL } from 'node:url'
 
 const API_VERSION = '2022-11-28'
 
-export function getRequiredReleaseAssetNames(tag) {
+export function getRequiredReleaseAssetNames(
+  tag,
+  { requireWindowsPortable = process.env.ORCA_REQUIRE_WINDOWS_PORTABLE === 'true' } = {}
+) {
   const version = tag.replace(/^v/i, '')
   return [
     'latest-linux.yml',
@@ -19,6 +22,9 @@ export function getRequiredReleaseAssetNames(tag) {
     `orca-ide-${version}.aarch64.rpm`,
     'orca-windows-setup.exe',
     'orca-windows-setup.exe.blockmap',
+    ...(requireWindowsPortable
+      ? ['orca-windows-x64-portable.zip', 'orca-windows-x64-portable.zip.sha256']
+      : []),
     `Orca-${version}-mac.zip`,
     `Orca-${version}-mac.zip.blockmap`,
     `Orca-${version}-arm64-mac.zip`,
