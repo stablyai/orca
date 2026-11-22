@@ -6641,7 +6641,8 @@
           "upToDate_one": "{{count}} skill is up to date."
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Replace with Orca's copy (keeps a backup)"
+          "replaceWithOrca": "Replace with Orca's copy (keeps a backup)",
+          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to a backup."
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",
@@ -7021,7 +7022,8 @@
           "repairAvailable": "Repair available",
           "installAvailable": "Install available",
           "otherBuild": "Installed by another Orca version",
-          "otherBuildKept": "Kept: written by another Orca version"
+          "otherBuildKept": "Kept: written by another Orca version",
+          "differsFromOrca": "This copy differs from Orca's"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -14350,7 +14352,9 @@
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
+          "replaceMovesCopy": "Replacing moves the current copy, including any extra files, to a backup.",
+          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's"
         },
         "recoverServer": {
           "checking": "Checking the lock…",
