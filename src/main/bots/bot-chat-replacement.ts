@@ -6,7 +6,6 @@ import {
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { retireChatRuns } from '../runtime/orchestration/db/runs/retired-chat-runs'
-import { dropUnreadBotRequests } from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
 
 type Closed = Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>
 
@@ -32,6 +31,9 @@ export async function dropReplacedChatMail(
   replaced: string | null
 ): Promise<void> {
   if (replaced) {
+    // Loaded here: the request outcomes reach bot groups, which open Chats through this module.
+    const { dropUnreadBotRequests } =
+      await import('../runtime/rpc/methods/orchestration/messaging/bot-request-outcome')
     await dropUnreadBotRequests(runtime, botId, 'new-chat', replaced)
   }
 }
