@@ -1,13 +1,14 @@
 import { agentMessageSenderName } from '../../agent-session/journal/agent-session-message-source'
 
-/** Who sent mail from a paired computer, from that computer's Orca's own records; `computer` is null
- *  when an Orca from before it named none. */
-export type PairedSender = { computer: string | null; botName: string | null }
+/** Who sent mail from a computer paired with this one, either side of the pairing. `computer` is
+ *  this computer's name for a server it pulls from, or a client's Orca's name for itself; '' when
+ *  none was named. `botName` is the sender's bot as its own Orca named it. */
+export type PairedSender = { computer: string; botName: string | null }
 
 /** That computer's bot by name on it, or an agent there. Never "your owner's": a paired computer
  *  may be someone else's. */
 export function pairedSenderName(sender: PairedSender): string {
-  const computer = sender.computer ?? 'another computer'
+  const computer = sender.computer || 'another computer'
   return sender.botName ? `${sender.botName} on ${computer}` : `an agent on ${computer}`
 }
 

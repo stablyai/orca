@@ -15,13 +15,11 @@ export type BotRequestRecord = {
   group?: BotGroupPeerScope
   fromBotId: string | null
   fromBotName: string | null
-  /** Sent from a paired computer, by the name its Orca gave (null when it named none);
-   *  `fromBotName` is then that computer's bot. */
-  fromComputer?: string | null
+  /** Sent by an agent on a computer paired with this one, either side of the pairing ('' when
+   *  unnamed; see PairedSender); `fromBotName` is then that computer's bot. */
+  fromPairedComputer?: string
   /** Sent by a worker that bot started, for it; the answer goes to the worker. */
   fromWorker?: boolean
-  /** Sent by an agent on a server this computer is paired to, named as this computer names it. */
-  fromPairedServer?: string
   toBotId: string
   toBotName: string
   purpose: BotRequestPurpose
@@ -80,13 +78,10 @@ const askersOf = (record: BotRequestRecord): string =>
 
 /** Who sent it, as the receiving bot reads it. */
 export function botRequestSenderName(
-  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedServer' | 'fromComputer'>
+  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedComputer'>
 ): string {
-  if (record.fromPairedServer !== undefined) {
-    return `an agent on ${record.fromPairedServer || 'a server'} (paired server)`
-  }
-  if (record.fromComputer !== undefined) {
-    return pairedSenderName({ computer: record.fromComputer, botName: record.fromBotName })
+  if (record.fromPairedComputer !== undefined) {
+    return pairedSenderName({ computer: record.fromPairedComputer, botName: record.fromBotName })
   }
   if (!record.fromBotName) {
     return "your owner's agent"
@@ -141,10 +136,7 @@ const TITLE_SENDER_MAX = 40
 /** A request chat's title: a bot's own new chat is named for its subject alone; another sender's
  *  names who sent it first. Cut on a word, within the sidebar's room. */
 export function botRequestChatTitle(
-  record: Pick<
-    BotRequestRecord,
-    'fromBotId' | 'fromBotName' | 'fromWorker' | 'fromPairedServer' | 'fromComputer'
-  >,
+  record: Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromWorker' | 'fromPairedComputer'>,
   botId: string,
   subject: string
 ): string {

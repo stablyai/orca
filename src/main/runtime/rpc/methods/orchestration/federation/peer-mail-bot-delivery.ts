@@ -84,18 +84,16 @@ export async function deliverPeerMailToBot(
         routing: { run: undefined },
         messageId: params.messageId,
         senderSnapshot,
-        // A server's mail is named by this computer's catalog; a computer's, as its Orca named them.
-        // Neither grants anything here.
-        ...(pulled
-          ? { fromPairedServer: pulled.serverName }
-          : {
-              pairedSender: {
-                computer:
-                  agentMessageSenderName(params.sender?.computer) ??
-                  pairedLabelComputer(params.senderLabel),
-                botName: agentMessageSenderName(params.sender?.bot?.name)
-              }
-            }),
+        // Who it is from, either side of the pairing: a server this computer pulls from by this
+        // computer's catalog name for it, a client by its Orca's name for itself. It grants nothing here.
+        pairedSender: {
+          computer: pulled
+            ? pulled.serverName
+            : (agentMessageSenderName(params.sender?.computer) ??
+              pairedLabelComputer(params.senderLabel) ??
+              ''),
+          botName: agentMessageSenderName(params.sender?.bot?.name)
+        },
         // Its reply and any notice go back over this conversation, linked before the bot is woken.
         onAdmitted: link
       }

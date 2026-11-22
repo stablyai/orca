@@ -4,7 +4,7 @@ import { botRequestChatTitle } from './bot-request-view'
 const longSender = {
   fromBotId: null,
   fromBotName: 'A bot with an unusually long and descriptive name for reviews',
-  fromComputer: 'Review Laptop'
+  fromPairedComputer: 'Review Laptop'
 }
 
 describe('request chat titles', () => {

@@ -35,7 +35,8 @@ const header = (row: MessageRow, options: MessageFormattingOptions = {}) =>
 
 const linkedPeer = (row: MessageRow): MessageFormattingOptions => ({
   peerMail: {
-    getPeerMailMessage: (id) => (id === row.id ? { sender_label: row.from_handle } : undefined)
+    getPeerMailMessage: (id) => (id === row.id ? { sender_label: row.from_handle } : undefined),
+    getBotRequest: () => undefined
   }
 })
 
@@ -77,10 +78,40 @@ describe('the mail header', () => {
 
   it('uses the recorded origin to tell identical local and paired sender labels apart', () => {
     const row = message({ from_handle: 'Build on Call', type: 'status' })
-    expect(header(row, { peerMail: { getPeerMailMessage: () => undefined } })).toBe(
-      '──── From: BUILD ON CALL (Build on Call) (status) ────'
-    )
+    expect(
+      header(row, {
+        peerMail: { getPeerMailMessage: () => undefined, getBotRequest: () => undefined }
+      })
+    ).toBe('──── From: BUILD ON CALL (Build on Call) (status) ────')
     expect(header(row, linkedPeer(row))).toBe('──── From: an agent on Call (status) ────')
+  })
+
+  it("names a paired bot request as its own record does, over the sender's own snapshot", () => {
+    const pulled = message({
+      from_handle: PAIRED_LABEL,
+      answer_sender_snapshot: peerMailSenderSnapshot(PAIRED_LABEL, {
+        name: 'Ranger',
+        computer: 'Lab Mac',
+        bot: { id: 'ranger', name: 'Ranger', avatar: null }
+      })
+    })
+    const recorded = (record: object): MessageFormattingOptions => ({
+      peerMail: {
+        ...linkedPeer(pulled).peerMail!,
+        getBotRequest: (id) =>
+          id === pulled.id ? { record: JSON.stringify({ fromBotId: null, ...record }) } : undefined
+      }
+    })
+    expect(
+      header(pulled, recorded({ fromBotName: 'Ranger', fromPairedComputer: 'Build Box' }))
+    ).toBe('──── From: Ranger on Build Box (handoff) ────')
+    expect(header(pulled, recorded({ fromBotName: null, fromPairedComputer: '' }))).toBe(
+      '──── From: an agent on another computer (handoff) ────'
+    )
+    // A local bot's request names no paired computer, so the label decides as before.
+    expect(header(pulled, recorded({ fromBotName: 'Docs' }))).toBe(
+      '──── From: Ranger on Lab Mac (handoff) ────'
+    )
   })
 
   it('keeps priority and authority tags beside a paired sender', () => {

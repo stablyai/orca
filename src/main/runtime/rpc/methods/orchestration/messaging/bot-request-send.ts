@@ -74,10 +74,7 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
-  } & Pick<
-    SendBotRequestArgs,
-    'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'fromPairedServer'
-  >
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -127,6 +124,7 @@ type SendBotRequestArgs = {
   messageId?: string
   /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
   senderSnapshot?: string
+  /** Its sender is an agent on a computer paired with this one, either side of the pairing. */
   pairedSender?: PairedSender
   /** Store images claimed for the receiving chat (`send --item --file`). */
   images?: readonly string[]
@@ -134,8 +132,6 @@ type SendBotRequestArgs = {
   held?: (() => void)[]
   /** Commits with the request's admission, before anyone is woken for it. */
   onAdmitted?: () => void
-  /** Its sender is an agent on this paired server, by this computer's name for it. */
-  fromPairedServer?: string
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -199,7 +195,6 @@ async function admitBotRequestMail(
       : {}),
     ...botRequestSender(acting.bot, args.pairedSender),
     ...(acting.worker ? { fromWorker: true } : {}),
-    ...(args.fromPairedServer !== undefined ? { fromPairedServer: args.fromPairedServer } : {}),
     toBotId: target.id,
     toBotName: target.name,
     purpose,

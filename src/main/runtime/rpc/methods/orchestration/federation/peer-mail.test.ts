@@ -291,12 +291,13 @@ describe('agent mail between paired Orca servers', () => {
         computer: 'Review Laptop',
         bot: { id: 'remote', name: 'Ranger', avatar: null }
       },
-      'Review Laptop'
+      // The label's computer differs: the sender's own record of where it is decides.
+      'Laptop (old name)'
     )
     expect(record).toMatchObject({
       fromBotId: null,
       fromBotName: 'Ranger',
-      fromComputer: 'Review Laptop',
+      fromPairedComputer: 'Review Laptop',
       askers: [{ kind: 'owner' }]
     })
     expect(requestSender).toBe('Ranger on Review Laptop')
@@ -321,7 +322,7 @@ describe('agent mail between paired Orca servers', () => {
     expect(record).toMatchObject({
       fromBotId: null,
       fromBotName: null,
-      fromComputer: "Morgan's MacBook Pro"
+      fromPairedComputer: "Morgan's MacBook Pro"
     })
     expect(requestSender).toBe("an agent on Morgan's MacBook Pro")
     expect(header).toBe("──── From: an agent on Morgan's MacBook Pro (question) ────")

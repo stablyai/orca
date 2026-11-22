@@ -71,14 +71,14 @@ export function answersRequest(
   return id ? { answersRequest: id } : {}
 }
 
-/** Who sent a request: this Orca's own bot, or a paired computer's sender as that computer's Orca
- *  named them. That bot is no bot of this Orca's, so only its name is kept, beside its computer. */
+/** Who sent a request: this Orca's own bot, or a sender on a paired computer (either side of the
+ *  pairing). That bot is no bot of this Orca's, so only its name is kept, beside its computer. */
 export function botRequestSender(
   bot: Pick<Bot, 'id' | 'name'> | null,
   paired: PairedSender | undefined
-): Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromComputer'> {
+): Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromPairedComputer'> {
   if (paired) {
-    return { fromBotId: null, fromBotName: paired.botName, fromComputer: paired.computer }
+    return { fromBotId: null, fromBotName: paired.botName, fromPairedComputer: paired.computer }
   }
   return {
     fromBotId: bot?.id ?? null,
