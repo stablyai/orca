@@ -109,6 +109,7 @@ export function RemoteBrowserPagePane({
     streamStatus,
     frameUrl,
     frameMetadata,
+    pagePointer,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -390,6 +391,7 @@ export function RemoteBrowserPagePane({
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
+        pagePointer={pagePointer}
         busy={busy}
         markup={markup}
         browserTab={browserTab}

@@ -216,7 +216,8 @@ export function createHarness() {
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
-    handleFrameBytes: () => {}
+    handleFrameBytes: () => {},
+    setPointer: () => {}
   })
 
   return {

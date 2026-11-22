@@ -13,7 +13,12 @@ import type {
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
-import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
+import {
+  getRemoteBrowserFrameCursor,
+  getRemoteBrowserFrameStyle
+} from './remote-browser-frame-style'
+import { RemoteBrowserLinkStatusBubble } from './remote-browser-link-status-bubble'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
@@ -37,6 +42,7 @@ export function RemoteBrowserPageViewport({
   feedbackBadgeRef,
   frameUrl,
   frameMetadata,
+  pagePointer,
   busy,
   markup,
   browserTab,
@@ -66,6 +72,8 @@ export function RemoteBrowserPageViewport({
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
+  /** The host page's cursor and hovered link; null from hosts that don't report them. */
+  pagePointer: BrowserScreencastPointer | null
   busy: boolean
   markup: MarkupModeController
   browserTab: BrowserPageState
@@ -88,8 +96,7 @@ export function RemoteBrowserPageViewport({
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
-  /** Present only while a page tool needs hover. */
-  handleRemotePointerMove?: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
   annotateOverlays: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -109,6 +116,11 @@ export function RemoteBrowserPageViewport({
   }, [hasStreamFrame, imageRef, remoteViewportRef])
 
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const pageCursor = pagePointer?.cursor
+  const remoteImageStyle = useMemo(
+    () => ({ ...remoteFrameStyle, cursor: getRemoteBrowserFrameCursor(pageCursor) }),
+    [pageCursor, remoteFrameStyle]
+  )
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
   if (
@@ -149,8 +161,8 @@ export function RemoteBrowserPageViewport({
           src={frameUrl}
           alt=""
           tabIndex={0}
-          style={remoteFrameStyle}
-          className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
+          style={remoteImageStyle}
+          className="absolute top-0 left-0 max-w-none bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
           onPointerMove={handleRemotePointerMove}
           onPointerUp={handleRemotePointerUp}
@@ -185,6 +197,11 @@ export function RemoteBrowserPageViewport({
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
       {annotateOverlays}
+      <RemoteBrowserLinkStatusBubble
+        browserPageId={browserTab.id}
+        targetUrl={pagePointer?.targetUrl ?? ''}
+        viewportRef={remoteViewportRef}
+      />
       {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
           loadError={loadError}
