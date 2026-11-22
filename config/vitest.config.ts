@@ -1,5 +1,6 @@
 import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
@@ -122,6 +123,8 @@ const transforms = {
   }
 }
 const testOptions = {
+  // Each project opts out of root config inheritance. Cap local pools here to limit memory use.
+  ...(!process.env.CI ? { maxWorkers: Math.min(2, availableParallelism()) } : {}),
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
@@ -218,6 +221,7 @@ const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject, ..
 export default defineConfig({
   ...transforms,
   test: {
+    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {}),
     ...testOptions,
     forceRerunTriggers: [
       ...configDefaults.forceRerunTriggers,
@@ -236,7 +240,6 @@ export default defineConfig({
     projects,
     // A finished file's background log can lose the race with worker teardown; only that log line is lost.
     onUnhandledError: (error) =>
-      !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
-    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
+      !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"'))
   }
 })

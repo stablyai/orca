@@ -53,6 +53,7 @@ Add a test when it would catch a regression of your behavior change or bug fix, 
 ### Targeting Local Tests
 
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
+Local runs default to at most two workers to limit memory use. Use `--maxWorkers` to override the default.
 
 ```bash
 pnpm test src/shared/automations/scheduling/automation-cron-input-validation.test.ts --maxWorkers=2
