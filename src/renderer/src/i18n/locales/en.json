@@ -26536,6 +26536,8 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "kiroChatAgent": "Chat agent",
+    "kiroDefaultAgent": "Kiro default",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
     "catalogLoading": "Loading models…",

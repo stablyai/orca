@@ -64,7 +64,7 @@ export async function initializeAcpStructuredSession(
   input: AcpHandshakeInput
 ): Promise<StructuredAgentSessionProviderOpenResult> {
   const { acquire, deps, launch, connection, options, prompts, child, onSettled } = input
-  const { spec } = launch
+  const { spec, resume } = launch
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const assertStarting = () => assertAcpStartingSession(child, input.abandoned)
@@ -102,7 +102,6 @@ export async function initializeAcpStructuredSession(
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
   }
-  const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
   let takeover: Awaited<ReturnType<typeof acpReopenTakeover>> | null = null
@@ -110,6 +109,7 @@ export async function initializeAcpStructuredSession(
   const acceptSession = (accepted: NonNullable<typeof started>): void => {
     assertStarting()
     if (accepted.kind === 'new') {
+      launch.confirmNewSession?.(accepted.response)
       liveLane = input.lanes.create(accepted.sessionId)
       assertStarting()
     }
@@ -285,10 +285,7 @@ export async function initializeAcpStructuredSession(
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
   // Include warning rows missed by earlier failed starts.
-  const lost = [
-    ...(launch.resume?.lossKeys ?? []),
-    ...(takeover?.replaces ? [takeover.replaces.key] : [])
-  ]
+  const lost = [...(resume?.lossKeys ?? []), ...(takeover?.replaces ? [takeover.replaces.key] : [])]
   for (const key of lost) {
     liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
   }

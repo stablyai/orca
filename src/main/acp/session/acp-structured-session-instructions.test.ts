@@ -1,3 +1,4 @@
+import { KIRO_LAUNCH_SPEC } from '../../kiro/kiro-acp-launch-spec'
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK, openAcpAdapterRig } from './testing/acp-structured-adapter.test-support'
@@ -25,6 +26,44 @@ const ADVERTISES_APPEND = {
 }
 
 describe('ACP standing instructions on the session', () => {
+  it('opens the selected Kiro agent without replacing steering', async () => {
+    const steering = [{ name: 'orca', inclusion: 'always', content: 'Keep project guidance' }]
+    const rig = await openAcpAdapterRig({
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, {
+            sessionId: 'kiro',
+            modes: { currentModeId: 'team/reviewer', availableModes: [] }
+          })
+        ),
+      launch: KIRO_LAUNCH_SPEC.withNewSessionOptions?.(
+        { sessionMeta: { kiro: { steering } } },
+        { kiroAgentMode: 'team/reviewer' }
+      )
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toBeUndefined()
+    expect(rig.sent('session/new')[0]?.params).toMatchObject({
+      _meta: { kiro: { modeId: 'team/reviewer', steering } }
+    })
+  })
+
+  it('stops before prompting if Kiro silently falls back to its default mode', async () => {
+    const rig = await openAcpAdapterRig({
+      launch: KIRO_LAUNCH_SPEC.withNewSessionOptions?.(undefined, { kiroAgentMode: 'removed' }),
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, {
+            sessionId: 'kiro',
+            modes: { currentModeId: 'vibe', availableModes: [] }
+          })
+        )
+    })
+    await rig.acquire()
+    expect(String(rig.openFailure())).toContain('could not start the selected agent')
+    expect(rig.sent('session/prompt')).toEqual([])
+  })
+
   it('sends them with a new session', async () => {
     const rig = await openAcpAdapterRig({ launch: { sessionMeta: RULES } })
     await rig.acquire()

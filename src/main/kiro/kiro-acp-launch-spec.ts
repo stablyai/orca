@@ -48,6 +48,28 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
     listingNamesConfiguredModel: false
   },
   instructions: deliverKiroInstructions,
+  withNewSessionOptions: (launch, options) => {
+    const modeId = options?.kiroAgentMode
+    if (!modeId) {
+      return launch
+    }
+    const meta = launch?.sessionMeta
+    const kiro = meta?.kiro
+    return {
+      ...launch,
+      sessionMeta: { ...meta, kiro: { ...(typeof kiro === 'object' && kiro), modeId } },
+      confirmNewSession(response) {
+        const actual =
+          response.modes?.currentModeId ??
+          response.configOptions?.find((option) => option.id === 'mode')?.currentValue
+        if (actual !== modeId) {
+          throw new Error(
+            `Kiro could not start the selected agent "${modeId}". Check the agent in this workspace and try again.`
+          )
+        }
+      }
+    }
+  },
   transcriptImport: null,
   sessionHistory: KIRO_SESSION_HISTORY
 }

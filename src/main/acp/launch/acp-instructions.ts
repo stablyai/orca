@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { withOpenCodeInstructionsFile } from '../../opencode/opencode-inline-config'
 import type { AcpLaunchSpec } from './acp-launch-contract'
-import type { InitializeResponse } from '../generated/acp-protocol.generated'
+import type { InitializeResponse, NewSessionResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { writeFolderContextFile } from './acp-folder-context-file'
@@ -26,6 +26,7 @@ export type AcpInstructionsLaunch = {
   sessionMeta?: Record<string, unknown>
   /** The agent keeps none across its own restarts, so every reopen sends `sessionMeta` again. */
   sessionMetaOnReopen?: true
+  confirmNewSession?: (response: NewSessionResponse) => void
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
   /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */

@@ -58,37 +58,31 @@ export function acpProcessEnvironment(
     : { env: launch.env, envToDelete: launch.envToDelete }
 }
 
-export type AcpStructuredLaunch = StructuredAgentCommand & {
-  spec: AcpLaunchSpec
-  antigravityChatAuth?: AntigravityChatAuthConfig
-  args: string[]
-  cwd: string
-  /** Sealed for spawns; recovery reads use the unsealed agent environment. */
-  env: Record<string, string>
-  envToDelete: string[]
-  fullAccess: boolean
-  /** See `AcpInstructionsLaunch`. */
-  sessionMeta?: Record<string, unknown>
-  sessionMetaOnReopen?: true
-  takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
-  sessionMetaOptional?: true
-  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
-  release?: AcpInstructionsLaunch['release']
-  /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
-  mcpServers?: McpServer[]
-  /** The saved model the launch line carries. */
-  launchModel?: string
-  /** The launched program's version, when its check or managed release names it. */
-  version?: string
-  resume: {
-    sessionId: string
-    key: string
-    /** A chat-created session with no exchanged turn may never have been saved. */
-    mayBeUnsaved: () => Promise<boolean>
-    /** The writer decides which lost conversations still need warning rows. */
-    lossKeys: readonly string[]
-  } | null
-}
+export type AcpStructuredLaunch = StructuredAgentCommand &
+  Omit<AcpInstructionsLaunch, 'args' | 'env'> & {
+    spec: AcpLaunchSpec
+    antigravityChatAuth?: AntigravityChatAuthConfig
+    args: string[]
+    cwd: string
+    /** Sealed for spawns; recovery reads use the unsealed agent environment. */
+    env: Record<string, string>
+    envToDelete: string[]
+    fullAccess: boolean
+    /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
+    mcpServers?: McpServer[]
+    /** The saved model the launch line carries. */
+    launchModel?: string
+    /** The launched program's version, when its check or managed release names it. */
+    version?: string
+    resume: {
+      sessionId: string
+      key: string
+      /** A chat-created session with no exchanged turn may never have been saved. */
+      mayBeUnsaved: () => Promise<boolean>
+      /** The writer decides which lost conversations still need warning rows. */
+      lossKeys: readonly string[]
+    } | null
+  }
 
 export type AcpStructuredLaunchPartDeps = {
   savedSession: SavedProviderTurnReads
@@ -252,7 +246,9 @@ export function acpStructuredLaunchPart(
       },
       visuals && !skillLoaded ? visuals.skill : null
     )
-    const instructions = delivered.launch
+    const instructions =
+      spec.withNewSessionOptions?.(delivered.launch ?? undefined, record.options) ??
+      delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
     // A managed release's receipt names its version; other programs answer the check.
@@ -293,7 +289,8 @@ export function acpStructuredLaunchPart(
               sessionMeta: instructions.sessionMeta,
               sessionMetaOnReopen: instructions.sessionMetaOnReopen,
               takesSessionMeta: instructions.takesSessionMeta,
-              ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
+              sessionMetaOptional: instructions.sessionMetaOptional,
+              confirmNewSession: instructions.confirmNewSession
             }
           : {}),
         ...(instructions?.aroundNewSession
