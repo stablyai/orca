@@ -29,4 +29,14 @@ describe("the owner's names as this computer knows them", () => {
     runProcess.mockResolvedValue({ code: 0, stdout: 'Someone Else' })
     expect(await hostOwnerNames()).toEqual(['Dana'])
   })
+
+  it('reads again after a failed read', async () => {
+    const hostOwnerNames = await freshNames()
+    vi.spyOn(console, 'info').mockImplementationOnce(() => {
+      throw new Error('log failed')
+    })
+    runProcess.mockResolvedValue({ code: 0, stdout: 'Dana' })
+    await expect(hostOwnerNames()).rejects.toThrow('log failed')
+    expect(await hostOwnerNames()).toEqual(['Dana'])
+  })
 })

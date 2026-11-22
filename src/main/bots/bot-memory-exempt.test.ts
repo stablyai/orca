@@ -120,5 +120,7 @@ describe('the decision check, wide where a false match only costs bytes', () => 
     expect(test("- 2026-11-03 O'Brien picked tabs for #5900")).toBe(true)
     expect(test('- 2026-11-03 O\u2019Brien\u2019s call: tabs')).toBe(true)
     expect(test("- 2026-11-03 O'Brien's call: tabs")).toBe(true)
+    const typographic = salvageCandidateTest(['O’Brien'])
+    expect(typographic("- 2026-11-03 O'Brien picked tabs for #5900")).toBe(true)
   })
 })
