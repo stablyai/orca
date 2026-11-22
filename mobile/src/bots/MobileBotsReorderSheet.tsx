@@ -40,7 +40,7 @@ type Entry = Pick<BotHomeOwner, 'sidebarOrder' | 'createdAt'> & {
 export function botsReorderEntries(listing: ListedHostBots): Entry[] {
   const face = (bot: ListedHostBots['bots'][number]) => ({
     id: bot.id,
-    avatar: mobileBotAvatarSource(bot, listing.avatarUris.get(bot.id))
+    avatar: mobileBotAvatarSource(bot)
   })
   return sortBotsBySidebarOrder<Entry>([
     ...listing.bots.map((bot) => ({
