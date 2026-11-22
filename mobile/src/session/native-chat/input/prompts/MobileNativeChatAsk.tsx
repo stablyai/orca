@@ -197,8 +197,7 @@ export function MobileNativeChatAsk({
 
   const total = prompt.questions.length
   const isLast = index === total - 1
-  const anyAnswered = (sel = selections): boolean =>
-    prompt.questions.some((_, i) => isAnswered(i, sel))
+  const anyAnswered = (sel = selections) => prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
     if (!anyAnswered(sel) || isLocalPending(operationRef.current) || answerPending) {
@@ -230,12 +229,10 @@ export function MobileNativeChatAsk({
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
     const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
-    if (isLast && unanswered !== -1) {
-      showStep(() => unanswered)
-    } else if (isLast) {
+    if (isLast && unanswered === -1) {
       await submit(sel)
     } else {
-      showStep((i) => Math.min(i + 1, total - 1))
+      showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))
     }
   }
 
