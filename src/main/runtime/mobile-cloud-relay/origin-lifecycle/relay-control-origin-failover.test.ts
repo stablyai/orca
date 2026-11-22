@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry } from '../../rpc/server/pairing/device-registry'
 import { MobileSocketWiring } from '../../rpc/mobile/mobile-socket-wiring'
+import type { RelayControlClient } from '../control-channel/relay-control-client'
 import type { RelayAssignment } from '../director/relay-http-client'
 import { RelayControlOrigin } from './relay-control-origin'
 import {
@@ -13,7 +14,8 @@ import {
   FakeHostSession,
   RESUMED_GENERATION,
   closedOnServer,
-  deferred
+  deferred,
+  untilLoopback
 } from './relay-fake-edge.test-fixture'
 
 describe('RelayControlOrigin two-path failover', () => {
@@ -111,6 +113,7 @@ describe('RelayControlOrigin two-path failover', () => {
       session,
       primary,
       primarySocket,
+      primaryControl: origin.availableControl,
       alternates,
       assignment,
       origin,
@@ -119,6 +122,12 @@ describe('RelayControlOrigin two-path failover', () => {
       closed: closed.promise,
       dataDials
     }
+  }
+
+  // The stalled primary stays live until the alternate's hello-ack promotes the resumed control.
+  function expectPromoted(origin: RelayControlOrigin, stalled: RelayControlClient | null): void {
+    expect(origin.availableControl).not.toBe(stalled)
+    expect(origin.hasLiveControl()).toBe(true)
   }
 
   // Delivers a conn-open on the server side of the active control to see where data dials go.
@@ -136,8 +145,17 @@ describe('RelayControlOrigin two-path failover', () => {
   }
 
   it('resumes the same generation on the alternate when the primary stalls', async () => {
-    const { session, primary, primarySocket, alternates, origin, onClose, onDrain, dataDials } =
-      await setup({ alternates: 1 })
+    const {
+      session,
+      primary,
+      primarySocket,
+      primaryControl,
+      alternates,
+      origin,
+      onClose,
+      onDrain,
+      dataDials
+    } = await setup({ alternates: 1 })
     const [alternate] = alternates
     expect(origin.controlGeneration).toBe(RESUMED_GENERATION)
     primary.answersPings = false
@@ -153,8 +171,8 @@ describe('RelayControlOrigin two-path failover', () => {
     expect(alternate.connections).toHaveLength(0)
     await vi.advanceTimersByTimeAsync(7_000)
     const alternateSocket = await alternateConnection
-    await vi.waitFor(() => expect(alternate.acks).toHaveLength(1), { interval: 1 })
-    await vi.waitFor(() => expect(origin.hasLiveControl()).toBe(true), { interval: 1 })
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
 
     expect(alternate.hellos).toEqual([
       expect.objectContaining({
@@ -173,14 +191,66 @@ describe('RelayControlOrigin two-path failover', () => {
 
     // Data dials follow the path that proved itself.
     sendConnOpen(alternateSocket, 'conn-after-failover')
-    await vi.waitFor(() => expect(dataDials).toHaveLength(1), { interval: 1 })
+    await untilLoopback(() => expect(dataDials).toHaveLength(1))
     expect(dataDials[0]).toBe(
       `${alternate.url.replace('http:', 'ws:')}/v1/host/data/conn-after-failover`
     )
   })
 
+  it('sends the resumed control a token renewed while it was still connecting', async () => {
+    const { primary, primaryControl, alternates, origin, onClose } = await setup({ alternates: 1 })
+    const [alternate] = alternates
+    primary.answersPings = false
+    // The renewal lands after the alternate's hello carried the old token, before its hello-ack:
+    // the connecting control cannot take an auth-refresh yet.
+    alternate.beforeHelloAck = async () => {
+      origin.refreshAuthorization('renewed-token')
+    }
+
+    await vi.advanceTimersByTimeAsync(36_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    await untilLoopback(() => expect(alternate.authRefreshes).toEqual(['renewed-token']))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('dials a later alternate with a token renewed after the resume began', async () => {
+    const { primary, primaryControl, alternates, origin } = await setup({ alternates: 2 })
+    const [silent, alternate] = alternates
+    primary.answersPings = false
+    silent.behaviour = 'silent'
+
+    // The resume is under way on the first alternate when the renewal lands; that attempt times out.
+    const silentConnection = silent.nextConnection()
+    await vi.advanceTimersByTimeAsync(36_000)
+    await silentConnection
+    origin.refreshAuthorization('renewed-token')
+    await vi.advanceTimersByTimeAsync(20_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    expect(alternate.dialTokens).toEqual(['renewed-token'])
+    expect(alternate.authRefreshes).toEqual([])
+  })
+
+  it('sends no extra auth-refresh when the token did not change while connecting', async () => {
+    const { primary, primaryControl, alternates, origin } = await setup({ alternates: 1 })
+    const [alternate] = alternates
+    primary.answersPings = false
+
+    await vi.advanceTimersByTimeAsync(36_000)
+    await untilLoopback(() => expect(alternate.acks).toHaveLength(1))
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
+
+    origin.refreshAuthorization('later-token')
+    await untilLoopback(() => expect(alternate.authRefreshes).toEqual(['later-token']))
+  })
+
   it('retires the old control itself when the edge’s 4408 has not arrived', async () => {
-    const { primary, primarySocket, alternates, origin, onClose } = await setup({ alternates: 1 })
+    const { primary, primarySocket, primaryControl, alternates, origin, onClose } = await setup({
+      alternates: 1
+    })
     const [alternate] = alternates
     primary.answersPings = false
     const primaryGone = closedOnServer(primarySocket)
@@ -189,7 +259,7 @@ describe('RelayControlOrigin two-path failover', () => {
     await vi.advanceTimersByTimeAsync(36_000)
     await alternateConnection
     await primaryGone
-    await vi.waitFor(() => expect(origin.hasLiveControl()).toBe(true), { interval: 1 })
+    await untilLoopback(() => expectPromoted(origin, primaryControl))
     expect(origin.controlGeneration).toBe(RESUMED_GENERATION)
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -223,11 +293,8 @@ describe('RelayControlOrigin two-path failover', () => {
 
     const alternateConnection = alternate.nextConnection()
     await vi.advanceTimersByTimeAsync(36_000)
-    const alternateSocket = await alternateConnection
-    const alternateHello = new Promise<void>((resolve) =>
-      alternateSocket.once('message', () => resolve())
-    )
-    await alternateHello
+    await alternateConnection
+    await untilLoopback(() => expect(alternate.hellos).toHaveLength(1))
     expect(onClose).not.toHaveBeenCalled()
 
     // The alternate's 15s connect deadline expires, then the primary is dropped as today.

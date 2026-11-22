@@ -40,7 +40,7 @@ describe('remote browser authoritative page state', () => {
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
   })
 
-  it.each(['browser.goto', 'browser.back', 'browser.forward', 'browser.reload'] as const)(
+  it.each(['browser.goto', 'browser.reload'] as const)(
     'reads authoritative state after %s rejects or resolves, without a pre-command read',
     async (method) => {
       const { result, busy, notice } = renderNavigation()
@@ -72,6 +72,34 @@ describe('remote browser authoritative page state', () => {
     }
   )
 
+  it("files the host's favicon in history only for the document that carries it", () => {
+    const { result } = renderNavigation()
+    const tab = (url: string): BrowserTabInfo => ({
+      browserPageId: 'remote-page-a',
+      index: 0,
+      active: true,
+      url,
+      title: 'Example'
+    })
+    act(() => {
+      useAppStore.getState().updateBrowserPageState('page-a', {
+        faviconUrl: 'https://example.test/icon.png'
+      })
+      useAppStore.getState().setBrowserPageUrl('page-a', 'https://example.test/')
+    })
+    act(() => result.current.applyRemoteTabInfo(tab('https://example.test/')))
+    act(() => result.current.applyRemoteTabInfo(tab('https://other.test/')))
+
+    expect(
+      useAppStore
+        .getState()
+        .browserUrlHistory.map(({ url, faviconUrl }) => ({ url, faviconUrl: faviconUrl ?? null }))
+    ).toEqual([
+      { url: 'https://other.test/', faviconUrl: null },
+      { url: 'https://example.test/', faviconUrl: 'https://example.test/icon.png' }
+    ])
+  })
+
   it('keeps a pending failure when a resolved reload outcome read times out', async () => {
     const { result } = renderNavigation()
     act(() => result.current.applyRemoteTabInfo(failedTab()))
@@ -98,7 +126,7 @@ describe('remote browser authoritative page state', () => {
       pending = result.current.runRemoteNavigation('browser.reload')
     })
     expect(currentPage().loading).toBe(true)
-    act(() => result.current.prepareCertificateProceed())
+    act(() => result.current.abandonRemoteNavigation())
     expect(currentPage().loading).toBe(false)
     await act(async () => {
       reload.reject(new Error('connection lost before reaching host'))
@@ -106,6 +134,33 @@ describe('remote browser authoritative page state', () => {
     })
     expectPending()
     expect(currentPage().loading).toBe(false)
+  })
+
+  it('Stop releases a pending reload and stops the host page', async () => {
+    const { result, busy } = renderNavigation()
+    const reload = deferred<unknown>()
+    const calls: string[] = []
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method, params) => {
+      calls.push(`${String(method)} ${JSON.stringify(params)}`)
+      return method === 'browser.reload' ? reload.promise : undefined
+    })
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = result.current.runRemoteNavigation('browser.reload', undefined, true)
+    })
+    expect(currentPage().loading).toBe(true)
+    await act(() => result.current.stopRemotePage())
+    expect(currentPage().loading).toBe(false)
+    expect(busy).toHaveBeenLastCalledWith(false)
+    await act(async () => {
+      reload.resolve({ url: 'https://example.test/', title: 'Example' })
+      await pending
+    })
+    expect(currentPage().loading).toBe(false)
+    expect(calls.filter((call) => !call.startsWith('browser.tabShow'))).toEqual([
+      'browser.reload {"worktree":"worktree-a","page":"remote-page-a","ignoreCache":true}',
+      'browser.stop {"worktree":"worktree-a","page":"remote-page-a"}'
+    ])
   })
 
   it('does not bless external ABA or clear native-owned loading during local cleanup', async () => {

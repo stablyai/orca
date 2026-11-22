@@ -17,7 +17,7 @@ export function WorktreeCardParentContent({
   card: WorktreeCardController
   presentation: WorktreeCardPresentation
 }): React.JSX.Element {
-  const { worktree, showInlineAgentList, titleRenaming } = card
+  const { worktree, compactLine, showInlineAgentList, titleRenaming } = card
   const {
     titleOnlyCard,
     parentContentMarginLeft,
@@ -66,6 +66,8 @@ export function WorktreeCardParentContent({
       <div
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',
+          // A line under a bot puts its name on the bot's name column, past the 16px avatar.
+          compactLine && 'pl-1',
           // Why: inline agent rows intentionally outdent into the card gutter; inner elements handle truncation.
           showInlineAgentList || getWorkspaceAttachments(worktree).length > 1
             ? 'overflow-visible'

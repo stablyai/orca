@@ -1,6 +1,6 @@
 import '../../memory-agent-identity-store.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -86,7 +86,48 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
       await vi.advanceTimersByTimeAsync(1_000)
-      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+      // The poll reads rollouts off the main thread, so its result lands after the tick.
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined())
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Replay leaves a child's unresolved rollout to the poll, so replay must start one.
+  it('finishes a replayed Codex hook child that completed while Orca was closed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-replay-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    writeFileSync(parentPath, spawnLine(CHILD_ID, '/root/pr_review'))
+    writeFileSync(
+      join(dir, `rollout-child-${CHILD_ID}.jsonl`),
+      line({ type: 'event_msg', payload: { type: 'task_started' } }) +
+        line({ type: 'event_msg', payload: { type: 'task_complete' } })
+    )
+    const spoolDir = join(dir, 'agent-hooks', 'spool')
+    mkdirSync(spoolDir, { recursive: true })
+    writeFileSync(
+      join(spoolDir, 'pane-replay.jsonl'),
+      `\n${JSON.stringify({
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'codex',
+        receivedAt: Date.now(),
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'root-session',
+          transcript_path: parentPath,
+          tool_name: 'collaborationspawn_agent'
+        }
+      })}\n`
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath: dir })
+    try {
+      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined())
     } finally {
       server.stop()
     }

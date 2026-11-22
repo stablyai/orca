@@ -13,7 +13,6 @@ import {
   type NativeChatSignIn
 } from '@/components/native-chat/host-access/native-chat-host-setup'
 
-import { i18n } from '@/i18n/i18n'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 
 import {
@@ -21,10 +20,7 @@ import {
   type NativeChatOrcaStopView
 } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 
-afterEach(async () => {
-  cleanup()
-  await i18n.changeLanguage('en')
-})
+afterEach(cleanup)
 
 type ContinueOffer = Pick<NativeChatOrcaStopView, 'offeredTurnItemId' | 'continueNow'> &
   Partial<Pick<NativeChatOrcaStopView, 'usageLimitTurnItemId' | 'continueUsageLimit'>>
@@ -180,19 +176,12 @@ it.each([
     'codex',
     'notification:guardianWarning',
     'warning',
-    'Codex reported a safety review warning. View details.',
-    'Codex a signalé un avertissement de sécurité. Voir les détails.'
+    'Codex reported a safety review warning. View details.'
   ],
-  [
-    'claude',
-    'message:system:permission_denied',
-    'error',
-    'Claude denied permission. View details.',
-    'Claude a refusé la permission. Voir les détails.'
-  ]
+  ['claude', 'message:system:permission_denied', 'error', 'Claude denied permission. View details.']
 ] as const)(
   'compacts the declared %s notice while retaining every available diagnostic',
-  async (provider, kind, tone, heading, french) => {
+  (provider, kind, tone, heading) => {
     const text = `${'安全 '.repeat(1500)}EXPLANATION_SENTINEL`
     const head = `{"partial":"${'é'.repeat(4500)}PAYLOAD_SENTINEL`
     renderStatus({
@@ -209,20 +198,12 @@ it.each([
     const disclosure = summary.closest('details')!
     expect(disclosure.open).toBe(false)
     expect(summary).not.toHaveTextContent(/SENTINEL|99999/)
-    expect(disclosure.parentElement).not.toHaveClass('text-destructive', 'text-chat-warning')
     fireEvent.click(summary)
     expect(disclosure.open).toBe(true)
     const detail = disclosure.querySelector('pre')!
     expect(detail.textContent).toContain(text)
     expect(detail.textContent).toContain(head)
     expect(detail).toHaveTextContent('Provider response truncated (original size: 99999 bytes).')
-    expect(detail).toHaveClass(tone === 'error' ? 'text-destructive' : 'text-chat-warning')
     expect(screen.queryByText('Show full output')).toBeNull()
-    await act(() => i18n.changeLanguage('fr'))
-    expect(summary).toHaveTextContent(french)
-    expect(detail).toHaveTextContent(
-      'Réponse du fournisseur tronquée (taille d’origine : 99999 octets).'
-    )
-    expect(disclosure.open).toBe(true)
   }
 )

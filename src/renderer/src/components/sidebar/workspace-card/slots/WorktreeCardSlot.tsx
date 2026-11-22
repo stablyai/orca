@@ -49,8 +49,9 @@ export function WorktreeCardSlot({
     <span
       data-worktree-card-slot={signal.kind}
       title={slotLabel(signal, t)}
+      // Why 2.5em: fits the widest time ("999d") so title icons line up across rows; "offline" grows past it.
       className={cn(
-        'inline-flex min-w-[22px] shrink-0 items-center justify-end whitespace-nowrap text-3xs leading-none tabular-nums',
+        'inline-flex min-w-[2.5em] shrink-0 items-center justify-end whitespace-nowrap text-3xs leading-none tabular-nums',
         signal.kind === 'offline'
           ? 'italic text-muted-foreground/70'
           : timeTone === 'unread'

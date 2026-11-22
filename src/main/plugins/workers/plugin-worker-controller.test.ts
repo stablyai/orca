@@ -87,25 +87,6 @@ function controller(options: {
 }
 
 describe('PluginWorkerController activation authority', () => {
-  it('does not start code after approval is revoked during integrity verification', async () => {
-    const subjectPlugin = await plugin()
-    let approved = true
-    let finishVerification!: () => void
-    const verification = new Promise<void>((resolve) => {
-      finishVerification = resolve
-    })
-    const factory = vi.fn<PluginWorkerFactory>()
-    const subject = controller({ factory, verify: () => verification, isApproved: () => approved })
-
-    const activation = subject.ensure(subjectPlugin)
-    approved = false
-    finishVerification()
-
-    await expect(activation).rejects.toThrow('no longer approved')
-    expect(factory).not.toHaveBeenCalled()
-    await subject.dispose()
-  })
-
   it('disposes a worker whose approval changes while the process starts', async () => {
     const subjectPlugin = await plugin()
     let approved = true

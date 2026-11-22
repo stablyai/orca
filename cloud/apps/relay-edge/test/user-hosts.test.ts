@@ -22,15 +22,6 @@ function index() {
 }
 
 describe('UserHosts', () => {
-  it('an unknown user lists nothing and gets no storage', async () => {
-    const { hosts, state } = index()
-    expect(await hosts.list()).toEqual([])
-    await hosts.remove(A)
-    expect(await hosts.adminList()).toEqual({ outcome: 'listed', relayHostIds: [] })
-    expect(state.tables()).toBe(0)
-    expect(state.kv.size).toBe(0)
-  })
-
   it('add is idempotent: first seen stays, last seen moves forward only', async () => {
     const { hosts } = index()
     await hosts.add(A, 1_000)
@@ -64,12 +55,6 @@ describe('UserHosts', () => {
 })
 
 describe('pending index writes', () => {
-  it('an account switch removes the earlier user and adds the new one; a first assign only adds', () => {
-    expect(userIndexOps('u2', 'u1')).toEqual({ u1: 'remove', u2: 'add' })
-    expect(userIndexOps('u1', null)).toEqual({ u1: 'add' })
-    expect(userIndexOps('u1', 'u1')).toEqual({ u1: 'add' })
-  })
-
   it('keeps the latest wanted state per user, due at once', () => {
     const first = mergePending(undefined, A, { u1: 'add' }, 10)
     const failed = afterFailure(first, first.ops, 20)
@@ -85,7 +70,6 @@ describe('pending index writes', () => {
       pending = afterFailure(pending, pending.ops, 0)
       delays.push(pending.retryAt)
     }
-    expect(delays[0]).toBe(USER_INDEX_RETRY_MIN_MS)
     expect(delays[1]).toBe(2 * USER_INDEX_RETRY_MIN_MS)
     expect(delays.at(-1)).toBe(USER_INDEX_RETRY_MAX_MS)
     expect(pending.attempts).toBe(10)

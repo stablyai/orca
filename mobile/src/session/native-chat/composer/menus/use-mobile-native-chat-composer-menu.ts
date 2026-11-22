@@ -25,9 +25,12 @@ import {
   mobileComposerSkillTokens,
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
-import type { ComposerMenuRow } from './MobileNativeChatComposerMenu'
+import type { ComposerMenuRow, ComposerRoomMention } from './MobileNativeChatComposerMenu'
+import type { SlashCommandSuggestion } from '../../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
+import { rankNativeChatRoomMembers } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
 
 type Selection = { start: number; end: number }
+const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
 /** Opening the menu from the + sheet narrows it to what that row named. */
 type MenuKind = 'skill' | 'command'
 
@@ -39,6 +42,8 @@ export function useMobileNativeChatComposerMenu(input: {
   /** Undefined on a terminal-backed chat. */
   structuredCatalog: MobileComposerStructuredCatalog | undefined
   filePaths: readonly string[]
+  /** Set in a room: `@` lists these members instead of files. */
+  roomMentions?: readonly ComposerRoomMention[]
   onNeedFiles?: (query: string) => void
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void
@@ -46,17 +51,22 @@ export function useMobileNativeChatComposerMenu(input: {
   onSlashMenuOpen?: () => void
   onSlashMenuDemand?: (open: boolean) => void
   /** A picked skill; a send carries its file while its token stays, and treats a leading one as chat. */
-  onPickSkill?: (skill: { token: string; path?: string }) => void
+  onPickSkill?: (skill: Extract<ComposerMenuRow, { kind: 'skill' }>) => void
+  /** An Orca command row was picked; it outranks an earlier skill pick of the same token. */
+  onPickOrcaCommand?: (token: string) => void
   editing?: boolean
   interactionModeSupported?: boolean
   admitsInteractionMode?: (mode: AgentSessionInteractionMode) => boolean
   onPickInteractionMode?: (mode: AgentSessionInteractionMode) => void
   refuseCommand?: (text: string) => boolean
+  /** `/` lists skills only: the text goes somewhere no chat command acts on. */
+  skillsOnly?: boolean
   /** Picking `/goal` enters goal mode instead of inserting the command; an edit has no goal mode. */
   goalMode?: { hostSetsGoals: boolean; enter?: () => void }
   focusField: () => void
 }) {
-  const { value, onChangeText, agent, structuredCatalog, filePaths, skillDiscovery } = input
+  const { value, onChangeText, agent, structuredCatalog, filePaths, roomMentions, skillDiscovery } =
+    input
   const [cursor, setCursor] = useState(0)
   // Drives the caret only right after an insert; a permanently controlled `selection` breaks
   // manual caret placement in React Native.
@@ -118,7 +128,7 @@ export function useMobileNativeChatComposerMenu(input: {
       deriveComposerAutocomplete(
         beforeCaret,
         beforeCaret.length,
-        catalog.commands,
+        input.skillsOnly ? NO_COMMANDS : catalog.commands,
         catalog.discovery.skills,
         catalog.profile,
         catalog.discovery,
@@ -126,9 +136,20 @@ export function useMobileNativeChatComposerMenu(input: {
         catalog.sessionSkills,
         commandAvailable
       ),
-    [beforeCaret, catalog, commandAvailable]
+    [beforeCaret, catalog, commandAvailable, input.skillsOnly]
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
+    if (autocomplete.mode === 'mention' && roomMentions) {
+      const members = new Map(roomMentions.map((mention) => [mention.name, mention]))
+      return rankNativeChatRoomMembers([...members.values()], autocomplete.query)
+        .matches.slice(0, MENU_ROWS_PER_GROUP)
+        .map(({ name }) => ({
+          kind: 'member' as const,
+          id: `member:${name}`,
+          name,
+          icon: members.get(name)?.icon
+        }))
+    }
     if (autocomplete.mode === 'mention') {
       return filePaths.slice(0, MENU_ROWS_PER_GROUP).map((path) => ({
         kind: 'file' as const,
@@ -140,7 +161,7 @@ export function useMobileNativeChatComposerMenu(input: {
       return []
     }
     return narrowedMenuItems(boundedMenuItems(autocomplete.items), menuKind)
-  }, [autocomplete, filePaths, menuKind])
+  }, [autocomplete, filePaths, menuKind, roomMentions])
 
   const { onNeedFiles, onNeedSkills, onSlashMenuOpen } = input
   // Scan disk skills only once a token needs them, as desktop does.
@@ -156,7 +177,7 @@ export function useMobileNativeChatComposerMenu(input: {
       onNeedSkills?.()
     }
   }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
-  const mentionQuery = autocomplete.mode === 'mention' ? autocomplete.query : null
+  const mentionQuery = autocomplete.mode === 'mention' && !roomMentions ? autocomplete.query : null
   useEffect(() => {
     if (mentionQuery !== null) {
       onNeedFiles?.(mentionQuery)
@@ -187,6 +208,9 @@ export function useMobileNativeChatComposerMenu(input: {
     if (row.kind === 'command' && input.refuseCommand?.(row.token)) {
       return
     }
+    if (row.kind === 'command' && row.orcaOwned) {
+      input.onPickOrcaCommand?.(row.token)
+    }
     const enterGoalMode = input.goalMode?.enter
     const changeMode = input.onPickInteractionMode
     const mode =
@@ -208,8 +232,11 @@ export function useMobileNativeChatComposerMenu(input: {
     setMenuKind(null)
     // Restore page field focus after a menu tap so typing continues at the inserted pick.
     input.focusField()
-    if (row.kind === 'file') {
-      const next = applyMentionSuggestion(value, cursor, row.path)
+    if (row.kind === 'file' || row.kind === 'member') {
+      const next =
+        row.kind === 'file'
+          ? applyMentionSuggestion(value, cursor, row.path)
+          : applyMentionSuggestion(value, cursor, row.name, `@${row.name}`)
       setDraft(next.draft)
       placeCaret(next.caret)
       return

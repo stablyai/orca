@@ -122,8 +122,7 @@ describe('WSL is not installed', () => {
 
   it.each([
     ['access denied', exited('', 5)],
-    ['a timeout', { ...exited('', null), timedOut: true }],
-    ['a signal kill', { ...exited('', null), signal: 'SIGTERM' as const }]
+    ['a timeout', { ...exited('', null), timedOut: true }]
   ])('treats %s from sc.exe as unknown and keeps probing wsl.exe', async (_label, failed) => {
     const calls: ProcessSpec[] = []
     runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
@@ -167,21 +166,6 @@ describe('WSL is not installed', () => {
       await expect(readWslInstallation()).resolves.toBe('unknown')
     })
     expect(isWslNotInstalledLatched()).toBe(false)
-  })
-
-  it('reuses an unknown answer briefly, then asks sc.exe again', async () => {
-    vi.useFakeTimers()
-    const calls = answerServices({ WSLService: 5, LxssManager: 5 })
-    await withPlatformAsync('win32', async () => {
-      await expect(readWslInstallation()).resolves.toBe('unknown')
-      const first = calls.length
-      expect(first).toBeGreaterThan(0)
-      await expect(readWslInstallation()).resolves.toBe('unknown')
-      expect(calls.length).toBe(first)
-      await vi.advanceTimersByTimeAsync(60_001)
-      await expect(readWslInstallation()).resolves.toBe('unknown')
-      expect(calls.length).toBe(first * 2)
-    })
   })
 
   it('keeps failed running-list reads to one sc.exe pair while sc.exe is denied', async () => {

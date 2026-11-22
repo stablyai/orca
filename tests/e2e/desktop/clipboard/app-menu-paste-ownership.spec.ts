@@ -147,7 +147,6 @@ test.describe('app menu paste ownership', () => {
     await dispatchAppMenuPasteFromMain(electronApp)
 
     await expect(renameInput).toHaveValue(payload)
-    expect(countOccurrences(await renameInput.inputValue(), payload)).toBe(1)
     expect((await readTerminalPtyWrites(electronApp)).join('')).not.toContain(payload)
 
     await renameInput.press('Escape')

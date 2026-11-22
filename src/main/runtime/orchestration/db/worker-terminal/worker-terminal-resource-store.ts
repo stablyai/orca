@@ -5,7 +5,8 @@ import type {
 import { WORKER_SETTLED_STATES } from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
-import type { OrchestrationDb } from '../orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
+import { WORKER_TERMINAL_RESOURCE_COLUMN_LIST } from '../row-column-lists'
 import { formerlyOwnedResourceIdSql } from './worker-terminal-prior-owner-index'
 
 // Pre-v23 input and reuse cannot be proven; historical terminals remain external.
@@ -125,16 +126,17 @@ export function getWorkerTerminalResourceByHandle(
 }
 
 export function getWorkerTerminalResourceByProcessIncarnation(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   processIncarnation: string
 ): WorkerTerminalResourceRow | undefined {
+  // An explicit projection, so SyncDatabase keeps this hot statement compiled; `SELECT *` is never cached.
   const row = this.db
     .prepare(
-      `SELECT * FROM worker_terminal_resources
+      `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources
         WHERE process_incarnation = ? ORDER BY updated_at DESC LIMIT 1`
     )
     .get(processIncarnation)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerTerminalResourceRow, and projected-row-getters.test.ts verifies the returned row.
   return row as WorkerTerminalResourceRow | undefined
 }
 

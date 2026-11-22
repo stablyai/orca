@@ -1,6 +1,12 @@
 import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import type * as Source from './codex-at-rest-skills-probe'
+import type { AtRestCommandDemand } from '../../../native-chat/agent-session-wire/options/at-rest-command-demand'
+import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
+import {
+  isCodexSkillRootsUnsupported,
+  setCodexSkillRoots
+} from '../launch/codex-structured-skill-roots'
 
 const MAX_PROBE_PROCESSES = 2
 const FAILED_START_BACKOFF_MS = [10_000, 30_000, 90_000, 5 * 60_000] as const
@@ -19,6 +25,10 @@ export type ProbeOwner = {
   command: string
   args: string[]
   environment: Record<string, string>
+  /** The skill roots this process loads, set once; a different list gets another process. */
+  roots: string[]
+  /** An explicit menu read waits on it, so it is admitted ahead of eager reads. */
+  demanded: boolean
   pending: Set<FolderRequest>
   active: Set<FolderRequest>
   cursor?: SetIterator<FolderRequest>
@@ -33,6 +43,40 @@ type ProbePool = {
   lastDemandAt: number
   expiry?: ReturnType<typeof setTimeout>
   owner?: ProbeOwner
+}
+
+/** A menu that asks now is admitted ahead of eager reads, including once its owner is queued. */
+export function promoteOnDemand(
+  demand: AtRestCommandDemand,
+  owner: () => Pick<ProbeOwner, 'demanded'>
+): () => void {
+  const promote = (): void => {
+    owner().demanded = true
+  }
+  if (demand.independent) {
+    promote()
+  }
+  return demand.onRequest(promote)
+}
+
+/** Gives a probe its roots once: null when it may list (no roots, taken, or a Codex that can't load
+ *  skills by path and lists what its chats would load); otherwise why it lists nothing. */
+export async function setProbeRoots(
+  rpc: Pick<CodexAppServerRpc, 'request'>,
+  roots: string[]
+): Promise<Error | null> {
+  if (roots.length === 0) {
+    return null
+  }
+  try {
+    await setCodexSkillRoots(rpc, roots)
+    return null
+  } catch (error) {
+    if (isCodexSkillRootsUnsupported(error)) {
+      return null
+    }
+    return error instanceof Error ? error : new Error(String(error))
+  }
 }
 
 export function settle(request: FolderRequest, outcome: AtRestCommandScan | Error): void {
@@ -83,7 +127,7 @@ export function createCodexSkillsProbePools(
     let release: (() => void) | undefined
     let initialized = false
     try {
-      release = await processes.acquire(0, owner.controller.signal)
+      release = await processes.acquire(() => (owner.demanded ? 0 : 1), owner.controller.signal)
       owner.controller.signal.throwIfAborted()
       if (owner.pending.size === 0) {
         return

@@ -128,13 +128,27 @@ export type WorktreeSlice = {
   /** `executionHostId` names the clicked row's host, so a same-id twin elsewhere is never the target. */
   updateWorktreeLineage: (
     worktreeId: string,
-    args: { parentWorktreeId?: string; noParent?: boolean; executionHostId?: ExecutionHostId }
+    args: {
+      parentWorktreeId?: string
+      noParent?: boolean
+      executionHostId?: ExecutionHostId
+      /** Apply only while the current parent is this workspace key; a newer move stands. */
+      ifParentWorkspace?: string
+    }
   ) => Promise<void>
   assignWorktreeParent: (
     worktreeId: string,
-    args: { parentWorktreeId: string; executionHostId?: ExecutionHostId }
+    args: {
+      parentWorktreeId: string
+      executionHostId?: ExecutionHostId
+      ifParentWorkspace?: string
+    }
   ) => Promise<void>
-  assignCrossStoreWorktreeParent: (children: readonly Worktree[], parent: Worktree) => Promise<void>
+  assignCrossStoreWorktreeParent: (
+    children: readonly Worktree[],
+    parent: Worktree,
+    options?: { ifParentWorkspace?: string }
+  ) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,

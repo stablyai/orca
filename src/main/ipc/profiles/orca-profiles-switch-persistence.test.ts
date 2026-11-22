@@ -5,6 +5,9 @@ import {
   maintenanceBarrier
 } from '../../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 import { registerOrcaProfileHandlers } from './orca-profiles'
+import { OrcaAccountService } from '../../orca-profiles/orca-account-service'
+
+const orcaAccount = new OrcaAccountService({ openBrowser: async () => {} })
 
 const { handlers, quit, select } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => Promise<unknown>>(),
@@ -58,7 +61,7 @@ describe('plain profile switch persistence', () => {
       hold(() => complete(domains))
     )
     store.updateSettings({ theme: 'dark' })
-    registerOrcaProfileHandlers(store)
+    registerOrcaProfileHandlers(store, orcaAccount)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const switching = handlers
       .get('orcaProfiles:switch')?.(

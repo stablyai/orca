@@ -236,8 +236,14 @@ export function nativeChatAnswerOperationEvidence(
   }
   const key = agentJournalSubmissionKey(clientMessageId)
   const message = messages.find((row) => row.id === key)
-  const submission = submissions.find((row) => row.clientMessageId === clientMessageId)
-  if (submission && submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING) {
+  // Queue handoff gives the answer a new submission ID before its transcript row catches up;
+  // snapshots order submissions oldest first, so the last linked row is the newest attempt.
+  const submission = submissions.findLast(
+    (row) =>
+      (row.clientMessageId === clientMessageId || row.queuedMessageId === clientMessageId) &&
+      row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+  )
+  if (submission) {
     return submission.dispatchState === 'pending'
   }
   if (message && isDeliveredNativeChatUserMessage(message)) {

@@ -6,72 +6,46 @@ import {
 } from './first-window-startup-services'
 
 describe('startFirstWindowStartupServices', () => {
-  it('starts daemon and hook services concurrently before awaiting either', async () => {
-    const events: string[] = []
-    let resolveDaemon!: () => void
-    let resolveHooks!: () => void
-
-    const started = startFirstWindowStartupServices({
-      startDaemonPtyProvider: () =>
-        new Promise<void>((resolve) => {
-          events.push('daemon-started')
-          resolveDaemon = resolve
-        }),
-      startAgentHookServer: () =>
-        new Promise<void>((resolve) => {
-          events.push('hooks-started')
-          resolveHooks = resolve
-        }),
-      onDaemonError: vi.fn(),
-      onAgentHookServerError: vi.fn()
-    })
-
-    await Promise.resolve()
-    expect(events).toEqual(['daemon-started', 'hooks-started'])
-
-    let completed = false
-    started.firstWindowReady.then(() => {
-      completed = true
-    })
-
-    resolveDaemon()
-    await Promise.resolve()
-    expect(completed).toBe(false)
-
-    resolveHooks()
-    await started.firstWindowReady
-    await started.localPtyReady
-    await started.localPtyProviderReady
-    expect(completed).toBe(true)
-  })
-
   it('opens the provider gate when daemon startup finishes without waiting for hooks', async () => {
     let resolveDaemon!: () => void
     let resolveHooks!: () => void
-    const started = startFirstWindowStartupServices({
-      startDaemonPtyProvider: () =>
+    const startDaemonPtyProvider = vi.fn(
+      () =>
         new Promise<void>((resolve) => {
           resolveDaemon = resolve
-        }),
-      startAgentHookServer: () =>
+        })
+    )
+    const startAgentHookServer = vi.fn(
+      () =>
         new Promise<void>((resolve) => {
           resolveHooks = resolve
-        }),
+        })
+    )
+    const started = startFirstWindowStartupServices({
+      startDaemonPtyProvider,
+      startAgentHookServer,
       onDaemonError: vi.fn(),
       onAgentHookServerError: vi.fn()
     })
     await Promise.resolve()
+    expect(startDaemonPtyProvider).toHaveBeenCalledOnce()
+    expect(startAgentHookServer).toHaveBeenCalledOnce()
 
     let allServicesReady = false
+    let windowReady = false
     void started.localPtyReady.then(() => {
       allServicesReady = true
+    })
+    void started.firstWindowReady.then(() => {
+      windowReady = true
     })
     resolveDaemon()
     await expect(started.localPtyProviderReady).resolves.toBeUndefined()
     expect(allServicesReady).toBe(false)
+    expect(windowReady).toBe(false)
 
     resolveHooks()
-    await started.localPtyReady
+    await Promise.all([started.localPtyReady, started.firstWindowReady])
   })
 
   it('opens the first window at the window timeout without aborting a slow daemon or opening the PTY gate', async () => {

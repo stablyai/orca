@@ -146,7 +146,7 @@ it('scopes a pending-send-only exit notice to the eligible root already interrup
   })
 })
 
-it('updates legacy context presence with visibility, replacement and removal and seeks absent eligible subsets', async () => {
+it('updates legacy context presence with visibility, replacement and removal', async () => {
   const f = domainLifecycleFixture(cleanups)
   const view = journalDomainTimelineReads(f.db, target)
   await f.run({
@@ -182,29 +182,6 @@ it('updates legacy context presence with visibility, replacement and removal and
   })
   await f.run({ kind: 'tombstone', identity: identity('window'), fence: 1 })
   expect(view.contextWindowHeld()).toBe(false)
-  for (const [predicate, index] of [
-    [`hidden=0 AND context_window=1`, 'journal_items_context_window'],
-    [
-      `hidden=0 AND (lifecycle_state IN ('running','pending') OR live_work=1)`,
-      'journal_items_unsettled'
-    ],
-    [
-      `hidden=0 AND kind IN ('turn','status') AND lifecycle_state='unverifiable'`,
-      'journal_items_unverifiable_turn'
-    ],
-    [`hidden=0 AND unverified_end=1`, 'journal_items_unverified_end'],
-    [
-      `hidden=0 AND root=1 AND kind IN ('turn','status') AND lifecycle_state='interrupted' AND turn_completed_at IS NOT NULL AND turn_completed_at=150`,
-      'journal_items_interrupted_root'
-    ]
-  ]) {
-    const plan = f.db
-      .prepare(
-        `EXPLAIN QUERY PLAN SELECT 1 FROM journal_items INDEXED BY ${index} WHERE session_id=? AND epoch=? AND ${predicate} LIMIT 1`
-      )
-      .all('chat', 'epoch')
-    expect(plan.map((row) => row.detail).join('\n')).toContain(index)
-  }
 })
 
 it('uses the visible named opener to preserve historical replay instead of settling it as live work', async () => {

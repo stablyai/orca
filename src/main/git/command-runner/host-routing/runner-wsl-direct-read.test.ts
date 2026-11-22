@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
+
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false
+  })
+)
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock,

@@ -6,7 +6,8 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-search'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
@@ -93,7 +94,7 @@ export function QuickCommandsPane({
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatuses = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatuses = useRuntimeStatusByEnvironmentId()
   const runtimeCommands = useAppStore((s) => s.runtimeTerminalQuickCommands)
   const loadRuntimeCommands = useAppStore((s) => s.loadRuntimeTerminalQuickCommands)
   const ownership = getSettingOwnershipSummary('terminalQuickCommands', t)
@@ -391,7 +392,7 @@ export function QuickCommandsPane({
           repos={hostRepos}
           defaultAdvancedOpen
           agentPromptMaxLength={getTerminalQuickCommandHostPromptMaxLength(
-            { runtimeStatusByEnvironmentId: runtimeStatuses },
+            runtimeStatuses,
             editor.hostId
           )}
           onOpenChange={(open) => !open && setEditor(null)}

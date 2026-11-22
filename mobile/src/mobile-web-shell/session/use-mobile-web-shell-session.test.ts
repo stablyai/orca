@@ -79,6 +79,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   AppState: {
     get currentState() {
       return doubles.appState.currentState
@@ -181,7 +182,7 @@ function createFakeStore(): {
     deferCommit: () => {
       deferred += 1
     },
-    holdGeneration: () => () => {},
+    holdGeneration: () => ({ release: () => {}, answer: () => {}, withdraw: () => {} }),
     claimUpdate: async () => () => {},
     abortStagedGeneration: async () => {
       aborted += 1

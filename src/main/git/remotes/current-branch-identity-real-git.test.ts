@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, expect, it } from 'vitest'
 import { gitPush } from './remote'
+import { getCurrentBranchAndHead } from '../../source-control/hosted-review-creation-git-state'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 
 let directory: string | null = null
@@ -15,7 +17,7 @@ afterEach(async () => {
   }
 })
 
-it('pushes to the configured branch target when a tag shares the branch name', async () => {
+async function createBranchSharingTagName() {
   const repo = await mkdtemp(join(tmpdir(), 'orca-current-branch-'))
   directory = repo
   const git = async (args: string[], cwd = repo) => {
@@ -34,6 +36,20 @@ it('pushes to the configured branch target when a tag shares the branch name', a
   await git(['commit', '--allow-empty', '-qm', 'base'])
   await git(['tag', 'release'])
   await git(['commit', '--allow-empty', '-qm', 'feature'])
+  return { repo, git }
+}
+
+it('reads the branch for Create PR when a tag shares the branch name', async () => {
+  const { repo, git } = await createBranchSharingTagName()
+
+  expect(await getCurrentBranchAndHead(repo, LOCAL_EXECUTION_HOST_ID)).toEqual({
+    branch: 'release',
+    headOid: await git(['rev-parse', 'HEAD'])
+  })
+})
+
+it('pushes to the configured branch target when a tag shares the branch name', async () => {
+  const { repo, git } = await createBranchSharingTagName()
   const head = await git(['rev-parse', 'HEAD'])
   const origin = join(repo, 'origin.git')
   const fork = join(repo, 'fork.git')

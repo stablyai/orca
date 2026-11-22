@@ -320,6 +320,22 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect(await urls()).toContain('https://live.test/')
   })
 
+  it('lists an evicted page again after a window save main skipped as unchanged', async () => {
+    const live = mocks.guests.get(11)
+    if (!(live instanceof EventEmitter)) {
+      throw new Error('missing guest')
+    }
+    mocks.pageByGuest.set(11, 'live')
+    announceRegisteredBrowserExtensionTab('live', 11)
+    mocks.pageByGuest.delete(11)
+    mocks.guests.delete(11)
+    live.emit('destroyed')
+    const urls = async () => (await query({ discarded: true })).map((entry) => entry.url)
+    expect(await urls()).not.toContain('https://live.test/')
+    discardedTabs.noteWindowSessionSaveUnchanged('local')
+    expect(await urls()).toContain('https://live.test/')
+  })
+
   it('showing one restored page gives no other page a tab id extensions never saw', async () => {
     recordActiveBrowserPage('cold')
     guest(12, mocks.sessions.default, 'https://cold.test/')

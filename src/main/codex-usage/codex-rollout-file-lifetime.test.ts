@@ -102,21 +102,7 @@ describe('Codex rollout descriptor lifetime', () => {
     }
   )
 
-  it('keeps the descriptor closed when publishing ownership fails', async () => {
-    const rolloutPath = join(directory, 'rollout.jsonl')
-    writeFileSync(rolloutPath, rollout('failed-claims', 3))
-
-    await expect(
-      parseCodexUsageFile(rolloutPath, () => null, {
-        commitEventKey: () => {
-          throw new Error('ownership publication failed')
-        }
-      })
-    ).rejects.toThrow('ownership publication failed')
-    expect(openedHandles[0]?.fd).toBe(-1)
-  })
-
-  it('publishes no ownership if closing the verified descriptor fails', async () => {
+  it('closes the rollout on both descriptor and ownership publication failures', async () => {
     const rolloutPath = join(directory, 'rollout.jsonl')
     writeFileSync(rolloutPath, rollout('close-failure', 3))
     const commitEventKey = vi.fn()
@@ -127,5 +113,15 @@ describe('Codex rollout descriptor lifetime', () => {
     )
     expect(commitEventKey).not.toHaveBeenCalled()
     expect(openedHandles[0]?.fd).toBe(-1)
+
+    await expect(
+      parseCodexUsageFile(rolloutPath, () => null, {
+        commitEventKey: () => {
+          expect(openedHandles.at(-1)?.fd).toBe(-1)
+          throw new Error('ownership publication failed')
+        }
+      })
+    ).rejects.toThrow('ownership publication failed')
+    expect(openedHandles.at(-1)?.fd).toBe(-1)
   })
 })

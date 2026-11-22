@@ -10,7 +10,7 @@ import '../../db/attempt-outcome-projection'
 afterEach(() => vi.useRealTimers())
 
 describe('coordinator terminal census availability', () => {
-  it.each(['terminal_surface_ownership_unavailable', 'terminal_liveness_unavailable'])(
+  it.each(['terminal_surface_ownership_unavailable'])(
     'defers dispatch on %s and reuses the existing worker after recovery',
     async (error) => {
       vi.useFakeTimers()

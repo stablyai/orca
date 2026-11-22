@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
@@ -11,7 +11,7 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
@@ -129,31 +129,29 @@ export function useTerminalQuickCommandHosts(
     remoteState,
     runtimeEnvironments,
     settings
-  } = useAppStore(
-    useShallow((state): TerminalQuickCommandHostState => {
-      if (!enabled) {
-        return DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE
-      }
-      const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
-      const parsedExecutionHost = parseExecutionHostId(executionHostId)
-      const remoteEnvironmentId =
-        parsedExecutionHost?.kind === 'runtime' ? parsedExecutionHost.environmentId : null
-      return {
-        executionHostId,
-        loadRemote: state.loadRuntimeTerminalQuickCommands,
-        remoteConnectionGeneration: remoteEnvironmentId
-          ? (state.runtimeStatusByEnvironmentId.get(remoteEnvironmentId)?.connectionGeneration ?? 0)
-          : 0,
-        remoteEnvironmentId,
-        remoteHostId: parsedExecutionHost?.kind === 'runtime' ? parsedExecutionHost.id : null,
-        remoteState: remoteEnvironmentId
-          ? state.runtimeTerminalQuickCommands.get(remoteEnvironmentId)
-          : undefined,
-        runtimeEnvironments: state.runtimeEnvironments,
-        settings: state.settings
-      }
-    })
-  )
+  } = useAppStoreWithHostStatuses((state, statuses): TerminalQuickCommandHostState => {
+    if (!enabled) {
+      return DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE
+    }
+    const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
+    const parsedExecutionHost = parseExecutionHostId(executionHostId)
+    const remoteEnvironmentId =
+      parsedExecutionHost?.kind === 'runtime' ? parsedExecutionHost.environmentId : null
+    return {
+      executionHostId,
+      loadRemote: state.loadRuntimeTerminalQuickCommands,
+      remoteConnectionGeneration: remoteEnvironmentId
+        ? (statuses.get(remoteEnvironmentId)?.connectionGeneration ?? 0)
+        : 0,
+      remoteEnvironmentId,
+      remoteHostId: parsedExecutionHost?.kind === 'runtime' ? parsedExecutionHost.id : null,
+      remoteState: remoteEnvironmentId
+        ? state.runtimeTerminalQuickCommands.get(remoteEnvironmentId)
+        : undefined,
+      runtimeEnvironments: state.runtimeEnvironments,
+      settings: state.settings
+    }
+  }, shallow)
 
   useEffect(() => {
     if (loadRemote && remoteEnvironmentId) {

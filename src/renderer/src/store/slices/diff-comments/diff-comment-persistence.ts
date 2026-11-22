@@ -6,7 +6,7 @@ import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findCopyRows } from './worktree-diff-comments-selector'
 import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
 import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
-import { writeDiffCommentsToHost } from './diff-comment-host-write'
+import { readDiffCommentsFromHost, writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
@@ -60,7 +60,17 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 const floorSeedEpochByQueue = new Map<string, number>()
 
 // Why: a failed write may still have landed, so until a write succeeds this copy can't name what the host holds.
-const floorsUncertainAfterFailure = new Set<string>()
+// The ids are every note this copy listed or tried to write since: only those are its to change on the host.
+const ownNoteIdsAfterFailure = new Map<string, Set<string>>()
+
+export function resetDiffCommentPersistenceForTests(): void {
+  persistQueueByWorktree.clear()
+  floorKeysByQueue.clear()
+  lastPersistedByQueue.clear()
+  lastMutationNextByQueue.clear()
+  floorSeedEpochByQueue.clear()
+  ownNoteIdsAfterFailure.clear()
+}
 
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
@@ -115,15 +125,38 @@ export function enqueueDiffCommentPersist(
     const seedEpoch = floorSeedEpochByQueue.get(floorKey)
     // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
     let stateList: DiffComment[] | undefined
+    const floor = (
+      (lastPersistedByQueue.has(floorKey)
+        ? lastPersistedByQueue.get(floorKey)
+        : mutation.previous) ?? []
+    ).map(normalizeDiffComment)
+    let sent: DiffComment[] = []
     // What this copy last saw on disk; the host merges only the edits since then.
-    // Unknown after a failed write, so the next write replaces the list whole and resyncs the host.
-    const base = floorsUncertainAfterFailure.has(floorKey)
-      ? undefined
-      : (
-          (lastPersistedByQueue.has(floorKey)
-            ? lastPersistedByQueue.get(floorKey)
-            : mutation.previous) ?? []
-        ).map(normalizeDiffComment)
+    // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
+    const baseFor = (
+      requested: DiffComment[]
+    ): DiffComment[] | undefined | Promise<DiffComment[]> => {
+      sent = requested
+      const own = ownNoteIdsAfterFailure.get(floorKey)
+      const owner = mutation.owner
+      if (!own) {
+        return floor
+      }
+      // Why no base: there is no folder re-read helper, and a failed write may still have landed,
+      // so the floor may not be what the host holds; the host replaces the list instead.
+      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : undefined
+    }
+    const rereadBase = async (
+      owner: Extract<DiffCommentOwner, { kind: 'worktree' }>,
+      own: ReadonlySet<string>,
+      requested: DiffComment[]
+    ): Promise<DiffComment[]> => {
+      // After a failed write the host is asked what it holds: its notes this copy never listed are
+      // another device's and stay; the rest become what this copy shows.
+      const held = await readDiffCommentsFromHost(owner)
+      const mine = new Set([...own, ...[...floor, ...requested].map((note) => note.id)])
+      return held.filter((note) => mine.has(note.id)).map(normalizeDiffComment)
+    }
     try {
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder' && mutation.owner.kind === 'folder') {
@@ -132,10 +165,12 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = folderWorkspace.diffComments
+        const requested = (stateList ?? []).map(normalizeDiffComment)
+        const base = baseFor(requested)
         await writeDiffCommentsToHost(
           mutation.owner,
-          (stateList ?? []).map(normalizeDiffComment),
-          base
+          requested,
+          base instanceof Promise ? await base : base
         )
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
@@ -144,23 +179,29 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = rows.at(-1)?.diffComments
+        const requested = (stateList ?? []).map(normalizeDiffComment)
+        const base = baseFor(requested)
         await writeDiffCommentsToHost(
           mutation.owner,
-          (stateList ?? []).map(normalizeDiffComment),
-          base
+          requested,
+          base instanceof Promise ? await base : base
         )
       }
     } catch (err) {
       // Why: converge to what actually landed; rollback's identity guard no-ops when a later mutation owns the array.
       // Why: `has()`, not `get() ?? …` — an absent entry and a legitimately-`undefined` floor are different things.
-      const floor = lastPersistedByQueue.has(floorKey)
+      const rollbackFloor = lastPersistedByQueue.has(floorKey)
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
-      rollback(set, worktreeId, floor, mutation)
-      floorsUncertainAfterFailure.add(floorKey)
+      rollback(set, worktreeId, rollbackFloor, mutation)
+      const own = ownNoteIdsAfterFailure.get(floorKey) ?? new Set<string>()
+      for (const note of [...floor, ...sent]) {
+        own.add(note.id)
+      }
+      ownNoteIdsAfterFailure.set(floorKey, own)
       throw err
     }
-    floorsUncertainAfterFailure.delete(floorKey)
+    ownNoteIdsAfterFailure.delete(floorKey)
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)

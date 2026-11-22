@@ -50,6 +50,9 @@ import {
   signOutCurrentOrcaProfile
 } from './profile-cloud-service'
 
+// The PKCE flow is mocked, so no browser opens.
+const openNoBrowser = async (): Promise<void> => {}
+
 const earlierCloud: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-profile-1',
   userId: 'user-1',
@@ -124,8 +127,8 @@ describe('Orca cloud overlapping connect', () => {
       capabilities
     }))
 
-    const first = connectCurrentOrcaProfile(userDataPath)
-    const later = connectCurrentOrcaProfile(userDataPath)
+    const first = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
+    const later = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
     await expect(later).resolves.toMatchObject({ status: 'connected' })
     expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
 
@@ -142,6 +145,95 @@ describe('Orca cloud overlapping connect', () => {
       expect.any(Object),
       expect.objectContaining({ code: 'later-code' })
     )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
+  })
+
+  it('discards an earlier token exchange that finishes after a later wait has linked', async () => {
+    type PkceCode = {
+      code: string
+      codeVerifier: string
+      nonce: string
+      redirectUri: string
+      state: string
+    }
+    let finishEarlierPkce!: (value: PkceCode) => void
+    let finishLaterPkce!: (value: PkceCode) => void
+    let finishEarlierExchange!: (value: {
+      accessToken: string
+      refreshToken: string
+      expiresAt: number
+      cloud: OrcaProfileCloudSummary
+      organizations: OrcaCloudOrgSummary[]
+      capabilities: OrcaCloudCapabilities
+    }) => void
+    let finishLaterExchange!: (value: {
+      accessToken: string
+      refreshToken: string
+      expiresAt: number
+      cloud: OrcaProfileCloudSummary
+      organizations: OrcaCloudOrgSummary[]
+      capabilities: OrcaCloudCapabilities
+    }) => void
+    beginOrcaCloudPkceFlowMock
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishEarlierPkce = resolve
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishLaterPkce = resolve
+        })
+      )
+    exchangeOrcaCloudAuthCodeMock.mockImplementation(
+      (_config, args) =>
+        new Promise((resolve) => {
+          if (args.code === 'later-code') {
+            finishLaterExchange = resolve
+          } else {
+            finishEarlierExchange = resolve
+          }
+        })
+    )
+
+    const earlier = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
+    const later = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
+    finishEarlierPkce({
+      code: 'earlier-code',
+      codeVerifier: 'earlier-verifier',
+      nonce: 'earlier-nonce',
+      redirectUri: 'http://127.0.0.1:4100/auth/callback',
+      state: 'earlier-state'
+    })
+    finishLaterPkce({
+      code: 'later-code',
+      codeVerifier: 'later-verifier',
+      nonce: 'later-nonce',
+      redirectUri: 'http://127.0.0.1:4101/auth/callback',
+      state: 'later-state'
+    })
+    await vi.waitFor(() => expect(exchangeOrcaCloudAuthCodeMock).toHaveBeenCalledTimes(2))
+
+    finishLaterExchange({
+      accessToken: 'later-access',
+      refreshToken: 'later-refresh',
+      expiresAt: Date.now() + 3_600_000,
+      cloud: laterCloud,
+      organizations,
+      capabilities
+    })
+    await expect(later).resolves.toMatchObject({ status: 'connected' })
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
+
+    finishEarlierExchange({
+      accessToken: 'earlier-access',
+      refreshToken: 'earlier-refresh',
+      expiresAt: Date.now() + 3_600_000,
+      cloud: earlierCloud,
+      organizations,
+      capabilities
+    })
+    await expect(earlier).resolves.toMatchObject({ status: 'cancelled' })
     expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
   })
 
@@ -175,8 +267,8 @@ describe('Orca cloud overlapping connect', () => {
       capabilities
     }))
 
-    const earlier = connectCurrentOrcaProfile(userDataPath)
-    const later = connectCurrentOrcaProfile(userDataPath)
+    const earlier = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
+    const later = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
     finishEarlierPkce({
       code: 'earlier-code',
       codeVerifier: 'earlier-verifier',

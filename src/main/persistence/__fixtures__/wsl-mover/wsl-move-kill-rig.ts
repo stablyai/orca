@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import { createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
 import type { Store } from '../../loading-store/store'
 import {
   listWslMoveCutoverChain,
@@ -68,7 +68,8 @@ export function wslMoveRigTempDir(prefix: string): string {
   return dir
 }
 
-export function removeWslMoveRigDirs(): void {
+export async function removeWslMoveRigDirs(): Promise<void> {
+  await closeTestStores()
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }

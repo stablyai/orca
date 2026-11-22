@@ -35,6 +35,10 @@ const CLAUDE_CUSTOM_THEME_FIRST_VERSION = '2.1.119'
 // Exec-form hooks (`args`) spawn without a shell, so a spaced path needs no quoting.
 const CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION = '2.1.139'
 
+// Async prompt hooks need `async` command hooks (fixed by 2.1.19) and a prompt_id on every event to order a late
+// prompt; 2.1.280 is the oldest build with that id in Orca's recorded hook fixtures.
+const CLAUDE_ASYNC_PROMPT_HOOK_FIRST_VERSION = '2.1.280'
+
 // Unknown versions get the core lifecycle/statusLine floor until a probe resolves their actual version.
 export const UNRESOLVED_CLAUDE_VERSION = CLAUDE_STATUS_LINE_FIRST_VERSION
 
@@ -84,6 +88,11 @@ export function claudeLoadsCustomThemes(version: string | null | undefined): boo
 // Unknown versions keep the shell form because an older CLI ignores `args`.
 export function claudeAcceptsExecFormHooks(version: string | null | undefined): boolean {
   return claudeVersionReaches(version, CLAUDE_HOOK_EXEC_FORM_FIRST_VERSION)
+}
+
+// Unknown versions stay synchronous, which every Claude accepts.
+export function claudeRunsAsyncPromptHook(version: string | null | undefined): boolean {
+  return claudeVersionReaches(version, CLAUDE_ASYNC_PROMPT_HOOK_FIRST_VERSION)
 }
 
 /** Probe with the launch cwd and env so version-manager shims select the same CLI. */

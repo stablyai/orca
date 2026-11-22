@@ -2,7 +2,10 @@ import type {
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import {
+  workspaceKeyOfRow,
+  worktreeWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import { toWorkspaceLineageRow } from '../../../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 
 /** Older hosts report only the worktree lineage; the workspace record is its projection. */
@@ -11,7 +14,8 @@ export function projectWorktreeLineageToWorkspaceLineage(
   lineage: WorktreeLineage | null,
   current: Record<string, WorkspaceLineage>
 ): Record<string, WorkspaceLineage> {
-  const childWorkspaceKey = worktreeWorkspaceKey(worktreeId)
+  // A folder row's id is already its key.
+  const childWorkspaceKey = workspaceKeyOfRow(worktreeId)
   const next = { ...current }
   if (!lineage) {
     delete next[childWorkspaceKey]

@@ -107,6 +107,9 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore } from '../../testing/app-store-test-fixture'
+import { resetDiffCommentPersistenceForTests } from './diff-comment-persistence'
+
+beforeEach(resetDiffCommentPersistenceForTests)
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'
@@ -251,30 +254,23 @@ describe('worktree diff comment rollback convergence', () => {
 })
 
 describe('desktop note writes beside another device', () => {
-  type NoteWrite = { updates: { diffComments: DiffComment[]; diffCommentsBase?: DiffComment[] } }
+  type NoteWrite = { updates: { diffComments?: DiffComment[]; diffCommentsBase?: DiffComment[] } }
   let hostNotes: DiffComment[] = []
   // The host's write rule: merge against the writer's base when it sends one.
   const saveOnHost = ({ updates }: NoteWrite): void => {
+    if (!updates.diffComments) {
+      return
+    }
     hostNotes = updates.diffCommentsBase
       ? mergeDiffCommentMutation(updates.diffCommentsBase, hostNotes, updates.diffComments)
       : updates.diffComments
   }
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks()
     updateMeta.mockImplementation(async (write: NoteWrite) => {
       saveOnHost(write)
-      return {}
-    })
-    // Failed writes in earlier tests leave this copy's next write unbased; one success resyncs it.
-    const store = createTestStore()
-    seed(store, [])
-    await store.getState().addDiffComment(capturedOwner(store, WT), {
-      worktreeId: WT,
-      filePath: 'src/foo.ts',
-      lineNumber: 1,
-      body: 'resync',
-      side: 'modified'
+      return { diffComments: hostNotes }
     })
   })
 
@@ -289,6 +285,23 @@ describe('desktop note writes beside another device', () => {
     ).toBe(true)
 
     expect(hostNotes.map((comment) => comment.body)).toEqual(['edited', 'phone note'])
+  })
+
+  it('keeps a note another device saved when this desktop saves after a failed save', async () => {
+    const store = createTestStore()
+    const mine = makeComment({ id: 'mine', body: 'desktop note' })
+    seed(store, [mine])
+    hostNotes = [mine]
+    updateMeta.mockRejectedValueOnce(new Error('timed out'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const owner = capturedOwner(store, WT)
+    await store.getState().updateDiffComment(owner, 'mine', 'never saved')
+    hostNotes = [mine, makeComment({ id: 'phone', body: 'phone note' })]
+
+    expect(await store.getState().updateDiffComment(owner, 'mine', 'edited')).toBe(true)
+
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['edited', 'phone note'])
+    errSpy.mockRestore()
   })
 
   it('keeps an edit queued behind a save whose reply was lost after it landed', async () => {

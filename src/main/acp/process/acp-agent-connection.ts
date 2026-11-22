@@ -24,7 +24,7 @@ import {
 } from '../transport/acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from '../transport/acp-peer-limits'
 import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
-import { redactString, redactTextTail } from '../../observability/redactor'
+import { redactString, redactTextTail } from '../../../shared/observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 
 export type AcpSignInWatch = {

@@ -39,7 +39,13 @@ export type BrowserScreencastSession = {
 }
 
 export type BrowserScreencastEvent =
-  | { type: 'dialog'; dialogType: string; message: string }
+  | {
+      type: 'dialog'
+      dialogType: string
+      message: string
+      defaultPromptText: string
+      origin: string | null
+    }
   | { type: 'dialogClosed' }
 
 export type PendingScreencastFrame = {

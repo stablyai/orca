@@ -138,7 +138,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight batch shims', ()
 
     const result = await findRunnableLocalCommand(COMMAND)
 
-    expect(result).toEqual({ status: 'available', binary: path.posix.join(second, name) })
+    expect(result).toEqual({ status: 'available', binary: path.join(second, name) })
     if (result.status === 'available') {
       await expect(
         execLocalPreflightCommandOrThrow(result.binary, ['auth', 'status'])

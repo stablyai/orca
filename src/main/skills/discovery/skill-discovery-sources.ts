@@ -16,6 +16,7 @@ import {
   type SkillInstallProviderId
 } from '../../../shared/skills/installation/skill-install-providers'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
+import { isSkillFolderOwnerOthersRead } from '../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { stablePathId } from './skill-discovery-classification'
 import {
   resolveDefaultHermesSkillsRoot,
@@ -45,21 +46,38 @@ function skillProvidersFor(id: SkillInstallProviderId): SkillProvider[] {
 function providerHomeSources(
   home: string,
   pathApi: SkillDiscoveryPathApi,
-  overrides: SkillProviderRootOverrides
+  overrides: SkillProviderRootOverrides,
+  keepsDefaultHomes: boolean
 ): SkillScanRoot[] {
   return SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
     if (!provider.globalSegments) {
       return []
     }
+    const id = `home-${provider.id}`
+    const label = `${provider.displayName} home`
+    const providers = skillProvidersFor(provider.id)
+    const defaultPath = pathApi.join(home, ...provider.globalSegments)
+    const relocated = overrides[provider.id]
+    if (!relocated || relocated === defaultPath) {
+      return [source(id, label, defaultPath, 'home', providers, provider.id)]
+    }
+    if (!keepsDefaultHomes || !isSkillFolderOwnerOthersRead(provider.id)) {
+      return [source(id, label, relocated, 'home', providers, provider.id)]
+    }
+    // Agents that read this owner's folders join them to the user's home, whatever its override says.
     return [
-      source(
-        `home-${provider.id}`,
-        `${provider.displayName} home`,
-        overrides[provider.id] ?? pathApi.join(home, ...provider.globalSegments),
-        'home',
-        skillProvidersFor(provider.id),
-        provider.id
-      )
+      { ...source(id, label, relocated, 'home', providers, provider.id), readers: 'owner' },
+      {
+        ...source(
+          `${id}-default`,
+          `${label} (default)`,
+          defaultPath,
+          'home',
+          providers,
+          provider.id
+        ),
+        readers: 'borrowers'
+      }
     ]
   })
 }
@@ -86,6 +104,15 @@ function providerRepoSources(
     ]
   })
 }
+
+// Project folders these agents also read; they install into the canonical `.agents/skills` root.
+const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvider[]])[] = [
+  ['codex', '.codex', ['codex']],
+  ['cursor', '.cursor', ['agent-skills']],
+  ['copilot', '.github', ['agent-skills']],
+  ['qoder', '.qoder', ['agent-skills']],
+  ['opencode', '.opencode', ['agent-skills']]
+]
 
 export function buildSkillDiscoverySources(
   args: {
@@ -133,7 +160,9 @@ export function buildSkillDiscoverySources(
       'codex'
     ),
     // Provider home roots also receive global npx installs; canonical roots alone miss them.
-    ...providerHomeSources(home, pathApi, providerRootOverrides),
+    // WSL walks each root in the guest, where a relocated home linked to the default one cannot be
+    // folded into one scan, so it keeps the relocated root alone.
+    ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(
       'home-opencode',
@@ -185,6 +214,23 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'muse'
     ),
+    source(
+      'home-copilot',
+      'Copilot home',
+      pathApi.join(home, '.copilot', 'skills'),
+      'home',
+      ['agent-skills'],
+      'copilot'
+    ),
+    // Cursor writes its own built-in skills here; they cannot be deleted like a user's.
+    source(
+      'home-cursor-builtin',
+      'Cursor',
+      pathApi.join(home, '.cursor', 'skills-cursor'),
+      'bundled',
+      ['agent-skills'],
+      'cursor'
+    ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(
       'home-antigravity-cli',
@@ -221,22 +267,15 @@ export function buildSkillDiscoverySources(
         null
       ),
       ...providerRepoSources(repoPath, label, pathApi),
-      // OpenCode and Qoder also read their own project folders; they install into the canonical root above.
-      source(
-        `repo-qoder-${stablePathId(repoPath)}`,
-        `${label} .qoder`,
-        pathApi.join(repoPath, '.qoder', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'qoder'
-      ),
-      source(
-        `repo-opencode-${stablePathId(repoPath)}`,
-        `${label} .opencode`,
-        pathApi.join(repoPath, '.opencode', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'opencode'
+      ...PROJECT_SKILL_FOLDERS.map(([owner, folder, providers]) =>
+        source(
+          `repo-${owner}-${stablePathId(repoPath)}`,
+          `${label} ${folder}`,
+          pathApi.join(repoPath, folder, 'skills'),
+          'repo',
+          providers,
+          owner
+        )
       )
     )
   }

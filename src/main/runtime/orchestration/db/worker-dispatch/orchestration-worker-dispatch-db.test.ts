@@ -157,6 +157,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       processIncarnation: 'runtime:pty:1',
       worktreeId: 'repo::worktree',
       setupState: 'not_applicable',
+      terminalOwnership: 'created',
       effects: []
     })
     d.markWorkerDispatchReady(started.dispatch.id)
@@ -170,8 +171,18 @@ describe('OrchestrationDb worker Dispatch state', () => {
         result: '{}'
       })
     ).toMatchObject({ action: 'rejected', code: 'inactive_dispatch' })
+    expect(d.getWorkerTerminalResourceByOwner(started.dispatch.id)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'not_requested'
+    })
     expect(d.settleWorkerStop(started.dispatch.id).state).toBe('stopped')
     expect(d.getTask(task.id)?.status).toBe('blocked')
+    // A proven stop must not leave the closed terminal pinning its Run.
+    expect(d.getWorkerTerminalResourceByOwner(started.dispatch.id)).toMatchObject({
+      ownership_state: 'released',
+      release_state: 'released',
+      archive_status: 'unavailable'
+    })
   })
 
   it('allows explicit stop recovery from uncertain local and remote starts', () => {

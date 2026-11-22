@@ -117,11 +117,53 @@ export function revealElementInScrollContainer(
   if (!bounds) {
     return false
   }
-  const nextScrollTop = getScrollTopToRevealBounds(
-    container,
-    bounds,
-    getPinnedHeaderRevealInset(container)
+  const containerTop = container.getBoundingClientRect().top
+  const topInset = element.closest('[data-worktree-sticky-header-active]')
+    ? 0
+    : Math.max(
+        getPinnedHeaderRevealInset(container),
+        ...Array.from(
+          container.querySelectorAll('[data-worktree-sticky-header-active]'),
+          (header) =>
+            header.getBoundingClientRect().bottom - containerTop + WORKTREE_REVEAL_TOP_CLEARANCE
+        )
+      )
+  const leadingHeight = Math.max(
+    0,
+    container.clientHeight - Math.min(container.clientHeight, topInset)
   )
+  const leadingBounds =
+    bounds.end - bounds.start > leadingHeight
+      ? { start: bounds.start, end: bounds.start + leadingHeight }
+      : bounds
+  const nextScrollTop = getScrollTopToRevealBounds(container, leadingBounds, topInset)
+  // Short sidebars can clip the entire Projects scroller despite an internally visible row.
+  const outer = container.closest<HTMLElement>('[data-sidebar-content-viewport]')
+  if (outer && outer !== container) {
+    let outerBounds = getElementScrollBounds(outer, container)
+    if (container.clientHeight > outer.clientHeight) {
+      const innerTop = Math.max(
+        0,
+        Math.min(
+          container.scrollHeight - container.clientHeight,
+          nextScrollTop ?? container.scrollTop
+        )
+      )
+      outerBounds = {
+        start: outerBounds.start + bounds.start - innerTop,
+        end: outerBounds.start + bounds.end - innerTop
+      }
+    }
+    const outerTop =
+      outerBounds.end - outerBounds.start > outer.clientHeight
+        ? outerBounds.start
+        : getScrollTopToRevealBounds(outer, outerBounds)
+    // An already-visible target still supersedes the previous outer animation.
+    outer.scrollTo({
+      top: Math.max(0, outerTop ?? outer.scrollTop),
+      behavior: outerTop === null ? 'instant' : motionSafeScrollBehavior(behavior)
+    })
+  }
   if (nextScrollTop === null) {
     supersedeVirtualizedScrollAnchorRestore(container)
     requestVirtualizedScrollAnchorRecord(container)

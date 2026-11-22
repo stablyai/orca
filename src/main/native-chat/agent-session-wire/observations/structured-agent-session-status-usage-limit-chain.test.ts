@@ -211,3 +211,47 @@ it.each([
     expect((await readProjection(projections, journal))!.usageLimitCut?.chain).toBe(laterLinks + 1)
   }
 )
+
+it('counts a link across a refused send its queued card took back (#46650)', async () => {
+  const journal = await fixture.open()
+  const projections = new StructuredAgentSessionJournalProjections()
+  const first = await limitedTurn(journal, 'first', 0)
+  await journal.appendSubmission({
+    clientMessageId: 'refused',
+    payloadFingerprint: 'refused',
+    body: { kind: 'message', role: 'user', blocks: [] },
+    origin: 'client',
+    fence: 1
+  })
+  await journal.resolveDispatch({
+    clientMessageId: 'refused',
+    state: 'pending',
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+    fence: 1
+  })
+  await journal.resolveDispatch({
+    clientMessageId: 'refused',
+    state: 'rejected',
+    keptAsQueuedMessageId: 'refused',
+    fence: 1,
+    ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
+      surface: 'rejection'
+    })
+  })
+  const sent = await hostContinue(
+    journal,
+    { turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 },
+    2_000
+  )
+  await journal.resolveDispatch({
+    clientMessageId: sent,
+    state: 'accepted',
+    providerIdentity: null,
+    fence: 1
+  })
+  await limitedTurn(journal, 'second', 0, {
+    userItemId: agentJournalSubmissionKey(sent),
+    resetsAt: 120_000
+  })
+  expect((await readProjection(projections, journal))!.usageLimitCut?.chain).toBe(1)
+})

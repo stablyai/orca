@@ -10,7 +10,7 @@ import {
 } from './provider-group-orphan-guard'
 
 // One worst-case proof (two 2 s reads around a 1 s second-boundary wait) still fits the 15 s bootstrap deadline.
-const OWNERSHIP_PROOF_WINDOW_MS = 9_000
+export const OWNERSHIP_PROOF_WINDOW_MS = 9_000
 const OWNERSHIP_PROOF_MAX_BACKOFF_MS = 1_000
 
 let ownerIdentity: Promise<ProviderProcessIdentityRead> | undefined

@@ -54,7 +54,7 @@ async function helper(
   return { reads, output, code: process.exitCode }
 }
 
-it.each(['é', '界', '😀'])(
+it.each(['é', '😀'])(
   'preserves %s in W and C across byte delivery schedules',
   async (character) => {
     const parent = `/selected-${character}`

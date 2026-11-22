@@ -17,7 +17,7 @@ import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accoun
 import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
 import type * as paneSelectionLane from '../codex-pane-selection-lane'
-import type { ClaudeHostFolders } from './claude-pane-account-folder'
+import type { ClaudeHostFolders } from '../../../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 
 const laneByPtyId: Record<string, string> = {}
 let projectRuntime: ProjectExecutionRuntimeResolution | undefined

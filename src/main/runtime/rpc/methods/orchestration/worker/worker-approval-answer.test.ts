@@ -65,6 +65,14 @@ function setup(approvalId: string) {
   })
   const task = db.createTask({ spec: 'do the work', runId: run.id })
   const dispatch = createRootDispatch(db, task.id, HANDLE)
+  const openApproval = {
+    v: 1 as const,
+    approvalId,
+    state: 'open' as const,
+    worker: { handle: HANDLE, dispatchId: dispatch.id, taskId: dispatch.task_id },
+    summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+    allowedActions: ['allow' as const, 'deny' as const]
+  }
   // The escalation Orca's stop report stored for this approval.
   db.insertMessage({
     id: approvalReportId(dispatch.id, approvalId, 'open'),
@@ -73,22 +81,15 @@ function setup(approvalId: string) {
     subject: 'Worker is waiting for permission',
     type: 'escalation',
     payload: JSON.stringify({
-      approval: {
-        v: 1,
-        approvalId,
-        state: 'open',
-        worker: { handle: HANDLE, dispatchId: dispatch.id, taskId: dispatch.task_id },
-        summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
-        allowedActions: ['allow', 'deny']
-      }
+      approval: openApproval
     }),
     runId: run.id
   })
-  const terminalAnswer = vi.fn(async () => ({
-    ok: false as const,
-    code: 'approval_not_open' as const,
-    message: 'gone'
-  }))
+  const terminalAnswer = vi.fn(async () =>
+    chat.custody === 'terminal'
+      ? { ok: true as const, approval: openApproval }
+      : { ok: false as const, code: 'approval_not_open' as const, message: 'gone' }
+  )
   const runtime = {
     getOrchestrationDb: () => db,
     notifyMessageArrived: vi.fn(),
@@ -149,5 +150,28 @@ describe('answering a worker approval', () => {
     const byCoordinator = setup('item_1')
     await byCoordinator.call('deny', coordinator)
     expect(byCoordinator.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
+  })
+  it("mails a coordinator's reason that the worker's answer cannot carry", async () => {
+    chat.custody = 'chat'
+    chat.answer.mockResolvedValue({
+      ok: true,
+      prompt: { revision: 2, body: item('trusted-local:orchestration:approval:x') },
+      optionLabel: 'Allow'
+    })
+    const chatAllow = setup('item_1')
+    await chatAllow.call('allow', coordinator)
+    expect(chatAllow.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
+
+    // Claude's hook answer carries a deny's message, but an allow takes none.
+    chat.custody = 'terminal'
+    const terminalAllow = setup('apr_1')
+    await expect(terminalAllow.call('allow', coordinator)).resolves.toMatchObject({
+      reasonMessageId: expect.any(String)
+    })
+    expect(terminalAllow.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
+
+    const terminalDeny = setup('apr_1')
+    await terminalDeny.call('deny', coordinator)
+    expect(terminalDeny.mailToWorker()).toEqual([])
   })
 })

@@ -16,6 +16,7 @@ import {
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 import { followPublicationLeasesWithFrameRate } from './offscreen-page-frame-rate'
 import { mustKeepOffscreenPage, OffscreenPageIdleClock } from './offscreen-page-idle-freeing'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from '../../window/web-contents-listener-budget'
 
 // orca serve has no renderer for webviews; hidden offscreen BrowserWindows host its pages.
 // Headless Linux requires Xvfb; Electron --headless segfaults.
@@ -94,6 +95,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     // Nothing reads offscreen paint frames: CDP captures and screencasts copy from the compositor,
     // and delivering every animation frame to main costs hundreds of MB per animated tab.
     win.webContents.stopPainting()
+    // Same browser subsystems watch it as a desktop guest, so the same per-event budget.
+    win.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
     followPublicationLeasesWithFrameRate(win.webContents)
     this.windowsByPageId.set(browserPageId, win)
     // Server pages have no window to ask in; agents and phones answer their dialogs.

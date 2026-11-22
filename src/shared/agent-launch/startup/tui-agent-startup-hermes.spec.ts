@@ -6,29 +6,21 @@ import { unwrapPosixShellScript } from './tui-agent-startup-script.test-fixture'
 // Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
-  it('removes a configured duplicate chat subcommand', () => {
+  it('removes a duplicate chat subcommand and preserves chat as an option value', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
       prompt: 'run it',
-      cmdOverrides: { hermes: 'hermes --provider copilot chat --tui' },
+      cmdOverrides: {
+        hermes: 'hermes --provider copilot --profile chat --model example chat --tui'
+      },
       agentArgs: '--provider copilot chat --yolo',
       platform: 'linux'
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
-    expect(script.match(/'chat'/g)).toHaveLength(1)
+    expect(script.match(/'chat'/g)).toHaveLength(2)
     expect(script).toContain("'--provider' 'copilot' '--yolo'")
-  })
-
-  it('preserves an option value named chat', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'hermes --profile chat --tui' },
-      platform: 'linux'
-    })
-
-    expect(unwrapPosixShellScript(plan?.launchCommand)).toContain("'--profile' 'chat'")
+    expect(script).toContain("'--profile' 'chat'")
   })
 
   it('keeps Orca ownership of the Hermes startup query and TUI mode', () => {

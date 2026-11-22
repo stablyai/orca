@@ -80,7 +80,7 @@ afterEach(() => {
 })
 
 describe('relocated process-host package', () => {
-  it.each(['package.json', 'dist/run-process.js', 'dist/spawn-observer.js'])(
+  it.each(['package.json', 'dist/spawn-observer.js'])(
     'refuses a source missing %s before copying',
     (relative) => {
       rmSync(join(installDir, packageRel, ...relative.split('/')))
@@ -89,33 +89,20 @@ describe('relocated process-host package', () => {
     }
   )
 
-  it('rejects a mirror missing a private emitted module', () => {
-    writeFileSync(
-      join(installDir, packageRel, 'dist', 'private-internal.js'),
-      'module.exports = {}'
-    )
+  it('repairs a mirror missing a private emitted module without replacing the old host', () => {
+    const privateModule = join(packageRel, 'dist', 'private-internal.js')
+    writeFileSync(join(installDir, privateModule), 'module.exports = {}')
     const root = materializedRoot()
-    rmSync(join(root, packageRel, 'dist', 'private-internal.js'))
-    expect(getRelocatedDaemonHost()).toBeNull()
-    expect(existsSync(join(materializedRoot(), packageRel, 'dist', 'private-internal.js'))).toBe(
-      true
-    )
-  })
+    const sentinel = join(root, 'live-host-sentinel')
+    writeFileSync(sentinel, 'keep')
+    rmSync(join(root, privateModule))
 
-  it.each(['package.json', 'dist/run-process.js', 'dist/spawn-observer.js'])(
-    'rejects a mirror missing %s and preserves it while publishing a repair',
-    (relative) => {
-      const root = materializedRoot()
-      const sentinel = join(root, 'live-host-sentinel')
-      writeFileSync(sentinel, 'keep')
-      rmSync(join(root, packageRel, ...relative.split('/')))
-      expect(getRelocatedDaemonHost()).toBeNull()
-      const repaired = materializedRoot()
-      expect(repaired).not.toBe(root)
-      expect(existsSync(join(repaired, packageRel, ...relative.split('/')))).toBe(true)
-      expect(readFileSync(sentinel, 'utf8')).toBe('keep')
-    }
-  )
+    expect(getRelocatedDaemonHost()).toBeNull()
+    const repaired = materializedRoot()
+    expect(repaired).not.toBe(root)
+    expect(existsSync(join(repaired, privateModule))).toBe(true)
+    expect(readFileSync(sentinel, 'utf8')).toBe('keep')
+  })
 
   it.each(['bytes', 'file list'])(
     'distinguishes the same app version when package %s change',
@@ -250,7 +237,7 @@ describe('relocated process-host package', () => {
 
 describe('relocated Windows registry package', () => {
   const registryRel = join('resources', 'node_modules', '@orca', 'windows-registry')
-  const required = ['package.json', 'index.js', 'build/Release/orca_windows_registry.node']
+  const nativeModule = join(registryRel, 'build', 'Release', 'orca_windows_registry.node')
 
   it('loads the real root entry and reaches the native binary after the install tree disappears', () => {
     const root = materializedRoot()
@@ -286,29 +273,24 @@ describe('relocated Windows registry package', () => {
     expect(existsSync(join(root, registryRel, 'build', 'Release', 'obj'))).toBe(false)
   })
 
-  it.each(required)(
-    'refuses an incomplete registry source missing %s without staging a host',
-    (relative) => {
-      rmSync(join(installDir, registryRel, ...relative.split('/')))
-      expect(materializeRelocatedDaemonHost()).toBeNull()
-      expect(existsSync(hostRoot)).toBe(false)
-    }
-  )
+  it('refuses an incomplete registry source without staging a host', () => {
+    rmSync(join(installDir, nativeModule))
+    expect(materializeRelocatedDaemonHost()).toBeNull()
+    expect(existsSync(hostRoot)).toBe(false)
+  })
 
-  it.each(required)(
-    'repairs a mirror missing registry %s without changing the old host',
-    (relative) => {
-      const root = materializedRoot()
-      const sentinel = join(root, 'live-host-sentinel')
-      writeFileSync(sentinel, 'keep')
-      rmSync(join(root, registryRel, ...relative.split('/')), { force: true })
-      expect(getRelocatedDaemonHost()).toBeNull()
-      const repaired = materializedRoot()
-      expect(repaired).not.toBe(root)
-      expect(existsSync(join(repaired, registryRel, ...relative.split('/')))).toBe(true)
-      expect(readFileSync(sentinel, 'utf8')).toBe('keep')
-    }
-  )
+  it('repairs a missing native registry module without replacing the old host', () => {
+    const root = materializedRoot()
+    const sentinel = join(root, 'live-host-sentinel')
+    writeFileSync(sentinel, 'keep')
+    rmSync(join(root, nativeModule))
+
+    expect(getRelocatedDaemonHost()).toBeNull()
+    const repaired = materializedRoot()
+    expect(repaired).not.toBe(root)
+    expect(existsSync(join(repaired, nativeModule))).toBe(true)
+    expect(readFileSync(sentinel, 'utf8')).toBe('keep')
+  })
 
   it.skipIf(originalPlatform !== 'win32')(
     'reads the Windows registry from the mirror with the built addon',

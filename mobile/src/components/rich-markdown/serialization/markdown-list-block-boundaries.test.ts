@@ -6,7 +6,6 @@ import { quietRichMarkdownEditorHost } from '../document/rich-markdown-editor-ho
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
 const stopDocuments: (() => void)[] = []
-const lists = [['task', '- [ ] First\n- [x] Next\n\nOutside', 'li > div']] as const
 
 function surface(source: string) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
@@ -25,33 +24,23 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-for (const [kind, source, selector] of lists) {
-  it.each([
-    ['<p>First</p><p>Second</p>', 'First<br />Second', 'First<br>Second'],
-    [
-      '<p><code>First</code></p><p><code>Second</code></p>',
-      '`First`<br />`Second`',
-      '<code>First</code><br><code>Second</code>'
-    ]
-  ])(
-    `preserves ${kind} item block boundaries through host save and reopen: %s`,
-    (html, text, inline) => {
-      const { editorDocument, editor, messages } = surface(source)
-      const body = editor.querySelector(selector)!
-      body.innerHTML = html
-      editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }))
-      const markdown = source.replace('First', text)
+it('keeps separate code paragraphs in a task item through host save and reopen', () => {
+  const { editorDocument, editor, messages } = surface('- [ ] First\n- [x] Next\n\nOutside')
+  editor.querySelector('li > div')!.innerHTML =
+    '<p><code>First</code></p><p><code>Second</code></p>'
+  editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }))
+  const markdown = '- [ ] `First`<br />`Second`\n- [x] Next\n\nOutside'
 
-      expect(messages.filter((message) => message.type === 'change')).toEqual([
-        { type: 'change', generation: 7, markdown }
-      ])
-      editorDocument.send.setMarkdown(markdown, 8)
-      expect(editor.querySelector(selector)!.querySelector('p')!.innerHTML).toBe(inline)
-      expect(editor.querySelector(':scope > p')?.textContent).toBe('Outside')
-      expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-    }
+  expect(messages.filter((message) => message.type === 'change')).toEqual([
+    { type: 'change', generation: 7, markdown }
+  ])
+  editorDocument.send.setMarkdown(markdown, 8)
+  expect(editor.querySelector('li > div > p')?.innerHTML).toBe(
+    '<code>First</code><br><code>Second</code>'
   )
-}
+  expect(editor.querySelector(':scope > p')?.textContent).toBe('Outside')
+  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
+})
 
 it.each([
   ['<p>First<br></p><p>Second</p>', 'First<br />Second'],

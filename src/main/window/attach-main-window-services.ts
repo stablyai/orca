@@ -1,6 +1,8 @@
 import { ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 
+// oxlint-disable-next-line no-restricted-imports -- application handlers installed here move with the IPC registry, not the native window
 import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -60,6 +62,7 @@ let activeTccPromptHandlerToken: number | null = null
 export async function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
+  nativeSettings: NativeSettingsProjection,
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   prepareClaudeAuth?: (
@@ -159,7 +162,7 @@ export async function attachMainWindowServices(
     return getAgentSessionAttachmentStore()
   })
   registerTccPromptNoticeHandlers(mainWindow)
-  scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
+  scheduleMainWindowAutoUpdaterSetup(mainWindow, nativeSettings, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   installPluginDesktopFrameServices(mainWindow, store)

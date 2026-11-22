@@ -28,6 +28,11 @@ export class FakeConnectorCloud {
   private readonly held = new Map<string, (() => void)[]>()
   /** Accounts the auth service still mints for; removing one is a sign-out elsewhere. */
   readonly signedIn = new Set<string>(['ada'])
+  /** The auth service's 403 code for every mint, e.g. `machine_mismatch`; null mints. */
+  mintRefusal: string | null = null
+  /** The mint still refuses the sign-in after a fresh session, as the desktop's mint reports it. */
+  mintSessionRefused = false
+  mintAttempts = 0
   /** Every token minted, in order. */
   readonly minted: { account: string; token: string }[] = []
   private readonly tokens = new Map<string, { account: string; expiresAt: number }>()
@@ -35,6 +40,16 @@ export class FakeConnectorCloud {
   private hello: { rev: number; seq: number } | null = null
   // The last revision handed out; it outlives a lost hello, as the host row does.
   private lastRev = 0
+  /** What each hello answer lists beyond the contract version; an older cloud lists nothing. */
+  features: string[] | undefined
+  /** Hooks of this machine deleted while it was away, as the hello answer lists them. */
+  webhookTombstones: string[] | undefined
+  /** The bot ids the cloud holds for this machine, as its last hello listing bots replaced them. */
+  registeredBots: string[] = []
+  /** Staged pages are lost before their hello, as a sweep would. */
+  loseBotPages = false
+  /** Staged bot pages by inventory, from a cloud listing `bots.pages`. */
+  private readonly botPages = new Map<string, Map<number, string[]>>()
   /** Every hello, ack and event the machine sent, in order. */
   readonly hellos: unknown[] = []
   readonly acks: unknown[] = []
@@ -77,6 +92,19 @@ export class FakeConnectorCloud {
   /** The auth service's connector-token route for one account, minus the HTTP. */
   mintFor(account: string): ConnectorTokenMint {
     return async (): Promise<ConnectorResult<ConnectorToken>> => {
+      this.mintAttempts++
+      if (this.mintRefusal) {
+        return { ok: false, status: 403, error: this.mintRefusal, retryAfterMs: null }
+      }
+      if (this.mintSessionRefused) {
+        return {
+          ok: false,
+          status: 401,
+          error: 'invalid_token',
+          retryAfterMs: null,
+          sessionRefused: true
+        }
+      }
       if (!this.signedIn.has(account)) {
         return { ok: false, status: 401, error: 'signed_out', retryAfterMs: null }
       }
@@ -144,6 +172,8 @@ export class FakeConnectorCloud {
         return this.machineCall(path, body, token, signal)
       case CONNECTOR_PATHS.replies:
         return this.reply(body, token)
+      case CONNECTOR_PATHS.botPages:
+        return this.stageBotPage(body)
       default:
         return { status: 404, body: { error: 'not_found' } }
     }
@@ -154,11 +184,51 @@ export class FakeConnectorCloud {
     if (!issued || issued.expiresAt <= Date.now()) {
       return { status: 401, body: { error: 'invalid_token' } }
     }
-    const replyId = isRecord(body) ? String(body.replyId) : ''
+    // As the cloud's route parses it: v is the request's version, and 1 is the only one.
+    if (!isRecord(body) || body.v !== 1) {
+      return { status: 400, body: { error: 'invalid_request' } }
+    }
+    const replyId = String(body.replyId)
     if (!this.replies.has(replyId)) {
       this.replies.set(replyId, body)
     }
     return { status: 200, body: { status: 'posted', messageId: '1793.0042' } }
+  }
+
+  private takesPages(): boolean {
+    return this.features?.includes('bots.pages') === true
+  }
+
+  private stageBotPage(body: unknown): Reply {
+    // An older cloud has no such route.
+    if (!this.takesPages() || !isRecord(body)) {
+      return { status: 404, body: { error: 'not_found' } }
+    }
+    const inventory = this.botPages.get(String(body.inventoryId)) ?? new Map<number, string[]>()
+    inventory.set(Number(body.index), botIds(body.bots))
+    if (!this.loseBotPages) {
+      this.botPages.set(String(body.inventoryId), inventory)
+    }
+    return { status: 204 }
+  }
+
+  /** The ids a hello lists, null when it lists none, or why the cloud refuses it. */
+  private helloBots(fields: Record<string, unknown>): string[] | null | 'invalid' | 'missing' {
+    const { botPages } = fields
+    if (isRecord(botPages) && this.takesPages()) {
+      const inventory = this.botPages.get(String(botPages.inventoryId))
+      this.botPages.delete(String(botPages.inventoryId))
+      const pages = Array.from({ length: Number(botPages.pages) }, (_, index) =>
+        inventory?.get(index)
+      )
+      return pages.every(Boolean) ? pages.flatMap((page) => page ?? []) : 'missing'
+    }
+    if (!Array.isArray(fields.bots)) {
+      return null
+    }
+    return fields.bots.length > CONNECTOR_CLIENT_LIMITS.maxHelloBots
+      ? 'invalid'
+      : botIds(fields.bots)
   }
 
   private async machineCall(
@@ -175,9 +245,26 @@ export class FakeConnectorCloud {
     const rev = typeof fields.helloRev === 'number' ? fields.helloRev : -1
     if (path === CONNECTOR_PATHS.hello) {
       this.hellos.push(body)
+      const listed = this.helloBots(fields)
+      if (listed === 'invalid') {
+        return { status: 400, body: { error: 'invalid_request' } }
+      }
+      if (listed === 'missing') {
+        return { status: 409, body: { error: 'bot_pages_missing' } }
+      }
+      if (listed) {
+        this.registeredBots = listed
+      }
       // Every hello gets the next revision and a fresh event mark.
       this.hello = { rev: ++this.lastRev, seq: -1 }
-      return { status: 200, body: { helloRev: this.hello.rev } }
+      return {
+        status: 200,
+        body: {
+          helloRev: this.hello.rev,
+          features: this.features,
+          webhookTombstones: this.webhookTombstones
+        }
+      }
     }
     const { hello } = this
     // Anything under another hello is refused and applies nothing.
@@ -212,6 +299,10 @@ export class FakeConnectorCloud {
     }
     return reply
   }
+}
+
+function botIds(bots: unknown): string[] {
+  return Array.isArray(bots) ? bots.map((bot) => String(isRecord(bot) ? bot.id : '')) : []
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

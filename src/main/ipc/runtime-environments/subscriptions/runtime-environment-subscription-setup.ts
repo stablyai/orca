@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { IpcMainInvokeEvent, WebContents } from 'electron'
+import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
 import {
   isAbortSignalReason,
   throwIfSignalAborted
@@ -95,8 +95,7 @@ export async function resolveSubscriptionEnvironment(
 }
 
 export async function assertCrewSubscriptionCurrent(
-  event: IpcMainInvokeEvent,
-  sender: WebContents,
+  document: DocumentDeliveryEndpoint,
   getUserDataPath: () => string,
   environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   pairingRevision: number,
@@ -106,12 +105,7 @@ export async function assertCrewSubscriptionCurrent(
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
 ): Promise<void> {
   throwIfSignalAborted(signal)
-  if (
-    sender.isDestroyed() ||
-    !event.senderFrame ||
-    event.senderFrame.detached ||
-    event.senderFrame !== sender.mainFrame
-  ) {
+  if (!document.isCurrent()) {
     throw new RuntimeEnvironmentSetupGuardError(
       'The window that started this subscription went away',
       { kind: 'source-retired' }
@@ -130,12 +124,7 @@ export async function assertCrewSubscriptionCurrent(
     throw error
   }
   throwIfSignalAborted(signal)
-  if (
-    sender.isDestroyed() ||
-    !event.senderFrame ||
-    event.senderFrame.detached ||
-    event.senderFrame !== sender.mainFrame
-  ) {
+  if (!document.isCurrent()) {
     throw new RuntimeEnvironmentSetupGuardError(
       'The window that started this subscription went away',
       { kind: 'source-retired' }

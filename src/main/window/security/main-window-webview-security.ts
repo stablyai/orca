@@ -53,6 +53,7 @@ import {
   startBrowserExtensionSidePanelGuest
 } from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
 import { associateBrowserExtensionSidePanelGuest } from '../../browser/extensions/side-panel/browser-extension-side-panel-guests'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from '../web-contents-listener-budget'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -98,6 +99,10 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
   const mainWebContentsId = mainWindow.webContents.id
   const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
+    // Each browser subsystem watches a page's lifetime, so a restore alone passes Node's default 10.
+    if (guest.getType() === 'webview') {
+      guest.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+    }
     associateBrowserPageAttach(guest)
     associateBrowserExtensionSidePanelGuest(guest)
   }

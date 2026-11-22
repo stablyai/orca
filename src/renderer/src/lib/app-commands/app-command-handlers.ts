@@ -3,9 +3,12 @@ import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-r
 import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
+import { toast } from 'sonner'
+import { readSidebarRevealTarget } from '@/components/sidebar/sidebar-reveal-target-state'
+import { workspaceRenameUnsupportedReason } from './workspace-rename-target'
 import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
-import { shouldShowWorktreeHistoryControls } from '../../app-shell/chrome/titlebar-worktree-history-controls'
+import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
@@ -13,6 +16,7 @@ import {
 } from '../../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../../store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
@@ -126,7 +130,8 @@ export function createAppCommandHandlers(
     [
       'worktree.history.back',
       () => {
-        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+        const { activeModal } = useAppStore.getState()
+        if (creationLayoutActive || !canNavigateWorktreeHistory({ activeView, activeModal })) {
           return false
         }
         return claim('worktree.history.back', () => useAppStore.getState().goBackWorktree())
@@ -135,7 +140,8 @@ export function createAppCommandHandlers(
     [
       'worktree.history.forward',
       () => {
-        if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
+        const { activeModal } = useAppStore.getState()
+        if (creationLayoutActive || !canNavigateWorktreeHistory({ activeView, activeModal })) {
           return false
         }
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
@@ -168,7 +174,7 @@ export function createAppCommandHandlers(
         }
         const groupKey = resolveChildWorkspacesToggleGroupKey(
           store,
-          getRenderedLineageChipKeys(store)
+          getRenderedLineageChipKeys(store, readRuntimeStatuses())
         )
         if (!groupKey) {
           return false
@@ -214,6 +220,13 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('workspace.rename', () => {
+          // A bot's or group's page is its home, not a worktree: say so rather than rename
+          // something else or queue a Projects reveal that can never land.
+          const unsupported = workspaceRenameUnsupportedReason(readSidebarRevealTarget())
+          if (unsupported) {
+            toast.info(unsupported)
+            return
+          }
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
         })

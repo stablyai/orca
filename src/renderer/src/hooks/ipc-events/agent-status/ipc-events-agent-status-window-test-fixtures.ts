@@ -24,6 +24,7 @@ export function buildWindowApi(args: {
     api: {
       repos: { onChanged: () => () => {} },
       automations: { onChanged: () => () => {} },
+      botChanges: { onChanged: () => () => {} },
       workspaceCleanup: { onRunFinished: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
@@ -33,6 +34,8 @@ export function buildWindowApi(args: {
       ui: {
         onStateChanged: () => () => {},
         onOpenSettings: () => () => {},
+        onBotLinkPending: () => () => {},
+        consumePendingBotLink: async () => null,
         consumePendingOpenSettings: () => Promise.resolve(false),
         onOpenFeatureTour: () => () => {},
         onToggleLeftSidebar: () => () => {},
@@ -144,7 +147,10 @@ export function buildWindowApi(args: {
           : {}),
         drop: args.drop ?? vi.fn()
       }
-    }
+    },
+    // App-wide window events, such as botsChanged's re-emit.
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
   }
 }
 

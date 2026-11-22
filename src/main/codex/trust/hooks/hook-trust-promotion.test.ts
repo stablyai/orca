@@ -24,6 +24,11 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock
@@ -316,6 +321,96 @@ describe('codex hook trust write-back promotion', () => {
         computeTrustKey(runtimeUserStopEntry())
       )?.enabled
     ).toBe(false)
+  })
+
+  it('keeps a SessionEnd hook disabled in ~/.codex when an older Orca left its in-Orca approval unrecorded', async () => {
+    mkdirSync(systemCodexDir(), { recursive: true })
+    writeFileSync(
+      join(systemCodexDir(), 'hooks.json'),
+      JSON.stringify({
+        hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: USER_HOOK_COMMAND }] }] }
+      })
+    )
+    const systemEntry: CodexTrustEntry = {
+      ...systemUserStopEntry(),
+      eventLabel: 'session_end'
+    }
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent('', [{ ...systemEntry, enabled: false }])
+    )
+    const service = new CodexHookService()
+    await service.install()
+    // An older Orca could not record session_end approvals in its version 1 provenance.
+    simulateCodexApproval({
+      ...runtimeUserStopEntry(),
+      eventLabel: 'session_end',
+      groupIndex: 0,
+      enabled: true
+    })
+    writeFileSync(
+      join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'),
+      `${JSON.stringify({ version: 1, entries: {} })}\n`
+    )
+
+    await service.install()
+
+    expect(readHookTrustEntries(systemTomlPath).get(computeTrustKey(systemEntry))?.enabled).toBe(
+      false
+    )
+  })
+
+  it('does not enable a disabled SessionEnd sibling whose raw timeout differs but clamps equal', async () => {
+    mkdirSync(systemCodexDir(), { recursive: true })
+    const hook = (timeout: number) => ({
+      hooks: [{ type: 'command', command: USER_HOOK_COMMAND, timeout }]
+    })
+    writeFileSync(
+      join(systemCodexDir(), 'hooks.json'),
+      JSON.stringify({ hooks: { SessionEnd: [hook(5), hook(9)] } })
+    )
+    const systemSource = join(systemCodexDir(), 'hooks.json')
+    const systemEntry = (groupIndex: number, timeoutSec: number): CodexTrustEntry => ({
+      sourcePath: systemSource,
+      eventLabel: 'session_end',
+      groupIndex,
+      handlerIndex: 0,
+      command: USER_HOOK_COMMAND,
+      timeoutSec
+    })
+    const systemTomlPath = join(systemCodexDir(), 'config.toml')
+    writeFileSync(
+      systemTomlPath,
+      upsertHookTrustEntriesInContent('', [
+        { ...systemEntry(0, 5), enabled: false },
+        { ...systemEntry(1, 9), enabled: false }
+      ])
+    )
+    const service = new CodexHookService()
+    await service.install()
+    const runtimeHooks: { hooks: { SessionEnd: { hooks: { timeout?: number }[] }[] } } = JSON.parse(
+      readFileSync(join(runtimeHomeDir(), 'hooks.json'), 'utf-8')
+    )
+    const runtimeGroup = runtimeHooks.hooks.SessionEnd.findIndex(
+      (group) => group.hooks[0]?.timeout === 5
+    )
+    expect(runtimeGroup).toBeGreaterThanOrEqual(0)
+    simulateCodexApproval({
+      sourcePath: getCodexExplicitHomeHookSourcePath(join(runtimeHomeDir(), 'hooks.json')),
+      eventLabel: 'session_end',
+      groupIndex: runtimeGroup,
+      handlerIndex: 0,
+      command: USER_HOOK_COMMAND,
+      timeoutSec: 5,
+      enabled: true
+    })
+
+    await service.install()
+
+    const system = readHookTrustEntries(systemTomlPath)
+    expect(system.get(computeTrustKey(systemEntry(0, 5)))?.enabled).toBe(true)
+    expect(system.get(computeTrustKey(systemEntry(1, 9)))?.enabled).toBe(false)
   })
 
   it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', async () => {

@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import {
+  joinsAutomationRunFold,
   sameNativeChatRowPlacement,
   type NativeChatSubagentRow
 } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -56,6 +57,9 @@ export function reuseUnits(
       !sameNativeChatRowPlacement(prior, message) ||
       subagentItemBlock(prior) !== null ||
       subagentItemBlock(message) !== null ||
+      // A run row can fold or mark an earlier row, so only a full pass may place it.
+      joinsAutomationRunFold(prior) ||
+      joinsAutomationRunFold(message) ||
       // A conversation user row opens the turns subagent rows are grouped by.
       (subagents && message.role === 'user') ||
       state.kinds.get(prior) !== nativeChatToolFoldKind(message)
@@ -84,6 +88,7 @@ export function reuseUnits(
       !message.journalPosition ||
       nativeChatDisplaySortRank(message) !== 0 ||
       subagentItemBlock(message) !== null ||
+      joinsAutomationRunFold(message) ||
       // A raw id shaped like a detached result's renames every later orphan.
       isOrphanRowId(message.id) ||
       state.ids.has(message.id) ||

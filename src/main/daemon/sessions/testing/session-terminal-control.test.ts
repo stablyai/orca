@@ -142,6 +142,36 @@ describe('Session terminal control', () => {
     })
   })
 
+  describe('startup command typeahead', () => {
+    async function flushAfterReady(typed: string[]): Promise<void> {
+      createSession({ shellReadySupported: true })
+      session.writeStartupCommand('claude\r')
+      for (const data of typed) {
+        session.write(data)
+      }
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07% ')
+      await vi.advanceTimersByTimeAsync(50)
+    }
+
+    it('clears text typed before the held launch command so it runs intact (#45382)', async () => {
+      await flushAfterReady(['h', 'i'])
+      expect(subprocess.written).toEqual(['h', 'i', ' \x15', 'claude\r'])
+    })
+
+    it('clears typed text before a launch command flushed by the ready timeout', async () => {
+      createSession({ shellReadySupported: true })
+      session.writeStartupCommand('claude\r')
+      session.write('hi')
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(subprocess.written).toEqual(['hi', ' \x15', 'claude\r'])
+    })
+
+    it('does not clear the line for a terminal query reply', async () => {
+      await flushAfterReady(['\x1b[1;1R'])
+      expect(subprocess.written).toEqual(['\x1b[1;1R', 'claude\r'])
+    })
+  })
+
   describe('producer flow control', () => {
     it('client resume and its failsafe cannot release daemon stream backpressure', () => {
       createSession()

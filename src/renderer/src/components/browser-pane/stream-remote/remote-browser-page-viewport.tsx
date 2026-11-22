@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,10 +26,15 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from '../assemble-chrome/feedback/browser-page-feedback-badge'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
   imageRef,
+  feedbackBadgeRef,
   frameUrl,
   frameMetadata,
   busy,
@@ -35,7 +42,6 @@ export function RemoteBrowserPageViewport({
   browserTab,
   remoteError,
   streamStatus,
-  remoteCertificateTrustSupported,
   certificateFailure,
   remotePageHandle,
   activeRuntimeEnvironmentId,
@@ -51,10 +57,13 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerUp,
   handleRemoteContextMenu,
   handleRemoteScreenshotKeyDown,
-  handleRemoteScreenshotPaste
+  handleRemoteScreenshotPaste,
+  handleRemotePointerMove,
+  annotateOverlays
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
+  feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   busy: boolean
@@ -62,7 +71,6 @@ export function RemoteBrowserPageViewport({
   browserTab: BrowserPageState
   remoteError: string | null
   streamStatus: RemoteBrowserStreamStatus
-  remoteCertificateTrustSupported: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageHandle: RemoteBrowserPageHandle | null
   activeRuntimeEnvironmentId: string
@@ -80,8 +88,26 @@ export function RemoteBrowserPageViewport({
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  /** Present only while a page tool needs hover. */
+  handleRemotePointerMove?: (event: React.PointerEvent<HTMLImageElement>) => void
+  annotateOverlays: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
+  const remoteCertificateTrustSupported = useRuntimeEnvironmentCapability(
+    certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
+    BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+  )
+
+  // Transfer viewport focus to the first image, which owns remote key input.
+  const hasStreamFrame = frameUrl !== null
+  useEffect(() => {
+    if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
+      return
+    }
+    imageRef.current?.focus()
+  }, [hasStreamFrame, imageRef, remoteViewportRef])
+
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
@@ -104,6 +130,7 @@ export function RemoteBrowserPageViewport({
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
     >
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>
@@ -125,6 +152,7 @@ export function RemoteBrowserPageViewport({
           style={remoteFrameStyle}
           className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
+          onPointerMove={handleRemotePointerMove}
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}
@@ -156,6 +184,7 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
+      {annotateOverlays}
       {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
           loadError={loadError}

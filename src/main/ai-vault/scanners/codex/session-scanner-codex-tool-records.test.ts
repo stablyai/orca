@@ -12,22 +12,6 @@ const file = {
 const record = (type: string, payload: Record<string, unknown>): Buffer =>
   Buffer.from(JSON.stringify({ timestamp, type, payload }))
 
-it.each(['function_call_output', 'custom_tool_call_output'])(
-  'reads large %s records only when a consumer needs them',
-  (type) => {
-    const line = record('response_item', { type, output: 'outputonly '.repeat(300) })
-    expect(readCodexTimelineOnlyRecord(line)).toEqual({ timestamp })
-    expect(readCodexTimelineOnlyRecord(line, true)).toBeNull()
-    const messages: TranscriptMessage[] = []
-    const state = createCodexSessionResumeState(file, null, {
-      active: true,
-      push: (message) => messages.push(message)
-    })
-    state.consumeLineBytes!(line)
-    expect(messages).toEqual([{ role: 'tool', text: 'outputonly '.repeat(300), timestamp }])
-  }
-)
-
 it.each([false, true])(
   'uses one tool representation across append when paginated=%s',
   async (paginated) => {
@@ -87,7 +71,13 @@ it.each([
   ])
 })
 
-it('normalizes custom calls and structured results through the existing content reader', () => {
+it('publishes custom calls and large structured results when a transcript consumer is active', () => {
+  const output = 'resultneedle '.repeat(300).trimEnd()
+  const result = record('response_item', {
+    type: 'custom_tool_call_output',
+    output: { content: [{ type: 'text', text: output }] }
+  })
+  expect(readCodexTimelineOnlyRecord(result)).toEqual({ timestamp })
   const messages: TranscriptMessage[] = []
   const state = createCodexSessionResumeState(file, null, {
     active: true,
@@ -96,14 +86,9 @@ it('normalizes custom calls and structured results through the existing content 
   state.consumeLineBytes!(
     record('response_item', { type: 'custom_tool_call', name: 'apply_patch', input: 'patchneedle' })
   )
-  state.consumeLineBytes!(
-    record('response_item', {
-      type: 'custom_tool_call_output',
-      output: { content: [{ type: 'text', text: 'resultneedle' }] }
-    })
-  )
-  expect(messages.map((message) => message.text)).toEqual([
-    'apply_patch: patchneedle',
-    'resultneedle'
+  state.consumeLineBytes!(result)
+  expect(messages).toEqual([
+    { role: 'tool', text: 'apply_patch: patchneedle', timestamp },
+    { role: 'tool', text: output, timestamp }
   ])
 })

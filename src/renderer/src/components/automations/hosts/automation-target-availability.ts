@@ -52,6 +52,10 @@ export function getAutomationTargetAvailability(
   }: AutomationTargetAvailabilityArgs,
   t: Translate = translate
 ): AutomationTargetAvailability {
+  // A bot run needs no project; the host checks the bot itself and refuses a deleted or paused one.
+  if (automation.bot) {
+    return { canRunNow: true, reason: 'available', message: null }
+  }
   const reselection = automationHostReselectionMessage(capturedOwner, t)
   if (reselection) {
     return unavailable('host-reselection', reselection)

@@ -117,4 +117,24 @@ describe('createPtySubprocess', () => {
     expect(data).toEqual(['last output\r\n'])
     expect(codes).toEqual([7])
   })
+
+  it('marks a WinPTY pane, whose resize redraws its own screen, and no other', async () => {
+    const winpty = Object.assign(mockPtyProcess(), { _agent: { _useConpty: false } })
+    spawnMock.mockReturnValue(winpty)
+    expect(
+      (await createPtySubprocess({ sessionId: 'w', cols: 80, rows: 24 })).resizeRedrawsOwnScreen
+    ).toBe(true)
+
+    // A POSIX node-pty object has no `_agent` at all.
+    spawnMock.mockReturnValue(mockPtyProcess())
+    expect(
+      (await createPtySubprocess({ sessionId: 'p', cols: 80, rows: 24 })).resizeRedrawsOwnScreen
+    ).toBeUndefined()
+
+    const conpty = Object.assign(mockPtyProcess(), { _agent: { _useConpty: true } })
+    spawnMock.mockReturnValue(conpty)
+    expect(
+      (await createPtySubprocess({ sessionId: 'c', cols: 80, rows: 24 })).resizeRedrawsOwnScreen
+    ).toBeUndefined()
+  })
 })

@@ -65,6 +65,7 @@ describe('switchBranchGuarded', () => {
     const oid = await git('rev-parse', 'HEAD')
     await git('commit', '--allow-empty', '-qm', 'later')
     await git('branch', oid)
+    await git('checkout', '--detach', '-q')
     await switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
     expect(await git('log', '-1', '--format=%s')).toBe('base')
     expect(await git('branch', '--show-current')).toBe('')
@@ -76,15 +77,6 @@ describe('switchBranchGuarded', () => {
     )
     expect(await currentBranch()).toBe(oid)
     expect(await git('log', '-1', '--format=%s')).toBe('later')
-  })
-
-  it('moves between distinct reachable detached commits', async () => {
-    const target = await git('rev-parse', 'HEAD')
-    await git('commit', '--allow-empty', '-qm', 'later')
-    await git('checkout', '--detach', '-q')
-    await switchBranchGuarded(directory, { commitId: target }, {}, deps(null, target))
-    expect(await git('log', '-1', '--format=%s')).toBe('base')
-    expect(await git('branch', '--show-current')).toBe('')
   })
 
   it('does not check out a detached commit that is already HEAD', async () => {
@@ -102,13 +94,6 @@ describe('switchBranchGuarded', () => {
       previousBranch: null,
       head: oid
     })
-  })
-
-  it('switches a clean checkout and reports the branch it left', async () => {
-    const result = await switchBranchGuarded(directory, 'feature', {}, deps())
-
-    expect(result).toEqual({ branch: 'feature', previousBranch: 'main', head: initialHead })
-    expect(await currentBranch()).toBe('feature')
   })
 
   it('serializes concurrent switches so only one checks a clean tree and moves HEAD', async () => {

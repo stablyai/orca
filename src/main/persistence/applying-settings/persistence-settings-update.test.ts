@@ -1,4 +1,10 @@
-import { closeTestStores, testState, createStore } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  readPersistedState,
+  testState,
+  writeDataFile
+} from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -54,6 +60,30 @@ describe('Store', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it.each([
+    [{}, false],
+    [{ linuxTilingWindowMode: 'true' }, false],
+    [{ linuxTilingWindowMode: true }, true]
+  ])('loads tiling window mode from a saved profile with settings %j', (settings, expected) => {
+    writeDataFile({ settings })
+    expect(createStore().getSettings().linuxTilingWindowMode).toBe(expected)
+  })
+
+  it('persists tiling window mode as a strict boolean and preserves it on unrelated updates', () => {
+    const store = createStore()
+    store.updateSettings({ linuxTilingWindowMode: true })
+    store.updateSettings({ theme: 'dark' })
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(true)
+
+    store.updateSettings({
+      // @ts-expect-error -- Settings updates can contain malformed values at runtime.
+      linuxTilingWindowMode: 'true'
+    })
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(false)
   })
 
   it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {

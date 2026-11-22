@@ -84,7 +84,9 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
+export function createStore(
+  options: Pick<StoreRuntimeOptions, 'paneShellPath' | 'storageAuthority'> = {}
+): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })

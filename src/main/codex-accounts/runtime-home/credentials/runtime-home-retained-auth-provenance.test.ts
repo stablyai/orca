@@ -22,7 +22,7 @@ vi.mock(
   '../../../codex/configuration/shared-server/codex-daemon-socket-path-guard',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    applyCodexDaemonSocketGuard: (config: string) => config
+    codexDaemonSocketPathExceedsLimit: () => false
   })
 )
 

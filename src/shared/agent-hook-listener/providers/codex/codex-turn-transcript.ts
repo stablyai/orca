@@ -1,4 +1,4 @@
-import { record, type JsonRecord } from './codex-rollout-jsonl-cursor'
+import { type JsonRecord, record } from './codex-rollout-jsonl-format'
 
 export type CodexTranscriptTurn = {
   turnId?: string
@@ -30,4 +30,50 @@ export function reconcileCodexTranscriptTurn(
       }
     }
   }
+}
+
+/** Read model from child turn_context; it may differ from the parent’s. */
+export function readChildModel(records: JsonRecord[]): string | undefined {
+  let model: string | undefined
+  for (const recordValue of records) {
+    if (recordValue.type !== 'turn_context') {
+      continue
+    }
+    const payload = record(recordValue.payload)
+    const value = typeof payload?.model === 'string' ? payload.model.trim() : ''
+    if (value) {
+      model = value
+    }
+  }
+  return model
+}
+
+export function readTurnEnd(
+  recordValue: JsonRecord
+): { turnId: string; end: 'completed' | 'failed' } | undefined {
+  if (recordValue.type !== 'event_msg') {
+    return undefined
+  }
+  const payload = record(recordValue.payload)
+  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
+  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
+    return undefined
+  }
+  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
+}
+
+export function childIsComplete(records: JsonRecord[]): boolean {
+  let complete = false
+  for (const recordValue of records) {
+    if (recordValue.type !== 'event_msg') {
+      continue
+    }
+    const payload = record(recordValue.payload)
+    if (payload?.type === 'task_started') {
+      complete = false
+    } else if (payload?.type === 'task_complete') {
+      complete = true
+    }
+  }
+  return complete
 }

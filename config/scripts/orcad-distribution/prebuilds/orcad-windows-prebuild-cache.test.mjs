@@ -38,6 +38,7 @@ function fixture(arch = 'x64') {
   mkdirSync(join(sourceDir, 'third_party/conpty/1', `win10-${arch}`), { recursive: true })
   const files = {}
   for (const [file, bytes] of [
+    ['journal-file-lock.exe', peImage({ arch })],
     [
       'conpty.node',
       Buffer.concat([peImage({ arch }), CYGWIN_BREAKAWAY_MARKER, NATIVE_HOST_JOB_MARKER])
@@ -51,7 +52,7 @@ function fixture(arch = 'x64') {
   ]) {
     write(join(slotDir, file), bytes)
     files[file] = sha256Of(join(slotDir, file))
-    if (file !== 'conpty.node' && !file.startsWith('conpty/')) {
+    if (file !== 'journal-file-lock.exe' && file !== 'conpty.node' && !file.startsWith('conpty/')) {
       write(join(sourceDir, 'prebuilds', slot, file), bytes)
     }
     if (file.startsWith('conpty/')) {

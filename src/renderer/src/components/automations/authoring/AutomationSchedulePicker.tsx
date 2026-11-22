@@ -64,18 +64,26 @@ export function getSchedulePresetDraft(
   }
 }
 
+// A bot's When menu: no schedule (when it has events), or set up events in its chat.
+const NO_SCHEDULE = 'none'
+const ON_EVENTS = 'events'
+
 export function AutomationSchedulePicker({
   draft,
   validateAdvancedSchedule = isValidAutomationSchedule,
-  onDraftChange
+  onDraftChange,
+  onSetUpEvents
 }: {
   draft: AutomationDraft
   validateAdvancedSchedule?: (schedule: string) => boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
+  /** Present for a bot: its events are set up by chatting with it. */
+  onSetUpEvents?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const customSchedule = draft.customSchedule.trim()
+  const hasEvents = Boolean(draft.savedBotAutomation?.on.length)
   const weekdayNames = getUiWeekdayNames(intlLocale)
   // Match save validation: an untouched legacy cadence is not new input and must not show a strict-validation error.
   const acceptsSchedule = (schedule: string): boolean =>
@@ -98,13 +106,21 @@ export function AutomationSchedulePicker({
   return (
     <div className="grid gap-3">
       <Select
-        value={draft.preset}
-        onValueChange={(preset) =>
-          onDraftChange((current) => ({
-            ...current,
-            ...getSchedulePresetDraft(current, preset as AutomationSchedulePreset)
-          }))
-        }
+        value={draft.eventsOnly ? NO_SCHEDULE : draft.preset}
+        onValueChange={(value) => {
+          if (value === ON_EVENTS) {
+            onSetUpEvents?.()
+            return
+          }
+          const preset = AUTOMATION_SCHEDULE_PRESET_OPTIONS.find(
+            ([option]) => option === value
+          )?.[0]
+          onDraftChange((current) =>
+            preset
+              ? { ...current, eventsOnly: false, ...getSchedulePresetDraft(current, preset) }
+              : { ...current, eventsOnly: true, scheduleWarning: null }
+          )
+        }}
       >
         <SelectTrigger
           aria-label={t(
@@ -121,9 +137,22 @@ export function AutomationSchedulePicker({
               {getAutomationSchedulePresetLabel([value, fallbackLabel, labelKey], t)}
             </SelectItem>
           ))}
+          {/* Saved without a schedule and with every event removed, it runs on nothing. */}
+          {hasEvents || draft.eventsOnly ? (
+            <SelectItem value={NO_SCHEDULE}>
+              {hasEvents
+                ? t('automations.botTarget.noSchedule', 'Only on events')
+                : t('automations.botTarget.never', 'Never')}
+            </SelectItem>
+          ) : null}
+          {onSetUpEvents ? (
+            <SelectItem value={ON_EVENTS}>
+              {t('automations.botTarget.onEvents', 'When something happens…')}
+            </SelectItem>
+          ) : null}
         </SelectContent>
       </Select>
-      {draft.preset === 'custom' ? (
+      {draft.eventsOnly ? null : draft.preset === 'custom' ? (
         <AutomationCustomCronPanel
           draft={draft}
           customScheduleInvalid={customScheduleInvalid}

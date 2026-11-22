@@ -1,8 +1,12 @@
 import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
+import { readBrowserGuestCurrentFormData } from './manager/registration/browser-page-state-form-data'
 import { BrowserError } from '../browser-error'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
-import { readBrowserGuestDiscardProtection } from './manager/registration/browser-guest-discard-protection'
+import {
+  noteBrowserGuestFormData,
+  readBrowserGuestDiscardProtection
+} from './manager/registration/browser-guest-discard-protection'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   claims,
@@ -21,6 +25,7 @@ export {
   startBrowserPageAttach,
   hasPendingBrowserPageAttach
 } from './browser-page-attach'
+import { noteBrowserPageClosed } from './browser-page-partition-presence'
 
 export function bindBrowserPageMemoryInvalidation(
   pageId: string,
@@ -125,17 +130,18 @@ export function claimBrowserMemoryPage(
   }
 }
 
+/** `creatorRendererId` null means the creating renderer is already gone, so nothing is retained. */
 export function retainBrowserMemoryPageForAgent(
   pageId: string,
-  creator?: Electron.WebContents
+  creatorRendererId?: number | null
 ): void {
-  if (!isAgentRpcCaller(getActiveRpcCaller()) || creator?.isDestroyed()) {
+  if (!isAgentRpcCaller(getActiveRpcCaller()) || creatorRendererId === null) {
     return
   }
   const claim: Claim = claims.get(pageId) ?? { held: false, operations: 0 }
   const wasHeld = claim.held
-  if (creator && !pages.has(pageId)) {
-    claim.pendingRendererId = creator.id
+  if (creatorRendererId !== undefined && !pages.has(pageId)) {
+    claim.pendingRendererId = creatorRendererId
   }
   claim.held = true
   claims.set(pageId, claim)
@@ -165,9 +171,10 @@ export function isRetiredBrowserGuest(pageId: string, guestId: number): boolean 
   return pages.get(pageId)?.retired.has(guestId) === true
 }
 
-export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+/** Whether a discard reservation would be granted right now, without taking one. */
+export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
   const page = pages.get(pageId)
-  if (
+  return !(
     !page ||
     page.guest !== guest ||
     page.claim.held ||
@@ -179,11 +186,23 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
     guest.isDevToolsOpened() ||
     guest.debugger.isAttached() ||
     readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
-  ) {
+  )
+}
+
+export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+  const page = pages.get(pageId)
+  if (!page || !canReserveBrowserPageDiscard(pageId, guest)) {
     return false
   }
   let history: History
   try {
+    // A restore reloads with GET; only a page Chromium records as no form POST is discarded.
+    // Read from the current entry alone, so a refusal never exports the whole history.
+    const formData = readBrowserGuestCurrentFormData(guest)
+    noteBrowserGuestFormData(guest, formData)
+    if (formData !== 'none') {
+      return false
+    }
     // pageState restores scroll and form contents; it can hold typed secrets, so it stays in memory only.
     const entries = guest.navigationHistory
       .getAllEntries()
@@ -258,6 +277,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   forgetBrowserPageAttach(page)
   page.history = null
   pages.delete(pageId)
+  noteBrowserPageClosed(page.partition)
   for (const retired of page.retired.values()) {
     if (!retired.guest.isDestroyed()) {
       retired.guest.close({ waitForBeforeUnload: false })

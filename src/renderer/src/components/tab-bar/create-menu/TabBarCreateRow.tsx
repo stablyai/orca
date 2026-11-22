@@ -89,11 +89,7 @@ export function TabBarCreateRow({
             ? formatOptionalPrimaryShortcutLabel(item.actionId, keybindings)
             : null
           return (
-            <DropdownMenuItem
-              key={item.id}
-              onSelect={() => item.run()}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
+            <DropdownMenuItem key={item.id} onSelect={() => item.run()} variant="create">
               <span className="flex text-muted-foreground">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
               {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}

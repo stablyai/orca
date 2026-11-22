@@ -20,6 +20,7 @@ import {
   checkOrcadStdioBridge,
   openOrcadStdioBridgeChannel
 } from '../../managed-server/lifecycle/orcad-stdio-bridge'
+import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from '../../managed-server/lifecycle/orcad-stdio-bridge-listener'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import {
   fakeWslBridgeChildren,
@@ -34,6 +35,13 @@ import { WslOrcadConnectionSupersededError } from './wsl-orcad-connection-errors
 import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
+import type * as BackgroundDistroGate from '../discovery/wsl-background-distro-gate'
+
+// On Windows each bridge dial asks whether the distro runs (E9); keep the host's real WSL out of it.
+vi.mock('../discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 let first: { server: Server; port: number }
 let second: { server: Server; port: number }
@@ -159,6 +167,19 @@ describe('WslOrcadConnectionManager', () => {
     await staleClosed
     expect(await roundTrip(after, 'new')).toBe('new')
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
+  })
+
+  it('does not hold long-lived sockets to the SSH session cap', async () => {
+    const { manager, children } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const count = ORCAD_STDIO_BRIDGE_MAX_CHANNELS + 4
+    const sockets = await Promise.all(
+      Array.from({ length: count }, () => dial(connection.localPort))
+    )
+    await vi.waitFor(() => expect(children.live()).toBe(count))
+    expect(await Promise.all(sockets.map((socket, i) => echoOf(socket, `m${i}`)))).toEqual(
+      sockets.map((_, i) => `m${i}`)
+    )
   })
 
   it('drops a connect that a close overtook', async () => {

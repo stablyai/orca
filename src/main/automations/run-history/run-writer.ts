@@ -13,6 +13,7 @@ export type AutomationRunWriter = {
   createRun: DurableWrite<Store['createAutomationRun']>
   updateRun: DurableWrite<Store['updateAutomationRun']>
   repeatSkip: DurableWrite<Store['recordRepeatedAutomationSkip']>
+  foldEvent: DurableWrite<Store['foldAutomationEvent']>
   advanceNextRun: DurableWrite<Store['advanceAutomationNextRun']>
 }
 
@@ -23,6 +24,7 @@ export function createAutomationRunWriter(
     | 'createAutomationRun'
     | 'updateAutomationRun'
     | 'recordRepeatedAutomationSkip'
+    | 'foldAutomationEvent'
     | 'advanceAutomationNextRun'
     | 'automationChangeSelector'
     | 'flushPendingOrThrowAsync'
@@ -37,14 +39,24 @@ export function createAutomationRunWriter(
     const selector = store.automationChangeSelector(automationId)
     publish({ reason, ...(selector ? { selector } : {}) })
   }
+  const folded = async (
+    automationId: string,
+    run: AutomationRun | null
+  ): Promise<AutomationRun | null> => {
+    if (run) {
+      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      announce(automationId, 'run')
+    }
+    return run
+  }
   return {
     advanceNextRun: async (id, now) => {
       const automation = store.advanceAutomationNextRun(id, now)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       return automation
     },
-    createRun: async (automation, scheduledFor, trigger): Promise<AutomationRun> => {
-      const run = store.createAutomationRun(automation, scheduledFor, trigger)
+    createRun: async (automation, scheduledFor, trigger, event, id): Promise<AutomationRun> => {
+      const run = store.createAutomationRun(automation, scheduledFor, trigger, event, id)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       announce(automation.id, 'run')
       return run
@@ -55,13 +67,12 @@ export function createAutomationRunWriter(
       announce(run.automationId, result.usage ? 'usage' : 'run')
       return run
     },
-    repeatSkip: async (automationId, error, scheduledFor): Promise<AutomationRun | null> => {
-      const run = store.recordRepeatedAutomationSkip(automationId, error, scheduledFor)
-      if (run) {
-        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-        announce(automationId, 'run')
-      }
-      return run
-    }
+    repeatSkip: (automationId, error, scheduledFor, event) =>
+      folded(
+        automationId,
+        store.recordRepeatedAutomationSkip(automationId, error, scheduledFor, event)
+      ),
+    foldEvent: (automationId, event) =>
+      folded(automationId, store.foldAutomationEvent(automationId, event))
   }
 }

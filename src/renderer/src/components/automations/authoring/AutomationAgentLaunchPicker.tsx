@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
@@ -62,7 +62,7 @@ export function AutomationAgentLaunchPicker({
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }) {
   const t = useTranslate()
-  const state = useAppStore(selectAgentLaunchRouteView)
+  const state = useAppStoreWithHostStatuses(selectAgentLaunchRouteView)
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const route = buildAgentLaunchRouteInput(state, { agent: draft.agentId, workspace })

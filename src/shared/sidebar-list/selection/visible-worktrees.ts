@@ -1,5 +1,7 @@
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
+import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { isListedByFolderWorkspace } from '../../project/catalog/hidden-projects'
 import { isWorktreeRetiredByRemoval } from '../../worktree/removal/removal-visibility'
@@ -169,4 +171,21 @@ function addVisibleLineageAncestors(
     addWithAncestors(worktree)
   }
   return result
+}
+
+/** Rows a Bots section lists leave their project before filtering, so muting and filter counts ignore them. */
+export function withoutBotListedWorktrees<T extends Pick<Worktree, 'id' | 'hostId'>>(
+  rows: readonly T[],
+  botListed: ReadonlySet<string> | undefined
+): readonly T[] {
+  return botListed?.size ? rows.filter((row) => !botListed.has(getWorktreeHostIdentity(row))) : rows
+}
+
+/** A folder workspace a bot lists (one handed to it, say) leaves its project the same way. */
+export function withoutBotListedFolderWorkspaces<
+  T extends Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
+>(folders: readonly T[], botListed: ReadonlySet<string> | undefined): readonly T[] {
+  return botListed?.size
+    ? folders.filter((folder) => !botListed.has(getFolderWorkspaceHostIdentity(folder)))
+    : folders
 }

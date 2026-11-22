@@ -30,11 +30,13 @@ export function reusablePairingOffer(
   offers: readonly TokenDeviceEntry[],
   grants: readonly RuntimeDeviceGrant[],
   offerTtlMs: number | undefined,
+  createdByDeviceId?: string,
   now = Date.now()
 ): TokenDeviceEntry | null {
   return (
     offers.find(
       (d) =>
+        d.createdByDeviceId === createdByDeviceId &&
         sameGrants(d, grants) &&
         (offerTtlMs === undefined
           ? d.offerExpiresAt === undefined

@@ -53,13 +53,19 @@ export function nativeChatComposerSendState(
     orcaCommand?: boolean
     /** Goal mode submits the draft as an objective, which starts work. */
     goalMode?: boolean
+    /** A picked bot chat that can't take the message, or isn't checked yet: Send waits. */
+    mentionHold?: boolean
   },
   t?: Translate
 ): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments, t)
   const localHold =
-    input.pastedTextSaving || input.disabled || transport?.sendOut === true || imageBlock.holdsSend
+    input.pastedTextSaving ||
+    input.disabled ||
+    transport?.sendOut === true ||
+    imageBlock.holdsSend ||
+    input.mentionHold === true
   const hostHold = transport?.sendBlockedReason !== undefined
   const sendHeld = localHold || hostHold
   // Like Enter, a held host still takes commands that start no turn.

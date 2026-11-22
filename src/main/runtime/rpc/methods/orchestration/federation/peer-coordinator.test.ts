@@ -7,6 +7,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { escalateWorkerFailure } from '../../../../orchestration/workers/reports/worker-failure-escalation'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcResponse } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
@@ -92,7 +93,7 @@ describe('a paired Orca coordinating its Run on this server', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pull's result schema; a refusal reads as an empty page.
     return (response.ok ? response.result : { items: [] }) as {
-      items: { conversationId: string; kind: string }[]
+      items: { conversationId: string; kind: string; payload: string }[]
     }
   }
 
@@ -225,5 +226,25 @@ describe('a paired Orca coordinating its Run on this server', () => {
     db.transitionLifecycle({ entity: 'worker', id: dispatch.id, from: 'starting', to: 'ready' })
 
     expect((await waiting).items).toEqual([expect.objectContaining({ kind: 'worker_state' })])
+  })
+
+  it('sends home the Dispatch of a report this server files about its worker', async () => {
+    await peerCall('orchestration.runCurrent', {})
+    const task = db.createTask({ spec: 'peer work', runId: peerRunId() })
+    const dispatch = createRootDispatch(db, task.id, 'term_w', WORKER_PANE)
+    escalateWorkerFailure(
+      db,
+      dispatch,
+      {
+        id: 'msg_lost',
+        from: 'term_w',
+        describe: () => ({ subject: 'Worker lost without reporting', body: 'lost' }),
+        payload: {}
+      },
+      () => {}
+    )
+
+    const mail = (await pull('pull')).items.find((item) => item.kind === 'worker_mail')
+    expect(JSON.parse(mail!.payload)).toMatchObject({ dispatchId: dispatch.id, taskId: task.id })
   })
 })

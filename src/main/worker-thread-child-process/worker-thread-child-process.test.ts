@@ -6,6 +6,7 @@ import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
+  WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcessHost,
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
@@ -194,6 +195,104 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
 })
 
 // Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
+describe('WorkerThreadChildProcessHost availability', () => {
+  it('stops offering a worker that died before answering, so callers can spawn locally', async () => {
+    let created = 0
+    const host = new WorkerThreadChildProcessHost(() => {
+      created += 1
+      const transport = new EventEmitter()
+      return Object.assign(transport, {
+        postMessage: () => setImmediate(() => transport.emit('exit', 1)),
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    expect(host.available()).toBe(true)
+    const child = host.spawn({ program: 'git', args: ['status'] })
+    const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    // It never ran the request, so the child never existed and closes as a failed launch.
+    expect(child.closed).toBe(true)
+    expect(host.available()).toBe(false)
+    expect(created).toBe(1)
+  })
+
+  it('answers not ready for a worker whose entry fails to load, and never builds another', async () => {
+    let created = 0
+    const host = new WorkerThreadChildProcessHost(() => {
+      created += 1
+      const transport = new EventEmitter()
+      setImmediate(() => {
+        transport.emit(
+          'error',
+          new Error("Cannot find module 'worker-thread-child-process-entry.js'")
+        )
+        transport.emit('exit', 1)
+      })
+      return Object.assign(transport, {
+        postMessage: () => {},
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    await expect(host.whenReady()).resolves.toBe(false)
+    await expect(host.whenReady()).resolves.toBe(false)
+    expect(created).toBe(1)
+  })
+
+  it('answers ready once a live worker has loaded its entry', async () => {
+    await expect(makeConnectedHost().whenReady()).resolves.toBe(true)
+  })
+
+  it('starts a cold worker without waiting and reports it ready only once it loaded its entry', async () => {
+    const host = makeConnectedHost()
+    expect(host.isReady()).toBe(false)
+    await expect(host.whenReady()).resolves.toBe(true)
+    expect(host.isReady()).toBe(true)
+  })
+
+  it('still counts a ready message that arrives after the worker error that killed it', async () => {
+    const host = new WorkerThreadChildProcessHost(() => {
+      const transport = new EventEmitter()
+      return Object.assign(transport, {
+        postMessage: () =>
+          setImmediate(() => {
+            transport.emit('error', new Error('boom'))
+            transport.emit('message', { type: 'ready' })
+            transport.emit('exit', 1)
+          }),
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    expect(host.available()).toBe(true)
+    const child = host.spawn({ program: 'git', args: ['status'] })
+    const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    // It answered, so it is offered again.
+    expect(host.available()).toBe(true)
+  })
+
+  it('fails a child the ready worker never started as a spawn error', async () => {
+    const host = new WorkerThreadChildProcessHost(() => {
+      const transport = new EventEmitter()
+      setImmediate(() => transport.emit('message', { type: 'ready' }))
+      return Object.assign(transport, {
+        postMessage: () => setImmediate(() => transport.emit('exit', 1)),
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    expect(host.available()).toBe(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    const child = host.spawn({ program: 'git', args: ['status'] })
+    const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+    await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    await closed
+  })
+})
+
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''
   let entryPath = ''

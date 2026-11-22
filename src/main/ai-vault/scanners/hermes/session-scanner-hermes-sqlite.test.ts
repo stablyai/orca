@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { withFullFirstUserPromptCapture } from '../../prompts/session-scanner-first-user-prompt-capture'
+import { readHermesConversation } from './hermes-state-db-conversations'
+import { readMessageBodies, readMessageIdentities } from './hermes-state-db-messages'
+import { readHermesSchema } from './hermes-state-db-schema'
 import {
   captureHermesSqliteSession,
   listHermesSqliteSessions,
@@ -325,9 +328,14 @@ it('moves the row revision on a rewind or a retitle that leaves every timestamp 
   const rewound = revision()
   db.prepare("UPDATE sessions SET title = 'Renamed' WHERE id = 'chat'").run()
   const renamed = revision()
+  const retitle = db.prepare("UPDATE sessions SET title = ? WHERE id = 'chat'")
+  retitle.run('Plan \u{1F600}')
+  const grinning = revision()
+  retitle.run('Plan \u{1F601}')
+  const beaming = revision()
   db.close()
 
-  expect(new Set([first, rewound, renamed]).size).toBe(3)
+  expect(new Set([first, rewound, renamed, grinning, beaming]).size).toBe(5)
 })
 
 it('keeps a message rewound in a continuation hidden, and a compacted tool result whole', () => {
@@ -394,6 +402,48 @@ it('keeps a message rewound in a continuation hidden, and a compacted tool resul
     ['tool', 'full output'],
     ['user', 'next']
   ])
+})
+
+it('names an untitled conversation from a multimodal first prompt longer than the preview cut', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  const parts = [
+    { type: 'text', text: 'Describe this screenshot' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${'A'.repeat(20_000)}` } }
+  ]
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: `\u0000json:${JSON.stringify(parts)}`,
+    at: 1_800_000_010
+  })
+  const schema = readHermesSchema(db, path)!
+  const rows = readMessageIdentities(db, schema, readHermesConversation(db, schema, 'chat')!)
+  for (const options of [{ full: false }, { full: true, textChars: 100 }, { full: true }]) {
+    const [row] = readMessageBodies(db, schema, rows, { ...options, tools: false })
+    // The image's base64 stays in SQLite; its part keeps its place.
+    expect(row.content).toBe(`\u0000json:${JSON.stringify([parts[0], { type: 'image_url' }])}`)
+  }
+  db.close()
+
+  const session = parseHermesSqliteSession({ dbPath: path, sessionId: 'chat', platform: 'darwin' })
+  expect(session?.title).toBe('Describe this screenshot')
+})
+
+it('shows nothing of a cut multimodal first prompt whose parts do not parse', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: `\u0000json:[{"type":"text","text":"${'A'.repeat(20_000)}"`,
+    at: 1_800_000_010
+  })
+  db.close()
+
+  const session = parseHermesSqliteSession({ dbPath: path, sessionId: 'chat', platform: 'darwin' })
+  expect(session?.title).toBe('Hermes chat')
+  expect(session?.previewMessages).toEqual([])
 })
 
 it('reads a whole first prompt longer than the preview cut', async () => {

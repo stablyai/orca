@@ -7,10 +7,11 @@ import type { WorktreeCardDisplaySettings } from '../worktree/card-display-setti
 import type { BrowserLinkOpeningSettings } from '../browser/navigation/browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from '../browser/passwords/browser-passwords-types'
 import type { BrowserMemorySaverGlobalSettings } from '../browser/guest-lifecycle/browser-memory-saver'
+import type { PerfNoticeGlobalSettings } from '../perf-notices/perf-notice-settings'
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
-import type { ExternalConversationSettings } from '../connectors/external-conversation-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
+import type { NativeChatUsageLimitAutoContinueSettings } from '../native-chat/settings/native-chat-usage-limit-auto-continue'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
 import type { PluginAppearanceSettings } from '../plugins/appearance/plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from '../plugins/contributions/plugin-file-type'
@@ -20,6 +21,7 @@ import type { TerminalScrollSettings } from '../terminal/appearance/terminal-scr
 import type { WorktreeDeletionPreferences } from '../worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from '../agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from '../terminal-themes/terminal-color-overrides'
+import type { BotsGlobalSettings } from '../bots-global-settings'
 import type { WindowMaterialSettings } from '../app-lifecycle/windows/window-material'
 import type { EditorSaveSettings } from '../editor/saving/editor-save-settings'
 import type { NestedWorkerDepthSettings } from '../orchestration/workers/nested-worker-depth'
@@ -31,6 +33,16 @@ import type { PRAutoRefreshSettings } from '../source-control/hosted-review/revi
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
+import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
+
+type DesktopWindowSettings = {
+  /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
+  minimizeToTrayOnClose?: boolean
+  /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
+  showMenuBarIcon?: boolean
+  /** Linux: disables titlebar dragging and keeps only the close button. */
+  linuxTilingWindowMode?: boolean
+}
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AgentcookieSettings &
@@ -40,11 +52,11 @@ export type GlobalSettingsBase = AgentcookieSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
+  NativeChatUsageLimitAutoContinueSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
-  ExternalConversationSettings &
   BrowserLinkOpeningSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
@@ -55,9 +67,12 @@ export type GlobalSettingsBase = AgentcookieSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
+  DesktopWindowSettings &
   EditorSaveSettings &
+  BotsGlobalSettings &
   BrowserPasswordsGlobalSettings &
   BrowserMemorySaverGlobalSettings &
+  PerfNoticeGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
@@ -65,4 +80,5 @@ export type GlobalSettingsBase = AgentcookieSettings &
   PRAutoRefreshSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
-  UiLanguageSettings
+  UiLanguageSettings &
+  ChatDeleteSettings

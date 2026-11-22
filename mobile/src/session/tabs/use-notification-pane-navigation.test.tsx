@@ -166,4 +166,18 @@ describe('the page pane hook', () => {
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
     expect(pageUrl.params.paneKey).toBeUndefined()
   })
+
+  it('keeps a later tab pick on a replay and accepts a fresh tap for the same pane', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
+    const tree = render(true)
+    act(() => tree.update(createElement(Probe, { terminalsLoaded: true })))
+    switched.push(TABS[0]!)
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.at(-1)?.id).toBe('first')
+    deliver('')
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.at(-1)?.id).toBe('second')
+    act(() => tree.unmount())
+  })
 })

@@ -8,7 +8,7 @@ import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker,
-  AgentSessionResumeTrigger,
+  AgentSessionResumeMarkerTrigger,
   AgentSessionResumeWork
 } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionRestartActivity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
@@ -23,7 +23,7 @@ export type StructuredAgentSessionResumeCandidate = {
   workspaceId: string
   agent: AgentSessionRecord['provider']
   work: AgentSessionResumeWork
-  trigger: AgentSessionResumeTrigger
+  trigger: AgentSessionResumeMarkerTrigger
   recordedAt: number
   latestPrompt: string
   executionHostId: AgentSessionRecord['location']['executionHostId']

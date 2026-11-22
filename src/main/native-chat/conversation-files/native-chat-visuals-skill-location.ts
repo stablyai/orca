@@ -3,16 +3,13 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import type { NativeChatSkillRoot } from '../native-chat-skill-roots'
 
 const PLUGIN_DIR_NAME = 'native-chat-visuals'
 export const NATIVE_CHAT_VISUALS_SKILL_NAME = 'orca-chat-visuals'
 
-export type NativeChatVisualsSkillLocation = {
-  /** Contains .claude-plugin/plugin.json and skills/<name>/SKILL.md. */
-  pluginDir: string
-  /** Codex expects the plugin’s skills directory as its root. */
-  skillsRoot: string
-}
+/** Its pluginDir contains .claude-plugin/plugin.json and skills/<name>/SKILL.md. */
+export type NativeChatVisualsSkillLocation = NativeChatSkillRoot
 
 function candidatePluginDirs(): string[] {
   const candidates: string[] = []

@@ -52,9 +52,11 @@ const mocks = vi.hoisted(() => {
     >(async () => {}),
     beginStructuredAgentSessionProvisionalLaunch: vi.fn<
       (args: BeginArgs) => {
-        sessionId: string
-        tab: { id: string }
-        settlement: Promise<{ kind: 'structured'; sessionId: string }>
+        sessionId: string | null
+        tab: { id: string } | null
+        settlement: Promise<
+          { kind: 'structured'; sessionId: string } | { kind: 'cancelled'; sessionId: null }
+        >
         cancel: () => void
       } | null
     >(),
@@ -205,5 +207,32 @@ describe('launchStructuredWorktreeSession', () => {
       'Still typing while the editor mounts'
     )
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a held text message when the launch ends with nothing opened', async () => {
+    mocks.state.pendingWorktreeCreations = {
+      'creation-1': { request, heldChatMessage: 'Fix the route' }
+    }
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.onTabOpenSettled?.(null)
+      return {
+        sessionId: null,
+        tab: null,
+        settlement: Promise.resolve({ kind: 'cancelled' as const, sessionId: null }),
+        cancel: vi.fn()
+      }
+    })
+
+    const result = await launchStructuredWorktreeSession({
+      ...baseArgs,
+      shouldActivateOnCompletion: false
+    })
+
+    expect(result.retainedInput).toBe(true)
+    expect(mocks.state.updatePendingWorktreeCreation).toHaveBeenLastCalledWith('creation-1', {
+      worktreeId: 'worktree-1',
+      status: 'error',
+      error: expect.any(String)
+    })
   })
 })

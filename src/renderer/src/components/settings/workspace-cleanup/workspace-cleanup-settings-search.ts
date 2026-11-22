@@ -1,3 +1,4 @@
+// @protected-copy: rule names here are reused in delete confirmations and must not be reworded by a language pack.
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_ARCHIVE_SUPPORTED } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
@@ -151,27 +152,6 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
           ...translateSearchKeyword('components.settings.workspaceCleanup.search.envFile', '.env', {
             englishOnly: true
           })
-        ]
-      },
-      deleteChatHistory: {
-        title: translate(
-          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspace',
-          'Delete chat history with the workspace'
-        ),
-        description: translate(
-          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspaceDescription',
-          "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
-        ),
-        keywords: [
-          ...translateSearchKeyword('components.settings.workspaceCleanup.search.chat', 'chat'),
-          ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.transcripts',
-            'transcripts'
-          ),
-          ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.diskSpace',
-            'disk space'
-          )
         ]
       },
       activity: {

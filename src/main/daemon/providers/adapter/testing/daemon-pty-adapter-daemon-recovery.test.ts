@@ -100,6 +100,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('signals every active pane and respawns as soon as the daemon dies, before any input', async () => {
       const respawn = vi.fn(async () => {
+        // A real respawn starts after the old daemon process exited, so its endpoint is released.
+        await server.shutdown()
         restartServerOnRespawn()
         await server.start()
       })

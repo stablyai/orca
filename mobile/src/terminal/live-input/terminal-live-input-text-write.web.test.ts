@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { createRequire } from 'node:module'
-import { act, createElement, createRef, type ComponentType, type RefObject } from 'react'
+import { act, createElement, createRef, Fragment, type ComponentType, type RefObject } from 'react'
 import { createRoot } from 'react-dom/client'
-import { describe, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import type { TextInputInstance } from 'react-native'
 import { writeTerminalLiveInputText as writeTerminalLiveInputTextOnWeb } from './terminal-live-input-text-write.web'
 
@@ -11,46 +11,52 @@ const refTo = (node: unknown): RefObject<TextInputInstance | null> => ({
   current: node as TextInputInstance | null
 })
 
-describe('the web sibling', () => {
-  it('writes a multiline field too, which RN Web renders as a textarea', () => {
-    const area = document.createElement('textarea')
-    document.body.append(area)
+// Require RN Web because it ships no type declarations.
+const {
+  TextInput: ReactNativeWebTextInput
+}: {
+  TextInput: ComponentType<{
+    defaultValue: string
+    multiline?: boolean
+    ref: RefObject<unknown>
+  }>
+} = createRequire(import.meta.url)('react-native-web')
 
-    writeTerminalLiveInputTextOnWeb(refTo(area), 'edited')
-
-    expect(area.value).toBe('edited')
-  })
-})
-
-// Check the actual RN Web TextInput ref too; a hand-built input would miss component shape changes.
-describe('against a real react-native-web TextInput', () => {
-  // Require RN Web because it ships no type declarations; a bare import would lose tests-typecheck coverage.
-  const {
-    TextInput: ReactNativeWebTextInput
-  }: { TextInput: ComponentType<{ defaultValue: string; ref: RefObject<unknown> }> } =
-    createRequire(import.meta.url)('react-native-web')
-
-  it('clears the field react-native-web mounted, with no render behind it', async () => {
-    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    const fieldRef: RefObject<unknown> = createRef<unknown>()
-    try {
-      await act(async () => {
-        root.render(
-          createElement(ReactNativeWebTextInput, { defaultValue: 'ime-preedit', ref: fieldRef })
+it('clears the input and textarea mounted by react-native-web without a rerender', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const inputRef = createRef<unknown>()
+  const textareaRef = createRef<unknown>()
+  try {
+    await act(async () => {
+      root.render(
+        createElement(
+          Fragment,
+          null,
+          createElement(ReactNativeWebTextInput, { defaultValue: 'ime-preedit', ref: inputRef }),
+          createElement(ReactNativeWebTextInput, {
+            defaultValue: 'multiline-preedit',
+            multiline: true,
+            ref: textareaRef
+          })
         )
-      })
+      )
+    })
 
-      writeTerminalLiveInputTextOnWeb(refTo(fieldRef.current), '')
+    const input = container.querySelector('input')
+    const textarea = container.querySelector('textarea')
+    expect(input?.value).toBe('ime-preedit')
+    expect(textarea?.value).toBe('multiline-preedit')
 
-      const field = container.querySelector('input')
-      expect(field).toBeInstanceOf(HTMLInputElement)
-      expect(field?.value).toBe('')
-    } finally {
-      await act(async () => root.unmount())
-      container.remove()
-    }
-  })
+    writeTerminalLiveInputTextOnWeb(refTo(inputRef.current), '')
+    writeTerminalLiveInputTextOnWeb(refTo(textareaRef.current), '')
+
+    expect(input?.value).toBe('')
+    expect(textarea?.value).toBe('')
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+  }
 })

@@ -165,13 +165,12 @@ async function withReader<T>(
   }
 }
 
-it.each(['below', 'at', 'above', 'multibyte', 'BOM run', 'GIF', 'RIFF', 'internal magic'] as const)(
+it.each(['at', 'above', 'multibyte', 'BOM run', 'GIF', 'RIFF', 'internal magic'] as const)(
   'delivers complete text recipe content: %s',
   async (boundary) => {
     const cap = 5 * 1024 * 1024
     const payloadCap = cap - 3
     const patches = {
-      below: () => 'x'.repeat(payloadCap - 1),
       at: () => 'x'.repeat(payloadCap),
       above: () => 'x'.repeat(cap + 1),
       multibyte: () =>

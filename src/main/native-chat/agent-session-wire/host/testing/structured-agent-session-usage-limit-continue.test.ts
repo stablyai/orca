@@ -93,35 +93,49 @@ it('stops automatically continuing once five continues in a row end in another u
   ).toBe('failed')
 })
 
-it('continues every chat whose limit reset in the same pass', async () => {
+function sweepOver(
+  open: { tabs: string[]; background: string[] },
+  sent: string[],
+  {
+    enabled = true,
+    loaded = true,
+    unreadable = []
+  }: { enabled?: boolean; loaded?: boolean; unreadable?: readonly string[] } = {}
+): StructuredAgentSessionUsageLimitContinue {
   const now = HOST_TEST_NOW
-  const ids = ['chat-a', 'chat-b', 'chat-c']
+  const ids = [...open.tabs, ...open.background]
   const cut = (id: string) => ({
     turnItemId: `${id}-turn`,
     resetsAt: now - 60_000,
     turnEndedAt: now - 120_000,
     chain: 0
   })
-  const sent: string[] = []
-  const sweep = new StructuredAgentSessionUsageLimitContinue({
+  return new StructuredAgentSessionUsageLimitContinue({
     host: {
       logger: recordingStructuredAgentSessionLogger().logger,
       usageLimitAutoContinue: {
-        isEnabled: () => true,
+        isEnabled: () => enabled,
         isWorkspaceAsleep: () => false,
         subscribe: () => () => {}
       },
       store: {
         hostId: 'local',
-        listVisibleSessionIds: () => ids,
-        isSessionTabVisible: () => true,
+        listVisibleSessionIds: () => open.tabs,
+        isSessionTabVisible: (id) => open.tabs.includes(id),
+        listBackgroundSessionIds: () => open.background,
+        isSessionInBackground: (id) => open.background.includes(id),
         cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
         getRecord: (id) => hostTestRestingOptionsRecord(id)
       }
     },
-    sessions: new Map(ids.map((id) => [id, {}])),
-    readSavedCut: async () => null,
-    readLoadedCut: async (id) => cut(id),
+    sessions: new Map(loaded ? ids.map((id) => [id, {}]) : []),
+    readSavedCut: async (id) => (loaded ? null : cut(id)),
+    readLoadedCut: async (id) => {
+      if (unreadable.includes(id)) {
+        throw new Error('database disk image is malformed')
+      }
+      return cut(id)
+    },
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {
@@ -132,6 +146,74 @@ it('continues every chat whose limit reset in the same pass', async () => {
     publish: () => {},
     now: () => now
   })
+}
+
+// Bot chats and kept-open structured workers run with no tab.
+const TABLESS = { tabs: [], background: ['bot-chat', 'worker-chat'] }
+
+it('continues both visible and tabless chats whose limit reset', async () => {
+  const sent: string[] = []
+  await sweepOver({ ...TABLESS, tabs: ['chat-a'] }, sent).tick()
+  expect(sent).toEqual(['chat-a', 'bot-chat'])
+})
+
+it('continues at most two chats per pass and the rest on later passes', async () => {
+  const sent: string[] = []
+  const sweep = sweepOver(
+    { tabs: ['chat-a', 'chat-b', 'chat-c', 'chat-d', 'chat-e'], background: [] },
+    sent
+  )
   await sweep.tick()
-  expect(sent).toEqual(ids)
+  expect(sent).toEqual(['chat-a', 'chat-b'])
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c', 'chat-d'])
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c', 'chat-d', 'chat-e'])
+})
+
+it('continues no tabless chat while automatic continue is off', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { enabled: false }).tick()
+  expect(sent).toEqual([])
+})
+
+it('continues tabless chats that are not loaded, as after a restart or a released run', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { loaded: false }).tick()
+  expect(sent).toEqual(['bot-chat', 'worker-chat'])
+})
+
+it('still continues the other chats when one chat cannot be read', async () => {
+  const sent: string[] = []
+  const sweep = sweepOver({ tabs: ['chat-a', 'chat-corrupt', 'chat-c'], background: [] }, sent, {
+    unreadable: ['chat-corrupt']
+  })
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-c'])
+})
+
+it('says a chat’s continue may have ended once the chat closes, loaded or not', async () => {
+  const open: { tabs: string[]; background: string[] } = {
+    tabs: ['chat-a', 'chat-b'],
+    background: []
+  }
+  const sweep = sweepOver(open, [], { loaded: false })
+  const told: (string | undefined)[] = []
+  sweep.onDispositionChange((id) => told.push(id))
+  await sweep.tick()
+  open.tabs = ['chat-a']
+  await sweep.tick()
+  expect(told).toEqual(['chat-b'])
+})
+
+it('says a chat closed before the first sweep may have ended too', async () => {
+  const open: { tabs: string[]; background: string[] } = { tabs: ['chat-a'], background: [] }
+  const sweep = sweepOver(open, [], { loaded: false })
+  const told: (string | undefined)[] = []
+  sweep.onDispositionChange((id) => told.push(id))
+  sweep.start()
+  open.tabs = []
+  await sweep.tick()
+  sweep.dispose()
+  expect(told).toEqual(['chat-a'])
 })

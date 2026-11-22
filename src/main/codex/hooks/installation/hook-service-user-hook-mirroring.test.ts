@@ -11,6 +11,11 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock
@@ -173,6 +178,41 @@ describe('CodexHookService', () => {
     )
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:pre_compact:0:0`, true))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true))
+  })
+
+  it('carries each SessionEnd user hook trust into the runtime home (STA-16540)', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    const command = 'node -e "process.exit(0)"'
+    // Codex clamps both timeouts to 3s, so both hooks share one hash but keep their own trust.
+    const sessionEndGroup = (timeout: number): object => ({
+      matcher: 'other',
+      hooks: [{ type: 'command', command, timeout }]
+    })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({ hooks: { SessionEnd: [sessionEndGroup(5), sessionEndGroup(9)] } })}\n`,
+      'utf-8'
+    )
+    // Hash codex-cli 0.170.0 reported for this hook.
+    const codexHash = 'sha256:b4f5513d145df2d6d400f79b73a8f6e1a4eaa96484fbe4b793e802d7906e9e02'
+    const systemTrust = (group: number, enabled: boolean): string =>
+      `${hookTrustHeader(`${systemHooksPath}:session_end:${group}:0`, true)}\nenabled = ${enabled}\ntrusted_hash = "${codexHash}"`
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      `model = "system-model"\n\n${systemTrust(0, false)}\n\n${systemTrust(1, true)}\n`,
+      'utf-8'
+    )
+
+    expect((await new CodexHookService().install()).state).toBe('installed')
+
+    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    const runtimeTrust = (group: number, enabled: boolean): string =>
+      `${hookTrustHeader(`${join(managedCodexHome, 'hooks.json')}:session_end:${group}:0`)}\nenabled = ${enabled}\ntrusted_hash = "${codexHash}"`
+    expect(runtimeToml).toContain(runtimeTrust(0, false))
+    expect(runtimeToml).toContain(runtimeTrust(1, true))
   })
 
   it('removes runtime user hook trust after system approval is revoked', async () => {
