@@ -195,8 +195,8 @@ export type ClaudeSession = {
   cliVersion?: () => Promise<string | null>
   /** The newer installed CLI last reported for this process; null once reported as current. */
   installedUpdate?: AgentSessionProviderUpdate | null
-  /** Rechecks the installed CLI while this process lives; it stops itself once the process ends. */
-  installedUpdateWatch?: ReturnType<typeof setInterval>
+  /** Rechecks the installed CLI at most once a minute; set at this process's first turn end. */
+  installedUpdateCheck?: () => void
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
   promptSuggestionPause?: ClaudePromptSuggestionPause

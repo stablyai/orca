@@ -20,9 +20,12 @@ import {
   type TrackedClaudeBackgroundTask
 } from './claude-settled-background-tasks'
 import { combineClaudeBackgroundTaskRoster } from './claude-background-task-roster-merge'
+import type { AgentSessionIdleConfirmation } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 // Bound terminal IDs without evicting live tasks.
 const MAX_TERMINAL_TASK_IDS = 256
+// Claude starts its wake turn for finished background work within moments.
+const CLAUDE_WAKE_TURN_MS = 5_000
 export type ClaudeGoalBackgroundWork = 'live' | 'unverifiable' | 'exited'
 
 export class ClaudeBackgroundTaskTracker {
@@ -33,8 +36,19 @@ export class ClaudeBackgroundTaskTracker {
   private coverageIncomplete = false
   private monitoring = false
   private publishedTasksFingerprint = ''
+  /** When the last background work ended with no turn started since. */
+  private backgroundEndedAt: number | null = null
 
   constructor(private readonly now: () => number = () => Date.now()) {}
+
+  /** Claude wakes for finished background work with a turn of its own; until it starts, the
+   *  process is not idle. Undefined leaves an idle stop to the host's own checks. */
+  wakeTurnHold(): Promise<AgentSessionIdleConfirmation> | undefined {
+    const ended = this.backgroundEndedAt
+    return ended !== null && this.now() - ended < CLAUDE_WAKE_TURN_MS
+      ? Promise.resolve('busy')
+      : undefined
+  }
 
   get state(): AgentSessionBackgroundTaskState | null {
     if (!this.monitoring) {
@@ -70,8 +84,16 @@ export class ClaudeBackgroundTaskTracker {
     if (startsTurn || message.type === 'result') {
       this.settleForegroundTasks()
     }
+    if (startsTurn) {
+      this.backgroundEndedAt = null
+    }
     if (message.type === 'system') {
-      if (!this.observeSystemFrame(message) && !startsTurn) {
+      const wasLive = hasLiveClaudeBackgroundWork(this.tasks.values())
+      const changed = this.observeSystemFrame(message)
+      if (wasLive && !hasLiveClaudeBackgroundWork(this.tasks.values())) {
+        this.backgroundEndedAt = this.now()
+      }
+      if (!changed && !startsTurn) {
         return false
       }
     } else if (!startsTurn && message.type !== 'result') {
@@ -86,6 +108,7 @@ export class ClaudeBackgroundTaskTracker {
     this.terminalTaskIds.clear()
     this.aggregateRosterObserved = false
     this.coverageIncomplete = false
+    this.backgroundEndedAt = null
     return this.refreshMonitoring()
   }
 

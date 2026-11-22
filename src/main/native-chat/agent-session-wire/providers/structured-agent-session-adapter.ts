@@ -274,6 +274,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
+  /** On the idle sweep's tick: look again for a newer installed agent than the live child runs. */
+  recheckProviderUpdate?(sessionId: string): void
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */

@@ -10,6 +10,7 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './turns/claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from './turns/claude-command-lifecycle'
+import { claudeHoldsLiveProcess } from './lifecycle/claude-structured-owner-identity'
 import {
   releaseClaudeAcquisition,
   type ClaudeReleaseRequest
@@ -214,6 +215,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     manageClaudeMcp(this.sessions, record.sessionId, operation)
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
   holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
+  confirmIdle = (sessionId: string) => this.sessions.get(sessionId)?.backgroundTasks.wakeTurnHold()
+  recheckProviderUpdate = (id: string): void => this.sessions.get(id)?.installedUpdateCheck?.()
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.sessions.get(sessionId)?.translator?.currentTurnId
@@ -222,14 +225,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const held = session && claudeHeldSends(session)
     return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
   }
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      session.connection.exitVerdict.root === 'live'
-    )
-  }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
+    claudeHoldsLiveProcess(this.sessions.get(sessionId), acquisitionGeneration)
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
