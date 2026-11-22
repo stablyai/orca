@@ -97,23 +97,27 @@ export type DeviceKeyResolution<TDevice> =
   | { kind: 'refused' }
   | { kind: 'unavailable' }
 
+export type MobileE2EEAuthResult<TDevice> =
+  | { ok: true; device: TDevice; clientCapabilities: unknown }
+  | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string }
+
 export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   v2TokenCapabilities?: boolean
-  resolveDevice: (token: string) => TDevice | null
+  resolveDevice: (token: string) => TDevice | null | Promise<TDevice | null>
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
-}):
-  | { ok: true; device: TDevice; clientCapabilities: unknown }
-  | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
+}): MobileE2EEAuthResult<TDevice> | Promise<MobileE2EEAuthResult<TDevice>> {
   const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
     // Why: a keyed row has no token, so presenting one can never match it.
-    return device?.deviceToken === auth.deviceToken
-      ? { ok: true, device, clientCapabilities: auth.clientCapabilities }
-      : { ok: false, code: 'unauthorized' }
+    const validate = (resolved: TDevice | null): MobileE2EEAuthResult<TDevice> =>
+      resolved?.deviceToken === auth.deviceToken
+        ? { ok: true, device: resolved, clientCapabilities: auth.clientCapabilities }
+        : { ok: false, code: 'unauthorized' }
+    return device instanceof Promise ? device.then(validate) : validate(device)
   }
   if (auth.kind === 'invalid' || !args.resolveDeviceKey || !args.v2Session) {
     return { ok: false, code: 'bad_auth' }

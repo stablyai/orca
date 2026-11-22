@@ -42,7 +42,7 @@ export type AgentStatusStoreMode = 'authority' | 'replica'
 export type AgentStatusStore = {
   getParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
   /** Every parent in insertion order, without materializing the child records a snapshot holds. */
-  getParents(): AgentStatusParentRecord[]
+  getParents(limit?: number): AgentStatusParentRecord[]
   getRevision(): { epoch: string; revision: number }
   getChildren(subject: AgentStatusSubject): AgentChildWorkRecord[]
   getChild(childWorkId: string): AgentChildWorkRecord | null
@@ -86,8 +86,19 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       // Rows are parsed and frozen on write; re-parsing per read made every status publication allocate per chat.
       return state.parents.get(serializeAgentStatusSubject(parsed)) ?? null
     },
-    getParents() {
-      return [...state.parents.values()]
+    getParents(limit) {
+      if (limit === undefined) {
+        return [...state.parents.values()]
+      }
+      const bounded: AgentStatusParentRecord[] = []
+      const safeLimit = Math.max(0, Math.floor(limit))
+      for (const parent of state.parents.values()) {
+        if (bounded.length >= safeLimit) {
+          break
+        }
+        bounded.push(parent)
+      }
+      return bounded
     },
     getRevision() {
       return { epoch: state.epoch, revision: state.revision }

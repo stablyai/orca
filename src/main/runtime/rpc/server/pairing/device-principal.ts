@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 /** Socket revoke/close uses deviceId; per-client drivers, dictation and file grants use clientId. */
 export type DevicePrincipal = {
   deviceId: string
-  scope: DeviceEntry['scope']
+  scope: DeviceEntry['scope'] | 'observer'
   // Shipped phones use bearer tokens in terminal client.id; keyed rows use device ids.
   clientId: string
   callerFingerprint: string

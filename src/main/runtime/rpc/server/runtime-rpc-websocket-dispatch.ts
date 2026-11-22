@@ -1,3 +1,5 @@
+import { injectDeviceScope } from './runtime-rpc-device-scope-reply'
+import { dispatchObserverSocketRequest } from './runtime-rpc-observer-dispatch'
 import type { WebSocket } from 'ws'
 import type {
   PairingGetEndpointsParams,
@@ -7,9 +9,8 @@ import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
-import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
-import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
@@ -19,20 +20,6 @@ import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { isUntaggedTrackerCall, withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
-
-// Stamp proven scope at transport boundary; status.get has no connection context.
-function injectDeviceScope(response: string, scope: DeviceScope): string {
-  try {
-    const parsed = JSON.parse(response) as RpcResponse
-    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
-      return response
-    }
-    ;(parsed.result as Record<string, unknown>).deviceScope = scope
-    return JSON.stringify(parsed)
-  } catch {
-    return response
-  }
-}
 
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
   // Relay only to configured execution hosts; unreachable targets fail, never run locally. Return null after relay/reply.
@@ -144,7 +131,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       return
     }
 
-    if (typeof request.id !== 'string' || request.id.length === 0) {
+    if (!request || typeof request.id !== 'string' || request.id.length === 0) {
       reply(JSON.stringify(this.buildError('unknown', 'bad_request', 'Missing request id')))
       return
     }
@@ -157,6 +144,18 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+    if (authenticatedSocket?.device.observer) {
+      return dispatchObserverSocketRequest(
+        this.observerCredentialStore,
+        this.dispatcher,
+        request,
+        authenticatedSocket,
+        authenticatedSocket.device.observer.id,
+        reply,
+        this.buildError.bind(this)
+      )
+    }
+
     // Why: a keyed socket proved no token, so any request token is a mismatch.
     const boundToken = authenticatedSocket
       ? (authenticatedSocket.device.deviceToken ?? null)
@@ -171,6 +170,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return
     }
+
     // Recheck device/credential revision per request so revocation refuses immediately, before socket close.
     const device = authenticatedSocket
       ? this.deviceRegistry?.resolveAuthenticatedPrincipal(authenticatedSocket.device)

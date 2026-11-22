@@ -72,6 +72,16 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
 
   readonly readObservedAgentStatusPaneIdentityFn!: HostBindings['readObservedAgentStatusPaneIdentity']
 
+  protected getBoundedAgentProviderSessionSnapshotFn?: HostBindings['getBoundedAgentProviderSessionSnapshot']
+  getBoundedAgentProviderSessionRows(worktreeId: string, scanLimit: number, rowLimit: number) {
+    return (
+      this.getBoundedAgentProviderSessionSnapshotFn?.(worktreeId, scanLimit, rowLimit) ?? {
+        rows: [],
+        truncated: true
+      }
+    )
+  }
+
   protected readonly getAgentProviderSessionSnapshotFn!:
     | HostBindings['getAgentProviderSessionSnapshot']
     | null

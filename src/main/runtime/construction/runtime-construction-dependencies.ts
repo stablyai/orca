@@ -52,6 +52,11 @@ export type RuntimeConstructionDependencies = {
   ) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
+  getBoundedAgentProviderSessionSnapshot?: (
+    worktreeId: string,
+    scanLimit: number,
+    rowLimit: number
+  ) => { rows: AgentStatusIpcPayload[]; truncated: boolean }
   getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForSession?: (
     agent: string,

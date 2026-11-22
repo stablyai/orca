@@ -54,6 +54,8 @@ export function pluginCliAuditActor(caller: RpcCallerIdentity | undefined): `cli
       return `cli:paired-device:${caller.deviceId}`
     case 'desktop':
       return 'cli:desktop'
+    case 'observer':
+      return `cli:observer:${caller.credentialId}`
   }
 }
 

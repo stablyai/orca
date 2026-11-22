@@ -1,10 +1,13 @@
+import { authenticatedDeviceFromEntry, resolveSocketBearer } from './mobile-socket-bearer'
+import {
+  isObserverCredentialTokenShape,
+  type ObserverCredential
+} from '../../observer-credential-ledger'
 import type { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type { DeviceEntry } from '../server/pairing/device-entry'
 import type { DeviceRegistry } from '../server/pairing/device-registry'
 import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../server/pairing/ephemeral-device-rows'
-import { devicePrincipalOf } from '../server/pairing/device-principal'
 import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
 import type { E2EEAuthenticatedDevice } from '../server/mobile-e2ee-authenticated-device'
@@ -53,6 +56,7 @@ export type AuthenticatedMobileSocket = {
 }
 
 type MobileSocketWiringOptions = {
+  resolveObserverCredential?: (token: string) => Promise<ObserverCredential | null>
   deviceRegistry: DeviceRegistry
   e2eeKeypair: E2EEKeypair
   onText: (
@@ -68,14 +72,8 @@ type MobileSocketWiringOptions = {
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
-function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
-  return {
-    ...devicePrincipalOf(device),
-    ...(device.token !== undefined ? { deviceToken: device.token } : {})
-  }
-}
-
 export class MobileSocketWiring {
+  private readonly resolveObserverCredential: MobileSocketWiringOptions['resolveObserverCredential']
   private readonly deviceRegistry: DeviceRegistry
   private readonly e2eeKeypair: E2EEKeypair
   private readonly onText: MobileSocketWiringOptions['onText']
@@ -92,6 +90,7 @@ export class MobileSocketWiring {
 
   constructor(options: MobileSocketWiringOptions) {
     this.deviceRegistry = options.deviceRegistry
+    this.resolveObserverCredential = options.resolveObserverCredential
     this.e2eeKeypair = options.e2eeKeypair
     this.onText = options.onText
     this.onBinary = options.onBinary
@@ -188,7 +187,11 @@ export class MobileSocketWiring {
     metadata: MobileSocketTransportMetadata
   ): void {
     const socket = this.authenticatedSockets.get(ws)
-    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+    if (
+      socket &&
+      !socket.device.observer &&
+      !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)
+    ) {
       ws.close(4001, 'Unauthorized')
       this.handleClose(ws)
       return
@@ -196,6 +199,7 @@ export class MobileSocketWiring {
     let channel = this.channels.get(ws)
     if (!channel) {
       const connectionId = randomBytes(8).toString('hex')
+      let observerAuthAttempted = false
       this.connectionIds.set(ws, connectionId)
       channel = new E2EEChannel(ws, {
         serverSecretKey: this.e2eeKeypair.secretKey,
@@ -206,15 +210,14 @@ export class MobileSocketWiring {
         requireV2: metadata.transport === 'relay',
         outboundMemoryBudget: this.outboundMemoryBudget,
         resolveAuthenticatedDevice: (token) => {
-          const device = this.deviceRegistry.validateToken(token)
-          if (!device) {
-            return null
-          }
-          // Outer relay authorization cannot choose Orca identity; E2EE resolves the device before readiness.
-          if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
-            return null
-          }
-          return toAuthenticatedDevice(device)
+          observerAuthAttempted = isObserverCredentialTokenShape(token)
+          return resolveSocketBearer(
+            this.deviceRegistry,
+            metadata,
+            token,
+            observerAuthAttempted,
+            this.resolveObserverCredential
+          )
         },
         resolveAuthenticatedDeviceKey: (deviceId) => {
           const lookup = this.deviceRegistry.lookupDeviceKey(deviceId)
@@ -231,7 +234,7 @@ export class MobileSocketWiring {
           }
           return {
             kind: 'found',
-            device: toAuthenticatedDevice(lookup.device),
+            device: authenticatedDeviceFromEntry(lookup.device),
             devicePublicKeyB64: lookup.device.devicePublicKeyB64
           }
         },
@@ -252,6 +255,9 @@ export class MobileSocketWiring {
             transport: metadata
           }
           this.authenticatedSockets.set(ws, socket)
+          if (device.observer) {
+            return
+          }
           transport.setClientId(ws, device.deviceId)
           // Do not delay e2ee_authenticated for the secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(
@@ -269,7 +275,7 @@ export class MobileSocketWiring {
           this.channels.get(ws)?.destroy()
           this.channels.delete(ws)
           ws.close(code, reason)
-          if (reportUnpairedDevice) {
+          if (reportUnpairedDevice && !observerAuthAttempted) {
             try {
               this.onUnpairedDeviceAuthFailure?.(metadata)
             } catch (error) {
@@ -287,7 +293,7 @@ export class MobileSocketWiring {
       })
       channel.onBinaryMessage((bytes) => {
         const socket = this.authenticatedSockets.get(ws)
-        if (socket) {
+        if (socket && !socket.device.observer) {
           this.onBinary(socket, bytes)
         }
       })
@@ -308,7 +314,12 @@ export class MobileSocketWiring {
         (candidate) => candidate.device.deviceId === socket.device.deviceId
       )
     // Session-only idle time starts at disconnect, not connection.
-    if (socket && !hasOtherConnections && socket.device.deviceToken === undefined) {
+    if (
+      socket &&
+      !socket.device.observer &&
+      !hasOtherConnections &&
+      socket.device.deviceToken === undefined
+    ) {
       this.deviceRegistry.updateLastSeenDeferred(socket.device.deviceId)
     }
     this.onClose(socket, hasOtherConnections)
