@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { agentWorksBehindQuestion } from '../../../agent-status/lifecycle/agent-works-behind-question'
 import { createHookListenerState } from '../../listener-state'
@@ -152,4 +155,26 @@ it('holds no question accepted as the turn was interrupted', () => {
   // A queued prompt opens the next turn at once.
   report({ hook_event_name: 'UserPromptSubmit', prompt: 'Use Postgres', turn_id: 'turn-2' })
   expect(report({ hook_event_name: 'PostToolUse', ...QUESTION }).state).not.toBe('waiting')
+})
+
+// Codex's approvals reviewer decides these while the turn keeps working.
+it('keeps working behind a question while the approvals reviewer decides an approval', () => {
+  const rollout = join(mkdtempSync(join(tmpdir(), 'orca-codex-reviewer-')), 'rollout.jsonl')
+  writeFileSync(
+    rollout,
+    `${JSON.stringify({ type: 'turn_context', payload: { approvals_reviewer: 'auto_review' } })}\n`
+  )
+  const report = codexPane()
+  const inTurn = (payload: Record<string, unknown>) =>
+    report({ ...payload, transcript_path: rollout })
+  inTurn({ hook_event_name: 'UserPromptSubmit', prompt: 'Build the cache' })
+  inTurn({ hook_event_name: 'PreToolUse', ...QUESTION })
+  inTurn({ hook_event_name: 'PostToolUse', ...QUESTION })
+  const build = bash('rm -rf build', 'build')
+  inTurn({ hook_event_name: 'PreToolUse', ...build })
+  const reviewed = inTurn({ hook_event_name: 'PermissionRequest', ...asked(build) })
+  expect(reviewed).toMatchObject({ toolInput: 'SQLite or Postgres?' })
+  expect(agentWorksBehindQuestion(reviewed)).toBe(true)
+  const lint = bash('pnpm lint', 'lint')
+  expect(agentWorksBehindQuestion(inTurn({ hook_event_name: 'PreToolUse', ...lint }))).toBe(true)
 })

@@ -54,18 +54,23 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }
+  options: AgentLeadStatusResolution & {
+    updateLead: boolean
+    sessionBoundary?: true
+    reviewerOwnsApproval?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
+  const reviewerOwnsApproval = options.reviewerOwnsApproval === true
   const snapshot = options.updateLead
-    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload) ??
+    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload, reviewerOwnsApproval) ??
       resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('codex', eventName)
       }))
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
+  // A human's approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
   const asyncQuestion =
-    options.stateName === 'waiting' && !snapshot.interactivePrompt
+    options.stateName === 'waiting' && (!snapshot.interactivePrompt || reviewerOwnsApproval)
       ? pendingCodexAsyncQuestion(state, paneKey)
       : undefined
 
@@ -307,6 +312,7 @@ export function normalizeCodexEvent(
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
-    updateLead: true
+    updateLead: true,
+    reviewerOwnsApproval: stateName === 'waiting' && ownedState === 'working'
   })
 }

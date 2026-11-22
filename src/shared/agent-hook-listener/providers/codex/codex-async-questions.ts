@@ -89,21 +89,33 @@ export function codexWaitBesideQuestion(
   state: HookListenerState,
   paneKey: string,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  reviewerOwnsApproval: boolean
 ): ToolSnapshot | undefined {
   const open = state.codexAsyncQuestionsByPaneKey.get(paneKey)
   if (!open) {
     return undefined
   }
+  const callId = readString(hookPayload, 'tool_use_id')
+  // Every hook passes here while a question is open; with no approval to settle, a call's end is only bookkeeping.
+  if (eventName === 'PostToolUse' && open.approvals.length === 0) {
+    if (callId) {
+      open.running.delete(callId)
+    }
+    return undefined
+  }
   const { toolName, toolInput, interactivePrompt } = extractCodexToolFields(eventName, hookPayload)
   const asksAs = approvalAskedAs(toolName, toolInput, hookPayload['tool_input'])
   if (eventName === 'PermissionRequest') {
+    // Codex's approvals reviewer decides it while the turn keeps working; the user still has only the question.
+    if (reviewerOwnsApproval) {
+      return undefined
+    }
     open.approvals.push({ asksAs, shown: { toolName, toolInput, interactivePrompt } })
     // One call can ask again, for a sandbox retry or network access.
     dropEndedApprovals(open, asksAs, 1)
     return undefined
   }
-  const callId = readString(hookPayload, 'tool_use_id')
   if (eventName === 'PostToolUse') {
     // Codex rewrites MCP file arguments after approval, so the call's PreToolUse says what it asked as.
     const startedAs = (callId && open.running.get(callId)) || asksAs
