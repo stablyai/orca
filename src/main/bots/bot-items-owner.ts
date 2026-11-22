@@ -5,6 +5,7 @@ import {
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemCommentImage,
+  type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
@@ -50,7 +51,8 @@ export class BotItemsOwner extends BotItemsWrites {
     /** The question event a quick reply answers: refused once the agent is asking another. */
     questionEventId?: number,
     /** A comment of its own: it answers no question, so a Needs you item keeps waiting on it. */
-    plain = false
+    plain = false,
+    skills: readonly BotItemCommentSkill[] = []
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -91,7 +93,8 @@ export class BotItemsOwner extends BotItemsWrites {
         images,
         requestId,
         answers,
-        plain
+        plain,
+        skills
       )
       this.endSnooze(uid, actor, now)
       // A reply hands the item back to the bot.
@@ -130,14 +133,16 @@ export class BotItemsOwner extends BotItemsWrites {
     images: readonly BotItemCommentImage[] = [],
     requestId?: string,
     answers?: string,
-    plain = false
+    plain = false,
+    skills: readonly BotItemCommentSkill[] = []
   ): number {
     const data = {
       text: commentText,
       ...(images.length > 0 ? { images } : {}),
       ...(requestId === undefined ? {} : { requestId }),
       ...(answers === undefined ? {} : { answers }),
-      ...(plain ? { plain: true } : {})
+      ...(plain ? { plain: true } : {}),
+      ...(skills.length > 0 ? { skills } : {})
     }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
   }

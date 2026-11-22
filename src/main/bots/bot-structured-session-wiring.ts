@@ -127,7 +127,8 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     deps.recentChats,
-    deps.unansweredQuestionNote
+    deps.unansweredQuestionNote,
+    (botId) => botById(botId)?.name ?? null
   )
   // The host's bots at install move their saved values out now, not when each next launches.
   const scrub = deps.scrubToolSecrets

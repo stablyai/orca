@@ -38,7 +38,7 @@ export function RightSidebarTopActivityBar({
   topActivityStripRef: (node: HTMLDivElement | null) => void
   topActivityLayout: TopActivityBarLayout<ActivityBarItem>
   effectiveTab: ActiveRightSidebarTab
-  onSelectTab: (tab: ActiveRightSidebarTab) => void
+  onSelectTab: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
   checksStatus: CheckStatus | null
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
@@ -52,7 +52,7 @@ export function RightSidebarTopActivityBar({
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => onSelectTab(item.id)}
+      onClick={(fromKeyboard) => onSelectTab(item.id, fromKeyboard)}
       layout="top"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
       compact={topActivityLayout.compactIds.has(item.id)}

@@ -314,9 +314,3 @@ export function gateWorktreeAgentActivation(
   inFlightByWorktreeId.set(worktreeId, gate)
   return gate
 }
-
-export function waitForWorktreeAgentActivationGateForTests(
-  worktreeId: string
-): Promise<WorktreeAgentActivationOutcome | null> {
-  return inFlightByWorktreeId.get(worktreeId) ?? Promise.resolve(null)
-}

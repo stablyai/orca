@@ -20,6 +20,7 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { awaitsAPerson, isWorkerGone, isWorkerStartRest } from './worker-turn-stop-wording'
 
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
@@ -36,12 +37,13 @@ export type WorkerRest = Pick<
   | 'mailTaken'
   | 'requestError'
   | 'startSurface'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' }
+  | 'blockedStart'
+> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' | 'start-blocked' }
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
   'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
-> & { reason: 'exited' | 'lost' }
+> & { reason: 'exited' | 'lost' | 'never-ready' }
 
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
@@ -121,7 +123,7 @@ export function observeWorker(
   }
   const { rest } = observation
   // A rest proves its turn ran, though a missed hook may have hidden the turn's start.
-  if (target.kind === 'local' && rest.reason !== 'start-unconfirmed') {
+  if (target.kind === 'local' && !isWorkerStartRest(rest.reason)) {
     confirmUnknownWorkerStart(db, dispatchId)
   }
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
@@ -129,7 +131,7 @@ export function observeWorker(
     db,
     target,
     nextWorkerPresence(current, {
-      presence: rest.reason === 'needs-input' ? 'prompt' : 'resting',
+      presence: awaitsAPerson(rest.reason) ? 'prompt' : 'resting',
       fence: observation.fence,
       report: storedReport(rest, observation)
     }),
@@ -270,8 +272,7 @@ function reconcileWorkerReport(
   // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
   // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
   if (
-    rest.reason !== 'exited' &&
-    rest.reason !== 'lost' &&
+    !isWorkerGone(rest.reason) &&
     (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
   ) {
     return keep()

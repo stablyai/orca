@@ -54,36 +54,40 @@ export function BrowserNewTabPage({
     runtimeTarget,
     openInPlace: !serversElsewhere
   }
+  const importTarget =
+    importProfileId === undefined ? undefined : { profileId: importProfileId, worktreeId }
   return worktree ? (
     <BrowserNewTabWorktreePage
       worktree={worktree}
       repo={repo}
       servers={servers}
       onOpenUrl={onOpenUrl}
-      importProfileId={importProfileId}
+      importTarget={importTarget}
     />
   ) : (
     <BrowserNewTabPageLayout
       linkedItems={NO_LINKED_ITEMS}
       servers={servers}
       onOpenUrl={onOpenUrl}
-      importProfileId={importProfileId}
+      importTarget={importTarget}
     />
   )
 }
+
+type BrowserNewTabImportTarget = { profileId: string | null; worktreeId: string }
 
 function BrowserNewTabWorktreePage({
   worktree,
   repo,
   servers,
   onOpenUrl,
-  importProfileId
+  importTarget
 }: {
   worktree: Worktree
   repo: Repo | undefined
   servers: BrowserNewTabServerContext
   onOpenUrl: (url: string) => void
-  importProfileId?: string | null
+  importTarget?: BrowserNewTabImportTarget
 }): React.JSX.Element {
   const linkedItems = useBrowserNewTabLinkedItems(worktree, repo)
   return (
@@ -92,7 +96,7 @@ function BrowserNewTabWorktreePage({
       linkedItems={linkedItems}
       servers={servers}
       onOpenUrl={onOpenUrl}
-      importProfileId={importProfileId}
+      importTarget={importTarget}
     />
   )
 }
@@ -102,13 +106,13 @@ function BrowserNewTabPageLayout({
   linkedItems,
   servers: { servers, runtimeTarget, openInPlace },
   onOpenUrl,
-  importProfileId
+  importTarget
 }: {
   workspaceName?: string
   linkedItems: WorkspaceLinkedItemRow[]
   servers: BrowserNewTabServerContext
   onOpenUrl: (url: string) => void
-  importProfileId?: string | null
+  importTarget?: BrowserNewTabImportTarget
 }): React.JSX.Element {
   const t = useTranslate()
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
@@ -148,9 +152,12 @@ function BrowserNewTabPageLayout({
 
   // empty:hidden drops the row (and its flex gap) once the hint is hidden.
   const importRow =
-    importProfileId === undefined ? null : (
+    importTarget === undefined ? null : (
       <div className="flex justify-center empty:hidden">
-        <BrowserImportHintButton profileId={importProfileId} />
+        <BrowserImportHintButton
+          profileId={importTarget.profileId}
+          worktreeId={importTarget.worktreeId}
+        />
       </div>
     )
 

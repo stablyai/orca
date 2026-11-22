@@ -145,14 +145,6 @@ let nativeReaderEpoch = 0
 /** Serialize both flag sets: the npm wrapper coalesces overlapping callers and discards later flags; the bare addon has no queue and can crash on overlap. Deadline rejection lets waiters recheck outstanding work instead of stranding them. */
 let nativeReadGate: Promise<unknown> = Promise.resolve()
 
-function resetNativeReaderState(): void {
-  nativeReaderEpoch += 1
-  warnedAboutCimFallback = false
-  unreturnedReads.clear()
-  // Chain rather than replace: existing waiters must not run beside newly queued reads.
-  nativeReadGate = nativeReadGate.then(ignoreSettlement, ignoreSettlement)
-}
-
 /** A flag set and the row shape it can honestly produce. */
 type ProcessRowProjection<Row> = {
   flags: (native: WindowsProcessTreeModule) => number
@@ -351,43 +343,4 @@ export function readWindowsProcessCreationTime(pid: number): number | null {
 export function readProcessIdsUsingPaths(paths: string[]): ReturnType<PathUsersQuery> | null {
   const query = process.platform === 'win32' ? moduleLoader()?.getProcessIdsUsingPaths : undefined
   return query ? query(paths) : null
-}
-
-function resetSnapshotReaders(): void {
-  identityReader.reset()
-  detailedReader.reset()
-}
-
-/** Inject the native loader: createRequire bypasses vi.mock and non-Windows installs may lack the module. */
-export function __setWindowsProcessTreeLoaderForTests(
-  loader?: () => WindowsProcessTreeModule | null
-): void {
-  moduleLoader = loader ?? loadWindowsProcessTree
-  cachedModule = undefined
-  resetNativeReaderState()
-  resetSnapshotReaders()
-}
-
-/** Inject resolution; attach resolve to exercise staged binary inspection. */
-export function __setWindowsProcessTreeRequireForTests(resolve?: NativeRequire): void {
-  requireNative = resolve ?? requireFromMain
-  moduleLoader = loadWindowsProcessTree
-  cachedModule = undefined
-  resetNativeReaderState()
-  resetSnapshotReaders()
-}
-
-/** Inject CIM to avoid spawning PowerShell in tests. */
-export function __setWindowsProcessTableCimScanForTests(
-  scan?: () => Promise<WindowsProcessRow[]>
-): void {
-  cimScan = scan ?? readWindowsProcessRowsWithCim
-  resetSnapshotReaders()
-}
-
-/** Test-only: drop the shared snapshots so suites cannot serve each other's rows. */
-export function resetWindowsProcessTableForTests(): void {
-  resetSnapshotReaders()
-  cachedModule = undefined
-  resetNativeReaderState()
 }

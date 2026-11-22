@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -9,10 +9,14 @@ const writeHermesContextFile = (cwd: string, text: string) =>
   writeFolderContextFile(cwd, HERMES_CONTEXT_FILE, 'Hermes', text)
 
 let dir = ''
+let previousUmask = 0
 beforeEach(async () => {
+  // A permissive umask, as a login shell often has, so a kept 0644 mode would show.
+  previousUmask = process.umask(0o022)
   dir = await mkdtemp(join(tmpdir(), 'hermes-context-'))
 })
 afterEach(async () => {
+  process.umask(previousUmask)
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -34,6 +38,21 @@ describe('Hermes context file', () => {
     const content = await readFile(join(dir, HERMES_CONTEXT_FILE), 'utf8')
     expect(content).toContain('second text')
     expect(content).not.toContain('first text')
+  })
+
+  it.skipIf(process.platform === 'win32').each([
+    ['a user-written file', 'My own rules.\n'],
+    [
+      'a file Orca wrote',
+      '<!-- Orca writes this file for Hermes chats in this folder; edits are replaced. -->\n\nold\n'
+    ]
+  ])('makes %s that others could read private once it carries the text', async (_, content) => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(path, content, { mode: 0o644 })
+    await chmod(path, 0o644)
+    await writeHermesContextFile(dir, 'private text')
+    expect(await readFile(path, 'utf8')).toContain('private text')
+    expect((await stat(path)).mode & 0o777).toBe(0o600)
   })
 
   it.skipIf(process.platform === 'win32')('leaves a symlink and its target alone', async () => {

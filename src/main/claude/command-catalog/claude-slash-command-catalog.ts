@@ -11,6 +11,7 @@ const MAX_COMMANDS_JSON_BYTES = 512 * 1024
 const MAX_NAME_LENGTH = 200
 const MAX_DESCRIPTION_LENGTH = 200
 const MAX_ARGUMENT_HINT_LENGTH = 100
+const ACCOUNT_SKILL_NAMESPACE = 'anthropic-skills:'
 
 type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHint' | 'builtin'>
 
@@ -119,25 +120,50 @@ export function readClaudeSlashCommands(
   }))
 }
 
+function initializationCommands(initialization: unknown): unknown[] | undefined {
+  return initialization !== null &&
+    typeof initialization === 'object' &&
+    'commands' in initialization &&
+    Array.isArray(initialization.commands)
+    ? initialization.commands
+    : undefined
+}
+
+// Stream init spells a claude.ai account skill `anthropic-skills:<name>` where descriptors list the
+// bare `<name>`, which the CLI also accepts; keep that spelling so the row keeps its description and hint.
+function descriptorSpelling(
+  entries: AgentSessionSlashCommand[],
+  descriptorNames: ReadonlySet<string>
+): AgentSessionSlashCommand[] {
+  let reported: Set<string> | undefined
+  return entries.map((entry) => {
+    if (!entry.name.startsWith(ACCOUNT_SKILL_NAMESPACE) || descriptorNames.has(entry.name)) {
+      return entry
+    }
+    const bare = entry.name.slice(ACCOUNT_SKILL_NAMESPACE.length)
+    if (!descriptorNames.has(bare)) {
+      return entry
+    }
+    reported ??= new Set(entries.map(({ name }) => name))
+    return reported.has(bare) ? entry : { ...entry, name: bare }
+  })
+}
+
 export class ClaudeSlashCommandCatalog {
   private entries: AgentSessionSlashCommand[] | undefined
   private hasSkillClassification = false
   private launchCwd: string | undefined
   private commandNames = new Set<string>()
+  private descriptorNames = new Set<string>()
   private details = new Map<string, CommandDetail>()
+  private hasDescriptors = false
 
   constructor(initMessage?: Record<string, unknown>, initialization?: unknown) {
     // SessionStart can prove acquisition before the first stream init exists.
-    if (
-      initialization !== null &&
-      typeof initialization === 'object' &&
-      'commands' in initialization &&
-      Array.isArray(initialization.commands)
-    ) {
-      const catalog = descriptorCatalog(initialization.commands)
-      this.details = catalog.details
+    const commands = initializationCommands(initialization)
+    if (commands) {
       this.entries = this.describe(
-        catalog.names.map((name) => ({
+        this.applyDescriptors(commands).map((name) => ({
           name,
           kind: 'command',
           kindUnspecified: true
@@ -153,14 +179,35 @@ export class ClaudeSlashCommandCatalog {
     return this.entries
   }
 
+  /** Initialize can land after a streamed catalog; it respells those rows to descriptor names and
+   *  attaches description, hint and builtin copy unless a newer descriptor list already did. */
+  adoptInitialization(initialization: unknown): void {
+    const commands = initializationCommands(initialization)
+    if (!commands || this.hasDescriptors || this.entries === undefined) {
+      return
+    }
+    this.applyDescriptors(commands)
+    this.entries = this.describe(descriptorSpelling(this.entries, this.descriptorNames))
+  }
+
+  private applyDescriptors(commands: unknown): string[] {
+    const catalog = descriptorCatalog(commands)
+    this.hasDescriptors = true
+    this.details = catalog.details
+    this.descriptorNames = new Set(catalog.names)
+    return catalog.names
+  }
+
   // skills follows cwd after cd; slash_commands remains session-wide, so preserve launch-folder kinds.
   private classify(message: Record<string, unknown>): AgentSessionSlashCommand[] {
     const reported = readClaudeSlashCommands(message)
     const cwd = typeof message.cwd === 'string' ? message.cwd : undefined
     this.launchCwd ??= cwd
-    if (cwd === undefined || cwd === this.launchCwd) {
-      return reported
-    }
+    const spelled = descriptorSpelling(reported, this.descriptorNames)
+    return cwd === undefined || cwd === this.launchCwd ? spelled : this.withLaunchKinds(spelled)
+  }
+
+  private withLaunchKinds(reported: AgentSessionSlashCommand[]): AgentSessionSlashCommand[] {
     const known = new Map(
       (this.entries ?? [])
         .filter((entry) => !entry.kindUnspecified)
@@ -203,10 +250,8 @@ export class ClaudeSlashCommandCatalog {
       message.subtype === 'commands_changed' &&
       Array.isArray(message.commands)
     ) {
-      const catalog = descriptorCatalog(message.commands)
-      this.details = catalog.details
       next = this.describe(
-        catalog.names.map((name) =>
+        this.applyDescriptors(message.commands).map((name) =>
           this.hasSkillClassification
             ? { name, kind: this.commandNames.has(name) ? 'command' : 'skill' }
             : { name, kind: 'command', kindUnspecified: true }

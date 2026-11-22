@@ -15,6 +15,7 @@ import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-reques
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { noteListedBots } from './bot-avatar-uploads'
 import { publishHostBots } from './host-bot-store'
 import { botsListRead, type PhoneBot } from './host-bots-operations'
 import type { BotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
@@ -118,6 +119,7 @@ export async function readHostBots(
     }
     options?.beforeSend?.()
     publishHostBots(key, read)
+    noteListedBots(client, read.bots)
     return read
   } catch {
     return { kind: 'unreadable' }

@@ -673,6 +673,10 @@
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} precisam de você",
+      "needsYou": "Precisa de você"
     }
   },
   "tray": {
@@ -1393,7 +1397,8 @@
         "safariFullDiskAccess": "O macOS negou acesso aos cookies do Safari. Conceda ao Orca Acesso Total ao Disco em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco.",
         "connectionEnded": "A conexão com este servidor foi encerrada durante a importação. Reconecte-se e tente novamente.",
         "serverRepaired": "Este servidor foi pareado novamente durante a importação. Tente novamente.",
-        "macFullDiskAccess": "O macOS negou acesso aos cookies do {{browser}}. Conceda Acesso Total ao Disco ao Orca em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco e reinicie o Orca."
+        "macFullDiskAccess": "O macOS negou acesso aos cookies do {{browser}}. Conceda Acesso Total ao Disco ao Orca em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco e reinicie o Orca.",
+        "sshHostDisconnected": "Esta página não está mais conectada pelo host SSH. Reconecte e tente novamente."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importado para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-lo.",
@@ -1403,6 +1408,13 @@
         "imported_other": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navegadores neste dispositivo",
+        "destination": "Importa para o navegador de {{host}}.",
+        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
+        "stored": "Salvo no navegador de {{host}}.",
+        "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
       }
     },
     "googleCookieClear": {
@@ -2066,6 +2078,10 @@
           "devin": "Devin",
           "devinDesktop": "devin desktop"
         }
+      },
+      "about": {
+        "title": "Sobre",
+        "version": "Orca {{version}}"
       }
     },
     "openInApp": {
@@ -2102,7 +2118,10 @@
       "availableSoon": "Disponível para você {{relative}}",
       "availableOn": "Disponível para você em {{date}} ({{relative}})",
       "clearedTitle": "Orca {{version}} está pronto",
-      "released": "Lançado {{released}}"
+      "released": "Lançado {{released}}",
+      "1b4d825e0e": "Atraso de atualização",
+      "ab7e864374": "Sobre o atraso de atualização",
+      "ee1d96f74a": "Ignorar o atraso uma vez"
     },
     "groupHooks": {
       "invalidSetup": "O arquivo está presente, mas o Orca não encontrou um script de configuração válido.",
@@ -2126,6 +2145,12 @@
         "ownShort": "Skills próprias",
         "showMore": "Mostrar mais {{count}}"
       }
+    },
+    "automaticUpdates": {
+      "title": "Atualizações automáticas",
+      "description": "Nas instalações compatíveis para computador, o Orca baixa as atualizações elegíveis durante as verificações programadas e reinicia automaticamente para instalá-las.",
+      "info": "Sobre as atualizações automáticas",
+      "saveFailed": "Não foi possível salvar a configuração de atualizações automáticas."
     }
   },
   "auto": {
@@ -3250,6 +3275,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Issue vinculada",
         "listeningPort": "Porta em escuta"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+clique verifica a versão candidata (RC) mais recente. {{perfKey}}+clique verifica a build de teste de desempenho mais recente.",
+        "localMacBuildHint": "⌥+clique permite escolher uma build local do macOS."
       }
     },
     "components": {
@@ -7454,21 +7483,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de versão",
-          "d89806cc89": "está pronto para instalar.",
-          "a6b37929dc": "Versão",
-          "8311da27ba": "está disponível.",
           "02dc082e70": "Não foi possível iniciar o download da atualização.",
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
           "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
           "b9ad70c30d": "Erro de atualização. {{value0}}",
-          "2a48034c4c": "Baixando v{{value0}}... {{value1}}%",
           "f40d88390d": "Você está na versão mais recente.",
           "31fd7150cf": "Verificando atualizações...",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
-          "e3b9d21c07": "está disponível. Atualize o Orca através do gerenciador de pacotes do seu sistema — o Orca não pode instalar esta versão por conta própria.",
           "6d27bd46e3": "Verificar Atualizações",
-          "857ca887da": "Baixar Atualização (",
-          "c0a8f827c7": "Reiniciar para Atualizar ("
+          "downloadUpdate": "Baixar atualização",
+          "restartToUpdate": "Reiniciar para atualizar",
+          "versionAvailable": "A versão {{version}} está disponível.",
+          "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria.",
+          "versionReadyToInstall": "A versão {{version}} está pronta para instalar.",
+          "versionInstalling": "Instalando a versão {{version}}.",
+          "downloadingVersion": "Baixando a versão {{version}} ({{percent}}%)…"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -7707,26 +7736,35 @@
           "empty": "Os catálogos configurados não listam nenhum plugin."
         },
         "ReleaseChannelSection": {
-          "switchFailed": "Não foi possível alternar para essa build.",
-          "title": "Canal de versão",
-          "description": "Alterne canais de atualização ou vá para qualquer build publicada, incluindo versões mais antigas. Downgrades são permitidos e builds não revisadas podem estar quebradas.",
+          "switchFailed": "Não foi possível mudar para essa versão.",
+          "title": "Canal de atualização",
+          "description": "Mude de canal de atualização ou escolha uma versão publicada, inclusive uma anterior. Versões não verificadas podem falhar.",
           "devOnly": "Somente dev",
-          "channelAriaLabel": "Canal de atualização",
-          "hourlyWarning": "As builds por hora saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "dailyWarning": "As builds diárias saem direto da main sem barreira de testes, e as do Windows não são assinadas. Mantenha uma build estável à mão.",
-          "adhocWarning": "As builds adhoc vêm de uma branch que ainda não foi mesclada, e as do Windows não são assinadas. Quem a gerou pode abandoná-la — mantenha uma build estável à mão.",
-          "loadingBuilds": "Carregando builds…",
-          "noBuilds": "Nenhuma build encontrada",
-          "refresh": "Atualizar lista de builds",
-          "switchTo": "Alternar para build",
-          "alreadyRunning": "Esta é a build que você está executando.",
+          "adhocWarning": "As versões para Windows não são assinadas. Quem gerou a versão pode deixar de mantê-la. Tenha uma versão estável à mão.",
+          "loadingBuilds": "Carregando versões…",
+          "noBuilds": "Nenhuma versão encontrada",
+          "refresh": "Atualizar lista de versões",
+          "switchTo": "Mudar de versão",
+          "alreadyRunning": "Esta é a versão em uso.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Alternar builds só está disponível no app desktop.",
+          "webUnavailable": "Só é possível mudar de versão no aplicativo para computador.",
           "devChannelUnsupportedAria": "{{value0}} (somente {{value1}})",
-          "devChannelUnsupported": "As builds {{value0}} são produzidas somente para {{value1}}. O Linux permanece em Stable ou RC.",
+          "devChannelUnsupported": "As versões do canal “{{value0}}” estão disponíveis apenas para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
           "downloadInstaller": "Baixar instalador",
-          "manualInstallHint": "As builds {{value0}} não são assinadas no Windows, então o atualizador do app não consegue instalar uma sobre uma build assinada. Execute o instalador baixado uma vez — o Windows vai avisar sobre um publicador desconhecido — e toda troca posterior, inclusive de volta para Stable, funciona a partir daí.",
-          "cacheHint": "As listas de compilações ficam em cache por 5 minutos. Atualize para verificar se há novas compilações."
+          "manualInstallHint": "As versões do canal “{{value0}}” não são assinadas no Windows. O atualizador do aplicativo não consegue instalá-las sobre uma versão assinada. Execute o instalador baixado uma vez. O Windows vai avisar sobre um editor desconhecido. Depois, você pode mudar de versão aqui, inclusive voltar ao canal “{{stable}}”.",
+          "cacheHint": "A lista de versões fica em cache por 5 minutos. Atualize a lista para procurar novas versões.",
+          "stableLabel": "Estável",
+          "stableDescription": "Versões estáveis para uso geral.",
+          "rcLabel": "RC",
+          "rcDescription": "Versões candidatas publicadas antes de uma versão estável.",
+          "hourlyLabel": "Por hora",
+          "hourlyDescription": "Versão gerada a cada hora a partir de main.",
+          "dailyLabel": "Diário",
+          "dailyDescription": "Versão gerada uma vez por dia a partir de main.",
+          "adhocLabel": "Pontual",
+          "adhocDescription": "Versões pontuais de uma branch para experimentar alterações antes de integrá-las.",
+          "devChannelPlatforms": "macOS e Windows",
+          "scheduledWarning": "Essas versões são publicadas sem testes obrigatórios. As versões para Windows não são assinadas. Tenha uma versão estável à mão."
         },
         "ManageSessionsSection": {
           "33c2a1e1b4": "Encerrar sessão {{value0}}",
@@ -8377,7 +8415,8 @@
           "updating": "Atualizando servidores…",
           "serverCountOne": "1 servidor pareado",
           "fdd271abf0": "Servidores Orca Remotos",
-          "e4e5937469": "Verificar Atualizações"
+          "e4e5937469": "Verificar Atualizações",
+          "newerCount": "{{value0}} com versão mais recente que a deste aplicativo"
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Cliques em URL no terminal",
@@ -9676,10 +9715,10 @@
           "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}"
         },
         "ReleaseBuildPicker": {
-          "build": "Build",
-          "searchLabel": "Buscar builds",
-          "searchPlaceholder": "Buscar builds…",
-          "noMatches": "Nenhuma build encontrada."
+          "build": "Versão",
+          "searchLabel": "Pesquisar versões",
+          "searchPlaceholder": "Pesquisar versões…",
+          "noMatches": "Nenhuma versão correspondente."
         },
         "pluginInstallAction": {
           "installed": "{{value0}} instalado",
@@ -12671,7 +12710,7 @@
           "removeWithChildrenGit_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeSingleFolderFromOrca": "Remove-o do Orca. A pasta no disco é mantida.",
-          "deleteSingleWorktreeAndBranch": "Exclui o worktree e sua branch (mantida se não mesclada)."
+          "deleteSingleWorktreeAndBranch": "Exclui o worktree e as alterações locais. A branch também é excluída se já tiver sido mesclada."
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Mostrar worktree",
@@ -13156,7 +13195,6 @@
           "stopped": "Parada",
           "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
-          "description": "O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais funcionem nativamente no Linux. Os projetos desta distribuição que você abriu por \\\\wsl.localhost são movidos automaticamente para este host quando seus terminais ficam ociosos; projetos em uma unidade do Windows (/mnt/…) permanecem neste computador. Você pode trazer de volta um projeto movido pela barra lateral.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
@@ -14728,7 +14766,6 @@
           "missingWorkspace": "Espaço de trabalho faltando",
           "usageUnavailable": "Uso indisponível",
           "noRunUsageYet": "Ainda sem uso de execução",
-          "noWorkspace": "Nenhum espaço de trabalho",
           "latestSavedOutput": "Última saída salva",
           "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
           "retryFullOutput": "Tentar novamente",
@@ -14917,7 +14954,6 @@
           "failed7d": "Com falha · 7d",
           "automation": "Automação",
           "triggered": "Acionada",
-          "trigger": "Acionador",
           "loading": "Carregando execuções…",
           "noRuns": "Ainda sem execuções",
           "emptyDescription": "As execuções aparecem aqui depois que uma automação é acionada.",
@@ -15023,11 +15059,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Ainda sem execuções.",
-          "13988187b3": "Tokens",
           "86a248187e": "Gasto",
           "149c0b49c7": "Espaço de Trabalho",
           "8faaa00726": "Execução",
-          "a00e38d1a3": "—",
           "historyUnavailable": "O histórico de execução não está disponível a partir deste host. Isso não significa que a automação falhou ou não tem execuções."
         },
         "AutomationSchedulePicker": {
@@ -15226,7 +15260,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} gastos",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -20813,6 +20851,10 @@
         "permissionAuto": "Aprovar por mim",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
+        "permissionAgentSettings": "Configurações do {{agent}}",
+        "permissionAgentSettingsUsedHint": "Usa suas configurações de permissão do {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Usa suas configurações de permissão do {{agent}}. O Orca não consegue exibir este modo.",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}",
         "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
         "permissionFullAccessSharedDescription": "Nunca pede aprovação antes de edições ou comandos",
@@ -20827,6 +20869,7 @@
         "imageUnavailable": "Prévia indisponível",
         "exitPlanMode": "Sair do modo de planejamento",
         "moreControls": "Mais controles do chat",
+        "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
         "botFor": "Para: {{detail}}",
         "bots": "Bots"
       },
@@ -21078,7 +21121,17 @@
         "skip": "Pular",
         "sending": "Enviando…",
         "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
-        "openTerminal": "Responder no terminal"
+        "openTerminal": "Responder no terminal",
+        "recommended": "Recomendado",
+        "stepAnswered": "{{value0}}, respondida",
+        "stepOf": "{{value0}} de {{value1}}",
+        "answered": "Respondida",
+        "title": "Pergunta",
+        "previous": "Pergunta anterior",
+        "nextQuestion": "Próxima pergunta",
+        "back": "Voltar",
+        "skipAndSubmit": "Pular e enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",
@@ -21465,14 +21518,12 @@
         "steerHint": "Enviar agora, enquanto o agente continua trabalhando",
         "sendHint": "Enviar esta mensagem agora",
         "delete": "Excluir",
-        "moreActions": "Mais ações",
         "editMessage": "Editar mensagem",
         "showFullMessage": "Mostrar mensagem completa",
         "showLess": "Mostrar menos",
         "listLabel": "Mensagens na fila",
         "alreadySent": "Esta mensagem já foi enviada.",
         "withdrawnHold": "Interrompida antes do envio",
-        "pausedSendFailed": "Não foi possível enviar — pressione Enviar para tentar novamente.",
         "paused": "Pausada",
         "resume": "Retomar",
         "fromSender": "De",
@@ -21488,15 +21539,17 @@
         "imageCount_one": "{{count}} imagem",
         "imageCount_other": "{{count}} imagens",
         "imageCount_many": "{{count}} imagens",
-        "collapse": "Recolher",
-        "expand": "Expandir",
         "queued": "Na fila",
         "clearAll": "Limpar tudo",
         "moveChanged": "A fila mudou antes desta movimentação. Tente arrastar a mensagem novamente.",
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem",
         "editReturned": "Sua edição está na caixa de bate-papo.",
-        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila."
+        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila.",
+        "couldNotSend": "Não foi possível enviar",
+        "retry": "Tentar novamente",
+        "showLessRows": "Mostrar menos",
+        "moreRows": "+{{value0}} mais"
       },
       "thought": "Raciocínio",
       "thoughtForDuration": "Pensou por {{duration}}",
@@ -21777,6 +21830,9 @@
           "alreadyRedeemed": "Esse crédito de redefinição já foi usado."
         }
       },
+      "dock": {
+        "label": "Caixa de mensagem e solicitações"
+      },
       "automationSaved": {
         "openFullPage": "Abrir página"
       },
@@ -21871,9 +21927,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Revisar limpeza alpha"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -23452,8 +23505,8 @@
     "failure": {
       "releaseNotReady": "Uma versão mais recente ainda não está disponível para este dispositivo. Verifique novamente mais tarde.",
       "updateServerUnreachable": "Não foi possível acessar o servidor de atualização. Tente novamente em alguns minutos.",
-      "channelUnsupportedPlatform": "As builds {{channel}} são produzidas apenas para macOS e Windows.",
-      "unsignedDevChannel": "As builds {{channel}} não são assinadas, e esta build assinada só instala atualizações assinadas pelo publicador do Orca. Baixe o instalador na página de releases e execute-o uma vez — depois disso, as atualizações funcionam normalmente, inclusive para voltar ao Stable.",
+      "channelUnsupportedPlatform": "As versões do canal “{{channel}}” estão disponíveis apenas para macOS e Windows.",
+      "unsignedDevChannel": "As versões do canal “{{channel}}” não são assinadas. A versão assinada atual só instala atualizações assinadas pelo editor do Orca. Baixe o instalador na página de versões e execute-o uma vez. Depois, as atualizações voltam a funcionar normalmente, inclusive para voltar ao canal estável.",
       "linuxPackageMissing": "O pacote baixado não está mais no cache de atualizações. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
       "linuxPackageNotRegular": "O pacote baixado não é mais um arquivo válido no cache de atualizações. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
       "linuxPackageHashMismatch": "O pacote baixado não corresponde mais ao release verificado, por isso o Orca não o encaminhará a um gerenciador de pacotes. Baixe a atualização novamente ou obtenha-a na página oficial de releases.",
@@ -23468,8 +23521,8 @@
       "unknownReleaseChannel": "Canal de versão desconhecido \"{{channel}}\".",
       "invalidReleaseTag": "\"{{tag}}\" não é uma tag de release válida.",
       "releaseRepoNotFound": "Nenhum repositório de releases encontrado em {{repo}}.",
-      "releaseListFailed": "Não foi possível listar as builds {{channel}} (HTTP {{status}}).",
-      "releaseListUnreadable": "Não foi possível ler a lista de releases de {{channel}}.",
+      "releaseListFailed": "Não foi possível obter a lista de versões do canal “{{channel}}” (HTTP {{status}}).",
+      "releaseListUnreadable": "Não foi possível ler a lista de versões do canal “{{channel}}”.",
       "rateLimitedSoon": "Limite de taxa do GitHub atingido. Tente novamente em alguns minutos.",
       "rateLimitedSoonSignedOut": "Limite de taxa do GitHub atingido. Tente novamente em alguns minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinute": "Limite de taxa do GitHub atingido. Tente novamente em cerca de um minuto.",
@@ -23479,7 +23532,10 @@
       "rateLimitedInMinutes_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos.",
       "rateLimitedInMinutesSignedOut_one": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minuto ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinutesSignedOut_other": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
-      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta."
+      "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
+      "automaticInstallCheckpointFailed": "O Orca não conseguiu salvar a janela atual antes de reiniciar. Tente instalar a atualização novamente.",
+      "automaticInstallTerminalBusy": "Alguns terminais seriam encerrados durante a reinicialização. O Orca tentará novamente em uma verificação posterior.",
+      "macStagingTimeout": "O macOS ainda está preparando a atualização. Se isso persistir, encerre e reabra o Orca."
     }
   },
   "jira": {
@@ -24908,7 +24964,10 @@
       "title": "Atividade"
     },
     "connectors": {
-      "tab": "Conectores"
+      "tab": "Conectores",
+      "needYou_many": "{{count}} precisam de você",
+      "needYou_one": "{{count}} precisa de você",
+      "needYou_other": "{{count}} precisam de você"
     },
     "files": {
       "tab": "Arquivos"

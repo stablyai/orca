@@ -91,6 +91,9 @@ export const ConnectorAskerSchema = z.object({
       name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
     })
     .optional(),
+  // Another Slack app the owner put on Who can ask wrote it, not a person: userId is its bot user,
+  // and no one's permission comes with it. An older machine drops it and reads a member's request.
+  app: z.literal(true).optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
   note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
