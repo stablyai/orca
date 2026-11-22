@@ -3,6 +3,7 @@ import {
   framesWithin,
   liveTextRecipients,
   noteLiveRowsHeld,
+  noteLiveTextReadersChanged,
   sessionLiveTextFanOut,
   sessionLiveTextReaders
 } from '../agent-session-subscriber-live-text-readers'
@@ -131,4 +132,20 @@ it('owes a window with no rows only to members holding live rows, including ones
   holding.liveSent = new Map()
   expect(owed()).toEqual(['later'])
   expect([...liveTextRecipients(group!, true)]).toHaveLength(3)
+})
+
+it('lets go of every holder once the session it was grouped in changes', () => {
+  const holding = subscriber({
+    id: 'holding',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the key is read.
+    liveSent: new Map([['timeline', {} as never]])
+  })
+  const session = new Map([['holding', holding]])
+  const [group] = sessionLiveTextFanOut(session).groups
+  session.delete('holding')
+  noteLiveTextReadersChanged(session)
+  expect(group!.holders.size).toBe(0)
+  // A row it gets now belongs to no group, so no stale set takes it back.
+  noteLiveRowsHeld(holding)
+  expect(group!.holders.size).toBe(0)
 })

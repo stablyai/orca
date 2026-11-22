@@ -79,8 +79,15 @@ const sessionFanOuts = new WeakMap<ReadonlyMap<string, Subscriber>, LiveTextFanO
 export function noteLiveTextReadersChanged(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): void {
-  if (subscribers) {
-    sessionFanOuts.delete(subscribers)
+  const fanOut = subscribers && sessionFanOuts.get(subscribers)
+  if (!fanOut) {
+    return
+  }
+  sessionFanOuts.delete(subscribers)
+  // The next lookup seeds new groups from each member's rows; the old ones keep no one alive.
+  for (const group of fanOut.groups) {
+    group.holders.clear()
+    group.members.forEach((member) => holdersBySubscriber.delete(member))
   }
 }
 
