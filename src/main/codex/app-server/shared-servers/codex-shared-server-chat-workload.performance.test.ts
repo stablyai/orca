@@ -30,36 +30,15 @@ afterEach(() => {
 async function environReadsForOneClose(processes: number): Promise<number> {
   proc.pids = Array.from({ length: processes }, (_, index) => BASE_PID + index + 1)
   proc.environReads = 0
-  vi.useFakeTimers()
   const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
-  const stopped = stopCodexLeaseTaggedProcesses(SERVER_PID, 'lease-a', undefined, 'linux')
-  await vi.runAllTimersAsync()
-  expect(await stopped).toBe(false)
-  expect(kill).toHaveBeenCalledWith(TAGGED_PID, 'SIGKILL')
+  expect(await stopCodexLeaseTaggedProcesses(SERVER_PID, 'lease-a', undefined, 'linux')).toBe(false)
+  expect(kill).not.toHaveBeenCalled()
   return proc.environReads
 }
 
 describe('shared Codex chat close without the launcher (Linux)', () => {
-  it('reads each process environment once, plus one per tagged process', async () => {
-    expect(await environReadsForOneClose(200)).toBe(200 + 1)
-    expect(await environReadsForOneClose(2_000)).toBe(2_000 + 1)
-  })
-
-  it('shares one environment reading across chats closing at once', async () => {
-    proc.pids = Array.from({ length: 200 }, (_, index) => BASE_PID + index + 1)
-    proc.environReads = 0
-    vi.useFakeTimers()
-    vi.spyOn(process, 'kill').mockReturnValue(true)
-    const closes = Array.from({ length: 10 }, (_, index) =>
-      stopCodexLeaseTaggedProcesses(
-        SERVER_PID,
-        index === 0 ? 'lease-a' : `lease-${index}`,
-        undefined,
-        'linux'
-      )
-    )
-    await vi.runAllTimersAsync()
-    await Promise.all(closes)
-    expect(proc.environReads).toBe(200 + 1)
+  it('reads no process environment, since nothing there can prove the close', async () => {
+    expect(await environReadsForOneClose(200)).toBe(0)
+    expect(await environReadsForOneClose(2_000)).toBe(0)
   })
 })

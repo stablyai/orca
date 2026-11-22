@@ -39,17 +39,6 @@ export async function scanCodexLeaseProcesses(
   return null
 }
 
-/** Which of these pids still carry the lease's tag: one environment read each (Linux, the only
- *  scan that finds tagged processes). */
-export async function codexLeaseProcessesStillTagged(
-  envName: string,
-  pids: readonly number[],
-  leaseId: string
-): Promise<number[]> {
-  const tags = await readLinuxTags(pids, envName)
-  return pids.filter((pid) => tags.get(pid) === leaseId)
-}
-
 function byTag(entries: readonly (readonly [number, string | null])[]) {
   return (leaseId: string): number[] =>
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
@@ -103,25 +92,6 @@ const readOwnLinuxProcesses = coalescedReading(async () => {
   return processes
 })
 
-/** Concurrent closes share one process reading, so they share its tag reading too: one environment
- *  read per process however many chats close at once. */
-const allTagReadings = new WeakMap<
-  ReadonlyMap<number, LinuxProcess>,
-  Promise<Map<number, string | null | typeof UNREADABLE_TAG>>
->()
-
-function readAllTags(
-  processes: ReadonlyMap<number, LinuxProcess>,
-  envName: string
-): Promise<Map<number, string | null | typeof UNREADABLE_TAG>> {
-  let reading = allTagReadings.get(processes)
-  if (!reading) {
-    reading = readLinuxTags([...processes.keys()], envName)
-    allTagReadings.set(processes, reading)
-  }
-  return reading
-}
-
 async function readLinuxTags(
   pids: readonly number[],
   envName: string
@@ -150,7 +120,7 @@ async function readLinuxTags(
  *  command that cleared its environment still sits under the tagged command that started it).
  *  An untagged process under no tagged one is Codex's own (an MCP server); an untagged orphan
  *  can't be attributed, so no chat's Stop is proven while it runs. Without the launcher, orphans
- *  go to init, so tagged processes are stopped but nothing is proven. */
+ *  go to init, so nothing is proven and nothing is read. */
 async function scanLinux(
   envName: string,
   serverPid: number
@@ -166,14 +136,8 @@ async function scanLinux(
       ? server.parent
       : null
   if (launcher === null) {
-    // Tagged processes can still be found and stopped, but a command that cleared its environment
-    // and was orphaned to init is indistinguishable from any other process.
-    const tags = await readAllTags(processes, envName)
-    const unreadable = [...tags].flatMap(([pid, tag]) => (tag === UNREADABLE_TAG ? [pid] : []))
-    const entries = [...tags].flatMap(([pid, tag]) =>
-      tag === UNREADABLE_TAG ? [] : [[pid, tag] as const]
-    )
-    return { tagged: byTag(entries), unreadable, bounded: false }
+    // Orphans go to init here, so nothing can prove a close: no environment is read for nothing.
+    return { tagged: () => [], unreadable: [], bounded: false }
   }
   const children = childrenByParent([...processes].map(([pid, { parent }]) => [pid, parent]))
   const watchers = new Set(

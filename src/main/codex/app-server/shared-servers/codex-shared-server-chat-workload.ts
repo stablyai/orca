@@ -3,10 +3,7 @@ import {
   forEachWithConcurrency,
   mapSettledWithConcurrency
 } from '../../../../shared/concurrency/map-with-concurrency'
-import {
-  codexLeaseProcessesStillTagged,
-  scanCodexLeaseProcesses
-} from './codex-shared-lease-process-scan'
+import { scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
 import {
@@ -130,15 +127,13 @@ export async function stopCodexLeaseTaggedProcesses(
     const targets = first.tagged(leaseId)
     if (targets.length > 0) {
       // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
-      // A bounded scan tags by ancestry, so only a fresh scan re-derives it; an unbounded one tags
-      // by each process's own environment, so reading just the targets' is the same check.
-      const still = new Set(
-        first.bounded
-          ? ((
-              await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform, watcherPid)
-            )?.tagged(leaseId) ?? [])
-          : await codexLeaseProcessesStillTagged(CODEX_SHARED_LEASE_ENV, targets, leaseId)
+      const confirm = await scanCodexLeaseProcesses(
+        CODEX_SHARED_LEASE_ENV,
+        serverPid,
+        platform,
+        watcherPid
       )
+      const still = new Set(confirm?.tagged(leaseId) ?? [])
       for (const pid of targets) {
         if (still.has(pid)) {
           try {
@@ -151,7 +146,6 @@ export async function stopCodexLeaseTaggedProcesses(
       await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
     }
     if (!first.bounded) {
-      // Nothing proves an unbounded scan, so another whole reading would change nothing.
       return false
     }
     // Always a reading taken after the first finished: a process forked while the first was

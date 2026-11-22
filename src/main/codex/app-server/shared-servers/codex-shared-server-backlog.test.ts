@@ -52,6 +52,16 @@ describe('shared Codex server backlog', () => {
     expect(connB.closed).toBe(false)
   })
 
+  it('makes the server wait as soon as every chat is paused and a frame is held', async () => {
+    const { server, connA, connB, threadA, megabyte } = await backloggedPair()
+    connA.pauseReading?.()
+    connB.pauseReading?.()
+    megabyte(threadA)
+    expect(server.readingPaused).toBe(true)
+    connB.resumeReading?.()
+    expect(server.readingPaused).toBe(false)
+  })
+
   it('drops a lagging chat after a short grace when another chat on its server runs a turn', async () => {
     vi.useFakeTimers()
     const { server, a, b, connA, threadA, threadB, megabyte } = await backloggedPair()

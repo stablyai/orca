@@ -12,6 +12,8 @@ const MAX_SHED_GRACE_MS = 4_500
 type BacklogLease = {
   /** Owed a reply or a running turn's frames, or cleaning up: a paused reader would stall it. */
   readonly waiting: boolean
+  /** Can take frames now (not paused, not leaving). */
+  readonly reading: boolean
   /** Drops this chat's queue and ends it alone; it reconnects on its next send. */
   shed: () => void
 }
@@ -74,6 +76,14 @@ export class CodexSharedServerBacklog {
 
   private settle(graceOver: boolean): void {
     const half = CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
+    // No chat can take a frame and none waits on one: Codex holds the rest, as on a paused pipe.
+    const stalled =
+      this.total > 0 &&
+      this.waiters.size === 0 &&
+      ![...this.leases].some((lease) => lease.reading || lease.waiting)
+    if (stalled) {
+      this.setPaused(true)
+    }
     if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
       this.setPaused(true)
       if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
@@ -98,7 +108,7 @@ export class CodexSharedServerBacklog {
         this.graceSince = null
       }
     }
-    if (this.total <= half) {
+    if (this.total <= half && !stalled) {
       clearTimeout(this.grace)
       this.grace = undefined
       this.graceSince = null

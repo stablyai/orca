@@ -166,12 +166,17 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   pauseReading = (): void => {
     this.paused = true
+    this.noteWaiting()
   }
 
   resumeReading = (): void => {
     this.paused = false
     this.queue.drain()
     this.noteWaiting()
+  }
+
+  get reading(): boolean {
+    return !this.paused && !this.shedding && this.state !== 'ended'
   }
 
   /** Reading and owed frames: a paused shared reader would stall this chat. */
