@@ -20,6 +20,7 @@ import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-w
 import { captureBrowserLinkReveal } from './browser-link-reveal'
 import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
 import {
+  allowsHttpLinkSplit,
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
   prepareRemoteHttpLinkTab
@@ -135,7 +136,9 @@ export function canHttpLinkOpenInSourceGroup(
   ) {
     return false
   }
-  return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
+  return state
+    ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId, allowsHttpLinkSplit(state))
+    : false
 }
 
 function reportHttpLinkBrowserOpenFailure(error: unknown): void {
