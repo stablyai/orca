@@ -6,12 +6,15 @@ import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
-import { contentAssetName } from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
-import { MOBILE_WEB_BUNDLE_ENTRYPOINT, sha256Hex } from './mobile-web-bundle-manifest.mjs'
+import {
+  contentAssetName,
+  MOBILE_WEB_BUNDLE_ENTRYPOINT,
+  sha256Hex
+} from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const manifestContract = join(
