@@ -32,6 +32,7 @@ import {
   type ToolsBot
 } from './bot-tool-words'
 import { MobileBotAddToolPage } from './MobileBotAddToolPage'
+import { MobileBotEditToolPage } from './MobileBotEditToolPage'
 import { MobileBotToolPage } from './MobileBotToolPage'
 import { useBotToolsPage, type PhoneBotTools } from './use-bot-tools-page'
 
@@ -85,7 +86,7 @@ export function MobileBotToolsRow(props: {
   )
 }
 
-type Opened = { name: string; signIn: boolean }
+type Opened = { name: string; signIn: boolean; editing?: boolean }
 
 export function MobileBotToolsPage(props: {
   client: RpcClient | null
@@ -111,6 +112,33 @@ export function MobileBotToolsPage(props: {
     (tool) => !COMPOSIO_SESSION_MCP_URL.test(tool.detail)
   )
   const tool = opened ? own.find((entry) => entry.name === opened.name) : undefined
+  // The host refuses an owner's own server's name too; a plugin's doesn't clash.
+  const inheritedNames = (page.tools?.inherited ?? [])
+    .filter((entry) => !entry.plugin)
+    .map((entry) => entry.name)
+  const takenBesides = (name?: string) =>
+    new Set([
+      ...(page.tools?.own ?? []).map((entry) => entry.name).filter((entry) => entry !== name),
+      ...inheritedNames
+    ])
+  if (opened?.editing && tool) {
+    return (
+      <MobileBotEditToolPage
+        client={props.client}
+        bot={props.bot}
+        name={tool.name}
+        taken={takenBesides(tool.name)}
+        hostName={props.hostName}
+        online={props.online}
+        banner={banner}
+        onCancel={() => setOpened({ name: tool.name, signIn: false })}
+        onSaved={async (saved) => {
+          await page.reread(true)
+          setOpened({ name: saved.name, signIn: false })
+        }}
+      />
+    )
+  }
   if (opened && tool) {
     return (
       <MobileBotToolPage
@@ -126,25 +154,17 @@ export function MobileBotToolsPage(props: {
         onBack={() => setOpened(null)}
         onChanged={(recheck) => void page.reread(recheck)}
         onCheckAgain={page.checkAgain}
+        onEdit={() => setOpened({ name: tool.name, signIn: false, editing: true })}
         showToast={props.showToast}
       />
     )
   }
   if (adding) {
-    const inheritedNames = (page.tools?.inherited ?? [])
-      .filter((entry) => !entry.plugin)
-      .map((entry) => entry.name)
     return (
       <MobileBotAddToolPage
         client={props.client}
         bot={props.bot}
-        taken={
-          new Set([
-            ...(page.tools?.own ?? []).map((entry) => entry.name),
-            // The host refuses an owner's own server's name too; a plugin's doesn't clash.
-            ...inheritedNames
-          ])
-        }
+        taken={takenBesides()}
         hostName={props.hostName}
         online={props.online}
         banner={banner}

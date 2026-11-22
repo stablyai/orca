@@ -14,18 +14,32 @@ const Text = z
   .string()
   .max(4096)
   .refine((value) => !value.includes('\0'))
+// React Native's URL reads username, password and origin with regexes over the whole text, so an `@`
+// in a path (https://server.smithery.ai/@owner/mcp) reads as a user there; read the authority instead.
+function botToolUrlAuthority(value: string): { userinfo: string; hostPort: string } | null {
+  const authority = /^https?:\/\/([^/?#\\]*)/i.exec(value)?.[1]
+  if (authority === undefined) {
+    return null
+  }
+  const at = authority.lastIndexOf('@')
+  return { userinfo: at === -1 ? '' : authority.slice(0, at), hostPort: authority.slice(at + 1) }
+}
+/** A valid tool URL's origin, as `new URL().origin` gives it in Node and browsers. */
+export function botToolUrlOrigin(value: string): string {
+  const scheme = /^https?:/i.exec(value)?.[0].toLowerCase() ?? ''
+  const hostPort = (botToolUrlAuthority(value)?.hostPort ?? '').toLowerCase()
+  return `${scheme}//${hostPort.replace(scheme === 'https:' ? /:443$/ : /:80$/, '')}`
+}
 export const BotToolUrl = z
   .string()
   .max(2048)
   .refine((value) => {
     try {
-      const url = new URL(value)
-      return (
-        /^https?:\/\//i.test(value) &&
-        ['http:', 'https:'].includes(url.protocol) &&
-        !url.username &&
-        !url.password
-      )
+      new URL(value)
+      // The authority read only matches http(s)://, so it settles the scheme too. An empty user and
+      // password (`https://@host`, `https://:@host`) is no credential.
+      const authority = botToolUrlAuthority(value)
+      return authority !== null && (authority.userinfo === '' || authority.userinfo === ':')
     } catch {
       return false
     }
