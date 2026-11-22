@@ -33,7 +33,7 @@ import {
   type BotWorkWorkspace
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
-import type { BotWorkWorkspaceShow } from './bot-work-types'
+import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
 import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'

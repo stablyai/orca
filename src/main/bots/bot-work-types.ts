@@ -3,13 +3,6 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session/journal
 import type { OrchestrationSessionWorkerState } from '../../shared/orchestration-session-workers'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
 import type { BotWorkAddress, BotWorkHost, BotWorkRow, BotWorkStore } from './bot-work-store'
-import type { Worktree } from '../../shared/worktree/types'
-import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
-
-/** A worktree of this host by selector; `reads` shares each repo's read across one batch. */
-export type BotWorkWorkspaceShow = (
-  ...args: [selector: string, requiredHostId?: undefined, reads?: ScopedWorktreeReads]
-) => Promise<Pick<Worktree, 'displayName' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR'>>
 
 /** A row's worker as orchestration reads it now, at the newest Dispatch of its lineage. */
 export type BotWorkWorker = {
