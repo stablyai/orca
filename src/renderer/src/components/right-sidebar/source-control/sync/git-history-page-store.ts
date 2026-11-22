@@ -4,7 +4,7 @@ import type { GitHistoryResult } from '../../../../../../shared/git/history/git-
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
   | { status: 'refreshing' | 'ready'; result: GitHistoryResult; error?: string }
-  | { status: 'error'; result?: GitHistoryResult; error: string }
+  | { status: 'error'; result?: GitHistoryResult; error?: string }
 
 export const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 export const LOADING_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'loading' }
@@ -94,7 +94,7 @@ export function presentGitHistoryEntry(
     key.request.baseOid === fence.baseOid
   ) {
     // The current read finished with an incompatible page, so there is nothing left to wait for.
-    return { status: 'error', error: 'Commit history did not match the current checkout' }
+    return { status: 'error' }
   }
   return state.status === 'error'
     ? { status: 'error', error: state.error }

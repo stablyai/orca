@@ -31,10 +31,7 @@ describe('useSourceControlGitHistory session page', () => {
       mount({ branchName: 'main', headOid: 'h1', compareBaseRef: null })
       await act(() => Promise.resolve())
 
-      expect(historyProbe.current?.gitHistoryState).toEqual({
-        status: 'error',
-        error: 'Commit history did not match the current checkout'
-      })
+      expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'error' })
 
       await act(async () => historyProbe.current?.refreshGitHistory())
       expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'ready', result: matching })
