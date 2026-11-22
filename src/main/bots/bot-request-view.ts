@@ -34,6 +34,8 @@ export type BotRequestRecord = {
   origin?: AutomationTriggeredBy
   /** The sending chat, when the turn that sent it was its conversation's: answers to it go there. */
   askedInConversation?: string
+  /** The request from another chat the sending turn was answering: what comes back goes on there. */
+  answersRequest?: string
 }
 
 const CHANNELS = new Set(['public_channel', 'private_channel', 'channel'])
@@ -107,15 +109,21 @@ function originLine(record: BotRequestRecord): Record<string, string> {
     : {}
 }
 
-/** Asked by the owner in the sender's own chat, where Orca shows the answer on its own card. A
- *  worker's request has no card: its answer goes to the worker. */
-export function askedInOwnersChat(
-  record: Pick<BotRequestRecord, 'askers' | 'askedBy' | 'fromWorker'>
+/** Asked in a chat read in Orca, not on a connector conversation's turn, so Orca shows the answer
+ *  there on its own card, whoever asked. A worker's request has no card: its answer goes to the
+ *  worker. */
+export function answeredOnCard(
+  record: Pick<BotRequestRecord, 'fromWorker' | 'askedInConversation'>
 ): boolean {
-  const askedBy = askedByOf(record)
-  return (
-    !record.fromWorker && askedBy.length > 0 && askedBy.every((asker) => asker.kind === 'owner')
-  )
+  return !record.fromWorker && record.askedInConversation === undefined
+}
+
+/** Shown on the card, and the sending turn answers no one outside its chat, so the card is enough;
+ *  a turn answering another chat's request passes the answer on there. */
+function answerStaysOnCard(
+  record: Pick<BotRequestRecord, 'fromWorker' | 'askedInConversation' | 'answersRequest'>
+): boolean {
+  return answeredOnCard(record) && record.answersRequest === undefined
 }
 
 /** What the receiving bot reads beside the message. */
@@ -160,7 +168,7 @@ export function botRequestView(
     answerAppears:
       record.purpose === 'question'
         ? `${sender}'s conversation, waking it to finish the job`
-        : askedInOwnersChat(record)
+        : answerStaysOnCard(record)
           ? `${sender}'s conversation, where your owner reads it`
           : `${sender}'s conversation, which passes it on to ${askers}`
   }
@@ -178,14 +186,14 @@ export function botRequestSentNext(record: BotRequestRecord): string {
       : `${bot} has it now; the room shows its answer on ${bot}'s turn when it comes. Tell the asker in one line that ${bot} has it.`
   }
   if (record.purpose === 'question') {
-    return askedInOwnersChat(record)
+    return answerStaysOnCard(record)
       ? `${bot} answers you by mail, which wakes you; your owner sees the answer on its card, so finish the job with it without repeating it.`
       : `${bot} answers you by mail, which wakes you; then finish the job with its answer.`
   }
   if (botRequestAnswerRef(record)) {
     return `${bot} has it now and answers in this thread itself. Tell the asker in one line that ${bot} has it.`
   }
-  return askedInOwnersChat(record)
+  return answerStaysOnCard(record)
     ? `${bot} has it now; your owner sees its answer here on its own card when it comes. Tell them in one line that ${bot} has it.`
     : `${bot} has it now; its answer comes back to you by mail, and you pass it on. Tell the asker in one line that ${bot} has it.`
 }
@@ -204,7 +212,7 @@ export function botAnswerView(
   posted: boolean,
   shownInRoom = false
 ): Record<string, string> {
-  const owners = !record.group && askedInOwnersChat(record)
+  const owners = !record.group && answerStaysOnCard(record)
   const inRoom = `The room already shows this answer on ${record.toBotName}'s turn, so don't repeat, quote or summarize it.`
   const next = shownInRoom
     ? record.purpose === 'question'
@@ -251,11 +259,7 @@ export function botRequestUnansweredText(
     return `${failedTurn} Your ${record.purpose} hasn't been handled yet; ${bot} continues on its own when the limit resets, so don't redo it.`
   }
   // A handoff it read is its job now: no reply yet isn't a refusal.
-  if (
-    why === 'ended' &&
-    record.purpose === 'handoff' &&
-    (record.group || askedInOwnersChat(record))
-  ) {
+  if (why === 'ended' && record.purpose === 'handoff' && (record.group || answeredOnCard(record))) {
     return `${bot} read your handoff and ended its turn without a reply; the job is still ${bot}'s, so don't redo it or call it dropped. ${record.group ? `The room shows ${bot}'s turn.` : `Your owner's card reads that ${bot} has it.`}`
   }
   const what =
