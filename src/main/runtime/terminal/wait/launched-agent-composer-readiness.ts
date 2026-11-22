@@ -34,7 +34,10 @@ export type LaunchedAgentReadinessRuntime = Pick<
   'waitForTerminal' | 'waitForFreshWorkerComposer'
 > &
   Partial<
-    Pick<OrcaRuntimeService, 'getPtyLivenessVerdict' | 'readExitedLaunchOutput'> &
+    Pick<
+      OrcaRuntimeService,
+      'getPtyLivenessVerdict' | 'readExitedLaunchOutput' | 'wakeSleptAgentHandle'
+    > &
       LaunchedAgentExitRuntime
   >
 
@@ -222,6 +225,13 @@ export async function waitForWorkerAgentReady(
 ): Promise<RuntimeTerminalWait> {
   const { agent } = args
   try {
+    if (args.reusesTerminal) {
+      // A reused slept agent resumes in place first, so its authority is read from the woken process.
+      await runtime.wakeSleptAgentHandle?.(handle, {
+        timeoutMs: args.timeoutMs,
+        ...(args.signal ? { signal: args.signal } : {})
+      })
+    }
     const result = await (agent && !args.reusesTerminal
       ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, args.signal, (signal) =>
           waitForWorkerStartComposer(runtime, handle, agent, args.timeoutMs, signal)

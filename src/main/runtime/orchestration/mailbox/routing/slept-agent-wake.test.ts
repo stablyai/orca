@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import { registerBoundPty } from '../../../terminal/layout/bind-first-pane.test-fixture'
+import { waitForWorkerAgentReady } from '../../../terminal/wait/launched-agent-composer-readiness'
 import {
   createDatabase,
   createRuntime,
@@ -66,6 +67,34 @@ describe('Agent-slept window pane wake', () => {
     await expect(second).resolves.toBe(handle)
     expect(resume).toHaveBeenCalledTimes(1)
     expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+    slept.db.close()
+  })
+
+  it('wakes a reused slept agent before a worker start reads its process', async () => {
+    const slept = await sleptPane()
+    const { runtime, handle } = slept
+    runtime.setNotifier(
+      wakeNotifier(async () => {
+        registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+          tabId: TAB_ID,
+          leafId: LEAF_ID,
+          incarnationId: 'woken-incarnation'
+        })
+        slept.rows = [statusRow({ receivedAt: 2 })]
+        await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+        runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
+        await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
+        return true
+      })
+    )
+
+    await waitForWorkerAgentReady(runtime, handle, {
+      agent: 'codex',
+      reusesTerminal: true,
+      timeoutMs: 5_000
+    })
+
+    expect(runtime.getTerminalProcessIncarnation(handle)).toBe(`${WOKEN_PTY_ID}:woken-incarnation`)
     slept.db.close()
   })
 
