@@ -929,6 +929,7 @@ import {
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
+  ToolCallerParams,
   UnsubscribeParams
 } from './structured-agent-session/structured-agent-session-params'
 import { RespondToQuestionParams } from './structured-agent-session/structured-agent-session-question-params'
@@ -1187,6 +1188,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
+  'agentSession.toolCaller': ToolCallerParams,
   'agentSession.unsubscribe': UnsubscribeParams,
   'agentSessionAttachment.read': AttachmentReadParams,
   'agentSessionAttachment.readTextChunk': AttachmentTextReadParams,

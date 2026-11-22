@@ -15,6 +15,7 @@ import type {
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
+import type { PublishSharedToolProcessSessionEnv } from '../../runtime/agent-session/environment/shared-tool-process-session-env'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type {
@@ -98,8 +99,9 @@ export type AcpLaunchSpec = {
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
   /** Tools run in a process other chats share, which keeps the environment of the chat that
-   *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
-  sharedToolProcess?: true
+   *  started it, so no chat's process carries caller identity. Each session's tools get theirs from
+   *  `publishSessionEnv`; without it, Orca's CLI there refuses to guess one. */
+  sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv }
   /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */

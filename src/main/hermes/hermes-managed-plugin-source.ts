@@ -2,6 +2,7 @@ import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import { SHARED_TOOL_PROCESS_SESSION_ENV_NAMES } from '../runtime/agent-session/environment/shared-tool-process-session-env'
 
 export const HERMES_PLUGIN_NAME = 'orca-status'
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
@@ -30,12 +31,17 @@ export const HERMES_CLIENT_ENV_PASSTHROUGH: readonly string[] = [
   'ORCA_AGENT_HOOK_VERSION'
 ]
 
+/** Where, under the plugin, Orca writes each chat's tool environment, named `<session id>.json`. */
+export const HERMES_SESSION_ENV_DIR = 'sessions'
+/** The Hermes session ids Orca writes and the plugin reads as file names. */
+export const HERMES_SESSION_ID_PATTERN = '[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}'
+
 export function getPluginManifest(): string {
   return [
     `# ${HERMES_PLUGIN_MARKER}`,
     `name: ${HERMES_PLUGIN_NAME}`,
     'version: 1.0.0',
-    'description: "Reports Hermes Agent lifecycle events to Orca."',
+    'description: "Reports Hermes Agent lifecycle events to Orca and runs each Orca chat\'s tools as that chat."',
     'author: "Orca"',
     'kind: standalone',
     'provides_hooks:',
@@ -50,6 +56,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Optional
@@ -61,6 +68,11 @@ except ImportError:
     bound_client_env = None
 
 EVENTS = ${JSON.stringify(HERMES_EVENTS)}
+# Why: the gateway runs every chat's tools, so its own environment names no chat. Orca writes each
+# chat's here, by Hermes session id, and Hermes asks for it at every tool spawn.
+SESSION_ENV_NAMES = ${JSON.stringify(SHARED_TOOL_PROCESS_SESSION_ENV_NAMES)}
+SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "${HERMES_SESSION_ENV_DIR}")
+SESSION_ID = re.compile(r"${HERMES_SESSION_ID_PATTERN}")
 # Why: hook args/results can include full tool payloads. Bound traversal before
 # JSON encoding so status hooks stay best-effort and cheap.
 MAX_JSONABLE_DEPTH = 5
@@ -212,6 +224,16 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
     return payload
 
 
+def _session_env(session_id: str) -> Optional[dict[str, Any]]:
+    if not SESSION_ID.fullmatch(session_id or ""):
+        return None
+    try:
+        with open(os.path.join(SESSION_ENV_DIR, session_id + ".json"), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def _make_hook(event_name: str) -> Callable[..., None]:
     def _hook(**kwargs: Any) -> None:
         _post_to_orca(_payload_for_event(event_name, kwargs))
@@ -222,5 +244,12 @@ def _make_hook(event_name: str) -> Callable[..., None]:
 def register(ctx: Any) -> None:
     for event_name in EVENTS:
         ctx.register_hook(event_name, _make_hook(event_name))
+    # Hermes before 0.23.1 has no per-session env: its chats' tools keep no Orca identity.
+    if hasattr(ctx, "register_session_env"):
+        try:
+            ctx.register_session_env(SESSION_ENV_NAMES, _session_env)
+        except ValueError:
+            # Another plugin holds one of these names; status hooks still report.
+            pass
 `
 }
