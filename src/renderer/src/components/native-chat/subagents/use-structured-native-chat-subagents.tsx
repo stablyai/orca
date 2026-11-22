@@ -14,6 +14,7 @@ import {
 } from './native-chat-open-subagent'
 import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatusBar'
 import { nativeChatWorkerApprovalParty } from '../worker-approvals/NativeChatWorkerApprovals'
+import { NativeChatPairedServerAskStack } from '../paired-server-asks/NativeChatPairedServerAskStack'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -57,6 +58,7 @@ export function useStructuredNativeChatSubagents({
       currentAgentId={openId}
     />
   )
+  const party = nativeChatWorkerApprovalParty({ sessionId })
   return {
     /** The subagent whose view replaces the conversation and the composer; null for none. */
     openId,
@@ -66,10 +68,12 @@ export function useStructuredNativeChatSubagents({
         hasWork={hasWork}
         strip={strip}
         target={target}
-        party={nativeChatWorkerApprovalParty({ sessionId })}
+        party={party}
         isVisible={isVisible}
       />
     ) : null,
+    /** Agents in this paired server's chat asking agents on this computer: answered here. */
+    pairedAsks: <NativeChatPairedServerAskStack target={target} party={party} />,
     statusBar:
       openId === null ? null : (
         <NativeChatStructuredSubagentStatusBar
