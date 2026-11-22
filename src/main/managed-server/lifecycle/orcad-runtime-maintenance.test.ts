@@ -133,6 +133,17 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(status.terminals.liveSessions).toBeNull()
   })
 
+  it('never lets a bare force pass an uncounted census, but a confirmed update anyway may', async () => {
+    mocks.deploy.mockResolvedValue({ outcome: 'installed-and-activated', fullVersion: '0.3.0+new' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed', force: true })
+    expect(mocks.deploy.mock.calls[0]?.[0]).toMatchObject({ force: 'live-terminals' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, {
+      selector: 'Managed',
+      pastLiveTerminals: { incumbentVersion: MANAGED_VERSION, uncounted: true }
+    })
+    expect(mocks.deploy.mock.calls[1]?.[0]).toMatchObject({ force: true })
+  })
+
   it('clears the deferral once an update goes through and keeps an unchanged pairing as is', async () => {
     mocks.deploy.mockResolvedValueOnce({
       outcome: 'installed-not-activated',
