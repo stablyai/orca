@@ -81,4 +81,29 @@ describe('collectWslDriveUncScope', () => {
       ]
     })
   })
+
+  it('refuses a local repo nesting with an SSH repo of the same id', () => {
+    const state = {
+      repos: [repo(SRC), repo(APP, 'ssh-1')],
+      folderWorkspaces: [],
+      projectGroups: []
+    }
+    expect(collectWslDriveUncScope(state, 'Ubuntu', MOUNTS)).toEqual({
+      repoIds: [],
+      folderWorkspaceIds: [],
+      refused: [
+        { kind: 'repo', id: 'repo-a', reason: 'not-local' },
+        { kind: 'repo', id: 'repo-a', reason: 'overlaps-refused-project' }
+      ]
+    })
+  })
+
+  it('accepts a local repo disjoint from an SSH repo of the same id', () => {
+    const state = {
+      repos: [repo(SRC), repo(String.raw`\\wsl.localhost\Ubuntu\mnt\c\remote`, 'ssh-1')],
+      folderWorkspaces: [],
+      projectGroups: []
+    }
+    expect(collectWslDriveUncScope(state, 'Ubuntu', MOUNTS).repoIds).toEqual(['repo-a'])
+  })
 })
