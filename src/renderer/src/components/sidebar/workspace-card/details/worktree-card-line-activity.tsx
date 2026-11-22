@@ -1,5 +1,6 @@
 import React from 'react'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { findIndexedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
 import { WorktreeCardDetailSection } from './WorktreeCardDetailSection'
@@ -17,7 +18,6 @@ import {
   rankWorktreeStatus
 } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { worktreeCopyOwnerKey } from '@/store/slices/worktrees/metadata/worktree-copy-review-clear'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
@@ -35,7 +35,7 @@ export function WorktreeCardLineActivity({
   const workspaceStatus = useWorktreeActivityStatus(worktreeId)
   const agents = useWorktreeAgentRows(worktreeId, true, executionHostId)
   const hasHostCopies = useAppStateValue((state) => {
-    const copies = getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)
+    const copies = findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId)
     if (copies.length < 2) {
       return false
     }
