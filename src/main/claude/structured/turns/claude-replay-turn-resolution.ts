@@ -4,6 +4,7 @@ import {
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
+import { settleCancelledClaudeDispatchWaiters } from '../dispatch/claude-structured-dispatch'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
@@ -78,6 +79,15 @@ export function resolveClaudeReplayTurn(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (exact) {
+      // A Stop before Claude checked the prompt ends it unechoed; Claude lists it as dropped, never run.
+      if (
+        isCompletedCommand &&
+        message.terminal_reason === 'aborted_streaming' &&
+        !exact.acceptsResult
+      ) {
+        settleCancelledClaudeDispatchWaiters(session, [exact.sentUuid], onSettledLate)
+        return null
+      }
       return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
     }
     const retired = session.retiredDispatchWaiters.find(

@@ -5382,7 +5382,11 @@
     },
     "needs": {
       "chat": "你与 {{name}} 的聊天",
-      "access": "{{person}} 请求了访问权限"
+      "access": "{{person}} 请求了访问权限",
+      "connector": "{{name}} 需要你重新登录或修复连接。",
+      "fixConnector": "打开 {{name}}",
+      "runSignIn": "你登录后才能运行。",
+      "openRun": "打开运行"
     },
     "waits": {
       "cancel": "取消",
@@ -5752,6 +5756,9 @@
     },
     "panel": {
       "backTo": "返回 {{name}}"
+    },
+    "composio": {
+      "toolName": "Composio 应用"
     }
   },
   "hostMutation": {

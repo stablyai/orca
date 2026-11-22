@@ -473,12 +473,20 @@
         "safariFullDiskAccess": "macOS 拒絕存取 Safari 的 Cookie。請在「系統設定」→「隱私權與安全性」→「完全磁碟存取權限」中授予 Orca 完全磁碟存取權限。",
         "connectionEnded": "匯入期間與此伺服器的連線已中斷。請重新連線後再試一次。",
         "serverRepaired": "此伺服器已在匯入期間重新配對。請再試一次。",
-        "macFullDiskAccess": "macOS 拒絕存取 {{browser}} Cookie。請在「系統設定」→「隱私權與安全性」→「完整磁碟存取權限」中授予 Orca 權限，然後重新啟動 Orca。"
+        "macFullDiskAccess": "macOS 拒絕存取 {{browser}} Cookie。請在「系統設定」→「隱私權與安全性」→「完整磁碟存取權限」中授予 Orca 權限，然後重新啟動 Orca。",
+        "sshHostDisconnected": "此頁面已不再透過其 SSH 主機連線。請重新連線後再試一次。"
       },
       "notice": {
         "importedMore_other": "已為 {{domains}} 及其他 {{more}} 個網域匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
+      },
+      "sshPage": {
+        "label": "此裝置上的瀏覽器",
+        "destination": "匯入到 {{host}} 的瀏覽器。",
+        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
+        "stored": "已儲存到 {{host}} 的瀏覽器。",
+        "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
       }
     },
     "passwords": {
@@ -17440,11 +17448,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "還沒有執行。",
-          "13988187b3": "token",
           "86a248187e": "花費",
           "149c0b49c7": "工作區",
           "8faaa00726": "執行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "該主機無法取得執行歷史記錄。這並不意味著自動化失敗或沒有執行。"
         },
         "AutomationSchedulePicker": {
@@ -17514,7 +17520,6 @@
           "missingWorkspace": "缺少工作區",
           "usageUnavailable": "用量不可用",
           "noRunUsageYet": "尚無執行用量",
-          "noWorkspace": "無工作區",
           "latestSavedOutput": "最近儲存的輸出",
           "fullOutputUnavailable": "無法載入完整輸出。",
           "retryFullOutput": "重試",
@@ -17780,7 +17785,6 @@
           "failed7d": "失敗 · 7 天",
           "automation": "自動化",
           "triggered": "已觸發",
-          "trigger": "觸發",
           "loading": "正在載入執行...",
           "noRuns": "還沒有執行",
           "emptyDescription": "觸發自動化後，執行記錄會顯示在這裡。",
@@ -17850,7 +17854,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "已花費 {{spend}}",
+          "tokens_other": "{{tokens}} token"
         },
         "externalDisplay": {
           "sshHost": "SSH 主機",
@@ -20040,9 +20046,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "審查 Alpha 清理"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -23529,19 +23532,20 @@
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
       "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
-      "every2h": "每 2 小時",
-      "every4h": "每 4 小時",
       "lookFirst": "第一次聊天後 · 之後 {{every}}",
-      "mornings": "每天早上",
       "tidyUp": "整理記憶",
-      "twiceDaily": "每天兩次",
       "lastNeededSignIn": "上次執行因需要登入而停止",
       "stopped": "已停止",
       "lookAroundSettings": "四處檢視設定",
       "dueNow": "已到執行時間",
       "runsEvery": "{{every}} 執行",
       "tidySettings": "整理記憶設定",
-      "needsSignIn": "需要登入"
+      "needsSignIn": "需要登入",
+      "every4hWindow": "{{from}}至{{to}}，每 4 小時",
+      "every2hWindow": "{{from}}至{{to}}，每 2 小時",
+      "twiceDailyAt": "每天兩次，{{first}}和{{second}}",
+      "morningsAt": "每天早上{{time}}",
+      "weekdays": "平日，{{schedule}}"
     },
     "palette": {
       "placeholder": "搜尋 bots、聊天、終端機、工作區、任務、設定和操作...",

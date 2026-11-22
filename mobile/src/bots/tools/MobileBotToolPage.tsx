@@ -1,5 +1,5 @@
 // One tool's page: the details the desktop shows when its row opens, what its check found, its
-// sign-in from the phone, and Remove (asked first: on a phone it is one stray tap away).
+// sign-in from the phone, Edit, and Remove (asked first: on a phone it is one stray tap away).
 import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { BOT_MCP_APPS } from '../../../../src/shared/bots/bot-mcp-apps'
@@ -42,6 +42,7 @@ export function MobileBotToolPage(props: {
   /** The tools changed on the host: read them again, and check the servers again with `recheck`. */
   onChanged: (recheck: boolean) => void
   onCheckAgain: () => void
+  onEdit: () => void
   showToast: (message: string, durationMs?: number) => void
 }) {
   const t = useMobileTranslation()
@@ -210,6 +211,13 @@ export function MobileBotToolPage(props: {
             onPress={() => setSigningIn(true)}
           />
         ) : null}
+        <ListRow
+          key="edit"
+          title={t('bots.tools.edit', 'Edit')}
+          navigates
+          disabled={locked}
+          onPress={props.onEdit}
+        />
         <ListRow
           key="remove"
           title={t('bots.tools.removeNamed', 'Remove {{app}}', { app: name })}

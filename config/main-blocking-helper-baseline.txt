@@ -3,7 +3,7 @@
 # This is a RATCHET: counts may only go DOWN.
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
-3 src/main/acp/conversation-copy/acp-conversation-copy.ts
+1 src/main/acp/conversation-copy/acp-conversation-copy.ts
 3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-preparation.ts # moved from acp-structured-acquire.ts with the private-temp connect call
@@ -36,13 +36,12 @@
 3 src/main/ai-vault/discovery/ai-vault-scan-roots.ts
 1 src/main/ai-vault/discovery/session-scanner-agent-sources.ts
 3 src/main/ai-vault/discovery/session-scanner-roots.ts
-3 src/main/ai-vault/discovery/session-scanner-source-discovery.ts
+1 src/main/ai-vault/discovery/session-scanner-source-discovery.ts
 2 src/main/ai-vault/listing/cached-session-list.ts
 9 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 1 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
 14 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts
 1 src/main/ai-vault/parse-cache/session-scanner-sidecar-enrichment.ts
-14 src/main/ai-vault/parsing/session-scanner-agent-parser.ts
 1 src/main/ai-vault/prompts/session-first-user-prompt-handler.ts
 5 src/main/ai-vault/scan-service/session-scanner-background.ts
 3 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
@@ -50,27 +49,22 @@
 2 src/main/ai-vault/scanners/devin/session-scanner-devin-db.ts
 2 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
 3 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
-2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
+1 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
 15 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
-5 src/main/ai-vault/scanners/hermes/session-scanner-hermes-worker.ts
 1 src/main/ai-vault/scanners/omp/omp-session-root.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
 15 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
 1 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts
-25 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
+5 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client.ts
-3 src/main/ai-vault/scanners/opencode/session-scanner-opencode-sources.ts
 3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-discovery.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
 3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 1 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 4 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
-1 src/main/ai-vault/scanners/zcode/session-scanner-zcode-sources.ts
-2 src/main/ai-vault/session-handoff-snapshot.ts
+1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
-1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
 8 src/main/antigravity/hook-service.ts
@@ -96,6 +90,8 @@
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
 1 src/main/bots/bot-access-request-watch.ts
+1 src/main/bots/bot-group-store-tables.ts # indexRemoteAsks at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
+1 src/main/bots/bot-group-store.ts # createBotGroupTables at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
 1 src/main/bots/bot-items-link-join.ts
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
@@ -137,10 +133,12 @@
 8 src/main/browser/cookies/chromium/import-cookies.ts
 5 src/main/browser/cookies/chromium/prepare-import.ts
 1 src/main/browser/cookies/chromium/scan-source-rows.ts
-7 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
+4 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
 3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 1 src/main/browser/cookies/imports/import-cookie-file.ts
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
+3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import
+1 src/main/browser/cookies/route-partition/browser-ssh-route-cookie-import.ts # same source detection as the local import IPC
 2 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
 1 src/main/browser/cookies/session-restore/browser-session-cookie-snapshot-file.ts
 5 src/main/browser/cookies/sources/browser-cookie-detection.ts
@@ -214,7 +212,6 @@
 2 src/main/claude/agent-view/agent-view-plugin.ts
 1 src/main/claude/agent-view/agent-view-service.ts
 1 src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
-1 src/main/claude/claude-cli-conversations.ts
 1 src/main/claude/claude-stream-json-connection.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 13 src/main/claude/configuration/claude-folder-trust-file.ts
@@ -227,14 +224,13 @@
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-home.ts
 1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
-2 src/main/claude/transcripts/claude-conversation-copy.ts
-4 src/main/claude/transcripts/claude-rewind-fork.ts
+1 src/main/claude/transcripts/claude-conversation-copy.ts
+2 src/main/claude/transcripts/claude-rewind-fork.ts
 2 src/main/claude/transcripts/claude-rewind-transcript.ts
-2 src/main/claude/transcripts/claude-transcript-catch-up.ts
+1 src/main/claude/transcripts/claude-transcript-catch-up.ts
 1 src/main/claude/transcripts/claude-transcript-recovery.ts
 12 src/main/cli/appimage/appimage-copy-pre-extraction.ts
 29 src/main/cli/appimage/appimage-extracted-root.ts
@@ -283,7 +279,7 @@
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
-2 src/main/codex/codex-conversation-copy.ts
+1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
 22 src/main/codex/configuration/homes/codex-home-paths.ts
@@ -320,13 +316,12 @@
 3 src/main/codex/history/index/codex-state-db-backfill-recovery-process.ts
 5 src/main/codex/history/index/codex-state-db-backfill-recovery.ts
 5 src/main/codex/history/index/codex-state-db.ts
-2 src/main/codex/history/journal-views/codex-cli-conversations.ts
+1 src/main/codex/history/journal-views/codex-cli-conversations.ts
 3 src/main/codex/history/resume/codex-ai-vault-session-resume.ts
 2 src/main/codex/history/resume/codex-legacy-session-resume.ts
 6 src/main/codex/history/resume/codex-session-resume-home.ts
 4 src/main/codex/history/resume/codex-session-resume-launch-preparation.ts
 1 src/main/codex/history/resume/codex-session-resume-preparation.ts
-3 src/main/codex/history/resume/codex-thread-account-move.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
 2 src/main/codex/history/shared-store/wsl-codex-account-history.ts
@@ -561,7 +556,6 @@
 1 src/main/grok-accounts/status.ts
 1 src/main/grok/grok-hook-backup-cleanup.ts
 1 src/main/grok/grok-text-task.ts
-1 src/main/grok/grok-transcript-import.ts
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
@@ -570,7 +564,7 @@
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
 15 src/main/hermes/hermes-home-filesystem.ts
-3 src/main/hermes/hermes-transcript-import.ts
+2 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
@@ -589,7 +583,7 @@
 1 src/main/ipc/browser/browser-extensions.ts
 1 src/main/ipc/browser/browser-passwords-import-ipc.ts
 1 src/main/ipc/browser/browser-passwords-ipc.ts
-8 src/main/ipc/browser/browser-session-profile-ipc.ts
+6 src/main/ipc/browser/browser-session-profile-ipc.ts
 1 src/main/ipc/browser/browser.ts
 7 src/main/ipc/cli.ts
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
@@ -628,10 +622,8 @@
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.ts
 1 src/main/ipc/filesystem/watchers/wsl-watcher-spawn.ts
-3 src/main/ipc/hooks/register-worktree-hook-check-handler.ts
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
 1 src/main/ipc/linear/register-handlers.ts
-1 src/main/ipc/native-chat.ts
 7 src/main/ipc/notebook.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
@@ -691,7 +683,7 @@
 1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
-3 src/main/ipc/worktrees.ts
+2 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
@@ -739,7 +731,7 @@
 3 src/main/linear/projects/linear-project-queries.ts
 1 src/main/linear/projects/linear-project-team-queries.ts
 5 src/main/linear/teams/linear-team-queries.ts
-7 src/main/macos-permissions/macos-tcc-prompt-notice.ts
+6 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 7 src/main/managed-data-accounts/credential-capture.ts
 1 src/main/managed-data-accounts/profile-removal.ts
 2 src/main/managed-data-accounts/service.ts
@@ -783,9 +775,8 @@
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-5 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # per resume click: the adopted-folder read (OpenCode/Hermes via the shared SQLite worker, whose only sync step is its entry existsSync on first spawn)
-1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
-5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
+1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
@@ -816,23 +807,18 @@
 2 src/main/native-chat/conversation-adoption/codex-adoption-preparation.ts
 1 src/main/native-chat/conversation-adoption/structured-agent-cli-conversations.ts
 3 src/main/native-chat/conversation-files/native-chat-media-path.ts
-3 src/main/native-chat/session-file-resolver.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
+2 src/main/native-chat/session-file-resolver.ts
 1 src/main/native-chat/transcript-discovery/transcript-path-admission.ts
 3 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-dispatch.ts
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
 7 src/main/native-chat/transcript-history/hermes/transcript-hermes-sqlite.ts
-4 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
+3 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
 7 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
-4 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
+2 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
-1 src/main/native-chat/transcript-read-cache.ts
-1 src/main/native-chat/transcript-reader.ts
-1 src/main/native-chat/transcript-tail-reader.ts
-3 src/main/native-chat/transcript-watch.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 3 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
@@ -841,7 +827,7 @@
 4 src/main/observability/bundle.ts
 4 src/main/observability/index.ts
 4 src/main/observability/local-file-sink.ts
-3 src/main/omp/omp-transcript-import.ts # per resume click: id lookup when the cwd buckets miss a sub-folder conversation; its existsSync runs only for a hook transcript path, which this lookup never passes
+2 src/main/omp/omp-transcript-import.ts
 1 src/main/opencode-usage/opencode-usage-provider.ts
 1 src/main/opencode-usage/store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
@@ -859,7 +845,7 @@
 1 src/main/opencode/text-tasks/opencode-text-task.ts
 1 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task-entry.ts
 4 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task.ts
-3 src/main/opencode/transcripts/opencode-transcript-import.ts
+2 src/main/opencode/transcripts/opencode-transcript-import.ts
 7 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 2 src/main/orca-profiles/catalog/profile-project-presence.ts
 11 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
@@ -869,13 +855,14 @@
 11 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
 19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
 30 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
+1 src/main/orca-profiles/cloud-console/cloud-console-link.ts # click-time console link reads the profile index once
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
 2 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
 9 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
 21 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
-7 src/main/orca-profiles/orca-account-service.ts
+8 src/main/orca-profiles/orca-account-service.ts # +1 openConsole: click-time console link reads the profile index once
 1 src/main/orca-profiles/profile-account-user-id.ts
 21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
@@ -1147,7 +1134,6 @@
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
-1 src/main/runtime/agent-session/ownership/structured-agent-session-create-adoption.ts # per resume click: resolveAdoptedTranscriptFolder, whose only sync step is the SQLite worker entry existsSync on first spawn
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
@@ -1215,6 +1201,7 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
+1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-decisions.ts # one savepoint around orchestration DB writes that were already synchronous, so a card's answer and its decline or allowance commit together
 2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
 1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owed-actions.ts
@@ -1229,7 +1216,6 @@
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
 1 src/main/runtime/orchestration/mailbox/questions/question-reconcile.ts # one savepoint per agent-question notice, around orchestration DB writes that were already synchronous, so the notice and its record commit together
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
-1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
 1 src/main/runtime/orchestration/workers/turn-stops/worker-presence-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 1 src/main/runtime/orchestration/workers/turn-stops/worker-turn-stop-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 2 src/main/runtime/push/push-unregister-outbox.ts
@@ -1237,7 +1223,7 @@
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
 1 src/main/runtime/repositories/runtime-project-host-setup-controller.ts
 2 src/main/runtime/repositories/runtime-repository-clone-controller.ts
-6 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
+3 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
 2 src/main/runtime/repositories/runtime-repository-issue-command.ts
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
@@ -1255,7 +1241,6 @@
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
-1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
 2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
@@ -1280,7 +1265,6 @@
 2 src/main/runtime/session-construction/agent-session/get-agent-session-execution-namespace.ts
 3 src/main/runtime/session-lifecycle/projection/restored-pane-materialize.ts
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts
-1 src/main/runtime/session-tabs/chat/structured-session-resume-folder-check.ts # per Continue in Chat UI click: assertAdoptedTranscriptFolder, whose only sync step is the OpenCode SQLite worker entry existsSync on first spawn
 1 src/main/runtime/sidebar-inputs/sidebar-inputs-feed-domains.ts
 1 src/main/runtime/speech/runtime-mobile-dictation-controller.ts
 2 src/main/runtime/speech/runtime-mobile-speech-catalog.ts
@@ -1466,7 +1450,7 @@
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
-15 src/main/windows/windows-process-table.ts
+11 src/main/windows/windows-process-table.ts
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts

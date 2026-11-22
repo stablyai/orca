@@ -1,4 +1,5 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { ORCHESTRATION_SEND_FLAGS } from './orchestration-send-flags'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
@@ -53,31 +54,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Send an inter-agent message',
     usage:
       'orca orchestration send --subject <text> [--to <run:id|dispatch:id|bot:name|legacy_handle>] [--chat <id|new> | --item <n> [--file <path>]...] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text> | --body-file <path|->] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'to',
-      'chat',
-      'item',
-      'file',
-      'on',
-      'run',
-      'from',
-      'subject',
-      'body',
-      'body-file',
-      'type',
-      'priority',
-      'thread-id',
-      'payload',
-      'task-id',
-      'dispatch-id',
-      'dispatch-capability',
-      'retry-request',
-      'outcome',
-      'files-modified',
-      'report-path',
-      'phase'
-    ],
+    allowedFlags: [...GLOBAL_FLAGS, ...ORCHESTRATION_SEND_FLAGS],
     identityFlagRoles: { from: 'caller' },
     repeatableFlags: ['file'],
     notes: [

@@ -30,6 +30,7 @@ import { isFloatingWorkspaceSelector } from '../../../../shared/workspace/identi
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
+import type { AgentCliInstallationProblem } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredResumeFolderCheck {
   protected abstract restoreStructuredAgentSessionTabsOnce(
@@ -45,7 +46,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     worktreeSelector: string,
     agent: StructuredAgentId,
     options?: { requireInstalledChatProgram?: boolean }
-  ): Promise<StructuredAgentCreateSupportReply> {
+  ): Promise<StructuredAgentCreateSupportReply & { installation?: AgentCliInstallationProblem }> {
     const support = await resolveHostStructuredAgentCreateSupport({
       agent,
       worktreeSelector,
@@ -172,7 +173,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const transcriptImport = structuredAgentRuntimeMetadata(input.agent)?.transcriptImport
     if (!resolveAccountHome || !support.supported || (input.resumeFrom && !transcriptImport)) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
+        reason: 'hostUnsupported',
+        ...(support.installation ? { agentInstallation: support.installation } : {})
       })
     }
     await this.accounts.prepareHostAgentLaunch(input.agent)
