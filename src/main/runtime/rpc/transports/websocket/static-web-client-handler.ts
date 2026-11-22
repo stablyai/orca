@@ -1,4 +1,4 @@
-import { createReadStream } from 'node:fs'
+import { createReadStream, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
@@ -88,6 +88,18 @@ async function handleStaticRequest(
     return
   }
 
+  const immutable = pathname.startsWith('/assets/')
+  // Why: non-/assets/ files already revalidate on every load; a validator turns that into a 304.
+  const etag = immutable ? undefined : staticWebFileETag(fileStat)
+  if (etag && staticWebFileFresh(request, etag, fileStat.mtimeMs)) {
+    response.statusCode = 304
+    response.setHeader('ETag', etag)
+    response.setHeader('Last-Modified', fileStat.mtime.toUTCString())
+    response.setHeader('Cache-Control', 'no-cache')
+    response.end()
+    return
+  }
+
   response.statusCode = 200
   response.setHeader(
     'Content-Type',
@@ -96,8 +108,12 @@ async function handleStaticRequest(
   response.setHeader('Content-Length', fileStat.size)
   response.setHeader(
     'Cache-Control',
-    pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
+    immutable ? 'public, max-age=31536000, immutable' : 'no-cache'
   )
+  if (etag) {
+    response.setHeader('ETag', etag)
+    response.setHeader('Last-Modified', fileStat.mtime.toUTCString())
+  }
   if (request.method === 'HEAD') {
     response.end()
     return
@@ -170,6 +186,30 @@ function isAllowedStaticWebPath(pathname: string): boolean {
     STATIC_WEB_ALLOWED_PATHS.has(pathname) ||
     STATIC_WEB_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   )
+}
+
+/** Strong tag for an on-disk file version; a byte change implies a new size or mtime. */
+function staticWebFileETag(fileStat: Stats): string {
+  return `"${Math.round(fileStat.mtimeMs).toString(16)}-${fileStat.size.toString(16)}"`
+}
+
+/** If-None-Match wins over If-Modified-Since (RFC 9110 13.2.2); weak tags compare weakly. */
+function staticWebFileFresh(request: IncomingMessage, etag: string, mtimeMs: number): boolean {
+  const ifNoneMatch = request.headers['if-none-match']
+  if (ifNoneMatch !== undefined) {
+    const candidates = Array.isArray(ifNoneMatch) ? ifNoneMatch.join(',') : ifNoneMatch
+    return candidates.split(',').some((candidate) => {
+      const tag = candidate.trim()
+      return tag === '*' || (tag.startsWith('W/') ? tag.slice(2) : tag) === etag
+    })
+  }
+  const ifModifiedSince = request.headers['if-modified-since']
+  if (typeof ifModifiedSince !== 'string') {
+    return false
+  }
+  const since = Date.parse(ifModifiedSince)
+  // The header carries second precision; floor both so a fresh copy revalidates clean.
+  return !Number.isNaN(since) && Math.floor(mtimeMs / 1000) <= Math.floor(since / 1000)
 }
 
 function writeHttpStatus(response: ServerResponse, statusCode: number): void {
