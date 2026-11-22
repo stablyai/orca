@@ -1,4 +1,5 @@
 import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
+import { withoutClaudeVendor } from '../options/model-catalog/model-id-label'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -259,11 +260,14 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   const normalized = command.argument.toLowerCase()
+  // Claude rows read `Opus 5.5`; still accept the official `Claude Opus 5.5`.
+  const unvendored = controller.agent === 'claude' ? withoutClaudeVendor(normalized) : normalized
   const choice =
     descriptor?.kind.type === 'select'
       ? descriptor.kind.choices.find(
           (entry) =>
-            entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
+            entry.value.toLowerCase() === normalized ||
+            [normalized, unvendored].includes(entry.label.toLowerCase())
         )
       : undefined
   const value = choice?.value ?? command.argument

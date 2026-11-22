@@ -7,6 +7,7 @@ import type { GitHubRepoContext } from './github-repository-identity'
 type LocalGitConfigPaths = {
   commonConfigPath: string
   worktreeConfigPath: string
+  headPath: string
 }
 
 // A dead mount can stall stat before the bounded Git probe; missing signatures use shorter cache lifetimes.
@@ -50,24 +51,26 @@ function withConfigSignatureDeadline(
   })
 }
 
-export function __resetLocalGitConfigSignatureCacheForTests(): void {
-  localGitConfigSignatureInFlight.clear()
-}
-
 async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<string | undefined> {
   const configPaths = await resolveLocalGitConfigPaths(repoPath)
   if (!configPaths) {
     return undefined
   }
+  let branchRead: Promise<string> | undefined
+  const readBranch = (): Promise<string> => {
+    branchRead ??= readBranchSignature(configPaths.headPath)
+    return branchRead
+  }
   const signatures = await Promise.all([
-    readConfigPathSignatures(configPaths.commonConfigPath),
-    readConfigPathSignatures(configPaths.worktreeConfigPath)
+    readConfigPathSignatures(configPaths.commonConfigPath, readBranch),
+    readConfigPathSignatures(configPaths.worktreeConfigPath, readBranch)
   ])
   return signatures.flat().join('\0')
 }
 
 async function readConfigPathSignatures(
   configPath: string,
+  readBranch: () => Promise<string>,
   visited = new Set<string>()
 ): Promise<string[]> {
   if (visited.has(configPath)) {
@@ -83,11 +86,25 @@ async function readConfigPathSignatures(
     return [ownSignature]
   }
 
-  const includedPaths = parseIncludedConfigPaths(configText, dirname(configPath))
-  const includedSignatures = await Promise.all(
-    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, visited))
+  const { paths: includedPaths, onBranch } = parseIncludedConfigPaths(
+    configText,
+    dirname(configPath)
   )
-  return [ownSignature, ...includedSignatures.flat()]
+  const includedSignatures = await Promise.all(
+    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, readBranch, visited))
+  )
+  // HEAD contents distinguish branch switches even on filesystems with coarse timestamps.
+  const branchSignature = onBranch ? [await readBranch()] : []
+  return [ownSignature, ...branchSignature, ...includedSignatures.flat()]
+}
+
+async function readBranchSignature(headPath: string): Promise<string> {
+  const head = await readFile(headPath, 'utf8')
+  if (head.trim() === 'ref: refs/heads/.invalid') {
+    throw new Error('Branch-dependent reftable config cannot be signed from loose HEAD')
+  }
+  // onbranch never matches detached HEAD, so commits there do not change effective config.
+  return head.startsWith('ref:') ? head : 'detached'
 }
 
 async function readConfigPathSignature(configPath: string): Promise<string> {
@@ -99,18 +116,23 @@ async function readConfigPathSignature(configPath: string): Promise<string> {
   }
 }
 
-function parseIncludedConfigPaths(configText: string, baseDir: string): string[] {
+function parseIncludedConfigPaths(
+  configText: string,
+  baseDir: string
+): { paths: string[]; onBranch: boolean } {
   const includedPaths: string[] = []
   let inIncludeSection = false
+  let onBranch = false
   for (const rawLine of configText.split(/\r?\n/)) {
-    const line = rawLine.trim()
+    let line = rawLine.trim()
     if (!line || line.startsWith('#') || line.startsWith(';')) {
       continue
     }
-    const sectionName = parseConfigSectionName(line)
-    if (sectionName) {
-      inIncludeSection = sectionName === 'include' || sectionName.startsWith('includeif ')
-      continue
+    const section = parseConfigSection(line)
+    if (section) {
+      inIncludeSection = section.name === 'include' || /^includeif\s/.test(section.name)
+      onBranch ||= /^includeif\s+"onbranch:/.test(section.name)
+      line = section.rest
     }
     if (!inIncludeSection) {
       continue
@@ -120,10 +142,10 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
       includedPaths.push(resolveIncludedConfigPath(includePath, baseDir))
     }
   }
-  return includedPaths
+  return { paths: includedPaths, onBranch }
 }
 
-function parseConfigSectionName(line: string): string | null {
+function parseConfigSection(line: string): { name: string; rest: string } | null {
   if (!line.startsWith('[')) {
     return null
   }
@@ -131,6 +153,10 @@ function parseConfigSectionName(line: string): string | null {
   for (let index = 1; index < line.length; index += 1) {
     const char = line[index]
     if (quote) {
+      if (char === '\\') {
+        index += 1
+        continue
+      }
       if (char === quote) {
         quote = null
       }
@@ -143,11 +169,10 @@ function parseConfigSectionName(line: string): string | null {
     if (char !== ']') {
       continue
     }
-    const trailing = line.slice(index + 1).trim()
-    if (trailing && !trailing.startsWith('#') && !trailing.startsWith(';')) {
-      return null
+    return {
+      name: line.slice(1, index).replace(/\\(.)/g, '$1').trim().toLowerCase(),
+      rest: line.slice(index + 1).trim()
     }
-    return line.slice(1, index).trim().toLowerCase()
   }
   return null
 }
@@ -218,7 +243,8 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
     if (dotGitStats.isDirectory()) {
       return {
         commonConfigPath: join(dotGitPath, 'config'),
-        worktreeConfigPath: join(dotGitPath, 'config.worktree')
+        worktreeConfigPath: join(dotGitPath, 'config.worktree'),
+        headPath: join(dotGitPath, 'HEAD')
       }
     }
     if (!dotGitStats.isFile()) {
@@ -246,7 +272,8 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
     }
     return {
       commonConfigPath: join(commonGitDir, 'config'),
-      worktreeConfigPath: join(gitDir, 'config.worktree')
+      worktreeConfigPath: join(gitDir, 'config.worktree'),
+      headPath: join(gitDir, 'HEAD')
     }
   } catch {
     return null

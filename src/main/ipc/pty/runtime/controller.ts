@@ -9,6 +9,7 @@ import {
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { requestRepaintFromRuntimeController } from './pty-repaint-request'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
@@ -118,6 +119,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     waitForRendererSerializer: (ptyId, afterGeneration, timeoutMs, signal) =>
       waitForRendererSerializerFromRuntimeController(ptyId, afterGeneration, timeoutMs, signal),
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
-    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
+    resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows),
+    requestRepaint: (ptyId) => requestRepaintFromRuntimeController(deps, ptyId)
   })
 }

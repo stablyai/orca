@@ -84,8 +84,10 @@ function personText(
   const name = shownPersonName(person.name)
   if (source === 'slack') {
     const id = sourceId(person.userId)
-    const mention = id === null ? null : `<@${id}>`
-    return [name, mention].filter((part) => part !== null).join(' ') || 'someone'
+    if (id === null) {
+      return name ?? 'someone'
+    }
+    return name === null ? `<@${id}>` : `<@${id}|${name}>`
   }
   // A GitHub name is the login.
   return name === null ? 'someone' : source === 'github' ? `@${name}` : name

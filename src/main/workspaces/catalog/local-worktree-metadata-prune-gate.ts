@@ -46,12 +46,6 @@ export function forgetLocalWorktreeMetadataPruneGate(repoId: string): void {
   listingFingerprintByRepo.delete(repoId)
 }
 
-export function __resetLocalWorktreeMetadataPruneGateForTests(): void {
-  pruneInputsGeneration = 0
-  observedGenerationByRepo.clear()
-  listingFingerprintByRepo.clear()
-}
-
 /** Removing either local or remote ownership can unpin metadata in other repos. */
 export function retireLocalWorktreeMetadataPruneStateForRepo(
   repoId: string,

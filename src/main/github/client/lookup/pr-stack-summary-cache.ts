@@ -87,8 +87,3 @@ export async function getCachedGitHubPRStackSummary(
     }
   }
 }
-
-export function _resetPRStackSummaryCacheForTests(): void {
-  prStackSummaryCache.clear()
-  prStackSummaryInFlight.clear()
-}

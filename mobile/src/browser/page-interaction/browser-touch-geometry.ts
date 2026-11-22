@@ -46,7 +46,10 @@ export function computeBrowserFrameGeometry(
   const renderedWidth = sourceWidth * scale
   const renderedHeight = sourceHeight * scale
   return {
-    pageScale: getPositiveFiniteNumber(metadata?.pageScaleFactor) ?? 1,
+    // Page zoom shrinks the CSS viewport like pinch does, without changing the painted size.
+    pageScale:
+      (getPositiveFiniteNumber(metadata?.pageScaleFactor) ?? 1) *
+      (getPositiveFiniteNumber(metadata?.zoomFactor) ?? 1),
     sourceWidth,
     sourceHeight,
     viewportWidth: layout.width,

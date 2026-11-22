@@ -30,7 +30,7 @@ import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsWorktreeContents
-} from '../web-session-tabs-sync/hydration/host-session-snapshot-authority'
+} from '../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {

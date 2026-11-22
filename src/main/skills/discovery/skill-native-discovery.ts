@@ -1,5 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { realpath, stat } from 'node:fs/promises'
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -10,6 +10,7 @@ import type {
   SkillSourceKind
 } from '../../../shared/skills/discovery/skills'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
+import { withoutLinkedDefaultHomes } from './skill-relocated-home-roots'
 import {
   sortDiscoveredSkills,
   sortSkillDiscoverySources,
@@ -33,6 +34,7 @@ import {
   discoverClaudePluginSkillInstalls
 } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
+import { skillRootExists } from './skill-root-unreadable'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import {
   isSkillRootUnavailableError,
@@ -50,7 +52,7 @@ import {
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// A scan builds 24 fixed roots + 14/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
+// A scan builds 26 fixed roots (+1 per relocated home others read) + 15/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
 // Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12
@@ -99,20 +101,15 @@ function readLastKnownRootScan(key: string): ScannedSkill[] {
   return retained.skills
 }
 
-async function pathExists(pathValue: string): Promise<boolean> {
-  try {
-    await stat(pathValue)
-    return true
-  } catch {
-    return false
-  }
-}
-
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
+async function scanRoot(
+  root: SkillScanRoot,
+  signal: AbortSignal,
+  rejectUnreadableRoot: boolean
+): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
-  const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, { rejectUnreadableRoot })
   // Bound per-package metadata fan-out so one large root cannot occupy every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
@@ -163,8 +160,10 @@ async function scanRootShared(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
       async (signal) => {
-        const exists = await pathExists(root.path)
-        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+        // Why: only a root still serving retained skills reads strictly, so a permanently unreadable root cannot leave install checks unverifiable.
+        const strict = readLastKnownRootScan(key).length > 0
+        const exists = await skillRootExists(root.path, strict)
+        return { exists, skills: exists ? await scanRoot(root, signal, strict) : [] }
       }
     )
     recordLastKnownRootScan(key, outcome.value)
@@ -266,7 +265,10 @@ export async function discoverSkills(args: {
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
       ? await splitStoppedWslDistroRoots(candidateRoots, mayReadStopped)
       : { readable: candidateRoots, unavailable: [] }
-  const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  // Fold only roots that may be touched, so a relocated home in a stopped distro stays down.
+  const roots = (
+    await waitForPromiseWithSignal(withoutLinkedDefaultHomes(readable), args.signal)
+  ).filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
   const scans = await waitForPromiseWithSignal(
     Promise.all(roots.map((root) => scanRootShared(root, refresh))),

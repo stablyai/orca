@@ -1,7 +1,7 @@
 // How the desktop words an automation run's row: each phrase by its own key, times as the chat's
 // wait cards write them, and the automation's schedule.
 import { useMemo } from 'react'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatWaitTime } from '@/components/bots/bot-wait-copy'
 import { formatUiAutomationScheduleDescriptor } from '@/components/automations/details/automation-schedule-label'
 import { botAutomationWhenParts } from '../../../../../shared/bots/bot-automation-when'
@@ -9,7 +9,8 @@ import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automati
 import {
   AUTOMATION_RUN_COPY,
   type AutomationRunCopyKey,
-  type AutomationRunWording
+  type AutomationRunWording,
+  type SayAutomationRun
 } from '../../../../../shared/automations/automation-run-row-words'
 
 // Literal keys, so localization extraction keeps each.
@@ -118,6 +119,11 @@ const KEYS: Record<AutomationRunCopyKey, string> = {
   'what.other': 'components.native-chat.automationRun.what.other'
 }
 
+/** Says a run row's phrase in the desktop's language. */
+export function sayAutomationRun(t: Translate): SayAutomationRun {
+  return (key, params) => t(KEYS[key], AUTOMATION_RUN_COPY[key], params)
+}
+
 /** An automation's row wording: a run's as saved when it ran, or the automation's own. */
 export function useAutomationRunWording(
   automation: Pick<BotAutomationFacts, 'dtstart' | 'rrule' | 'on'>
@@ -126,7 +132,7 @@ export function useAutomationRunWording(
   return useMemo(() => {
     const schedule = botAutomationWhenParts(automation).find((part) => part.kind === 'schedule')
     return {
-      say: (key, params) => t(KEYS[key], AUTOMATION_RUN_COPY[key], params),
+      say: sayAutomationRun(t),
       formatTime: (at) => formatWaitTime(at),
       schedule:
         schedule?.kind === 'schedule'

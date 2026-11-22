@@ -6,6 +6,8 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
 import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
+import { useBotConnectorPaged } from '../bot-connector-page'
+import { BotConnectorSection } from '../bot-connector-people'
 import { BotSlackPostAs } from './BotSlackPostAs'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
 
@@ -21,18 +23,33 @@ export function BotSlackSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const people = useSlackWhoCanAsk(bot, slack.teamId)
+  // On the connector's own page each part is a captioned card; the dialog reads as one block.
+  const paged = useBotConnectorPaged()
   return (
     <div>
-      <p className="mb-3 text-xs leading-5 text-muted-foreground">
-        <BotHowToAsk
-          text={t('bots.slack.mentionLine', 'Mention <code>@{{name}}</code> in a channel or DM.', {
-            name: bot.name,
-            ...HOW_TO_ASK_ESCAPED
-          })}
-        />
-      </p>
+      <BotConnectorSection title={paged ? t('bots.connector.howToAsk', 'How to ask') : undefined}>
+        <p className="mb-3 text-xs leading-5 text-muted-foreground">
+          <BotHowToAsk
+            text={t(
+              'bots.slack.mentionLine',
+              'Mention <code>@{{name}}</code> in a channel or DM.',
+              {
+                name: bot.name,
+                ...HOW_TO_ASK_ESCAPED
+              }
+            )}
+          />
+        </p>
+      </BotConnectorSection>
       <BotWhoCanAskInsetList bot={bot} service={people} />
-      <BotSlackPostAs bot={bot} slack={slack} setupState={setupState} />
+      <BotConnectorSection>
+        <BotSlackPostAs
+          bot={bot}
+          slack={slack}
+          setupState={setupState}
+          className={paged ? undefined : 'mt-3 px-3'}
+        />
+      </BotConnectorSection>
     </div>
   )
 }

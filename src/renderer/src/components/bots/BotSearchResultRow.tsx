@@ -117,7 +117,8 @@ export const BotSearchResultRow = memo(function BotSearchResultRow({
         <span className="mr-2 shrink-0">
           <BotGroupFaces
             faces={botGroupFaces(botGroupMemberBots(entry.group, botsById), (bot) => bot.id)}
-            className="size-7"
+            className="size-8"
+            slot={32}
           />
         </span>
       )}
@@ -148,14 +149,13 @@ function BotResultPicture({ bot, home }: { bot: Bot; home: FolderWorkspace }): R
   const status = foldBotStatus(useWorktreeActivityStatus(folderWorkspaceKey(home.id)), bot.paused)
   const badge = {
     status: offline || status === 'inactive' ? null : status,
-    isUnread: false,
     sleeping: useBotAvatarBadgeSleeping(folderWorkspaceKey(home.id), status)
   }
   return (
     <span className={cn('relative mr-2 shrink-0', (bot.paused || offline) && 'opacity-60')}>
       <BotAvatar
         bot={bot}
-        className="size-7 rounded-md text-sm"
+        className="size-8 rounded-md text-sm"
         style={botAvatarBadgeCutout(badge)}
       />
       <BotAvatarStatusBadge {...badge} />

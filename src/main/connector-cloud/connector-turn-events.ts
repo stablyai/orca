@@ -20,7 +20,8 @@ import {
   type ConnectorSnapshotExpectation
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
-import { toConnectorEvent } from './connector-event-wire'
+import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
+import { slackReplyBody } from './connector-slack-text'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
@@ -70,6 +71,22 @@ function eventsHeadSize(events: readonly ConnectorEvent[]): number {
     }
   }
   return events.length
+}
+
+/** Only a pane's newest unsent activity is worth sending: each one replaces the last in the thread. */
+function newestActivities(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
+  const newest = new Map<string, number>()
+  events.forEach((event, index) => {
+    if (event.kind === 'activity') {
+      newest.set(event.paneKey, index)
+    }
+  })
+  return newest.size === 0
+    ? events
+    : events.filter(
+        (event, index) =>
+          index < sent || event.kind !== 'activity' || newest.get(event.paneKey) === index
+      )
 }
 
 /**
@@ -123,7 +140,9 @@ export class ConnectorTurnEvents {
     this.outbox = new ConnectorOutbox<ConnectorEvent>({
       headSize: eventsHeadSize,
       initial: this.stored.read(),
-      bound: (events, sent) => {
+      bound: (queued, sent) => {
+        // A superseded activity is no loss, so it owes no snapshot.
+        const events = newestActivities(queued, sent)
         const kept = boundEvents(events, sent)
         this.dropped ||= kept.length < events.length
         return kept
@@ -229,7 +248,11 @@ export class ConnectorTurnEvents {
     const { post, hostName } = this.replyDeps
     return {
       client: flush && {
-        post,
+        // As the events path sends it: within the older cap for a cloud without answers.long.
+        post: (reply) => {
+          const shown = slackReplyBody(reply)
+          return post({ ...shown, text: answerTextFor(shown.text, this.cloudFeatures) })
+        },
         hostName,
         push: (events) => {
           this.outbox.push(...events)
@@ -279,6 +302,13 @@ export class ConnectorTurnEvents {
       return
     }
     const wire = toConnectorEvent(event, this.cloudFeatures)
+    if (event.kind === 'turn-ended' && event.turnId === null) {
+      // Its start predates the watch, so the cloud can't place it and nothing posts.
+      console.info('[connector] turn end without its start left out', {
+        hadReply: Boolean(event.lastAssistantMessage),
+        stopReason: event.stopReason
+      })
+    }
     if (wire) {
       this.publications.bind(event, wire)
       this.outbox.push(wire)
@@ -286,7 +316,10 @@ export class ConnectorTurnEvents {
   }
 
   next(helloRev: number): ConnectorOutboxHead<ConnectorEvent> | null {
-    return this.outbox.next(helloRev)
+    const head = this.outbox.next(helloRev)
+    return (
+      head && { ...head, batch: head.batch.map((event) => answerFor(event, this.cloudFeatures)) }
+    )
   }
 
   accepted(stamp: ConnectorStamp): void {

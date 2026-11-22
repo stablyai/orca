@@ -165,7 +165,8 @@ export class DaemonRequestRouter {
         this.options.host.resetInputModes(request.payload.sessionId)
         return {}
       case 'reportFocusLost':
-        this.options.host.reportFocusLost(request.payload.sessionId)
+      case 'requestRepaint':
+        this.options.host[request.type](request.payload.sessionId)
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }

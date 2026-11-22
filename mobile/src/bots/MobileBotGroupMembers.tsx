@@ -1,6 +1,7 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { LayoutAnimation, Pressable, ScrollView, Text, View } from 'react-native'
+import { Users } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
@@ -11,7 +12,8 @@ import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { PhoneBot } from './host-bots-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
-import { botRoster, groupCreate, groupUpdate } from './bot-group-operations'
+import { groupCreate, groupUpdate } from './bot-group-operations'
+import { useBotPurposes } from './use-bot-purposes'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 import {
   BOT_GROUP_NAME_MAX_LENGTH,
@@ -55,22 +57,7 @@ export function MobileBotGroupMembers({
   const [name, setName] = useState(group?.name ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [purposes, setPurposes] = useState(() => new Map<string, string>())
-  useEffect(() => {
-    let live = true
-    botRoster
-      .request(client, {})
-      .then((outcome) => {
-        const { bots: roster } = botRoster.interpret(outcome)
-        if (live) {
-          setPurposes(new Map(roster.flatMap((b) => (b.specialty ? [[b.id, b.specialty]] : []))))
-        }
-      })
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [client])
+  const purposes = useBotPurposes(client)
   const savedIds = group?.members.map((member) => member.botId) ?? []
   const picked = botGroupPickOrder(savedIds, selected).flatMap(
     (id) => bots.find((bot) => bot.id === id) ?? []
@@ -158,14 +145,21 @@ export function MobileBotGroupMembers({
         }}
       />
       <View style={styles.picture}>
-        <MobileBotFaceStack
-          slot={96}
-          ringColor={colors.sheetSurface}
-          faces={picked.map((bot) => ({
-            id: bot.id,
-            avatar: mobileBotAvatarSource(bot, undefined)
-          }))}
-        />
+        {picked.length > 0 ? (
+          <MobileBotFaceStack
+            slot={96}
+            ringColor={colors.sheetSurface}
+            faces={picked.map((bot) => ({
+              id: bot.id,
+              avatar: mobileBotAvatarSource(bot)
+            }))}
+          />
+        ) : (
+          // The desktop dialog's empty picture, so the space reads as the group's picture to come.
+          <View style={styles.emptyPicture}>
+            <Users size={28} strokeWidth={1.5} color={colors.textMuted} />
+          </View>
+        )}
       </View>
       <View style={styles.inset}>
         <TextField
@@ -189,7 +183,7 @@ export function MobileBotGroupMembers({
               key={bot.id}
               title={bot.name}
               subtitle={purposes.get(bot.id)}
-              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={28} />}
+              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} />}
               selected={selected.includes(bot.id)}
               accessibilityRole="checkbox"
               disabled={busy}

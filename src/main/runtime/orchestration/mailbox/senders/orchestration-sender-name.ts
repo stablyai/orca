@@ -250,10 +250,22 @@ export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
   reportedDispatchId?: string,
-  observation = observeOrchestrationSender(party, sources, reportedDispatchId),
-  taskName?: string | null
+  observation = observeOrchestrationSender(party, sources, reportedDispatchId)
 ): string | null {
   const { chat, terminal } = observation
+  return crewDisplayName(
+    liveSenderName(observation, sources),
+    observedTaskName(observation, sources.db),
+    chat?.fallback,
+    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
+  )
+}
+
+/** The name the sender's live chat or terminal tab gives it; null once neither names it. */
+export function liveSenderName(
+  { chat, terminal }: Pick<SenderObservation, 'chat' | 'terminal'>,
+  sources: Pick<SenderNamingSources, 'generatedTitlesEnabled'>
+): string | null {
   const terminalName = terminal?.tab
     ? getAgentRowConversationName(
         terminal.tab,
@@ -263,15 +275,7 @@ export function orchestrationSenderName(
         terminal.providerSessionId
       )
     : null
-  const ownName = crewDisplayName(chat?.ownName, terminalName)
-  if (ownName) {
-    return ownName
-  }
-  return crewDisplayName(
-    taskName !== undefined ? taskName : observedTaskName(observation, sources.db),
-    chat?.fallback,
-    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
-  )
+  return crewDisplayName(chat?.ownName, terminalName)
 }
 
 function observedTaskName(

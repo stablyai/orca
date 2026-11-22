@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -72,7 +73,7 @@ export async function requirePeerMailServer(
   selector: string,
   toBot = false,
   type?: z.infer<typeof PeerMailMessageType>
-): Promise<OrchestrationWorkerServer> {
+): Promise<OrchestrationWorkerServer & { takesFiles: boolean }> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
     await runtime.callOrchestrationWorkerServer(
@@ -116,11 +117,13 @@ export async function requirePeerMailServer(
   ) {
     throw new OrchestrationError(
       'server_mail_unsupported',
-      `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Update Orca on ${server.name}, then send again. Nothing was sent.`,
+      `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Nothing was sent. Update Orca on ${server.name}, or send it again as --type status, which it accepts.`,
       { ...NOTHING_SENT, server: server.name }
     )
   }
-  return server
+  const takesFiles =
+    status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY) === true
+  return { ...server, takesFiles }
 }
 
 /** The pairing credential the server knows this Orca by; a re-pair starts new conversations under it. */
@@ -144,6 +147,7 @@ export async function deliverPeerMail(
     threadId?: string
     chat?: string
     item?: string
+    attachments?: readonly string[]
     sender: PeerMailSender
   }
 ): Promise<void> {
@@ -162,6 +166,7 @@ export async function deliverPeerMail(
       ...(message.threadId ? { threadId: message.threadId } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
+      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
       sender: message.sender
     },
     DELIVER_TIMEOUT_MS,

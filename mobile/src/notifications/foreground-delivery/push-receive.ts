@@ -1,4 +1,5 @@
 import { wasPushDismissed } from '../dismissal/push-dismissal-watermarks'
+import { botAccessRequestIdOfNotice } from '../../../../src/shared/bots/bot-access-request'
 import { dismissPresentedPushNotification } from '../dismissal/push-tray-dismissal'
 import { shouldSuppressNotificationWhileViewing } from '../delivery-policy/notification-viewing-policy'
 import { loadPushNotificationsEnabled } from '../../storage/preferences'
@@ -43,10 +44,6 @@ function claimForegroundPush(payload: OrcaPushPayload): boolean {
     }
   }
   return true
-}
-
-export function resetForegroundPushClaimsForTests(): void {
-  recentForegroundPushes.clear()
 }
 
 export async function foregroundNotificationBehavior(notification: {
@@ -137,10 +134,13 @@ export function pushNotificationRouteData(
   if (!hostId) {
     return null
   }
+  const accessRequestId = botAccessRequestIdOfNotice(payload.notificationId)
   return {
     hostId,
     ...(payload.paneKey ? { paneKey: payload.paneKey } : {}),
     ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
-    ...(payload.executionHost ? { executionHost: payload.executionHost } : {})
+    ...(payload.executionHost ? { executionHost: payload.executionHost } : {}),
+    // The contract has no request field: an access request's notice names it in its id.
+    ...(accessRequestId ? { accessRequestId } : {})
   }
 }

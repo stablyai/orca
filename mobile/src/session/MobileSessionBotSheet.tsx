@@ -9,9 +9,11 @@ import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-c
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { BotItemCommentMicContext } from '../bots/items/bot-item-comment-mic'
-import { navigateToMobileFilePreview } from '../files/preview/mobile-file-preview-navigation'
+import { openBotItemFile } from '../bots/items/bot-item-file-open'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useRouteHandoff } from '../navigation/route-handoff'
+import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { useBotAccessRequests } from '../bots/use-bot-access-requests'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -25,6 +27,7 @@ import {
 import type { BotChatTreeActions } from '../bots/MobileBotChatTree'
 import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
+import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 
 // The desktop's "New automation" drafts this into the bot's chat, where automations are made.
 const NEW_AUTOMATION_DRAFT = 'Set up an automation that '
@@ -51,9 +54,11 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   } = controller
   const server = useContext(WorkspaceServerContext)
   const router = useWorkspaceRouteHandoff()
+  const hostRouter = useRouteHandoff()
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const openMobileSession = useOpenMobileSession()
+  const openMobileAutomations = useOpenMobileAutomations()
   // An item's comment box dictates with this screen's one dictation, as its chat composers do.
   const dictationLive = useMobileDictationLive(dictation, controller.cancelDictation, hostId ?? '')
   const { dictationEnabled, dictationMode, handleDictationToggle } = controller
@@ -142,6 +147,14 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     setShowBotSheet(false)
     setBotPanel(null)
   }
+  // Its home workspace went with it, so the host's list is next, as after any removed workspace.
+  const leaveDeletedBot = () => {
+    closeSheets()
+    if (hostId) {
+      hostRouter.replace(hostStackHostRoute(hostId))
+    }
+  }
+  const home = { folderPath: controller.worktreePath, onDeleted: leaveDeletedBot }
   const startSuggestion = homeTab
     ? (ask: string) => {
         closeSheets()
@@ -163,6 +176,19 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
         )
       }
     : null
+  const viewRuns = hostId
+    ? (automationId: string) => {
+        closeSheets()
+        openMobileAutomations(hostId, {
+          automation: automationId,
+          ...(executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID
+            ? { server: executionHost }
+            : {})
+        })
+      }
+    : null
+  const hostName =
+    (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
   if (itemsOnPhone && hostId) {
     const closePanel = () => setBotPanel(null)
     const panelTreeActions: BotChatTreeActions = {
@@ -185,10 +211,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               routeBot={routeBot}
               client={client}
               online={connState === 'connected'}
-              hostName={
-                (server ? server.name : controller.hostName) ||
-                t('bots.items.thisComputer', 'The computer')
-              }
+              hostName={hostName}
               hostId={hostId}
               worktreeId={worktreeId}
               hostKey={hostBotsKey(hostId, executionHost)}
@@ -202,29 +225,22 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
                   chatTabScope
                 )
               }}
-              onOpenFile={(path, toast) => {
-                // Only a file in the bot's folder opens, as on the desktop.
-                if (!isBotFolderPath(path)) {
-                  toast(
-                    t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", {
-                      path
-                    })
-                  )
-                  return
-                }
-                navigateToMobileFilePreview(
+              onOpenFile={(path, toast) =>
+                openBotItemFile({
+                  path,
                   router,
-                  {
-                    hostId,
-                    worktreeId,
-                    relativePath: path.replace(/^\.\//, ''),
-                    name: path.split('/').at(-1) ?? path
-                  },
-                  { embedded: true, onRequestClose: closePanel }
-                )
-              }}
+                  hostId,
+                  worktreeId,
+                  t,
+                  toast,
+                  onRequestClose: closePanel
+                })
+              }
               onStartSuggestion={startSuggestion}
               onNewAutomation={newAutomation}
+              home={home}
+              onAskInChat={startSuggestion}
+              onViewRuns={viewRuns}
             />
           </BotItemCommentMicContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
@@ -235,6 +251,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     <MobileBotSheet
       hostKey={hostBotsKey(hostId ?? '', executionHost)}
       treeActions={treeActions}
+      online={connState === 'connected'}
+      hostName={hostName}
       visible={showBotSheet}
       onClose={() => setShowBotSheet(false)}
       routeBot={routeBot}
@@ -243,11 +261,9 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       accessRequests={accessRequests}
       onStartSuggestion={startSuggestion}
       onNewAutomation={newAutomation}
+      home={home}
+      onAskInChat={startSuggestion}
+      onViewRuns={viewRuns}
     />
   )
-}
-
-/** A link to a file in the bot's folder: relative, never climbing out of it. */
-function isBotFolderPath(path: string): boolean {
-  return !path.startsWith('/') && !path.startsWith('~') && !path.split(/[\\/]/).includes('..')
 }
