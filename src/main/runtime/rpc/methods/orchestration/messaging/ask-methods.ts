@@ -1,5 +1,5 @@
 import { dropReaderlessRunQuestions } from '../../../../orchestration/db/questions/readerless-run-questions'
-import { retiredCoordinatorChat } from './retired-coordinator-chat'
+import { deletedCoordinatorChat } from './deleted-coordinator-chat'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
@@ -166,8 +166,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           to
         })
         question = created.question
-        // No one coordinates the Run, or its chat was retired: its worker is told at once.
-        dropReaderlessRunQuestions(db, run.id, retiredCoordinatorChat(runtime, run))
+        // No one coordinates the Run, or its chat was deleted: its worker is told at once.
+        dropReaderlessRunQuestions(db, run.id, deletedCoordinatorChat(run))
         runtime.notifyMessageArrived(to, created.message.type)
       }
 

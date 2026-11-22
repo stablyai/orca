@@ -8,6 +8,9 @@ import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questio
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 
 export function workerAskNoticeText(runId: string, why: string): string {
+  if (why === 'withdrawn') {
+    return 'Your question was removed before your coordinator read it. Decide it yourself and say what you chose when you report.'
+  }
   return why === 'no-reader'
     ? `No one coordinates Run ${runId} now, so no one will read your question. Decide it yourself and say what you chose when you report.`
     : 'Your coordinator stopped without answering your question and has no worker running for it. Decide it yourself and say what you chose when you report. If an answer comes later, it still reaches you.'
