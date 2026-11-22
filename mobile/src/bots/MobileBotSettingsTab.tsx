@@ -29,6 +29,7 @@ import { readConnectionStatusProbe } from '../transport/connection/runtime-statu
 import { useBackClaim } from '../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
+  botPermissionSetting,
   MobileBotSettingsRoot,
   MobileBotStalePage,
   type BotSettingsTarget
@@ -293,7 +294,9 @@ export function MobileBotSettingsTab(props: {
         onSwitch={async (agent) => {
           // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
           if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id)
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
           }
         }}
       />
@@ -360,7 +363,7 @@ export function MobileBotSettingsTab(props: {
         {offlineBanner}
         <ChoiceRows
           choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
+          selected={botPermissionSetting(bot).mode ?? 'inherit'}
           disabled={!props.online}
           onSelect={(mode) => {
             if (mode === 'inherit' || modes.some((value) => value === mode)) {

@@ -59,6 +59,7 @@ export type BotPanelOpen =
   | { access: string }
   /** Settings, on one of its pages. */
   | { settings: BotSettingsTarget }
+  | { automation: string }
 
 export function MobileBotPanel(props: {
   /** What the panel opens on; null while closed. */
@@ -132,6 +133,8 @@ export function MobileBotPanel(props: {
       openPage(`item:${props.open.item}`)
     } else if (props.open && 'settings' in props.open) {
       openPage('settings')
+    } else if (props.open && 'automation' in props.open) {
+      openPage(`automation:${props.open.automation}`)
     } else if (props.open) {
       forget()
     }

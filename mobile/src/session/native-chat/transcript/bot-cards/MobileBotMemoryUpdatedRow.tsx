@@ -14,6 +14,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
+import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 
 function changeLabel(change: BotMemoryUpdatedRow['change'], t: Translate): string {
   switch (change) {
@@ -26,7 +27,7 @@ function changeLabel(change: BotMemoryUpdatedRow['change'], t: Translate): strin
   }
 }
 
-/** A quiet line that folds open to the bot's memory changes. No link: the phone has no memory editor. */
+/** A quiet line that folds open to the bot's memory changes, and Open memory, as the desktop's. */
 export function MobileBotMemoryUpdatedRow({
   note,
   cardId,
@@ -40,6 +41,7 @@ export function MobileBotMemoryUpdatedRow({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [open, setOpen] = useMobileNativeChatDisclosure(`bot-memory:${cardId}`, false)
+  const panel = useBotPanelOpener(note.botId)
   const Chevron = open ? ChevronDown : ChevronRight
   const meta = scaledType(typography.metaSize, fontScale)
   return (
@@ -79,6 +81,18 @@ export function MobileBotMemoryUpdatedRow({
               {t('chat.botCards.memory.indexChanged', COPY.indexChanged)}
             </Text>
           ) : null}
+          {panel ? (
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => panel.open({ settings: 'memory' })}
+              hitSlop={8}
+              style={styles.openMemory}
+            >
+              <Text style={[styles.openMemoryText, meta]}>
+                {t('chat.botCards.memory.openMemory', COPY.openMemory)}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -98,5 +112,7 @@ const styles = themedStyleSheet(() => ({
   value: { color: colors.textPrimary },
   label: { color: colors.textMuted },
   removed: { textDecorationLine: 'line-through' },
-  mono: { fontFamily: typography.monoFamily, fontSize: typography.metaSize }
+  mono: { fontFamily: typography.monoFamily, fontSize: typography.metaSize },
+  openMemory: { alignSelf: 'flex-start' },
+  openMemoryText: { color: colors.textMuted, textDecorationLine: 'underline' }
 }))

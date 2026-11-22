@@ -28,6 +28,11 @@ import { useOptionalHostProtocolGates } from '../../components/host-connection/h
 import { structuredAgentSessionHostSupport } from '../../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
 import { useMobileStructuredAsyncQuestions } from '../../session/native-chat/agent-session/use-mobile-structured-async-questions'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
+import { MobileBotItemOwnerLine } from './MobileBotItemRow'
+
+/** In a group's list: the member an ask is from. */
+export type PhoneAskOwner = { name: string; avatar: MobileBotAvatarSource }
 
 type Row = { key: string; approval: boolean; ask?: PhoneAsk; item?: BotItem }
 
@@ -62,6 +67,7 @@ function askLine(ask: PhoneAsk, t: Translate, question: string | undefined): str
 function AskRow({
   ask,
   botName,
+  owner,
   client,
   disabled,
   onOpen,
@@ -69,6 +75,7 @@ function AskRow({
 }: {
   ask: PhoneAsk
   botName: string
+  owner: PhoneAskOwner | undefined
   client: RpcClient | null
   disabled: boolean
   onOpen: () => void
@@ -87,19 +94,28 @@ function AskRow({
   )
   const asked = ask.approval ? undefined : asyncQuestionSkip?.awaiting
   const save = asyncQuestionSkip?.save
-  const title = askRowTitle(ask, botName, t)
+  const title = askRowTitle(ask, owner?.name ?? botName, t)
+  const line = askLine(ask, t, asked?.text)
+  const command = ask.tool?.input ? (
+    <Text style={styles.command} numberOfLines={1}>
+      {ask.tool.input}
+    </Text>
+  ) : null
   return (
     <ListRow
       title={title}
       marker={ask.number === null ? undefined : formatBotItemNumber(ask.number)}
-      subtitle={askLine(ask, t, asked?.text)}
+      subtitle={owner ? undefined : line}
       subtitleLines={1}
       detail={
-        ask.tool?.input ? (
-          <Text style={styles.command} numberOfLines={1}>
-            {ask.tool.input}
-          </Text>
-        ) : undefined
+        owner ? (
+          <>
+            <MobileBotItemOwnerLine owner={owner} line={line} />
+            {command}
+          </>
+        ) : (
+          (command ?? undefined)
+        )
       }
       leading={
         ask.approval ? (
@@ -176,11 +192,14 @@ export function MobileBotNeedsYouGroup({
   disabled,
   renderItem,
   onOpenAsk,
+  ownerOf,
   client,
   onSkipFailed
 }: {
   botName: string
   asks: readonly PhoneAsk[]
+  /** In a group's list: the member each ask is from, named under its title. */
+  ownerOf?: (ask: PhoneAsk) => PhoneAskOwner | undefined
   items: readonly BotItem[]
   /** Offline or the read failed: rows stay, taps wait. */
   disabled: boolean
@@ -228,6 +247,7 @@ export function MobileBotNeedsYouGroup({
                     key={row.key}
                     ask={row.ask}
                     botName={botName}
+                    owner={ownerOf?.(row.ask)}
                     client={client}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}
