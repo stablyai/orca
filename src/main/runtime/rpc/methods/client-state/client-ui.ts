@@ -151,6 +151,9 @@ export const CLIENT_UI_METHODS = [
     params: NativeChatSessionOptionsMutation,
     handler: async (params, { runtime }) => {
       const mutation = withoutSendCheckedEffortPicks(params)
+      if (mutation.type === 'apply-picks' && mutation.picks.length === 0) {
+        return { ok: true as const }
+      }
       if (!(await keepSessionPicksOnBot(runtime.bots, mutation))) {
         runtime.updateClientNativeChatSessionOptions(mutation)
       }
