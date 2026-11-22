@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MessageRow } from '../../db/orchestration-records'
+import type { BotRequestRecord } from '../../../../bots/bot-request-view'
 import { peerMailSenderSnapshot } from '../../federation/peer-mail/peer-mail-sender-snapshot'
 import {
   formatMessageBanner,
@@ -95,7 +96,9 @@ describe('the mail header', () => {
         bot: { id: 'ranger', name: 'Ranger', avatar: null }
       })
     })
-    const recorded = (record: object): MessageFormattingOptions => ({
+    const recorded = (
+      record: Pick<BotRequestRecord, 'fromBotName' | 'fromPairedComputer'>
+    ): MessageFormattingOptions => ({
       peerMail: {
         ...linkedPeer(pulled).peerMail!,
         getBotRequest: (id) =>
