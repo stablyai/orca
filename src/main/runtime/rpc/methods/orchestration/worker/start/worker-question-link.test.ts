@@ -149,4 +149,29 @@ describe('worker-start --for', () => {
     db.recordBotAnswer(id)
     expect(openQuestionReminder(db, caller)).toBeUndefined()
   })
+
+  it("reminds a coordinator holding its worker's unanswered question", () => {
+    const run = db.createRun({
+      objective: 'o',
+      coordinatorHandle: 'term_docs',
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ spec: 'work', runId: run.id })
+    const worker = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskId: task.id,
+      startOptions: {}
+    })
+    const { message } = db.createQuestion({
+      runId: run.id,
+      dispatchId: worker.dispatch.id,
+      askerHandle: 'term_w',
+      question: 'Which font?'
+    })
+    db.markAsRead([message.id], { kind: 'terminal', handle: 'term_docs' })
+    expect(openQuestionReminder(db, caller)).toBe(
+      `You have an open question from your worker on Dispatch ${worker.dispatch.id} (${message.id}). If this worker is for it, add --for ${message.id}.`
+    )
+  })
 })

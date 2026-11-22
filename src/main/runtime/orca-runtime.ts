@@ -1,4 +1,4 @@
-import { botQuestionNotices } from './rpc/methods/orchestration/messaging/bot-question-notices'
+import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -299,7 +299,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
     botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
     this.startQuestionReconciler(db, (taker, ids, chat) =>
-      botQuestionNotices(this, taker, ids, chat)
+      agentQuestionNotices(this, taker, ids, chat)
     )
   }
 

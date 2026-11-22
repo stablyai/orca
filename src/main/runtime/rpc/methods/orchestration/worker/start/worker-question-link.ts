@@ -116,17 +116,25 @@ export function openQuestionReminder(
   if (own.length === 0) {
     return undefined
   }
+  const takers = own.map(() => '?').join(',')
   const id = db.db
     .prepare(
-      `SELECT message_id FROM bot_requests WHERE awaiting = 1
-       AND taken_by IN (${own.map(() => '?').join(',')}) ORDER BY rowid DESC LIMIT 1`
+      `SELECT id FROM messages WHERE id IN (
+         SELECT message_id FROM bot_requests WHERE awaiting = 1 AND taken_by IN (${takers})
+         UNION SELECT message_id FROM question_threads WHERE awaiting = 1 AND taken_by IN (${takers})
+       ) ORDER BY sequence DESC LIMIT 1`
     )
-    .get(...own)?.message_id
+    .get(...own, ...own)?.id
   if (typeof id !== 'string') {
     return undefined
   }
   const record = botRequestRecord(db, id)
-  const asker = record ? botRequestSenderName(record) : 'another agent'
+  const worker = record ? undefined : db.getQuestionRaw(id)?.dispatch_id
+  const asker = record
+    ? botRequestSenderName(record)
+    : worker
+      ? `your worker on Dispatch ${worker}`
+      : 'another agent'
   return `You have an open question from ${asker} (${id}). If this worker is for it, add --for ${id}.`
 }
 

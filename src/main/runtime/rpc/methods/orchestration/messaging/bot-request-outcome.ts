@@ -19,6 +19,7 @@ import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { noteBotQuestionFailure } from './bot-question-notices'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { retireCoordinatorChatRuns } from '../../../../orchestration/db/runs/retired-chat-runs'
 import {
   stampQuestionTakes,
   type MailTaker
@@ -224,6 +225,10 @@ export async function dropUnreadBotRequests(
           }
         })
       }
+    }
+    if (why === 'chat-deleted' && onlyTo) {
+      // A replaced Chat's Runs are retired where it is closed (bot-chat-replacement.ts).
+      retireCoordinatorChatRuns(db, onlyTo)
     }
     const dropped = unread
       .filter(({ request }) => request.purpose !== 'question')
