@@ -48,7 +48,7 @@ export type OrcadDeployOptions = {
   census: OrcadTerminalCensus
   /** Bind census to its incumbent record; a changed locked record makes earlier counts unverifiable. */
   censusRecord?: OrcadActivationRecord
-  /** WSL only: the record and fence this connect read moments ago; skips the same pre-upload reads. */
+  /** The record and fence this connect read moments ago; skips the same pre-upload reads. */
   preRead?: { record: OrcadActivationRecord; fenceOpen: boolean }
   /** WSL only: a same-version deploy skips its fence; the caller's wake re-checks under its own. */
   sameVersionFencedByCaller?: boolean
