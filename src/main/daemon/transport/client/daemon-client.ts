@@ -149,7 +149,7 @@ export class DaemonClient {
         )
       )
 
-      const controlBootstrap = watchControlSocketBootstrap(this.controlSocket)
+      const controlBootstrap = watchControlSocketBootstrap(this.controlSocket, connectDaemonSocket)
       pendingListenerCleanups.push(controlBootstrap.stop)
       const pendingStreamSocket = await controlBootstrap.connect(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingStreamSocket)

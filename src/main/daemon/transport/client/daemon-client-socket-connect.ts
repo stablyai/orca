@@ -34,7 +34,10 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
 }
 
 // Watch the authenticated control socket for failure until its permanent close handlers are armed.
-export function watchControlSocketBootstrap(socket: Socket): {
+export function watchControlSocketBootstrap(
+  socket: Socket,
+  connectSocket: typeof connectDaemonSocket
+): {
   race: <T>(step: Promise<T>) => Promise<T>
   connect: (socketPath: string, timeoutMs: number) => Promise<Socket>
   stop: () => void
@@ -48,7 +51,7 @@ export function watchControlSocketBootstrap(socket: Socket): {
   return {
     race,
     connect: (socketPath, timeoutMs) => {
-      const connecting = connectDaemonSocket(socketPath, timeoutMs)
+      const connecting = connectSocket(socketPath, timeoutMs)
       return race(connecting).catch((error: unknown) => {
         // A socket that connects after the attempt failed has no owner left to close it.
         void connecting.then(
