@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
-import { parseClaudeStatusLineBody } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import {
+  readClaudeStatusLineForm,
+  readClaudeStatusLineRateLimits
+} from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import {
@@ -361,13 +364,14 @@ describe('RateLimitService', () => {
     await service.refresh()
     const resetsAt = Date.parse('2100-01-01T00:00:00Z') / 1000
     const post = (sessionId: string, usedPercentage: number) => {
-      const event = parseClaudeStatusLineBody({
+      const form = readClaudeStatusLineForm({
         configDir: '/claude/a',
         payload: JSON.stringify({
           session_id: sessionId,
           rate_limits: { five_hour: { used_percentage: usedPercentage, resets_at: resetsAt } }
         })
       })
+      const event = form && readClaudeStatusLineRateLimits(form)
       if (event) {
         service.ingestLiveClaudeRateLimits(event)
       }

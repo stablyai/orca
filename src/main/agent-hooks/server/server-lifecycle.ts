@@ -8,8 +8,10 @@ import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody
+  readClaudeStatusLineForm,
+  readClaudeStatusLineRateLimits
 } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { readClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -17,14 +19,14 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
-import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
+import { AgentHookServerClaudeStatusLineModel } from './server-claude-statusline-model'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
 import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
-export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
+export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStatusLineModel {
   private readonly startup = new AgentHookStartup()
 
   start(options?: HookServerStartOptions): Promise<void> {
@@ -124,9 +126,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
-          const statusLineEvent = parseClaudeStatusLineBody(body)
-          if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+          const form = readClaudeStatusLineForm(body)
+          if (form) {
+            const statusLineEvent = readClaudeStatusLineRateLimits(form)
+            if (statusLineEvent) {
+              this.onClaudeStatusLine?.(statusLineEvent)
+            }
+            const modelReport = readClaudeStatusLineModel(form)
+            if (modelReport) {
+              this.applyClaudeStatusLineModel(modelReport)
+            }
           }
           res.writeHead(204)
           res.end()
