@@ -557,7 +557,8 @@
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
         "serverRepaired": "This server was re-paired during the import. Try again.",
-        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again.",
+        "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -27206,6 +27207,17 @@
       "uploadPasteOrDrop": "or upload, paste or drop your own",
       "pasteHint": "Paste an image with {{shortcut}}",
       "changePicture": "Change picture",
+      "validation": {
+        "addName": "Add a name",
+        "botsUnavailable": "Bots unavailable",
+        "computerOffline": "Offline",
+        "findingAgents": "Finding agents…",
+        "identityTooLong": "Too long",
+        "noAgents": "No agents",
+        "noAgentsAvailable": "No agents available",
+        "pictureLoading": "Picture loading…",
+        "updateOrca": "Update Orca"
+      },
       "parts": {
         "olderHost": "{{host}} needs an Orca update to add skills and schedules",
         "skillsKept_one": "{{kept}}/{{count}} skill",

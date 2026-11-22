@@ -1399,7 +1399,8 @@
         "connectionEnded": "A conexão com este servidor foi encerrada durante a importação. Reconecte-se e tente novamente.",
         "serverRepaired": "Este servidor foi pareado novamente durante a importação. Tente novamente.",
         "macFullDiskAccess": "O macOS negou acesso aos cookies do {{browser}}. Conceda Acesso Total ao Disco ao Orca em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco e reinicie o Orca.",
-        "sshHostDisconnected": "Esta página não está mais conectada pelo host SSH. Reconecte e tente novamente."
+        "sshHostDisconnected": "Esta página não está mais conectada pelo host SSH. Reconecte e tente novamente.",
+        "pageChanged": "Esta página foi fechada ou mudou de perfil durante a importação. Tente novamente."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importado para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-lo.",
@@ -25047,7 +25048,19 @@
       "noChatAgents": "Nenhum agente de chat disponível neste computador.",
       "pictureColor": "Cor de fundo",
       "pictureColorCustom": "Cor personalizada",
-      "useChatDefaults": "Usar os padrões do chat"
+      "useChatDefaults": "Usar os padrões do chat",
+      "name": "Nome",
+      "validation": {
+        "addName": "Adicione um nome",
+        "botsUnavailable": "Bots indisponíveis",
+        "computerOffline": "Offline",
+        "findingAgents": "Procurando agentes…",
+        "identityTooLong": "Muito longo",
+        "noAgents": "Sem agentes",
+        "noAgentsAvailable": "Agentes indisponíveis",
+        "pictureLoading": "Carregando imagem…",
+        "updateOrca": "Atualize o Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "Trocar de conta",

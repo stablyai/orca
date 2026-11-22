@@ -96,7 +96,7 @@ function Toolbar(): React.JSX.Element {
               detectedBrowsers: DETECTED_BROWSERS,
               onFetchDetectedBrowsers: noop,
               browserSessionImportState: null,
-              sshRoute: null,
+              pageRoute: { kind: 'local' },
               onImportFromBrowser: noop,
               onImportFromFile: noop
             }}

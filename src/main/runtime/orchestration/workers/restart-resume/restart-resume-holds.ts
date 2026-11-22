@@ -1,6 +1,7 @@
 // The workers a restart resume holds: each reopens or binds once, and ends bound or given up.
 
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeTerminalPromptSubmitHold } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { continueResumedWorker } from './resumed-worker-continue'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
@@ -34,8 +35,18 @@ export type TerminalWorkerRestartResumeDeps = {
   paneSessions: (paneKey: string) => readonly string[]
   /** Resolves once the resumed agent's composer takes input; false when it never does. */
   waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
-  /** False when the agent provably did not start the turn. */
-  sendPrompt: (handle: string, prompt: string, operationId: string) => Promise<boolean>
+  /** False when the agent provably did not start the turn; the hold when Orca left it unsubmitted. */
+  sendPrompt: (
+    handle: string,
+    prompt: string,
+    operationId: string
+  ) => Promise<boolean | { withheldFor: RuntimeTerminalPromptSubmitHold }>
+  /** The continue prompt waits unsent behind a dialog or typing: its coordinator is told once. */
+  reportContinueWithheld: (
+    dispatchId: string,
+    handle: string,
+    hold: RuntimeTerminalPromptSubmitHold
+  ) => Promise<void>
   /** A terminal this resume opened for a Dispatch that settled meanwhile; nobody owns its agent. */
   closeTerminal: (handle: string) => Promise<unknown>
   /** Decides again a rest the worker's report was held back for; no wait outlives its lost terminal. */

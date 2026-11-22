@@ -39,3 +39,7 @@ export function hasRegisteredPtyWithPid(): boolean {
 export function listRegisteredPtys(): PtyRegistration[] {
   return [...registry.values()]
 }
+
+export function registeredPtyCount(): number {
+  return registry.size
+}

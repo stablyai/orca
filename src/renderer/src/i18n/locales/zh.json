@@ -22617,7 +22617,8 @@
         "connectionEnded": "导入期间与此服务器的连接已断开。请重新连接后重试",
         "serverRepaired": "此服务器在导入期间已重新配对。请重试",
         "macFullDiskAccess": "macOS 拒绝访问 {{browser}} Cookie。请在“系统设置”→“隐私与安全性”→“完全磁盘访问权限”中授予 Orca 权限，然后重启 Orca。",
-        "sshHostDisconnected": "此页面已不再通过其 SSH 主机连接。请重新连接后重试。"
+        "sshHostDisconnected": "此页面已不再通过其 SSH 主机连接。请重新连接后重试。",
+        "pageChanged": "导入期间此页面已关闭或更改了配置文件。请重试。"
       },
       "notice": {
         "importedMore_other": "已为 {{domains}} 及其他 {{more}} 个域名导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
@@ -26135,7 +26136,18 @@
       "purposePlaceholder": "它是谁，负责什么",
       "uploadPasteOrDrop": "或上传、粘贴或拖放你自己的图片",
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
-      "changePicture": "更换图片"
+      "changePicture": "更换图片",
+      "validation": {
+        "addName": "添加名称",
+        "botsUnavailable": "无法运行机器人",
+        "computerOffline": "离线",
+        "findingAgents": "正在查找代理…",
+        "identityTooLong": "内容过长",
+        "noAgents": "无代理",
+        "noAgentsAvailable": "没有可用的代理",
+        "pictureLoading": "正在加载图片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",

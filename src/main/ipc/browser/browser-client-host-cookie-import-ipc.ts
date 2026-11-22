@@ -10,6 +10,26 @@ import { clientRouteCookieImportSources } from '../../browser/cookies/client-rou
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
+type ClientHostCookieImportTargetArgs = {
+  environmentId: string
+  profileId: string
+  /** The server's metadata for profileId; checked in main like page creation checks it. */
+  profile?: unknown
+  /** Set when a page imports into its own jar. */
+  browserPageId?: unknown
+}
+
+function clientHostCookieImportTarget(args: ClientHostCookieImportTargetArgs) {
+  return {
+    environmentId: args.environmentId,
+    browserProfileId: args.profileId,
+    ...(args.profile ? { profile: args.profile } : {}),
+    ...(typeof args.browserPageId === 'string' && args.browserPageId.length > 0
+      ? { browserPageId: args.browserPageId }
+      : {})
+  }
+}
+
 export function registerClientHostCookieImportHandlers(): void {
   for (const channel of [
     'browser:session:importFromBrowserForClientHost',
@@ -25,9 +45,7 @@ export function registerClientHostCookieImportHandlers(): void {
     'browser:session:importFromBrowserForClientHost',
     async (
       event,
-      args: {
-        environmentId: string
-        profileId: string
+      args: ClientHostCookieImportTargetArgs & {
         browserFamily: string
         browserProfile?: string
       }
@@ -36,8 +54,7 @@ export function registerClientHostCookieImportHandlers(): void {
         return browserCookieImportFailure('notAuthorized')
       }
       return importCookiesIntoClientRoutePartition({
-        environmentId: args.environmentId,
-        browserProfileId: args.profileId,
+        ...clientHostCookieImportTarget(args),
         browserFamily: args.browserFamily,
         browserProfile: args.browserProfile
       })
@@ -49,15 +66,14 @@ export function registerClientHostCookieImportHandlers(): void {
     'browser:session:importCookiesForClientHost',
     async (
       event,
-      args: { environmentId: string; profileId: string }
+      args: ClientHostCookieImportTargetArgs
     ): Promise<BrowserCookieImportResult | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
       }
       const parent = BrowserWindow.fromWebContents(event.sender)
-      return importCookieFileIntoClientRoutePartition(
-        { environmentId: args.environmentId, browserProfileId: args.profileId },
-        () => pickCookieFile(parent)
+      return importCookieFileIntoClientRoutePartition(clientHostCookieImportTarget(args), () =>
+        pickCookieFile(parent)
       )
     }
   )

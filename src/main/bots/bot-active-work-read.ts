@@ -1,11 +1,8 @@
-// Reads a bot's live work for a turn its owner asked: open items and the work record, cached for a
-// few seconds per bot, since the work record checks each worker it lists.
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { actsForOwner, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
+// Reads a bot's live work for any of its turns: open items and the work record, cached for a few
+// seconds per bot, since the work record checks each worker it lists.
 import type { BotItem } from '../../shared/bots/bot-items'
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readBotTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
 import { type BotActiveWorkSection, botActiveWorkSection } from './bot-active-work'
 import type { BotItemRecord } from './bot-items-schema'
 
@@ -19,8 +16,6 @@ type Listed = Pick<BotItemRecord, 'number' | 'lastActivityAt'>
 type Shown = Parameters<typeof botActiveWorkSection>[0][number]
 
 export type BotActiveWorkReads<R extends Listed = BotItemRecord> = {
-  /** Whom this turn acts for. */
-  askers: () => Promise<readonly BotRequestAsker[]>
   items: (
     status: 'needs_you' | 'working',
     limit: number,
@@ -32,22 +27,17 @@ export type BotActiveWorkReads<R extends Listed = BotItemRecord> = {
 
 type Cached = { at: number; section: Promise<BotActiveWorkSection> }
 
-/** A reader that settles who the turn acts for first: null when it isn't only the owner (nothing is
- *  read or cached), else the section's read, which rejects on a failure so the turn keeps what it
- *  last had. */
+/** A reader of the section, which rejects on a failure so the turn keeps what it last had. */
 export function createBotActiveWorkReader() {
   const cache = new Map<string, Cached>()
   return async <R extends Listed>(
     botId: string,
     reads: BotActiveWorkReads<R>,
     now = Date.now()
-  ): Promise<{ section: Promise<BotActiveWorkSection> } | null> => {
-    if (!actsForOwner(await reads.askers())) {
-      return null
-    }
+  ): Promise<BotActiveWorkSection> => {
     const hit = cache.get(botId)
     if (hit && now - hit.at < FRESH_MS) {
-      return { section: hit.section }
+      return hit.section
     }
     const section = (async () => {
       const waiting: R[] = []
@@ -77,24 +67,20 @@ export function createBotActiveWorkReader() {
     cache.set(botId, { at: now, section })
     // A failed read is tried again on the next turn, never kept.
     section.catch(() => cache.get(botId)?.section === section && cache.delete(botId))
-    return { section }
+    return section
   }
 }
 
 const readers = new WeakMap<OrcaRuntimeService, ReturnType<typeof createBotActiveWorkReader>>()
 
-/** The runtime's reads for a turn of `sessionId`, a chat of `botId`. */
+/** The runtime's reads for a turn of one of `botId`'s chats. */
 export function readBotActiveWork(
   runtime: OrcaRuntimeService,
-  botId: string,
-  sessionId: string,
-  message: AgentJournalMessageItem
-): Promise<{ section: Promise<BotActiveWorkSection> } | null> {
+  botId: string
+): Promise<BotActiveWorkSection> {
   const reader = readers.get(runtime) ?? createBotActiveWorkReader()
   readers.set(runtime, reader)
   return reader(botId, {
-    askers: async () =>
-      (await readBotTurn(runtime, runtime.getOrchestrationDb(), sessionId, message)).turn.askers,
     items: (status, limit, cursor) =>
       runtime.botItems
         .store()

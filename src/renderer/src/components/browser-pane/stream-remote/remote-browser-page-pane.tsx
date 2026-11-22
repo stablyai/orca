@@ -262,7 +262,8 @@ export function RemoteBrowserPagePane({
     handleRemotePointerMove,
     handleRemoteScreenshotKeyDown,
     handleRemoteScreenshotPaste,
-    runRemoteEditCommand
+    runRemoteEditCommand,
+    selectPopupElement
   } = useRemoteBrowserPageInput({
     ...remotePageTarget,
     busy,
@@ -275,7 +276,9 @@ export function RemoteBrowserPagePane({
     remoteViewportSizeRef,
     frameMetadata,
     enqueueRemoteInput,
-    scheduleRemoteTabInfoRefresh
+    scheduleRemoteTabInfoRefresh,
+    isActive,
+    mountedRef
   })
 
   const zoom = useRemoteBrowserPageZoom({
@@ -343,6 +346,7 @@ export function RemoteBrowserPagePane({
           }}
         />
       ) : null}
+      {selectPopupElement}
       <RemoteBrowserPageToolbar
         page={browserTab}
         workspaceId={workspaceId}

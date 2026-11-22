@@ -501,7 +501,8 @@
         "connectionEnded": "İçe aktarma sırasında bu sunucuyla bağlantı kesildi. Yeniden bağlanıp tekrar deneyin.",
         "serverRepaired": "Bu sunucu içe aktarma sırasında yeniden eşleştirildi. Tekrar deneyin.",
         "macFullDiskAccess": "macOS, {{browser}} çerezlerine erişimi reddetti. Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi bölümünden Orca’ya Tam Disk Erişimi verin, ardından Orca’yı yeniden başlatın.",
-        "sshHostDisconnected": "Bu sayfa artık SSH ana bilgisayarı üzerinden bağlı değil. Yeniden bağlanıp tekrar deneyin."
+        "sshHostDisconnected": "Bu sayfa artık SSH ana bilgisayarı üzerinden bağlı değil. Yeniden bağlanıp tekrar deneyin.",
+        "pageChanged": "Bu sayfa içe aktarma sırasında kapandı veya profil değiştirdi. Tekrar deneyin."
       },
       "notice": {
         "importedMore_one": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
@@ -24058,7 +24059,19 @@
       "noChatAgents": "Bu bilgisayarda kullanılabilir sohbet ajanı yok.",
       "pictureColor": "Arka plan rengi",
       "pictureColorCustom": "Özel renk",
-      "useChatDefaults": "Sohbet varsayılanlarını kullan"
+      "useChatDefaults": "Sohbet varsayılanlarını kullan",
+      "name": "Ad",
+      "validation": {
+        "addName": "Bir ad ekleyin",
+        "botsUnavailable": "Botlar kullanılamıyor",
+        "computerOffline": "Çevrimdışı",
+        "findingAgents": "Ajanlar aranıyor…",
+        "identityTooLong": "Çok uzun",
+        "noAgents": "Ajan yok",
+        "noAgentsAvailable": "Kullanılabilir ajan yok",
+        "pictureLoading": "Görsel yükleniyor…",
+        "updateOrca": "Orca’yı güncelleyin"
+      }
     },
     "apps": {
       "paste": {
