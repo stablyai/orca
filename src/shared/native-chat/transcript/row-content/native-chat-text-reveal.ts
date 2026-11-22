@@ -27,8 +27,10 @@ export type NativeChatTextRevealFrames = {
   now: () => number
   request: (step: () => void) => number
   cancel: (frame: number) => void
-  /** How long the last step took to render, timed by the surface from the step to its commit. */
-  stepCost?: (ms: number) => void
+  /** How long the last step took to render, timed by the surface from the step to its commit.
+   *  `exact` is false when the time may include other work queued before the render; it then
+   *  spaces the steps but never marks the reply redrawn whole. */
+  stepCost?: (ms: number, exact?: boolean) => void
   /** Whether this reply's steps have been slow enough to show it redrawn whole each step. */
   redrawsWhole?: () => boolean
 }
@@ -79,6 +81,7 @@ export function nativeChatRevealStepFrames(
   let steppedAt = -Infinity
   let spacing = stepMs
   const stepCosts: number[] = []
+  const exactCosts: number[] = []
   let redrawsWhole = false
   let lastFrame: number | undefined
   const gaps: number[] = []
@@ -99,15 +102,17 @@ export function nativeChatRevealStepFrames(
   }
   return {
     now: () => performance.now(),
-    stepCost: (ms) => {
-      stepCosts.push(Math.max(0, ms))
-      if (stepCosts.length > STEP_COST_SAMPLES) {
-        stepCosts.shift()
+    stepCost: (ms, exact = true) => {
+      for (const costs of exact ? [stepCosts, exactCosts] : [stepCosts]) {
+        costs.push(Math.max(0, ms))
+        if (costs.length > STEP_COST_SAMPLES) {
+          costs.shift()
+        }
       }
       // Once over the line the reply stays there, so it doesn't switch back and forth.
       redrawsWhole ||=
-        stepCosts.length === STEP_COST_SAMPLES &&
-        medianStepCost(stepCosts) > NATIVE_CHAT_WHOLE_REDRAW_STEP_MS
+        exactCosts.length === STEP_COST_SAMPLES &&
+        medianStepCost(exactCosts) > NATIVE_CHAT_WHOLE_REDRAW_STEP_MS
     },
     redrawsWhole: () => redrawsWhole,
     request: (step) => {

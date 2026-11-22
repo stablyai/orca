@@ -14,6 +14,7 @@ import {
   savePacedNativeChatTextDue,
   startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
+import { REVEAL_STEP_TIMED_EXACTLY, renderRevealStep } from './render-reveal-step'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-chat-growth-hold'
 
@@ -92,7 +93,7 @@ export function useMobileNativeChatPacedText(
         stepStartedAt.current = next.shown === onScreen.current ? null : performance.now()
         pace.current = next
         list?.drawn.set(rowKey, next)
-        setShown(next.shown)
+        renderRevealStep(() => setShown(next.shown))
       },
       frames,
       REVEAL_MS
@@ -101,7 +102,7 @@ export function useMobileNativeChatPacedText(
   useLayoutEffect(() => {
     onScreen.current = shown
     if (stepStartedAt.current !== null) {
-      frames.stepCost?.(performance.now() - stepStartedAt.current)
+      frames.stepCost?.(performance.now() - stepStartedAt.current, REVEAL_STEP_TIMED_EXACTLY)
       stepStartedAt.current = null
       if (frames.redrawsWhole?.() && !pace.current.savePaced) {
         pace.current = savePacedNativeChatText(pace.current, performance.now())

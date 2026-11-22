@@ -27,7 +27,10 @@ import {
 } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
-import { rowsBesideStreamedText } from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  noteStreamedTextRevision,
+  rowsBesideStreamedText
+} from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   noteRevisedInPlace,
   revisedInPlace
@@ -227,14 +230,26 @@ export function withNativeChatCutTurnNotices(
     placed = { agentName: context.agentName, after: cutTurnNoticesAfter(rows, context) }
     placedNotices.set(rows, placed)
   }
-  const noticesAfter = placed.after
-  if (noticesAfter.size === 0) {
+  if (placed.after.size === 0) {
     return items
   }
+  const noticed = rowsWithNotices(items, placed)
+  // A text-only revision's rows stay linked to its base's, so memos over them hold while it streams.
+  if (rows !== items) {
+    noteStreamedTextRevision(noticed, rowsWithNotices(rows, placed))
+  }
+  return noticed
+}
+
+function rowsWithNotices(
+  items: readonly AgentJournalRenderItem[],
+  placed: PlacedNotices
+): readonly AgentJournalRenderItem[] {
   const cached = noticedRows.get(items)
   if (cached?.placed === placed) {
     return cached.rows
   }
+  const noticesAfter = placed.after
   const revised = revisedInPlace(items)
   const prior = revised && noticedRows.get(revised.from)
   const noticed =
