@@ -1,3 +1,5 @@
+import type { ObservedBrowserGuestGesture } from '../input/browser-guest-input-gesture'
+
 export type NewBrowserTabPopupRequest = {
   url: string
   frameName: string
@@ -11,6 +13,20 @@ export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): 
     isBrowserTabPopupRequest(details) &&
     !isBlankBrowserPopupUrl(details.url) &&
     !isOAuthAuthorizationUrl(details.url)
+  )
+}
+
+// A link and a featureless `window.open(url, '_blank')` arrive alike; only the created child's opener tells them apart.
+// Only this desktop's user sees a child window; other opens stay tabs, as do background tabs (no child) and file links.
+export function waitsForPopupOpener(
+  details: NewBrowserTabPopupRequest,
+  observed: ObservedBrowserGuestGesture | null
+): boolean {
+  return (
+    observed?.byAgent === false &&
+    details.disposition === 'foreground-tab' &&
+    isNewBrowserTabPopupIntent(details) &&
+    normalizeBrowserPopupUrl(details.url) !== null
   )
 }
 

@@ -36,7 +36,3 @@ export const guardedSafeStorage = {
     return safeStorage.decryptString(cipher)
   }
 }
-
-export function resetSafeStorageWithholdForTests(): void {
-  withheldReason = null
-}

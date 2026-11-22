@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { credentialFileExists } from '../../credentials/credential-file-io'
+import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -36,16 +37,16 @@ export function getWorkspaceLoginPath(workspaceId: string): string {
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.login.enc`)
 }
 
-export function ensureOrcaDir(): void {
+export async function ensureOrcaDir(): Promise<void> {
   const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+  if (!(await credentialFileExists(dir))) {
+    await mkdir(dir, { recursive: true })
   }
 }
 
-export function ensureWorkspaceTokenDir(): void {
+export async function ensureWorkspaceTokenDir(): Promise<void> {
   const dir = getWorkspaceTokenDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+  if (!(await credentialFileExists(dir))) {
+    await mkdir(dir, { recursive: true })
   }
 }

@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { readCreatedWorkspaceLaunch } from '../../../../agent-launch/agent-launch-created-workspace'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
@@ -16,6 +17,7 @@ import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-termina
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import {
   projectSessionTabUnreadForClient,
+  sessionTabsShowAnyPane,
   sessionTabUnreadMarks
 } from './session-tab-unread-projection'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
@@ -154,11 +156,13 @@ export const SESSION_TAB_METHODS = [
         sentUnreadMarks = currentSnapshot
           ? sessionTabUnreadMarks(runtime, currentSnapshot, clientKind)
           : ''
+        const launch = readCreatedWorkspaceLaunch(runtime, projected.worktree)
+        const launchAware = launch ? { ...projected, initialSurfaceLaunch: launch } : projected
         emit({
           type,
           ...(type === 'snapshot'
-            ? tabDelta.full(withProofDelta(projected))
-            : tabDelta.update(withProofDelta(projected)))
+            ? tabDelta.full(withProofDelta(launchAware))
+            : tabDelta.update(withProofDelta(launchAware)))
         })
         if (!released) {
           runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
@@ -177,19 +181,16 @@ export const SESSION_TAB_METHODS = [
       // Verdicts move on every agent step; project and re-send only when this workspace's unread tabs change.
       const stopObservingVerdicts =
         clientKind === 'mobile'
-          ? runtime.onClientEvent(
-              (event) => {
-                if (
-                  event.type === 'agentListChanged' &&
-                  !released &&
-                  currentSnapshot &&
-                  sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
-                ) {
-                  emitSnapshot(project(currentSnapshot), 'updated')
-                }
-              },
-              { consumesTerminalSideEffects: false }
-            )
+          ? runtime.onAgentListChanged((paneKeys) => {
+              if (
+                !released &&
+                currentSnapshot &&
+                (paneKeys === null || sessionTabsShowAnyPane(currentSnapshot, paneKeys)) &&
+                sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
+              ) {
+                emitSnapshot(project(currentSnapshot), 'updated')
+              }
+            })
           : () => {}
       stopReprojecting = () => {
         stopObservingCapabilities()

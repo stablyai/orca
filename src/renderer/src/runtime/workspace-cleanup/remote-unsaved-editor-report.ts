@@ -15,7 +15,11 @@ import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runt
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
 import { subscribeRuntimeHostContactRegained } from '../hosts/connections/runtime-host-contact-regained'
-import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
+  type RuntimeStatuses,
+  subscribeStoreWithStatuses,
+  runtimeStatusSubscriptionsFor
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 type UnsavedReportState = WorktreeOperationRouteState & Pick<AppState, 'openFiles' | 'editorDrafts'>
 
@@ -164,15 +168,17 @@ export function installRemoteUnsavedEditorReport(): () => void {
   // A reloaded window must clear what its previous renderer reported over main's still-open socket.
   const known = new Set<string>()
   /** The hosts that just got their first report owed. */
+  const hostStatuses = runtimeStatusSubscriptionsFor(useAppStore)
   const noteEnvironments = (
-    state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>,
-    environmentIds: Iterable<string> = state.runtimeStatusByEnvironmentId.keys()
+    state: Pick<AppState, 'runtimeEnvironments'>,
+    statuses: RuntimeStatuses,
+    environmentIds: Iterable<string> = statuses.keys()
   ): string[] => {
     // Statuses can outlive a removed host; only configured hosts get a report.
     const noted: string[] = []
     let configured: Set<string> | undefined
     for (const environmentId of environmentIds) {
-      if (known.has(environmentId) || !state.runtimeStatusByEnvironmentId.has(environmentId)) {
+      if (known.has(environmentId) || !statuses.has(environmentId)) {
         continue
       }
       configured ??= new Set(state.runtimeEnvironments.map((environment) => environment.id))
@@ -184,15 +190,15 @@ export function installRemoteUnsavedEditorReport(): () => void {
     }
     return noted
   }
-  noteEnvironments(useAppStore.getState())
+  noteEnvironments(useAppStore.getState(), hostStatuses.readStatuses())
   sync()
   // Routing reads no host status, so a status write only owes a first report to a newly seen host.
-  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
-    syncHosts(noteEnvironments(useAppStore.getState(), change.ids))
+  const stopStatuses = hostStatuses.subscribeStatusChanges((change) =>
+    syncHosts(noteEnvironments(useAppStore.getState(), hostStatuses.readStatuses(), change.ids))
   )
-  const stopStore = useAppStore.subscribe((state, previous) => {
+  const stopStore = subscribeStoreWithStatuses(useAppStore, (state, previous, statuses) => {
     if (state.runtimeEnvironments !== previous.runtimeEnvironments) {
-      noteEnvironments(state)
+      noteEnvironments(state, statuses)
     }
     if (readReportInputs.some((read) => read(state) !== read(previous))) {
       sync()

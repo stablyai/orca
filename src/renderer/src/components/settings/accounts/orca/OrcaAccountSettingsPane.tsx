@@ -9,8 +9,10 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
+import { isOrcaCloudConsoleAvailable } from '../../../../../../shared/orca-cloud-console'
+import { OrcaConsoleRow } from './OrcaConsoleRow'
 
-function accountStatusCopy(
+export function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
   email: string | undefined,
   t: Translate = translate
@@ -61,6 +63,43 @@ function AccountBenefit({
   )
 }
 
+/** An Orca account's row: who it is, Connected, its status line, then the row's actions. */
+export function OrcaAccountHeader({
+  name,
+  connected,
+  line,
+  children
+}: {
+  name: string | undefined
+  connected: boolean
+  line: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <CircleUserRound className="size-5" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">
+            {name?.trim() || t('auto.components.settings.orcaAccount.account', 'Orca account')}
+          </p>
+          {connected ? (
+            <Badge variant="outline" className="text-[11px] text-muted-foreground">
+              <Check />
+              {t('auto.components.settings.orcaAccount.connected', 'Connected')}
+            </Badge>
+          ) : null}
+        </div>
+        <p className="truncate text-xs text-muted-foreground">{line}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function OrcaAccountSettingsPane(): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
@@ -87,27 +126,11 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <CircleUserRound className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium">
-                {authStatus?.cloud?.displayName?.trim() ||
-                  t('auto.components.settings.orcaAccount.account', 'Orca account')}
-              </p>
-              {connected ? (
-                <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                  <Check />
-                  {t('auto.components.settings.orcaAccount.connected', 'Connected')}
-                </Badge>
-              ) : null}
-            </div>
-            <p className="truncate text-xs text-muted-foreground">
-              {accountStatusCopy(authStatus?.state, authStatus?.cloud?.email, t)}
-            </p>
-          </div>
+        <OrcaAccountHeader
+          name={authStatus?.cloud?.displayName}
+          connected={connected}
+          line={accountStatusCopy(authStatus?.state, authStatus?.cloud?.email, t)}
+        >
           {connected ? (
             <Button
               type="button"
@@ -126,7 +149,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
             </OrcaSignInButton>
           )}
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
-        </div>
+        </OrcaAccountHeader>
+
+        {isOrcaCloudConsoleAvailable(authStatus) ? <OrcaConsoleRow /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

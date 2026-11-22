@@ -32,7 +32,6 @@ import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
-import type { Bot } from '../../../../shared/bot-types'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
@@ -41,7 +40,6 @@ import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { openBotFromSidebar } from './BotRow'
 import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
@@ -179,12 +177,6 @@ export function SidebarBotsSection({
       toggleCollapsedGroup(BOTS_GROUP_KEY)
     }
   }
-  // A face opens its bot as its row does, and unfolds the section so that row shows.
-  const openFromFace = (bot: Bot): void => {
-    if (openBotFromSidebar(bot, onOpenBot) && collapsed) {
-      toggleBots()
-    }
-  }
   const collapseLabel = collapsed
     ? t('bots.section.expand', 'Expand Bots')
     : t('bots.section.collapse', 'Collapse Bots')
@@ -221,10 +213,9 @@ export function SidebarBotsSection({
         }
         summary={
           collapsed ? (
-            <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
+            <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} onExpand={toggleBots} />
           ) : null
         }
-        // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
         actions={
           collapsed ? null : (
             <>

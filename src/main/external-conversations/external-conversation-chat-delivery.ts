@@ -172,7 +172,12 @@ export class ChatDeliveries {
     chats: ConversationChatHost | undefined,
     key: ConversationKey,
     chat: LinkableChat,
-    delivery: ConnectorMessage & { deliveryId: string; signal: AbortSignal }
+    delivery: ConnectorMessage & {
+      deliveryId: string
+      signal: AbortSignal
+      /** Images saved on this machine for the turn to see, beside its words. */
+      images?: readonly string[]
+    }
   ): Promise<Delivery> {
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}

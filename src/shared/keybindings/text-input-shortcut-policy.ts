@@ -1,6 +1,6 @@
 import { hasModifier } from './parser'
 import { isLatinShortcutKey } from './input'
-import { keybindingRunsInTextField } from './matching'
+import { keybindingRunsInChatPrompt, keybindingRunsInTextField } from './matching'
 import type { KeybindingActionId, KeybindingInput } from './types'
 
 export type TextShortcutInput = KeybindingInput & {
@@ -42,7 +42,9 @@ export function shortcutProducesText(input: TextShortcutInput, platform: NodeJS.
 export function nativeChatPromptClaimsShortcut(
   input: TextShortcutInput,
   platform: NodeJS.Platform,
-  actionId?: KeybindingActionId
+  actionId?: KeybindingActionId,
+  // A chat pane's composer, as opposed to the same editor reused elsewhere (item comments).
+  inChatPane = false
 ): boolean {
   if (textInputOwnsComposition(input)) {
     return true
@@ -62,7 +64,12 @@ export function nativeChatPromptClaimsShortcut(
   if (key && ['enter', 'escape', 'tab'].includes(key)) {
     return true
   }
-  if (actionId && keybindingRunsInTextField(actionId, input, platform)) {
+  if (
+    actionId &&
+    (inChatPane
+      ? keybindingRunsInChatPrompt(actionId, input, platform)
+      : keybindingRunsInTextField(actionId, input, platform))
+  ) {
     return false
   }
   if (

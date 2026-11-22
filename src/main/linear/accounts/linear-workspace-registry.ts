@@ -1,5 +1,6 @@
+import { credentialFileExists, inCredentialFileOrder } from '../../credentials/credential-file-io'
 // Keep account metadata readable without decrypting tokens or triggering keychain prompts.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -35,21 +36,24 @@ export function resetCredentialCaches(): void {
   workspaceLoginFileCache.clear()
 }
 
-export function getCredentialError(workspaceId: string): string | undefined {
-  return workspaceTokenFileCache.error(workspaceId) ?? workspaceLoginFileCache.error(workspaceId)
+export async function getCredentialError(workspaceId: string): Promise<string | undefined> {
+  return (
+    (await workspaceTokenFileCache.error(workspaceId)) ??
+    (await workspaceLoginFileCache.error(workspaceId))
+  )
 }
 
 export function resetWorkspaceFileCacheToEmpty(): void {
   workspaceFileCache.invalidate()
 }
 
-function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
+async function readWorkspaceFileFromDisk(): Promise<LinearWorkspaceFile> {
   const path = getWorkspaceFilePath()
-  if (!existsSync(path)) {
+  if (!(await credentialFileExists(path))) {
     return emptyWorkspaceFile()
   }
   try {
-    const raw = readFileSync(path, { encoding: 'utf-8' })
+    const raw = await readFile(path, { encoding: 'utf-8' })
     const parsed = JSON.parse(raw) as Partial<LinearWorkspaceFile>
     const workspaces = Array.isArray(parsed.workspaces)
       ? parsed.workspaces
@@ -79,46 +83,48 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
   }
 }
 
-export function getWorkspaceFile(): LinearWorkspaceFile {
-  return workspaceFileCache.get()
+export async function getWorkspaceFile(): Promise<LinearWorkspaceFile> {
+  return inCredentialFileOrder(getWorkspaceFilePath(), () => workspaceFileCache.get())
 }
 
-export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
-  ensureOrcaDir()
-  const persistedWorkspaces = file.workspaces.filter(
-    (workspace) => workspace.id !== LEGACY_WORKSPACE_ID
-  )
-  const selectableIds = new Set(persistedWorkspaces.map((workspace) => workspace.id))
-  if (hasStoredToken(LEGACY_WORKSPACE_ID)) {
-    selectableIds.add(LEGACY_WORKSPACE_ID)
-  }
-  const activeWorkspaceId =
-    file.activeWorkspaceId && selectableIds.has(file.activeWorkspaceId)
-      ? file.activeWorkspaceId
-      : (persistedWorkspaces[0]?.id ??
-        (selectableIds.has(LEGACY_WORKSPACE_ID) ? LEGACY_WORKSPACE_ID : null))
-  const selectedWorkspaceId =
-    file.selectedWorkspaceId === 'all'
-      ? 'all'
-      : file.selectedWorkspaceId && selectableIds.has(file.selectedWorkspaceId)
-        ? file.selectedWorkspaceId
-        : activeWorkspaceId
+export async function writeWorkspaceFile(file: LinearWorkspaceFile): Promise<void> {
+  return inCredentialFileOrder(getWorkspaceFilePath(), async () => {
+    await ensureOrcaDir()
+    const persistedWorkspaces = file.workspaces.filter(
+      (workspace) => workspace.id !== LEGACY_WORKSPACE_ID
+    )
+    const selectableIds = new Set(persistedWorkspaces.map((workspace) => workspace.id))
+    if (await hasStoredToken(LEGACY_WORKSPACE_ID)) {
+      selectableIds.add(LEGACY_WORKSPACE_ID)
+    }
+    const activeWorkspaceId =
+      file.activeWorkspaceId && selectableIds.has(file.activeWorkspaceId)
+        ? file.activeWorkspaceId
+        : (persistedWorkspaces[0]?.id ??
+          (selectableIds.has(LEGACY_WORKSPACE_ID) ? LEGACY_WORKSPACE_ID : null))
+    const selectedWorkspaceId =
+      file.selectedWorkspaceId === 'all'
+        ? 'all'
+        : file.selectedWorkspaceId && selectableIds.has(file.selectedWorkspaceId)
+          ? file.selectedWorkspaceId
+          : activeWorkspaceId
 
-  const next: LinearWorkspaceFile = {
-    version: 1,
-    activeWorkspaceId,
-    selectedWorkspaceId,
-    workspaces: persistedWorkspaces
-  }
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(next, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
+    const next: LinearWorkspaceFile = {
+      version: 1,
+      activeWorkspaceId,
+      selectedWorkspaceId,
+      workspaces: persistedWorkspaces
+    }
+    await writeFile(getWorkspaceFilePath(), JSON.stringify(next, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600
+    })
+    workspaceFileCache.invalidate()
   })
-  workspaceFileCache.invalidate()
 }
 
-export function getLegacyWorkspace(): LinearWorkspace | null {
-  if (!hasStoredToken(LEGACY_WORKSPACE_ID)) {
+export async function getLegacyWorkspace(): Promise<LinearWorkspace | null> {
+  if (!(await hasStoredToken(LEGACY_WORKSPACE_ID))) {
     return null
   }
   const viewer = getLegacyViewer()
@@ -133,12 +139,15 @@ export function getLegacyWorkspace(): LinearWorkspace | null {
   }
 }
 
-export function getWorkspaceState(): LinearWorkspaceFile {
-  const file = getWorkspaceFile()
-  const legacyWorkspace = getLegacyWorkspace()
+export async function getWorkspaceState(): Promise<LinearWorkspaceFile> {
+  const file = await getWorkspaceFile()
+  const legacyWorkspace = await getLegacyWorkspace()
+  const presence = await Promise.all(
+    file.workspaces.map((workspace) => hasStoredToken(workspace.id))
+  )
   const workspaces = [
     ...(legacyWorkspace ? [legacyWorkspace] : []),
-    ...file.workspaces.filter((workspace) => hasStoredToken(workspace.id))
+    ...file.workspaces.filter((_, index) => presence[index])
   ]
   const activeWorkspaceId =
     file.activeWorkspaceId &&
@@ -161,19 +170,29 @@ export function getWorkspaceState(): LinearWorkspaceFile {
   }
 }
 
-export function hasStoredToken(workspaceId?: string): boolean {
+export async function hasStoredToken(workspaceId?: string): Promise<boolean> {
   if (!workspaceId) {
-    return getWorkspaceState().workspaces.length > 0
+    return (await getWorkspaceState()).workspaces.length > 0
   }
-  return workspaceTokenFileCache.has(workspaceId) || workspaceLoginFileCache.has(workspaceId)
+  return (
+    (await workspaceTokenFileCache.has(workspaceId)) ||
+    (await workspaceLoginFileCache.has(workspaceId))
+  )
 }
 
 // keepActive: a workspace added in the background (Connect Linear's login) leaves the active one.
-export function upsertWorkspace(
+export async function upsertWorkspace(
   workspace: LinearWorkspace,
   options: { select?: boolean; keepActive?: boolean } = {}
-): void {
-  const file = getWorkspaceFile()
+): Promise<void> {
+  return inWorkspaceRegistryOrder((upsert) => upsert(workspace, options))
+}
+
+async function upsertWorkspaceInOrder(
+  workspace: LinearWorkspace,
+  options: { select?: boolean; keepActive?: boolean } = {}
+): Promise<void> {
+  const file = await getWorkspaceFile()
   const current = file.workspaces.find((entry) => entry.id === workspace.id)
   const credentialRevision = (current?.credentialRevision ?? 0) + 1
   const workspaceWithRevision = { ...workspace, credentialRevision }
@@ -186,7 +205,7 @@ export function upsertWorkspace(
     : file.selectedWorkspaceId && file.selectedWorkspaceId !== LEGACY_WORKSPACE_ID
       ? file.selectedWorkspaceId
       : workspace.id
-  writeWorkspaceFile({
+  await writeWorkspaceFile({
     version: 1,
     activeWorkspaceId: options.keepActive ? file.activeWorkspaceId : workspace.id,
     selectedWorkspaceId: options.keepActive ? file.selectedWorkspaceId : selectedWorkspaceId,
@@ -194,11 +213,11 @@ export function upsertWorkspace(
   })
 }
 
-export function resolveWorkspaceId(workspaceId?: string | null): string | null {
+export async function resolveWorkspaceId(workspaceId?: string | null): Promise<string | null> {
   if (workspaceId && workspaceId !== 'all') {
     return workspaceId
   }
-  const state = getWorkspaceState()
+  const state = await getWorkspaceState()
   if (
     state.selectedWorkspaceId &&
     state.selectedWorkspaceId !== 'all' &&
@@ -213,4 +232,12 @@ export function resolveWorkspaceId(workspaceId?: string | null): string | null {
     return state.activeWorkspaceId
   }
   return state.workspaces[0]?.id ?? null
+}
+
+export function inWorkspaceRegistryOrder<T>(
+  run: (upsert: typeof upsertWorkspaceInOrder) => Promise<T>
+): Promise<T> {
+  return inCredentialFileOrder(`${getWorkspaceFilePath()}.registry`, () =>
+    run(upsertWorkspaceInOrder)
+  )
 }

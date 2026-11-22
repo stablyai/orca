@@ -14,7 +14,10 @@ import { resolveWindowTabIdForHostTab } from '../session-tabs/host-session-tab-t
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { isBotPage } from '@/components/bots/bot-workspace'
-import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
+  findTabByIdOrChatAlias,
+  structuredAgentSessionIdOfTab
+} from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 import { isStructuredAgentSessionHostTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
@@ -184,9 +187,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
     window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
-      const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (item) => item.id === localTabId
-      )
+      const tab = findTabByIdOrChatAlias(store.unifiedTabsByWorktree[worktreeId], localTabId)
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
       // Courtesy completion reveals must not undo user navigation; explicit notification clicks may reveal before async activation updates the active ID.
       if (

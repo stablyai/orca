@@ -18,7 +18,6 @@ import { createInterface } from 'node:readline'
 import { zstdCompressSync } from 'node:zlib'
 import { spawnProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
 const ROLLOUT = 'rollout-2026-11-14T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
@@ -54,13 +53,17 @@ async function holdThreadLock(lock: string): Promise<() => Promise<void>> {
 }
 
 const roots: string[] = []
-function fixture(platform: NodeJS.Platform = 'linux') {
+// Without a platform, the home is one Orca manages on this host, as share runs it in the app.
+function fixture(platform?: NodeJS.Platform) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'codex-account-history-')))
   roots.push(root)
   const store = join(root, 'store')
   const account = join(root, 'account')
   mkdirSync(join(store, 'sessions', DAY), { recursive: true })
   mkdirSync(join(account, 'sessions', DAY), { recursive: true })
+  if (!platform && process.platform === 'win32') {
+    writeFileSync(join(account, '.orca-managed-home'), 'account-1\n')
+  }
   const pending = join(root, 'index-pending')
   const warnings: unknown[] = []
   const share = () =>
@@ -69,7 +72,7 @@ function fixture(platform: NodeJS.Platform = 'linux') {
       storeHome: store,
       sqliteHome: store,
       indexPendingDir: pending,
-      platform,
+      platform: platform ?? process.platform,
       onWarning: (error) => warnings.push(error)
     })
   const unshare = () =>
@@ -148,7 +151,7 @@ describe('shareCodexAccountHistory', () => {
     )
   })
 
-  it('keeps one form of a rollout in the store, sets the other aside and records it', async () => {
+  it('keeps one form of a rollout in the store and sets the other aside', async () => {
     const f = fixture()
     const at = (path: string, seconds: number) => utimesSync(path, seconds, seconds)
     const compressed = zstdCompressSync(Buffer.from('plain\n'))
@@ -172,40 +175,18 @@ describe('shareCodexAccountHistory', () => {
     writeFileSync(join(f.account, 'state_5.sqlite'), 'db')
 
     expect(await f.share()).toBe('shared')
-    await checkCodexHistoryLeftBehind({
-      accountHome: f.account,
-      storeHome: f.store,
-      shouldStop: () => false
-    })
 
     expect(readdirSync(storeDay).sort()).toEqual([`${ROLLOUT}.zst`, OTHER, `${OTHER}.zst`])
     expect(readdirSync(join(f.store, 'sessions', '2026', '11', '15'))).toEqual([`${ROLLOUT}.zst`])
+    const setAside = join(f.account, '.orca-set-aside-rollouts', 'sessions', '2026', '11')
+    expect(readdirSync(join(setAside, '14'))).toEqual([ROLLOUT])
+    expect(readdirSync(join(setAside, '15'))).toEqual([ROLLOUT])
     const manifest = JSON.parse(readFileSync(join(f.account, '.orca-history-cleanup.json'), 'utf8'))
     expect(manifest).toMatchObject({
       version: 1,
       sharedPasses: 1,
-      databases: [{ path: 'state_5.sqlite', bytes: 2 }],
-      storeTwinPairs: [`sessions/2026/11/14/${OTHER}`]
+      databases: [{ path: 'state_5.sqlite', bytes: 2 }]
     })
-    const checked = {
-      kind: 'set-aside-twin',
-      check: {
-        sameContent: true,
-        sha256: 'dacf36547c7774a0a170806363b5d412991fbc0d6260b2c00b1d3a80a816c23f'
-      }
-    }
-    expect([...manifest.rollouts].sort((a, b) => a.path.localeCompare(b.path))).toMatchObject([
-      {
-        ...checked,
-        path: `.orca-set-aside-rollouts/sessions/2026/11/14/${ROLLOUT}`,
-        storePath: `sessions/2026/11/14/${ROLLOUT}.zst`
-      },
-      {
-        ...checked,
-        path: `.orca-set-aside-rollouts/sessions/2026/11/15/${ROLLOUT}`,
-        storePath: `sessions/2026/11/15/${ROLLOUT}.zst`
-      }
-    ])
   })
 
   it('renames the ownership marker before a Windows home gets junctions', async () => {

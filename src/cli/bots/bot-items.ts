@@ -9,6 +9,7 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
+import { resolve } from 'node:path'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
 import { printResult } from '../output/command-result-output'
 import {
@@ -71,6 +72,12 @@ function optional(name: string, value: string | undefined): Record<string, strin
   return value === undefined ? {} : { [name]: value }
 }
 
+/** `--file`, each resolved against the caller's folder: the host copies them from its own disk. */
+function files(flags: Flags, cwd: string): { files?: string[] } {
+  const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
+  return paths.length > 0 ? { files: paths } : {}
+}
+
 export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
   'bot item add': async (ctx) => {
     const { flags, cwd } = ctx
@@ -99,14 +106,18 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { status: statusFlag(status) } : {}),
       ...optional('note', await readTextOrFileFlag(flags, cwd, 'note', false)),
       ...optional('reason', await readTextOrFileFlag(flags, cwd, 'reason', false)),
-      ...(ask ? botItemAskParams(ask, comment) : optional('comment', comment))
+      ...(ask ? botItemAskParams(ask, comment) : optional('comment', comment)),
+      ...files(flags, cwd)
     })
   },
   'bot item comment': async (ctx) => {
     const { flags, cwd } = ctx
+    const attached = files(flags, cwd)
     await write(ctx, 'bots.items.comment', {
       item: itemId(flags),
-      text: await readTextOrFileFlag(flags, cwd, 'text', true)
+      // Files alone make a comment.
+      text: (await readTextOrFileFlag(flags, cwd, 'text', !attached.files)) ?? '',
+      ...attached
     })
   },
   'bot item done': async (ctx) => {

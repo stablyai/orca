@@ -15,7 +15,8 @@
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 6 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
-47 src/main/bots/bot-group-store.ts
+13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
+50 src/main/bots/bot-group-store.ts # +3: one indexed remote-ask insert per post on append and its by-request lookup
 18 src/main/bots/bot-work-store.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts
@@ -29,7 +30,7 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 22 src/main/native-chat/agent-session-journal/database/journal-database.ts
-8 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
+7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: retired-epoch pending table, triggers and settle, run on the journal SQL worker
 5 src/main/native-chat/agent-session-journal/database/journal-text-tail-schema.ts
