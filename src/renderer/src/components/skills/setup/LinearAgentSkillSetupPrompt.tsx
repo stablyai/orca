@@ -19,7 +19,6 @@ import {
 import {
   dismissLinearAgentSkillSetupReminderToast,
   resetLinearAgentSkillSetupReminderToastForRuntime,
-  resetLinearAgentSkillSetupReminderToastState,
   snoozeLinearAgentSkillSetupReminderToast,
   useLinearAgentSkillSetupReminderToast
 } from './linear-agent-skill-setup-reminder-toast'
@@ -37,12 +36,6 @@ import { useTranslate } from '@/i18n/use-translate'
 const LinearAgentSkillSetupDialog = lazyWithRetry(() => import('./LinearAgentSkillSetupDialog'), {
   reloadKey: 'linear-agent-skill-setup-dialog'
 })
-
-export const _linearAgentSkillSetupPromptInternalsForTests = {
-  resetSessionReminders(): void {
-    resetLinearAgentSkillSetupReminderToastState()
-  }
-}
 
 type LinearAgentSkillSetupPromptProps = {
   linked: boolean

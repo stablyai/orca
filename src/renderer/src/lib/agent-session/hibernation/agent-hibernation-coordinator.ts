@@ -241,10 +241,3 @@ export function stopAgentHibernationCoordinator(): void {
   coordinator.confirmationState = {}
   coordinator.refusedCandidates.clear()
 }
-
-export function resetAgentHibernationCoordinatorForTests(): void {
-  stopAgentHibernationCoordinator()
-  coordinator.shuttingDownCandidateIds.clear()
-  coordinator.tickInFlight = false
-  coordinator.now = () => Date.now()
-}

@@ -8,6 +8,7 @@ import { useMobileNativeChatProjection } from './transcript/projection/use-mobil
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import { useMobileNativeChatMentionFiles } from './composer/menus/use-mobile-native-chat-mention-files'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
@@ -186,6 +187,7 @@ function MobileNativeChatOverlayContent({
         : null,
     [itemSource, fullContent.detail, load]
   )
+  const mentionFiles = useMobileNativeChatMentionFiles(controller, worktreePath)
   const queuedComposerContext = useMemo(
     () => ({
       agent,
@@ -195,8 +197,7 @@ function MobileNativeChatOverlayContent({
       ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
+      ...mentionFiles,
       onError: (message: string) => controller.reportQueuedEditError?.(message),
       onMicPress,
       micActive,
@@ -212,8 +213,7 @@ function MobileNativeChatOverlayContent({
       controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
+      mentionFiles,
       controller.reportQueuedEditError,
       onMicPress,
       micActive,
@@ -383,8 +383,7 @@ function MobileNativeChatOverlayContent({
                       }
                       onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
-                      filePaths={controller.nativeChatFilePaths}
-                      onNeedFiles={controller.loadNativeChatFiles}
+                      {...mentionFiles}
                       skillDiscovery={controller.nativeChatSkills}
                       onNeedSkills={controller.loadNativeChatSkills}
                       sessionOptions={controller.nativeChatSessionOptions}

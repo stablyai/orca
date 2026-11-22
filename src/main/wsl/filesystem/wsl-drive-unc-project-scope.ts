@@ -43,6 +43,27 @@ type WslDriveUncScopeState = {
   projectGroups: readonly ProjectGroup[]
 }
 
+/** A folder workspace row alone: another host may hold one with the same id. */
+export function isLocalFolderWorkspace(
+  state: Pick<WslDriveUncScopeState, 'repos' | 'projectGroups'>,
+  workspace: FolderWorkspace
+): boolean {
+  return (
+    resolveFolderWorkspaceHost(
+      {
+        repos: [...state.repos],
+        projectGroups: [...state.projectGroups],
+        folderWorkspaces: [workspace]
+      },
+      workspace.id
+    ).kind === 'local'
+  )
+}
+
+export function isLocalRepo(repo: Repo): boolean {
+  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+}
+
 export function collectWslDriveUncScope(
   state: WslDriveUncScopeState,
   distro: string,
@@ -86,11 +107,7 @@ export function collectWslDriveUncScope(
       scope.repoIds.push(repo.id)
     }
   }
-  const hostState = { repos: [...state.repos], projectGroups: [...state.projectGroups] }
-  // This row alone: another host may hold a folder workspace with the same id.
-  const isLocal = (workspace: FolderWorkspace): boolean =>
-    resolveFolderWorkspaceHost({ ...hostState, folderWorkspaces: [workspace] }, workspace.id)
-      .kind === 'local'
+  const isLocal = (workspace: FolderWorkspace): boolean => isLocalFolderWorkspace(state, workspace)
   const claimedFolderPaths = new Set(
     state.folderWorkspaces
       .filter((workspace) => isLocal(workspace))
@@ -127,18 +144,20 @@ export function collectWslDriveUncScope(
  */
 function refuseOverlaps(
   scope: WslDriveUncScope,
-  state: Pick<WslDriveUncScopeState, 'repos' | 'folderWorkspaces'>,
+  state: WslDriveUncScopeState,
   distro: string
 ): void {
   const projects = [
     ...state.repos.map((repo) => ({
       kind: 'repo' as const,
       id: repo.id,
+      local: isLocalRepo(repo),
       roots: driveRoots(wslMoveRepoPaths(repo), distro)
     })),
     ...state.folderWorkspaces.map((workspace) => ({
       kind: 'folder-workspace' as const,
       id: workspace.id,
+      local: isLocalFolderWorkspace(state, workspace),
       roots: driveRoots([workspace.folderPath], distro)
     }))
   ]
@@ -149,14 +168,19 @@ function refuseOverlaps(
     // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncRefusedSplitBy.
     const refusedRoots = scope.refused
       .filter((entry) => entry.reason !== 'duplicate-windows-project')
-      // An accepted id is another host's row refused under the same folder workspace id.
-      .filter((entry) => !accepted(entry.kind).includes(entry.id))
       .flatMap((entry) =>
-        projects.filter((project) => project.kind === entry.kind && project.id === entry.id)
+        projects.filter(
+          (project) =>
+            project.kind === entry.kind &&
+            project.id === entry.id &&
+            // An accepted id's local row is the converting one; only another host's row is refused.
+            !(project.local && accepted(entry.kind).includes(entry.id))
+        )
       )
       .flatMap((project) => project.roots)
     for (const project of projects) {
       if (
+        project.local &&
         accepted(project.kind).includes(project.id) &&
         project.roots.some((root) => refusedRoots.some((refused) => nests(root, refused)))
       ) {
@@ -234,9 +258,15 @@ export function wslDriveUncRefusedSplitBy(
   const convertingFolders = new Set(
     driveRoots(
       [
-        ...state.repos.filter(({ id }) => converting.repoIds.includes(id)).map(({ path }) => path),
+        ...state.repos
+          .filter((repo) => converting.repoIds.includes(repo.id) && isLocalRepo(repo))
+          .map(({ path }) => path),
         ...state.folderWorkspaces
-          .filter(({ id }) => converting.folderWorkspaceIds.includes(id))
+          .filter(
+            (folder) =>
+              converting.folderWorkspaceIds.includes(folder.id) &&
+              isLocalFolderWorkspace(state, folder)
+          )
           .map(({ folderPath }) => folderPath)
       ],
       distro

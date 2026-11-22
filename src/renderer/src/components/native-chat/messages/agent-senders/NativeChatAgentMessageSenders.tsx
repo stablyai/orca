@@ -6,7 +6,7 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { NATIVE_CHAT_INLINE_CHIP } from '../events/native-chat-inline-chip'
+import { NATIVE_CHAT_INLINE_CHIP, NATIVE_CHAT_INLINE_NAME } from '../events/native-chat-inline-chip'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -190,9 +190,7 @@ export function SenderChip({
   if (!opens || !chatWorktreeId) {
     return (
       <SenderTooltip label={label}>
-        <span className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground">
-          {label}
-        </span>
+        <span className={NATIVE_CHAT_INLINE_NAME}>{label}</span>
       </SenderTooltip>
     )
   }
