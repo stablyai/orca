@@ -13,16 +13,20 @@ export function withRuntimeUnreachableHint(
   if (!UNREACHABLE_RE.test(message)) {
     return message
   }
-  const hostHint = `${message} ${environment.name} isn't answering; make sure Orca is running and connected on that host, then retry the command.`
+  const hostHint = `${environment.name} isn't answering; make sure Orca is running and connected on that host, then retry the command.`
+  if (message.includes(hostHint)) {
+    return message
+  }
+  const messageWithHostHint = `${message} ${hostHint}`
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'network':
-      return withRemoteRuntimeTailscaleHint(hostHint, endpoint)
+      return withRemoteRuntimeTailscaleHint(messageWithHostHint, endpoint)
     case 'ssh':
       // An SSH tunnel already crosses networks; Tailscale cannot help it.
-      return hostHint
+      return messageWithHostHint
     case 'wsl':
       // WSL is reached locally through wsl.exe; a Tailscale hint cannot help.
-      return `${hostHint} The Orca server in the WSL distro ${host.deployment.distro} needs reconnecting in Settings → Remote Orca Servers → WSL hosts.`
+      return `${messageWithHostHint} The Orca server in the WSL distro ${host.deployment.distro} needs reconnecting in Settings → Remote Orca Servers → WSL hosts.`
   }
 }
