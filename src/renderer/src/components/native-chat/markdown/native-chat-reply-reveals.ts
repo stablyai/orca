@@ -19,3 +19,10 @@ export function useNativeChatReplyReveals(
   const [state] = useState(createNativeChatReplyRevealTracker)
   return trackNativeChatReplyRows(state, rowKeys, loadedMessageIds)
 }
+
+/** Reveal memory for text drawn outside the transcript rows (the live reasoning line), kept for the
+ *  owner's lifetime so collapsing and reopening resumes it, a reply's fallback included. */
+export function useNativeChatHeldReveals(): NativeChatReplyReveals {
+  const [reveals] = useState<NativeChatReplyReveals>(() => ({ begun: new Set(), drawn: new Map() }))
+  return reveals
+}

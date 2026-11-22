@@ -34,3 +34,11 @@ export function useMobileNativeChatReplyReveals(
   const reducedMotion = useReducedMotionEnabled() !== false
   return useMemo(() => ({ ...reveals, reducedMotion }), [reveals, reducedMotion])
 }
+
+/** Reveal memory for reasoning drawn under a row or live line, kept for that owner's lifetime so
+ *  collapsing and reopening resumes it, a reply's fallback included. */
+export function useMobileNativeChatHeldReveals(): MobileNativeChatReplyReveals {
+  const [held] = useState(() => ({ begun: new Set<string>(), drawn: new Map() }))
+  const reducedMotion = useReducedMotionEnabled() !== false
+  return useMemo(() => ({ ...held, reducedMotion }), [held, reducedMotion])
+}

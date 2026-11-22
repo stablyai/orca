@@ -14,6 +14,10 @@ import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { useMobileNativeChatPacedText } from './use-mobile-native-chat-paced-text'
+import {
+  MobileNativeChatReplyRevealsContext,
+  useMobileNativeChatHeldReveals
+} from '../tool-results/mobile-native-chat-reply-reveals'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
@@ -57,6 +61,8 @@ export function MobileNativeChatReasoningRow({
   onToggle?: (key: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
+  // The body unmounts when collapsed; this row outlives it, so its reveal resumes on reopening.
+  const heldReveals = useMobileNativeChatHeldReveals()
   useMobileColorScheme()
   const [localExpanded, setLocalExpanded] = useState(false)
   const expanded = onToggle ? transcriptExpanded : localExpanded
@@ -84,14 +90,16 @@ export function MobileNativeChatReasoningRow({
         </View>
       </Pressable>
       {expanded ? (
-        <MobileNativeChatReasoningBody
-          positionKey={nativeChatReasoningDisclosureKey(message.id)}
-          markdown={markdown}
-          streaming={live}
-          savedRevision={message.journalRevision}
-          fontScale={fontScale}
-          onLongPress={onLongPress}
-        />
+        <MobileNativeChatReplyRevealsContext.Provider value={heldReveals}>
+          <MobileNativeChatReasoningBody
+            positionKey={nativeChatReasoningDisclosureKey(message.id)}
+            markdown={markdown}
+            streaming={live}
+            savedRevision={message.journalRevision}
+            fontScale={fontScale}
+            onLongPress={onLongPress}
+          />
+        </MobileNativeChatReplyRevealsContext.Provider>
       ) : null}
     </View>
   )

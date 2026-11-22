@@ -10,6 +10,10 @@ import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
+import {
+  MobileNativeChatReplyRevealsContext,
+  useMobileNativeChatHeldReveals
+} from '../tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-turn-disclosure'
 
@@ -23,6 +27,8 @@ export function MobileNativeChatLiveLine({
   onToggleReasoning: (key: string) => void
   fontScale: number
 }): React.JSX.Element {
+  // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
+  const heldReveals = useMobileNativeChatHeldReveals()
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { reasoning, reasoningExpanded } = line
@@ -62,14 +68,16 @@ export function MobileNativeChatLiveLine({
       </Pressable>
       {reasoning && open ? (
         <View style={styles.body}>
-          <MobileNativeChatReasoningBody
-            positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
-            markdown={reasoning.markdown}
-            streaming
-            savedRevision={reasoning.message.journalRevision}
-            fontScale={fontScale}
-            onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
-          />
+          <MobileNativeChatReplyRevealsContext.Provider value={heldReveals}>
+            <MobileNativeChatReasoningBody
+              positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
+              markdown={reasoning.markdown}
+              streaming
+              savedRevision={reasoning.message.journalRevision}
+              fontScale={fontScale}
+              onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
+            />
+          </MobileNativeChatReplyRevealsContext.Provider>
         </View>
       ) : null}
     </View>

@@ -1,3 +1,7 @@
+import {
+  NativeChatReplyRevealsContext,
+  useNativeChatHeldReveals
+} from '../../markdown/native-chat-reply-reveals'
 import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
@@ -47,6 +51,8 @@ export function NativeChatTurnActivityLine({
   const disclosure = useNativeChatDisclosure(disclosureKey, false)
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
+  // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
+  const heldReveals = useNativeChatHeldReveals()
 
   return (
     <Collapsible open={open} onOpenChange={disclosure.setOpen}>
@@ -77,12 +83,14 @@ export function NativeChatTurnActivityLine({
       </div>
       {reasoning ? (
         <CollapsibleContent>
-          <NativeChatReasoningBody
-            rowKey={disclosureKey}
-            markdown={reasoning.markdown}
-            streaming
-            savedRevision={reasoning.message.journalRevision}
-          />
+          <NativeChatReplyRevealsContext.Provider value={heldReveals}>
+            <NativeChatReasoningBody
+              rowKey={disclosureKey}
+              markdown={reasoning.markdown}
+              streaming
+              savedRevision={reasoning.message.journalRevision}
+            />
+          </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>
       ) : null}
     </Collapsible>
