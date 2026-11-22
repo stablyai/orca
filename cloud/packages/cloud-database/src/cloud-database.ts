@@ -26,7 +26,51 @@ export type CloudDatabase = {
   tryLockScope(key: string): Promise<boolean>
   // Shared try-lock: holders of one key coexist, and an exclusive holder excludes them all.
   tryLockSharedScope(key: string): Promise<boolean>
+  // Runs fn after this transaction commits; never on rollback, and a retried attempt drops the
+  // earlier attempt's. A nested transaction joins the outer one. Throws outside a transaction.
+  // A throwing fn is logged and ignored: the commit stands.
+  afterCommit(fn: () => void): void
   close(): Promise<void>
+}
+
+// One transaction attempt's afterCommit callbacks.
+class AfterCommitQueue {
+  private callbacks: (() => void)[] | null = []
+
+  add(fn: () => void): void {
+    if (!this.callbacks) {
+      throw new Error('after_commit_requires_open_transaction')
+    }
+    this.callbacks.push(fn)
+  }
+
+  discard(): void {
+    this.callbacks = null
+  }
+
+  run(): void {
+    const callbacks = this.callbacks ?? []
+    this.callbacks = null
+    for (const fn of callbacks) {
+      try {
+        const result: unknown = fn()
+        if (result instanceof Promise) {
+          result.catch(logAfterCommitFailure)
+        }
+      } catch (error) {
+        logAfterCommitFailure(error)
+      }
+    }
+  }
+}
+
+function logAfterCommitFailure(error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      event: 'orca_cloud_database_after_commit_failed',
+      error: error instanceof Error ? error.name : typeof error
+    })
+  )
 }
 
 function postgresSql(sql: string): string {
@@ -41,7 +85,10 @@ function returnsRows(sql: string): boolean {
 class SqliteTransaction implements CloudDatabase {
   readonly dialect = 'sqlite' as const
 
-  constructor(protected readonly database: DatabaseSync) {}
+  constructor(
+    protected readonly database: DatabaseSync,
+    private readonly afterCommitQueue?: AfterCommitQueue
+  ) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const statement = this.database.prepare(sql)
@@ -68,6 +115,13 @@ class SqliteTransaction implements CloudDatabase {
     return true
   }
 
+  afterCommit(fn: () => void): void {
+    if (!this.afterCommitQueue) {
+      throw new Error('after_commit_requires_transaction')
+    }
+    this.afterCommitQueue.add(fn)
+  }
+
   async close(): Promise<void> {}
 }
 
@@ -85,20 +139,24 @@ class SqliteDatabase extends SqliteTransaction {
     let release!: () => void
     this.tail = new Promise((resolve) => (release = resolve))
     await previous
+    const afterCommit = new AfterCommitQueue()
+    let result: T
     try {
       this.database.exec('BEGIN IMMEDIATE')
-      const transaction = new SqliteTransaction(this.database)
+      const transaction = new SqliteTransaction(this.database, afterCommit)
       try {
-        const result = await operation(transaction)
+        result = await operation(transaction)
         this.database.exec('COMMIT')
-        return result
       } catch (error) {
+        afterCommit.discard()
         this.database.exec('ROLLBACK')
         throw error
       }
     } finally {
       release()
     }
+    afterCommit.run()
+    return result
   }
 
   override async close(): Promise<void> {
@@ -110,7 +168,10 @@ class SqliteDatabase extends SqliteTransaction {
 class PostgresTransaction implements CloudDatabase {
   readonly dialect = 'postgres' as const
 
-  constructor(private readonly client: pg.ClientBase) {}
+  constructor(
+    private readonly client: pg.ClientBase,
+    private readonly afterCommitQueue?: AfterCommitQueue
+  ) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const result = await this.client.query(postgresSql(sql), params)
@@ -143,6 +204,13 @@ class PostgresTransaction implements CloudDatabase {
     return row?.locked === true
   }
 
+  afterCommit(fn: () => void): void {
+    if (!this.afterCommitQueue) {
+      throw new Error('after_commit_requires_transaction')
+    }
+    this.afterCommitQueue.add(fn)
+  }
+
   async close(): Promise<void> {}
 }
 
@@ -151,15 +219,19 @@ export async function runClientTransaction<T>(
   client: pg.ClientBase,
   operation: (transaction: CloudDatabase) => Promise<T>
 ): Promise<T> {
+  const afterCommit = new AfterCommitQueue()
+  let result: T
   try {
     await client.query('BEGIN')
-    const result = await operation(new PostgresTransaction(client))
+    result = await operation(new PostgresTransaction(client, afterCommit))
     await client.query('COMMIT')
-    return result
   } catch (error) {
+    afterCommit.discard()
     await client.query('ROLLBACK').catch(() => undefined)
     throw error
   }
+  afterCommit.run()
+  return result
 }
 
 function retryablePostgresTransactionError(error: unknown): boolean {
@@ -231,6 +303,10 @@ class PostgresDatabase implements CloudDatabase {
 
   async tryLockSharedScope(): Promise<boolean> {
     throw new Error('lock_quota_scope_requires_transaction')
+  }
+
+  afterCommit(): void {
+    throw new Error('after_commit_requires_transaction')
   }
 
   async close(): Promise<void> {
