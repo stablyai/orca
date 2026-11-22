@@ -735,7 +735,8 @@
       },
       "userAgent": {
         "title": "瀏覽器識別設定",
-        "description": "為所有瀏覽器設定檔與頁面選擇使用者代理程式。重新啟動後才會生效。",
+        "descriptionPageKinds": "為這台電腦顯示的所有頁面選擇使用者代理程式，包括 SSH 頁面和設為「目前裝置」的遠端頁面。重新啟動後才會生效。",
+        "serverPagesNote": "「伺服器（串流）」頁面使用該伺服器的設定；請在伺服器上執行 orca browser identity set 變更。",
         "remoteUnsupported": "使用 Orca CLI 管理遠端主機上的瀏覽器識別設定。",
         "loading": "載入中…",
         "resetRequired": "變更瀏覽器識別設定前，必須先手動重設識別資料。",
@@ -19687,6 +19688,7 @@
         "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
+        "moreActions": "更多操作",
         "moveChanged": "佇列在移動前已變更。請重新拖曳訊息。",
         "reorderHint": "拖曳以重新排序，或使用上、下方向鍵。",
         "reorderMessage": "重新排序訊息",
@@ -21487,7 +21489,8 @@
         "agentNotSupported": "不支援此代理程式"
       },
       "consentTranscriptIndex": "搜尋會比對工作階段詳細資料和訊息預覽。若要搜尋完整對話，請啟用全文搜尋（為本機記錄建立索引，不遮蔽內容）。配對裝置也可以搜尋這些內容。",
-      "noMatchesToShow": "沒有可顯示的符合工作階段。"
+      "noMatchesToShow": "沒有可顯示的符合工作階段。",
+      "titleMatchesOnly": "沒有全文符合項目。正在顯示標題或詳細資料符合的工作階段。"
     }
   },
   "sessionHistory": {
@@ -23532,19 +23535,20 @@
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
       "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
-      "every2h": "每 2 小時",
-      "every4h": "每 4 小時",
       "lookFirst": "第一次聊天後 · 之後 {{every}}",
-      "mornings": "每天早上",
       "tidyUp": "整理記憶",
-      "twiceDaily": "每天兩次",
       "lastNeededSignIn": "上次執行因需要登入而停止",
       "stopped": "已停止",
       "lookAroundSettings": "四處檢視設定",
       "dueNow": "已到執行時間",
       "runsEvery": "{{every}} 執行",
       "tidySettings": "整理記憶設定",
-      "needsSignIn": "需要登入"
+      "needsSignIn": "需要登入",
+      "every4hWindow": "{{from}}至{{to}}，每 4 小時",
+      "every2hWindow": "{{from}}至{{to}}，每 2 小時",
+      "twiceDailyAt": "每天兩次，{{first}}和{{second}}",
+      "morningsAt": "每天早上{{time}}",
+      "weekdays": "平日，{{schedule}}"
     },
     "palette": {
       "placeholder": "搜尋 bots、聊天、終端機、工作區、任務、設定和操作...",
@@ -23598,7 +23602,19 @@
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身份登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
       "agent": "代理程式",
-      "folder": "資料夾：{{path}}"
+      "folder": "資料夾：{{path}}",
+      "name": "名稱",
+      "validation": {
+        "addName": "新增名稱",
+        "botsUnavailable": "無法執行機器人",
+        "computerOffline": "離線",
+        "findingAgents": "正在尋找代理程式…",
+        "identityTooLong": "內容過長",
+        "noAgents": "無代理程式",
+        "noAgentsAvailable": "沒有可用的代理程式",
+        "pictureLoading": "正在載入圖片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "apps": {
       "paste": {

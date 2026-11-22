@@ -1,7 +1,9 @@
 // A bot's tools as Settings › Tools shows them: the list, then the host's check of every server,
-// which starts them, so it runs only while the page is open and stops when it closes.
+// which starts them, so it runs only while the page is open and stops when it closes. Connectors
+// checks only its apps' URL servers, as the desktop's does.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotToolProblem } from '../../../../src/shared/bot-tools'
+import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -16,7 +18,13 @@ export type PhoneBotTools = {
   inherited: { name: string; plugin?: true }[]
 }
 
-export function useBotToolsPage(client: RpcClient | null, botId: string) {
+export function useBotToolsPage(
+  client: RpcClient | null,
+  botId: string,
+  scope: 'all' | 'apps' = 'all',
+  /** The route's reads: each later one reads the tools again (the host's notices), keeping the check. */
+  again?: number
+) {
   const t = useMobileTranslation()
   const [tools, setTools] = useState<PhoneBotTools | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +45,10 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
   const runCheck = useCallback(
     (own: readonly PhoneOwnTool[]) => {
       stopCheck()
-      if (!client || own.length === 0) {
+      // An app Orca signs in to has its own state, so only the CLI's URL servers are checked.
+      const checked =
+        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && tool.remote)
+      if (!client || checked.length === 0) {
         setProblems({})
         return
       }
@@ -46,12 +57,16 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
       setProblems(null)
       void botToolProblemsRead
         // The host polls the CLI's check for up to 30 s after starting it.
-        .request(client, { botId, scope: 'all' }, { timeoutMs: 120_000 })
+        .request(
+          client,
+          { botId, scope: scope === 'all' ? 'all' : 'remote' },
+          { timeoutMs: 120_000 }
+        )
         .then((response) => botToolProblemsRead.interpret(response).problems)
         .catch(() =>
           // Orca's own sign-ins aren't checked, so they never read as unconfirmed.
           Object.fromEntries(
-            own
+            checked
               .filter((tool) => !tool.signIn)
               .map((tool) => [
                 tool.name,
@@ -72,29 +87,45 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
           }
         })
     },
-    [client, botId, stopCheck, t]
+    [client, botId, scope, stopCheck, t]
   )
 
   /** Reads the tools again; `recheck` also checks the servers again (a tool was added or edited). */
+  // Only the latest read lands; a recheck asked by one it replaced runs on the latest's answer, and
+  // a replaced read settles with the latest, so a caller that navigates after it sees fresh tools.
+  const lists = useRef({ generation: 0, recheck: false, latest: Promise.resolve() })
   const reread = useCallback(
-    async (recheck = false) => {
+    (recheck = false): Promise<void> => {
       if (!client) {
-        return
+        return Promise.resolve()
       }
-      try {
-        const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
-        if (!mounted.current) {
-          return
+      const gen = (lists.current.generation += 1)
+      lists.current.recheck ||= recheck
+      const settled = (async (): Promise<void> => {
+        try {
+          const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
+          if (gen !== lists.current.generation) {
+            return await lists.current.latest
+          }
+          if (!mounted.current) {
+            return
+          }
+          const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
+          setTools(next)
+          setError(null)
+          if (lists.current.recheck) {
+            lists.current.recheck = false
+            runCheck(next.own)
+          }
+        } catch (caught) {
+          if (gen !== lists.current.generation) {
+            return lists.current.latest
+          }
+          setError(caught instanceof Error ? caught.message : String(caught))
         }
-        const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
-        setTools(next)
-        setError(null)
-        if (recheck) {
-          runCheck(next.own)
-        }
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : String(caught))
-      }
+      })()
+      lists.current.latest = settled
+      return settled
     },
     [client, botId, runCheck]
   )
@@ -107,6 +138,13 @@ export function useBotToolsPage(client: RpcClient | null, botId: string) {
       stopCheck()
     }
   }, [reread, stopCheck])
+
+  const firstAgain = useRef(again)
+  useEffect(() => {
+    if (again !== firstAgain.current) {
+      void reread()
+    }
+  }, [again, reread])
 
   return {
     tools,

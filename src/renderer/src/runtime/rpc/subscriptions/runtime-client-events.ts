@@ -124,6 +124,7 @@ function isRuntimeClientEvent(
     message.type === 'workspaceViewChanged' ||
     message.type === 'botsChanged' ||
     message.type === 'orchestrationSessionWorkersChanged' ||
+    message.type === 'peerMailReturned' ||
     message.type === 'workspaceCleanupRunFinished'
   )
 }

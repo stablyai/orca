@@ -192,6 +192,8 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       return revealStructuredAgentSession(deps, id, conversation)
     },
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
+    /** After an out-of-turn options write, so an open tab re-reads the chat's options. */
+    publishStatus: (id: string) => context().publishStatus(id),
     /** The home a running child launched under. ACP adapters report none, so `orPinned` falls
      *  back to the record's pinned home while a child runs. */
     childAccountHome: (id: string, orPinned = false) => {
@@ -202,6 +204,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         : child?.accountHome
     },
     holdsSessions: () => context().deps.store.holdsRecords(),
+    openConversationCount: () => context().sessions.size,
     onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()

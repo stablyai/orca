@@ -3974,6 +3974,8 @@
       "loadFailed": "无法加载已配对的桌面",
       "pairDesktop": "请先配对桌面，然后重试",
       "pushServiceFailed": "无法通过 Orca 推送服务发送。请重试",
+      "hostClockSkew": "{{host}} 的时钟偏差了 {{seconds}} 秒，因此 Orca 的推送服务拒绝了它。请将时钟设为正确时间后重试。",
+      "hostClockSkewDuration": "{{host}} 的时钟偏差了 {{duration}}，因此 Orca 的推送服务拒绝了它。请将时钟设为正确时间后重试。",
       "rateLimited": "通知发送过于频繁。请稍后重试",
       "sendButton": "发送测试通知",
       "sendFailed": "无法发送测试推送",
@@ -6412,7 +6414,11 @@
       "actionFor": "{{action}}：{{title}}",
       "open": "打开",
       "chat": "你与 {{name}} 的聊天",
-      "access": "{{person}} 请求访问权限"
+      "access": "{{person}} 请求访问权限",
+      "connector": "{{name}} 需要你重新登录或修复连接。",
+      "fixConnector": "打开 {{name}}",
+      "runSignIn": "你登录后才能运行。",
+      "openRun": "打开运行"
     },
     "chat": {
       "nothingToReport": "没有需要汇报的内容"
@@ -7301,7 +7307,8 @@
       "added": "{{bot}} 现在可以使用 {{app}} 了",
       "signedOut": "已退出登录 · {{via}}",
       "unreadShort": "无法加载 Composio 应用",
-      "reading": "正在读取 Composio…"
+      "reading": "正在读取 Composio…",
+      "toolName": "Composio 应用"
     },
     "setup": {
       "for": "用于 {{name}}"

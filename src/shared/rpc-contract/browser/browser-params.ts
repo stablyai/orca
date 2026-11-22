@@ -61,7 +61,9 @@ export const Screencast = BrowserTarget.extend({
   everyNthFrame: OptionalFiniteNumber,
   minFrameIntervalMs: OptionalFiniteNumber,
   // Ask for frame credit; the host echoes `frameAck: true` in `ready`. Old hosts strip it.
-  frameAck: z.literal(1).optional()
+  frameAck: z.literal(1).optional(),
+  // Ask for the page's cursor and hovered link: `ready.pointer`, then `pointer` events. Old hosts strip it.
+  pointerEvents: z.literal(1).optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({
@@ -280,8 +282,19 @@ export const MouseXY = ExpectUrlBrowserTarget.extend({
   })
 })
 
+const BROWSER_MOUSE_MODIFIERS = ['cmd', 'ctrl', 'alt', 'shift'] as const
+export type BrowserMouseModifier = (typeof BROWSER_MOUSE_MODIFIERS)[number]
+
+export const MouseModifiers = z
+  .unknown()
+  .transform((v) => (Array.isArray(v) ? v : undefined))
+  .pipe(z.union([z.array(z.enum(BROWSER_MOUSE_MODIFIERS)), z.undefined()]))
+  .optional()
+
+// Older hosts strip `modifiers` from mouseDown/mouseUp, so a modified press arrives plain.
 export const MouseButton = ExpectUrlBrowserTarget.extend({
-  button: OptionalPlainString
+  button: OptionalPlainString,
+  modifiers: MouseModifiers
 })
 
 export const MouseWheel = ExpectUrlBrowserTarget.extend({

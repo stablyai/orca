@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Bot } from 'lucide-react-native'
 import type { BotAccessCopyId } from '../../../src/shared/bots/bot-access-copy'
 import {
   botAccessAdvice,
@@ -11,6 +12,7 @@ import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListRow } from '../components/list/ListGroup'
 import { SettingsSection } from '../settings/settings-screen-frame'
+import { colors } from '../theme/mobile-theme'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
 import {
@@ -28,6 +30,11 @@ const PHONE_FIXES: Record<
   'ask-for-approval': { headingId: 'fixAsk', actionId: 'fixAskAction' }
 }
 
+/** Another Slack app draws the desktop's bot mark; a person draws none. */
+export function memberMark(member: BotMember): ReactNode {
+  return member.kind === 'app' ? <Bot size={20} color={colors.textSecondary} /> : undefined
+}
+
 /** One person who can ask, with Remove. */
 export function MobileBotMemberRow(props: {
   member: BotMember
@@ -37,6 +44,7 @@ export function MobileBotMemberRow(props: {
   const t = useMobileTranslation()
   return (
     <ListRow
+      leading={memberMark(props.member)}
       title={props.member.name}
       accessory={
         <MobileBotTextButton

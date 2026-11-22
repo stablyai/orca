@@ -65,7 +65,8 @@ async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<st
     readConfigPathSignatures(configPaths.commonConfigPath, readBranch),
     readConfigPathSignatures(configPaths.worktreeConfigPath, readBranch)
   ])
-  return signatures.flat().join('\0')
+  // Includes are walked concurrently, so a shared include lands under whichever parent reaches it first.
+  return signatures.flat().sort().join('\0')
 }
 
 async function readConfigPathSignatures(

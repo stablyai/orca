@@ -1,6 +1,8 @@
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { listWorkerRestartOffers } from '../db/worker-dispatch/worker-restart-resume'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { OrcaRuntimeWithAgentPromptRequestCorrelation as PromptCorrelation } from '../../terminal/input/orca-runtime-agent-prompt-request-correlation'
 import { RuntimeWorkspaceSessionFlush } from '../../workspaces/session-hosts/runtime-workspace-session-flush'
 import { StartupWorkerAuthorityRestore } from './startup-worker-authority-restore'
 import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport as StructuredSessionStartup } from '../../session-tabs/chat/structured-session-create-support'
@@ -24,6 +26,12 @@ import {
   type UnconfirmedWorkerStart
 } from '../workers/turn-stops/unconfirmed-worker-start'
 import { redactWorkerTerminalView } from './views/worker-terminal-redaction'
+import {
+  describeUnconfirmedStartEvidence,
+  SUBMIT_WITHHELD_STAGE,
+  WITHHELD_AFTER_RESTART_EVIDENCE,
+  type UnconfirmedStartDelivery
+} from '../workers/turn-stops/unconfirmed-start-evidence'
 import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 
@@ -36,6 +44,9 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   abstract prepareStructuredAgentSessionStartupRestoration(
     ...args: Parameters<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
   ): ReturnType<StructuredSessionStartup['prepareStructuredAgentSessionStartupRestoration']>
+  abstract readTerminalAgentPromptAftermath(
+    ...args: Parameters<PromptCorrelation['readTerminalAgentPromptAftermath']>
+  ): ReturnType<PromptCorrelation['readTerminalAgentPromptAftermath']>
 
   /** Continues after startup restoration, whichever path ran it, and off the startup path. A failed
    *  restoration only lets waiters go on, so a retry that reconciles leases still continues. */
@@ -58,7 +69,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
 
   protected abstract readonly terminalWorkerTurnStops: Pick<
     TerminalWorkerTurnStops,
-    'reportRestingPane'
+    'reportRestingPane' | 'backgroundWaits'
   >
 
   private restartWorkerStopReport: Promise<void> | null = null
@@ -67,6 +78,17 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   /** Once per start, after restored terminal authority: tell coordinators about workers that
    *  stopped while Orca was down, or that this start did not continue. */
   reportWorkerStopsAcrossRestartOnce(): Promise<void> {
+    // Restored terminals are placed: workers held for a restart resume reopen now.
+    this.terminalWorkerRestartResume.settleStartup()
+    // Workers still offered from before this start are shown with the cut chats, as their offers are.
+    try {
+      const db = this.getExistingOrchestrationDb()
+      if (db && listWorkerRestartOffers(db).length > 0) {
+        this.notifier?.restartOffersChanged?.()
+      }
+    } catch (error) {
+      console.warn('[orchestration] reading offered terminal workers failed', error)
+    }
     if (this.restartWorkerStopReport === null) {
       // A restoration retried after a failure passes over what it continued and left, again.
       this.structuredAgentSessionLaunchContinuation.onRetried(
@@ -116,6 +138,9 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         reportDeps: this.workerTurnStopReportDeps,
         reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
         reportUnconfirmedStart: (dispatchId) => this.reportUnconfirmedWorkerStart(dispatchId),
+        armBackgroundWait: (dispatchId) =>
+          this.terminalWorkerTurnStops.backgroundWaits.arm(db, dispatchId),
+        resuming: (dispatchId) => this.terminalWorkerRestartResume.isResumingThisStart(dispatchId),
         chats: host
           ? {
               cutByLastRun,
@@ -135,7 +160,10 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
 
   /** Tells the coordinator once about a start whose turn Orca never saw begin, live or after a
    *  restart; a terminal's screen shows whether its brief still waits in the prompt. */
-  async reportUnconfirmedWorkerStart(dispatchId: string): Promise<void> {
+  async reportUnconfirmedWorkerStart(
+    dispatchId: string,
+    delivery?: UnconfirmedStartDelivery
+  ): Promise<void> {
     const db = this.getExistingOrchestrationDb()
     // A paired server's start is settled by federation reconcile, not here.
     if (!db || db.getFederatedDispatch(dispatchId)) {
@@ -160,10 +188,44 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
                   '\n'
                 )
               })
-              .catch(() => undefined)
+              .catch(() => undefined),
+            ...(delivery
+              ? {
+                  evidence: describeUnconfirmedStartEvidence(
+                    delivery,
+                    delivery.prompt
+                      ? this.readTerminalAgentPromptAftermath(handle, delivery.prompt)
+                      : null
+                  )
+                }
+              : worker.stage === SUBMIT_WITHHELD_STAGE
+                ? { evidence: WITHHELD_AFTER_RESTART_EVIDENCE }
+                : {})
           }
         : { surface: 'chat' }
     observeUnconfirmedWorkerStart(db, dispatchId, start, this.workerTurnStopReportDeps)
+  }
+
+  protected holdLostWorkerForRestartResume(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): boolean {
+    return this.terminalWorkerRestartResume.holdForReopen(candidate.dispatchId, () =>
+      this.failLostRestartWorker(candidate.dispatchId)
+    )
+  }
+
+  protected failLostRestartWorker(dispatchId: string): void {
+    const dispatch = this.getExistingOrchestrationDb()?.getDispatchContextById(dispatchId)
+    const incarnation = dispatch?.process_incarnation ?? ''
+    const worker = {
+      dispatchId,
+      terminalHandle: dispatch?.assignee_handle ?? '',
+      ptyId: incarnation.slice(0, Math.max(0, incarnation.lastIndexOf(':')))
+    }
+    // A failed close re-enters the sweep: its claim is spent, so the sweep's own retry owns it.
+    if (!this.legacyWorkerRecoveryPersistence.reconcileMissing(worker, this.lostWorkerReport)) {
+      void this.reconcileLegacyWorkerTerminals().catch(() => undefined)
+    }
   }
 
   async reconcileLegacyWorkerTerminals(

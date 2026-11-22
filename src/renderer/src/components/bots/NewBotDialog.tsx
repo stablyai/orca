@@ -1,6 +1,7 @@
 // @protected-copy scope=file
 // Its copy is fixed: a bot from someone else's link is made here, on the security surface.
-import React, { useRef, useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
 import { LayoutTemplate } from 'lucide-react'
 import {
@@ -19,8 +20,8 @@ import {
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { createBot, updateBot, useHostBots } from '@/lib/bot-catalog'
-import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { createBot, useHostBots } from '@/lib/bot-catalog'
+import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
 import { BotRunsOnPicker } from './BotRunsOnPicker'
@@ -49,7 +50,6 @@ import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
 import { NewBotPurposeField } from './NewBotPurposeField'
-import { botTemplateShownName } from '../../../../shared/bots/bot-template-text'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -124,6 +124,7 @@ export function NewBotDialog({
   fromShare?: NewBotShareSource
 }): React.JSX.Element {
   const t = useTranslate()
+  const nameErrorId = useId()
   const nameRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   // A link's name is only suggested until the owner types one: free on the picked computer.
@@ -138,18 +139,13 @@ export function NewBotDialog({
   const { hostId, blocked } = hostChoice.host
   const hostBots = useHostBots(hostId)
   const name = typedName ?? (fromShare ? freeBotName(fromShare.review.bot.name, hostBots) : '')
-  const menu = useBotAgentMenu(hostId, open)
-  const { choices } = menu
+  const { model, choices } = useBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent, fromShare && 'ask')
   const [creating, setCreating] = useState(false)
+  const createInFlight = useRef(false)
+  const [submitted, setSubmitted] = useState(false)
   const trimmedName = name.trim()
-  const shownName = botTemplateShownName(
-    proposal,
-    name,
-    hostBots.map((bot) => bot.name),
-    t
-  )
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
     useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
@@ -160,14 +156,7 @@ export function NewBotDialog({
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
   const shownIdentity = shownTemplateIdentity(proposal, t)
   const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
-  // A picture still being read would miss the bot, so Create waits for it.
-  const canCreate =
-    !creating &&
-    !blocked &&
-    choices.length > 0 &&
-    trimmedName.length > 0 &&
-    !intake.reading &&
-    !identityTooLong
+  const nameInvalid = submitted && !trimmedName
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
   // From a template: what it comes with, its skills kept unless switched off; an older host takes the seed only.
@@ -178,6 +167,7 @@ export function NewBotDialog({
   )
 
   const close = (made?: Bot): void => {
+    setSubmitted(false)
     setName(fromShare ? null : (proposal?.name ?? ''))
     setAddHostMode(null)
     setDraft(draftOf(proposal, initialPurpose))
@@ -188,7 +178,7 @@ export function NewBotDialog({
     onOpenChange(false, made)
   }
   const handleOpenChange = (next: boolean): void => {
-    if (creating) {
+    if (createInFlight.current) {
       return
     }
     if (next) {
@@ -200,30 +190,28 @@ export function NewBotDialog({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    if (!canCreate) {
+    if (createInFlight.current) {
       return
     }
+    if (!trimmedName || identityTooLong || blocked || !choices.length || intake.reading) {
+      flushSync(() => setSubmitted(true))
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      return
+    }
+    createInFlight.current = true
     setCreating(true)
-    let bot: Bot
+    let bot: Bot | null
     try {
       if (fromShare) {
         const { setup, intent } = agentSetup
-        const shared = await createNewBotFromShare(
+        bot = await createNewBotFromShare(
           fromShare,
           hostId,
           { name: trimmedName, setup, intent },
           picture
         )
-        if (!shared) {
-          setCreating(false)
-          return
-        }
-        bot = shared
       } else {
-        const goesBy = shownName.trim()
-        // A shown name differs from the English one it is created under, which must be free too.
-        const createName = goesBy === trimmedName ? trimmedName : freeBotName(trimmedName, hostBots)
-        const made = editedProposal(proposal, draft, createName, t)
+        const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await createBot(hostId, {
           ...(made
@@ -236,27 +224,28 @@ export function NewBotDialog({
                   fromOffer: offerHere ? fromOffer : undefined
                 }
               )
-            : { name: createName }),
+            : { name: trimmedName }),
           ...agentSetup.setup,
           avatar: picture.avatar,
           avatarColor: picture.avatarColor,
           ...(takingOver ? { takingOver } : {})
         })
-        if (goesBy !== createName) {
-          // A rename that fails leaves the English name, which still names the bot correctly.
-          bot = await updateBot(bot, { name: goesBy }).catch(() => bot)
-        }
         bot = await picture.saveUpload(bot)
       }
     } catch (error) {
+      createInFlight.current = false
       setCreating(false)
       toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
+      return
+    }
+    createInFlight.current = false
+    setCreating(false)
+    if (!bot) {
       return
     }
     // Closes once the bot exists, as a new workspace's composer does; its page opens next and shows
     // its agent starting.
     createdBot.current = true
-    setCreating(false)
     close(bot)
     void openCreatedBot(bot).then((opened) => {
       if (opened || takingOver) {
@@ -329,16 +318,7 @@ export function NewBotDialog({
           tabIndex={-1}
           className="flex min-h-0 flex-col gap-4 outline-none"
           onSubmit={(event) => void handleSubmit(event)}
-          onKeyDown={(event) => {
-            if (
-              isScreenSubmitShortcut(event) &&
-              event.target instanceof Node &&
-              event.currentTarget.contains(event.target)
-            ) {
-              event.preventDefault()
-              formRef.current?.requestSubmit()
-            }
-          }}
+          onKeyDown={handleScreenFormSubmitKey}
         >
           <div className="-mx-5 -mt-1 min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-5 pt-1 scrollbar-sleek">
             {/* The nudge reads this computer's other apps, so it shows only while this computer is picked. */}
@@ -352,23 +332,34 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton picture={picture} intake={intake}>
+              <NewBotPictureButton picture={picture} intake={intake} submitted={submitted}>
                 <ImeInput
                   ref={nameRef}
-                  className={BARE_HEADING_CLASS}
+                  className={cn(
+                    BARE_HEADING_CLASS,
+                    'aria-invalid:px-2 aria-invalid:ring-1 aria-invalid:ring-destructive aria-invalid:outline-destructive'
+                  )}
                   aria-label={t('bots.new.name', 'Name')}
+                  aria-invalid={nameInvalid || undefined}
+                  aria-describedby={nameInvalid ? nameErrorId : undefined}
                   autoComplete="off"
                   spellCheck={false}
-                  value={shownName}
+                  value={name}
                   maxLength={BOT_NAME_MAX_LENGTH}
                   placeholder={t('bots.new.name', 'Name')}
                   onChange={(event) => setName(event.target.value)}
                 />
+                {nameInvalid ? (
+                  <p id={nameErrorId} role="alert" className="mt-1 text-xs text-destructive">
+                    {t('bots.new.validation.addName', 'Add a name')}
+                  </p>
+                ) : null}
               </NewBotPictureButton>
               {fromShare ? null : (
                 <NewBotPurposeField
                   value={shown.purpose}
                   prefilled={shownIdentity}
+                  tooLong={submitted && identityTooLong}
                   onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
@@ -377,18 +368,19 @@ export function NewBotDialog({
               variant="fields"
               hostChoice={hostChoice}
               setup={agentSetup.setup}
-              model={menu.model}
+              model={model}
               choices={choices}
               onSetupChange={agentSetup.setSetup}
               keptPermission={agentSetup.intent}
               onAddHost={hosts ? undefined : setAddHostMode}
+              showSubmitFeedback={submitted}
             />
             {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}
             {template ? (
               <NewBotTemplateParts
                 template={template}
                 packages={templatePackages}
-                hostLabel={hostChoice.host.label}
+                hostLabel={submitted && blocked ? undefined : hostChoice.host.label}
                 kept={kept}
                 onKeptChange={(skill, on) => {
                   const next = new Set(kept)
@@ -427,7 +419,7 @@ export function NewBotDialog({
               </Button>
             ) : null}
             {fromShare ? <NewBotShareBack source={fromShare} disabled={creating} /> : null}
-            <BotCreateButton type="submit" busy={creating} disabled={!canCreate}>
+            <BotCreateButton type="submit" busy={creating} disabled={creating}>
               {t('bots.new.create', 'Create')}
             </BotCreateButton>
           </DialogFooter>

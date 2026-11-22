@@ -29,6 +29,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     name?: string | string[]
     created?: string | string[]
     warning?: string | string[]
+    homeDraft?: string | string[]
     paneKey?: string | string[]
     botItem?: string | string[]
     paneIntent?: string | string[]
@@ -40,19 +41,21 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   const router = useRouter()
   const paneKey = firstParam(params.paneKey) ?? ''
   const botItem = firstParam(params.botItem) ?? ''
+  const homeDraft = firstParam(params.homeDraft) ?? ''
   // Clear only the consumed request; a newer tap must survive.
   const eraseRequest = useCallback(
     (param: BridgeClearableRouteParam, value: string) => {
-      if (
-        (param !== 'paneKey' && param !== 'botItem') ||
-        value === '' ||
-        value !== (param === 'paneKey' ? paneKey : botItem)
-      ) {
+      const held: Partial<Record<BridgeClearableRouteParam, string>> = {
+        paneKey,
+        botItem,
+        homeDraft
+      }
+      if (value === '' || value !== held[param]) {
         return
       }
       router.setParams({ [param]: '' })
     },
-    [botItem, paneKey, router]
+    [botItem, homeDraft, paneKey, router]
   )
 
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.

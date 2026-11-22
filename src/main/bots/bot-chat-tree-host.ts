@@ -32,6 +32,7 @@ import {
 } from './bot-activity-host'
 import type { BotChatTreeParams } from '../../shared/rpc-contract/bots-params'
 import type { Bot } from '../../shared/bot-types'
+import { hasPairedServerCards } from '../runtime/orchestration/db/federation/paired-server-asks-store'
 
 export type BotChatTreeHost = BotActivityHost & {
   /** The chat records, which live in the chat host that opens lazily. */
@@ -45,6 +46,8 @@ export type BotChatTreeHost = BotActivityHost & {
   index?: Pick<BotChatTreeIndex, 'base'>
   /** Keeps settled workers between reads; without it, every read re-reads every shown worker. */
   workerCache?: BotChatTreeWorkerCache
+  /** Whether a paired server's agent waits on a person to message the bot: its Home row needs you. */
+  pairedServerCards?: (botId: string) => boolean
 }
 
 function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatTreeWorker {
@@ -209,7 +212,7 @@ export async function readBotChatTreeParts(
       )
     )
   }
-  const tree = buildBotChatTree({
+  const built = buildBotChatTree({
     chats,
     placed,
     workers: new Map(
@@ -219,6 +222,14 @@ export async function readBotChatTreeParts(
     homeWorkspaceIds: [...handedWorkspaces],
     page
   })
+  const tree = host.pairedServerCards?.(bot.id)
+    ? {
+        ...built,
+        chats: built.chats.map((chat) =>
+          chat.origin === 'home' && !chat.closed ? { ...chat, live: 'needs-you' as const } : chat
+        )
+      }
+    : built
   return { tree, placed, rootOf }
 }
 
@@ -248,7 +259,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
     ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {}),
-    workerCache: runtime.botChatTreeWorkers
+    workerCache: runtime.botChatTreeWorkers,
+    pairedServerCards: (botId) => hasPairedServerCards(runtime.getOrchestrationDb(), botId)
   }
 }
 

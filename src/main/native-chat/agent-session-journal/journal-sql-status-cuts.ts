@@ -5,7 +5,10 @@ import {
 } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { commandTurnsByBody } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { nativeChatUsageLimitOfRow } from '../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import {
+  nativeChatUsageLimitOfRow,
+  usageLimitStopWithdrawal
+} from '../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   orcaStopCauseOfRow,
   type NativeChatOrcaStopCut
@@ -213,13 +216,10 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
   return chain
 }
 
-export function readJournalSqlUsageLimitContinueIdentity(
+export function readJournalSqlUsageLimitStopWithdrawal(
   state: JournalSqlStatusContext
 ): UsageLimitContinueIdentity | undefined {
-  const cut = readJournalSqlUsageLimitCut(state)
-  return cut?.resetsAt !== undefined && Number.isFinite(cut.resetsAt)
-    ? { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt }
-    : undefined
+  return usageLimitStopWithdrawal(readJournalSqlUsageLimitCut(state))
 }
 
 export function readJournalSqlOrcaStopCut(

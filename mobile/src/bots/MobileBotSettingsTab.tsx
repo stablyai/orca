@@ -1,20 +1,15 @@
 import { useState } from 'react'
-import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
-import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ChoiceRows } from '../host-screen/workspace-options/workspace-option-rows'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
 import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
-import { SettingsNote } from '../settings/settings-screen-frame'
 import {
   MobileLookAroundPage,
   MobileLookAroundSection,
@@ -31,8 +26,9 @@ import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
   MobileBotSettingsRoot,
   MobileBotStalePage,
-  type SettingsRootPage
+  type BotSettingsTarget
 } from './MobileBotSettingsRoot'
+import { MobileBotPermissionsPage } from './MobileBotPermissionsPage'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
@@ -64,6 +60,8 @@ export function MobileBotSettingsTab(props: {
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
   onOpenFile?: (path: string) => void
+  /** The page Settings opens on, read as it mounts; absent opens the list. */
+  initialPage?: BotSettingsTarget
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -73,7 +71,7 @@ export function MobileBotSettingsTab(props: {
   const locked = saving || !props.online
   const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const [deleting, setDeleting] = useState(false)
-  const [page, setPage] = useState<SettingsRootPage | null>(null)
+  const [page, setPage] = useState(typeof props.initialPage === 'string' ? props.initialPage : null)
   // A page drilled into from Look around or Memory upkeep; its Back returns there.
   const [lookPage, setLookPage] = useState<LookAroundPage | null>(null)
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
@@ -120,7 +118,11 @@ export function MobileBotSettingsTab(props: {
       setSaving(false)
     }
   }
-  const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const connectors = useMobileBotConnectorSettings(props, offlineBanner, {
+    accessBot,
+    save,
+    initialPage: typeof props.initialPage === 'object' ? props.initialPage : undefined
+  })
   const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
@@ -287,7 +289,9 @@ export function MobileBotSettingsTab(props: {
         onSwitch={async (agent) => {
           // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
           if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id)
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
           }
         }}
       />
@@ -335,43 +339,18 @@ export function MobileBotSettingsTab(props: {
     )
   }
 
-  const modes = agentChatPermissionModes(bot.agent)?.modes ?? AGENT_CHAT_PERMISSION_MODES
   if (page === 'permissions') {
-    const permissionChoices = [
-      {
-        id: 'inherit',
-        label: t('bots.settings.sameAsChats', 'Same as chats'),
-        description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
-      },
-      ...modes.map((mode) => ({ id: mode, ...mobilePermissionModeCopy(bot.agent, mode, t) }))
-    ]
     return (
-      <>
-        <SheetHeader
-          title={t('bots.settings.permissions', 'Permissions')}
-          onBack={backToSettings}
-        />
-        {offlineBanner}
-        <ChoiceRows
-          choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
-          disabled={!props.online}
-          onSelect={(mode) => {
-            if (mode === 'inherit' || modes.some((value) => value === mode)) {
-              void save({
-                permissionMode: mode === 'inherit' ? null : modes.find((value) => value === mode)!
-              })
-              closePage()
-            }
-          }}
-        />
-        <SettingsNote>
-          {t(
-            'bots.settings.permissionsDetail',
-            'The starting permission for new sessions. Anything beyond it asks in the session.'
-          )}
-        </SettingsNote>
-      </>
+      <MobileBotPermissionsPage
+        bot={bot}
+        disabled={!props.online}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onPick={(permissionMode) => {
+          void save({ permissionMode })
+          closePage()
+        }}
+      />
     )
   }
   return (
