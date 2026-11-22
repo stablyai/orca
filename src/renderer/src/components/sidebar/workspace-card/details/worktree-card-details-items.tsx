@@ -119,7 +119,7 @@ export function WorktreeCardIdentityHover({
   card: WorktreeCardController
   branchName: string | undefined
   workspaceTitle: string | undefined
-  /** Keeps the hover card shut, e.g. while the title is being renamed, without unmounting the title. */
+  /** Drops open requests, e.g. while the title is being renamed, without unmounting the title. */
   closed?: boolean
   children: React.ReactElement<React.RefAttributes<HTMLElement>>
 }): React.JSX.Element {
@@ -154,7 +154,6 @@ export function WorktreeCardIdentityHover({
       openDelay={100}
       hoverControl={{
         ...hoverControl,
-        hoverOpen: hoverControl.hoverOpen && !closed,
         handleHoverOpenChange: (open) => {
           if (open && closed) {
             return
