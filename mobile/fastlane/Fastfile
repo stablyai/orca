@@ -11,9 +11,13 @@ MOBILE_ROOT = File.expand_path("..", __dir__)
 # Fastlane runs from mobile/fastlane regardless of the caller’s working directory.
 APP_CONFIG_PATH = File.join(MOBILE_ROOT, "app.json")
 WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
+XCODE_PROJECT = File.join(MOBILE_ROOT, "ios", "Orca.xcodeproj")
 BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
+# expo-widgets' extension target and its default bundle ID (the app's plus the target name).
+WIDGET_TARGET = "ExpoWidgetsTarget"
+WIDGET_BUNDLE_ID = "#{BUNDLE_ID}.#{WIDGET_TARGET}"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
 DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
 TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS = 20 * 60
@@ -193,16 +197,31 @@ platform :ios do
 
     team_id = ENV.fetch("APPLE_TEAM_ID")
 
-    # Fetch/install an explicit API-key profile for manual archive/export.
-    get_provisioning_profile(
-      api_key: api_key,
-      app_identifier: BUNDLE_ID,
-      force: true,
-    )
+    # Fetch/install an explicit API-key profile per signed target for manual archive/export.
     # This fastlane exposes the chosen profile through SIGH_NAME, not SIGH_PROFILE_MAPPING.
-    profile_name = lane_context[SharedValues::SIGH_NAME]
+    profiles = { SCHEME => BUNDLE_ID, WIDGET_TARGET => WIDGET_BUNDLE_ID }.to_h do |target, bundle_id|
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: bundle_id,
+        force: true,
+      )
+      [target, lane_context[SharedValues::SIGH_NAME]]
+    end
 
-    # Archive needs explicit manual signing/team/profile; omitting DEVELOPMENT_TEAM fails signing.
+    # The app and the widget extension each need their own profile, so it is set per target in the
+    # project rather than as one PROVISIONING_PROFILE_SPECIFIER build setting for every target.
+    profiles.each do |target, profile_name|
+      update_code_signing_settings(
+        path: XCODE_PROJECT,
+        use_automatic_signing: false,
+        team_id: team_id,
+        code_sign_identity: "Apple Distribution",
+        targets: [target],
+        profile_name: profile_name,
+      )
+    end
+
+    # Archive needs explicit manual signing/team; omitting DEVELOPMENT_TEAM fails signing.
     build_app(
       workspace: WORKSPACE,
       scheme: SCHEME,
@@ -210,13 +229,13 @@ platform :ios do
       export_method: "app-store",
       xcargs: "DEVELOPMENT_TEAM=#{team_id} " \
         "CODE_SIGN_STYLE=Manual " \
-        "CODE_SIGN_IDENTITY='Apple Distribution' " \
-        "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+        "CODE_SIGN_IDENTITY='Apple Distribution'",
       export_options: {
         teamID: team_id,
         signingStyle: "manual",
         provisioningProfiles: {
-          BUNDLE_ID => profile_name,
+          BUNDLE_ID => profiles.fetch(SCHEME),
+          WIDGET_BUNDLE_ID => profiles.fetch(WIDGET_TARGET),
         },
       },
       output_directory: BUILD_OUTPUT_DIRECTORY,
