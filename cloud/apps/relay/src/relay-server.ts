@@ -25,7 +25,7 @@ import {
   reserveDeadManWindowMs
 } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
-import { EDGE_CELL_ID, EdgeAssignments } from './edge-relay.js'
+import { EDGE_CELL_ID, EdgeAssignments, edgeLockedCallsMax } from './edge-relay.js'
 import { EdgeEvacuation } from './edge-relay-evacuation.js'
 import type { EdgeControl } from './edge-relay-control.js'
 import { createEdgeAdmin } from './edge-admin-client.js'
@@ -193,7 +193,13 @@ export function createRelayServer(
     config.edge && options.edgeControl ? { ...config.edge, control: options.edgeControl.flags } : config.edge
   const edgeAssignments =
     config.role === 'director' && edgeConfig
-      ? new EdgeAssignments(observedDatabase, edgeConfig, options.now, edgeAdmin)
+      ? new EdgeAssignments(
+          observedDatabase,
+          edgeConfig,
+          options.now,
+          edgeAdmin,
+          edgeLockedCallsMax(config.databasePoolMax)
+        )
       : undefined
   // Hosts that left the cohort are drained off the edge, rather than waiting out their lease.
   const edgeEvacuation =

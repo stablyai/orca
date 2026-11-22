@@ -24,6 +24,7 @@ import {
 import {
   EDGE_CELL_ID,
   EDGE_LOCKED_CALLS_MAX,
+  edgeLockedCallsMax,
   EdgeAssignments,
   EdgeMoveDeferredError,
   type EdgeRelayConfig
@@ -402,6 +403,34 @@ describe('relay edge pushes under the row lock', () => {
     for (const call of h.edge.calls) { expect(call.options).toEqual({ timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS }) }
     // Slots are freed: the deferred host moves on its next ask.
     expect((await assignments.moveToEdge(last, 0)).cellId).toBe(EDGE_CELL_ID)
+  })
+
+  it('leaves two pooled connections free of locked pushes', () => {
+    expect(edgeLockedCallsMax(3)).toBe(1)
+    expect(edgeLockedCallsMax(5)).toBe(3)
+    expect(edgeLockedCallsMax(1)).toBe(1)
+    expect(edgeLockedCallsMax(16)).toBe(EDGE_LOCKED_CALLS_MAX)
+  })
+
+  it('defers a second push on a director with a 3-connection pool', async () => {
+    const h = await harness()
+    const assignments = new EdgeAssignments(
+      overlapping(h.database), edgeConfig(), () => h.clock.now, h.edge, edgeLockedCallsMax(3)
+    )
+    await assignments.ensureEdgeCell()
+    h.edge.answers = ['hang' as const]
+    const first = { userId: USER, relayHostId: 'poolcap000000001' }
+    const second = { userId: USER, relayHostId: 'poolcap000000002' }
+    await h.placeRow('us-c1', 3, first.relayHostId)
+    await h.placeRow('us-c1', 3, second.relayHostId)
+    const held = assignments.moveToEdge(first, 0)
+    await vi.waitFor(() => expect(h.edge.calls).toHaveLength(1))
+    const deferred = await assignments.moveToEdge(second, 0).catch((error: unknown) => error)
+    expect((deferred as Error).message).toBe('relay_edge_move_deferred:edge_busy')
+    expect(h.edge.calls).toHaveLength(1)
+    h.edge.release()
+    await held
+    expect((await assignments.moveToEdge(second, 0)).cellId).toBe(EDGE_CELL_ID)
   })
 })
 

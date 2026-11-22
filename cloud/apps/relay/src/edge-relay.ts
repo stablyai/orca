@@ -179,6 +179,14 @@ export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 // moves). A move that would exceed it is deferred rather than queued behind a slow edge.
 export const EDGE_LOCKED_CALLS_MAX = 8
 
+// Locked pushes a director may hold at once with a database pool of `poolMax`. Each push holds a
+// pooled connection (its transaction) for up to the admin timeout, so pushes up to the pool size
+// starve every other query on the instance (pool acquire timeouts, director 503s). Leave two
+// connections free; at least one push, never more than EDGE_LOCKED_CALLS_MAX.
+export function edgeLockedCallsMax(poolMax: number): number {
+  return Math.max(1, Math.min(EDGE_LOCKED_CALLS_MAX, poolMax - 2))
+}
+
 // The move cannot happen on this ask (old-cell units still held, the edge did not take the push,
 // this director already has EDGE_LOCKED_CALLS_MAX pushes in flight, or a keep-only ask found the
 // row off the edge) and nothing changed: the host
@@ -330,7 +338,7 @@ export class EdgeAssignments {
   // When this director's exports started failing as unavailable; any usable answer clears it.
   private exportFailingSince: number | undefined
   private exportLastFailureAt: number | undefined
-  // Edge admin calls in flight under an assignment row lock (pushes), capped at EDGE_LOCKED_CALLS_MAX.
+  // Edge admin calls in flight under an assignment row lock (pushes), capped at lockedCallsMax.
   private lockedCalls = 0
   // Asks by requested region × country (observe only; relay-server starts it with an IP table).
   readonly regionCountries = new EdgeRegionCountryTally()
@@ -343,7 +351,9 @@ export class EdgeAssignments {
     private readonly database: RelayDatabase,
     readonly config: EdgeRelayConfig,
     private readonly now: () => number = Date.now,
-    private readonly admin?: EdgeAdmin
+    private readonly admin?: EdgeAdmin,
+    // Locked pushes in flight at once (edgeLockedCallsMax of the director's pool).
+    private readonly lockedCallsMax: number = EDGE_LOCKED_CALLS_MAX
   ) {}
 
   get pushes(): boolean {
@@ -1032,11 +1042,11 @@ export class EdgeAssignments {
     throw new EdgeMoveDeferredError('push_failed')
   }
 
-  // A push made under the row lock. Past EDGE_LOCKED_CALLS_MAX in flight the move is deferred at
+  // A push made under the row lock. Past lockedCallsMax in flight the move is deferred at
   // once rather than adding another row lock held on a slow edge.
   private async lockedAssign(body: EdgeAssignBody): Promise<EdgeAssignResult> {
     if (!this.admin) throw new Error('relay_edge_admin_missing')
-    if (this.lockedCalls >= EDGE_LOCKED_CALLS_MAX) throw new EdgeMoveDeferredError('edge_busy')
+    if (this.lockedCalls >= this.lockedCallsMax) throw new EdgeMoveDeferredError('edge_busy')
     this.lockedCalls += 1
     try {
       return await this.admin.assign(body, { timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS })
