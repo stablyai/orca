@@ -2,12 +2,15 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 
 import { existsSync } from 'node:fs'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import { journalDomainDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import {
+  journalDatabasePath,
+  journalDomainDatabasePath
+} from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { readDeletedChats } from './agent-session-record-forgets'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export type AgentSessionRecordStoreLocation = {
@@ -120,7 +123,8 @@ async function openRecordStore(
         journalDatabase,
         records,
         hostId: location.hostId,
-        legacySessionTabIds: location.legacySessionTabIds
+        legacySessionTabIds: location.legacySessionTabIds,
+        deletedChats: await readDeletedChats(journalDatabase)
       })
     }
   } catch (error) {

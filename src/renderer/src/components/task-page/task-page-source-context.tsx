@@ -9,7 +9,7 @@ import type {
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
@@ -27,7 +27,7 @@ import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
-} from '../task-source-context-summary'
+} from './source-selection/task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
@@ -81,6 +81,22 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       getJiraIssueKeyCasingSeedOptions()
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
+}
+/** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */
+export function getTaskPageGitHubRepoArgs(
+  repos: readonly Repo[],
+  unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>
+) {
+  return repos.map((repo) => {
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    return {
+      repoId: repo.id,
+      path: repo.path,
+      executionHostId: repo.executionHostId,
+      sourceContext,
+      hostUnreachable: Boolean(sourceContext && unreachableHostIds.has(sourceContext.hostId))
+    }
+  })
 }
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,

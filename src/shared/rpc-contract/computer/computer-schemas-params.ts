@@ -10,7 +10,7 @@ import {
   computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
-} from '../../computer-use-key-spec'
+} from '../../computer/computer-use-key-spec'
 
 export const OptionalNonNegativeInt = z.number().int().nonnegative().optional()
 

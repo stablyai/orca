@@ -7,7 +7,7 @@ import { measureUtf8ByteLength } from '../../../../../../shared/text/utf8-byte-l
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 export const AI_VAULT_SESSION_DRAG_TYPE = 'application/x-orca-ai-vault-session'
 export const AI_VAULT_SESSION_DRAG_START_EVENT = 'orca-ai-vault-session-drag-start'

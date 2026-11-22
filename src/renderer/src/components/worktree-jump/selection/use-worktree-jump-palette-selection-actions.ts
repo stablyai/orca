@@ -1,3 +1,5 @@
+import { advanceBotPaletteGeneration } from '@/components/bots/reveal-bot-sidebar-row'
+import type { WorktreeJumpPaletteBotScope } from '../use-worktree-jump-palette-bot-scope'
 import { skipPaletteExitAnimation } from './worktree-jump-palette-exit-animation'
 import { useWorktreeJumpPaletteTaskSelection } from '../tasks/use-worktree-jump-palette-task-selection'
 import type { WorktreeJumpPaletteTaskSearch } from '../tasks/use-worktree-jump-palette-task-search'
@@ -14,7 +16,7 @@ import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tab
 import type { CmdJActionResult, CmdJSettingsResult } from '@/components/cmd-j/palette-results'
 import type { CmdJProjectSearchResult } from '@/components/cmd-j/palette-project-results'
 import { getUnavailableQuickActionMessage } from '../../cmd-j/quick-action-context'
-import type { SettingsNavTarget } from '@/components/settings/navigation/settings-navigation-types'
+import { getSettingsTargetFromSectionId } from '../worktree-jump-palette-settings-target'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
@@ -25,22 +27,13 @@ import type { WorktreeJumpPaletteQuickActions } from '../workspaces/use-worktree
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import type { WorktreeJumpPaletteStoreState } from '../state/use-worktree-jump-palette-store-state'
 
-function getSettingsTargetFromSectionId(sectionId: string): {
-  pane: SettingsNavTarget
-  repoId: string | null
-  sectionId?: string
-} {
-  if (sectionId.startsWith('repo-')) {
-    return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
-  }
-  return { pane: sectionId as SettingsNavTarget, repoId: null }
-}
-
 type WorktreeJumpPaletteSelectionActionsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteQuickActions, 'buildQuickActionContext'> &
-  Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'>
+  Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'> & {
+    botScope: Pick<WorktreeJumpPaletteBotScope, 'selectAction'>
+  }
 
 export function useWorktreeJumpPaletteSelectionActions({
   visible,
@@ -61,7 +54,8 @@ export function useWorktreeJumpPaletteSelectionActions({
   previousBrowserPageIdRef,
   previousBrowserFocusTargetRef,
   previousWorktreeIdRef,
-  previousFocusElementRef
+  previousFocusElementRef,
+  botScope
 }: WorktreeJumpPaletteSelectionActionsInput) {
   // Why: the selection moves focus itself, so closing must not restore the prior target.
   const dismissForSelection = useCallback(() => {
@@ -266,6 +260,8 @@ export function useWorktreeJumpPaletteSelectionActions({
   })
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
+      // Any selection supersedes a bot reveal still waiting from an earlier one.
+      advanceBotPaletteGeneration()
       if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
@@ -280,6 +276,8 @@ export function useWorktreeJumpPaletteSelectionActions({
         handleSelectTask(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'bot-scope-action') {
+        botScope.selectAction(item.action)
       } else if (item.type === 'extra') {
         dismissForSelection()
         item.result.onSelect()
@@ -288,6 +286,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       }
     },
     [
+      botScope,
       dismissForSelection,
       handleSelectTask,
       handleSelectBrowserPage,

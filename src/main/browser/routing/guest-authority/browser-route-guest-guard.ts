@@ -1,7 +1,7 @@
 import { hasPendingBrowserPageAttach } from '../../guest-lifecycle/browser-page-memory'
 import type { Session, WebContents } from 'electron'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isValidBrowserRoutePageOwnerIdentity,

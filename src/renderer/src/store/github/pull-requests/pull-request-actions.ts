@@ -25,7 +25,7 @@ import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-revie
 import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
 import { findWorktreeById } from '../refresh/worktree-refresh'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export const createPullRequestActions = (
   set: Parameters<StateCreator<AppState>>[0],

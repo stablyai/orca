@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   hostWindowMaterial,
   resolveWindowMaterial,
@@ -13,7 +13,7 @@ import { Button } from '../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { readPrefersReducedTransparency } from '@/hooks/use-reduce-visual-effects'
+import { readPrefersReducedTransparency } from '@/hooks/theme/use-reduce-visual-effects'
 import {
   activeWindowMaterial,
   rendererWindowMaterialHost

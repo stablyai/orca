@@ -10,7 +10,10 @@ import {
 import { acquire, release } from '../execution/github-operation-slots'
 import { classifyGhError } from '../api/gh-error-classification'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
 
 // An explicit target keeps replies bound to the conversation; otherwise use the selected source.
 export async function addIssueComment(

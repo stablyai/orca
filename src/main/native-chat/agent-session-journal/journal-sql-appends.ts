@@ -35,8 +35,11 @@ import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifec
 import type { JournalWriterSettled } from './journal-sql-failure'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { claimJournalAutomaticSubmission } from './journal-sql-automatic-submission'
-import type { JournalAutomaticSelection } from './journal-automatic-submission'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type {
+  JournalAutomaticAdmit,
+  JournalAutomaticSelection
+} from './journal-automatic-submission'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
@@ -174,9 +177,10 @@ export abstract class SqlJournalAppends {
     input: { clientMessageId: string; fence: number },
     capture: () => JournalAutomaticSelection | Promise<JournalAutomaticSelection>,
     owed: (source: AgentMessageSource) => QueuedMessageOwed,
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    admit?: JournalAutomaticAdmit
   ) {
-    return claimJournalAutomaticSubmission(this, input, capture, owed, receipt)
+    return claimJournalAutomaticSubmission(this, input, capture, owed, receipt, admit)
   }
 
   resolveDispatch(

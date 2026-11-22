@@ -1,5 +1,5 @@
 import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'

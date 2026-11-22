@@ -1,4 +1,4 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -10,7 +10,7 @@ import {
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../../shared/agent-status/identity/tab-agent-from-signals'
-import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'

@@ -9,7 +9,7 @@ import {
 import {
   isDescendantOrEqual,
   normalizeExistingPath
-} from '../../filesystem/access/filesystem-path-containment'
+} from '../../../filesystem/local-file-io/filesystem-path-containment'
 import {
   findOwnersListedThroughAnotherGit,
   shouldRelistOwner
@@ -194,14 +194,6 @@ export function registerCreatedWorktreeRoot(
   advanceOwner(owner)
   refreshRegisteredWorktreeRoots()
   registeredWorktreeRootsDirty = true
-}
-
-export function __resetCreatedWorktreeRootsForTests(): void {
-  for (const owner of registeredOwners.values()) {
-    owner.recovered.clear()
-    advanceOwner(owner)
-  }
-  refreshRegisteredWorktreeRoots()
 }
 
 export function getRegisteredWorktreeRootsRevision(repoId: string): number {

@@ -6,9 +6,9 @@ import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
 import { captureJournalFrame, captureRequestFrame } from './agent-session-subscriber-frame-capture'

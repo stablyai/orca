@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   getCodexSelectionTargetForAccount,

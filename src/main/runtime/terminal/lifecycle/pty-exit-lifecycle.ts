@@ -1,4 +1,4 @@
-import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
+import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -14,24 +14,15 @@ import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceReads {
+export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
   protected abstract pruneDisconnectedPtyRecords(): void
-
-  protected abstract failActiveDispatchOnExit(
-    handle: string,
-    paneKey: string | null,
-    cause: TerminalExitCause,
-    lastOutput?: string
-  ): void
-
-  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -205,6 +196,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
+      this.reattachedProviderSequenceByPtyId.delete(ptyId)
       this.providerSnapshotPreferredPtys.delete(ptyId)
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)

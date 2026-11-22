@@ -114,9 +114,7 @@ export function useMobileDiffReviewGitHub(input: Input) {
         return Promise.resolve(false)
       }
       if (!client || connState !== 'connected') {
-        setActionError(
-          translate('session.useDiffReviewGitHub.waitingForDesktop', 'Waiting for desktop...')
-        )
+        setActionError(translate('common.waitingForHost', 'Waiting for host…'))
         return Promise.resolve(false)
       }
       const path = item.filePath

@@ -1,4 +1,7 @@
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -14,21 +17,16 @@ import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persis
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent,
-  resetLocalWorktreeScanGenerationsForTests
+  isLocalWorktreeScanGenerationCurrent
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
-import {
-  __resetLocalWorktreeMetadataPruneGateForTests,
-  requireLocalWorktreeMetadataPrune
-} from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import { requireLocalWorktreeMetadataPrune } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 import {
   assertWslUncPathRunning,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
-  _resetWorktreeCatalogOwnerForTests,
   invalidateWorktreeCatalogForRepo,
   isCurrentWorktreeCatalogObservation,
   readWorktreeCatalog
@@ -73,12 +71,6 @@ export function invalidateDetectedWorktreeScanCache(repoId: string): void {
   bumpLocalWorktreeScanGeneration(repoId)
   requireLocalWorktreeMetadataPrune(repoId)
   invalidateWorktreeCatalogForRepo(repoId)
-}
-
-export function __resetDetectedWorktreeScanCacheForTests(): void {
-  _resetWorktreeCatalogOwnerForTests()
-  resetLocalWorktreeScanGenerationsForTests()
-  __resetLocalWorktreeMetadataPruneGateForTests()
 }
 
 export async function listDetectedGitWorktrees(

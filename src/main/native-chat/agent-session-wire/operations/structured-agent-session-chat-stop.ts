@@ -2,7 +2,7 @@
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
-import { usageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { usageLimitContinueIdentity } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,

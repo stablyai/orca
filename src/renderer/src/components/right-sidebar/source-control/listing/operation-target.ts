@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
 

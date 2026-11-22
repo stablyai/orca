@@ -1,10 +1,8 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from '../pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
 
-export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
-  const thickness = styleOptions.dividerThicknessPx ?? 4
-  const HIT_PADDING = 3
-  return thickness + HIT_PADDING * 2
+function getDividerThickness(styleOptions: PaneStyleOptions): number {
+  return styleOptions.dividerThicknessPx ?? 4
 }
 
 export function createDivider(
@@ -15,13 +13,13 @@ export function createDivider(
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
 
-  // Use a wide transparent hit target; CSS ::after paints only the visible divider line.
-  const hitSize = getDividerHitSize(styleOptions)
+  // The element is only as wide as the visible line; CSS ::before widens the grab area over a neighbor.
+  const thickness = getDividerThickness(styleOptions)
   if (isVertical) {
-    divider.style.width = `${hitSize}px`
+    divider.style.width = `${thickness}px`
     divider.style.cursor = 'col-resize'
   } else {
-    divider.style.height = `${hitSize}px`
+    divider.style.height = `${thickness}px`
     divider.style.cursor = 'row-resize'
   }
   divider.style.flex = 'none'
@@ -43,21 +41,20 @@ export function disposeDividersIn(root: HTMLElement): void {
 }
 
 export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOptions): void {
-  const thickness = styleOptions.dividerThicknessPx ?? 4
-  const hitSize = getDividerHitSize(styleOptions)
+  const thickness = getDividerThickness(styleOptions)
 
   const dividers = root.querySelectorAll('.pane-divider')
   for (const div of dividers) {
     const el = div as HTMLElement
     const isVertical = el.classList.contains('is-vertical')
     if (isVertical) {
-      el.style.width = `${hitSize}px`
+      el.style.width = `${thickness}px`
     } else {
-      el.style.height = `${hitSize}px`
+      el.style.height = `${thickness}px`
     }
     el.style.setProperty('--divider-thickness', `${thickness}px`)
     // Extend ::after to perpendicular divider centers so split intersections connect.
-    el.style.setProperty('--divider-extension', `${hitSize / 2}px`)
+    el.style.setProperty('--divider-extension', `${thickness / 2}px`)
   }
 }
 

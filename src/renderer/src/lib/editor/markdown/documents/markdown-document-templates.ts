@@ -5,7 +5,7 @@ import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-re
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { runtimePathExists } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { basename, joinPath } from '../../../path'
-import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
 const MARKDOWN_TEMPLATE_MAX_DEPTH = 8

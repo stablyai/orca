@@ -1,4 +1,4 @@
-import type { GitHubIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { GitHubIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {
@@ -9,8 +9,11 @@ import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../s
 import { acquire, release } from '../execution/github-operation-slots'
 import { classifyGhError } from '../api/gh-error-classification'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import { codeHostFailure, combinedClassifiedFailure } from '../../../shared/code-host-failure-copy'
-import type { ClassifiedError } from '../../../shared/classified-error'
+import {
+  codeHostFailure,
+  combinedClassifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import { githubBodyImageUrls, githubBodyMediaHeaders } from '../attachments/body-image-urls'
 
 export async function updateIssue(

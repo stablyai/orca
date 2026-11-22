@@ -1,4 +1,4 @@
-import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import type { OwningHostCadence } from './owning-host-cadence-replan'
 
 export type VisibleHostedReviewRefreshTarget = {

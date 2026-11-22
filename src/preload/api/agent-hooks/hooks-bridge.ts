@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { PreloadApi } from '../../api-types'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 

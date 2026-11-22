@@ -7,11 +7,13 @@ import type {
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
+  ARTIFACT_RATE_LIMITED_CODE,
   artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../../../shared/artifacts/artifacts'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
@@ -94,7 +96,10 @@ export async function publishArtifactFromSurface(
       ),
       error instanceof ArtifactPublishPreparationError
         ? { description: artifactPreparationErrorDescription(error.code) }
-        : undefined
+        : // The desktop already wrote the limit and its local reset time into the message.
+          error instanceof RuntimeRpcCallError && error.code === ARTIFACT_RATE_LIMITED_CODE
+          ? { description: error.message }
+          : undefined
     )
   }
   return null

@@ -25,7 +25,11 @@ export type HomeAgentEntry = Readonly<{
   repo: string
   branch: string
   agent: RuntimeWorktreeAgentRow
+  /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
+  bot?: HomeAgentBot
 }>
+
+export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
 
 export type HostWorktreeInfo = {
   hostId: string
@@ -33,6 +37,8 @@ export type HostWorktreeInfo = {
   activeCount: number
   /** Every agent from this connection's latest list read. */
   agents?: readonly HomeAgentEntry[]
+  /** This connection's unread rows, by worktree id. */
+  unreadWorktreeIds?: readonly string[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
   lastSeenAgents?: readonly HomeAgentEntry[]
   catalogUnavailable?: boolean
@@ -42,24 +48,35 @@ export type HostWorktreeInfo = {
   countsProvenAt?: number
 }
 
-export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
-  return worktrees.flatMap((worktree) =>
-    Array.isArray(worktree.agents)
-      ? worktree.agents.map((agent) => ({
-          worktreeId: worktree.worktreeId,
-          workspaceName: worktree.displayName || worktree.repo,
-          repo: worktree.repo,
-          branch: worktree.branch,
-          agent
-        }))
-      : []
-  )
+export function homeAgentEntries(
+  worktrees: readonly HomeWorktreeSummary[],
+  botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
+): HomeAgentEntry[] {
+  return worktrees.flatMap((worktree) => {
+    if (!Array.isArray(worktree.agents)) {
+      return []
+    }
+    const bot = botByHomeId.get(worktree.worktreeId)
+    return worktree.agents.map((agent) => ({
+      worktreeId: worktree.worktreeId,
+      workspaceName: bot?.name || worktree.displayName || worktree.repo,
+      repo: worktree.repo,
+      branch: worktree.branch,
+      agent,
+      ...(bot ? { bot } : {})
+    }))
+  })
 }
 
 /** One desktop's counts read, as its card and the Agents list see it. */
 export type HomeWorktreeRead = {
   data:
-    | { totalWorktrees: number; activeCount: number; agents: readonly HomeAgentEntry[] }
+    | {
+        totalWorktrees: number
+        activeCount: number
+        agents: readonly HomeAgentEntry[]
+        unreadWorktreeIds?: readonly string[]
+      }
     | undefined
   dataUpdatedAt: number
   // The latest read failed; counts it had stay, as stale ones.
@@ -89,6 +106,7 @@ export function homeWorktreeInfo(
     totalWorktrees: data.totalWorktrees,
     activeCount: data.activeCount,
     ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),
+    ...(live && data.unreadWorktreeIds ? { unreadWorktreeIds: data.unreadWorktreeIds } : {}),
     ...(failed ? { catalogUnavailable: true, staleCounts: true } : {}),
     countsProvenAt: read.dataUpdatedAt
   }

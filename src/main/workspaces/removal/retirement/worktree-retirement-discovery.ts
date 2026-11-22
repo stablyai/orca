@@ -2,7 +2,7 @@ import { claudeProfileHistoryDirs } from '../../../claude-accounts/profiles/rout
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isWslUncPath, parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../shared/file-access/cross-platform-path'
 import {
   claudeProjectBucketNameBelowScope,
   mayBeHashedClaudeProjectBucketName

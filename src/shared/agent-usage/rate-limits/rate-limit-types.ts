@@ -70,6 +70,13 @@ export type OwnerNotSetUpPlaceholder =
   /** The host reports Claude on API-key billing and with no login alike, so it cannot say which. */
   | { kind: 'claude-unknown'; ownerLabel: string }
 
+/** The saved account and runtime slot whose credentials a successful reading used. */
+export type UsageReadingAccount = {
+  accountId: string
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+}
+
 export type UsageRateLimitMetadata = {
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
@@ -85,6 +92,8 @@ export type UsageRateLimitMetadata = {
   ownerNotSetUp?: OwnerNotSetUpPlaceholder
   /** Antigravity: the native login verified before and after the read; id is null for an unsaved login. */
   account?: { id: string | null; email: string | null }
+  /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
+  readingAccount?: UsageReadingAccount
 }
 
 export type ProviderRateLimits = {
@@ -176,7 +185,7 @@ export type CursorAccountStatus = {
   signedIn: boolean
   email: string | null
   displayName: string | null
-  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  /** Which local store the session came from: the OS keychain (macOS Keychain or Linux keyring), the CLI auth file, or Cursor IDE. */
   credentialSource: 'keychain' | 'cli' | 'desktop' | null
   planType: string | null
   tokenFresh: boolean

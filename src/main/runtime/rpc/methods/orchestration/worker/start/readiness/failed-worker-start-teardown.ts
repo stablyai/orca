@@ -1,4 +1,4 @@
-import { closeStructuredAgentSessionChild } from '../../../../../../agent-session/structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from '../../../../../../agent-session/lifecycle/structured-agent-session-close'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import {

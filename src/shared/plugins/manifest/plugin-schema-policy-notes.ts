@@ -60,7 +60,7 @@ export const PLUGIN_CATALOG_POLICY_NOTES: readonly string[] = [
   '',
   "Orca's plugin browser folds related `categories` slugs into one filter and shows an unknown slug as its own. Pick the slug for what the plugin adds:",
   '',
-  '- **Code languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.',
+  '- **Languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.',
   "- **Translations:** `language-packs`, `localization`, `i18n`, `translations`. Language packs that show Orca's interface in another language.",
   '',
   '## One repository can hold many plugins',

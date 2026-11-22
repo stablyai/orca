@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import {
-  closeTerminalTab,
-  type PrecomputedTerminalCloseState
-} from '../terminal/terminal-tab-actions'
+import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
+import type { PrecomputedTerminalCloseState } from '../terminal/tab-lifecycle/terminal-close-target'
 import {
   buildTerminalTabRetirementPlans,
   type TerminalTabRetirementPlan,

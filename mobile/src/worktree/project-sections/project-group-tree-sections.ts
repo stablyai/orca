@@ -27,12 +27,13 @@ export type GroupTreePlacement = {
 export type GroupFolderRows = {
   /** Each listed group's folder workspaces and the rows nested under them, as its folder lane. */
   folderRowsByGroupId: Map<string, Worktree[]>
-  /** Those folder workspaces, which belong to no project. */
-  folders: ReadonlySet<Worktree>
   /** The rows nested under them; they still count in their own projects, only their display moves. */
   bound: ReadonlySet<Worktree>
   /** The row a project section files a row under. */
   groupingRootOf: (row: Worktree) => Worktree
+  /** The rows that count in their own projects: not the folder workspaces, which belong to none,
+   * nor a hidden project's rows, which show only under their folder workspace (#43083). */
+  projectRows: Worktree[]
 }
 
 // Binds rows to a group's folder lane as the desktop's getSidebarFolderOccurrences does.
@@ -40,7 +41,8 @@ export function bindGroupFolderRows(
   rows: readonly Worktree[],
   projectGroups: readonly ProjectGroup[],
   displayRootOf: (row: Worktree) => Worktree,
-  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>,
+  isInHiddenProject: (row: Worktree) => boolean
 ): GroupFolderRows {
   const listedGroupIds = new Set(projectGroups.map((group) => group.id))
   const groupIdOf = (row: Worktree) => {
@@ -68,14 +70,15 @@ export function bindGroupFolderRows(
     folderIdentities: [...folders].map(getWorktreeRowIdentity),
     childrenByParentIdentity,
     identityOf: getWorktreeRowIdentity,
-    listed: new Set(rows),
+    // A hidden row never roots a shown row's project (#43083).
+    listed: new Set(rows.filter((row) => !isInHiddenProject(row))),
     bound
   })
   return {
     folderRowsByGroupId,
-    folders,
     bound,
-    groupingRootOf: (row) => groupingRoots.get(getWorktreeRowIdentity(row)) ?? displayRootOf(row)
+    groupingRootOf: (row) => groupingRoots.get(getWorktreeRowIdentity(row)) ?? displayRootOf(row),
+    projectRows: rows.filter((row) => !folders.has(row) && !isInHiddenProject(row))
   }
 }
 

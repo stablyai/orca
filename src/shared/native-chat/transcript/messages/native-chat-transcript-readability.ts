@@ -1,4 +1,4 @@
-import { isRuntimeOwnedSshTargetId } from '../../../execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../execution-host/execution-host'
 
 /** Model-A SSH stores Grok transcripts on a host this renderer cannot read. */
 export function isNativeChatTranscriptLocalReadable(

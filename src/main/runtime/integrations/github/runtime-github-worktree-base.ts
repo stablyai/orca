@@ -15,7 +15,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
 export type RuntimeGitHubWorktreeBaseArgs = {
   repoSelector: string

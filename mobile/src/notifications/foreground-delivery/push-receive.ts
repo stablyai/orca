@@ -1,4 +1,5 @@
 import { wasPushDismissed } from '../dismissal/push-dismissal-watermarks'
+import { botAccessRequestIdOfNotice } from '../../../../src/shared/bots/bot-access-request'
 import { dismissPresentedPushNotification } from '../dismissal/push-tray-dismissal'
 import { shouldSuppressNotificationWhileViewing } from '../delivery-policy/notification-viewing-policy'
 import { loadPushNotificationsEnabled } from '../../storage/preferences'
@@ -11,7 +12,7 @@ import {
   loadNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from '../delivery-policy/notification-delivery-preferences'
-import { allowsMobilePushAlertKind } from '../../../../src/shared/mobile-push-alert'
+import { allowsMobilePushAlertKind } from '../../../../src/shared/notifications/mobile-push-alert'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -45,14 +46,24 @@ function claimForegroundPush(payload: OrcaPushPayload): boolean {
   return true
 }
 
-export function resetForegroundPushClaimsForTests(): void {
-  recentForegroundPushes.clear()
+const BADGE_ONLY_BEHAVIOR: NotificationBehavior = {
+  shouldShowBanner: false,
+  shouldShowList: false,
+  shouldPlaySound: false,
+  shouldSetBadge: true
 }
 
 export async function foregroundNotificationBehavior(notification: {
-  request: Parameters<typeof readNativeNotificationData>[0]
+  request: Parameters<typeof readNativeNotificationData>[0] & {
+    content: { title?: string | null; body?: string | null }
+  }
 }): Promise<NotificationBehavior> {
-  const data = readNativeNotificationData(notification.request)
+  const { request } = notification
+  // The gateway's icon-count update carries no text and nothing to present.
+  if (isRemotePushTrigger(request.trigger) && !request.content.title && !request.content.body) {
+    return BADGE_ONLY_BEHAVIOR
+  }
+  const data = readNativeNotificationData(request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
@@ -64,7 +75,8 @@ export async function foregroundNotificationBehavior(notification: {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,
     shouldPlaySound: !suppressed && preferences.sound,
-    shouldSetBadge: false
+    // The gateway puts the phone's total across hosts on each push.
+    shouldSetBadge: true
   }
 }
 
@@ -137,10 +149,13 @@ export function pushNotificationRouteData(
   if (!hostId) {
     return null
   }
+  const accessRequestId = botAccessRequestIdOfNotice(payload.notificationId)
   return {
     hostId,
     ...(payload.paneKey ? { paneKey: payload.paneKey } : {}),
     ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
-    ...(payload.executionHost ? { executionHost: payload.executionHost } : {})
+    ...(payload.executionHost ? { executionHost: payload.executionHost } : {}),
+    // The contract has no request field: an access request's notice names it in its id.
+    ...(accessRequestId ? { accessRequestId } : {})
   }
 }

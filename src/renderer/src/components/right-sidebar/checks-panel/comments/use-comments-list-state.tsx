@@ -35,8 +35,8 @@ import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-auth
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { PRCommentGroupView } from './comment-group'
-import { useNow } from '@/hooks/use-now'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { useNow } from '@/lib/window-activity/use-now'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']

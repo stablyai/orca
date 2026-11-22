@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../../workspace-layout/tab-groups/tab-types'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import { TerminalPaneLayoutNodeSchema } from '../session-tabs/session-tabs-schemas-params'
 import {

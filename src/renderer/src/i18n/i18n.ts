@@ -17,12 +17,12 @@ import {
   getTranslationResourceVersion
 } from './translation-resource-version'
 import { resolveUiLocale } from './supported-languages'
-import type { SupportedUiLocale } from '../../../shared/ui-locale'
-import type { UiLanguage } from '../../../shared/ui-language'
+import { DEFAULT_UI_LOCALE, type SupportedUiLocale } from '../../../shared/i18n/ui-locale'
+import type { UiLanguage } from '../../../shared/i18n/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
-import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
+import { createOrcaI18n } from '../../../shared/i18n/orca-i18n-instance'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
@@ -186,6 +186,12 @@ export function getIntlLocale(): string {
   const active = i18n.language
   const pack = orcaI18n.getPluginLanguagePacks().find((entry) => entry.resourceLanguage === active)
   return supportedIntlLocale(pack?.locale ?? active, Intl.DateTimeFormat)
+}
+
+/** getIntlLocale() for values inside `key`'s copy; English when that copy falls back to English. */
+export function getIntlLocaleForCopy(key: string): string {
+  const copy = i18n.getResource(i18n.language, 'translation', key)
+  return typeof copy === 'string' && copy !== '' ? getIntlLocale() : DEFAULT_UI_LOCALE
 }
 
 export function setRendererPluginLanguagePacks(

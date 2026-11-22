@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
 import { RipgrepSearchDiagnostics } from '../../shared/ripgrep/ripgrep-search-diagnostics'
-import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
+import { SearchSubprocessLineAccumulator } from '../../shared/process-streams/search-subprocess-lines'
 import {
   throwIfSignalAborted,
   abortSignalReason

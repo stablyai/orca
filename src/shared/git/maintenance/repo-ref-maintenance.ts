@@ -1,5 +1,5 @@
-import { countLooseRefs } from '../../loose-ref-count'
-import { PackedRefsLockGate } from '../../packed-refs-lock-gate'
+import { countLooseRefs } from './loose-ref-count'
+import { PackedRefsLockGate } from './packed-refs-lock-gate'
 import { RepoMaintenanceSchedule } from './repo-maintenance-schedule'
 import {
   LOOSE_REF_PACK_THRESHOLD,

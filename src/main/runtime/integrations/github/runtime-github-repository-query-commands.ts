@@ -6,6 +6,7 @@ import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-ho
 import { countWorkItems } from '../../../github/client/list/count-work-items'
 import { getWorkItem, getWorkItemByOwnerRepo } from '../../../github/client/fetch/get-work-item'
 import { listAssignableUsers, listLabels } from '../../../github/issues/issue-field-options'
+import { resolveIssueGitHubApiRepositorySource } from '../../../github/repositories/github-api-repository'
 import { listIssues } from '../../../github/issues/issues'
 import { listWorkItems } from '../../../github/client/list/list-work-items'
 import type { MainWorkItem } from '../../../github/client/map/work-item-field-coercion'
@@ -16,7 +17,7 @@ import {
 import { getRateLimit } from '../../../github/api/rate-limit'
 import { resolveGhAccountRequiredHost } from '../../../github/accounts/account-binding-required-host'
 import { getWorkItemDetails } from '../../../github/work-items/work-item-details'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -120,6 +121,18 @@ export class RuntimeGitHubRepositoryQueryCommands {
     return expectedGhAccount === undefined
       ? getWorkItemDetails(...args)
       : getWorkItemDetails(...args, expectedGhAccount)
+  }
+
+  /** The GitHub repo the project's issues live in, by its issue source setting; null when unknown. */
+  async getRepoIssueSource(repoSelector: string): Promise<GitHubOwnerRepo | null> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    const resolved = await resolveIssueGitHubApiRepositorySource(
+      repo.path,
+      repo.issueSourcePreference,
+      getRepoRoutingConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0] ?? {}
+    )
+    return resolved.source
   }
 
   async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {

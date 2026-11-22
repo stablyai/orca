@@ -2,7 +2,7 @@ import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artif
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
@@ -19,7 +19,7 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   acquireTerminalArtifactGrant,
@@ -128,7 +128,8 @@ export function buildDocPreviewShareControl(
   return (
     <ArtifactPublishButton
       sourceKey={sourceKey}
-      className="h-7 w-7"
+      size="icon-xs"
+      variant="muted-field-icon"
       createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
     />
   )

@@ -15,7 +15,7 @@ import { terminalConfigImportSettingsUpdate } from '../../../../shared/terminal/
 import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding/onboarding-state-types'
 import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 

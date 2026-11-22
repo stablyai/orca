@@ -1,7 +1,7 @@
-// @protected-copy: update signature and publisher warnings.
+// @protected-copy scope=file
 import { getUpdateInstallBlockGuidance } from './update-install-block-guidance'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
-import type { UpdateErrorCardModel } from '../../UpdateErrorCardContent'
+import type { UpdateErrorCardModel } from './UpdateErrorCardContent'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure

@@ -1,6 +1,6 @@
 import type { JournalSqlForkCopy } from '../../agent-session-journal/journal-sql-fork-copy'
 import type { NativeCopyOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
-import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'

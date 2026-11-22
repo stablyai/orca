@@ -6,6 +6,7 @@ import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/bro
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
+import type { BrowserExtensionSidePanelApi } from './browser-extension-side-panel-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
 import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
 import type {
@@ -36,7 +37,7 @@ import type {
   BrowserPagePromptResult
 } from '../../../shared/browser/prompts/browser-page-prompt'
 import type {
-  BrowserSitePermission,
+  BrowserSitePermissionKey,
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
 } from '../../../shared/browser/site-settings/browser-site-permission'
@@ -66,6 +67,7 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserCookieImportResult,
+  BrowserProfileCookieImportArgs,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -237,17 +239,15 @@ export type BrowserApi = {
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
+  sessionImportCookies: (args: BrowserProfileCookieImportArgs) => Promise<BrowserCookieImportResult>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionDetectBrowsersForClientHost: (args: {
     environmentId: string
   }) => Promise<DetectedBrowserInfo[] | null>
-  sessionImportFromBrowser: (args: {
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => Promise<BrowserCookieImportResult>
+  sessionImportFromBrowser: (
+    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string
@@ -265,7 +265,7 @@ export type BrowserApi = {
   sitePermissionsSet: (args: {
     profileId: string
     origin: string
-    permission: BrowserSitePermission
+    permission: BrowserSitePermissionKey
     decision: BrowserSitePermissionDecision | null
   }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
@@ -301,6 +301,7 @@ export type BrowserApi = {
   onExtensionsChanged: (callback: () => void) => () => void
 } & BrowserGuestDiscardApi &
   BrowserExtensionToolbarApi &
+  BrowserExtensionSidePanelApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &

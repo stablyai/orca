@@ -10,7 +10,14 @@ type SettingsGroupDisclosureProps = {
   label?: string
   /** A muted hint after the label naming what the disclosure holds. */
   description?: string
+  /** A muted line under the label, for a disclosure that stands as a card row of its own. */
+  summary?: React.ReactNode
   forceOpen?: boolean
+  /** Owns the open state when set; a click or a settings jump reports through onOpenChange. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Lines its rows up with the card's other rows instead of one step in. */
+  flush?: boolean
   children: React.ReactNode
 }
 
@@ -18,11 +25,22 @@ type SettingsGroupDisclosureProps = {
 export function SettingsGroupDisclosure({
   label,
   description,
+  summary,
   forceOpen = false,
+  open: controlledOpen,
+  onOpenChange,
+  flush = false,
   children
 }: SettingsGroupDisclosureProps): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) {
+      setOwnOpen(next)
+    }
+    onOpenChange?.(next)
+  }
   const expanded = open || forceOpen
   const revealRef = useSettingsTargetReveal<HTMLDivElement>(() => setOpen(true))
 
@@ -31,24 +49,42 @@ export function SettingsGroupDisclosure({
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => setOpen(!open)}
         // Unsaved edits must remain reachable.
         disabled={forceOpen}
-        className="flex min-h-11 w-full items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default"
+        className={cn(
+          'flex min-h-11 w-full items-center gap-2 text-left text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default',
+          summary ? 'py-[9px]' : 'font-semibold'
+        )}
       >
         <ChevronRight
           className={cn(
-            'size-3.5 text-muted-foreground transition-transform',
+            'size-3.5 shrink-0 text-muted-foreground transition-transform',
             expanded && 'rotate-90'
           )}
         />
-        {label ?? t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
-        {description ? (
-          <span className="truncate text-xs font-normal text-muted-foreground">{description}</span>
-        ) : null}
+        {summary ? (
+          <span className="min-w-0 flex-1">
+            <span className="block">{label}</span>
+            <span className="mt-0.5 block text-settings-detail text-muted-foreground">
+              {summary}
+            </span>
+          </span>
+        ) : (
+          // A description too long for the line wraps under the label instead of being cut off.
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
+            <span>
+              {label ??
+                t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+            </span>
+            {description ? (
+              <span className="text-xs font-normal text-muted-foreground">{description}</span>
+            ) : null}
+          </span>
+        )}
       </button>
       {/* Stays mounted while collapsed so a settings jump can find and reveal its rows. */}
-      <div hidden={!expanded} className={SETTINGS_GROUP_NESTED_INSET_CLASS}>
+      <div hidden={!expanded} className={flush ? undefined : SETTINGS_GROUP_NESTED_INSET_CLASS}>
         {children}
       </div>
     </div>

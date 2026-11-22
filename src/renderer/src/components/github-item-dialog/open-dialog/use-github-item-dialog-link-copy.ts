@@ -5,7 +5,7 @@ import {
   createGitHubLinkCopyState,
   markGitHubLinkCopied,
   resolveGitHubLinkCopyState
-} from '@/components/github-link-copy-state'
+} from '@/components/github/github-link-copy-state'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 

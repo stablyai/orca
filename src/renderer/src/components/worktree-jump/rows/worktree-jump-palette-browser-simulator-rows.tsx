@@ -13,8 +13,8 @@ import {
 } from './worktree-jump-palette-row-content'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
-import { BrowserFavicon } from '@/components/browser-favicon'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function WorktreeJumpPaletteSimulatorRow({
   entry,

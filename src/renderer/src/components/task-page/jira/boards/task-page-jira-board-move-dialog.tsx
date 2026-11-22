@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
-import { JiraTransitionFieldsForm } from '../../../jira-transition-fields-form'
+import { JiraTransitionFieldsForm } from '../issue-workspace/jira-transition-fields-form'
 import { classifyTransitionRequirements } from '../../../../../../shared/jira/jira-transition-fields'
 import type {
   JiraIssue,

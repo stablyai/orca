@@ -1,16 +1,16 @@
 import { translate } from '../../i18n/mobile-i18n'
-import type { AgentSessionConversationNames } from '../../../../src/shared/agent-session/agent-session-conversation-names'
+import type { AgentSessionConversationNames } from '../../../../src/shared/agent-session/conversation-naming/agent-session-conversation-names'
 import type { AgentSessionConversationName } from '../../../../src/shared/agent-session/agent-session-wire'
 import {
   agentSessionForkSourceSavedName,
   agentSessionShownName
-} from '../../../../src/shared/agent-session/agent-session-fork-name'
+} from '../../../../src/shared/agent-session/conversation-naming/agent-session-fork-name'
 import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import {
   FORK_MARKED_NAME_SLOTS,
   forkMarkedNameParts,
   type ForkMarkedNamePart
-} from '../../../../src/shared/agent-session/agent-session-fork-name-order'
+} from '../../../../src/shared/agent-session/conversation-naming/agent-session-fork-name-order'
 
 /** A forked chat's title in the locale's order: the "Fork ·" mark and the name as separate parts. */
 export function mobileForkMarkedNameParts(): ForkMarkedNamePart[] {

@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 
@@ -66,13 +67,15 @@ export function useNativeChatSelectedHistory({
     selectionChanged()
     return () => document?.removeEventListener('selectionchange', selectionChanged)
   }, [root, sourceKey, isVisible, selectedSource])
-  useEffect(
-    () => () => {
-      release.current?.()
-      release.current = null
-      owesTrim.current = false
-    },
-    [retainHistory, sourceKey]
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        release.current?.()
+        release.current = null
+        owesTrim.current = false
+      },
+      [retainHistory, sourceKey]
+    )
   )
   return { protectSelection, deferTrim, cancelTrim }
 }

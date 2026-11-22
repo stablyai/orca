@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 
 /** Drive, UNC share, WSL distro or POSIX root, as `normalizeRuntimePathForComparison` spells it. */
 const FILESYSTEM_ROOT_KEY = /^(?:\/|[a-z]:\/?|\/\/[^/]+(?:\/[^/]+)?)$/i

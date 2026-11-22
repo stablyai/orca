@@ -7,7 +7,7 @@ import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgeCloseResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -318,8 +318,8 @@ export function resizeLegacyRelayPane(ptyId: string, cols: number, rows: number)
   bridgeForPty(ptyId)?.resize(ptyId, cols, rows)
 }
 
-export function setLegacyRelayPaneOutputPaused(ptyId: string, paused: boolean): void {
-  hiddenOutput?.setPaused(ptyId, paused)
+export function setLegacyRelayOutputPaused(id: string, paused: boolean, replay = false): void {
+  hiddenOutput?.setPaused(id, paused, replay)
 }
 
 /** Only the bridge stops PTYs it serves or owes a stop. */

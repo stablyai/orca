@@ -1,4 +1,4 @@
-import type { OrcaVmRecipeLifecycleMode } from '../../orca-yaml-hook-types'
+import type { OrcaVmRecipeLifecycleMode } from '../../workspace-setup/orca-yaml-hook-types'
 import { formatEphemeralVmRecipeTimeout } from './ephemeral-vm-recipe-timeouts'
 
 // One English table for ephemeral VM failures: main builds the wire/persisted English, the renderer translates by code.

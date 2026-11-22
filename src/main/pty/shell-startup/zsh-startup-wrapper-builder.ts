@@ -1,4 +1,4 @@
-import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
@@ -17,7 +17,7 @@ import {
   ZSH_USER_ZSHENV_SOURCE_BLOCK,
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
-import { ZSH_WSL_CWD_REPORT_BLOCK } from '../../wsl/filesystem/wsl-shell-cwd-report'
+import { ZSH_CWD_REPORT_BLOCK } from './shell-cwd-report'
 
 export type ZshWrapperRestoreSpec = {
   /** Local-only PATH restore; inert outside WSL. */
@@ -36,8 +36,6 @@ export type ZshStartupHookSpec = {
   osc133CommandMarkers: boolean
   /** Local-only command delivery from the first zle line editor. */
   startupCommandDelivery: boolean
-  /** WSL bridge panes report their folder (OSC 7) at each prompt. */
-  wslCwdReports?: boolean
   overlayRestoreComment: string
   restores: ZshWrapperRestoreSpec
 }
@@ -59,6 +57,7 @@ const CODEX_HOME_RESTORE = `# Restore the runtime CODEX_HOME after user rc files
 
 const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
   local exit_code=$?
+  __orca_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
     builtin printf "\\033]133;D;%s\\007" "$exit_code"
     builtin unset __orca_in_command
@@ -133,15 +132,11 @@ ${indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped, t
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions
 ${ZSH_DEFERRED_LINE_INIT_RETIRE_BLOCK}
-${permanentPrecmd}${
-    spec.wslCwdReports
-      ? `
-  if [[ -n \${WSL_DISTRO_NAME:-} ]]; then
-    (( \${precmd_functions[(Ie)__orca_wsl_cwd_report]} )) || precmd_functions+=(__orca_wsl_cwd_report)
-    __orca_wsl_cwd_report
-  fi`
-      : ''
-  }
+${permanentPrecmd}
+  if ! __orca_has_feature markers; then
+    precmd_functions=(__orca_cwd_report \${precmd_functions:#__orca_cwd_report})
+    __orca_cwd_report
+  fi
 ${joinBlocks([
   spec.restores.managedWslCli ? indentBlock(WSL_MANAGED_CLI_PATH_RESTORE, '  ') : null,
   indentBlock(ORCA_CLI_POSIX_PATH_RESTORE, '  ').replace(/\n$/, ''),
@@ -174,7 +169,7 @@ export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
     ZSH_FEATURE_CHANNEL_BLOCK,
     SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
     spec.osc133CommandMarkers ? ZSH_OSC133_FUNCTION_BLOCK : null,
-    spec.wslCwdReports ? ZSH_WSL_CWD_REPORT_BLOCK : null,
+    ZSH_CWD_REPORT_BLOCK,
     ZSH_DEFERRED_LINE_INIT_BLOCK,
     buildDeferredInit(spec),
     ZSH_USER_ZSHENV_SOURCE_BLOCK

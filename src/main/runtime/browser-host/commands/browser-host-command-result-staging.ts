@@ -2,22 +2,21 @@ import {
   BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES,
   type BrowserClientAutomationResult as BrowserClientHostCommandResult
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import { BrowserError } from '../../../browser/browser-error'
 import type {
   BrowserHostCommandPageState,
   BrowserHostCommandRecord,
   BrowserHostCommandResultChunkParams as ChunkParams
 } from './browser-host-command-state'
+import { StagedResultChunks } from './staged-result-chunks'
 
 // Several pages can stage at once; bound the lease's total, not just each result.
 const MAX_STAGED_BYTES_PER_LEASE = 2 * BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
 
-type StagedResult = { chunks: Buffer[]; bytes: number }
-
 /** Holds chunked automation results until the desktop settles their command. */
 export class BrowserHostCommandResultStaging {
-  private readonly staged = new Map<BrowserHostCommandRecord, StagedResult>()
-  private bytes = 0
+  private readonly chunks = new StagedResultChunks<BrowserHostCommandRecord>(
+    MAX_STAGED_BYTES_PER_LEASE
+  )
 
   append(
     page: BrowserHostCommandPageState | undefined,
@@ -34,33 +33,7 @@ export class BrowserHostCommandResultStaging {
     ) {
       throw new Error('browser_host_command_result_chunk_conflict')
     }
-    if (offset === 0) {
-      this.release(record)
-    }
-    const staged = this.staged.get(record) ?? { chunks: [], bytes: 0 }
-    if (offset !== staged.bytes) {
-      this.release(record)
-      throw new Error('browser_host_command_result_chunk_out_of_order')
-    }
-    const chunk = Buffer.from(contentBase64, 'base64')
-    if (chunk.byteLength === 0) {
-      this.release(record)
-      throw new Error('browser_host_command_result_chunk_invalid')
-    }
-    if (
-      staged.bytes + chunk.byteLength > BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES ||
-      this.bytes + chunk.byteLength > MAX_STAGED_BYTES_PER_LEASE
-    ) {
-      this.release(record)
-      throw new BrowserError(
-        'browser_host_command_result_too_large',
-        'The server is already holding too many large browser results; retry, or use --format jpeg, a selector, or a smaller viewport.'
-      )
-    }
-    staged.chunks.push(chunk)
-    staged.bytes += chunk.byteLength
-    this.bytes += chunk.byteLength
-    this.staged.set(record, staged)
+    this.chunks.append(record, offset, contentBase64)
   }
 
   /** Swaps a staged marker for the value its chunks carried, and frees them either way. */
@@ -68,34 +41,21 @@ export class BrowserHostCommandResultStaging {
     record: BrowserHostCommandRecord,
     result: BrowserClientHostCommandResult
   ): BrowserClientHostCommandResult {
-    const staged = this.staged.get(record)
-    this.release(record)
     if (result.status !== 'completed' || result.stagedValueBytes === undefined) {
+      this.chunks.release(record)
       return result
     }
-    if (staged?.bytes !== result.stagedValueBytes) {
-      return { status: 'failed', errorCode: 'browser_host_command_result_incomplete' }
-    }
-    try {
-      return {
-        status: 'completed',
-        value: JSON.parse(Buffer.concat(staged.chunks).toString('utf8'))
-      }
-    } catch {
-      return { status: 'failed', errorCode: 'browser_host_command_result_invalid' }
-    }
+    const taken = this.chunks.take(record, result.stagedValueBytes)
+    return taken.ok
+      ? { status: 'completed', value: taken.value }
+      : { status: 'failed', errorCode: taken.errorCode }
   }
 
   release(record: BrowserHostCommandRecord): void {
-    const staged = this.staged.get(record)
-    if (staged) {
-      this.bytes -= staged.bytes
-      this.staged.delete(record)
-    }
+    this.chunks.release(record)
   }
 
   clear(): void {
-    this.staged.clear()
-    this.bytes = 0
+    this.chunks.clear()
   }
 }

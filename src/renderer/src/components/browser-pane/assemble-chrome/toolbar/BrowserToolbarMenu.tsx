@@ -23,10 +23,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
+import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
   workspaceId: string
+  worktreeId: string
   browserPageId: string
   viewportPresetId: BrowserViewportPresetId | null
   isActive: boolean
@@ -36,12 +38,15 @@ type BrowserToolbarMenuProps = {
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu, built by the toolbar that owns the pinned buttons. */
   extensionsSub: React.ReactNode
+  /** False where the page's session isn't one of this desktop's profiles, so switching and cookie import can't reach it. */
+  showProfiles?: boolean
   overflow: BrowserChromeOverflowMenuProps
 }
 
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
+  worktreeId,
   browserPageId,
   viewportPresetId,
   isActive,
@@ -49,16 +54,17 @@ export function BrowserToolbarMenu({
   isBlankTab,
   pageActions,
   extensionsSub,
+  showProfiles = true,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const { sshRoute, detectedBrowsers, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 1
@@ -68,7 +74,8 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
-  const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintOnPage
+  const shouldForceMenuOpen =
+    showProfiles && browserCookieTourStepActive && isActive && !importHintOnPage
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -76,7 +83,7 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
-  // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
+  // The tour's fallback step points at the top Import Cookies row, so it holds the menu open.
   const [menuOpen, setMenuOpen] = useState(shouldForceMenuOpen)
   const [prevShouldForceMenuOpen, setPrevShouldForceMenuOpen] = useState(shouldForceMenuOpen)
   if (prevShouldForceMenuOpen !== shouldForceMenuOpen) {
@@ -209,7 +216,12 @@ export function BrowserToolbarMenu({
     browserFamily: string,
     browserProfile?: string
   ): Promise<void> => {
-    const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+    const result = await importCookiesFromBrowser(
+      effectiveProfileId,
+      browserFamily,
+      browserProfile,
+      sshRoute
+    )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -240,7 +252,7 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, sshRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -263,20 +275,32 @@ export function BrowserToolbarMenu({
         browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
-        profile={{
-          browserPageId,
-          allProfiles,
-          effectiveProfileId,
-          onSwitchProfile: handleSwitchProfile,
-          onNewProfile: () => setNewProfileDialogOpen(true),
-          detectedBrowsers,
-          onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
-          browserSessionImportState,
-          onImportFromBrowser: (browserFamily, browserProfile) =>
-            void handleImportFromBrowser(browserFamily, browserProfile),
-          onImportFromFile: () => void handleImportFromFile(),
-          forceOpen: shouldForceMenuOpen
-        }}
+        profile={
+          showProfiles
+            ? {
+                browserPageId,
+                allProfiles,
+                effectiveProfileId,
+                onSwitchProfile: handleSwitchProfile,
+                onNewProfile: () => setNewProfileDialogOpen(true)
+              }
+            : null
+        }
+        cookieImport={
+          showProfiles
+            ? {
+                browserPageId,
+                effectiveProfileId,
+                detectedBrowsers,
+                onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
+                browserSessionImportState,
+                sshRoute,
+                onImportFromBrowser: (browserFamily, browserProfile) =>
+                  void handleImportFromBrowser(browserFamily, browserProfile),
+                onImportFromFile: () => void handleImportFromFile()
+              }
+            : null
+        }
         pageActions={pageActions}
         extensionsSub={extensionsSub}
         viewportPresetId={viewportPresetId}

@@ -1,4 +1,4 @@
-import { isRuntimePathAbsolute } from '../../cross-platform-path'
+import { isRuntimePathAbsolute } from '../../file-access/cross-platform-path'
 import { isRasterImagePath } from '../../file-preview/file-preview-kind'
 import {
   isToolCallBlock,

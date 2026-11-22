@@ -26,7 +26,7 @@ export function registerLinearHandlers(): void {
   })
 
   ipcMain.handle('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
-    disconnect(normalizeWorkspaceId(args?.workspaceId))
+    await disconnect(normalizeWorkspaceId(args?.workspaceId))
     _resetPreflightCache()
   })
 

@@ -1,4 +1,4 @@
-import type { EmulatorSelectionRequired } from '../../../../../shared/emulator-opening-preferences'
+import type { EmulatorSelectionRequired } from '../../../../../shared/emulator/emulator-opening-preferences'
 import type { EmulatorPaneSession, SimulatorDeviceRow } from './emulator-pane-types'
 
 type EmulatorAttachResult = {

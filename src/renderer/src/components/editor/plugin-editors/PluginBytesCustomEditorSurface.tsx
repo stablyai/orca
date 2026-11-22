@@ -6,7 +6,7 @@ import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plug
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { matchPluginFile } from '../../../../../shared/plugins/contributions/plugin-file-match'
 import { fileTypeOfPath } from '../../../../../shared/plugins/contributions/plugin-file-type'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { Button } from '../../ui/button'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from '../loading/editor-panel-content-types'

@@ -7,9 +7,9 @@ import {
   agentSessionRewindTargetIds
 } from './agent-session-rewind-targets'
 import type { AgentSessionWriteFailure } from '../../failures/agent-session-write-failure'
-import type { StructuredAgentSessionState } from '../../structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../view/live-read/structured-agent-session-reducer'
 import type { AgentJournalMessageItem } from '../../journal/agent-session-journal-types'
-import { nativeChatRewindOffered } from '../../../native-chat/native-chat-rewind-eligibility'
+import { nativeChatRewindOffered } from '../../../native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */

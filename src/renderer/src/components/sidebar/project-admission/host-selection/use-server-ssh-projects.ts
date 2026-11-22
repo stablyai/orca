@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/ssh/ssh-target-management'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type ServerSshProjects = {

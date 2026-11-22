@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronDown } from 'lucide-react'
 import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult
-} from '../../../../../shared/developer-permissions-types'
+} from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'

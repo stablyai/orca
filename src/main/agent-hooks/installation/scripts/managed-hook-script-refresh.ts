@@ -77,9 +77,18 @@ export async function refreshManagedScriptIfPresent(
 }
 
 // Callers must establish ownership from a surviving managed script or registration first.
-export async function restoreManagedScript(scriptPath: string, content: string): Promise<void> {
+export async function restoreManagedScript(
+  scriptPath: string,
+  content: string | Buffer,
+  options: { moveLockedTargetAside?: boolean } = {}
+): Promise<void> {
   await mkdir(dirname(scriptPath), { recursive: true })
-  await writeManagedScriptAtomically(scriptPath, content, true)
+  await writeManagedScriptAtomically(
+    scriptPath,
+    content,
+    true,
+    options.moveLockedTargetAside === true
+  )
 }
 
 async function writeManagedScriptAtomically(

@@ -14,7 +14,10 @@ export abstract class OrcaRuntimeWithPtyController extends OrcaRuntimeWithGetRun
     // Why: CLI terminal writes must go through the main-owned PTY registry
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
-    this.ptyController = controller
+    if (this.ptyController !== controller) {
+      this.ptyControllerGeneration++
+      this.ptyController = controller
+    }
   }
 
   /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */

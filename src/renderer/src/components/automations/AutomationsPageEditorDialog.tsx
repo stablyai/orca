@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useMemo } from 'react'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { AutomationEditorDialog } from './authoring/AutomationEditorDialog'
 import { getAutomationAuthorityTarget } from './hosts/automation-host-client'
 import type { AutomationsPageController } from './use-automations-page-controller'
@@ -35,6 +36,13 @@ export function AutomationsPageEditorDialog({
     editorNoticeHost,
     setEditorNoticeHost
   } = local
+  const bots = useBots()
+  const botsEnabled = useBotsEnabled()
+  const editingBotId = draft.bot?.botId
+  const editorBots = useMemo(
+    () => (botsEnabled ? bots : bots.filter((bot) => bot.id === editingBotId)),
+    [botsEnabled, bots, editingBotId]
+  )
   const { hostCatalog } = list
   return (
     <AutomationEditorDialog
@@ -67,6 +75,7 @@ export function AutomationsPageEditorDialog({
       worktrees={destinationForm.dialogWorktrees}
       settings={settings}
       draft={draft}
+      bots={editorBots}
       onProjectChange={editorActions.handleProjectChange}
       getRepoHostLabel={presentation.getAutomationRepoHostLabel}
       allowAddProject={

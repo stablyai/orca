@@ -3,7 +3,7 @@ import {
   type AgentSessionBackgroundTaskStops
 } from '../../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionCapabilities } from '../../../../shared/agent-session/agent-session-capabilities'
+import type { AgentSessionCapabilities } from '../../../../shared/agent-session/capabilities/agent-session-capabilities'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'

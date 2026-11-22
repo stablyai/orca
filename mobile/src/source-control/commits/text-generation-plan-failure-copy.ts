@@ -1,4 +1,4 @@
-import type { TextGenerationFailureCode } from '../../../../src/shared/text-generation-failure-copy'
+import type { TextGenerationFailureCode } from '../../../../src/shared/text-generation/text-generation-failure-copy'
 import { translate } from '../../i18n/mobile-i18n'
 
 export const TEXT_GENERATION_PLAN_FAILURE_COPY = {

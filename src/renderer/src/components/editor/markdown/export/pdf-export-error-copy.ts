@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   PDF_EXPORT_FAILURE_COPY as EN,
   type PdfExportFailureCode
-} from '../../../../../../shared/pdf-export-failure-copy'
+} from '../../../../../../shared/document-preview/pdf-export-failure-copy'
 
 const COPY: Record<PdfExportFailureCode, () => string> = {
   noContent: () => translate('editor.pdfExport.errors.noContent', EN.noContent),

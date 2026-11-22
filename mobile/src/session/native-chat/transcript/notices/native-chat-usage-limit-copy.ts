@@ -2,7 +2,7 @@ import {
   formatUsageLimitResetClock,
   type AgentSessionUsageLimit
 } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
-import type { NativeChatUsageLimitAutoContinueKind } from '../../../../../../src/shared/native-chat/native-chat-usage-limit-auto-continue'
+import type { NativeChatUsageLimitAutoContinueKind } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../../../../i18n/ui-intl-locale'
 

@@ -1,5 +1,8 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
-import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
+import {
+  structuredAgentSessionRuntimeFallbackModel,
+  structuredAgentSessionRuntimePermission
+} from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
@@ -21,6 +24,7 @@ import type {
 } from './structured-agent-session-status-feed-deps'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -31,6 +35,7 @@ export function structuredAgentSessionStatusSummary({
   stopping,
   starting,
   usageLimitContinue,
+  runningPermissionMode,
   childWork,
   namingFailure,
   now
@@ -49,12 +54,14 @@ export function structuredAgentSessionStatusSummary({
   state: StructuredAgentSessionStatusState
   starting?: boolean
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
+  runningPermissionMode?: string
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
   now: () => number
 }): AgentSessionStatusSummary {
-  const projected = state.summary
+  const { openAsyncQuestion, ...projected } = state.summary
+  const skippedThrough = record?.asyncQuestionsSkippedThrough
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -64,6 +71,9 @@ export function structuredAgentSessionStatusSummary({
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
+  const fallbackModel = session.child
+    ? structuredAgentSessionRuntimeFallbackModel(session.child)
+    : undefined
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -78,6 +88,10 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
+    ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
+      ? { awaitsAnswer: true as const, awaitsQuestion: openAsyncQuestion }
+      : {}),
+    ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
@@ -85,7 +99,14 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(fallbackModel ? { fallbackModel } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(session.child?.permissionMode
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
+      : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
@@ -192,6 +213,7 @@ export function releasedStructuredStatusSummary(
     stopping: _stopping,
     restartResume: _restartResume,
     reportedModel: _reportedModel,
+    fallbackModel: _fallbackModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

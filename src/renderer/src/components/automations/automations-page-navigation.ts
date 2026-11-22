@@ -1,4 +1,7 @@
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { AutomationListRow } from './listing/automation-list-row-identity'
 import type { AutomationRunPageOrigin, AutomationsPageLocation } from './automation-page-state'

@@ -13,7 +13,7 @@ import type { AgentSessionOptionsResult } from '../../../../shared/agent-session
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
@@ -168,5 +168,6 @@ export function structuredAgentSessionThreadGoalReport(
   if (hostChangesGoal) {
     return { threadGoal: { current, ...contextFloor } }
   }
-  return current ? { reportedThreadGoal: { current, ...contextFloor } } : {}
+  // Sent without a goal too, so a goal the agent sets mid-turn shows from its first journal row.
+  return { reportedThreadGoal: { current, ...contextFloor } }
 }

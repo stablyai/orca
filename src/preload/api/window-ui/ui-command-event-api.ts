@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/jira/jira-saved-filters'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
@@ -55,6 +55,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
@@ -68,7 +69,7 @@ import type {
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
 import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,
@@ -109,7 +110,8 @@ export type UiCommandEventApi = {
   onOpenCrashReport: (callback: () => void) => () => void
   onToggleLeftSidebar: (callback: () => void) => () => void
   onToggleRightSidebar: (callback: () => void) => () => void
-  onToggleWorktreePalette: (callback: () => void) => () => void
+  /** `openOnly` comes from the View menu item, which opens but never closes the palette. */
+  onToggleWorktreePalette: (callback: (options?: { openOnly?: boolean }) => void) => () => void
   onToggleFloatingTerminal: (callback: () => void) => () => void
   onTerminalShortcutCaptured: (
     callback: (data: { actionId: KeybindingActionId }) => void
@@ -230,19 +232,7 @@ export type UiCommandEventApi = {
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
   replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
-  onSplitTerminal: (
-    callback: (data: {
-      tabId: string
-      paneRuntimeId: number
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      activate?: false
-    }) => void
-  ) => () => void
+  onSplitTerminal: (callback: (data: RendererTerminalSplitRequest) => void) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void
   ) => () => void

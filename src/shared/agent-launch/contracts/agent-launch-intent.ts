@@ -2,6 +2,7 @@
 
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentLaunchSurface } from './agent-launch-surface'
+import type { SetupTrustMismatch } from '../../worktree/create-types'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -112,6 +113,8 @@ export type AgentLaunchResult = {
   worktreeId: string
   /** Keep partial workspace/surface failures in one top-level warning for both launch modes; callers must surface incomplete creation. */
   warning?: string
+  /** The create skipped setup because the created branch's commands differ from the approved ones. */
+  setupTrustMismatch?: SetupTrustMismatch
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt

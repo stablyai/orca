@@ -1,8 +1,8 @@
 import { journalItemsAtSequence, journalItemsById } from './agent-session-journal-item-index'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
-import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../../../shared/agent-session/agent-session-fork'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
+import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionForkedFrom } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {

@@ -6,7 +6,7 @@ import 'zod'
 import type { z } from 'zod'
 import '../../../shared/agent-session/view/structured-agent-session-projection'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
-import '../../../shared/execution-host'
+import '../../../shared/execution-host/execution-host'
 
 export const tolerant = <T>(schema: z.ZodType<T>, rows: unknown[]): T[] =>
   rows.flatMap((row) => {

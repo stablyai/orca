@@ -119,16 +119,9 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
-    "kind": "jsx-attribute:label",
-    "text": "sidebar",
-    "dynamic": false,
-    "count": 1
-  },
-  {
     "filePath": "src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx",
     "kind": "jsx-text",
-    "text": "Switch language",
+    "text": "Language",
     "dynamic": false,
     "count": 1
   },
@@ -150,6 +143,48 @@
     "filePath": "src/renderer/src/components/settings/appearance/chat/ChatFontFamilySetting.tsx",
     "kind": "jsx-text",
     "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Slack",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Discord",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Google",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Linear",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "GitHub",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/bots/BotMemoryList.tsx",
+    "kind": "jsx-text",
+    "text": "MEMORY.md",
     "dynamic": false,
     "count": 1
   },
@@ -227,6 +262,34 @@
     "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-primitives.tsx",
     "kind": "object-property:title",
     "text": "text-[13px] leading-5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/languages/LanguagePickerView.tsx",
+    "kind": "jsx-text",
+    "text": "Switch back to",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/languages/LanguagePackDiscoverySummary.tsx",
+    "kind": "jsx-expression",
+    "text": "Community translation by",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/languages/LanguagePackDiscoverySummary.tsx",
+    "kind": "jsx-expression",
+    "text": "Community translation.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/languages/LanguagePackDiscoverySummary.tsx",
+    "kind": "jsx-text",
+    "text": "Switch back to",
     "dynamic": false,
     "count": 1
   }

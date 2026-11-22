@@ -1,10 +1,11 @@
+import { selectDetectedWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
   isStaleWorktreeCatalogPublication
 } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
@@ -27,6 +28,8 @@ export function createFetchDetectedWorktrees(
   return async (repoId) => {
     try {
       const ownerState = get()
+      const requestStartedDetectedWorktrees =
+        selectDetectedWorktreesByRepo(ownerState)[repoId]?.worktrees
       const hostId = repoHostId(ownerState, repoId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
@@ -74,7 +77,7 @@ export function createFetchDetectedWorktrees(
           s.detectedWorktreesByRepo[repoId],
           refresh.result,
           hostId,
-          setup,
+          { setup, requestStartedDetectedWorktrees },
           worktreeHostMatchOptions(s, repoId, hostId)
         )
         const versionPatch = appliedWorktreeCatalogVersionPatch(

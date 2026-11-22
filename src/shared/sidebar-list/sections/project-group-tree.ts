@@ -3,7 +3,7 @@
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
   getDistinctProjectGroups,
   getEffectiveProjectGroupManualRank
@@ -14,7 +14,7 @@ import {
   withRepoSectionDisplayLabels,
   type ActivityItem
 } from './project-section-order'
-import { compareRootProjectEntries } from '../../root-project-order'
+import { compareRootProjectEntries } from './root-project-order'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 type GroupedProjectEntry = ProjectSectionEntry<

@@ -53,7 +53,12 @@ function getManagedScriptPath(): string {
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+    : getPosixManagedCommand(scriptPath)
+}
+
+// The script answers {} before any guard, so the skipped-script path answers the same.
+function getPosixManagedCommand(scriptPath: string): string {
+  return wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{}' })
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -221,7 +226,7 @@ export class GeminiHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
+      const command = getPosixManagedCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
       const managedEvents = new Set<string>(GEMINI_EVENTS)

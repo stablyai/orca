@@ -4,7 +4,7 @@ import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   resolveAutomationWorkspaceSshTargetId,
   resolveAutomationWorkspaceHost,

@@ -1,8 +1,9 @@
 import type { HttpLinkSourceOwner, HttpLinkStoreState } from './http-link-routing'
 import {
+  isLoopbackHttpUrl,
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
-} from '../../../../../shared/localhost-worktree-labels'
+} from '../../../../../shared/workspace/ports/localhost-worktree-labels'
 import type {
   WorkspacePort,
   WorkspacePortScanResult
@@ -18,6 +19,18 @@ export type LocalhostLinkProject = LocalhostLinkRepo
 export type LocalhostLinkWorktree = {
   id: string
   projectId?: string
+}
+
+// Why: a remote process's loopback URL names its own host; only that host's Orca browser reaches it.
+export function isRemoteLoopbackHttpLink(
+  url: string | undefined,
+  sourceOwner: HttpLinkSourceOwner | undefined
+): boolean {
+  return (
+    (sourceOwner?.kind === 'runtime' || sourceOwner?.kind === 'ssh') &&
+    url !== undefined &&
+    isLoopbackHttpUrl(url)
+  )
 }
 
 export function localhostLabelRouteForHttpLink(

@@ -9,7 +9,7 @@ import {
   Unlink
 } from 'lucide-react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {

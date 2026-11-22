@@ -2,7 +2,7 @@ import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingr
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
-} from '../../../shared/command-token-scanner'
+} from '../../../shared/shell/command-resolution/command-token-scanner'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'

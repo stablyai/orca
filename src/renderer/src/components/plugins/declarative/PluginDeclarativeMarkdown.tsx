@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Components } from 'react-markdown'
 import CommentMarkdown, {
   type CommentMarkdownExtension
-} from '@/components/sidebar/CommentMarkdown'
+} from '@/components/comment-markdown/CommentMarkdown'
 import { isPluginDeclarativeImagePath } from '../../../../../shared/plugins/declarative/plugin-declarative-content-props'
 import {
   pluginDeclarativeGestureId,

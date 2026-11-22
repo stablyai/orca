@@ -1,5 +1,5 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
-import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../agent-session/journal/harness-injected-user-turns'
 import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'
 import { extractClaudeToolFields } from './providers/claude/claude-tool-fields'

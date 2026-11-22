@@ -1,5 +1,5 @@
 // Persist each store before its ledger entry; restart retries only unrecorded rewrites.
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutover
@@ -41,7 +41,11 @@ export function wslMoveDesktopRewriteContext(
 ): WslMoveDesktopRewriteContext {
   return {
     cutover,
-    rewritePath: createUncToLinuxPathRewriter(cutover.manifest.source.distro),
+    rewritePath: createUncToLinuxPathRewriter(
+      cutover.manifest.source.distro,
+      cutover.mappedDrives,
+      { linuxRoots: wslMoveScopeRootPaths(cutover.manifest) }
+    ),
     destinationHostId: toRuntimeExecutionHostId(cutover.destinationEnvironmentId),
     recordSeededHostWorkspaceIds: (workspaceIds) =>
       recordSeededHostWorkspaces(userDataPath, cutover.migrationId, workspaceIds)
@@ -229,7 +233,8 @@ export function listPendingWslMoveRendererRewrites(
           distro: source.distro,
           scopeRepoIds: [...source.scopeRepoIds],
           scopeFolderWorkspaceIds: [...source.scopeFolderWorkspaceIds],
-          scopeRootPaths: wslMoveScopeRootPaths(cutover.manifest)
+          scopeRootPaths: wslMoveScopeRootPaths(cutover.manifest),
+          ...(cutover.mappedDrives?.length ? { mappedDrives: cutover.mappedDrives } : {})
         }
       ]
     })

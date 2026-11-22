@@ -2,7 +2,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostBlockedReason
 } from '../remote-runtime/host-status/runtime-host-status'
-import type { ExecutionHostId, ExecutionHostKind } from '../execution-host'
+import type { ExecutionHostId, ExecutionHostKind } from './execution-host'
 import type { RuntimeCompatVerdict } from '../remote-runtime/protocol/protocol-compat'
 import type { RuntimeStatus } from '../remote-runtime/session-graph/runtime-session-contracts'
 import type { SshConnectionStatus } from '../remote-runtime/ssh/ssh-types'

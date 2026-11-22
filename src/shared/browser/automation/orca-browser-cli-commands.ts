@@ -1,4 +1,4 @@
-import { orcaCliInvocations } from '../../orca-cli-invocations'
+import { orcaCliInvocations } from '../../cli/orca-cli-invocations'
 
 /** The browser CLI's command keys per handler group. Kept apart from the CLI's
  *  lazy handler imports so the renderer and mobile can read them too. */

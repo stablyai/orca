@@ -22,6 +22,8 @@ export type AgentModelCatalogServiceDeps = AgentModelCatalogWorkspaceDeps & {
   /** Share the launch resolver so recordless reads use the account a new chat would pin. */
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
+  /** Agents whose listing never runs in warm-up. */
+  listsOnDemand?: ReadonlySet<string>
   listingNamesConfiguredModel?: ReadonlySet<string>
   /** False means project configuration cannot override the account default. */
   agentReadsProjectModelConfig?: (agent: string) => boolean

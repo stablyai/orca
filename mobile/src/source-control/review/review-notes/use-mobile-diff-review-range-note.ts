@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type {
   DiffComment,
   MobileDiffReviewState
-} from '../../../../../src/shared/diff-comment-types'
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import { addMobileDiffComment } from './mobile-diff-comments'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
 import type { ReviewScreenState } from '../diff-state/mobile-diff-review-screen-model'

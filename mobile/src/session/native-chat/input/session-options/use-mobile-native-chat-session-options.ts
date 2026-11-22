@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import {
   useCallback,
   useEffect,
@@ -32,7 +32,8 @@ import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
+import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 export type MobileNativeChatSessionOptionsController = {
@@ -223,7 +224,6 @@ export function useMobileNativeChatSessionOptions(
     if (!surface || !scopeKey || !catalog || !reportedModel) {
       return
     }
-    // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
     // OMP reports exact selectors, including models absent from cached discovery.
     const matched =
       agent === 'omp'
@@ -273,8 +273,19 @@ export function useMobileNativeChatSessionOptions(
     [track]
   )
   const recordCommand = useCallback(
-    (command: string) => surface?.recordOutgoingCommand(command),
-    [surface]
+    (command: string) => {
+      surface?.recordOutgoingCommand(command)
+      // Why: later chat sends would be typed into the TUI screen this command opened; a send that lands after the phone moved to another chat or agent must not switch that one.
+      if (
+        agent &&
+        latest.current.scopeKey === scopeKey &&
+        latest.current.agent === agent &&
+        nativeChatCommandOpensTerminal(agent, command)
+      ) {
+        latest.current.onAgentPicker?.()
+      }
+    },
+    [agent, scopeKey, surface]
   )
   const pendingId = pending && pending.identity === identity ? pending.id : null
 

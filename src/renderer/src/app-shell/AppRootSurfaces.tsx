@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
+import { ModalBoundary, OverlayBoundary } from './root-surfaces/app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { memo, Suspense } from 'react'
@@ -7,33 +7,40 @@ import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
-import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
+import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
-import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
+import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { NativeChatResumeOnRestartModal } from '../components/native-chat-recovery/NativeChatResumeRuntimeModal'
+import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
-import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
-import { ZoomOverlay } from '../components/ZoomOverlay'
+import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
+import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
+import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { AgentCliUpdateFailedDialogHost } from '../components/agent-cli-update/AgentCliUpdateFailedDialogHost'
 import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store/index'
-import type { UpdateStatus } from '../../../shared/updater/update-status-types'
-import { useLazyModalMounts } from './use-lazy-modal-mounts'
-import { AppNotificationCards } from './AppNotificationCards'
-import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
+import { shouldMountUpdateCardForStatus } from './root-surfaces/update-notification-visibility'
+import { useLazyModalMounts } from './root-surfaces/use-lazy-modal-mounts'
+import { AppNotificationCards } from './root-surfaces/AppNotificationCards'
+import {
+  usePreloadWorktreeJumpPalette,
+  WorktreeJumpPalette
+} from '../components/worktree-jump/worktree-jump-palette-preload'
+import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
   selectAppRootSurfaceVoiceEnabled
-} from './app-root-surface-settings'
-import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
-import type { OnboardingGate } from './use-onboarding-and-feature-tips'
+} from './root-surfaces/app-root-surface-settings'
+import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
+import type { OnboardingGate } from './startup/use-onboarding-and-feature-tips'
 
-const QuickOpen = lazy(() => import('../components/QuickOpen'))
+const QuickOpen = lazy(() => import('../components/file-actions/quick-open/QuickOpen'))
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
@@ -104,16 +111,6 @@ const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
 // Avoid fetching onboarding assets for users past first launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
-function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
-  if (status.state === 'idle') {
-    return false
-  }
-  if (status.state === 'checking' || status.state === 'not-available') {
-    return status.userInitiated === true
-  }
-  return true
-}
-
 /** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
 export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
@@ -126,6 +123,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
+  usePrefetchAvatarCapability()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.
@@ -229,6 +227,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <NodeDistMirrorDialog />
           </ModalBoundary>
         ) : null}
+        <AgentCliUpdateFailedDialogHost />
         {/* The viewer must outlive the virtualized chat row that opened it. */}
         {activeModal === 'diagram-viewer' ? (
           <ModalBoundary boundaryId="modal.diagram-viewer" resetKey>
@@ -303,12 +302,17 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
-        <NativeChatResumeOnRestartModal />
+        <NativeChatResumeToasts />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />
       </OverlayBoundary>
       <StarNagAgentValueMomentObserver />
+      <LanguagePackDiscoveryHost
+        onboardingKnown={onboardingGate.onboarding !== null}
+        onboardingVisible={onboardingGate.shouldRender}
+      />
+      <PluginInstallTrustDialogHost />
       {/* Mount once per session; the internal gate selects pre-telemetry users (telemetry-plan.md §First-launch experience). */}
       <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />

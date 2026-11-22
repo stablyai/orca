@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/sorting/text-order'
 
 export type WorkspaceSortBy = PersistedUIState['sortBy']

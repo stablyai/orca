@@ -1,15 +1,22 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back, question or another reply; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 // Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
 
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/agent-session-compaction'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/conversation-context/agent-session-compaction'
 import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
+import { AGENT_SESSION_GOAL_CHECK_PRESENTATION } from '../../../agent-session/thread-goals/agent-session-goal-check-display'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../turns/native-chat-thread-goal-rows'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
-import { nativeChatRowRendersContent } from '../row-content/native-chat-row-content'
-import { isStoppedBeforeStartBlock } from '../../native-chat-stopped-before-start'
-import { nativeChatRowRendersProse } from '../../native-chat-trailing-run'
-import { isGeneratedImageOperation } from '../../native-chat-generated-image'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../row-content/native-chat-row-content'
+import { isStoppedBeforeStartBlock } from '../pending-sends/native-chat-stopped-before-start'
+import { nativeChatRowRendersProse } from './native-chat-trailing-run'
+import { isGeneratedImageOperation, isImageOperation } from '../images/native-chat-generated-image'
+import { hasNativeChatAskCall } from '../../input/questions/native-chat-ask-row'
+import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -17,9 +24,11 @@ import {
   type NativeChatMessage,
   type NativeChatRole
 } from '../../native-chat-types'
+import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
 
 /** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
 export type NativeChatTurnFoldRow = {
+  goalCheckAnswer?: boolean
   /** The turn this row belongs to; undefined before the first user message. */
   turnKey: string | undefined
   role: NativeChatRole
@@ -33,8 +42,12 @@ export type NativeChatTurnFoldRow = {
   reportsFailure: boolean
   /** Plans and turn notices remain visible independently of the agent's answer. */
   explainsTurn: boolean
-  /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
-  sendsBack: boolean
+  /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
+  endsAnswer: boolean
+  /** The row puts a question to the person, who answers from the words that led up to it. */
+  asks: boolean
+  /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
+  replyEnd: 'words' | 'work' | undefined
   /** A hook failed; it reports on the turn without ending it. */
   failedHook: boolean
 }
@@ -54,14 +67,19 @@ function isFailedHookBlock(block: NativeChatBlock): boolean {
 export function nativeChatTurnFoldRow(
   message: NativeChatMessage,
   turnKey: string | undefined,
-  hasReceipt: boolean
+  receipt: NativeChatResolvedPrompt | undefined
 ): NativeChatTurnFoldRow {
   let facts = rowFacts.get(message)
   if (!facts) {
     facts = deriveTurnFoldRow(message, undefined, false)
     rowFacts.set(message, facts)
   }
-  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+  return {
+    ...facts,
+    turnKey,
+    draws: receipt !== undefined || facts.draws,
+    asks: receipt?.kind === 'question' || facts.asks
+  }
 }
 
 function deriveTurnFoldRow(
@@ -69,15 +87,17 @@ function deriveTurnFoldRow(
   turnKey: string | undefined,
   hasReceipt: boolean
 ): NativeChatTurnFoldRow {
-  return {
+  const content = deriveNativeChatRowContent(message.blocks)
+  const facts = {
+    goalCheckAnswer: message.goalCheckAnswer === true,
     turnKey,
     role: message.role,
-    rendersProse:
-      nativeChatRowRendersProse(message) && !message.blocks.some(isGeneratedImageOperation),
-    draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
+    rendersProse: nativeChatRowRendersProse(message) && !message.blocks.some(isImageOperation),
+    draws:
+      hasReceipt || isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
     outlivesTurn:
-      message.agentStart === true ||
+      isNativeChatOrcaCard(message) ||
       message.blocks.some(
         (block) =>
           isSubagentGroupBlock(block) ||
@@ -101,16 +121,31 @@ function deriveTurnFoldRow(
             block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
             block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
             block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
-            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
+            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
+            block.presentation === AGENT_SESSION_GOAL_CHECK_PRESENTATION ||
+            block.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY)
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&
         message.blocks.some((block) => block.type === 'image-ref')),
-    sendsBack: message.blocks.some(
-      (block) =>
-        block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
-    ),
-    failedHook: message.blocks.some(isFailedHookBlock)
+    // Another agent's message and an orphaned tool result are work inside the turn, not a person's boundary.
+    endsAnswer:
+      (message.role === 'user' && message.from === undefined && content.tools.length === 0) ||
+      message.blocks.some(
+        (block) =>
+          block.type === 'text' &&
+          (block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
+            block.presentation === AGENT_SESSION_GOAL_CHECK_PRESENTATION)
+      ),
+    failedHook: message.blocks.some(isFailedHookBlock),
+    asks: hasNativeChatAskCall(message.blocks)
   }
+  const speaks =
+    message.role === 'assistant' &&
+    facts.rendersProse &&
+    content.hasText &&
+    !facts.outlivesTurn &&
+    !facts.explainsTurn
+  return { ...facts, replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined }
 }
 
 export type NativeChatTurnFold = {
@@ -125,26 +160,43 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work. */
+/** Last assistant prose/system failure per turn, before each steer or send-back, leading into each question, and before another reply; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
+  const previousDrawn = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
+    if (row.goalCheckAnswer) {
+      answers.add(index)
+    }
     if (row.turnKey === undefined) {
       continue
     }
     const answer = latest.get(row.turnKey)
-    if (row.sendsBack && answer !== undefined) {
+    const previous = previousDrawn.get(row.turnKey)
+    if (row.endsAnswer && answer !== undefined) {
       answers.add(answer)
       latest.delete(row.turnKey)
+    }
+    if (row.draws) {
+      // Back-to-back replies within a turn all stay visible; a reply that work follows folds.
+      if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
+        answers.add(previous)
+      }
+      previousDrawn.set(row.turnKey, index)
     }
     const isCandidate =
       row.rendersProse &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (isCandidate) {
       latest.set(row.turnKey, index)
+    }
+    // Words lead into a question from its own row or the row drawn just before it.
+    const asker = row.asks ? latest.get(row.turnKey) : undefined
+    if (asker !== undefined && (asker === index || asker === previous)) {
+      answers.add(asker)
     }
   }
   for (const index of latest.values()) {

@@ -1,10 +1,10 @@
 import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import {
   claudeProviderHandle,
   codexProviderHandle

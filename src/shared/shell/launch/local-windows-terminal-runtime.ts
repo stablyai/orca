@@ -1,5 +1,5 @@
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 
 type LocalWindowsTerminalRuntimeSettings =
   | Partial<Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro'>>

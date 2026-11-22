@@ -1,7 +1,7 @@
 import {
   createNormalizedPathInsideOrEqualMatcher,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import { parseWslUncPath, toWindowsWslPath } from '../../file-access/wsl-paths'
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 

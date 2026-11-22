@@ -1,20 +1,21 @@
-import type { UiLanguageDetection } from '../../shared/ui-locale'
+import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
 import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
-import type { E2EConfig } from '../../shared/e2e-config'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { E2EConfig } from '../../shared/app-lifecycle/launch/e2e-config'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'
+import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -42,6 +43,8 @@ export type AppApi = {
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
+    /** Relay ids that left `sessions`, applied by main to the keys the window owns. */
+    desktopRelays?: DesktopRelayWrite['hosts']
   }) => void
   /** Waits for durable persistence; rejection lets reload/restart abort without losing state. */
   awaitBeforeUnloadCheckpoint: () => Promise<void>
@@ -67,8 +70,6 @@ export type AppApi = {
   getKeyboardLayoutSnapshot: () => Promise<KeyboardLayoutSnapshot | null>
   /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
-  /** No-op on Windows/Linux. */
-  setUnreadDockBadgeCount: (count: number) => Promise<void>
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
   /** App-owned directory for auto-created Floating Workspace notes. */
   getFloatingMarkdownDirectory: () => Promise<string>

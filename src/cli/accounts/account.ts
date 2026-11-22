@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -163,7 +164,7 @@ async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<
       if (signIn.runtime === 'wsl' && signIn.wslDistro) {
         const login = `exec env CLAUDE_CONFIG_DIR=${quotePosixShell(signIn.configDir)} claude auth login`
         await runAgentLoginInTerminal(
-          'wsl.exe',
+          windowsSystem32Binary('wsl.exe'),
           buildWslExecArgs(signIn.wslDistro, ['/bin/sh', '-c', buildWslLoginShellCommand(login)]),
           {},
           json,

@@ -1,4 +1,4 @@
-import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../shared/file-access/cross-platform-path'
 import type {
   DiscoveredSkill,
   SkillDiscoverySource,

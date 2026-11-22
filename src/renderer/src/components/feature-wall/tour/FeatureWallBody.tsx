@@ -4,7 +4,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telem
 import type { AgentsStep } from '../../../../../shared/feature-education/explore/agents-orchestration-steps'
 import type { WorkbenchStep } from '../../../../../shared/feature-education/explore/workbench-steps'
 import type { ReviewStep } from '../../../../../shared/feature-education/explore/review-steps'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { InstalledAgentSkillState } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { cn } from '@/lib/class-names'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'

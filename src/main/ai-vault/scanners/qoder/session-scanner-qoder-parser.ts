@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   accumulatorSessionIdentity,

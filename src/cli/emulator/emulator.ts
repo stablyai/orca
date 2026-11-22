@@ -11,7 +11,7 @@ import {
 } from '../arguments/flags'
 import { getEmulatorCommandTarget } from './emulator-command-target'
 import { RuntimeClientError } from '../runtime/connection/types'
-import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator-attach-timeouts'
+import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator/emulator-attach-timeouts'
 
 type EmulatorAttachResult = {
   info?: {

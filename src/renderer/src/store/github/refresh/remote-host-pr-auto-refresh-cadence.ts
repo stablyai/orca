@@ -5,7 +5,7 @@ import {
   setPRAutoRefreshCadenceForHost,
   subscribePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 
 // Why no store or RPC imports here: store slice code reads these; the reads and host-contact
 // subscriptions that feed them live in remote-host-pr-auto-refresh-cadence-sync.ts.
@@ -133,15 +133,4 @@ export function useHostPRAutoRefreshCadence(
   return useSyncExternalStore(subscribePRAutoRefreshCadence, () =>
     environmentId ? knownHostPRAutoRefreshCadence(environmentId) : null
   )
-}
-
-/** How many hosts this client keeps any per-host read or support state for. */
-export function _trackedHostPRAutoRefreshStateCountForTests(): number {
-  return new Set([...pendingReads.keys(), ...hostsLackingSetting]).size
-}
-
-export function _resetHostPRAutoRefreshCadenceGenerationsForTests(): void {
-  pendingReads.clear()
-  hostsLackingSetting.clear()
-  lackListeners.clear()
 }

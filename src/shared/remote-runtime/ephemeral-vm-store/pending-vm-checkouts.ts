@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 
 /** A VM's primary checkout, registered on its host before the create that owns it finishes. */
 export type PendingVmCheckout = { repoId: string; path: string }

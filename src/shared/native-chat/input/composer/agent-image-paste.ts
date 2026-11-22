@@ -2,7 +2,7 @@ import {
   imagePasteWritesFollowedByText,
   separateImagePasteFromFollowingText
 } from '../../../terminal/input/image-paste-following-text'
-import { isWindowsAbsolutePathLike } from '../../../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../file-access/cross-platform-path'
 import { filesystemPathToFileUri } from '../../../file-links/file-uri-path'
 
 // Whether raw-path paste is verified to create an attachment; others use file references.
@@ -28,7 +28,8 @@ export function getAgentImageHandling(agent: string | null | undefined): AgentIm
 export const NATIVE_CHAT_QUOTED_FILE_REFERENCE = /@"(?:\\"|[^"])*"|@'[^']*'/
 
 export function formatNativeChatFileReference(filePath: string): string {
-  if (!/[\s@]/.test(filePath)) {
+  // A name that starts with a quote would otherwise read as a quoted reference.
+  if (!/[\s@]/.test(filePath) && !/^["']/.test(filePath)) {
     return `@${filePath}`
   }
   if (!filePath.includes('"')) {

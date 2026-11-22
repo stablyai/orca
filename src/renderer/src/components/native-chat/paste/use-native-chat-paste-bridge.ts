@@ -153,12 +153,18 @@ export function useNativeChatPasteBridge({
         )
         return
       }
+      const answerInput = questionAnswerInputRef?.current
+      // A focused answer owns paste even while a queued-message editor is open.
+      if (answerInput && activeElement === answerInput) {
+        event.preventDefault()
+        pasteClipboardTextInto(answerInput, () => questionAnswerInputRef?.current === answerInput)
+        return
+      }
       if (
         isEditableTarget(activeElement) &&
         !nativeChatComposerDestination(rootRef.current, composerRef.current)?.contains(
           activeElement
-        ) &&
-        activeElement !== questionAnswerInputRef?.current
+        )
       ) {
         return
       }

@@ -4,7 +4,7 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabMRReviewersUpdateResult,
   MRComment
-} from '../../../shared/gitlab-types'
+} from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyGlabError } from '../requests/glab-error-classification'
@@ -14,7 +14,10 @@ import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import { withProjectRef } from './merge-request-project-resolution'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
 
 export async function addMRComment(
   repoPath: string,

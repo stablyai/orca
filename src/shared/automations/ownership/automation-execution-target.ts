@@ -1,6 +1,6 @@
 import type { Automation, AutomationExecutionTargetType } from '../automation-definition'
 import type { Repo } from '../../repository/repo-types'
-import { getRepoSshConnectionId } from '../../execution-host'
+import { getRepoSshConnectionId } from '../../execution-host/execution-host'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 
 /** Fail closed when project resolution misses: create refuses; update retains the target unless explicitly moved. Capture SSH registration generations even through local folder-workspace pins so same-ID re-registration cannot impersonate the chosen host. */

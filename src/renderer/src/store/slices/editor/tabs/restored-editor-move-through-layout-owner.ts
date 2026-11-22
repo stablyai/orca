@@ -1,6 +1,6 @@
 // Restore reownership proposes IDs to main (same-workspace reownership is rename); move frames atomically rekey content (F42).
 
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import {
   sendLayoutApply,

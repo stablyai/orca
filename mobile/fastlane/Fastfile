@@ -71,6 +71,25 @@ def verify_play_signed_apk(apk)
   end
 end
 
+# Play Console's automatic protection injects com.pairip's license check into every APK Play generates.
+# It closes the app wherever Play is disabled or unreachable (mainland China), and the GitHub APK is
+# meant for exactly those phones (#42973), so refuse to publish a protected APK. Match any com.pairip
+# class: with protection off none belongs here, whichever package Play puts its check in.
+PAIRIP_CLASS_PREFIX = "Lcom/pairip/".b.freeze
+
+def reject_play_license_check(apk)
+  require "zip"
+  protected_dex = Zip::File.open(apk) do |zip|
+    zip.glob("classes*.dex").find { |entry| entry.get_input_stream.read.include?(PAIRIP_CLASS_PREFIX) }
+  end
+  return unless protected_dex
+  UI.user_error!(
+    "#{apk} carries Play's automatic-protection code (com.pairip, in #{protected_dex.name}), whose license " \
+    "check closes the app when Google Play is disabled or unreachable. Turn off automatic protection in Play Console " \
+    "(Test and release > App integrity), then release a new versionCode.",
+  )
+end
+
 def write_mobile_app_config(config)
   File.write(APP_CONFIG_PATH, "#{JSON.pretty_generate(config)}\n")
 end
@@ -304,5 +323,6 @@ platform :android do
       retry
     end
     verify_play_signed_apk(destination)
+    reject_play_license_check(destination)
   end
 end

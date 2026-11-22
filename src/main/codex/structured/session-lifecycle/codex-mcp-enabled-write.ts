@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { observeAgentStateFile } from '../../configuration/codex-path-observation'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { observeCodexSettingsBaseline } from '../../configuration/settings/config-settings-baseline'

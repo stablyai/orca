@@ -1,13 +1,16 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
+import {
+  getDefaultPersistedState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
 import {
   normalizeProjectHostSetupRows,
   normalizeProjectRows
 } from '../../../shared/project/catalog/project-catalog-row-normalization'
 import { carryProjectStateThroughIdentityChange } from '../../../shared/project/catalog/project-identity-succession'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -118,6 +121,7 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
   const {
     uiLanguagePortugueseMigrationApplied: _migrationApplied,
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
     artifactSharingEnabled: _artifactSharingEnabled,
     ...settingsDefaults
   } = defaults.settings

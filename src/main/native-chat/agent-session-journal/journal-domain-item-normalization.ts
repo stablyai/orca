@@ -7,7 +7,7 @@ import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { personStopDecidesTurn, turnEndAfterStop } from './context-epochs/journal-stop-turn-end'
 import { boundRunningToolOutput } from './item-lifecycle/journal-payload-bounds'
-import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage-schema'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage-schema'
 
 export function journalDomainLatestStop(
   db: Database.Database,

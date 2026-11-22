@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ipcRenderer } from 'electron'
 import type { ExternalAutomationManagerResult } from './automation-api'
 import type { PreloadApi } from '../../api-types'
@@ -6,7 +6,7 @@ import type { AutomationOwnerRef } from '../../../shared/automations/ownership/a
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import type { AutomationsChangedPayload } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 export const automationsApi = {
