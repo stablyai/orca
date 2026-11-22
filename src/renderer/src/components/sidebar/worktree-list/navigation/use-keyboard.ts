@@ -19,7 +19,9 @@ import { textInputOwnsComposition } from '../../../../../../shared/keybindings/t
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 import {
   activateAndRevealCycledRow,
-  readGlobalSidebarCycleOptions
+  clearPendingBotGroupCycleRow,
+  readGlobalSidebarCycleOptions,
+  readPendingBotGroupCycleRow
 } from './cycled-workspace-activation'
 import { useSidebarWorkspacePreview } from './use-sidebar-workspace-preview'
 
@@ -67,6 +69,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         executionHostId: activeWorkspaceExecutionHostId
       }
     }
+    clearPendingBotGroupCycleRow()
   }, [activeWorktreeId, activeWorkspaceExecutionHostId])
 
   const {
@@ -84,15 +87,18 @@ export function useWorktreeListKeyboardNavigation(args: {
     (direction: 'up' | 'down', isRepeat: boolean, selectInList = false) => {
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
       const preview = readActivePreviewRow()
+      // BotGroup opens wait for folder fetch, so chain non-repeated presses until activation settles.
+      const pendingBotGroup = !selectInList && !isRepeat ? readPendingBotGroupCycleRow() : null
+      const anchorRow = preview ?? pendingBotGroup
       const focused = selectInList ? focusedWorktree : null
       // Cycle actual rendered rows so collapse, pins, hosts, Bots and folder workspaces stay aligned with the screen.
       const nextRow = resolveCycledWorkspaceRow({
         rows,
         pinnedDisplayPolicy,
         ...(selectInList ? {} : readGlobalSidebarCycleOptions()),
-        activeWorktreeId: preview?.worktree.id ?? focused?.id ?? activeWorktreeId,
-        activeWorkspaceExecutionHostId: preview
-          ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
+        activeWorktreeId: anchorRow?.worktree.id ?? focused?.id ?? activeWorktreeId,
+        activeWorkspaceExecutionHostId: anchorRow
+          ? getWorktreeExecutionHostId(anchorRow.worktree, anchorRow.repo)
           : focused
             ? (focusedWorkspaceExecutionHostId ?? null)
             : activeWorkspaceExecutionHostId,

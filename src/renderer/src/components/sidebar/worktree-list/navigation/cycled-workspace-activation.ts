@@ -2,6 +2,7 @@ import { openBotGroup } from '@/lib/bot-group-catalog'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { requestScrollToCurrentWorkspaceReveal } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import {
   getWorktreeExecutionHostId,
@@ -14,6 +15,62 @@ import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
 import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
 
 let cycleActivationEpoch = 0
+
+type PendingBotGroupOrigin = {
+  worktreeId: string | null
+  executionHostId: ExecutionHostId | null
+  activeView: AppState['activeView']
+  activeWorkspaceKey: AppState['activeWorkspaceKey']
+  worktreeNavHistory: AppState['worktreeNavHistory']
+  worktreeNavHistoryIndex: AppState['worktreeNavHistoryIndex']
+}
+
+type PendingBotGroupCycleTarget = {
+  epoch: number
+  row: RenderedWorkspaceRow
+  origin: PendingBotGroupOrigin
+}
+
+let pendingBotGroupCycleTarget: PendingBotGroupCycleTarget | null = null
+
+function readPendingBotGroupOrigin(): PendingBotGroupOrigin {
+  const state = useAppStore.getState()
+  return {
+    ...readCurrentSidebarWorkspace(),
+    activeView: state.activeView,
+    activeWorkspaceKey: state.activeWorkspaceKey,
+    worktreeNavHistory: state.worktreeNavHistory,
+    worktreeNavHistoryIndex: state.worktreeNavHistoryIndex
+  }
+}
+
+function matchesPendingBotGroupOrigin(origin: PendingBotGroupOrigin): boolean {
+  const state = useAppStore.getState()
+  const current = readCurrentSidebarWorkspace()
+  return (
+    origin.worktreeId === current.worktreeId &&
+    origin.executionHostId === current.executionHostId &&
+    origin.activeView === state.activeView &&
+    origin.activeWorkspaceKey === state.activeWorkspaceKey &&
+    origin.worktreeNavHistory === state.worktreeNavHistory &&
+    origin.worktreeNavHistoryIndex === state.worktreeNavHistoryIndex
+  )
+}
+
+export function readPendingBotGroupCycleRow(): RenderedWorkspaceRow | null {
+  if (!pendingBotGroupCycleTarget) {
+    return null
+  }
+  if (!matchesPendingBotGroupOrigin(pendingBotGroupCycleTarget.origin)) {
+    pendingBotGroupCycleTarget = null
+    return null
+  }
+  return pendingBotGroupCycleTarget.row
+}
+
+export function clearPendingBotGroupCycleRow(): void {
+  pendingBotGroupCycleTarget = null
+}
 
 export function readCurrentSidebarWorkspace(): {
   worktreeId: string | null
@@ -42,12 +99,24 @@ export function readGlobalSidebarCycleOptions() {
 export function activateAndRevealCycledRow(row: RenderedWorkspaceRow): void {
   const epoch = ++cycleActivationEpoch
   if (row.botGroup) {
+    pendingBotGroupCycleTarget = {
+      epoch,
+      row,
+      origin: readPendingBotGroupOrigin()
+    }
     void openBotGroup(row.botGroup, {
       shouldActivate: () => epoch === cycleActivationEpoch,
       onActivated: () => requestScrollToCurrentWorkspaceReveal({ highlight: false })
-    }).catch(console.error)
+    })
+      .catch(console.error)
+      .finally(() => {
+        if (pendingBotGroupCycleTarget?.epoch === epoch) {
+          pendingBotGroupCycleTarget = null
+        }
+      })
     return
   }
+  pendingBotGroupCycleTarget = null
   const executionHostId = getWorktreeExecutionHostId(row.worktree, row.repo)
   void activateWorktreeFromSidebar(row.worktree.id, executionHostId, {
     revealInSidebar: false
