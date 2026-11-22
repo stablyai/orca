@@ -6014,7 +6014,7 @@
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
           "removeSingleFolderFromOrca": "Orca から削除します。ディスク上のフォルダーは保持されます。",
-          "deleteSingleWorktreeAndBranch": "ワークツリーとそのブランチを削除します（未マージの場合ブランチは保持）。"
+          "deleteSingleWorktreeAndBranch": "ワークツリーとローカルの変更を削除します。ブランチはマージ済みの場合に削除します。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "読み込まれたパスを表示",

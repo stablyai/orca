@@ -6221,7 +6221,7 @@
           "removeWithChildrenGit_one": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
           "removeWithChildrenGit_other": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
           "removeSingleFolderFromOrca": "Orca'dan kaldırır. Diskteki klasör korunur.",
-          "deleteSingleWorktreeAndBranch": "Worktree'yi ve branch'ini siler (birleştirilmemişse branch korunur)."
+          "deleteSingleWorktreeAndBranch": "Worktree'yi ve yerel değişiklikleri siler. Branch birleştirilmişse onu da siler."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Yüklenen yolları göster",
