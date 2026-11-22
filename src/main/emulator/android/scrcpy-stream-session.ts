@@ -48,6 +48,8 @@ export type ScrcpyControlTarget = {
   // Touch positions must carry this size; the server drops events sized for another frame.
   videoSize(): H264PictureSize | null
   sendControl(message: Buffer): boolean
+  /** True when the device lets the server create a UHID keyboard (`/dev/uhid` is usable). */
+  readonly uhidKeyboard?: boolean
 }
 
 function newScid(): string {
@@ -67,6 +69,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
   private readonly ready: Promise<void>
   private resolveReady: (() => void) | null = null
   private rejectReady: ((error: Error) => void) | null = null
+  uhidKeyboard = false
 
   private constructor(
     private readonly options: ScrcpyStreamOptions,
@@ -102,10 +105,15 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
 
   private async deploy(): Promise<void> {
     const { runner, sdk, serial, localJarPath } = this.options
-    ensureAdbOk(
-      await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
-      'scrcpy server push'
-    )
+    // Probed once per session, next to the push, so key presses never spawn anything.
+    const [push, uhid] = await Promise.all([
+      runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
+      runner(sdk.adb, ['-s', serial, 'shell', 'test', '-r', '/dev/uhid', '-a', '-w', '/dev/uhid'])
+        .then((result) => result.code === 0)
+        .catch(() => false)
+    ])
+    ensureAdbOk(push, 'scrcpy server push')
+    this.uhidKeyboard = uhid
     const forward = ensureAdbOk(
       await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
       'scrcpy port forward'
@@ -204,6 +212,8 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
         this.controlSocket = null
       }
     })
+    // Device messages (UHID keyboard LED reports, clipboard) are unused; reading them keeps them from backing up.
+    socket.on('data', () => {})
     this.controlSocket = socket
   }
 

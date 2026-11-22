@@ -3,6 +3,11 @@ import { EmulatorError } from '../emulator-errors'
 import { planEmulatorTextInput } from '../emulator-text-input-plan'
 import { sendScrcpyButton } from './scrcpy-control-input'
 import {
+  createScrcpyUhidKeyboard,
+  pressScrcpyUhidKey,
+  SCRCPY_UHID_KEYBOARD_READY_MS
+} from './scrcpy-uhid-keyboard'
+import {
   encodeInjectText,
   encodeSetClipboard,
   SCRCPY_CLIPBOARD_TEXT_MAX_BYTES,
@@ -21,6 +26,7 @@ const MAX_QUEUED_PASTES = 4
 type Queued = { done: (ok: boolean) => void } & (
   | { kind: 'text'; text: string; paste: boolean }
   | { kind: 'action'; send: () => boolean }
+  | { kind: 'wait'; ms: number }
 )
 
 /**
@@ -57,6 +63,11 @@ class ScrcpyInputQueue {
       for (let item = this.queued.shift(); item; item = this.queued.shift()) {
         if (item.kind === 'action') {
           item.done(runSafely(item.send))
+          continue
+        }
+        if (item.kind === 'wait') {
+          await sleep(item.ms)
+          item.done(true)
           continue
         }
         // A pasted newline is text; INJECT_TEXT would press Enter and could submit the field.
@@ -167,6 +178,25 @@ export function sendScrcpyText(
       reject(new EmulatorError('emulator_error', 'Too many pastes are waiting for this device.'))
     }
   })
+}
+
+/**
+ * Presses a key on the device's UHID keyboard, in order with other input; devices without one get
+ * `fallback`, which types the same key the older way.
+ */
+export function sendScrcpyHidKey(
+  control: ScrcpyControlTarget,
+  key: { usage: number; shift: boolean },
+  fallback: () => Promise<boolean>
+): Promise<boolean> {
+  if (!control.uhidKeyboard) {
+    return fallback()
+  }
+  if (createScrcpyUhidKeyboard(control)) {
+    // Input queued behind this, the new keyboard's first key included, waits until Android has it.
+    queueFor(control).enqueue({ kind: 'wait', ms: SCRCPY_UHID_KEYBOARD_READY_MS, done: () => {} })
+  }
+  return sendScrcpyInOrder(control, () => pressScrcpyUhidKey(control, key.usage, key.shift))
 }
 
 export function sendScrcpyKey(
