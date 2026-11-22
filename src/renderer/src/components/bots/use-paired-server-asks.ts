@@ -117,3 +117,13 @@ export function usePairedServerCardsForChat(
   )
   return shown.length === 0 ? NO_CARDS : shown
 }
+
+/** Whether this computer still holds the card for an ask (it leaves once let in or declined). */
+export function useHeldPairedServerAsk(messageId: string | undefined, watch: boolean): boolean {
+  const cards = useSyncExternalStore(
+    watch ? subscribeLocalCards : subscribeToNothing,
+    watch ? readLocalSnapshot : readNoCards,
+    watch ? readLocalSnapshot : readNoCards
+  )
+  return messageId !== undefined && cards.some((card) => card.messageId === messageId)
+}

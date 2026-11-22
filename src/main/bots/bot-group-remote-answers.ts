@@ -141,7 +141,7 @@ export function collectRemoteAnswers(
 }
 
 /** The bot's own answer, which carries the question's id; a notice carries none. */
-function isBotAnswer(row: MessageRow, requestId: string): boolean {
+export function isBotAnswer(row: Pick<MessageRow, 'payload'>, requestId: string): boolean {
   if (!row.payload) {
     return false
   }

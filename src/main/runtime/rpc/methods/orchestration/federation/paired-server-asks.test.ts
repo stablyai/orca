@@ -520,5 +520,19 @@ describe('agents on a paired server messaging an agent on this computer', () => 
         answer: 'docs/install.md'
       })
     )
+
+    const unpaired = await ask({ subject: 'Third question' })
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    await call('pairedServerAsks.decide', { messageId: unpaired.message.id, decision: 'once' })
+    await vi.waitFor(() =>
+      expect(computer.db.getUnreadMessages(DOCS_HOME).map((mail) => mail.id)).toContain(
+        unpaired.message.id
+      )
+    )
+    await settlePairedServerAsksOnRemoval(computer.runtime, 'env_s')
+    await vi.waitFor(() => expect(outcome(unpaired.message.id).outcome).toBe('dropped'))
+    expect(outcome(unpaired.message.id).answer).toContain(
+      "Docs's owner unpaired its computer from this one"
+    )
   })
 })

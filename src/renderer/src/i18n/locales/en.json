@@ -22612,7 +22612,7 @@
       },
       "clientAsk": {
         "declined": "Declined",
-        "notConnected": "{{computer}} isn’t connected",
+        "notConnected": "Wasn’t connected",
         "waitingForYou": "Waiting for you",
         "waitingOn": "Waiting for approval on {{computer}}"
       }

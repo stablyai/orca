@@ -7,6 +7,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { useOwnInstallation } from '@/components/bots/use-paired-server-client-mentions'
+import { useHeldPairedServerAsk } from '@/components/bots/use-paired-server-asks'
 import { BotMentionHostText } from '@/components/bots/BotMentionHostBadge'
 import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { foldBotRequestMail } from './bot-request-folded-mail'
@@ -68,20 +69,24 @@ export function NativeChatClientAskRequestCard({
   const here = useOwnInstallation() === client.installationId
   const computer = here ? t('bots.groups.thisComputer', 'This computer') : client.computer
   const sent = Boolean(card.messageId)
+  const held = useHeldPairedServerAsk(card.messageId, here && reading.outcome === null)
   const heading = !sent
     ? t('components.native-chat.botRequest.notSentTo', 'Not sent to')
     : card.purpose === 'question'
       ? t('components.native-chat.botRequest.asked', 'Asked')
       : t('components.native-chat.botRequest.handedTo', 'Handed to')
   const state = !sent
-    ? t('components.native-chat.clientAsk.notConnected', '{{computer}} isn’t connected', {
-        computer: client.computer
-      })
+    ? t('components.native-chat.clientAsk.notConnected', 'Wasn’t connected')
     : reading.outcome === 'dropped'
-      ? t('components.native-chat.clientAsk.declined', 'Declined')
+      ? // A notice that it went unanswered shows as its details instead.
+        reading.answer
+        ? null
+        : t('components.native-chat.clientAsk.declined', 'Declined')
       : reading.outcome === null
         ? here
-          ? t('components.native-chat.clientAsk.waitingForYou', 'Waiting for you')
+          ? held
+            ? t('components.native-chat.clientAsk.waitingForYou', 'Waiting for you')
+            : null
           : t(
               'components.native-chat.clientAsk.waitingOn',
               'Waiting for approval on {{computer}}',
