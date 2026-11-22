@@ -31,5 +31,9 @@ test('double-click renames the active new-style card', async ({ orcaPage }) => {
 
 // The first click wakes a sleeping workspace; un-dimming it must not remount the title mid-rename.
 test('double-click renames a sleeping new-style card', async ({ orcaPage }) => {
+  const sidebar = orcaPage.locator('#workspace-list-region')
+  await expect(
+    sidebar.locator('[data-worktree-sleeping-dim]').getByText('e2e-secondary', { exact: true })
+  ).toBeVisible()
   await renameByDoubleClick(orcaPage, 'e2e-secondary', 'renamed-sleeping-card')
 })

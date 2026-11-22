@@ -125,10 +125,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       {newCardStyle ? (
         // Mix tokens for background-independent sleep dimming; scope to the parent so awake children stay bright.
         // Toggle the attribute, not the wrapper: waking must not remount the title mid-rename.
-        <div
-          className="contents"
-          data-worktree-sleeping-dim={isSleeping && !isDeleting ? '' : undefined}
-        >
+        <div data-worktree-sleeping-dim={isSleeping && !isDeleting ? '' : undefined}>
           {parentCardContent}
         </div>
       ) : (
