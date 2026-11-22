@@ -108,60 +108,80 @@ describe('bots.discord answers after an account change', () => {
     return handler(params, context)
   }
 
-  // The cloud answers each call as `answer`; when `switchTo` is set, the host signs into that
-  // account while the call is under way.
-  function setUp(answer: unknown, switchTo?: string) {
+  // The cloud answers each call as `answer`. With `switchTo`, the host signs into that account
+  // while the call is under way ('call') or once a record edit is queued but before it runs
+  // ('queued'), as when it waits behind earlier writes. Each edit's change is kept in `changes`.
+  function setUp(answer: unknown, switchTo?: { account: string; when: 'call' | 'queued' }) {
     let account: string | null = 'acct-a'
-    const update = vi.fn(async () => undefined)
+    const changes: unknown[] = []
+    const record = {
+      discord: {
+        applicationId: '555',
+        guilds: [{ guildId: '901', guildName: 'Old' }]
+      }
+    }
+    const update = vi.fn(async (_botId: string, edit: (bot: typeof record) => unknown) => {
+      await Promise.resolve()
+      if (switchTo?.when === 'queued') {
+        account = switchTo.account
+      }
+      changes.push(edit(record))
+    })
     withHostCloudClient.mockReset()
     withHostCloudClient.mockImplementation(async () => {
-      if (switchTo !== undefined) {
-        account = switchTo
+      if (switchTo?.when === 'call') {
+        account = switchTo.account
       }
       return { ok: true, value: answer }
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Discord handlers read only these runtime fields.
     const context = {
       runtime: {
-        getConnectorCloud: () => ({ signedInAccount: () => account }),
+        getConnectorCloud: () => ({
+          signedInAccount: () => account,
+          withConnection: (run: () => Promise<unknown>) => run()
+        }),
         bots: { list: () => [{ id: 'bot-1' }], update }
       }
     } as unknown as Context
-    return { context, update }
+    return { context, changes }
   }
 
-  const listed = {
-    bots: [
-      {
-        botId: 'bot-1',
-        state: 'ready',
-        applicationId: '555',
-        botUserId: '556',
-        botName: 'Triage',
-        guilds: [{ guildId: '900', name: 'Acme' }]
+  const ready = {
+    state: 'ready',
+    applicationId: '555',
+    botUserId: '556',
+    botName: 'Triage',
+    guilds: [{ guildId: '900', name: 'Acme' }]
+  }
+  const listed = { bots: [{ botId: 'bot-1', ...ready }] }
+  // Made up, and built from parts so secret scanners don't read it as a leaked token.
+  const token = ['A'.repeat(24), 'B'.repeat(6), 'C'.repeat(38)].join('.')
+  const calls: [string, unknown, unknown][] = [
+    ['bots.discord.bots', null, listed],
+    ['bots.discord.setUp', { botId: 'bot-1', token }, ready],
+    ['bots.discord.remove', { botId: 'bot-1' }, {}],
+    ['bots.discord.leaveGuild', { botId: 'bot-1', guildId: '901' }, listed]
+  ]
+
+  it.each(calls)(
+    '%s records the answer for the account that asked',
+    async (name, params, answer) => {
+      const same = setUp(answer)
+      await call(name, params, same.context)
+      expect(same.changes).toHaveLength(1)
+      expect(same.changes[0]).toHaveProperty('discord')
+    }
+  )
+
+  it.each(calls)(
+    '%s records nothing once the account changed, during the call or behind queued writes',
+    async (name, params, answer) => {
+      for (const when of ['call', 'queued'] as const) {
+        const changed = setUp(answer, { account: 'acct-b', when })
+        await call(name, params, changed.context)
+        expect(changed.changes.every((change) => JSON.stringify(change) === '{}')).toBe(true)
       }
-    ]
-  }
-
-  it('records the list for the account that asked, and not once the account changed', async () => {
-    const same = setUp(listed)
-    await call('bots.discord.bots', null, same.context)
-    expect(same.update).toHaveBeenCalledTimes(1)
-
-    const changed = setUp(listed, 'acct-b')
-    await expect(call('bots.discord.bots', null, changed.context)).resolves.toMatchObject({
-      ok: true
-    })
-    expect(changed.update).not.toHaveBeenCalled()
-  })
-
-  it('does not clear the record of a removal or a left server once the account changed', async () => {
-    const removed = setUp({}, 'acct-b')
-    await call('bots.discord.remove', { botId: 'bot-1' }, removed.context)
-    expect(removed.update).not.toHaveBeenCalled()
-
-    const left = setUp(listed, 'acct-b')
-    await call('bots.discord.leaveGuild', { botId: 'bot-1', guildId: '900' }, left.context)
-    expect(left.update).not.toHaveBeenCalled()
-  })
+    }
+  )
 })

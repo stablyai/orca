@@ -66,13 +66,18 @@ export function nextBotDiscord(
 }
 
 // The cloud's answer stands even if the local record cannot follow it (e.g. the bot was just deleted).
+// The edit runs once earlier queued writes finish, so the account is checked there, not when queued.
 async function recordDiscord(
   runtime: Pick<OrcaRuntimeService, 'bots'>,
   botId: string,
-  state: ConnectorBotDiscordState
+  state: ConnectorBotDiscordState,
+  sameAccount: () => boolean
 ): Promise<void> {
   try {
     await runtime.bots.update(botId, (bot) => {
+      if (!sameAccount()) {
+        return {}
+      }
       const discord = nextBotDiscord(bot, state)
       return discord === undefined ? {} : { discord }
     })
@@ -85,19 +90,20 @@ async function recordDiscord(
 // doesn't list keeps its record, since a removal here clears it.
 async function recordDiscordBots(
   runtime: Pick<OrcaRuntimeService, 'bots'>,
-  listed: ConnectorDiscordBots
+  listed: ConnectorDiscordBots,
+  sameAccount: () => boolean
 ): Promise<void> {
   const here = new Set(runtime.bots.list().map((bot) => bot.id))
   for (const { botId, ...state } of listed.bots) {
     if (here.has(botId)) {
-      await recordDiscord(runtime, botId, state)
+      await recordDiscord(runtime, botId, state, sameAccount)
     }
   }
 }
 
 /**
  * Notes the host's signed-in account before a cloud call; true afterwards while it is the same. An
- * answer that arrives after the account changed belongs to the old account and is not recorded.
+ * answer recorded after the account changed belongs to the old account, so each record edit asks.
  */
 function sameAccountAfter(runtime: Pick<OrcaRuntimeService, 'getConnectorCloud'>): () => boolean {
   const cloud = runtime.getConnectorCloud()
@@ -114,8 +120,8 @@ export const BOT_DISCORD_METHODS = [
     handler: async (_params, context) => {
       const sameAccount = sameAccountAfter(context.runtime)
       const result = await withHostCloudClient(context, (client) => client.discordBots())
-      if (result.ok && sameAccount()) {
-        await recordDiscordBots(context.runtime, result.value)
+      if (result.ok) {
+        await recordDiscordBots(context.runtime, result.value, sameAccount)
       }
       return result
     }
@@ -143,7 +149,7 @@ export const BOT_DISCORD_METHODS = [
           return { ok: false as const, error: BOT_SLACK_DESKTOP_ERRORS.failed }
         }
         if (result.ok) {
-          await recordDiscord(runtime, botId, result.value)
+          await recordDiscord(runtime, botId, result.value, sameAccount)
         }
         return result
       }
@@ -158,8 +164,8 @@ export const BOT_DISCORD_METHODS = [
     handler: async ({ botId }, context) => {
       const sameAccount = sameAccountAfter(context.runtime)
       const removed = await withHostCloudClient(context, (client) => client.removeDiscordApp(botId))
-      if (removed.ok && sameAccount()) {
-        await recordDiscord(context.runtime, botId, { state: 'not_created' })
+      if (removed.ok) {
+        await recordDiscord(context.runtime, botId, { state: 'not_created' }, sameAccount)
       }
       return removed
     }
@@ -175,8 +181,8 @@ export const BOT_DISCORD_METHODS = [
       )
       if (left.ok) {
         const listed = await withHostCloudClient(context, (client) => client.discordBots())
-        if (listed.ok && sameAccount()) {
-          await recordDiscordBots(context.runtime, listed.value)
+        if (listed.ok) {
+          await recordDiscordBots(context.runtime, listed.value, sameAccount)
         }
       }
       return left
