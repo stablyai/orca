@@ -15,6 +15,8 @@ import {
   getWindowParkVisible,
   subscribeWindowParkVisibility
 } from '@/lib/window-activity/window-park-visibility'
+import { parseBotAvatar } from '../../../../../shared/bot-avatar'
+import type { Bot } from '../../../../../shared/bot-types'
 import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
 
 type Picture = {
@@ -48,9 +50,9 @@ export type BotGroupFacePictures = {
   close: () => void
   /** The list shows again (Back from an item): failed pictures are read again as their faces draw. */
   retryFailed: () => void
-  /** The group's members now (botRefKey to upload version, null for none): pictures of others, or of
-   *  a version since replaced, with no face drawn are let go. */
-  retain: (members: ReadonlyMap<string, string | null>) => void
+  /** The group's members now: once more members' pictures are kept than there are members, those of
+   *  others, or of a version since replaced, with no face drawn are let go. */
+  retain: (members: readonly (BotRef & Pick<Bot, 'avatar'>)[]) => void
 }
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
@@ -212,7 +214,18 @@ function createFacePictures(): BotGroupFacePictures {
         picture.hostLeft ||= picture.failed
       }
     },
-    retain: (members) => {
+    retain: (bots) => {
+      // At most one picture and handle per bot, so with no more than there are members (every group
+      // refresh that changes no member) nothing needs looking at.
+      if (handles.size <= bots.length && pictures.size <= bots.length) {
+        return
+      }
+      const members = new Map(
+        bots.map((bot) => {
+          const avatar = parseBotAvatar(bot.avatar)
+          return [botRefKey(bot), avatar?.kind === 'upload' ? avatar.version : null]
+        })
+      )
       // A folded face's handle has no picture behind it; one for a bot no longer shown at that version goes.
       for (const [key, known] of handles) {
         if (members.get(key) !== known.version && !pictures.get(key)?.faces.size) {
