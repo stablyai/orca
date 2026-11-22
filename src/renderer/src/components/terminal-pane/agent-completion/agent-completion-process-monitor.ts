@@ -9,7 +9,8 @@ import {
 import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import {
   clientOnlyUnverifiableInspection,
-  isClientOnlyUnverifiableInspection
+  isClientOnlyUnverifiableInspection,
+  type TerminalProcessInspection
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
 import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
@@ -63,6 +64,19 @@ export function createAgentCompletionProcessMonitor({
   function recordActivityUntil(until: number, eventAt: number): void {
     state.lastPaneActivityAt = Math.max(state.lastPaneActivityAt ?? until, until)
     noteForegroundEvent(eventAt)
+  }
+
+  function observationPredatesActivity(result: TerminalProcessInspection): boolean {
+    const capturedAgeMs = isClientOnlyUnverifiableInspection(result)
+      ? undefined
+      : result.foregroundProcessEvidence?.capturedAgeMs
+    const lastActivity = state.lastPaneActivityAt
+    return (
+      capturedAgeMs !== undefined &&
+      lastActivity !== null &&
+      lastActivity <= Date.now() &&
+      Date.now() - capturedAgeMs < lastActivity
+    )
   }
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
@@ -201,6 +215,10 @@ export function createAgentCompletionProcessMonitor({
                 dispatchCompletion,
                 remoteInspection
               })
+              // A shared capture can predate the output that asked for this read; read once more after it.
+              if (observationPredatesActivity(result)) {
+                requestFollowUp('unresolved')
+              }
             }
             inspectionSucceeded = true
           }
@@ -249,6 +267,8 @@ export function createAgentCompletionProcessMonitor({
     observeRecognizedProcess: (process: RecognizedAgentProcess) => {
       if (!state.disposed) {
         handleRecognizedProcess(process)
+        // Another reader found the agent; a read lets the host watch its exit.
+        noteForegroundEvent()
       }
     },
     start: () => {

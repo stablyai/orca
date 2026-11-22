@@ -121,6 +121,36 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
+  it('reads again when a shared capture predates the output that asked for the read', async () => {
+    const observed = (capturedAgeMs: number): RuntimeTerminalProcessInspection => ({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false,
+      foregroundProcessEvidence: {
+        verdict: 'unverifiable',
+        reason: 'test',
+        authorityGeneration: 'host',
+        observationEpoch: 1,
+        capturedAgeMs,
+        ptyId: 'pty-1',
+        ptyIncarnationId: 'inc-1'
+      }
+    })
+    const inspectProcess = vi
+      .fn(async () => observed(0))
+      .mockImplementationOnce(async () => observed(10_000))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(2)
+    coordinator.dispose()
+  })
+
   it('confirms an exit once a background child outlives the redraw and then ends silently', async () => {
     let result = processResult('codex')
     const dispatchCompletion = vi.fn()
