@@ -41,6 +41,7 @@ import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork
 } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { claudeNextLaunchCommand } from '../../cli-capabilities/claude-installed-update'
 
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
 
@@ -195,6 +196,7 @@ export function claudeStructuredLaunchPart(
       cwd,
       env: await withClaudeLaunchAccountPin(router, claudeProbeEnv(sources), accountHome.path)
     }
+    const nextCommand = claudeNextLaunchCommand(sources.command)
     const launchFlags = resolveClaudeLaunchFlags(
       { ...deps, prepareVisuals: basis.visuals },
       record.sessionId,
@@ -297,7 +299,8 @@ export function claudeStructuredLaunchPart(
         resumesTranscript,
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
-        cliVersion: async () => (deps.cliFlags ? deps.cliFlags.version(probeLaunch) : null),
+        cliVersion: async () =>
+          deps.cliFlags ? deps.cliFlags.version({ ...probeLaunch, command: nextCommand() }) : null,
         continuesChain,
         ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
