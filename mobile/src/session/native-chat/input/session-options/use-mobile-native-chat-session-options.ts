@@ -22,10 +22,10 @@ import type {
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import { createNativeChatPtySessionOptions } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
-  dropNativeChatTurnHeldOptionPicks,
   holdNativeChatOptionPicksDuringTurns,
   type NativeChatTurnHeldOptionSurface
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-turn-held-option-surface'
+import { useMobileTurnHeldOptionPicks } from './use-mobile-turn-held-option-picks'
 import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
@@ -235,19 +235,7 @@ export function useMobileNativeChatSessionOptions(
     return created
   }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
   const surface = entry?.surface ?? null
-  const isWorking = args.isWorking === true
-  useEffect(() => {
-    surface?.setWorking(isWorking)
-  }, [isWorking, surface])
-  // Another chat or agent drops picks still waiting for this one's turn.
-  useEffect(
-    () => () => {
-      if (identity) {
-        dropNativeChatTurnHeldOptionPicks(identity)
-      }
-    },
-    [identity]
-  )
+  useMobileTurnHeldOptionPicks(surface, identity, args.isWorking === true)
 
   useEffect(() => {
     if (entry && discoveredModels && entry.models !== discoveredModels) {
