@@ -12,7 +12,8 @@ import type {
   OpenCodeSqliteCaptureValue,
   OpenCodeSqliteListValue,
   OpenCodeSqliteWorkerRequest,
-  OpenCodeSqliteWorkerResponse
+  OpenCodeSqliteWorkerResponse,
+  SqliteReaderAgent
 } from './session-scanner-opencode-sqlite-worker-protocol'
 import { parseOpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-response'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
@@ -76,7 +77,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     scopePaths?: readonly string[]
     signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
@@ -131,7 +132,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     signal?: AbortSignal
   }): Promise<AiVaultSession | null> {
     try {
@@ -161,7 +162,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: SqliteReaderAgent
     signal?: AbortSignal
   }): Promise<OpenCodeSqliteCaptureValue> {
     try {
@@ -220,7 +221,7 @@ export class OpenCodeSqliteWorkerClient {
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
     timeoutMs: number,
     signal?: AbortSignal,
-    agent?: 'opencode2' | 'zcode' | 'native-chat'
+    agent?: SqliteReaderAgent | 'native-chat'
   ): Promise<unknown> {
     const deadline = this.requestTimeoutMs ?? timeoutMs
     const response = await runOpenCodeSqliteScanRequest(

@@ -3,7 +3,7 @@
 import {
   getRepoExecutionHostId,
   type LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   ExecutionHostNotDispatchableError,

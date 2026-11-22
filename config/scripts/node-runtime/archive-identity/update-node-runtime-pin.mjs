@@ -30,7 +30,7 @@ import { runProcessSync } from '@orca/process-host'
 import {
   getTarProgram,
   getZipExtractorCommand
-} from '../../../../src/shared/zip-extractor-command.ts'
+} from '../../../../src/shared/archives/zip-extractor-command.ts'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const PIN_FILE = join(root, 'src/shared/node-runtime/node-runtime-pin.ts')

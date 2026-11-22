@@ -3,7 +3,7 @@ import { withMacTailscaleDnsHint } from '../../network/macos-tailscale-dns-diagn
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 
 function emptyInputFailure(input: string): TextGenerationFailureFields | null {
   switch (input) {

@@ -6,7 +6,7 @@ import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
-import { resolveTabNameSource } from '../../tab-title-resolution'
+import { resolveTabNameSource } from '../../workspace-layout/tab-groups/tab-title-resolution'
 import { aiVaultTitleOfSession } from '../../ai-vault/contracts/ai-vault-session-title'
 
 export type ConversationNameTab = Pick<

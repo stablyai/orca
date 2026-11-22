@@ -1,4 +1,3 @@
-import type { BrowserWindow } from 'electron'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 import {
@@ -8,7 +7,7 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
@@ -34,7 +33,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string>
 
-  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
+  abstract getAuthoritativeWindowId(missingWindowMessage?: string): number
 
   abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
 

@@ -8,7 +8,7 @@ import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY

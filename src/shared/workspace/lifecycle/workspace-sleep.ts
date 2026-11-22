@@ -2,7 +2,7 @@ import {
   hasSleptAgentToWake,
   type SleepingAgentSessionRecord
 } from '../../agent-session/lifecycle/agent-session-resume'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 /** A host that runs part of a workspace: this desktop's main, or a paired server. */
 export type WorkspaceSleepHost = { kind: 'self' } | { kind: 'environment'; environmentId: string }

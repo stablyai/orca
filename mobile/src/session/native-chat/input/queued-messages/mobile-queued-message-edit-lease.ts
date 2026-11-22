@@ -1,7 +1,7 @@
 import {
   startQueuedEditLease,
   type QueuedEditLeaseLoss
-} from '../../../../../../src/shared/queued-message-edit-lease'
+} from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-lease'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { callAgentSession } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { structuredSessionOperationId } from '../../agent-session/structured-session-operation-id'

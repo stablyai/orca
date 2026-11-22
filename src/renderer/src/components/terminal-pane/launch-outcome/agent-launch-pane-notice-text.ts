@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AgentLaunchPaneOutcome } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
+import { stripClientEnvironmentFooter } from '../../../../../shared/feedback/client-environment-info'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { joinSentences } from '../../../../../shared/text/sentence-joining'

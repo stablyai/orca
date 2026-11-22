@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWorkspaceModel'
-import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { useTabGroupWorkspaceModel } from '@/components/tab-group/workspace-model/useTabGroupWorkspaceModel'
+import { resolveGroupTabFromVisibleId } from '@/components/tab-group/workspace-model/tab-group-visible-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surface-model'
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []

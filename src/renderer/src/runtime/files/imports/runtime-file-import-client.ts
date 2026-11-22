@@ -1,6 +1,6 @@
 import { joinPath } from '@/lib/path'
 import type { ImportItemResult } from '../../../../../shared/file-import/filesystem-import-result'
-import { deconflictCopyName } from '../../../../../shared/import-copy-name'
+import { deconflictCopyName } from '../../../../../shared/file-import/import-copy-name'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'

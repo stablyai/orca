@@ -1,17 +1,14 @@
-import { notificationSourceForOwner } from '../../../shared/notification-source'
+import { notificationSourceForOwner } from '../../../shared/notifications/notification-source'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host/execution-host-registry'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import { getHostDisplayLabelOverrides } from '../../../shared/execution-host/host-setting-overrides'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 
 export type NotificationSourceCatalog = Pick<
   AppState,
-  | 'sshTargetLabels'
-  | 'sshConnectionStates'
-  | 'settings'
-  | 'runtimeEnvironments'
-  | 'runtimeStatusByEnvironmentId'
->
+  'sshTargetLabels' | 'sshConnectionStates' | 'settings' | 'runtimeEnvironments'
+> & { runtimeStatusByEnvironmentId: RuntimeStatuses }
 
 export function buildNotificationSourceOptions(
   state: NotificationSourceCatalog

@@ -1,10 +1,10 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import type {
   GitLabPagedResult,
   GitLabTodo,
   GitLabWorkItem,
   MRListState
-} from '../../../shared/gitlab-types'
+} from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapIssueToWorkItem, mapMRToWorkItem } from '../requests/gitlab-response-mapping'
 import { acquire, release } from '../requests/glab-request-admission'

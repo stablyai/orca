@@ -1,3 +1,4 @@
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { collectLocalSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type {
   RuntimeConstructionBindings as Bindings,
@@ -10,7 +11,7 @@ import type { OrcaRuntimeWithPreservedBranchCleanup as HostServices } from './ru
 import type { RuntimeEdgeCommandSurface } from './runtime-edge-command-controller'
 import type { OrcaRuntimeWithListManagedWorktrees as ListManagedWorktrees } from '../workspaces/managed-workspace-operations'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
+import { OrcaRuntimeWithBots } from '../orca-runtime-bots'
 
 import type { RuntimeStore } from './runtime-store-contract'
 import { installGitHubProjectAccounts } from '../../github/accounts/github-project-account'
@@ -44,7 +45,7 @@ import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
 } from '../integrations/skill/runtime-skill-command-contract'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
@@ -59,7 +60,7 @@ import { setPRConflictSummaryRemoteFetches } from '../../github/pull-requests/co
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
-export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
   declare protected readonly getLocalProviderFn: HostServices['getLocalProviderFn']
   declare readonly onPtyStopped: HostServices['onPtyStopped']
   declare protected readonly onTerminalAgentStatus: HostServices['onTerminalAgentStatus']
@@ -86,6 +87,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly dropAgentStatusForRemovedWorktreeFn: HostServices['dropAgentStatusForRemovedWorktreeFn']
   declare protected readonly canRecoverPersistentLocalPtysFn: HostServices['canRecoverPersistentLocalPtysFn']
   declare protected readonly getPairedDeviceNameFn: HostServices['getPairedDeviceNameFn']
+  declare protected readonly getPairedDeviceAccountFn: Bindings['getPairedDeviceAccount']
   declare protected readonly buildAgentHookPtyEnv: HostServices['buildAgentHookPtyEnv']
   declare protected readonly getDesktopWindowStatusFn: HostServices['getDesktopWindowStatusFn']
   protected readonly headlessTerminalScrollbackRows: number
@@ -226,7 +228,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       {
         artifacts: () => this.artifacts.hasService(),
         skills: () => this.skillCommands.hasSkillCloudService()
-      }
+      },
+      () => this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
     )
     this.automation = new RuntimeAutomationController(store, {
       showRepo: (selector) => this.showRepo(selector),
@@ -258,6 +261,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForSessionFn =
       deps?.getAgentProviderSessionRowsForSession ?? null
+    this.getPaneAgentIdentityFn = deps?.getPaneAgentIdentity ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
     this.getAcceptedAgentReply = deps?.getAcceptedAgentReply ?? (() => undefined)
     this.subscribeAgentStatusRowChanges = deps?.subscribeAgentStatusRowChanges ?? (() => () => {})
@@ -273,6 +277,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
+    this.getPairedDeviceAccountFn = deps?.getPairedDeviceAccount ?? (() => null)
     // Headless serve skips registerCoreHandlers but still needs managed-Codex/WSL AiVault sources.
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
       configureAiVaultSessionSources({

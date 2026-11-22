@@ -9,7 +9,7 @@ import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ss
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   resolveChecksPanelTerminalPtyId,

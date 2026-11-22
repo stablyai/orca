@@ -10,8 +10,8 @@ import {
   pinServeUserDataPath,
   resolveLaunchUserDataPath
 } from './profile/launch-user-data-path'
-import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
-import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
+import { foregroundServeIsolatedProfileSwitches } from '../../shared/app-lifecycle/launch/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/app-lifecycle/launch/headless-serve-ozone-platform'
 import { getMacAppBundlePath } from './serve/updates/mac-app-update-bundle'
 import { getPlatformUserDataPath } from './profile/metadata'
 import { isSameUserDataPath } from '../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
@@ -21,9 +21,10 @@ import {
   superviseForegroundServe
 } from './serve/updates/serve-update-supervisor'
 import { RuntimeClientError } from './connection/types'
-import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
+import { BACKGROUND_OPEN_ARG } from '../../shared/app-lifecycle/launch/background-open-argv'
 import {
   getExecutableAppArgs,
+  resolveAppChildCwd,
   resolveAppRoot,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
@@ -32,7 +33,7 @@ import {
   SERVE_RUNTIME_ELECTRON,
   SERVE_RUNTIME_ENV
 } from '../../shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
-import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
+import { findBundledWebClientRoot } from '../../shared/web-client/bundled-web-client-root'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve/startup/serve-orcad-launch'
 import { findAppSpeechRecognizerDir } from './app-launch/serve-speech-recognizer'
 import {
@@ -48,13 +49,17 @@ import {
 import { MacServeStartupAbortError } from './serve/startup/serve-signal-exit-diagnostic'
 import { superviseServeService } from './serve/supervision/serve-supervised-service'
 import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
-import { supervisedAppImageUpdate } from './serve/updates/serve-appimage-update'
+import {
+  resolveAppImageBuildWatch,
+  supervisedAppImageUpdate
+} from './serve/updates/serve-appimage-update'
 import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
   noteServeSupervisorStart,
   restartThisServeSupervisorIfReplaced
 } from './serve/updates/serve-replaced-app-restart'
 import { isSupervisedSpawnHeld } from './serve/supervision/serve-supervised-stop'
+import { appImageEphemeralRootOf } from '../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 import { openServeBundlePark } from '../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import {
   redactingSpawn,
@@ -206,13 +211,23 @@ async function serveWithSelectedRuntime(
       userDataPath,
       stripElectronRunAsNode(process.env),
       findBundledWebClientRoot(resolveAppRoot()),
-      findAppSpeechRecognizerDir(resolveAppRoot())
+      findAppSpeechRecognizerDir(resolveAppRoot()),
+      servedAppImageForBrowser(executable)
     )
   }
   if (selection.reason) {
     process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
   }
   return serveWithElectron(executable, args, userDataPath)
+}
+
+/** The file, not the FUSE mount: it outlives this process and keeps its path across updates. */
+function servedAppImageForBrowser(executable: string): string | undefined {
+  // Extract-and-run means no FUSE here, so the file itself could not start.
+  if (appImageEphemeralRootOf(executable)?.kind === 'extract') {
+    return undefined
+  }
+  return resolveAppImageBuildWatch(executable)?.appImagePath
 }
 
 function serveWithElectron(
@@ -256,7 +271,7 @@ function spawnElectronServe(
     program: executable,
     args: childArgs,
     detached: args.recipeJson === true,
-    cwd: resolveAppRoot(),
+    cwd: resolveAppChildCwd(userDataPath),
     stdio:
       args.recipeJson === true
         ? ['ignore', 'pipe', 'inherit']

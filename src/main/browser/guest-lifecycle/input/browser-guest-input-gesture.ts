@@ -2,9 +2,8 @@ import type { WebContents } from 'electron'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
-const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
-  'mouseDown',
-  'mouseUp',
+const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
+const ACTIVATING_OTHER_INPUT_TYPES: ReadonlySet<string> = new Set([
   'keyDown',
   'rawKeyDown',
   'char',
@@ -23,8 +22,33 @@ export function isRecentBrowserGuestInput(observedAt: number, now: number): bool
   return elapsed >= 0 && elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
 }
 
-export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undefined): boolean {
-  return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
+/** Calls `listener` for each click in any of the page's frames, and each key press or tap in its main frame. */
+export function onActivatingBrowserGuestInput(
+  contents: WebContents,
+  listener: () => void
+): () => void {
+  // Why: input-event only sees the main frame's widget, so clicks in out-of-process (cross-site
+  // or sandboxed) frames reach before-mouse-event alone.
+  const onMouse = (_event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    if (ACTIVATING_MOUSE_TYPES.has(mouse.type)) {
+      listener()
+    }
+  }
+  const onInput = (_event: Electron.Event, input: Electron.InputEvent): void => {
+    if (ACTIVATING_OTHER_INPUT_TYPES.has(input.type)) {
+      listener()
+    }
+  }
+  contents.on('before-mouse-event', onMouse)
+  contents.on('input-event', onInput)
+  return () => {
+    try {
+      contents.off('before-mouse-event', onMouse)
+      contents.off('input-event', onInput)
+    } catch {
+      // Contents may already be destroyed.
+    }
+  }
 }
 
 export type LastBrowserGuestInput = { at: number; byAgent: boolean; guestWebContentsId: number }
@@ -40,11 +64,9 @@ function noteSessionInput(contents: WebContents, at: number, byAgent: boolean): 
 
 /** For windows with no guest policies (extension popups and popouts): their clicks count for the session too. */
 export function recordBrowserSessionInput(contents: WebContents): void {
-  contents.on('input-event', (_event, input) => {
-    if (isActivatingBrowserGuestInput(input)) {
-      noteSessionInput(contents, Date.now(), isAgentInjectingInput(contents))
-    }
-  })
+  onActivatingBrowserGuestInput(contents, () =>
+    noteSessionInput(contents, Date.now(), isAgentInjectingInput(contents))
+  )
 }
 
 /** The latest activating input any guest in `session` received, and who sent it. */
@@ -72,18 +94,14 @@ export function trackBrowserGuestInputGesture(
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
-  const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
-    if (isActivatingBrowserGuestInput(input)) {
+  let unsubscribe: (() => void) | null = null
+  try {
+    unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
       lastGestureByAgent = isAgentInjectingInput(guest)
       noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
       onActivatingInput?.(lastGestureByAgent)
-    }
-  }
-  let attached = false
-  try {
-    guest.on('input-event', onInputEvent)
-    attached = true
+    })
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
   }
@@ -91,19 +109,14 @@ export function trackBrowserGuestInputGesture(
     consume: () => {
       const observedAt = lastGestureAt
       lastGestureAt = null
-      return attached && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
+      return unsubscribe && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
         ? { byAgent: lastGestureByAgent }
         : null
     },
     dispose: () => {
       lastGestureAt = null
-      if (!attached) {
-        return
-      }
-      attached = false
-      try {
-        guest.off('input-event', onInputEvent)
-      } catch {}
+      unsubscribe?.()
+      unsubscribe = null
     }
   }
 }

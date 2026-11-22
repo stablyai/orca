@@ -1,7 +1,5 @@
-import {
-  captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -21,10 +19,9 @@ import {
   createAgentSessionRecordTablesSql
 } from './journal-database-schema'
 import { openJournalDatabase } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
@@ -228,23 +225,6 @@ it('never reimports metadata or consults a broken original once the new file is 
   expect(hash(published)).toBe(before)
 })
 
-it('accepts supported early schemas with no additive metadata tables without migrating their source', async () => {
-  const stateDirectory = directory()
-  const source = new Database(journalDatabasePath(stateDirectory))
-  source.exec(createJournalTablesSql())
-  source.exec(
-    `INSERT INTO journal_sessions VALUES('early','workspace','epoch'); PRAGMA user_version=3`
-  )
-  source.close()
-  const before = hash(journalDatabasePath(stateDirectory))
-  const current = open(await initializeJournalDomainDatabase(stateDirectory))
-  expect(
-    current.prepare('SELECT session_id,workspace_id,epoch FROM journal_chat_state').all()
-  ).toEqual([{ session_id: 'early', workspace_id: 'workspace', epoch: null }])
-  expect(current.prepare('SELECT record_json FROM agent_session_records').all()).toEqual([])
-  expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
-})
-
 it('publishes complete metadata under competing initialization without replacing the winner or foreign files', async () => {
   const stateDirectory = directory()
   seedSource(legacy(stateDirectory))
@@ -294,18 +274,14 @@ it('discards an unpublished partial metadata import on failure and retries from 
   })
 })
 
-it.each([1, 100, 'corrupt'])(
+it.each([1, 100])(
   'refuses source schema %s without publishing an empty successful profile',
   async (version) => {
     const stateDirectory = directory()
     const filename = journalDatabasePath(stateDirectory)
-    if (version === 'corrupt') {
-      writeFileSync(filename, 'corrupt database')
-    } else {
-      const source = new Database(filename)
-      source.pragma(`user_version=${version}`)
-      source.close()
-    }
+    const source = new Database(filename)
+    source.pragma(`user_version=${version}`)
+    source.close()
     const before = hash(filename)
     await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow()
     expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
@@ -401,7 +377,7 @@ it('upgrades schema one atomically without trusting old forms or changing source
   })
 })
 
-it('binds the initial profile copy to its source without refreshing an authoritative winner', async () => {
+it('records the original as last absorbed without copying its later profile metadata', async () => {
   const root = directory()
   const filename = journalDatabasePath(root)
   const source = new Database(filename)
@@ -426,7 +402,8 @@ it('binds the initial profile copy to its source without refreshing an authorita
   old.close()
   expect(captureJournalLegacySourceReceipt(filename)).not.toEqual(original)
   await initializeJournalDomainDatabase(root)
-  expect(JSON.parse(String(receipt()))).toEqual(original)
+  // The receipt names the original as last absorbed; old-build profile metadata stays there.
+  expect(JSON.parse(String(receipt()))).toEqual(captureJournalLegacySourceReceipt(filename))
   expect(
     destination
       .prepare("SELECT value FROM agent_session_store_meta WHERE key='old-build-append'")

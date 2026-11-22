@@ -9,7 +9,7 @@ import {
 import { installClaudeProfileRouter } from '../../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { claudeProfileMarkerPath } from '../../../../claude-accounts/profiles/claude-profile-paths'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'
-import { claudeInitializationAuthError } from '../../../../claude/structured/claude-structured-init-proof'
+import { claudeInitializationAuthError } from '../../../../claude/structured/startup/claude-structured-init-proof'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { resolveStructuredClaudeAccountHomePath } from '../../../../runtime/agent-session/environment/structured-agent-account-home'
 import { createClaudeStructuredLaunchResolver } from '../../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'

@@ -1,6 +1,9 @@
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
+import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
+import { isListedByFolderWorkspace } from '../../project/catalog/hidden-projects'
 import { isWorktreeRetiredByRemoval } from '../../worktree/removal/removal-visibility'
 import {
   filterWorkspaceRows,
@@ -36,7 +39,7 @@ export function selectVisibleSidebarWorktrees({
   ancestorByIdentity: everyAncestorByIdentity,
   rankOf,
   filters,
-  facts,
+  facts: projectFacts,
   worktreeLineageById,
   lineageParentIdentities,
   filterRepoIds,
@@ -44,10 +47,12 @@ export function selectVisibleSidebarWorktrees({
   preserveLineageParentOrder,
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
+  const facts = withFolderNestedRowsListed(projectFacts, lineageParentIdentities)
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const listedFilterIds = filterRepoIds.filter((id) => !facts.isProjectHidden(id))
   const selectedRepoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
-  // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back.
+  // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back;
+  // only a folder workspace above them lists them.
   const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
 
   let all = filterWorkspaceRows(rows, filters, {
@@ -92,6 +97,22 @@ export function selectVisibleSidebarWorktrees({
         selectedRepoIds,
         lineageParentIdentities
       )
+}
+
+function withFolderNestedRowsListed(
+  facts: WorkspaceRowFactReader<Worktree>,
+  parentIdentities: SidebarLineageParentIdentities | undefined
+): WorkspaceRowFactReader<Worktree> {
+  return parentIdentities
+    ? {
+        ...facts,
+        isInHiddenProject: (row) =>
+          facts.isInHiddenProject(row) &&
+          !isListedByFolderWorkspace(getWorktreeHostIdentity(row), (identity) =>
+            parentIdentities.get(identity)
+          )
+      }
+    : facts
 }
 
 function withoutHiddenProjectRows(
@@ -150,4 +171,21 @@ function addVisibleLineageAncestors(
     addWithAncestors(worktree)
   }
   return result
+}
+
+/** Rows a Bots section lists leave their project before filtering, so muting and filter counts ignore them. */
+export function withoutBotListedWorktrees<T extends Pick<Worktree, 'id' | 'hostId'>>(
+  rows: readonly T[],
+  botListed: ReadonlySet<string> | undefined
+): readonly T[] {
+  return botListed?.size ? rows.filter((row) => !botListed.has(getWorktreeHostIdentity(row))) : rows
+}
+
+/** A folder workspace a bot lists (one handed to it, say) leaves its project the same way. */
+export function withoutBotListedFolderWorkspaces<
+  T extends Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
+>(folders: readonly T[], botListed: ReadonlySet<string> | undefined): readonly T[] {
+  return botListed?.size
+    ? folders.filter((folder) => !botListed.has(getFolderWorkspaceHostIdentity(folder)))
+    : folders
 }

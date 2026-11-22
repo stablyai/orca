@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { normalizeMachineName } from '../../../../shared/machine-name'
+import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 
 /** Saved overrides already reached main; query runtime only for the detected name to avoid stale echoes. */
 export function usePublishedMachineName(savedOverride: string): string | null {

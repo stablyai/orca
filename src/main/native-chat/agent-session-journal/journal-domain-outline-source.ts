@@ -4,14 +4,14 @@ import {
   nativeChatUserMessagePreview,
   truncateOutlinePreview,
   type NativeChatUserMessagePreview
-} from '../../../shared/agent-session/agent-session-conversation-outline'
+} from '../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { nativeChatToolFoldKind } from '../../../shared/native-chat/tools/native-chat-tool-fold'
 import type {

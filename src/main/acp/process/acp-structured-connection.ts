@@ -7,6 +7,7 @@ export type AcpStructuredConnection = Pick<
   | 'authenticate'
   | 'requestSessionFreeExtension'
   | 'forkSession'
+  | 'listSessions'
   | 'start'
   | 'prompt'
   | 'cancel'

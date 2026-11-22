@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   NativeChatAppendedPayload,
+  NativeChatReadSessionOptions,
   NativeChatReadSessionResult,
   NativeChatSubscriptionFrame
 } from './native-chat-api'
@@ -9,7 +10,7 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,
   type NativeChatVisualTheme
-} from '../../../shared/native-chat/native-chat-visual-shell'
+} from '../../../shared/native-chat/visuals/native-chat-visual-shell'
 
 export const nativeChatApi = {
   // Acknowledge the in-memory snapshot before guest creation can start its preload.
@@ -21,14 +22,15 @@ export const nativeChatApi = {
     sessionId: string,
     limit?: number,
     transcriptPath?: string,
-    options?: { wakeWslDistro?: boolean }
+    options?: NativeChatReadSessionOptions
   ): Promise<NativeChatReadSessionResult> =>
     ipcRenderer.invoke('nativeChat:readSession', {
       agent,
       sessionId,
       limit,
       transcriptPath,
-      wakeWslDistro: options?.wakeWslDistro
+      wakeWslDistro: options?.wakeWslDistro,
+      beforeOffset: options?.beforeOffset
     }),
   subscribe: (
     args: {

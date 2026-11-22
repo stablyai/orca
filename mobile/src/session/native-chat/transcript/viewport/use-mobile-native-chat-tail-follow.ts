@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
 
 const AT_TAIL_SLOP = 80
 
@@ -16,18 +17,27 @@ export function mobileNativeChatRowAnchor(hasHeader: boolean): { minIndexForVisi
   return hasHeader ? ANCHOR_BELOW_HEADER : ANCHOR_AT_FIRST_ROW
 }
 
-function distanceFromTail(event: NativeScrollEvent): number {
+/** The scroll metrics the tail reads; a native scroll event carries them. */
+export type MobileScrollTailMetrics = {
+  contentOffset: { y: number }
+  contentSize: { height: number }
+  layoutMeasurement: { height: number }
+}
+
+function distanceFromTail(event: MobileScrollTailMetrics): number {
   const { contentOffset, contentSize, layoutMeasurement } = event
   return contentSize.height - (contentOffset.y + layoutMeasurement.height)
 }
 
-function isAtTail(event: NativeScrollEvent): boolean {
+export function isAtTail(event: MobileScrollTailMetrics): boolean {
   return distanceFromTail(event) <= AT_TAIL_SLOP
 }
 
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  /** Puts the drawn row `key`'s start at the top of the view; only the page list draws row keys. */
+  scrollRowToTop?: (key: string) => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -36,11 +46,13 @@ export type MobileNativeChatTailFollow = {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
     onEndDistance: (fromEnd: number, byReader: boolean) => void
+    onPlaceRestored: (scope: string) => void
   }
   showJumpToTail: boolean
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
+  scrollRowToTop: (key: string) => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
@@ -53,7 +65,7 @@ export type MobileNativeChatTailFollow = {
 // Reader gestures and explicit jumps own follow intent; correction metrics must not change it.
 export function useMobileNativeChatTailFollow(args: {
   hasItems: boolean
-  /** The chat shown; another one opens following, whatever the reader did here. */
+  /** The chat shown; another one opens following unless the list puts back where the reader left it. */
   scopeKey: string
 }): MobileNativeChatTailFollow {
   const { hasItems, scopeKey } = args
@@ -66,6 +78,7 @@ export function useMobileNativeChatTailFollow(args: {
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
   const scopeKeyRef = useRef(scopeKey)
+  const restoredScopeRef = useRef<string | null>(null)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -130,13 +143,30 @@ export function useMobileNativeChatTailFollow(args: {
     [setAtTail, setFollowing]
   )
 
-  const jumpToTail = useCallback(() => {
+  const followTail = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = false
     setAtTail(true)
     setFollowing(true)
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
+
+  // The reader chose the tail (send, jump to latest), even while the chat's rows are still loading.
+  const jumpToTail = useCallback(() => {
+    forgetMobileNativeChatPlace(scopeKeyRef.current)
+    followTail()
+  }, [followTail])
+
+  // Release the follow first, as desktop's scrollMessageToTop does, so streaming cannot pull the row away.
+  const scrollRowToTop = useCallback(
+    (key: string) => {
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setFollowing(false)
+      listRef.current?.scrollRowToTop?.(key)
+    },
+    [clearUserScrollSettle, setFollowing]
+  )
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
@@ -194,24 +224,41 @@ export function useMobileNativeChatTailFollow(args: {
 
   const isFollowing = useCallback(() => followingRef.current, [])
 
+  // The list commits before this view's chat-change effect, so the scope says which chat it restored.
+  const onPlaceRestored = useCallback(
+    (scope: string) => {
+      restoredScopeRef.current = scope
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setFollowing(false)
+    },
+    [clearUserScrollSettle, setFollowing]
+  )
+
   // Reset before paint on chat changes so a mounted view cannot expose the previous reader position.
   useLayoutEffect(() => {
     if (scopeKeyRef.current === scopeKey) {
       return
     }
     scopeKeyRef.current = scopeKey
-    jumpToTail()
-  }, [scopeKey, jumpToTail])
+    const restored = restoredScopeRef.current === scopeKey
+    restoredScopeRef.current = null
+    // Rows still loading keep the chat's saved place, for the list to put back once they draw.
+    if (!restored) {
+      followTail()
+    }
+  }, [scopeKey, followTail])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
     listProps: { ref: attachList },
-    pageListProps: { ref: attachList, isFollowing, onEndDistance },
+    pageListProps: { ref: attachList, isFollowing, onEndDistance, onPlaceRestored },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    scrollRowToTop,
     beginUserScroll,
     endUserDrag,
     beginMomentum,

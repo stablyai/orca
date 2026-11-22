@@ -1,9 +1,13 @@
+import { parseHermesSqliteSessionViaWorker } from '../scanners/hermes/session-scanner-hermes-worker'
 import type {
   AiVaultAgent,
   AiVaultSession,
   AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { wslGatedStat } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
@@ -70,13 +74,20 @@ async function parseSessionForFullFirstUserPrompt(args: {
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
   // Full capture must run in the actual reader, including WSL guests.
-  if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
+  if (
+    args.agent === 'opencode' ||
+    args.agent === 'opencode2' ||
+    args.agent === 'zcode' ||
+    args.agent === 'hermes'
+  ) {
     const parse =
       args.agent === 'opencode2'
         ? parseOpenCode2SqliteSessionViaWorker
         : args.agent === 'zcode'
           ? parseZcodeSqliteSessionViaWorker
-          : parseOpenCodeSqliteSessionViaWorker
+          : args.agent === 'hermes'
+            ? parseHermesSqliteSessionViaWorker
+            : parseOpenCodeSqliteSessionViaWorker
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath, args.agent)
     if (fromSynthetic) {
       return parse({

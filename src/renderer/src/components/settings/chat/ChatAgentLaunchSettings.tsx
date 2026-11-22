@@ -1,7 +1,7 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useEffect } from 'react'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
@@ -16,6 +16,8 @@ import {
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   AgentOpensAsControl,
@@ -48,13 +50,14 @@ export function ChatAgentLaunchSettings({
     void useAppStore.getState().ensureNativeDetectedAgents()
   }, [])
   const detected = useAppStore(readNativeDetectedAgents)
-  const chatOnlyKey = useAppStore((state) => {
+  const chatOnlyKey = useAppStoreWithHostStatuses((appState, statuses) => {
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, WORKSPACE)
     return chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
       .filter(
         (agent) =>
           !detected?.includes(agent) &&
-          readChatProgram(state, agent, context, detected) === 'available'
+          readChatProgram(statuses, agent, context, detected) === 'available'
       )
       .join(' ')
   })

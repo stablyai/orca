@@ -4,23 +4,23 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
-} from './activity-terminal-portal'
+} from './terminal-portal/activity-terminal-portal'
 import {
   reconcileActivityPortalThreads,
   resolveActivityPortalSwap
-} from './activity-portal-thread-reconciliation'
-import { useAgentPaneThreads } from './use-agent-pane-threads'
-import { handleActivityFilterFocusShortcut } from './activity-filter-focus-shortcut'
-import { hasActivityThreadWorkspace } from './activity-thread-actions'
-import { useActivityThreadActionBindings } from './use-activity-thread-action-bindings'
-import { ActivityThreadListPane } from './activity-thread-list-pane'
-import { ActivityThreadDetailPane } from './activity-thread-detail-pane'
+} from './terminal-portal/activity-portal-thread-reconciliation'
+import { useAgentPaneThreads } from './threads/use-agent-pane-threads'
+import { handleActivityFilterFocusShortcut } from './thread-list/activity-filter-focus-shortcut'
+import { hasActivityThreadWorkspace } from './thread-list/activity-thread-actions'
+import { useActivityThreadActionBindings } from './thread-list/use-activity-thread-action-bindings'
+import { ActivityThreadListPane } from './thread-list/activity-thread-list-pane'
+import { ActivityThreadDetailPane } from './terminal-portal/activity-thread-detail-pane'
 import {
   otherActivityTerminalSlot,
   useActivityTerminalLoadingLabel,
   useActivityTerminalPortalStatus
-} from './activity-terminal-portal-status'
-import type { ActivityTerminalPortalSlotId } from './activity-thread-types'
+} from './terminal-portal/activity-terminal-portal-status'
+import type { ActivityTerminalPortalSlotId } from './threads/activity-thread-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import {
   selectDetectedWorktreesByRepo,

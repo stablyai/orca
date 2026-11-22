@@ -1,6 +1,6 @@
 import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'
-import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles'
+import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles/orca-profiles'
 import { unadmittedBrowserPartition } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 export function resolveBrowserPagePartition({

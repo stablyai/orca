@@ -15,7 +15,7 @@ import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogGitRepoId
-} from '../../../../../shared/new-workspace-dialog-repo'
+} from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import type { QuickActionPaletteItem, SettingsPaletteItem } from '../worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'

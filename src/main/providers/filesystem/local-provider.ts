@@ -1,4 +1,14 @@
-import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   throwIfSignalAborted,
@@ -10,14 +20,14 @@ import {
 } from '../../../shared/document-preview/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../../filesystem/destination-serialized-local-rename'
 import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../../ipc/filesystem/access/filesystem-auth'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertNotExists,
   rethrowWithUserMessage
-} from '../../ipc/filesystem/filesystem-create-path-guards'
-import { classifyFilesystemDirectoryEntries } from '../../ipc/filesystem/filesystem-symlink-directory-entries'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/local-worktree-runtime-options'
-import { listMarkdownDocuments } from '../../ipc/markdown-documents'
+} from '../../filesystem/local-file-io/filesystem-create-path-guards'
+import { classifyFilesystemDirectoryEntries } from '../../filesystem/local-file-io/filesystem-symlink-directory-entries'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/worktrees/local-worktree-runtime-options'
+import { listMarkdownDocuments } from '../../ipc/filesystem/search/markdown-documents'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
@@ -26,7 +36,7 @@ import type {
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../shared/file-write/file-write-disk-precondition'
-import { writeLocalTextFileWithDiskPrecondition } from '../../ipc/filesystem/local-disk-write-precondition'
+import { writeLocalTextFileWithDiskPrecondition } from '../../filesystem/local-file-io/local-disk-write-precondition'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export type LocalFilesystemProviderOptions = {
@@ -81,7 +91,20 @@ export function createLocalFilesystemProvider(
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
     await mkdir(dirname(authorizedPath), { recursive: true })
-    await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    if (append) {
+      await writeFile(authorizedPath, content, { flag: 'a' })
+      return
+    }
+    // An exclusive-open failure leaves the existing file alone; only a partial this call created is removed.
+    const handle = await open(authorizedPath, 'wx')
+    try {
+      await handle.writeFile(content)
+      await handle.close()
+    } catch (error) {
+      await handle.close().catch(() => undefined)
+      await rm(authorizedPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   }
   const writeTextFile = async (
     filePath: string,

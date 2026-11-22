@@ -6,6 +6,7 @@ import { projectJournalStopNote } from './context-epochs/journal-stop-note-proje
 import { journalDomainItemWire } from './journal-domain-item-wire'
 import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -52,7 +53,7 @@ export function refreshJournalDomainStopNotes(
     WHERE session_id=? AND epoch=? AND item_id=?`)
   const get = (id: string): AgentJournalRenderItem | undefined => {
     const row = turn.get(...prefix, id)
-    return row ? JSON.parse(String(row.payload_json)) : undefined
+    return row ? readJournalStoredItem(db, prefix, row.payload_json) : undefined
   }
   const priorGet = (id: string) => (previousTurns?.has(id) ? previousTurns.get(id) : get(id))
   const update =
@@ -60,7 +61,7 @@ export function refreshJournalDomainStopNotes(
     WHERE session_id=? AND epoch=? AND item_id=?`)
   const changed: AgentJournalRenderItem[] = []
   for (const row of notes) {
-    const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+    const source: AgentJournalRenderItem = readJournalStoredItem(db, prefix, row.payload_json)
     const prior: AgentJournalRenderItem =
       row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
         ? resolveJournalDomainDisplay(source, row.wire_version, row.display_json, undefined)

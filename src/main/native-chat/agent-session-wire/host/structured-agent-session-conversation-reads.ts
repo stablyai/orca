@@ -1,3 +1,4 @@
+import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { holdStructuredMailSources } from '../observations/structured-agent-session-mail-sources'
 import {
   createStructuredAgentSessionCatalogReads,
@@ -7,7 +8,7 @@ import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionRead } from '../../../../shared/agent-session/view/agent-session-attention'
 import * as providerSupport from '../providers/structured-agent-session-provider-support'
 import type {
   SetUserConversationName,
@@ -15,10 +16,15 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import {
+  readAgentJournalPage,
+  type AgentReadJournalPage
+} from '../publication/history/agent-read-journal-page'
+import {
   queuedSendAnswer,
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
+import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -27,6 +33,7 @@ type ReadContext = {
   seal: (id: string) => void
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
+  publishStatus: (id: string) => void
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
@@ -73,6 +80,34 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       (await journalOf(sessionId)).reads.item(itemId),
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
+    /** Opened at rest; pending prompts wait only while the conversation can answer them. */
+    agentReadPage: async (sessionId: string, limit: number): Promise<AgentReadJournalPage> => {
+      const journal = await journalOf(sessionId)
+      const { deps, sessions } = context()
+      const work = await hostStructuredAgentSessionCurrentWork(
+        { store: deps.store, sessions },
+        sessionId
+      )
+      const actionable = work ? new Set(work.actionablePromptIds()) : null
+      const page = await readAgentJournalPage(
+        journal,
+        { sessionId, limit },
+        (itemId) => actionable?.has(itemId) ?? true
+      )
+      const record = deps.store.getRecord(sessionId)
+      const session = sessions.get(sessionId)
+      // A dead owner cannot be working; a completion the snapshot proved stays proved.
+      if (
+        page.state === 'working' &&
+        record &&
+        (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
+          (!session?.child && session?.lastEndedChild?.rootGone))
+      ) {
+        const { state: _state, ...content } = page
+        return content
+      }
+      return page
+    },
 
     readModelCatalog,
     attentionReads: {
@@ -105,6 +140,29 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     regenerateConversationName: (sessionId: string): boolean =>
       context().deps.conversationNaming?.regenerate(sessionId) ?? false,
     setUserConversationName,
+    /** Skip on an async question card: saved on the chat, so every device and the status agree.
+     *  Only moves forward: a device that has not loaded the newest question cannot bring it back. */
+    skipAsyncQuestions: async (sessionId: string, itemId: string) => {
+      // Opening serializes on this chat too, so it runs before the write takes the slot.
+      await context().conversation(sessionId)
+      return context().serialize(sessionId, async () => {
+        const { deps, sessions, publishStatus } = context()
+        const reads = sessions.get(sessionId)?.journal.reads
+        if (!reads) {
+          return
+        }
+        const saved = deps.store.getRecord(sessionId)?.asyncQuestionsSkippedThrough
+        const [previous, next] = await Promise.all([
+          saved === undefined ? undefined : reads.item(saved),
+          reads.item(itemId)
+        ])
+        if (!next || (previous && compareAgentJournalItems(previous, next) >= 0)) {
+          return
+        }
+        await deps.store.skipAsyncQuestions(sessionId, itemId)
+        publishStatus(sessionId)
+      })
+    },
     holdMailSources: (attempts: readonly JournalMailAttempt[], signal: AbortSignal) => {
       const { serialize, sessions, deps, conversation, seal } = context()
       return holdStructuredMailSources(
@@ -129,15 +187,22 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
       providerSupport.adapterSupportsCreate(context().deps.adapter, location, agent),
     knownAgentIds: () => providerSupport.knownAgentIds(context().deps),
-    agentDefinitions: () => context().deps.agents.definitions(),
     revealSession: (id: string) => {
       const { deps, conversation } = context()
       return revealStructuredAgentSession(deps, id, conversation)
     },
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
-    childAccountHome: (id: string) => context().sessions.get(id)?.child?.accountHome,
+    /** The home a running child launched under. ACP adapters report none, so `orPinned` falls
+     *  back to the record's pinned home while a child runs. */
+    childAccountHome: (id: string, orPinned = false) => {
+      const { sessions, deps } = context()
+      const child = sessions.get(id)?.child
+      return child && orPinned
+        ? (child.accountHome ?? deps.store.getConversation(id)?.accountHome)
+        : child?.accountHome
+    },
     holdsSessions: () => context().deps.store.holdsRecords(),
-    onSessionsHeld: (listener: () => void) => context().deps.store.onFirstRecord(listener),
+    onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()
       return serialize(

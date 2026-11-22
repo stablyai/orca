@@ -1,5 +1,5 @@
 import type { Dir } from 'node:fs'
-import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
+import { isSafeOwnedDirectory } from '../../shared/secure-storage/owned-private-directory'
 
 import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'

@@ -1,7 +1,7 @@
 import {
   orchestrationMailNotice,
   USER_MESSAGE_SOURCE
-} from '../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,

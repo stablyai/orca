@@ -1,11 +1,14 @@
-import { getRepoDialableSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { ipcMain } from 'electron'
 import type {
   ListKnownWorktreesForExecutionHostArgs,
   HostQualifiedKnownWorktreeResult,
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'

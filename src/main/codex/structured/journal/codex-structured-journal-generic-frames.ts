@@ -26,9 +26,11 @@ import {
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
-} from '../../../../shared/native-chat/native-chat-provider-frame-summary'
+} from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 import { CodexTurnFailures } from './codex-turn-failures'
+import { CodexStartupWarnings } from './codex-startup-warnings'
+import { boundedTurnBucket } from './codex-generic-frame-bucket'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 type TurnRows = { drawn: number; wordless: number }
@@ -37,19 +39,6 @@ type SuppressedSummary = {
   count: number
   publishedCount: number
   producer?: { threadId: string; turnId: string }
-}
-
-function boundedTurnBucket(threadId: string, turnId: string): string {
-  const encoded = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
-  if (Buffer.byteLength(encoded, 'utf8') <= 512) {
-    return encoded
-  }
-  let hash = 2166136261
-  for (const byte of Buffer.from(encoded, 'utf8')) {
-    hash ^= byte
-    hash = Math.imul(hash, 16777619)
-  }
-  return `${encoded.slice(0, 160)}:${(hash >>> 0).toString(16)}`
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -66,6 +55,7 @@ export class CodexJournalGenericFrames {
   private readonly genericRowsByTurn = new Map<string, TurnRows>()
   private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
   private readonly bucketOrder = new Map<string, number>()
+  private readonly startupWarnings = new CodexStartupWarnings()
   private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
   private readonly suppressionCoalesceMs: number
   private nextBucketOrder = 0
@@ -104,7 +94,13 @@ export class CodexJournalGenericFrames {
       return this.failures.appendTerminal(kind, payload, payload, threadId)
     }
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
-    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+    if (!translated) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const append = () => this.appendFrameRow(threadId, payload, translated)
+    return (readCodexTurnId(payload) ?? this.activeTurn(threadId))
+      ? append()
+      : this.startupWarnings.append(kind, threadId, translated.body.text, append)
   }
 
   appendCompletionFailure(
@@ -251,6 +247,7 @@ export class CodexJournalGenericFrames {
     this.genericRowsByTurn.clear()
     this.suppressedRowsByTurn.clear()
     this.bucketOrder.clear()
+    this.startupWarnings.clear()
     this.bookkeepingBytes = 0
   }
 

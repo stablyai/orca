@@ -5,13 +5,13 @@ import {
 /** Store-free registry/disposal lets shutdown slices stop watchers synchronously without re-entering store initialization through the watcher lifecycle import. */
 import { WorkspaceParkedTerminalRegistry } from './workspace-parked-terminal-registry'
 import { invalidateTerminalParkingInputs } from '../terminal-parking-input-events'
-import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../../shared/notifications/notification-source'
 import {
   discardPreHandlerPtyState,
   hasPreHandlerPtyExit
 } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {

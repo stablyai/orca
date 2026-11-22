@@ -2,7 +2,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
@@ -12,7 +12,7 @@ import {
   getEphemeralVmRecipeResultProjectRoot
 } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY

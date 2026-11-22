@@ -4,7 +4,7 @@ import {
   getRuntimePathBasename,
   normalizeRuntimePathSeparators,
   resolveRuntimePath
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')

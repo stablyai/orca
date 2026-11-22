@@ -4,8 +4,7 @@ import {
   providerDiagnosticOf,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { redactString, redactValue } from '../../../observability/redactor'
-import { providerStderrForDisplay } from '../../../provider-process/provider-spawn-failure-report'
+import { redactString, redactValue } from '../../../../shared/observability/redactor'
 import type { AcpDialect } from '../../acp-dialects/acp-dialect'
 import type { AcpStructuredConnection } from '../../process/acp-structured-connection'
 import { AcpAgentError, acpErrorDataWords } from '../../transport/acp-errors'
@@ -33,7 +32,7 @@ export function withAcpStartupDiagnostic(
     }
   }
   const rpc = redactString(words).trim()
-  const stderr = redactString(providerStderrForDisplay(connection.stderrTail())).trim()
+  const stderr = redactString(connection.stderrTail()).trim()
   const limit = MAX_PROVIDER_DIAGNOSTIC_CHARS
   const reply = rpc.slice(0, stderr ? Math.floor(limit / 2) : limit)
   const tail = stderr.slice(-(limit - (reply ? reply.length + 1 : 0)))

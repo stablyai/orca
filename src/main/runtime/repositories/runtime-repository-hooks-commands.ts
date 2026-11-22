@@ -1,10 +1,13 @@
-import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost
+} from '../../../shared/execution-host/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { Repo } from '../../../shared/repository/repo-types'
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
   hasHooksFile,
@@ -12,9 +15,12 @@ import {
   loadHooks
 } from '../../workspace-hooks/hooks'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
-import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
-import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { resolveHookCommandSourcePolicy } from '../../../shared/workspace-setup/hooks/hook-command-source-policy'
+import {
+  getSetupConfig,
+  getSetupTrustContent
+} from '../../../shared/workspace-setup/hooks/orca-hook-setup-config'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
@@ -33,7 +39,10 @@ type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
 export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = Repo> {
   constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps<TRepo>) {}
 
-  async getRepoHooks(repoSelector: string) {
+  async getRepoHooks(
+    repoSelector: string,
+    options: { createSource?: SetupHooksCreateSource } = {}
+  ) {
     const repo = await this.deps.resolveRepo(repoSelector)
     const connectionId = getRepoDialableSshTargetId(repo)
     // Why: an `ssh:` repo is not served here, nor a folder another host owns; neither reports hooks.
@@ -47,7 +56,13 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     }
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
-    const sharedHooks = scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)
+    // A create's setup prompt shows the orca.yaml of the ref it checks out; unreadable falls back to the checkout.
+    const created = options.createSource
+      ? await this.deps.readCreateSourceHooks(repo, options.createSource)
+      : undefined
+    const sharedHooks = created
+      ? created.hooks
+      : scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)
     const setupConfig = getSetupConfig(repo, sharedHooks)
     return {
       hasHooksFile: hasFile,

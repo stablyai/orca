@@ -1,5 +1,5 @@
 import React from 'react'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import {
   AlertTriangle,
   CircleCheck,

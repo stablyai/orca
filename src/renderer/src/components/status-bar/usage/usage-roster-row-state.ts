@@ -1,8 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { getOwnerNotSetUpLabel, getOwnerNotSetUpNote } from './owner-not-set-up-copy'
-import { getProviderUsageStatusLabel } from './usage-error-copy'
+import {
+  getOwnerNotSetUpLabel,
+  getOwnerNotSetUpNote
+} from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import { getProviderUsageStatusLabel } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 
 export type UsageRosterRowState = {
   kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'

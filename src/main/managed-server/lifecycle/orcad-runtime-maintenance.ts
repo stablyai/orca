@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   OrcadManagedDeployResult,
@@ -32,7 +32,7 @@ import {
 } from './orcad-managed-version-gc'
 
 import { clearOrcadUpdateFailedThisLaunch } from './orcad-managed-update-failure-memory'
-import { admitOrcadRecordForIntent } from './orcad-managed-update-decision'
+import { admitConfirmedIncumbent, admitOrcadRecordForIntent } from './orcad-managed-update-decision'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from '../activation/orcad-fenced-stop'
 import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
@@ -50,12 +50,14 @@ export async function updateManagedOrcadEnvironment(
     const admitIntent = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
     // Checked under the host fence: another desktop may have activated a build since the confirm.
     const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
-      ? (record, candidateVersion) =>
-          record.active !== pastLiveTerminals.incumbentVersion
-            ? "This host's server changed since the update was confirmed. Review it and update again."
-            : admitIntent(record, candidateVersion)
+      ? admitConfirmedIncumbent(admitIntent, pastLiveTerminals.incumbentVersion)
       : admitIntent
-    const force: OrcadUpdateForce | undefined = pastLiveTerminals ? 'live-terminals' : args.force
+    // A confirmed uncounted census needs full force, which still requires proof no daemon is running.
+    const force: OrcadUpdateForce | undefined = pastLiveTerminals
+      ? pastLiveTerminals.uncounted
+        ? true
+        : 'live-terminals'
+      : args.force
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
@@ -114,8 +116,7 @@ export async function runManagedOrcadUpdate(
       reason: result.reason,
       // Force may override policy deferrals, including a newer host build.
       forceable:
-        isForceableOrcadDeferral(result.code) ||
-        result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+        isForceableOrcadDeferral(result) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
     // Policy refusal is final for this host, not a transient update to retry.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {

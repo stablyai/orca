@@ -19,16 +19,17 @@ import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../../../shared/browser/runtime/browser-sidecar-lifetime'
-import { electronIsolatedProfileSwitches } from '../../../../shared/electron-isolated-profile-switches'
-import { headlessServeOzonePlatformSwitches } from '../../../../shared/headless-serve-ozone-platform'
+import { electronIsolatedProfileSwitches } from '../../../../shared/app-lifecycle/launch/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../../../shared/app-lifecycle/launch/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from '../orcad-sidecar-runtime-client'
 import { browserWaitRequestTimeoutMs } from '../../../../shared/browser/automation/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
 import { reserveLoopbackPort } from './loopback-port-reservation'
 import {
-  createElectronSidecarProfile,
-  removeLeftoverElectronSidecarProfile,
-  stopElectronSidecar
+  launchOnElectronSidecarProfile,
+  stopAnsweringElectronSidecar,
+  stopElectronSidecar,
+  type ElectronSidecarProfile
 } from './electron-sidecar-profile'
 import {
   ElectronSidecarTabRegistry,
@@ -51,7 +52,7 @@ export class ElectronServeBrowserProcess {
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
   private sidecarCapabilities: readonly string[] = []
-  private sidecarDataPath: string | null = null
+  private sidecarProfile: ElectronSidecarProfile | null = null
 
   constructor(
     private readonly executablePath: string,
@@ -61,9 +62,17 @@ export class ElectronServeBrowserProcess {
   async start(signal?: AbortSignal): Promise<void> {
     this.sidecarCapabilities = []
     signal?.throwIfAborted()
-    await removeLeftoverElectronSidecarProfile(this.orcadUserDataPath)
-    const userDataPath = await createElectronSidecarProfile(this.orcadUserDataPath)
-    this.sidecarDataPath = userDataPath
+    await launchOnElectronSidecarProfile(
+      this.orcadUserDataPath,
+      (profile) => this.launch(profile, signal),
+      // Retry only an app that exited on its own, after this attempt is cleaned up.
+      async () => (this.pid() === null && !signal?.aborted ? this.stop().then(() => true) : false)
+    )
+  }
+
+  private async launch(profile: ElectronSidecarProfile, signal?: AbortSignal): Promise<void> {
+    this.sidecarProfile = profile
+    const userDataPath = profile.path
     const port = await reserveLoopbackPort()
     signal?.throwIfAborted()
     const child = spawnProcess({
@@ -159,20 +168,22 @@ export class ElectronServeBrowserProcess {
   }
 
   async stop(): Promise<void> {
-    const child = this.child
-    const sidecarPid = this.metadata?.pid ?? child?.pid ?? null
-    const sidecarDataPath = this.sidecarDataPath
+    const childPid = this.pid()
+    const { metadata, sidecarProfile: profile } = this
     this.child = null
     this.metadata = null
     this.sidecarCapabilities = []
-    this.sidecarDataPath = null
+    this.sidecarProfile = null
     this.tabs.clear()
-    if (sidecarPid) {
-      await stopElectronSidecar(sidecarPid)
+    if (childPid !== null) {
+      await stopElectronSidecar(metadata?.pid ?? childPid)
+    } else if (metadata) {
+      // The child is gone, so its pids may be recycled; signal only a sidecar that still answers.
+      await stopAnsweringElectronSidecar(metadata)
     }
-    if (sidecarDataPath) {
+    if (profile && !profile.persistent) {
       // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.
-      await removeTree(sidecarDataPath).catch((error: unknown) =>
+      await removeTree(profile.path).catch((error: unknown) =>
         console.warn('[orcad] Electron browser sidecar data was not removed:', error)
       )
     }

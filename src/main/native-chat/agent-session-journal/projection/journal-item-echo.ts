@@ -8,7 +8,10 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { isWriteFailureSubmission } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 /** Absent permits legacy inference; preserve unknown declarations without authorizing delivery recovery. */
 export type JournalItemEcho = { echoOf?: unknown }
 
@@ -89,28 +92,34 @@ export function memoryJournalEchoClaimant(
   const contextSequence = state.queries.latestContextClearSequence(state)
   // Match equal payloads in send order; proven-undelivered legacy rows cannot claim later resend echoes.
   const owner = getJournalInputOrder(state)
-  const eligible = owner
-    ? [...memoryJournalMap(state.items).keys()]
-        .flatMap((id) => {
-          const input = owner.inputForItem(id)
-          return input ? [input] : []
-        })
-        .sort(
-          (a, b) => owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
-        )
-    : [...memoryJournalMap(state.submissions).values()]
-  const submission = eligible
-    .sort((left, right) => left.submittedAt - right.submittedAt)
-    .find(
-      (candidate) =>
-        (contextSequence === 0 || (candidate.acceptedSequence ?? 0) > contextSequence) &&
-        candidate.dispatchState !== 'rejected' &&
-        !isWriteFailureSubmission(candidate) &&
-        candidate.payloadFingerprint === fingerprint &&
-        (marker5
-          ? state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-          : !state.inputs.echoes.has(agentJournalSubmissionKey(candidate.clientMessageId)) &&
-            state.items.has(agentJournalSubmissionKey(candidate.clientMessageId)))
-    )
+  const claims = (candidate: AgentJournalSubmission) =>
+    (contextSequence === 0 || (candidate.acceptedSequence ?? 0) > contextSequence) &&
+    candidate.dispatchState !== 'rejected' &&
+    !isWriteFailureSubmission(candidate) &&
+    candidate.payloadFingerprint === fingerprint &&
+    (marker5
+      ? state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
+      : !state.inputs.echoes.has(agentJournalSubmissionKey(candidate.clientMessageId)) &&
+        state.items.has(agentJournalSubmissionKey(candidate.clientMessageId)))
+  if (!owner) {
+    const submission = [...memoryJournalMap(state.submissions).values()]
+      .sort((left, right) => left.submittedAt - right.submittedAt)
+      .find(claims)
+    return submission ? agentJournalSubmissionKey(submission.clientMessageId) : null
+  }
+  let submission: AgentJournalSubmission | undefined
+  const echoed: string[] = []
+  for (const id of owner.echoClaims.candidates(fingerprint, !marker5)) {
+    const candidate = state.submissions.get(id)
+    if (!marker5 && state.inputs.echoes.has(agentJournalSubmissionKey(id))) {
+      echoed.push(id)
+    } else if (candidate && claims(candidate)) {
+      submission = candidate
+      break
+    }
+  }
+  for (const id of echoed) {
+    owner.echoClaims.retire(fingerprint, id)
+  }
   return submission ? agentJournalSubmissionKey(submission.clientMessageId) : null
 }

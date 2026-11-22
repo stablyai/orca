@@ -5,7 +5,7 @@ import { isWorkspaceSelected } from '@/lib/workspace/ownership/active-workspace-
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isHostWorkspaceRoot,
   revealHostWorkspaceRoot,

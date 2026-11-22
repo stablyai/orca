@@ -12,7 +12,7 @@ import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
   seedPtySpawnSize
-} from '../spawn-options-assembly'
+} from '../spawn/spawn-options-assembly'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -85,6 +85,7 @@ export async function buildRuntimePtySpawnOptions(
     sessionId: ctx.sessionId,
     spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
     historyIsolationEnabled,
+    headlessHost: ctx.deps.runtime?.servesWithoutWindow?.() === true,
     getSettings: ctx.deps.getSettings,
     store: ctx.deps.store,
     claudeAuth: ctx.claudeAuth

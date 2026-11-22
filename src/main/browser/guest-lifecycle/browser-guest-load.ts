@@ -49,7 +49,7 @@ export function waitForBrowserGuestLoad(
         }
         finish(error instanceof Error ? error : new Error('The browser page could not load'))
       })
-    } else if (!guest.isLoading()) {
+    } else if (!guest.isLoadingMainFrame()) {
       loaded()
     }
   })

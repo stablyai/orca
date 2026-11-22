@@ -1,6 +1,6 @@
 import { StringDecoder } from 'node:string_decoder'
 import type { Writable } from 'node:stream'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { CommitMessageModel } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { createIncrementalNdjsonFramer } from '../../../shared/json-stream/main-process-ndjson-framer'
 import { createCodexAppServerRecordDispatcher } from '../../codex/app-server/codex-app-server-record-dispatch'

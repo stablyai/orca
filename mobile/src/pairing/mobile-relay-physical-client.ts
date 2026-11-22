@@ -13,7 +13,7 @@ import type { ConnectionLogSink } from '../diagnostics/connection/connection-log
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { websocketPayloadToUint8 } from '../transport/encryption/websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from '../transport/relay/mobile-relay-connect-url'
-import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { WsInboundMessageQueue } from '../../../src/shared/network/websocket/ws-inbound-message-queue'
 
 import { RelayOuterError } from '../transport/encryption/mobile-relay-e2ee-link'
 

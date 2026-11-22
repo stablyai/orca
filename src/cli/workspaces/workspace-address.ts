@@ -1,4 +1,7 @@
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'

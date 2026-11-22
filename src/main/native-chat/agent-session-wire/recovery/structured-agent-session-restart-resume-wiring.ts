@@ -7,7 +7,10 @@ import type {
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
-import type { SendSettlementWaitOptions } from '../delivery/structured-agent-session-send-settlement'
+import {
+  STRUCTURED_AGENT_SESSION_START_WAIT_MS,
+  type SendSettlementWaitOptions
+} from '../delivery/structured-agent-session-send-settlement'
 
 export type StructuredAgentSessionRestartResumeSurfaces = {
   revealSession: (
@@ -23,6 +26,10 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   awaitSendHandedOver: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDispatched: (
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
@@ -68,6 +75,12 @@ export function structuredAgentSessionRestartResumeSurfaces(
       host.waitForSendSettlement(sessionId, clientMessageId, {
         until: 'handed-over',
         budgetMs: MAX_TIMER_DELAY_MS
+      }),
+    // Bounded: a provider that never takes the send must not hold the restart action open.
+    awaitSendDispatched: (sessionId, clientMessageId) =>
+      host.waitForSendSettlement(sessionId, clientMessageId, {
+        until: 'dispatched',
+        budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS
       }),
     now
   }

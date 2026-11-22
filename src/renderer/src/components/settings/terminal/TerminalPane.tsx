@@ -1,7 +1,7 @@
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Textarea } from '../../ui/textarea'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
 import { cn } from '@/lib/class-names'

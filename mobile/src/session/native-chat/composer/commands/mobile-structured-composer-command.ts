@@ -2,7 +2,7 @@ import {
   agentSessionConversationCommandFields,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+} from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
@@ -56,7 +56,8 @@ export async function dispatchMobileStructuredCommand(input: {
       input.text,
       input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.snapshot
+      input.controller.snapshot,
+      input.controller.openMcpPanel !== undefined
     )
   ) {
     return input.pending.current ? 'rejected' : null

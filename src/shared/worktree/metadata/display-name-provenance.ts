@@ -1,4 +1,4 @@
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 
 /** A rename with text pins the label; empty text returns it to automatic (branch-derived). */
 export function displayNameUpdatePinsLabel(displayName: string | undefined): boolean {

@@ -1,6 +1,6 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
 import { homedir } from 'node:os'
-import type { UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { commitServeSupervisorParkOnQuit } from '../lifecycle/serve-supervisor-install-park'

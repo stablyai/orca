@@ -4,7 +4,7 @@ import {
   isVenturaRequirement,
   type MacosUpgradeSupport
 } from '../../../../shared/updater/requirements/macos-upgrade-support'
-import type { UnsupportedSystemUpdate } from '../../../../shared/update-status-types'
+import type { UnsupportedSystemUpdate } from '../../../../shared/updater/update-status-types'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {

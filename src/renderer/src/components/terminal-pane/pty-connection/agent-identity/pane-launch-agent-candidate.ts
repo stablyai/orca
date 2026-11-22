@@ -1,7 +1,7 @@
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { recognizeAgentLaunchCommand } from '../../../../../../shared/agent-launch/startup/agent-command-line-intent'
-import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../../../../../shared/command-token-scanner'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../../../../../shared/shell/command-resolution/command-token-scanner'
 
 /** The store slice the launch-agent ladder reads. */
 export type PaneLaunchAgentStoreSlice = {

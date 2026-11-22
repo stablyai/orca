@@ -1,9 +1,10 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   notifyWorkspaceSessionWritten,
+  type WrittenWorkspaceScope,
   type WorkspaceSessionOperationListener,
   type WorkspaceSessionWriteListener
 } from '../workspace-sessions/workspace-session-write-listeners'
@@ -12,8 +13,35 @@ import type { PartitionEditorViews } from '../workspace-sessions/layout-editor-v
 import type { ProfileSaveDomains } from '../../profile-save-domains'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
+export type StateWriteOptions = {
+  /** Set only when the write leaves every host's and folder's external conversation links unchanged. */
+  preservesExternalConversationLinks?: boolean
+  /** Set when only this single workspace's external conversation links could have changed. */
+  externalConversationLinksUpdate?: {
+    workspace: { worktreeId: string; sshHostId: ExecutionHostId | null }
+    externalConversations: unknown
+  }
+}
+
+export function workspaceLinkWriteOptions(
+  workspace: { worktreeId: string; sshHostId: ExecutionHostId | null },
+  changedExternalConversations: boolean,
+  externalConversations: unknown,
+  orderPreserved = true
+): StateWriteOptions | undefined {
+  if (!orderPreserved) {
+    return undefined
+  }
+  return changedExternalConversations
+    ? { externalConversationLinksUpdate: { workspace, externalConversations } }
+    : { preservesExternalConversationLinks: true }
+}
+
 /** Undefined means any domain may have changed. */
-export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
+export type StateWriteListener = (
+  dirtyDomains: readonly string[] | undefined,
+  options?: StateWriteOptions
+) => void
 /** One host's worktree metadata row before and after a write. */
 export type WorktreeMetaWriteListener = (write: {
   worktreeId: string
@@ -124,13 +152,15 @@ export class WriteSchedulingOperations {
   }
 }
 
-/** Saves the rows of the domains a mutation changed. */
+/** Saves the rows of the domains a mutation changed; `written` names the partition's changed workspaces when the writer knows them. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
   domains: ProfileSaveDomains,
-  writtenHostId?: ExecutionHostId
+  writtenHostId?: ExecutionHostId,
+  written?: WrittenWorkspaceScope,
+  options?: StateWriteOptions
 ): void {
-  scheduleDomainSave(owner, domains, writtenHostId)
+  scheduleDomainSave(owner, domains, writtenHostId, written, options)
 }
 
 /** Startup load, migration and maintenance resume only: their changes span the profile. */
@@ -141,12 +171,25 @@ export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void 
 function scheduleDomainSave(
   owner: WriteSchedulingOperations,
   dirtyDomains: readonly string[] | undefined,
-  writtenHostId?: ExecutionHostId
+  writtenHostId?: ExecutionHostId,
+  written?: WrittenWorkspaceScope,
+  options?: StateWriteOptions
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  notifyWorkspaceSessionWritten(
+    runtime,
+    dirtyDomains,
+    writtenHostId,
+    written?.workspaces,
+    written?.refs
+  )
   for (const listener of runtime.stateWriteListeners) {
-    listener(dirtyDomains)
+    try {
+      listener(dirtyDomains, options)
+    } catch (error) {
+      // The state already changed; one observer's failure must not hide it from the rest or skip its save.
+      console.error('[store] state write listener failed:', error)
+    }
   }
   runtime.automationListProjectionCache = null
   // A run list replaced outside the run-delta path saves as a whole row; an older pending delta is stale.

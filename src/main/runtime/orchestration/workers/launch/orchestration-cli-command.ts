@@ -4,7 +4,10 @@ import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/ide
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
-import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../../shared/app-lifecycle/app-environment'
 
 export type OrchestrationCliCommand = 'orca' | 'orca-dev' | 'orca-ide'
 
@@ -22,7 +25,8 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   connectionId: string | null
   isWsl: boolean | null | undefined
   worktreeId: string
-  projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Read only when nothing cheaper decides: it searches the project catalog. */
+  getProjectRuntime?: () => ProjectExecutionRuntimeResolution | undefined
   runtimeCliCommand?: OrchestrationCliCommand
 }): OrchestrationCliCommand {
   if (args.connectionId) {
@@ -34,7 +38,8 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   if (args.isWsl !== null && args.isWsl !== undefined) {
     return args.isWsl ? 'orca-ide' : 'orca'
   }
-  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
+  const projectRuntime = args.getProjectRuntime?.()
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
     return 'orca-ide'
   }
 
@@ -71,6 +76,6 @@ export function resolveRuntimeTerminalOrchestrationCliCommand(
     isWsl: pty.isWsl,
     worktreeId: pty.worktreeId,
     runtimeCliCommand: runtimeOrchestrationCliCommand(),
-    projectRuntime: source.getProjectRuntime(pty)
+    getProjectRuntime: () => source.getProjectRuntime(pty)
   })
 }

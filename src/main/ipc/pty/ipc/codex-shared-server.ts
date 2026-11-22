@@ -17,7 +17,7 @@ import {
 import type { CodexSharedServerStatus } from '../../../../shared/agent-launch/startup/codex-shared-server-command'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 // Wrapper availability depends on shell and daemon version; cmd.exe and unknown shells have none.
 const CODEX_SHELL_FUNCTION_PROTOCOL_BY_SHELL: ReadonlyMap<string, number> = new Map([

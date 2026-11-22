@@ -3,7 +3,7 @@ import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runti
 import type { RuntimeEnvironmentCall } from '../requests/runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestGuard,
@@ -30,6 +30,7 @@ import {
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
+import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -114,12 +115,14 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
   prepareRequest?: RuntimeRequestPreparation,
-  prepareGuard?: RuntimeRequestGuard
+  prepareGuard?: RuntimeRequestGuard,
+  responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const connection = getSharedControlConnection(environmentId, pairedConnection)
   return connection.request(method, params, timeoutMs, envelope, signal, {
     prepareRequest,
-    prepareGuard
+    prepareGuard,
+    responseTimeoutMs
   })
 }
 
@@ -197,6 +200,17 @@ export function closeRemoteRuntimeSharedControlConnection(environmentId: string)
   cached?.connection.close()
 }
 
+/** This desktop signed in, out or switched: every paired host it holds open hears the new account. */
+export function redeclarePairedDesktopAccounts(): void {
+  for (const { connection } of sharedControlConnections.values()) {
+    if (connection.getDiagnostics().state === 'ready') {
+      declarePairedDesktopAccount((method, params, timeoutMs) =>
+        connection.request(method, params, timeoutMs)
+      )
+    }
+  }
+}
+
 export function getRemoteRuntimeSharedControlDiagnostics(
   environmentId: string
 ): RemoteRuntimeSharedConnectionDiagnostics | null {
@@ -246,11 +260,14 @@ function getSharedControlConnection(
         ...sharedControlEnvironmentPolicy(environmentId),
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
-        // R39: every ready socket, including after a reconnect, re-declares this installation.
-        onReady: async () =>
-          await declareWslHostClient(environmentId, (method, params, timeoutMs) =>
+        // R39: every ready socket, including after a reconnect, re-declares this installation, and
+        // the Orca account it is signed in to.
+        onReady: async () => {
+          const request = (method: string, params: unknown, timeoutMs: number) =>
             connection.request(method, params, timeoutMs)
-          ),
+          declarePairedDesktopAccount(request)
+          await declareWslHostClient(environmentId, request)
+        },
         // Wall-clock time includes suspend, expiring pre-sleep answers.
         onAnswered: () => {
           answeredAt = Date.now()

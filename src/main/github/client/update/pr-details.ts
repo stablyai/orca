@@ -8,7 +8,10 @@ import {
   type GitHubRepoExecOptions
 } from '../../repositories/github-api-repository'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
-import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../../shared/source-control/code-host-failure-copy'
 
 async function patchPullRequest(
   repository: GitHubApiRepository,

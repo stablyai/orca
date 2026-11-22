@@ -5,7 +5,7 @@ import {
   isSameAutomationWorkspace
 } from './automation-recorded-target'
 import { useCallback, useEffect, useMemo } from 'react'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { automationWorktreesForRepo } from '../listing/automation-list-row-identity'
 import { getAutomationCreateRepos } from './automation-create-projects'

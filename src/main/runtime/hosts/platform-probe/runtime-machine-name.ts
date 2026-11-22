@@ -1,6 +1,6 @@
 import os from 'node:os'
 import { runProcess } from '@orca/process-host'
-import { normalizeMachineName } from '../../../../shared/machine-name'
+import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 const MACOS_COMPUTER_NAME = '/usr/sbin/scutil'

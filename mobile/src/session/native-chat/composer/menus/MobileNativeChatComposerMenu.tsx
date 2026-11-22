@@ -2,16 +2,23 @@ import { MobileNativeChatComposerMenuReservation } from '../field/MobileNativeCh
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { FileText, Package, Terminal } from 'lucide-react-native'
+import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-size'
 
-export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
+/** A room member `@` names instead of a file, e.g. a bot in a group. */
+export type ComposerRoomMention = { name: string; icon?: React.ReactNode }
 
-const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
+export type ComposerMenuRow =
+  | NativeChatPickerItem
+  | { kind: 'file'; id: string; path: string }
+  | { kind: 'member'; id: string; name: string; icon?: React.ReactNode }
+
+const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files', member: 'Bots' } as const
 
 export function MobileNativeChatComposerSuggestions({
   anchorRef,
@@ -72,28 +79,38 @@ function MenuRow({
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const Icon = row.kind === 'skill' ? Package : row.kind === 'command' ? Terminal : FileText
-  const description = row.kind === 'file' ? null : row.description
+  const Icon =
+    row.kind === 'skill'
+      ? Package
+      : row.kind === 'command'
+        ? Terminal
+        : row.kind === 'member'
+          ? AtSign
+          : isFolderPath(row.path)
+            ? Folder
+            : FileText
+  const description = row.kind === 'file' || row.kind === 'member' ? null : row.description
+  const label = row.kind === 'file' ? row.path : row.kind === 'member' ? row.name : row.token
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        row.kind === 'file'
-          ? row.path
-          : row.kind === 'skill' && row.location
-            ? `${row.token}, ${row.location}`
-            : row.token
+        row.kind === 'skill' && row.location ? `${row.token}, ${row.location}` : label
       }
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => onPick(row)}
     >
-      <Icon size={16} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
+      {row.kind === 'member' && row.icon ? (
+        <View style={styles.icon}>{row.icon}</View>
+      ) : (
+        <Icon size={16} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
+      )}
       <View style={styles.body}>
         <View style={styles.nameLine}>
           <Text style={styles.name} numberOfLines={1}>
-            {row.kind === 'file' ? row.path : row.token}
+            {label}
           </Text>
-          {row.kind !== 'file' && row.argumentHint ? (
+          {row.kind !== 'file' && row.kind !== 'member' && row.argumentHint ? (
             <Text style={styles.hint} numberOfLines={1}>
               {row.argumentHint}
             </Text>

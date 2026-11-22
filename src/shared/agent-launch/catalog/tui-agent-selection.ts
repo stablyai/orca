@@ -1,5 +1,5 @@
 import type { TuiAgent } from './tui-agent'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 
 // Match desktop catalog order: this determines fallback priority without a selected default.

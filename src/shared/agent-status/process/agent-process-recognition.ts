@@ -9,7 +9,7 @@ import type { AgentType } from '../contracts/agent-status-types'
 import type { TerminalAgent } from '../identity/terminal-agent'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
-import { getFirstCommandToken } from '../../command-token-scanner'
+import { getFirstCommandToken } from '../../shell/command-resolution/command-token-scanner'
 import {
   comparablePath,
   findInterpreterEntrypointToken,
@@ -17,6 +17,7 @@ import {
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from '../../agent-launch/startup/omp-fresh-launch'
+import { unwrapCodexStartupImageCommand } from '../../agent-launch/startup/codex-startup-image-command'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
 
@@ -236,7 +237,7 @@ export function recognizeAgentProcessFromCommandLine(
     return recognizedAgentForProcess('omp')
   }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(commandLine)
+  const tokens = tokenizeCommandLine(unwrapCodexStartupImageCommand(commandLine))
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizedAgentForProcess(firstNormalized)
   // Qoder's public dispatcher routes these commands to the IDE rather than the agent CLI.

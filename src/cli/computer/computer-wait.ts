@@ -4,8 +4,8 @@ import type {
   ComputerSnapshotData,
   ComputerSnapshotResult,
   ComputerWindowListWindow
-} from '../../shared/computer-use-runtime-types'
-import { parseComputerTreeText } from '../../shared/computer-use-tree-text'
+} from '../../shared/computer/computer-use-runtime-types'
+import { parseComputerTreeText } from '../../shared/computer/computer-use-tree-text'
 import {
   computerTreeElementsMatching,
   isComputerTreeElementDisabled,

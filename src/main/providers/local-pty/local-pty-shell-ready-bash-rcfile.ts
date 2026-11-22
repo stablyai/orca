@@ -1,6 +1,7 @@
+import { BASH_CWD_REPORT_BLOCK } from '../../pty/shell-startup/shell-cwd-report'
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../pty/shell-startup/bash-prompt-command-composition'
-import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl/execution/wsl-managed-cli-path-restore'
 import { getPosixOmpShellWrapper } from '../../pty/shell-startup/omp-shell-wrapper'
@@ -12,7 +13,6 @@ import {
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK
 } from '../../pty/shell-startup/shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
-import { BASH_WSL_CWD_REPORT_BLOCK } from '../../wsl/filesystem/wsl-shell-cwd-report'
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
@@ -52,18 +52,18 @@ ${getPosixOmpShellWrapper()}
 # Profile scripts must not replace Orca's runtime CODEX_HOME.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
-${BASH_WSL_CWD_REPORT_BLOCK}
+${BASH_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
   __orca_in_prompt_command=1
+  __orca_osc133_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
     printf "\\033]133;D;%s\\007" "$exit_code"
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
-  __orca_wsl_cwd_report
   return "$exit_code"
 }
 __orca_osc133_prompt_done() {

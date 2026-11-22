@@ -7,7 +7,7 @@ import type {
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
   ComputerSnapshotResult
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 import {
   normalizeComputerActionResult,
   rejectContradictedComputerAction
@@ -101,11 +101,6 @@ export async function callComputerSidecarAction(
       (await getComputerSidecar().call(method, params)) as ComputerActionResult
     )
   )
-}
-
-export function resetComputerSidecarForTest(): void {
-  sidecar?.shutdown()
-  sidecar = null
 }
 
 function getComputerSidecar(): ComputerSidecarProcess {

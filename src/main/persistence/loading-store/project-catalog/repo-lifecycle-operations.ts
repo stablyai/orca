@@ -14,7 +14,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { applyProjectHostSetupCompatibilityState } from '../../tracking-repos/project-host-compatibility'
 import { RepoOrderPersistenceOperations } from '../../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../../tracking-repos/repo-worktree-pruning'

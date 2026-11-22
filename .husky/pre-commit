@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-lint-staged
+lint-staged --quiet

@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Project } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -29,7 +29,7 @@ import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 
 // Structural typing lets narrowed runtime stores use the same resolution as workspace creation.
 export type ProjectRuntimeResolutionStore = {

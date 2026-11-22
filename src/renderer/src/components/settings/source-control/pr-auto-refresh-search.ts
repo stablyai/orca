@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { PRAutoRefreshCadence } from '../../../../../shared/review-refresh-policy'
+import type { PRAutoRefreshCadence } from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { matchesSettingsSearch } from '../search/settings-search'
 
 export const PR_AUTO_REFRESH_KEYWORDS = [

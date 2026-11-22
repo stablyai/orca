@@ -1,7 +1,7 @@
 import type React from 'react'
 
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
@@ -31,11 +31,16 @@ import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-form
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import {
+  matchesSettingsSearch,
+  normalizeSettingsSearchQuery,
+  type SettingsSearchEntry
+} from '../search/settings-search'
 
 type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  tilingWindowModeEntry?: SettingsSearchEntry
   forceVisiblePrimary?: boolean
 }
 
@@ -69,6 +74,7 @@ function recordStatusBarToggleInteraction(
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
+  tilingWindowModeEntry,
   forceVisiblePrimary = false
 }: AppearanceWindowSidebarSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -123,6 +129,18 @@ export function AppearanceWindowSidebarSection({
 
   return (
     <>
+      {tilingWindowModeEntry && (
+        <SearchableSetting {...tilingWindowModeEntry} forceVisible={forceVisiblePrimary}>
+          <SettingsSwitchRow
+            label={tilingWindowModeEntry.title}
+            description={tilingWindowModeEntry.description}
+            checked={settings.linuxTilingWindowMode === true}
+            onChange={() =>
+              updateSettings({ linuxTilingWindowMode: settings.linuxTilingWindowMode !== true })
+            }
+          />
+        </SearchableSetting>
+      )}
       <SearchableSetting
         title={leftSidebarAppearanceEntry.title}
         description={leftSidebarAppearanceEntry.description}

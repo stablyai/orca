@@ -1,4 +1,4 @@
-import { withReconnectJitter } from '../../reconnect-jitter'
+import { withReconnectJitter } from '../../network/reconnect-jitter'
 
 const ACTIVE_RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000]
 const IDLE_RECONNECT_DELAYS_MS = [...ACTIVE_RECONNECT_DELAYS_MS, 60_000, 120_000, 300_000]

@@ -9,8 +9,8 @@ import {
   worktreeWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { PersistedState } from '../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../shared/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
@@ -18,7 +18,7 @@ import { getDataFile, initDataPath } from './loading-store/user-data-path'
 import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
-import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import { exportProfileStateJson } from './profile-state/documents/profile-state-documents'
 
 export const testState = { dir: '' }
@@ -84,7 +84,9 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
+export function createStore(
+  options: Pick<StoreRuntimeOptions, 'paneShellPath' | 'storageAuthority'> = {}
+): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })
@@ -132,7 +134,7 @@ export function readPersistedState(
 }
 
 /** Restore aliases omitted by serialization, as Store.load does; use readPersistedState for raw state. */
-export function readDataFile(): unknown {
+export function readDataFile(): PersistedState {
   const parsed = readPersistedState()
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed

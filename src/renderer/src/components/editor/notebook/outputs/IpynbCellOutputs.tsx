@@ -9,7 +9,7 @@ import { IpynbMarkdownCell } from '../cells/IpynbCellEditor'
 import { IpynbHtmlOutput } from './IpynbHtmlOutput'
 import { parseAnsiSegments } from './ipynb-ansi'
 import type { AnsiColor } from './ipynb-ansi'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import type { ITheme } from '@xterm/xterm'
 import type { IpynbCell, IpynbOutput, IpynbOutputItem } from '../document/ipynb-parse'
 

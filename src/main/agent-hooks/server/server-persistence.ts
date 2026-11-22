@@ -17,7 +17,7 @@ import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
-import { StatusCacheExpiry } from './status-cache-expiry'
+import { KeyedDeadlines } from '../../../shared/collections/keyed-deadlines'
 import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
@@ -28,7 +28,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   private statusPersistRetryDelayMs = 0
   private statusPersistRetryAt = 0
 
-  private readonly statusCacheExpiry = new StatusCacheExpiry()
+  private readonly statusCacheExpiry = new KeyedDeadlines()
   private persistedExitRevision = -1
 
   protected buildStatusFile(keys?: readonly string[], includeExits = true): LastStatusFile {
@@ -38,7 +38,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
     const conflictedCommitments = new Set<string>()
-    // Restart drops anything older than the TTL, so saving it would only carry dead rows forward.
+    // Restart drops rows older than the TTL unless a placed pane still holds them.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, commitment] of selectedStatusEntries(
       this.persistedAuthorityCommitmentsByPaneKey,
@@ -67,7 +67,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       // Journal projections must not compete with unconfirmed copies hydrated from this cache.
       if (
         enrichedPayload.structuredHost ||
-        (!enrichedPayload.paneSleep && enrichedPayload.receivedAt < ttlCutoff)
+        (!enrichedPayload.paneSleep &&
+          enrichedPayload.receivedAt < ttlCutoff &&
+          !this.placementKeepsRow(enrichedPayload))
       ) {
         continue
       }
@@ -89,6 +91,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
         launchToken: _launchToken,
+        // Only a shared host outlives the restart; a pane-owned claim is proven again by its hook.
+        executionHost: _executionHost,
         ...persistedPayload
       } = enrichedPayload
       const launchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
@@ -97,7 +101,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       entries[paneKey] = {
         ...persistedPayload,
         payload: persistedStatus,
-        ...(launchTokenHash ? { launchTokenHash } : {})
+        ...(launchTokenHash ? { launchTokenHash } : {}),
+        ...(enrichedPayload.executionHost === 'shared' ? { executionHost: 'shared' as const } : {})
       }
       const commitment = this.toAuthorityEvidence(persistedPayload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {

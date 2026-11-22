@@ -15,10 +15,10 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import {
   isBareStructuredAgentSessionGoalCommand,
-  isStructuredAgentSessionHostCommand,
-  structuredAgentSessionGoalObjective
+  isStructuredAgentSessionHostCommand
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
+  structuredAgentSessionGoalObjective,
   structuredAgentSessionModePickDraft,
   structuredAgentSessionPickEntersGoalMode
 } from '../../../../../../shared/agent-session/view/structured-agent-session-goal-mode'
@@ -55,6 +55,8 @@ export function useNativeChatComposerSubmit(args: {
   textareaRef: RefObject<NativeChatComposerInput | null>
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
+  /** The draft names a bot chat that can't take it (or isn't checked yet): Enter keeps it. */
+  held?: boolean
   /** An optional-prompt action still passes the shared paste and attachment admission. */
   submitEmpty?: () => void
   sendPty: () => void
@@ -70,6 +72,7 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
+  const held = args.held === true
   const {
     agent,
     consumeOrcaCommand,
@@ -201,6 +204,9 @@ export function useNativeChatComposerSubmit(args: {
       if (consumeOrcaCommand?.(draft)) {
         return
       }
+      if (held) {
+        return
+      }
       if (
         structuredTransport &&
         !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
@@ -238,6 +244,7 @@ export function useNativeChatComposerSubmit(args: {
       disabled,
       draft,
       draftScopeKey,
+      held,
       imageAttachments,
       sendPty,
       sendStructured,
@@ -268,7 +275,8 @@ export function useNativeChatComposerSubmit(args: {
         commandText,
         threadGoal !== undefined,
         args.agent,
-        structuredTransport.optionSnapshot
+        structuredTransport.optionSnapshot,
+        structuredTransport.mcpPanel !== undefined
       )
     )
   return { send, goalMode, messageDelivery }

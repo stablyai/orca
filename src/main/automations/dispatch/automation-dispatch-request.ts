@@ -5,14 +5,26 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../../shared/automations/history/automation-run'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import type { AutomationRunWriter } from '../run-history/run-writer'
-import type { AutomationLauncher } from '../launch/automation-launch'
+import type {
+  AutomationBotLauncher,
+  AutomationLauncher,
+  AutomationMainLauncher
+} from '../launch/automation-launch'
 import type { AutomationLaunchContext } from './automation-launch-runner'
 import { AutomationDispatchRefusedError, runAutomationLaunch } from './automation-launch-runner'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
-import { describeScheduledRefusal, describeStoppedWslDistroRefusal } from './dispatch-refusal'
+import type {
+  AutomationRepoRunTarget,
+  AutomationRunTargetResult
+} from '../ownership/run-target-resolution'
+import type { AutomationBotRunTarget } from '../bot-run-target'
+import {
+  canDispatchTo,
+  describeScheduledRefusal,
+  describeStoppedWslDistroRefusal
+} from './dispatch-refusal'
 import {
   automationRunFailure,
   type AutomationRunFailure
@@ -23,6 +35,10 @@ import {
 } from '../ownership/orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 
+export { AutomationDispatchCancelledError }
+
+type RunTarget = Extract<AutomationRunTargetResult, { ok: true }>
+
 type DispatchContext = Pick<
   AutomationLaunchContext,
   'runPrecheck' | 'markDispatchResult' | 'watchRun'
@@ -32,8 +48,11 @@ type DispatchContext = Pick<
   isActive(): boolean
   /** Read at each check: a window graph can close while the claim is acknowledged. */
   launcher(): AutomationLauncher | null
+  botDispatcher: AutomationBotLauncher | null
   chatDispatcher?: AutomationLauncher | null
   resolveTarget(automation: Automation): AutomationRunTargetResult
+  /** A claimed run skipped before launch; repeats of one refusal fold before the claim. */
+  onRunRefused?(automation: Automation, error: string): void
 }
 
 function definition(automation: Automation) {
@@ -41,7 +60,10 @@ function definition(automation: Automation) {
   return configured
 }
 
-function destination(target: Extract<AutomationRunTargetResult, { ok: true }>) {
+function destination(target: RunTarget) {
+  if ('bot' in target) {
+    return { cwd: target.cwd, botId: target.bot.id, workspaceId: target.workspaceId }
+  }
   return {
     cwd: target.cwd,
     repoId: target.repo.id,
@@ -93,13 +115,15 @@ export async function requestAutomationDispatch(
     }
     return target
   }
-  const refuse = (failure: AutomationRunFailure) =>
-    ctx.runs.updateRun({
+  const refuse = (failure: AutomationRunFailure) => {
+    ctx.onRunRefused?.(automation, failure.error)
+    return ctx.runs.updateRun({
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
       ...failure
     })
+  }
   const returnDurable = async (current: AutomationRun) => {
     await ctx.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     return current
@@ -112,8 +136,13 @@ export async function requestAutomationDispatch(
   let target = resolveCurrentTarget()
   const refusal = describeScheduledRefusal({
     target,
-    canDispatch:
-      automation.surface === 'chat' ? Boolean(ctx.chatDispatcher) : Boolean(ctx.launcher())
+    canDispatch: canDispatchTo(
+      {
+        repo: Boolean(automation.surface === 'chat' ? ctx.chatDispatcher : ctx.launcher()),
+        bot: Boolean(ctx.botDispatcher)
+      },
+      target
+    )
   })
   if (refusal || !target.ok) {
     return refuse(refusal ?? automationRunFailure('noDispatchHost'))
@@ -141,41 +170,75 @@ export async function requestAutomationDispatch(
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
-  const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.launcher()
-  if (!dispatcher) {
-    return refuse(automationRunFailure('noDispatchHost'))
+  // Launch in main, rechecking what a long precheck can invalidate.
+  const launchInMain = <Target extends RunTarget>(
+    launchTarget: Target,
+    dispatcher: AutomationMainLauncher<Target>,
+    sameKind: (latest: RunTarget) => latest is Target
+  ) =>
+    runAutomationLaunch({
+      ...ctx,
+      automation,
+      run,
+      target: launchTarget,
+      // The status check and the store write share one synchronous step, so a settled run stays settled.
+      transition: (result) => {
+        const current = readRun()
+        return current.status === 'dispatching'
+          ? { applied: true, run: ctx.runs.updateRun({ runId: run.id, ...result }) }
+          : { applied: false, run: returnDurable(current) }
+      },
+      dispatcher: (request) => {
+        if (readRun().status !== 'dispatching') {
+          throw new AutomationDispatchCancelledError(
+            'The run changed before its agent could launch.'
+          )
+        }
+        const latestTarget = resolveCurrentTarget()
+        if (!latestTarget.ok) {
+          if ('bot' in launchTarget) {
+            ctx.onRunRefused?.(automation, latestTarget.error)
+          }
+          // A bot paused or removed during the precheck skips the run, as it would at the claim.
+          const { ok: _ok, ...failure } = latestTarget
+          throw 'bot' in launchTarget
+            ? new AutomationDispatchRefusedError(failure)
+            : new AutomationDispatchCancelledError(latestTarget.error)
+        }
+        // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
+        const latestRefusal = describeScheduledRefusal({
+          target: latestTarget,
+          canDispatch: true
+        })
+        if (latestRefusal) {
+          throw new AutomationDispatchRefusedError(latestRefusal)
+        }
+        // The destination check already refuses a changed kind; this narrows the type.
+        if (!sameKind(latestTarget)) {
+          throw new AutomationDispatchCancelledError(
+            'The automation destination changed before this run could launch.'
+          )
+        }
+        return dispatcher({ ...request, target: latestTarget })
+      }
+    })
+  if ('bot' in target) {
+    return ctx.botDispatcher
+      ? launchInMain(
+          target,
+          ctx.botDispatcher,
+          (latest): latest is AutomationBotRunTarget => 'bot' in latest
+        )
+      : refuse(automationRunFailure('noDispatchHost'))
   }
-  return runAutomationLaunch({
-    ...ctx,
-    automation,
-    run,
-    target,
-    // The status check and the store write share one synchronous step, so a settled run stays settled.
-    transition: (result) => {
-      const current = readRun()
-      return current.status === 'dispatching'
-        ? { applied: true, run: ctx.runs.updateRun({ runId: run.id, ...result }) }
-        : { applied: false, run: returnDurable(current) }
-    },
-    dispatcher: (request) => {
-      if (readRun().status !== 'dispatching') {
-        throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')
-      }
-      const latestTarget = resolveCurrentTarget()
-      if (!latestTarget.ok) {
-        throw new AutomationDispatchCancelledError(latestTarget.error)
-      }
-      // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
-      const latestRefusal = describeScheduledRefusal({
-        target: latestTarget,
-        canDispatch: true
-      })
-      if (latestRefusal) {
-        throw new AutomationDispatchRefusedError(latestRefusal)
-      }
-      return dispatcher({ ...request, target: latestTarget })
-    }
-  })
+  const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.launcher()
+  return dispatcher
+    ? launchInMain(
+        target,
+        dispatcher,
+        (latest): latest is AutomationRepoRunTarget => 'repo' in latest
+      )
+    : refuse(automationRunFailure('noDispatchHost'))
 }
 
 export async function runAutomationRequestPrecheck(

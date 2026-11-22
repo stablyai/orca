@@ -1,4 +1,4 @@
-import { isAgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
+import { isAgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { isPtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'

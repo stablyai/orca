@@ -5,7 +5,7 @@ import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   buildOpenTabSearchBrowserPages,
   selectOpenTabSearchBrowserPageState
-} from '@/components/tab-bar/open-tab-search-entries'
+} from '@/components/tab-bar/create-entry/open-tab-search-entries'
 import {
   activateBrowserPagePaletteResult,
   type BrowserPagePaletteActivationTarget

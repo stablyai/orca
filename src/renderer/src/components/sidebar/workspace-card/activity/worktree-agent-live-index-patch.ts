@@ -1,5 +1,5 @@
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/collections/structural-value-equality'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId

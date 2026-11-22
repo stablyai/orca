@@ -1,7 +1,5 @@
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../src/shared/native-chat/claude-model-fallback'
+import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNotice'
+import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
@@ -10,40 +8,47 @@ import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../../src/shared/native-chat/native-chat-notice'
+} from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-notice'
 import {
   isTextBlock,
   type NativeChatBlock,
   type NativeChatTextBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { isAgentSessionSetupFailureKind } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { agentSessionFailureSentence } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { nativeChatOrcaStopRowText } from '../../../../../../src/shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
 } from './mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
+import { MobileNativeChatAutomationResultRow } from '../MobileNativeChatAutomationResultRow'
+import { MobileNativeChatDivider, mobileNativeChatDividerStyles } from '../MobileNativeChatDivider'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
+import { nativeChatRestartNoteText } from './native-chat-restart-note-copy'
+import { nativeChatReviewNoticeSummary } from './native-chat-review-notice-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
 import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/native-chat-stopped-before-start'
+import { mobileNativeChatBotCard } from '../bot-cards/mobile-native-chat-bot-cards'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
 import { sheetPrimaryButtonStyles } from '../../../../components/sheets/SheetPrimaryButton'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -86,18 +91,21 @@ function noticeLineText(
       : undefined
   return failure && surface
     ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
-    : notice.text
+    : (nativeChatRestartNoteText(notice.text, t) ?? notice.text)
 }
 
 // Render system notices separately so they cannot read as the agent’s own prose.
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onLongPress
+  onLongPress,
+  cardId
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
+  /** The row's message id, for a bot card's fold and answer. */
+  cardId?: string
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -108,6 +116,16 @@ export function MobileNativeChatNoticeRow({
   const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
+  if (notice?.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY) {
+    return (
+      <MobileNativeChatGoalCheckNotice
+        text={notice.text}
+        fontScale={fontScale}
+        onLongPress={onLongPress}
+      />
+    )
+  }
+
   if (!notice) {
     const text = blocks
       .filter(isTextBlock)
@@ -119,17 +137,42 @@ export function MobileNativeChatNoticeRow({
       </Text>
     ) : null
   }
+  if (notice.automationResult) {
+    return (
+      <MobileNativeChatAutomationResultRow
+        note={notice.automationResult}
+        cleared={notice.automationResultCleared === true}
+        fontScale={fontScale}
+      />
+    )
+  }
+  const botCard = mobileNativeChatBotCard(notice, {
+    cardId: cardId ?? '',
+    timestamp: null,
+    fallback: notice.text,
+    fontScale
+  })
+  if (botCard) {
+    return botCard
+  }
   const look = nativeChatNoticeLook(notice)
   const lineText = noticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
+  // A setup failure a later successful turn resolved reads as history: muted, with no action.
+  const resolved =
+    isAgentSessionSetupFailureKind(failure?.kind) &&
+    cardId !== undefined &&
+    names.unresolvedFailureRows !== undefined &&
+    !names.unresolvedFailureRows.has(cardId)
   const signInCommand =
-    failure?.kind === 'notSignedIn'
+    failure?.kind === 'notSignedIn' && !resolved
       ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
-  const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
+  const reviewed = look.kind === 'settled-permission' || look.kind === 'auto-review-denied'
+  const diagnosticText = reviewed ? notice.text : detail
   const payload = notice.providerFrame?.payload
   const diagnosticBody = (
     <MobileNativeChatOwnedScrollView
@@ -143,7 +186,8 @@ export function MobileNativeChatNoticeRow({
         style={[
           toolStyles.codeText,
           scaledType(MONO_SIZE, fontScale),
-          look.kind === 'settled-permission' && { color: toneColor(look.tone) }
+          look.kind === 'settled-permission' && { color: toneColor(look.tone) },
+          look.kind === 'auto-review-denied' && { color: toneColor('warning') }
         ]}
       >
         {diagnosticText}
@@ -160,24 +204,9 @@ export function MobileNativeChatNoticeRow({
     </MobileNativeChatOwnedScrollView>
   )
   switch (look.kind) {
+    case 'auto-review-denied':
     case 'settled-permission': {
-      const agent = names.agentName ?? look.agent
-      const summary =
-        look.decision === 'approved'
-          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
-              agent
-            })
-          : look.decision === 'denied'
-            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
-                agent
-              })
-            : t(
-                'chat.notice.safetyReview',
-                '{{agent}} reported a safety review warning. View details.',
-                {
-                  agent
-                }
-              )
+      const summary = nativeChatReviewNoticeSummary(look, names.agentName ?? look.agent, t)
       return (
         <View>
           <MobileNativeChatNoticeDisclosure
@@ -191,23 +220,15 @@ export function MobileNativeChatNoticeRow({
         </View>
       )
     }
-    case 'divider': {
-      const label = copy[look.label]
-      return (
-        <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>{label}</Text>
-          <View style={styles.rule} />
-        </View>
-      )
-    }
+    case 'divider':
+      return <MobileNativeChatDivider label={copy[look.label]} />
     case 'forked-from': {
       const { sourceName, sourceSessionId } = look
       return (
         // No label on the row: it would replace the text and hide the source link from screen readers.
-        <View style={styles.divider}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>
+        <View style={mobileNativeChatDividerStyles.divider}>
+          <View style={mobileNativeChatDividerStyles.rule} />
+          <Text style={mobileNativeChatDividerStyles.dividerLabel}>
             {copy.forkedFrom}{' '}
             {openForkSource ? (
               <Text
@@ -221,7 +242,7 @@ export function MobileNativeChatNoticeRow({
               sourceName
             )}
           </Text>
-          <View style={styles.rule} />
+          <View style={mobileNativeChatDividerStyles.rule} />
         </View>
       )
     }
@@ -248,8 +269,8 @@ export function MobileNativeChatNoticeRow({
         <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
           {t(
             'chat.notice.modelFallback',
-            CLAUDE_MODEL_FALLBACK_COPY,
-            claudeModelFallbackLabels(look)
+            Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+            Fallback.claudeModelFallbackLabels(look)
           )}
         </Text>
       )
@@ -277,7 +298,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(look.tone) }
+        look.tone && { color: toneColor(resolved ? 'notice' : look.tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -331,10 +352,10 @@ export function MobileNativeChatNoticeRow({
       const Icon =
         look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
       return (
-        <View style={[styles.card, styles.toneCard]}>
+        <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(look.tone)}
+            color={toneColor(resolved ? 'notice' : look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -346,21 +367,6 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  rule: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  },
-  dividerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
   dividerLink: {
     textDecorationLine: 'underline'
   },
@@ -386,7 +392,8 @@ const styles = themedStyleSheet(() => ({
   },
   toneCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    gap: spacing.sm
   },
   toneIcon: {
     marginTop: 2

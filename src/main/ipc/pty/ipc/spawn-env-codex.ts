@@ -1,5 +1,5 @@
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
-import { resolvePtySpawnHostEnv } from '../spawn-host-env'
+import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {

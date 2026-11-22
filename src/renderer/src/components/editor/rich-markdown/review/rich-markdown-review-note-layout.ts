@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { getCommentBodyLayoutLineCount } from '@/lib/source-control/review/comments/comment-body-line-count'
 
 export type RichMarkdownReviewNotePosition = {

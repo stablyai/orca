@@ -1,4 +1,4 @@
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import type { AgentSenderPublication } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'

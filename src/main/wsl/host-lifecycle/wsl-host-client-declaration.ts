@@ -1,5 +1,5 @@
 /** R39: each ready control socket to a WSL host says which Orca installation it belongs to. */
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ORCAD_DECLARE_CLIENT_METHOD } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'

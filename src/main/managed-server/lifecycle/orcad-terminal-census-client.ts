@@ -1,6 +1,6 @@
 /** Unknown failures, including older hosts without census support, stay unverifiable and never mean zero live terminals. */
 import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
@@ -92,7 +92,7 @@ export async function requestOrcadTerminalCensus(
       undefined
     )
     return response.ok
-      ? OrcadTerminalCensusSchema.parse(response.result)
+      ? { ...OrcadTerminalCensusSchema.parse(response.result), answered: true }
       : UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   } catch {
     return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS

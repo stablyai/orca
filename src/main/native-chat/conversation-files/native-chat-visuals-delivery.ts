@@ -1,9 +1,11 @@
 // Best-effort visual setup must never prevent chat startup.
 
 import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import {
+  NATIVE_CHAT_VISUALS_SKILL_NAME,
   resolveNativeChatVisualsSkillLocation,
   type NativeChatVisualsSkillLocation
 } from './native-chat-visuals-skill-location'
@@ -24,19 +26,34 @@ export type PrepareNativeChatVisuals = (
   sessionId: string
 ) => Promise<NativeChatVisualsLaunch | null>
 
-export function createNativeChatVisualsDelivery(deps: {
-  stateDirectory: string
-  logger: StructuredAgentSessionLogger
+type NativeChatVisualsSwitch = {
   isEnabled?: () => boolean
   resolveSkill?: () => Promise<NativeChatVisualsSkillLocation | null>
-}): PrepareNativeChatVisuals {
-  const resolveSkill = deps.resolveSkill ?? (() => resolveNativeChatVisualsSkillLocation())
+}
+
+/** The bundled visuals skill while visuals are on; null when off or missing from this install.
+ *  A chat's launch and its resting `/` probe both load it from here. */
+export async function enabledNativeChatVisualsSkill(
+  deps: NativeChatVisualsSwitch
+): Promise<NativeChatVisualsSkillLocation | null> {
+  if (deps.isEnabled?.() === false) {
+    return null
+  }
+  return (deps.resolveSkill ?? (() => resolveNativeChatVisualsSkillLocation()))()
+}
+
+export function createNativeChatVisualsDelivery(
+  deps: NativeChatVisualsSwitch & {
+    stateDirectory: string
+    logger: StructuredAgentSessionLogger
+  }
+): PrepareNativeChatVisuals {
   return async (sessionId) => {
     try {
       if (deps.isEnabled?.() === false) {
         return null
       }
-      const skill = await resolveSkill()
+      const skill = await enabledNativeChatVisualsSkill(deps)
       if (!skill) {
         deps.logger.warn('native-chat visuals skill is missing from this install', {
           scope: 'nativeChatVisuals.skill',
@@ -69,4 +86,14 @@ export function withNativeChatVisualsEnv(
     ...rest
   } = env
   return visuals ? { ...rest, [NATIVE_CHAT_SCRATCH_DIR_ENV]: visuals.folder } : rest
+}
+
+/** Standing instructions that point an agent which cannot load skills at the visuals skill. */
+export function nativeChatVisualsSection(skill: NativeChatVisualsSkillLocation): string {
+  const file = join(skill.skillsRoot, NATIVE_CHAT_VISUALS_SKILL_NAME, 'SKILL.md')
+  return [
+    '## Inline visuals',
+    '',
+    `Orca can show a chart, diagram, table, report or mockup inline in this chat as an HTML page. When a visual would help, read ${file} first and follow it.`
+  ].join('\n')
 }

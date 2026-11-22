@@ -4,7 +4,7 @@ import {
   lookupGitLabWorkItemByPathForSource
 } from '@/lib/work-items/gitlab/gitlab-work-item-source-lookup'
 import { parseGitLabIssueOrMRLink } from '../../../../../shared/new-workspace/gitlab-links'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import { RESULT_LIMIT } from '../name-field/smart-workspace-name-field-model'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 

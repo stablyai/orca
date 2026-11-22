@@ -109,7 +109,8 @@ export class PiRpcSession {
       this.lane,
       (frame) => this.connection.send(frame),
       (error) => this.fail(error),
-      resolvedLaunch.backgroundWork?.directory ?? null
+      resolvedLaunch.backgroundWork?.directory ?? null,
+      (evidence) => deps.onChildWorkEvidence?.(input.identity.sessionId, evidence, input.events)
     )
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))

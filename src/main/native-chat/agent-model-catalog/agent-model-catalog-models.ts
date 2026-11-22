@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type {
   AgentModelCatalogListing,
   AgentModelCatalogConfiguredDefault,
@@ -65,6 +65,13 @@ export function mergedAgentModelCatalogModels(
           : model.isDefault,
       efforts,
       ...(defaultEffort ? { defaultEffort } : {}),
+      // A live menu reports Fast only for its current model; keep what the listing knew.
+      ...(model.supportsFastMode === undefined && olderModel?.supportsFastMode !== undefined
+        ? { supportsFastMode: olderModel.supportsFastMode }
+        : {}),
+      ...(model.defaultFastMode === undefined && olderModel?.defaultFastMode !== undefined
+        ? { defaultFastMode: olderModel.defaultFastMode }
+        : {}),
       ...(observation !== undefined
         ? {
             declaredDefaultEffort:

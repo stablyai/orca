@@ -22,7 +22,7 @@ import {
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
-  installUncaughtPipeErrorGuard,
+  installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
@@ -62,8 +62,8 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'
@@ -164,7 +164,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
   })
-  installUncaughtPipeErrorGuard()
+  installUncaughtExceptionQuitGuard()
   // #9441: log background rejections so restore failure cannot silently kill main.
   installUnhandledRejectionLogging()
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.

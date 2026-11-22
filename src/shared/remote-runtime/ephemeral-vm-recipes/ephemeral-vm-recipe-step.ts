@@ -1,4 +1,7 @@
-import type { OrcaVmRecipe, OrcaVmRecipeLifecycleMode } from '../../orca-yaml-hook-types'
+import type {
+  OrcaVmRecipe,
+  OrcaVmRecipeLifecycleMode
+} from '../../workspace-setup/orca-yaml-hook-types'
 import type {
   EphemeralVmRecipeContext,
   EphemeralVmRecipeStartArgs

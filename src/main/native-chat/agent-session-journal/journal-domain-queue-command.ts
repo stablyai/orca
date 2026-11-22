@@ -30,6 +30,10 @@ import {
 } from './queued-messages/queued-message-table'
 import { queuedMessageUpdateDecision } from './queued-messages/queued-message-update'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import {
+  recordJournalConnectorReplies,
+  withdrawJournalConnectorReplies
+} from './connector-replies/journal-connector-replies'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -41,6 +45,7 @@ export type JournalDomainQueueResult =
   | { kind: 'queue-hold' }
   | { kind: 'queue-withdraw'; cards: QueuedMessageRow[] }
   | { kind: 'queue-move'; move: AgentSessionQueuedMessageMoveResult }
+  | { kind: 'queue-steer'; card: QueuedMessageRow | null }
 
 export type JournalDomainQueuePlacement = { messageId: string; position: number }
 
@@ -135,6 +140,7 @@ export function applyJournalDomainQueueCommand(
       }
       changes = [{ prior: null, card }]
       result = { kind: 'queue-insert', card }
+      recordJournalConnectorReplies(db, target, input.messageId, true, input.body)
       break
     }
     case 'queue-update': {
@@ -176,6 +182,7 @@ export function applyJournalDomainQueueCommand(
           : []
       )
       retire = changes.map(({ card }) => card.messageId)
+      withdrawJournalConnectorReplies(db, target, retire, Date.now())
       result = { kind: 'queue-withdraw', cards: changes.map(({ card }) => card) }
       break
     case 'queue-move': {
@@ -195,6 +202,18 @@ export function applyJournalDomainQueueCommand(
         change?.op === 'moved' ? [{ messageId, position: change.position }] : []
       )
       result = { kind: 'queue-move', move: plan.result }
+      break
+    }
+    case 'queue-steer': {
+      const prior = current(operation.messageId)
+      if (
+        prior?.card.state === 'waiting' &&
+        !prior.card.body.command &&
+        prior.card.deliveryMode !== 'steer'
+      ) {
+        changes = [{ prior, card: { ...prior.card, deliveryMode: 'steer' } }]
+      }
+      result = { kind: 'queue-steer', card: changes[0]?.card ?? prior?.card ?? null }
       break
     }
   }

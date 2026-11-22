@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   getRepoHostIdentityForParts,
@@ -11,7 +11,7 @@ import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../../../../shared/worktree/host-qualified-identity'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectResolvedWorktreeLineage } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getAgentLaunchPlatformForRepo } from '../../terminal/launch/runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
@@ -19,6 +19,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
+  worktreeRowMemoRepoKey,
   type RepoWorktreeRowDeps,
   type RepoWorktreeRowsScan
 } from './repo-worktree-row-resolution'
@@ -141,6 +142,7 @@ function joinRows(
     }
     return rows
   })
+  deps.rowMemo?.retainRepos(new Set(repos.map(worktreeRowMemoRepoKey)))
   const worktrees = projectResolvedWorktreeLineage(
     perRepoWorktrees.flat(),
     store.getAllWorktreeLineage?.() ?? {}

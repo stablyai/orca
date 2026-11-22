@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { startOrcadWithHost } from '../orcad/host-lifecycle/orcad-lifecycle'
 import type { OrcadHandle, OrcadOptions } from '../orcad/serve-startup/orcad-start-contract'
 import { activateBackendServices } from './service-composition'

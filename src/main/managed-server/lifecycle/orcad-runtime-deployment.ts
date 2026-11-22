@@ -1,5 +1,5 @@
 // Target claims preserve environment identity so interrupted deploys resume the same registration.
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { randomUUID } from 'node:crypto'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -196,7 +196,7 @@ async function deployOwnOrcad(
       code: deployResult.code,
       reason: deployResult.reason,
       forceable:
-        isForceableOrcadDeferral(deployResult.code) ||
+        isForceableOrcadDeferral(deployResult) ||
         deployResult.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
   }

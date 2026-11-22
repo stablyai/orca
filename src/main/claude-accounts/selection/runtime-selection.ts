@@ -1,7 +1,8 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   ClaudeManagedAccount,
-  ClaudeManagedAccountRuntimeSelection
+  ClaudeManagedAccountRuntimeSelection,
+  ClaudeRateLimitAccountsState
 } from '../../../shared/agent-accounts/managed-account-types'
 
 export type ClaudeAccountSelectionTarget = {
@@ -166,4 +167,18 @@ export function findClaudeAccount(
   accountId: string
 ): ClaudeManagedAccount | undefined {
   return settings.claudeManagedAccounts.find((account) => account.id === accountId)
+}
+
+/** The selection for `target` as an accounts state reports it. */
+export function getSelectedClaudeAccountIdInState(
+  state: Pick<ClaudeRateLimitAccountsState, 'activeAccountId' | 'activeAccountIdsByRuntime'>,
+  target: ClaudeAccountSelectionTarget
+): string | null {
+  return getSelectedClaudeAccountIdForTarget(
+    {
+      activeClaudeManagedAccountId: state.activeAccountId,
+      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
+    },
+    target
+  )
 }

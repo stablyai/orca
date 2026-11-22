@@ -1,10 +1,10 @@
 import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
-} from '../../../../../shared/markdown-default-view-mode'
+} from '../../../../../shared/editor/markdown/markdown-default-view-mode'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Label } from '../../ui/label'

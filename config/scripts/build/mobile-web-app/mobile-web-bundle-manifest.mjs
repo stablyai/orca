@@ -70,7 +70,11 @@ export function hashedAsset(bytes, extension) {
   }
 }
 
-function readIntegerConstant(source, name, file = 'src/shared/protocol-version.ts') {
+function readIntegerConstant(
+  source,
+  name,
+  file = 'src/shared/remote-runtime/protocol/protocol-version.ts'
+) {
   const match = new RegExp(`export const ${name} = (\\d+)`).exec(source)
   if (!match) {
     throw new Error(`[mobile-web-bundle-manifest] ${name} not found in ${file}`)
@@ -80,7 +84,10 @@ function readIntegerConstant(source, name, file = 'src/shared/protocol-version.t
 
 // Parse TS protocol source: packaging runs bare Node before build outputs exist.
 export async function readProtocolWindow() {
-  const source = await readFile(join(projectDir, 'src', 'shared', 'protocol-version.ts'), 'utf8')
+  const source = await readFile(
+    join(projectDir, 'src', 'shared', 'remote-runtime', 'protocol', 'protocol-version.ts'),
+    'utf8'
+  )
   return {
     runtimeProtocolVersion: readIntegerConstant(source, 'RUNTIME_PROTOCOL_VERSION'),
     minCompatibleRuntimeProtocolVersion: readIntegerConstant(

@@ -4,7 +4,7 @@ import {
 } from './runtime-environment-usage-response'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
@@ -43,6 +43,8 @@ export async function callRuntimeEnvironment(
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
+    responseTimeoutMs?: number
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -135,6 +137,7 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment: currentEnvironment,
             ...call,
+            responseTimeoutMs: options?.responseTimeoutMs,
             expectedPairingRevision: expected.pairingRevision,
             expectedRuntimeId: expected.runtimeId,
             envelope: sharedControlEnvelope

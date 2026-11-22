@@ -179,6 +179,18 @@ export function asyncQuestionOccurrenceId(
   ])
 }
 
+/** The newest row a shown async prompt draws from: Skip saves through it, never past what it showed. */
+export function newestShownAsyncQuestionRow(
+  contributors: readonly AsyncQuestionContributor[],
+  sourceScope: string,
+  prompt: AskPrompt | null
+): string | undefined {
+  const shown = new Set(prompt?.occurrenceIds)
+  return contributors.findLast((contributor) =>
+    shown.has(asyncQuestionOccurrenceId(sourceScope, contributor))
+  )?.sourceRowId
+}
+
 /** Queued texts hide questions an answer waiting in the queue already quotes; deleting that card brings them back. */
 export function aggregateAsyncQuestions(
   contributors: readonly AsyncQuestionContributor[],

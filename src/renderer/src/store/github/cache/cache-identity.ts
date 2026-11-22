@@ -2,7 +2,7 @@ import { githubRepoIdentityKey } from '../../../../../shared/github/repositories
 import { githubProjectIdentityKey } from '../../../../../shared/github/projects/project-identity'
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { GetProjectViewTableArgs } from '../../../../../shared/github/projects/project-request-types'
 import {
   type TaskSourceContext,
@@ -14,7 +14,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   composeRepoCacheKey,
   getGitHubRepoCacheKey,

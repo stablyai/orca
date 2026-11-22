@@ -20,7 +20,7 @@ export function attachDurableMutationRecovery(
   // Why: a text-plus-Enter prompt refuses a menu; text-only and bare-Enter sends stay direct input.
   const menuHint =
     error.code === 'agent_prompt_blocked'
-      ? ' The agent is showing a permission or trust prompt; to answer it, send --text and --enter as separate commands.'
+      ? ' The agent is showing a permission or trust prompt; a person answers it with separate --text and --enter sends, and another agent never answers it.'
       : ''
   const message = `${error.message}${menuHint} Terminal prompt request ID: ${requestId}. Re-issue the exact command with --retry-request ${requestId} --wait-submit <seconds>; do not retry it without that ID.`
   const data = {

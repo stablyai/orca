@@ -1,13 +1,13 @@
 import { app, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
   getOrcaProfileBrowserSessionPartition
-} from '../../../../shared/orca-profiles'
+} from '../../../../shared/orca-profiles/orca-profiles'
 import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope
@@ -19,10 +19,11 @@ import {
 import {
   BROWSER_SESSION_META_FILE_NAME,
   forgetBrowserSessionProfileMeta,
+  getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
-  persistBrowserSessionMeta
+  persistBrowserSessionMeta,
+  type BrowserSessionMeta
 } from './browser-session-meta-store'
-import type { BrowserSessionMeta } from './browser-session-meta-store'
 import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
@@ -42,6 +43,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
+import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -99,10 +101,6 @@ class BrowserSessionRegistry {
     persistBrowserSessionMeta(() => this.metadataPath, this.defaultPartition, updates)
   }
 
-  private persistSource(source: BrowserSessionProfile['source']): void {
-    this.persistMeta({ defaultSource: source })
-  }
-
   private persistProfiles(): void {
     const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
     this.persistMeta({ profiles: nonDefault })
@@ -144,9 +142,8 @@ class BrowserSessionRegistry {
   }
 
   /**
-   * Starts a profile's extensions once it has a page or Settings acts on them, never at launch:
-   * each running profile wakes its extensions' service workers. Only local browser profiles
-   * run extensions, so route, SSH and doc-preview partitions never come through here.
+   * Starts a profile's extensions when it gets a page or Settings acts on them, never at launch, and
+   * they stop once it has none. Only local browser profiles (no route, SSH or doc preview) run them.
    */
   attachExtensions(profileId: string): void {
     const profile = this.profiles.get(profileId)
@@ -161,7 +158,8 @@ class BrowserSessionRegistry {
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
+    const cached = getCachedBrowserExtensionEnabledIds(this.metadataPath, profileId)
+    return cached ?? this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
   }
 
   updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
@@ -272,6 +270,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
+    trackBrowserSessionCookies(profile)
     this.onProfilesChanged?.()
     return profile
   }
@@ -287,7 +286,7 @@ class BrowserSessionRegistry {
     const updated = { ...profile, source }
     this.profiles.set(profileId, updated)
     if (profileId === 'default') {
-      this.persistSource(source)
+      this.persistMeta({ defaultSource: source })
     } else {
       this.persistProfiles()
     }

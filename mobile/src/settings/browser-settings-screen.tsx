@@ -6,16 +6,25 @@ import { PickerModal, type PickerOption } from '../components/sheets/PickerModal
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
-  loadTerminalLinkOpenMode,
-  saveTerminalLinkOpenMode,
-  type MobileTerminalLinkOpenMode
+  DEFAULT_LINK_OPEN_MODE,
+  loadLinkOpenMode,
+  saveLinkOpenMode,
+  type MobileLinkOpenMode
 } from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
-function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>[] {
+function linkModeOptions(t: Translate): PickerOption<MobileLinkOpenMode>[] {
   return [
+    {
+      value: 'ask',
+      label: t('settings.browserSettingsScreen.askEachTime', 'Ask each time'),
+      subtitle: t(
+        'settings.browserSettingsScreen.askEachTimeDescription',
+        'Choose Orca browser, phone browser, or copy the link each time.'
+      )
+    },
     {
       value: 'orca-browser',
       label: t('settings.browserSettingsScreen.desktopBrowser', 'Orca browser on desktop'),
@@ -36,8 +45,8 @@ function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>
 }
 
 function linkModeLabel(
-  mode: MobileTerminalLinkOpenMode,
-  options: PickerOption<MobileTerminalLinkOpenMode>[]
+  mode: MobileLinkOpenMode,
+  options: PickerOption<MobileLinkOpenMode>[]
 ): string {
   return options.find((option) => option.value === mode)?.label ?? options[0]!.label
 }
@@ -50,18 +59,18 @@ export default function BrowserSettingsScreen({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const router = useRouter()
-  const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
+  const [linkMode, setLinkMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<'load' | 'save' | null>(null)
   const options = linkModeOptions(t)
   const selectionRevision = useRef(0)
   const failedSelectionRevision = useRef<number | null>(null)
-  const savedMode = useRef<MobileTerminalLinkOpenMode>('orca-browser')
+  const savedMode = useRef<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const hasSaved = useRef(false)
 
   useEffect(() => {
     let active = true
-    void loadTerminalLinkOpenMode().then(
+    void loadLinkOpenMode().then(
       (mode) => {
         if (!hasSaved.current) {
           savedMode.current = mode
@@ -85,11 +94,11 @@ export default function BrowserSettingsScreen({
     }
   }, [])
 
-  const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
+  const selectLinkMode = useCallback((mode: MobileLinkOpenMode) => {
     setError(null)
     const revision = ++selectionRevision.current
     setLinkMode(mode)
-    void saveTerminalLinkOpenMode(mode).then(
+    void saveLinkOpenMode(mode).then(
       () => {
         savedMode.current = mode
         hasSaved.current = true
@@ -123,9 +132,9 @@ export default function BrowserSettingsScreen({
       title={t('settings.browserSettingsScreen.title', 'Browser')}
       onBack={onBack ?? (() => router.back())}
       overlays={
-        <PickerModal<MobileTerminalLinkOpenMode>
+        <PickerModal<MobileLinkOpenMode>
           visible={pickerOpen}
-          title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
+          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
           options={options}
           selected={linkMode}
           onSelect={selectLinkMode}
@@ -140,8 +149,8 @@ export default function BrowserSettingsScreen({
           <>
             <SettingsNote>
               {t(
-                'settings.browserSettingsScreen.linksDescription',
-                'Choose where HTTP(S) links tapped in terminal output open.'
+                'settings.browserSettingsScreen.terminalAndChatLinksDescription',
+                'Choose where web links tapped in terminal output and chat open.'
               )}
             </SettingsNote>
             {errorNote}
@@ -150,14 +159,11 @@ export default function BrowserSettingsScreen({
       >
         <ListRow
           key="linkMode"
-          title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
+          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
           subtitle={linkModeLabel(linkMode, options)}
           leading={<Globe size={18} color={colors.textSecondary} />}
           navigates
-          accessibilityLabel={t(
-            'settings.browserSettingsScreen.openTerminalLinks',
-            'Open terminal links'
-          )}
+          accessibilityLabel={t('settings.browserSettingsScreen.openLinks', 'Open links')}
           onPress={() => setPickerOpen(true)}
         />
       </SettingsSection>

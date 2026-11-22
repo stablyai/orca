@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LocalLogTailReadResult } from '../../../../../../shared/local-log-tail-types'
+import type { LocalLogTailReadResult } from '../../../../../../shared/file-content/local-log-tail-types'
 import { LocalLogTailDecoder } from './local-log-tail-decoder'
 
 const IDENTITY = '1:2:3'

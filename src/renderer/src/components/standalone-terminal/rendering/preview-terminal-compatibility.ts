@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../../shared/terminal/appearance/terminal-unicode-provider'
 import { installWindowsCtrlAltChordRepair } from '@/lib/pane-manager/terminal-protocol/terminal-windows-ctrl-alt-chord-classification'
 import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/terminal-input/pane-terminal-mouse-wheel'
@@ -30,13 +30,10 @@ export function installPreviewTerminalCompatibility(
   })
   // Register Arabic joining only after RTL arrives; DOM previews need no WebGL atlas compensation.
   const disposeArabicShapingJoiner = configureLazyArabicShapingJoiner(terminal, () => false)
-  const imeAnchorHandler = installTerminalImeCandidateAnchor(terminal)
+  const disposeImeCandidateAnchor = installTerminalImeCandidateAnchor(terminal)
 
   return () => {
-    if (imeAnchorHandler && terminal.element) {
-      terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
-      terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
-    }
+    disposeImeCandidateAnchor?.()
     disposeArabicShapingJoiner()
   }
 }

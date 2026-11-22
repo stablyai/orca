@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remot
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from '../../rpc/calls/runtime-rpc-environment-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
-import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/publisher-identity-fences'
+import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/tracking/publisher-identity-fences'
 import {
   cacheRetainedSurfaces,
   claimSurfaces,
@@ -33,28 +33,18 @@ import {
 import { resolveTerminalOrphanInventory } from './inventory/web-session-terminal-orphan-recovery-inventory'
 import { suppressCancelledStructuredSessionTabs } from '../../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import { resolvePersistedTerminalSurfaces } from './panes/web-session-terminal-orphan-recovery-pane'
+import { clearSurfaceInventoryAbsence } from './evidence/web-session-terminal-orphan-recovery-cache'
 import {
-  clearCachedSurfaceResolutions,
-  clearSurfaceInventoryAbsence
-} from './evidence/web-session-terminal-orphan-recovery-cache'
-import {
-  clearTerminalRecoveryQueues,
   enqueueLatestTerminalRecovery,
   supersedeTerminalRecovery
 } from './scheduling/web-session-terminal-orphan-recovery-queue'
-import {
-  clearTerminalRecoveryRpcLaneForTests,
-  runInTerminalRecoveryRpcLane
-} from './scheduling/web-session-terminal-orphan-recovery-rpc-lane'
+import { runInTerminalRecoveryRpcLane } from './scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
 } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { buildWebTerminalOrphanTopologyProposal } from './surfaces/web-session-terminal-orphan-topology'
-import {
-  clearRetainedTerminalRetirementProofsForTests,
-  mergeRetainedTerminalRetirementProofs
-} from './evidence/web-session-terminal-retirement-proof-ledger'
+import { mergeRetainedTerminalRetirementProofs } from './evidence/web-session-terminal-retirement-proof-ledger'
 
 function recoveryKey(
   environmentId: string,
@@ -301,11 +291,4 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
       options.getCurrentState
     )
   )
-}
-
-export function clearWebSessionTerminalOrphanRecoveryForTests(): void {
-  clearTerminalRecoveryQueues()
-  clearCachedSurfaceResolutions()
-  clearTerminalRecoveryRpcLaneForTests()
-  clearRetainedTerminalRetirementProofsForTests()
 }

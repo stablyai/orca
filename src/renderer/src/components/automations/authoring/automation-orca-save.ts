@@ -1,4 +1,3 @@
-import { completeAutomationSave } from './automation-save-completion'
 import {
   recordedAutomationRunContext,
   isSameAutomationWorkspace
@@ -16,7 +15,7 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
@@ -35,6 +34,7 @@ import {
   saveExistingAutomation
 } from './automation-orca-save-operations'
 import type { AutomationSaveContext } from './automation-save-context'
+import { completeAutomationSave } from './automation-save-completion'
 
 /** Saves an Orca automation, including destination validation and host moves. */
 export async function saveOrcaAutomation(
@@ -135,7 +135,7 @@ export async function saveOrcaAutomation(
         })
       : currentAutomation.setupDecision
   const { trust, setupTrustHash } = await confirmAutomationSaveSetup(context, {
-    // A new base can bring different orca.yaml setup, so it needs its own approval.
+    // Confirm setup on the base this automation will use.
     prompt:
       setupDecision === 'run' &&
       ((targetEdited && !recordedContext) || edited('setupDecision') || edited('baseBranch')),
@@ -207,7 +207,7 @@ export async function saveOrcaAutomation(
         }
       : {}),
     ...(edited('baseBranch') ? { baseBranch: draft.baseBranch.trim() || null } : {}),
-    ...(edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
+    ...(trust || edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
       ? { setupDecision }
       : {}),
     ...(setupTrustHash ? { setupTrustHash } : {}),
@@ -232,7 +232,7 @@ export async function saveOrcaAutomation(
     workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
     baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
     setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
-    setupTrustHash: currentAutomation ? currentAutomation.setupTrustHash : setupTrustHash,
+    setupTrustHash: 'setupDecision' in updates ? setupTrustHash : currentAutomation?.setupTrustHash,
     reuseSession: currentAutomation
       ? currentAutomation.reuseSession
       : draft.workspaceMode === 'existing' && draft.reuseSession,

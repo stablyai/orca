@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
-} from '../../../../../shared/emulator-keyboard-frame'
+} from '../../../../../shared/emulator/emulator-keyboard-frame'
 import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
-} from '../../../../../shared/emulator-touch-frame'
+} from '../../../../../shared/emulator/emulator-touch-frame'
 import { RotateOrientation } from '../../../../../shared/rpc-contract/emulator/emulator-params'
 import type { EmulatorStreamOrientation } from '../frame/emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
-const KEYBOARD_FRAME_DELAY_MS = 4
+export const KEYBOARD_FRAME_DELAY_MS = 4
 const SERVE_SIM_CONFIG_MESSAGE_TAG = 130
 
 // serve-sim pushes {width, height, orientation} on connect and on every rotate, fold or resize.
@@ -35,9 +35,29 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
   }
 }
 
+// Android keycode names (see android-input-mapping.ts) for the named keys; others type as text.
+export const ANDROID_KEY_BUTTONS: Readonly<Record<string, string>> = {
+  Enter: 'enter',
+  Tab: 'tab',
+  Backspace: 'backspace',
+  Delete: 'forward_delete',
+  ArrowUp: 'dpad_up',
+  ArrowDown: 'dpad_down',
+  ArrowLeft: 'dpad_left',
+  ArrowRight: 'dpad_right',
+  Home: 'move_home',
+  End: 'move_end',
+  PageUp: 'page_up',
+  PageDown: 'page_down'
+}
+
 export type ScrcpyKeyboard = {
   sendKey: (name: string, shift: boolean) => void
+  /** A key on the device's hardware keyboard; devices without one type `text` or press `button`. */
+  sendHidKey: (key: { usage: number; shift: boolean; text?: string; button?: string }) => void
   sendText: (text: string) => Promise<boolean>
+  /** One clipboard paste on the device, newlines kept as text. */
+  pasteText: (text: string) => Promise<boolean>
 }
 
 export type EmulatorControlStream = {
@@ -257,9 +277,23 @@ export function useEmulatorControlStream(
               void window.api.emulator
                 .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, key, shift })
                 .catch(() => false),
+            sendHidKey: ({ usage, shift, text, button }) => {
+              const hid = { usage, shift }
+              void window.api.emulator
+                .sendScrcpyKeyboard(
+                  button === undefined
+                    ? { deviceId: scrcpyDeviceId, hid, text: text ?? '' }
+                    : { deviceId: scrcpyDeviceId, hid, key: button, shift }
+                )
+                .catch(() => false)
+            },
             sendText: (text) =>
               window.api.emulator
                 .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text })
+                .catch(() => false),
+            pasteText: (text) =>
+              window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text, paste: true })
                 .catch(() => false)
           }
         : null,

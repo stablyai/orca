@@ -49,8 +49,9 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
       reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
     }
   }
-  // The WebGL atlas retains missing glyphs if it paints before the bundled fonts finish loading.
-  if (document.fonts && !document.fonts.check(...TERMINAL_FONT_PROBE)) {
+  // The WebGL atlas retains missing glyphs if it paints before the bundled fonts finish loading,
+  // and the first fit must measure the picked face, or native sizes the PTY twice.
+  if (document.fonts && (!document.fonts.check(...TERMINAL_FONT_PROBE) || scope.terminalFontLoad)) {
     return waitForTerminalFont(scope, reportReady)
   }
   reportReady()
@@ -81,6 +82,15 @@ function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => vo
       }
     }
     const timer = setTimeout(finish, FONT_READY_TIMEOUT_MS)
+    // The picked face settles after committing its family, so the first fit measures it.
+    const faceLoad = scope.terminalFontLoad
+    const finishAfterFace = () =>
+      void Promise.resolve(faceLoad).then(() => {
+        if (!canceled) {
+          scope.cancelFontReadiness = null
+          finish()
+        }
+      })
     const completion: TerminalFontCompletion = { loaded: null, failed: null }
     scope.cancelFontReadiness = () => {
       canceled = true
@@ -93,21 +103,20 @@ function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => vo
       if (canceled) {
         return
       }
-      scope.cancelFontReadiness = null
       if (ready) {
+        scope.cancelFontReadiness = null
         // A late font must evict fallback glyphs already cached after the startup deadline.
         try {
           scope.webglAddon?.clearTextureAtlas?.()
         } catch {}
         refreshTerminalSurface(scope)
       } else {
-        finish()
+        finishAfterFace()
       }
     }
     completion.failed = () => {
       if (!canceled) {
-        scope.cancelFontReadiness = null
-        finish()
+        finishAfterFace()
       }
     }
     observeFontCompletion(document.fonts.load(...TERMINAL_FONT_PROBE), completion)

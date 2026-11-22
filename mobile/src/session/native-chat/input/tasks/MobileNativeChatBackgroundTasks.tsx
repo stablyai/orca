@@ -17,14 +17,15 @@ import {
   Workflow
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import {
   backgroundTasksHeaderContent,
   backgroundTasksHeaderText,
   NARROW_BACKGROUND_TASKS_STRIP_REM
-} from '../../../../../../src/shared/background-task-header-content'
+} from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-header-content'
 import {
   backgroundTaskGroupLabel,
   backgroundTaskRowMeta,
@@ -32,7 +33,7 @@ import {
   backgroundTasksStripTicks,
   buildBackgroundTaskGroups,
   buildBackgroundTaskGroupsFromViews
-} from '../../../../../../src/shared/background-task-roster'
+} from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-roster'
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { useNow } from '../../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
@@ -121,21 +122,17 @@ function TaskRow({
           </Text>
         ) : null}
         {stopId !== null ? (
-          <Pressable
-            accessibilityRole="button"
+          // Held until the task's row leaves after a confirmed stop.
+          <MobilePendingButton
+            label={say('stop')}
             accessibilityLabel={say('stopTask', { value0: mobileAgentChildRowName(row) })}
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
             hitSlop={6}
-            style={({ pressed }) => [
-              styles.textAction,
-              pressed && strip.pressed,
-              busy && styles.disabled
-            ]}
+            style={styles.textAction}
+            labelStyle={styles.actionLabel}
+            spinnerColor={colors.textPrimary}
+            pending={busy}
             onPress={() => onStop(stopId)}
-          >
-            <Text style={styles.actionLabel}>{say('stop')}</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
       {row.owned.length > 0 ? (
@@ -234,7 +231,7 @@ function MobileNativeChatBackgroundTasksImpl({
             {groups.length > 0 ? (
               groups.map((group) => (
                 <View key={group.kind} style={styles.group}>
-                  <Text style={styles.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
+                  <Text style={strip.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
                   {group.tasks.map((entry) => (
                     <TaskRow
                       key={entry.row.id}
@@ -255,22 +252,16 @@ function MobileNativeChatBackgroundTasksImpl({
               <Text style={styles.unavailable}>{say('detailsUnavailable')}</Text>
             ) : null}
             {view.offersStopAll ? (
-              <Pressable
-                accessibilityRole="button"
+              <MobilePendingButton
+                label={say('stop')}
                 accessibilityLabel={say('stopAll')}
-                accessibilityState={{ disabled: stopping.all }}
-                disabled={stopping.all}
                 hitSlop={6}
-                style={({ pressed }) => [
-                  styles.textAction,
-                  styles.stopAll,
-                  pressed && strip.pressed,
-                  stopping.all && styles.disabled
-                ]}
+                style={[styles.textAction, styles.stopAll]}
+                labelStyle={styles.actionLabel}
+                spinnerColor={colors.textPrimary}
+                pending={stopping.all}
                 onPress={() => onStop()}
-              >
-                <Text style={styles.actionLabel}>{say('stop')}</Text>
-              </Pressable>
+              />
             ) : null}
           </ScrollView>
         ) : null}
@@ -329,14 +320,6 @@ const styles = themedStyleSheet(() => ({
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
   },
-  groupLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingBottom: spacing.xs / 2
-  },
   row: {
     minHeight: 32,
     flexDirection: 'row',
@@ -384,8 +367,5 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.metaSize,
     fontWeight: '500'
-  },
-  disabled: {
-    opacity: 0.5
   }
 }))

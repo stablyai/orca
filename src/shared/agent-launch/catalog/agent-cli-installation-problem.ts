@@ -1,4 +1,4 @@
-import { isValidAppVersion } from '../../app-version'
+import { isValidAppVersion } from '../../app-lifecycle/identity/app-version'
 import type { CodexInstallationProblem } from '../startup/codex-cli-installation'
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'

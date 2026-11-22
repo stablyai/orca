@@ -5,7 +5,7 @@ import {
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../protocol-version'
+} from '../remote-runtime/protocol/protocol-version'
 import type { RuntimeStatus } from '../remote-runtime/session-graph/runtime-session-contracts'
 import type { ExecutionHostHealth } from './execution-host-health'
 

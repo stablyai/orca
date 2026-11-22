@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import {
   parseRoutableExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Copy, RefreshCw, UserRound } from 'lucide-react-native'
 import { useClipboardWriter } from '../../platform/clipboard'
 import { triggerError } from '../../platform/haptics'
 import type { MobileSessionTab } from './mobile-session-tabs'
@@ -15,12 +15,14 @@ export function MobileBrowserTabActionSheet(props: {
   onNavigate: (target: BrowserTab, method: MobileBrowserNavigationMethod) => void
   onCloseTab: (target: BrowserTab) => void
   onToast?: (message: string, durationMs?: number) => void
+  /** The tab's profile name, read-only; null when the host doesn't say. */
+  profileLabel: string | null
   /** Rendered after Close — receives the open tab's id so the session route's
    *  bulk-close builder can resolve the anchor itself. */
   bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  const { target, onClose, onNavigate, onCloseTab, onToast, bulkCloseActions } = props
+  const { target, onClose, onNavigate, onCloseTab, onToast, profileLabel, bulkCloseActions } = props
   const clipboard = useClipboardWriter()
   return (
     <ActionSheetModal
@@ -93,6 +95,18 @@ export function MobileBrowserTabActionSheet(props: {
                       })
                   }
                 }
+              }
+            ]
+          : []),
+        ...(profileLabel !== null
+          ? [
+              {
+                id: 'profile',
+                label: t('session.browserProfile.title', 'Profile'),
+                icon: UserRound,
+                status: profileLabel,
+                disabled: true,
+                onPress: () => {}
               }
             ]
           : []),

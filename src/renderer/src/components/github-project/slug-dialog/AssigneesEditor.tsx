@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useRepoAssigneesBySlug } from '@/lib/work-items/github/useGitHubSlugMetadata'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function AssigneesEditor({

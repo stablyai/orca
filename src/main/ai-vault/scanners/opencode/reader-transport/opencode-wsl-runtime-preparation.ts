@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import type { ServerTarget } from '../../../../../shared/node-runtime/node-runtime-pin'
 import { OPENCODE_SQLITE_READER_FILENAME } from '../../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
@@ -107,6 +107,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     script: [
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
       'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ]; then printf present; exit 0; fi',
+      // Hermes scans the distro's ~/.hermes root and its named profiles.
+      'for db in "$HOME/.hermes/state.db" "$HOME"/.hermes/profiles/*/state.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       // WSL discovery still enumerates the default data root independently of guest overrides.
       'for db in "$HOME/.local/share/opencode"/opencode.db "$HOME/.local/share/opencode"/opencode-*.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'case "${OPENCODE_DB-}" in',
@@ -119,7 +121,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     loginPath: 'none'
   })
   if (hasDatabase !== 'present') {
-    return { distro, error: 'No OpenCode or ZCode database is present in this WSL distro.' }
+    return { distro, error: 'No OpenCode, ZCode or Hermes database is present in this WSL distro.' }
   }
   const readerPath = await run({
     program: 'wslpath',

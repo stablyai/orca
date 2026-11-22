@@ -3,7 +3,10 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/pro
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
+import {
+  focusLossReportSupport,
+  REPAINT_REQUEST_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -196,6 +199,12 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       }
       // A v55 daemon from 1.4.251 predates the request; its replacement is asked again.
       this.focusLossReportRejected = true
+    }
+  }
+
+  async requestRepaint(id: string): Promise<void> {
+    if (this.protocolVersion >= REPAINT_REQUEST_PROTOCOL_VERSION) {
+      await this.client.request('requestRepaint', { sessionId: id })
     }
   }
 

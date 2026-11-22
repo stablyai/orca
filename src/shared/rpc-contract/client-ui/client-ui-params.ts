@@ -1,19 +1,23 @@
 import { GitHistoryRefName } from '../source-control/git-params'
-import { z } from 'zod'
+import * as z from 'zod'
 import { isFeatureTipSeenId } from '../../feature-education/feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../../worktree/row-display/card-properties'
 import { isPluginPanelTabKey } from '../../plugins/frames/plugin-tab-key'
+import {
+  STATIC_RIGHT_SIDEBAR_TABS,
+  type StaticRightSidebarTab
+} from '../../ui-chrome/ui-chrome-types'
 import { isFeatureInteractionId } from '../../feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../feature-education/interactions/feature-interaction-catalog'
 import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
-} from '../../agents-view-thread-filters'
-import { isReleaseChannel } from '../../release-channel'
-import type { ReleaseChannel } from '../../release-channel'
+} from '../../agent-status/presentation/agents-view-thread-filters'
+import { isReleaseChannel } from '../../updater/release-channel'
+import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
@@ -31,25 +35,12 @@ export const UnknownRecord = z.record(z.string(), z.unknown())
 
 export const UnknownRecordArray = z.array(UnknownRecord)
 
-export type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
-
 // Derive from the shared union; drift previously omitted cli and rejected whole client payloads.
 export const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 
 export const WorktreeCardProperties = z
   .array(WorktreeCardPropertyParam)
   .transform((value) => normalizeWorktreeCardProperties(value))
-
-export const STATIC_RIGHT_SIDEBAR_TABS = [
-  'explorer',
-  'search',
-  'vault',
-  'workspaces',
-  'pr-checks',
-  'source-control',
-  'checks',
-  'ports'
-] as const
 
 // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
 // schema validates their shape rather than enumerating them.
@@ -77,7 +68,8 @@ export const StatusBarItem = z.enum([
   'muse',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'git-blame'
 ])
 
 export const WorkspaceStatusDefinition = z.object({
@@ -112,17 +104,21 @@ export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatur
   message: 'Unknown feature interaction id'
 })
 
-export const TopLevelViewSchema = z.enum([
-  'terminal',
-  'settings',
-  'tasks',
-  'activity',
-  'automations',
-  'space',
-  'skills',
-  'artifacts',
-  'mobile'
-])
+export const TopLevelViewSchema = z
+  .enum([
+    'terminal',
+    'settings',
+    'tasks',
+    'activity',
+    'automations',
+    'space',
+    'skills',
+    // Bot templates was a view before it became a dialog; an older peer can still send it.
+    'botTemplates',
+    'artifacts',
+    'mobile'
+  ])
+  .transform((view) => (view === 'botTemplates' ? 'terminal' : view))
 
 export const UiUpdateFields = z
   .object({
@@ -154,6 +150,15 @@ export const UiUpdateFields = z
     agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
     agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
     agentsHideCliCreatedWorkspaces: z.boolean().optional(),
+    hideBotCreatedWorkspaces: z.boolean().optional(),
+    botSidebarView: z
+      .object({
+        sortBy: z.enum(['manual', 'smart', 'recent', 'name']),
+        hidePausedBots: z.boolean(),
+        hideSleepingWorkers: z.boolean()
+      })
+      .optional(),
+    botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsShowSearch: z.boolean().optional(),
@@ -179,6 +184,7 @@ export const UiUpdateFields = z
       )
       .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
+    notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
@@ -189,6 +195,8 @@ export const UiUpdateFields = z
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
+    sidebarBotsHeight: z.number().finite().nullable().optional(),
+    sidebarProjectsFirst: z.boolean().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
@@ -203,6 +211,7 @@ export const UiUpdateFields = z
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
     _museStatusBarDefaultAdded: z.boolean().optional(),
+    _gitBlameStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
@@ -254,6 +263,7 @@ export const UiUpdateFields = z
         rightFraction: z.number().finite()
       })
       .optional(),
+    browserExtensionSidePanelWidth: z.number().finite().optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),
@@ -284,6 +294,7 @@ export const UiUpdateFields = z
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
     worktreeCardsUpdateNoticeSeen: z.boolean().optional(),
+    worktreeCardsIntroNoticeSeen: z.boolean().optional(),
     speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),

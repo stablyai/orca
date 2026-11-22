@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   useRuntimeFileListForWorktree,
   type RuntimeFileListState
-} from '@/components/quick-open-file-list'
+} from '@/components/file-actions/quick-open/quick-open-file-list'
 import {
   isFileExplorerNameFilterQueryTooLarge,
   type FileExplorerNameFilterProjectionSource
@@ -15,6 +15,7 @@ type UseFileExplorerNameFilterResult = {
   nameFilterCollapsedPaths: Set<string>
   setNameFilterCollapsedPaths: Dispatch<SetStateAction<Set<string>>>
   hasNameFilter: boolean
+  hasNameFilterQuery: boolean
   nameFilterFiles: RuntimeFileListState
   nameFilterSource: FileExplorerNameFilterProjectionSource | null
   handleClearNameFilter: () => void
@@ -83,6 +84,7 @@ export function useFileExplorerNameFilter({
     nameFilterCollapsedPaths,
     setNameFilterCollapsedPaths,
     hasNameFilter,
+    hasNameFilterQuery,
     nameFilterFiles,
     nameFilterSource,
     handleClearNameFilter

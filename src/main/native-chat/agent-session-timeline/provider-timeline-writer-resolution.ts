@@ -3,6 +3,7 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalApprovalSubject,
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -61,6 +62,11 @@ export type ProviderTimelineSettlementResolution =
       keep: readonly ProviderTimelineRequest[]
     }
   | { kind: 'request-withdrawn'; request: ProviderTimelineRequest }
+  | {
+      kind: 'request-subject'
+      request: ProviderTimelineRequest
+      subject: AgentJournalApprovalSubject
+    }
   /** Lifecycle writers own lifecycle fields; preserve the rest of each turn row. */
   | {
       kind: 'turn-revisions'
@@ -204,6 +210,22 @@ export function resolveProviderTimelineSettlement(
           }
         ]
       : []
+  }
+  if (resolution.kind === 'request-subject') {
+    const { held } = providerTimelineRequestRows(resolution.request, view.itemBody)
+    const item = held ? view.item(held.itemId) : null
+    // A revision while pending would make the person's answer stale.
+    if (!held || item?.body.kind !== 'approval' || item.body.resolution.state === 'pending') {
+      return []
+    }
+    return [
+      {
+        kind: 'item',
+        identity: held.identity,
+        body: { ...item.body, subject: resolution.subject },
+        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      }
+    ]
   }
   const { ending } = resolution
   const keep = new Set<string>()

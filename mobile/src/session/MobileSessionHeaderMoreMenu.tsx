@@ -1,6 +1,7 @@
-import type { RefObject } from 'react'
+import { useContext, type RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  ALargeSmall,
   Columns2,
   Folder,
   GitBranch,
@@ -15,6 +16,9 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
+import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
   controller: MobileSessionController
@@ -27,6 +31,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
+    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
@@ -37,11 +42,17 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
     handleOpenNewTab,
-    handleOpenQuickCommands
+    handleOpenQuickCommands,
+    itemsOnPhone
   } = controller
+  const botActions = useContext(MobileSessionBotActionsContext)
+  const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -55,7 +66,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    ...(actionsCollapsed && !isFloatingWorkspaceRoute
+    // A bot's screen has no source control, even folded into ⋯.
+    ...(actionsCollapsed && !isFloatingWorkspaceRoute && !itemsOnPhone
       ? [
           {
             id: 'sourceControl',
@@ -93,17 +105,27 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    {
-      id: 'quickCommands',
-      label: t('session.header.quickCommands', 'Quick commands'),
-      icon: SquareChevronRight,
-      disabled: tabActionsDisabled,
-      closeBeforePress: true,
-      onPress: handleOpenQuickCommands
-    }
+    // Desktop hides quick commands where there is no repo to run them in.
+    ...(!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
+      ? [
+          {
+            id: 'quickCommands',
+            label: t('session.header.quickCommands', 'Quick commands'),
+            icon: SquareChevronRight,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenQuickCommands
+          }
+        ]
+      : [])
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -113,24 +135,44 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
-  const tabs: ActionSheetAction[] = actionsCollapsed
-    ? [
-        {
-          id: 'newTab',
-          label: t('session.header.newTab', 'New tab'),
-          icon: Plus,
-          disabled: tabActionsDisabled,
-          closeBeforePress: true,
-          onPress: handleOpenNewTab
-        }
-      ]
-    : []
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
+          }
+        ]
+      : [])
+  ]
+  const tabs: ActionSheetAction[] = [
+    ...getMobileNativeChatCliForkActions({
+      controller,
+      tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
+      workspaceOnPairedHost,
+      onDismiss: () => setShowHeaderMoreActions(false)
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled })),
+    ...(actionsCollapsed
+      ? [
+          {
+            id: 'newTab',
+            label: t('session.header.newTab', 'New tab'),
+            icon: Plus,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenNewTab
+          }
+        ]
+      : [])
+  ]
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}
       anchorRef={anchorRef}
-      groups={[panels, view, tabs]}
+      groups={botActions.length > 0 ? [botActions, panels, view, tabs] : [panels, view, tabs]}
       onClose={() => setShowHeaderMoreActions(false)}
     />
   )

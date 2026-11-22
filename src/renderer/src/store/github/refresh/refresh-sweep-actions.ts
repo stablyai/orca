@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getWorktreeGitHubIssueRepository } from '../../../../../shared/worktree/github-issue-repository'
 import { buildPRRefreshCandidate, findWorktreeReviewOwner } from './worktree-refresh'
 import { issueCacheKey } from '../cache/cache-identity'

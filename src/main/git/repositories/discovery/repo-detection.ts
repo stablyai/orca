@@ -1,9 +1,9 @@
 import { existsSync, statSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
-import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathSeparators } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { scanGitMarkerSync } from './repo-git-marker-scan'
-import { resolveRealPathSync } from '../../../../shared/real-path-sync'
+import { resolveRealPathSync } from '../../../../shared/file-access/real-path-sync'
 import {
   gitRepoOutput,
   runGitRepoCommands,
@@ -22,6 +22,7 @@ type GitRepoProbe = {
 export type GitRepoRegistrationInfo = {
   isRepo: boolean
   rootPath: string
+  /** Git toplevel of the main checkout when the path is a linked worktree. */
   mainRepoPath: string | null
 }
 
@@ -130,11 +131,12 @@ function* inspectGitRepoForRegistrationCommands(
               }
         if (location.toplevel) {
           rootPath = normalizeGitRepoRootForInputPath(path, location.toplevel)
-          mainRepoPath = mainRepoPathFromProbe(path, {
+          const mainCheckout = mainRepoPathFromProbe(path, {
             result: 'repo',
             insideWorkTree: true,
             ...location
           })
+          mainRepoPath = mainCheckout ? yield* getGitRepoRootCommands(mainCheckout) : null
         } else {
           rootPath = rootPathFromMarker(path)
         }

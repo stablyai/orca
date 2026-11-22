@@ -32,7 +32,7 @@ type BrowserScreencastSnapshotCaptureDeps = {
 
 export type BrowserScreencastSnapshotCapture = {
   emitSnapshotFrame: (initialOnly: boolean, generation?: number) => Promise<void>
-  scheduleNavigationFrameCapture: () => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpGeneration: () => void
 }
@@ -46,24 +46,36 @@ export function createBrowserScreencastSnapshotCapture(
 
   let snapshotGeneration = 0
   let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
+  let navigationCaptureGeneration: number | null = null
 
   const clearNavigationCaptureTimer = (): void => {
     if (navigationCaptureTimer) {
       clearTimeout(navigationCaptureTimer)
       navigationCaptureTimer = null
+      navigationCaptureGeneration = null
     }
   }
 
-  const scheduleNavigationFrameCapture = (): void => {
+  const scheduleNavigationFrameCapture = (
+    reason: 'navigation' | 'viewport-recovery' = 'navigation'
+  ): void => {
     if (isClosed() || isStopping()) {
+      return
+    }
+    if (reason === 'viewport-recovery' && navigationCaptureGeneration === snapshotGeneration) {
       return
     }
     clearNavigationCaptureTimer()
     const generation = ++snapshotGeneration
+    navigationCaptureGeneration = generation
     // Static pages may finish navigation without emitting a live frame.
     navigationCaptureTimer = setTimeout(() => {
       navigationCaptureTimer = null
-      void emitSnapshotFrame(false, generation)
+      void emitSnapshotFrame(false, generation).finally(() => {
+        if (navigationCaptureGeneration === generation) {
+          navigationCaptureGeneration = null
+        }
+      })
     }, 250)
   }
 

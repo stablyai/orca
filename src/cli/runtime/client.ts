@@ -16,7 +16,7 @@ import { openLocalOrca } from './app-launch/open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
 import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
-import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
+import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { sendRequest } from './connection/transport'
 import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
@@ -40,7 +40,7 @@ import {
 } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { RemoteRuntimeCompatGate } from './connection/remote-runtime-compat-gate'
 import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
-import { getTimeoutMsParam, isWaitingCheck } from './connection/runtime-request-timeout'
+import * as requestTimeout from './connection/runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
@@ -201,7 +201,7 @@ export class RuntimeClient {
   // Give server-side waits time to finish before the client transport times out.
   private resolveMethodTimeoutMs(method: string, params?: unknown): number {
     if (method === 'orchestration.workerStart') {
-      const requestedValue = getTimeoutMsParam(params)
+      const requestedValue = requestTimeout.getTimeoutMsParam(params)
       const requested = typeof requestedValue === 'number' ? requestedValue : Number(requestedValue)
       if (!isWorkerStartTimeoutWithinTimerLimit(requested)) {
         throw new RuntimeClientError(
@@ -217,15 +217,15 @@ export class RuntimeClient {
       return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (
-      (method === 'orchestration.check' && isWaitingCheck(params)) ||
+      (method === 'orchestration.check' && requestTimeout.isWaitingCheck(params)) ||
       method === 'terminal.wait'
     ) {
-      const inner = Number(getTimeoutMsParam(params))
+      const inner = Number(requestTimeout.getTimeoutMsParam(params))
       if (Number.isFinite(inner) && inner > 0) {
         return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
       }
     }
-    return this.requestTimeoutMs
+    return Math.max(requestTimeout.artifactMethodTimeoutMs(method), this.requestTimeoutMs)
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {

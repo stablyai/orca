@@ -2,7 +2,7 @@ import {
   normalizeNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
-} from '../../../../../shared/native-chat/native-chat-appearance-settings'
+} from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingInput, KeybindingOverrides } from '../../../../../shared/keybindings/types'
 

@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api/api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { sortWorkItemsByNumber } from '../../../../shared/work-items/work-item-order'

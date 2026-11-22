@@ -9,7 +9,7 @@ import {
   buildJiraWorkspaceSource,
   getWorkspaceSourceName
 } from '../../../../src/shared/new-workspace/workspace-source'
-import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
+import { resolveWorkspaceCreateName } from '../../../../src/shared/workspace/naming/workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
 export type WorkspaceCreateHostedStartPoint = {
@@ -149,7 +149,7 @@ export function buildTaskWorkspaceCreateParams(args: {
     const fallback = `${item.source.type}-${item.source.number}`
     return {
       repo: `id:${item.source.repoId}`,
-      name: resolveMobileWorkspaceCreateName({ draft: workspaceName, fallback }),
+      name: resolveWorkspaceCreateName({ draft: workspaceName, fallback }),
       ...displayName,
       ...common,
       ...(item.source.type === 'issue'
@@ -162,7 +162,7 @@ export function buildTaskWorkspaceCreateParams(args: {
     const fallback = `${item.source.type}-${item.source.number}`
     return {
       repo: `id:${item.source.repoId}`,
-      name: resolveMobileWorkspaceCreateName({ draft: workspaceName, fallback }),
+      name: resolveWorkspaceCreateName({ draft: workspaceName, fallback }),
       ...displayName,
       ...common,
       ...(item.source.type === 'issue'
@@ -174,7 +174,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   if (item.provider === 'jira') {
     return {
       repo: `id:${targetRepoId}`,
-      name: resolveMobileWorkspaceCreateName({
+      name: resolveWorkspaceCreateName({
         draft: workspaceName,
         fallback: item.source.key.toLowerCase()
       }),
@@ -186,7 +186,7 @@ export function buildTaskWorkspaceCreateParams(args: {
 
   return {
     repo: `id:${targetRepoId}`,
-    name: resolveMobileWorkspaceCreateName({
+    name: resolveWorkspaceCreateName({
       draft: workspaceName,
       fallback: item.source.identifier.toLowerCase()
     }),

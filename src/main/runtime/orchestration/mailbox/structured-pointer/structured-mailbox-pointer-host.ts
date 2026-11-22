@@ -1,11 +1,17 @@
 import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
-import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
+import type {
+  ChatMailAdmitFacts,
+  UsageLimitContinueOff
+} from '../delivery-hold/mailbox-delivery-hold'
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredMailOwner
+} from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
@@ -17,7 +23,7 @@ import {
 import { subscribeForRedrive } from './structured-session-journal-redrive'
 import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -68,12 +74,54 @@ export async function readStructuredMailAdmitFacts(
       : null
   }
   const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
+  const failedTurn = work?.activeTurnId() ? null : await readFailedTurnHold(host, sessionId)
   return {
     attached: true,
     fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
     refusal: block ? block.refusal.message : null,
-    behindPrompt: work?.hasActionablePrompt() === true
+    behindPrompt: work?.hasActionablePrompt() === true,
+    ...(failedTurn ? { failedTurn } : {})
   }
+}
+
+/** Send admission queues agent mail behind a failed last turn; say whether Orca will lift it. */
+async function readFailedTurnHold(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): Promise<NonNullable<Extract<ChatMailAdmitFacts, { attached: true }>['failedTurn']> | null> {
+  try {
+    const { journal } = await host.conversation(sessionId)
+    if (!(await journal.queuedMessages.pauses()).some((pause) => pause.reason === 'failed')) {
+      return null
+    }
+    const cut = await journal.reads.usageLimitCut()
+    if (!cut) {
+      return {}
+    }
+    const state = host.usageLimitContinue.readState(sessionId, cut)
+    if (!state) {
+      return { usageLimit: { state: 'none' } }
+    }
+    return state.state === 'off'
+      ? { usageLimit: { ...state, off: usageLimitContinueOff(host, sessionId) } }
+      : { usageLimit: state }
+  } catch {
+    // An unreadable journal proves nothing about a failure.
+    return null
+  }
+}
+
+/** Why the host publishes `off`: only the setting means a person must continue the chat. */
+function usageLimitContinueOff(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): UsageLimitContinueOff {
+  const continues = host.deps.usageLimitAutoContinue
+  if (continues?.isEnabled() !== true) {
+    return 'setting'
+  }
+  const workspaceId = host.deps.store.getRecord(sessionId)?.location.workspaceId
+  return workspaceId !== undefined && continues.isWorkspaceAsleep(workspaceId) ? 'asleep' : 'other'
 }
 
 /** The host that admitted the send answers for it; this lane only acts on that answer. */
@@ -93,8 +141,12 @@ async function observeMailSend(
   }
 }
 
-export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
+export function createStructuredMailboxPointerHost(
+  owner?: StructuredMailOwner
+): StructuredMailboxPointerHost {
   return {
+    narrowBatch: owner?.narrowBatch,
+    mailHeld: owner?.mailHeld,
     async observeMail(attempt) {
       const host = getStructuredAgentSessionHost()
       try {
@@ -210,6 +262,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
               if (!input.stillOwed()) {
                 throw new StructuredMailObsoleteError()
               }
+              owner?.beforeSend(input)
             }
           }
         })

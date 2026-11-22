@@ -1,8 +1,11 @@
 import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
+import type { CodexSettingsPromotionHomes } from '../../codex/configuration/settings/config-settings-promotion'
+import type { UsageReadingAccount } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type CodexHomeLaunchOptions = {
   unavailableManagedHomePath?: string
-  deferConfigSync?: (syncConfig: () => boolean) => void
+  /** Hands the launch the config mirror it owes, as data, so it can run on the Codex trust worker. */
+  deferConfigSync?: (homes: CodexSettingsPromotionHomes) => void
 }
 
 export type CodexSystemDefaultSnapshot = {
@@ -63,5 +66,6 @@ export type CodexMirroredHomeStatus =
 
 /** Result used by quota polling, where `skip` means no process should be spawned. */
 export type CodexRateLimitHomeResolution =
-  | { kind: 'ready'; codexHomePath: string | null }
+  /** `readingAccount`: the saved account whose own home this is; absent for System default and the shared mirror. */
+  | { kind: 'ready'; codexHomePath: string | null; readingAccount?: UsageReadingAccount }
   | { kind: 'skip' }

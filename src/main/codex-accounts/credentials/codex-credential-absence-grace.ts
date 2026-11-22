@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   readStoredCodexCredentialState,
   type StoredCodexCredentialState

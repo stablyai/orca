@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { ManagedServerUpdateDeps } from './managed-server-update-check'
 import { autoUpdateManagedOrcadEnvironment } from '../../managed-server/lifecycle/orcad-managed-auto-update'
 import { requireManagedOrcadTargetStore } from '../../managed-server/lifecycle/orcad-managed-runtime-context'

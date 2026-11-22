@@ -1,5 +1,5 @@
 import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import {
   getWorkspaceCleanupCandidateIdentity,

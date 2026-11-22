@@ -5,7 +5,7 @@ import {
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { hasModifier } from '../../../../../shared/keybindings/parser'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import type { BrowserFindTarget } from '../../../../../shared/browser/guest-lifecycle/browser-find-source'
 import type { BrowserPageTabShortcut } from '../../../../../shared/browser/guest-lifecycle/browser-page-command-target'

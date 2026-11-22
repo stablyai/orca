@@ -192,6 +192,7 @@ export function createProviderTimelineAssembler(
       case 'item.close':
       case 'request.open':
       case 'request.withdrawn':
+      case 'request.subject':
       case 'context.usage':
       case 'provider.frame':
       case 'session.ended':

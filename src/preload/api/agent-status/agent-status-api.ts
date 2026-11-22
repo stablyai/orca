@@ -6,8 +6,8 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentInterruptInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
-import type { ComputerAwakeStatus } from '../../../shared/computer-awake-mode'
-import type { AgentListPublication } from '../../../shared/agent-status/presentation/agent-list-status'
+import type { ComputerAwakeStatus } from '../../../shared/app-lifecycle/computer-awake-mode'
+import type { AgentListVerdictUpdate } from '../../../shared/agent-status/presentation/agent-list-status'
 
 export type AgentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -46,8 +46,8 @@ export type AgentStatusApi = {
   /** Lift one pane's retirement fence when a live PTY re-attaches to it. Closed tabs stay retired. */
   restorePaneAuthority: (paneKey: string) => void
   transferPaneAuthority: (args: { fromPaneKey: string; toPaneKey: string; ptyId?: string }) => void
-  /** The Agents list's verdicts, for worktree.ps to show paired clients. Fire-and-forget. */
-  publishListVerdicts?: (publication: AgentListPublication | null) => void
+  /** The Agents list's verdicts or their changes, for worktree.ps to show paired clients. Fire-and-forget. */
+  publishListVerdicts?: (update: AgentListVerdictUpdate | null) => void
 }
 
 export type AgentAwakeApi = {

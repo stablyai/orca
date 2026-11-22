@@ -72,6 +72,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'session.writeNotice.historyUnavailable',
       "Orca couldn't open this chat's history right now."
     ),
+  savedInOtherFolder: () =>
+    translate(
+      'session.writeNotice.savedInOtherFolder',
+      'This conversation was saved in another folder.'
+    ),
   savedByNewerOrca: () =>
     translate('session.writeNotice.savedByNewerOrca', 'Chats were saved by a newer Orca.'),
   updateOrcaToKeepUsing: () =>

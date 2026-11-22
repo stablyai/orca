@@ -12,7 +12,7 @@ import { DISABLED_CHROMIUM_FEATURES } from './chromium-policy/disabled-chromium-
 import { readHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-launch/serve-user-data-path-guard'
 import { stampRuntimeSourceEnv } from '../../shared/remote-runtime/host-catalog/runtime-source-env'
-import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
+import { isLinuxWaylandSession } from '../../shared/app-lifecycle/launch/linux-wayland-session'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
@@ -117,10 +117,6 @@ function requestDevParentShutdown(): void {
 
 export function isDevParentShutdownRequested(): boolean {
   return devParentShutdownRequested
-}
-
-export function resetDevParentShutdownRequestForTests(): void {
-  devParentShutdownRequested = false
 }
 
 function resolvePackagedHome(): string {

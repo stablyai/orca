@@ -1,4 +1,4 @@
-import { compareAppVersions } from '../../../shared/app-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
 import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../../shared/agent-launch/startup/opencode-cli-version'
 
 // Real-CLI-verified floors, capped to their major: a new major may change the model route.

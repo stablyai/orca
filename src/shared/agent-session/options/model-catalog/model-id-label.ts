@@ -24,3 +24,22 @@ export function labelFromModelId(id: string): string {
       .join(' ')
   )
 }
+
+/** Names a model the agent did not list (a chat's own or saved model) like that agent's listed rows, keeping its date so a pinned snapshot stays distinct from the listed model. */
+export function unlistedModelLabel(agent: string, modelId: string): string {
+  const label = labelFromModelId(modelId)
+  return agent === 'claude' ? withoutClaudeVendor(label) : label
+}
+
+/** Drops a leading `Claude ` vendor only before a model name: version-first legacy names keep it (`Claude 3.5 Sonnet`, not `3.5 Sonnet`). */
+export function withoutClaudeVendor(label: string): string {
+  return label.replace(/^Claude (?=[a-z])/i, '')
+}
+
+/** Window suffixes (`[1m]`) and casing do not change model identity. */
+export function baseModelId(model: string): string {
+  return model
+    .replace(/\[[^\]]*\]$/u, '')
+    .trim()
+    .toLowerCase()
+}

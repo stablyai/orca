@@ -15,7 +15,7 @@ import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { stablePathId } from './skill-discovery-classification'
 import { skillScanSourceKinds } from './skill-discovery-source-filter'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
 import { assertWslUncPathRunning } from '../../wsl/filesystem/wsl-unc-access-gate'
 import {

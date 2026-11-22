@@ -1,8 +1,11 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
@@ -14,7 +17,7 @@ import {
   normalizeWorkspaceLinkedItem
 } from '../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   removeWorktreeMetadataForHost

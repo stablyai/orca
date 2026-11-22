@@ -1,9 +1,8 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { sameAgentLaunchPickerModel } from '../../tab-bar/new-tab-agent-menu-model'
+import { sameAgentLaunchPickerModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft,
@@ -14,7 +13,7 @@ import {
   pickSourceControlActionAgent,
   type CurrentActionSelection
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store/index'
 import {
   sourceControlRepoAgentRows,
@@ -31,6 +30,8 @@ import { useTranslate } from '@/i18n/use-translate'
 type PickerProps = {
   agent: TuiAgent | null
   draftScope?: object
+  /** Where the recipe's Permissions and Arguments fields render. */
+  launchDefaultsContainer?: HTMLElement | null
   surface?: SourceControlActionRecipe['surface']
   repoId?: string
   disabled?: boolean
@@ -175,15 +176,20 @@ const SelectedSourceControlActionAgentPicker = memo(
             preview.status === 'ready' ? preview.agent : null
           )
         }
+        launchDefaults
+        launchDefaultsContainer={props.launchDefaultsContainer}
         onPick={onSelection}
-      >
-        <DropdownMenuItem onSelect={onDefault}>
-          {t(
-            'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-            'Use default agent'
-          )}
-        </DropdownMenuItem>
-      </AgentLaunchPicker>
+        choices={[
+          {
+            id: 'default',
+            label: t(
+              'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+              'Use default agent'
+            ),
+            onSelect: onDefault
+          }
+        ]}
+      />
     )
   },
   (a, b) =>
@@ -192,6 +198,7 @@ const SelectedSourceControlActionAgentPicker = memo(
     a.cli === b.cli &&
     a.disabled === b.disabled &&
     a.draftScope === b.draftScope &&
+    a.launchDefaultsContainer === b.launchDefaultsContainer &&
     a.canSaveSurface === b.canSaveSurface &&
     ((!a.selection && !b.selection) ||
       (!!a.selection &&

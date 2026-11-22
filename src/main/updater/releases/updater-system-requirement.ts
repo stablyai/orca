@@ -1,6 +1,6 @@
 import { release } from 'node:os'
 import type { UpdateInfo } from 'electron-updater'
-import type { UnsupportedSystemUpdate } from '../../../shared/update-status-types'
+import type { UnsupportedSystemUpdate } from '../../../shared/updater/update-status-types'
 import { macosVersionForDarwinFloor } from '../../../shared/updater/requirements/macos-darwin-floor'
 import { compareVersions } from './updater-fallback'
 

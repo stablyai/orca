@@ -1,4 +1,4 @@
-import { getOrcaProfileBrowserSessionPartition } from '../../../../shared/orca-profiles'
+import { getOrcaProfileBrowserSessionPartition } from '../../../../shared/orca-profiles/orca-profiles'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const BROWSER_SESSION_PROFILE_ID_RE =

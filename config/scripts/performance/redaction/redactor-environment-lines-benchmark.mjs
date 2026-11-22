@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { performance } from 'node:perf_hooks'
-import { redactString } from '../../../../src/main/observability/redactor.ts'
+import { redactString } from '../../../../src/shared/observability/redactor.ts'
 
 // Supply an unchanged redactor.ts snapshot to measure the actual previous production function.
 const baselinePath = process.argv[2]

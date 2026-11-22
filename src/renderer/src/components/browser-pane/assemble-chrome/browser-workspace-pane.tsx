@@ -8,16 +8,16 @@ import { useBrowserAutomationVisiblePageIds } from '../host-guest/retention/brow
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import { BrowserMobileDriverOverlay } from './feedback/BrowserMobileDriverOverlay'
 import {
-  IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
   useBrowserMobileDrivenPageIds
 } from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { IDLE_BROWSER_DRIVER } from '@/runtime/browser/ownership/browser-mobile-driver-store'
 import { useBrowserRemotelyViewedPageIds } from '@/runtime/browser/ownership/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { RemoteBrowserPagePane } from '../stream-remote/remote-browser-page-pane'
-import { ClientHostedBrowserPagePane } from '../ClientHostedBrowserPagePane'
+import { ClientHostedBrowserPagePane } from './client-hosted/ClientHostedBrowserPagePane'
 import { BrowserPagePane } from './browser-page-pane'
 import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
@@ -28,6 +28,7 @@ import {
   useManagedBrowserProfileStatus
 } from './profile-routing/managed-browser-profile-hold'
 import { useBrowserPageMountAdmissions } from '../host-guest/retention/browser-page-mount-admission'
+import { takeBackAllFromPhone } from '../../terminal-pane/viewport/take-back-all-from-phone'
 
 export default function BrowserPane({
   browserTab,
@@ -104,6 +105,16 @@ export default function BrowserPane({
     }
     const { reclaimed } = await window.api.runtime.reclaimBrowserForDesktop(activeBrowserPageId)
     if (!reclaimed) {
+      throw new Error('Could not reclaim browser control')
+    }
+  }, [activeBrowserPageId])
+
+  const takeBackAllForDesktop = useCallback(async (): Promise<void> => {
+    const { reclaimedBrowserPageIds } = await takeBackAllFromPhone(
+      useAppStore.getState().settings ?? undefined,
+      { includeBrowserPages: true }
+    )
+    if (activeBrowserPageId && !reclaimedBrowserPageIds.has(activeBrowserPageId)) {
       throw new Error('Could not reclaim browser control')
     }
   }, [activeBrowserPageId])
@@ -209,6 +220,7 @@ export default function BrowserPane({
               <BrowserMobileDriverOverlay
                 driver={activeBrowserDriver}
                 onTakeBack={reclaimActiveBrowserForDesktop}
+                onTakeBackAll={takeBackAllForDesktop}
               />
             </div>
           )}

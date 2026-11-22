@@ -1,4 +1,10 @@
-export type AskOption = { label: string; description?: string; preview?: string }
+export type AskOption = {
+  label: string
+  description?: string
+  preview?: string
+  /** The asker's own pick, marked Recommended. */
+  recommended?: true
+}
 export type AskQuestion = {
   question: string
   header?: string

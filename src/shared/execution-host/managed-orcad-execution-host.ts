@@ -3,7 +3,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from './execution-host'
 import type { ExecutionHostRegistryEntry } from './execution-host-registry-entry'
 import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 

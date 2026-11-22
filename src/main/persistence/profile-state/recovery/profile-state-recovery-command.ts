@@ -4,7 +4,7 @@ import {
   type ProfileStateRecoverySelector,
   type ProfileStateExportsResult,
   type ProfileStateRollbackResult
-} from '../../../../shared/profile-state-recovery-command'
+} from '../../../../shared/orca-profiles/profile-state-recovery-command'
 import { getActiveProfileStateLocation } from '../offline-access/profile-state-active-location'
 import {
   profileStateJsonExportPath,
