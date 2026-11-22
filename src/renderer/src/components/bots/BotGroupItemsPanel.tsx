@@ -11,9 +11,6 @@ import { botGroupSessionIds, type BotGroup } from '../../../../shared/bots/bot-g
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { BOT_ITEM_GROUP_IDS, type BotItemFilter } from '../../../../shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../shared/bots/bot-items'
-import { cn } from '@/lib/class-names'
-import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
-import { BotGroupFaces } from './BotGroupFaces'
 import { BotGroupPanelHeader } from './BotGroupPanelHeader'
 import {
   BotItemsFilterButton,
@@ -21,7 +18,7 @@ import {
   sameChats,
   type BotItemFilterScope
 } from './items/BotItemsFilter'
-import { ALL_CLEAR_PICTURE, BotItemsAllClear } from './items/BotItemsAllClear'
+import { BotGroupItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
 import {
   BotGroupFacePicturesContext,
@@ -36,8 +33,6 @@ import { useBotGroupItems } from './use-bot-group-items'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 const GROUP_SCOPE = 'group'
-/** The all-clear picture's side, in px. */
-const ALL_CLEAR_SIZE = 40
 const ALL_SCOPE = 'all'
 
 function groupScopes(group: BotGroup, t: Translate): BotItemFilterScope[] {
@@ -163,6 +158,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     !named &&
     !asking &&
     !merged.offline &&
+    merged.outside === 0 &&
     merged.list.groups.needs_you.length + merged.list.groups.working.length === 0
   const note = (): React.ReactNode => {
     if (members.length === 0) {
@@ -266,17 +262,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
             }
           />
           <fieldset disabled={merged.offline} className="contents">
-            {allClear ? (
-              <BotItemsAllClear
-                picture={
-                  <BotGroupFaces
-                    faces={botGroupFaces(members, (bot) => bot.id)}
-                    slot={ALL_CLEAR_SIZE}
-                    className={cn('size-10', ALL_CLEAR_PICTURE)}
-                  />
-                }
-              />
-            ) : null}
+            {allClear ? <BotGroupItemsAllClear members={members} /> : null}
             <BotItemsList
               bot={{
                 foldKey: `group:${group.id}`,

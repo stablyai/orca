@@ -6,7 +6,7 @@ import { groupBotItems } from '../../../../../shared/bots/bot-item-groups'
 import { botGroupFaces } from '../../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar } from '../BotAvatar'
 import { BotGroupFaces } from '../BotGroupFaces'
-import { ALL_CLEAR_PICTURE, BotItemsAllClear } from './BotItemsAllClear'
+import { ALL_CLEAR_PICTURE, BotGroupItemsAllClear, BotItemsAllClear } from './BotItemsAllClear'
 import { BotItemsList } from './BotItemsList'
 
 const now = Date.now()
@@ -67,22 +67,18 @@ function Panel({ bot, group }: { bot: Bot; group?: readonly Bot[] }): React.JSX.
           <div className="truncate text-xs leading-4 text-muted-foreground">Idle</div>
         </div>
       </div>
-      <BotItemsAllClear
-        picture={
-          group ? (
-            <BotGroupFaces
-              faces={botGroupFaces(group, (member) => member.id)}
-              slot={40}
-              className={cn('size-10', ALL_CLEAR_PICTURE)}
-            />
-          ) : (
+      {group ? (
+        <BotGroupItemsAllClear members={group} />
+      ) : (
+        <BotItemsAllClear
+          picture={
             <BotAvatar
               bot={bot}
               className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
             />
-          )
-        }
-      />
+          }
+        />
+      )}
       <BotItemsList
         bot={bot}
         groups={groupBotItems(items, null, now, 'e10')}
@@ -104,8 +100,8 @@ export const letterWide = defineFixture({ width: 320, render: () => <Panel bot={
 
 const groupMembers: Bot[] = [
   mascotBot,
-  { ...letterBot, id: 'fixture-bot-2', name: 'Docs writer' },
-  { ...letterBot, id: 'fixture-bot-3', name: 'Triage', avatar: 'mascot:B1' }
+  { ...letterBot, id: 'fixture-bot-2', name: 'Docs writer', paused: true },
+  { ...letterBot, id: 'fixture-bot-3', name: 'Triage', avatar: 'mascot:B1', paused: true }
 ]
 export const groupNarrow = defineFixture({
   width: 200,
@@ -114,4 +110,13 @@ export const groupNarrow = defineFixture({
 export const groupWide = defineFixture({
   width: 320,
   render: () => <Panel bot={{ ...letterBot, name: 'Launch group' }} group={groupMembers} />
+})
+export const groupAllPaused = defineFixture({
+  width: 320,
+  render: () => (
+    <Panel
+      bot={{ ...letterBot, name: 'Launch group' }}
+      group={groupMembers.map((member) => ({ ...member, paused: true }))}
+    />
+  )
 })
