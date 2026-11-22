@@ -36,6 +36,7 @@ import { closeReplacedBotChat } from './bot-chat-replacement'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
+import { BotSessionRefusedError } from './bot-session-refused-error'
 import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
@@ -331,7 +332,7 @@ export async function startBotSession(
   // An at-rest chat whose tab was unconfirmed still exists, and showing it publishes the tab again;
   // a first message would stay undelivered, so that start fails.
   if (!created.ok && (input.message || !(await host()).deps.store.getConversation(sessionId))) {
-    throw new Error(`bot_session_refused: ${created.refusal.message}`)
+    throw new BotSessionRefusedError(bot.agent, created.refusal)
   }
   return sessionId
 }
