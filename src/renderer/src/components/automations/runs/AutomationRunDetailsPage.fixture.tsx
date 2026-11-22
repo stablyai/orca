@@ -7,7 +7,7 @@ import {
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import { mergeFetchedWorktrees } from '@/store/slices/worktrees/listing/fetched-worktree-merge'
-import { worktreeCatalogConfirmsAbsence } from '@/store/slices/worktrees/listing/worktree-catalog-absence'
+import { workspaceCatalogConfirmsAbsence } from '@/store/workspaces/catalog/workspace-catalog-absence'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
@@ -79,8 +79,10 @@ type Scenario = {
   isRerunPending?: boolean
 }
 
-const pairedRunTarget = (run: AutomationRun) =>
-  resolveAutomationRunTarget(useAppStore.getState(), run, PAIRED_AUTHORITY)
+const pairedRunTarget = (run: AutomationRun) => ({
+  ...resolveAutomationRunTarget(useAppStore.getState(), run, PAIRED_AUTHORITY),
+  workspaceCatalogHostId: PAIRED_HOST_ID
+})
 const openPairedWorkspace = createAutomationRunWorkspaceAction({
   list: { runTargetFor: pairedRunTarget }
 })
@@ -102,7 +104,7 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
   const actionLabel = viewState.canOpen ? viewState.actionLabel : null
   const workspaceRemoved = Boolean(
     run.workspaceId &&
-    worktreeCatalogConfirmsAbsence(
+    workspaceCatalogConfirmsAbsence(
       useAppStore.getState(),
       run.workspaceId,
       scenario.paired ? PAIRED_HOST_ID : 'local'

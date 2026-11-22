@@ -1,7 +1,6 @@
 import type { AppState } from '../../../types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/collections/structural-value-equality'
 import { isCurrentDetectedWorktreeRefresh } from './detected-worktree-refresh-admission'
 import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
@@ -51,14 +50,9 @@ export function appliedWorktreeCatalogAuthorityPatch(
 export function worktreeCatalogConfirmsAbsence(
   state: CatalogAuthorityState &
     Pick<AppState, 'repos' | 'sshConnectionStates' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
-  workspaceId: string,
+  worktreeId: string,
   hostId: ExecutionHostId
 ): boolean {
-  const scope = parseWorkspaceKey(workspaceId)
-  if (scope?.type === 'folder') {
-    return false
-  }
-  const worktreeId = scope?.worktreeId ?? workspaceId
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed) {
     return false

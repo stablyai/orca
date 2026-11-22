@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { worktreeCatalogConfirmsAbsence } from '@/store/slices/worktrees/listing/worktree-catalog-absence'
+import { workspaceCatalogConfirmsAbsence } from '@/store/workspaces/catalog/workspace-catalog-absence'
 import {
   getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
@@ -264,7 +264,7 @@ export function useAutomationRunPageState({
       catalogHostId &&
       !selectedRunTarget?.worktree &&
       !viewState?.canOpen &&
-      worktreeCatalogConfirmsAbsence(state, workspaceId, catalogHostId)
+      workspaceCatalogConfirmsAbsence(state, workspaceId, catalogHostId)
     )
   )
   const selectedAutomationRunPageWorkspaceActionLabel = viewState?.canOpen
