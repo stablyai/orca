@@ -71,17 +71,30 @@ async function captureMainMemorySpike(trigger: {
       ...trigger.processMetrics
     }
   })
-  try {
-    // Synchronous reads first, so they describe the moment of the spike.
-    const attributes: Details = { ...nodeMemory(), ...v8Heap(), ...countsData() }
-    Object.assign(attributes, await allocatorTotals(), await readWorkerThreadMemoryData())
+  const record = (attributes: Details): void => {
     for (const [key, value] of Object.entries(attributes)) {
       span.setAttribute(key, value)
     }
-    span.end()
-  } catch (error) {
-    span.fail(error instanceof Error ? error : String(error))
   }
+  // Synchronous reads first, so they describe the moment of the spike; a failed part names itself.
+  for (const [part, read] of [
+    ['node', nodeMemory],
+    ['v8', v8Heap],
+    ['counts', countsData]
+  ] as const) {
+    try {
+      record(read())
+    } catch {
+      span.setAttribute(`${part}Error`, true)
+    }
+  }
+  const [allocator, workers] = await Promise.allSettled([
+    allocatorTotals(),
+    readWorkerThreadMemoryData()
+  ])
+  record(allocator.status === 'fulfilled' ? allocator.value : { chromiumError: true })
+  record(workers.status === 'fulfilled' ? workers.value : { workersError: true })
+  span.end()
 }
 
 function toMB(bytes: number): number {
@@ -132,12 +145,8 @@ async function allocatorTotals(): Promise<Details> {
 }
 
 function countsData(): Details {
-  try {
-    const counts = readCounts?.() ?? {}
-    return Object.fromEntries(Object.entries(counts).map(([key, value]) => [`count_${key}`, value]))
-  } catch {
-    return { countsError: true }
-  }
+  const counts = readCounts?.() ?? {}
+  return Object.fromEntries(Object.entries(counts).map(([key, value]) => [`count_${key}`, value]))
 }
 
 export function resetMainMemorySpikeCaptureForTest(): void {
