@@ -193,7 +193,7 @@ function describeNextStep(
     return [
       check,
       `If it is stuck, stop it with \`orchestration worker-stop --dispatch ${dispatchId}\`, then retry it or tell the user.`,
-      "If it starts or reports, this Dispatch settles normally and you won't be told about this start again."
+      `If it starts or reports, this Dispatch settles normally and you won't be told about this ${stop.startEvidence?.continuePrompt ? 'prompt' : 'start'} again.`
     ]
   }
   if (isWorkerGone(stop.reason)) {
