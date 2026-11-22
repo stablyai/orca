@@ -2,10 +2,12 @@ import {
   botGroupTurnOperation,
   isBotGroupMemberSession,
   type BotGroup,
-  type BotGroupMember
+  type BotGroupMember,
+  type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { BotGroupPeerScopeSchema, type BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
+import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { requireStructuredHost } from './bot-chat-session'
@@ -103,9 +105,12 @@ function mailRoot(
     )
     return scope.success ? scope.data : null
   }
-  const dispatch = mail.from_handle.startsWith('dispatch:')
-    ? mail.from_handle.slice('dispatch:'.length)
-    : db.getActiveDispatchForIdentity(mail.from_handle)?.id
+  // A worker's final report settles its Dispatch as it lands, so its recorded sender comes first.
+  const dispatch =
+    readMessageSenderDispatch(db, mail.id)?.dispatchId ??
+    (mail.from_handle.startsWith('dispatch:')
+      ? mail.from_handle.slice('dispatch:'.length)
+      : db.getActiveDispatchForIdentity(mail.from_handle)?.id)
   const operationId = dispatch ? groups.store.workerOperation(dispatch) : null
   const message = operationId ? groups.store.operationMessage(operationId) : null
   const owned = message?.turns.some(
@@ -158,6 +163,16 @@ export function narrowGroupMailBatch<
   }
 }
 
+/** Whether a mail line's turn ran, by what the line itself saved: its reply, or its retirement. */
+function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
+  return (
+    turn === undefined ||
+    turn.reply !== undefined ||
+    turn.revoked === true ||
+    turn.frozenItems !== undefined
+  )
+}
+
 /** Records a peer request's or owned worker's mail as the receiving member's turn, refusing mail
  *  that no active group request accounts for. */
 export function reserveGroupMailTurn(
@@ -191,8 +206,27 @@ export function reserveGroupMailTurn(
   ) {
     throw new Error('This mail is outside the active group request; it was not delivered.')
   }
-  const id = `mail:${input.operationId}`
-  if (groups.store.message(id)) {
+  // A replay of this id (a line saved before lines were keyed by mail included) changes nothing.
+  if (
+    groups.store
+      .operationMessage(input.operationId)
+      ?.turns.some((turn) => turn.operationId === input.operationId)
+  ) {
+    return
+  }
+  // One room line per mail and member, whatever id carries it: the lane mints a new id when an
+  // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that
+  // runs. Mail that comes back after its turn ran gets the next line of its own.
+  const mailKey = `mail:${member.sessionId}:${notice.messages.map(({ messageId }) => messageId).join(',')}`
+  let id = mailKey
+  let line = groups.store.message(id)
+  for (let index = 2; line && mailTurnRan(line.turns[0]); index += 1) {
+    id = `${mailKey}#${index}`
+    line = groups.store.message(id)
+  }
+  if (line) {
+    groups.store.retarget(id, input.operationId)
+    groups.changed()
     return
   }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === member.botId)
@@ -235,6 +269,7 @@ export function reserveGroupMailTurn(
         botId: bot.id,
         botName: bot.name,
         avatar: bot.avatar,
+        ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
         agent: bot.agent,
         sessionId: member.sessionId,
         mailbox: true
@@ -244,8 +279,9 @@ export function reserveGroupMailTurn(
   groups.changed()
 }
 
-/** The group operation a member is running as it starts a worker, read from its live turn. */
-export async function captureGroupWorkerOperation(
+/** The group operation a member is running now (as it starts a worker or answers a peer), read
+ *  from its live turn. */
+export async function liveGroupOperation(
   groups: BotGroupRuntime,
   sessionId: string
 ): Promise<string | null> {

@@ -3,8 +3,7 @@ import type { EvalTurnOutcome } from './bot-orchestration-eval-conversation'
 import {
   neverSuggestsHandoff,
   onlySuggests,
-  suggestsHandoff,
-  suggestsNothing
+  suggestsHandoff
 } from './bot-orchestration-eval-look-around-grading'
 
 function turn(ask?: string): EvalTurnOutcome {
@@ -84,11 +83,6 @@ describe('look-around outcome grading', () => {
     ]
     expect(onlySuggests(wrong).length).toBeGreaterThan(0)
     expect(onlySuggests({ ...turn(), reply: 'I will take that over.' }).length).toBeGreaterThan(0)
-  })
-
-  it('rejects any suggestion when the scenario expects silence', () => {
-    expect(suggestsNothing(turn())).toEqual([])
-    expect(suggestsNothing(turn('Hand workspace-a to Ranger.')).length).toBeGreaterThan(0)
   })
 
   it('rejects a reworded dismissed handoff while allowing unrelated review suggestions', () => {

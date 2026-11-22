@@ -15,6 +15,7 @@ import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
+import { listenForBrowserGuestPageVisibility } from '../guest-lifecycle/visibility/browser-guest-page-visibility'
 
 let initialized = false
 
@@ -28,6 +29,7 @@ export function initializeBrowserSessionsForApp(
   }
   listenForBrowserPasskeyRequests()
   listenForBrowserSystemDialogs()
+  listenForBrowserGuestPageVisibility()
 
   if (activeProfile) {
     browserSessionRegistry.configureForOrcaProfile(activeProfile)

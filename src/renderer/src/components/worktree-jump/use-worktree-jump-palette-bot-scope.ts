@@ -163,15 +163,13 @@ export function useWorktreeJumpPaletteBotScope({
     (action: BotScopeActionItem['action']): void => {
       if (action === 'show-everything') {
         leaveBotScope(botScopeRecoveryText(query))
-      } else if (action === 'search-bots') {
-        enterBotScope(query.trim())
       } else {
         // The templates dialog takes over the modal slot and focus; the palette mustn't restore over it.
         skipRestoreFocusRef.current = true
         openBotTemplates()
       }
     },
-    [enterBotScope, leaveBotScope, query, skipRestoreFocusRef]
+    [leaveBotScope, query, skipRestoreFocusRef]
   )
 
   return { scoped, botsEnabled, enterBotScope, leaveBotScope, selectAction }

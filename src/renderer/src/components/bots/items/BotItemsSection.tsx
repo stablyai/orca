@@ -14,6 +14,7 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { BotItemsList } from './BotItemsList'
+import { BotItemsLoading } from './BotItemsLoading'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import type { BotItemsShownList } from './use-bot-items-shown-list'
 import type { BotNeedsYouAsks } from '../BotNeedsYouSection'
@@ -54,7 +55,7 @@ export function BotItemsSection({
   /** The row Back returns to: shown, focused and scrolled to once. */
   focusUid: string | null
   onOpen: (item: BotItem) => void
-  /** The bot's own item read: `unsupported` for a host without items, which says nothing of them. */
+  /** The bot's own item read. */
   botRead: { state: BotHostReadState; retry: () => void }
   /** Orca's asks the filter keeps; they lead Needs you whatever the item read says. */
   asks: BotNeedsYouAsks
@@ -71,14 +72,12 @@ export function BotItemsSection({
   // Every message here speaks for items only; the asks above it stand on their own.
   const itemsNote = (): React.ReactNode => {
     if (!read) {
-      if (botRead.state === 'unsupported') {
-        return null
-      }
       const chatFailed = filter.chatIds !== null && chatRead.failed
       return botRead.state === 'failed' || chatFailed ? (
         <BotItemsReadFailed onRetry={chatFailed ? chatRead.retry : botRead.retry} />
       ) : (
-        <BotItemsLoading />
+        // Needs you shows only for counted asks; runs a sign-in stopped, alone, leave it out.
+        <BotItemsLoading afterAsks={asks.needs.length > 0} />
       )
     }
     if (items.length === 0 && !filtered) {
@@ -171,14 +170,5 @@ function FilteredEmpty({
         {t('bots.items.filter.clearAll', 'Clear filters')}
       </Button>
     </div>
-  )
-}
-
-export function BotItemsLoading(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-      {t('bots.items.loading', 'Loading items…')}
-    </p>
   )
 }

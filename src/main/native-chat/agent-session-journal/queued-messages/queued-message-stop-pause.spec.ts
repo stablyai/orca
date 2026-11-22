@@ -59,7 +59,8 @@ export function registerQueuedMessageStopPauseTests(
           operationalRevision: 0
         },
         child: null,
-        steering: { kind: 'codex-unavailable' }
+        steering: { kind: 'codex-unavailable' },
+        mailJoinsTurn: true
       }
       const automatic = (clientMessageId: string) =>
         journal.claimAutomaticSubmission(

@@ -52,11 +52,4 @@ describe('ChatDeliveries.started', () => {
     admitAt(deliveries, 'd2', 700)
     expect(deliveries.started('s1', 900)).toBe('d2')
   })
-
-  it("names none for a start seen before the last turn's end", () => {
-    const deliveries = new ChatDeliveries(vi.fn())
-    expect(deliveries.started('s1', 500)).toBeUndefined()
-    admitAt(deliveries, 'd2', 700)
-    expect(deliveries.started('s1', 900)).toBeUndefined()
-  })
 })

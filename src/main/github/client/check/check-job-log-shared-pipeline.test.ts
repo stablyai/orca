@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import * as excerpt from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import * as extraction from '../../../../shared/source-control/checks/logs/check-job-log-tail-slice'
 import { TERMINAL_CONTROL_CHARACTER_PATTERN } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
@@ -12,6 +13,14 @@ import { attachLogFixture, failedLogJob } from './check-job-log-test-fixture'
 import { prCheckLogTailCache } from './check-job-log-tails'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 const failureFixture = {
   ...createCheckLogFixture(),

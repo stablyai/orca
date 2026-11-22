@@ -26,7 +26,10 @@ async function apiWith(routes: FakeRoute[]) {
     return null
   }
   const fake = fakeGoogle([recorder, ...routes])
-  return { api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }), sent }
+  return {
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    sent
+  }
 }
 
 const b64 = (text: string) => Buffer.from(text).toString('base64url')

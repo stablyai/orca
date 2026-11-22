@@ -3,7 +3,7 @@
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { awaitGitHubChange, readGitHubAwait, stopAwaitingGitHub } from '@/lib/bot-github-state'
@@ -32,8 +32,8 @@ vi.mock('@/lib/browser/navigation/app-http-link-open', async (actual) => ({
   openAppHttpLink
 }))
 
-import { botGitHubSetupStep } from './BotGitHubSetupDialog'
 import { GitHubInstallMount } from './GitHubInstallMount'
+import { botGitHubSetupStep } from './github-setup-step'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -150,6 +150,9 @@ function stateWith(installations: (typeof acme | ConnectorGitHubState['installat
   return { ok: true, value: state({ account: dana, installations }) }
 }
 
+// The mount loads the surface lazily; load it once so no test waits on the first import.
+beforeAll(() => import('./GitHubInstallSurface'))
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.updateBot.mockResolvedValue(bot)
@@ -200,18 +203,17 @@ describe('botGitHubSetupStep', () => {
       kind: 'done',
       login: 'dana',
       installations: [acme],
-      installUrl
+      installUrl,
+      error: null
     })
+    // Adding another login that didn't finish keeps saying so.
+    expect(
+      botGitHubSetupStep(installed, { status: 'failed', error: 'expired' }, true)
+    ).toMatchObject({ kind: 'done', error: 'expired' })
   })
 })
 
 describe('BotGitHubSetupDialog', () => {
-  it('says GitHub is coming soon while the cloud answers 404', async () => {
-    api.botGitHub.state.mockResolvedValue({ ok: false, error: 'github_off' })
-    renderDialog()
-    expect(await screen.findByText('GitHub is coming soon.')).toBeDefined()
-  })
-
   it('connects in one trip, then turns the bot on by itself and shows how to ask', async () => {
     api.botGitHub.state.mockResolvedValue({ ok: true, value: state() })
     renderDialog()
@@ -236,7 +238,7 @@ describe('BotGitHubSetupDialog', () => {
     expect(screen.getByText('2 repositories in acme')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Turn on Ranger' })).toBeNull()
     // The mention to type is set as code.
-    for (const mention of screen.getAllByText('@orca-ide ranger …')) {
+    for (const mention of screen.getAllByText('@orca-bots ranger …')) {
       expect(mention.tagName).toBe('CODE')
     }
   })

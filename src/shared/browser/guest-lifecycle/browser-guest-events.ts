@@ -8,6 +8,29 @@ export type BrowserPermissionDeniedEvent = {
   origin: string
 }
 
+/**
+ * The last main-frame request step Orca saw for an uncommitted load: none (`no-request-seen`),
+ * inside Orca's own request checks (`held`), or handed on to the network (`sent`), where it waits
+ * for a socket, a connection or the server's response.
+ */
+export type BrowserLoadStallPhase = 'no-request-seen' | 'held' | 'sent'
+
+export type BrowserLoadStall = {
+  phase: BrowserLoadStallPhase
+  /** host[:port] only, so paths and queries never reach UI state. */
+  host: string
+  /** Same-profile pages on this scheme, host and port that the user isn't looking at. */
+  hiddenSameOriginPages: number
+}
+
+export type BrowserLoadStallEvent = {
+  browserPageId: string
+  /** The guest that stalled; a clear from a replaced guest must not clear its successor's stall. */
+  webContentsId: number
+  /** Null once the load commits, fails, stops or is replaced. The phase and tab count stay in the trace. */
+  stall: Pick<BrowserLoadStall, 'host'> | null
+}
+
 export type BrowserPopupEvent = {
   browserPageId: string
   /** Sanitized to origin/host so auth query params never leak into UI state. */

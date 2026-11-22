@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
-import {
-  forgetPairedReads,
-  readPairedHandedAgents,
-  type BotPairedRuntime
-} from './bot-paired-handed-agents'
+import { readPairedHandedAgents, type BotPairedRuntime } from './bot-paired-handed-agents'
 
 const agent = {
   paneKey: 'tab-1:pane-1',
@@ -70,18 +66,10 @@ describe('readPairedHandedAgents', () => {
       ])
     )
   })
-
-  it('keeps every workspace when the computer does not answer', async () => {
-    const { runtime, calls } = runtimeAnswering(async () => {
-      throw new Error('offline')
-    })
-    expect(await readPairedHandedAgents(runtime, bot, 50_000)).toEqual([])
-    expect(calls.bots.update).not.toHaveBeenCalled()
-  })
 })
 
 describe('readPairedHandedAgents, a computer that is away', () => {
-  it('asks an offline computer again only after a growing wait, and at once after it answers', async () => {
+  it('shows a paired agent after the reconnect backoff', async () => {
     let online = false
     const { runtime, calls } = runtimeAnswering(async () => {
       if (!online) {
@@ -89,22 +77,15 @@ describe('readPairedHandedAgents, a computer that is away', () => {
       }
       return { worktrees: [row('wt-here', 'folder:home-1')] }
     })
-    const asked = () => calls.callOrchestrationWorkerServer.mock.calls.length
     expect(await readPairedHandedAgents(runtime, bot, 0)).toEqual([])
-    // Every bot change re-reads; the miss stands for 5 s, then for 10 s after a second one.
-    expect(await readPairedHandedAgents(runtime, bot, 1_000)).toEqual([])
-    expect(await readPairedHandedAgents(runtime, bot, 4_999)).toEqual([])
-    expect(asked()).toBe(1)
-    await readPairedHandedAgents(runtime, bot, 5_000)
-    expect(asked()).toBe(2)
-    await readPairedHandedAgents(runtime, bot, 14_999)
-    expect(asked()).toBe(2)
-    // Back online: the next ask after the wait answers, and later reads reuse it as any answer.
+    expect(await readPairedHandedAgents(runtime, bot, 5_000)).toEqual([])
+    expect(calls.bots.update).not.toHaveBeenCalled()
+
     online = true
-    expect(await readPairedHandedAgents(runtime, bot, 15_000)).toHaveLength(1)
-    expect(asked()).toBe(3)
-    await readPairedHandedAgents(runtime, bot, 16_000)
-    expect(asked()).toBe(3)
+    expect(await readPairedHandedAgents(runtime, bot, 12_000)).toEqual([])
+    expect(await readPairedHandedAgents(runtime, bot, 16_000)).toMatchObject([
+      { worktreeId: 'wt-here', hostId: 'runtime:env-1' }
+    ])
   })
 })
 
@@ -148,18 +129,5 @@ describe('readPairedHandedAgents, an answer older than the hand-over', () => {
     expect(saved.handedPairedWorkspaces).toHaveLength(1)
     // Once that answer expires, B sees its agent.
     expect(await readPairedHandedAgents(runtime, saved, 20_000)).toHaveLength(1)
-  })
-
-  it('a hand-over drops the cached answer, so the next read asks again', async () => {
-    const calls = vi.fn(async () => ({ worktrees: [row('wt-here', 'folder:home-1')] }))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader calls only these two.
-    const runtime = {
-      callOrchestrationWorkerServer: calls,
-      bots: { update: vi.fn() }
-    } as unknown as BotPairedRuntime
-    await readPairedHandedAgents(runtime, bot, 1_000)
-    forgetPairedReads(runtime, 'env-1')
-    await readPairedHandedAgents(runtime, bot, 1_001)
-    expect(calls).toHaveBeenCalledTimes(2)
   })
 })

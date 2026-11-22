@@ -1,10 +1,6 @@
 import React from 'react'
-import { ChevronsDownUp, ChevronsUpDown, Moon, Pause } from 'lucide-react'
-import {
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu'
+import { Moon, Pause } from 'lucide-react'
+import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
 import { SidebarOptionsPopover } from '@/components/sidebar/worktree-list/controls/SidebarOptionsPopover'
@@ -16,7 +12,6 @@ import {
   countActiveBotSidebarFilters,
   type BotSidebarSortBy
 } from '../../../../shared/bots/bot-sidebar-view'
-import type { BotCollapseAll } from './use-bot-collapse-all'
 
 const SORT_LABELS: Record<BotSidebarSortBy, () => string> = {
   manual: () => translate('bots.options.sortManual', 'Manual'),
@@ -35,12 +30,7 @@ const SORT_DESCRIPTIONS: Partial<Record<BotSidebarSortBy, () => string>> = {
 }
 
 /** The Bots header's options: how the section orders its bots and what it leaves out. */
-export function BotSidebarOptionsMenu({
-  collapseAll = null
-}: {
-  /** Collapse or expand every bot: the header's hover button, reachable without hover. */
-  collapseAll?: BotCollapseAll | null
-} = {}): React.JSX.Element {
+export function BotSidebarOptionsMenu(): React.JSX.Element {
   const t = useTranslate()
   const view = useAppStore((s) => s.botSidebarView)
   const setView = useAppStore((s) => s.setBotSidebarView)
@@ -65,21 +55,6 @@ export function BotSidebarOptionsMenu({
       activeFilterCount={activeFilterCount}
     >
       <DropdownMenuLabel>{title}</DropdownMenuLabel>
-      {collapseAll ? (
-        <>
-          <DropdownMenuItem onSelect={collapseAll.toggle}>
-            {collapseAll.allCollapsed ? (
-              <ChevronsUpDown className="size-3.5" />
-            ) : (
-              <ChevronsDownUp className="size-3.5" />
-            )}
-            {collapseAll.allCollapsed
-              ? t('bots.section.expandAll', 'Expand all bots')
-              : t('bots.section.collapseAll', 'Collapse all bots')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </>
-      ) : null}
       <OptionChoiceSubmenu
         label={t('bots.options.sortBy', 'Sort by')}
         choices={choices}

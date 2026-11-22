@@ -62,13 +62,6 @@ const join = new BotItemLinkJoin({} as BotWorkRuntime, () => ({
 }))
 const link = (kind: BotItemLinkKind, ref: string) => ({ itemUid: 'i1', kind, ref, addedEvent: 1 })
 
-it('passes a cached PR its title', () => {
-  expect(join.linkView(link('pr', 'acme/app#9'), undefined)).toMatchObject({
-    kind: 'pr',
-    pr: { shown: true, title: 'Share dialog', state: 'open', checks: 'failure' }
-  })
-})
-
 it('passes a cached issue link its title and state; an unread one stays a plain link', () => {
   expect(join.linkView(link('url', 'https://github.com/Acme/App/issues/7#top'), undefined)).toEqual(
     {

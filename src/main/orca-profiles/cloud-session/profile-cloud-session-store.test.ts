@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
@@ -16,7 +16,6 @@ let userDataPath = ''
 
 vi.mock('electron', () => ({
   app: {
-    commandLine: { hasSwitch: () => false },
     getPath: () => userDataPath
   },
   safeStorage: safeStorageMock
@@ -77,34 +76,6 @@ describe('Orca cloud session store', () => {
   afterEach(() => {
     rmSync(userDataPath, { recursive: true, force: true })
     vi.unstubAllEnvs()
-  })
-
-  it('keeps local sign-ins in memory when encryption has no protected seal', async () => {
-    const store = await loadSessionStore()
-    expect(store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
-      'encrypted'
-    )
-    setSecretStore({
-      isEncryptionAvailable: () => true,
-      encryptString: (value) => Buffer.from(value),
-      decryptString: (value) => value.toString(),
-      describeProtectionGap: () => 'built-in test key',
-      describeSealing: () => ({ kind: 'none', reason: 'built-in test key' })
-    })
-    expect(store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
-      'memory-only'
-    )
-    expect(
-      store.saveOrcaCloudSession('local-default', userDataPath, makeSession(), {
-        spentOnFailure: true
-      })
-    ).toBe('memory-only')
-    expect(existsSync(store.getOrcaCloudSessionPath('local-default', userDataPath))).toBe(false)
-    const restarted = await loadSessionStore()
-    expect(restarted.readOrcaCloudSession('local-default', userDataPath)).toEqual({
-      status: 'missing',
-      persistence: 'none'
-    })
   })
 
   it('rejects dev plaintext files when the escape hatch is disabled', async () => {

@@ -73,6 +73,34 @@ export function agentSessionUnresolvedFailureRows(
   return rows
 }
 
+/** The newest failure line no later successful turn resolved, and the sequence of that latest
+ *  success (-Infinity without one), so a refused send can be weighed against both. */
+export function agentSessionLatestFailureLine(items: readonly AgentJournalRenderItem[]): {
+  line: { sequence: number; fact: AgentSessionFailureFact } | null
+  resolvedAt: number
+} {
+  let line: { sequence: number; fact: AgentSessionFailureFact } | null = null
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    const turn = readAgentJournalTurn(item.body)
+    if (
+      turn &&
+      isRootAgentJournalItem(item) &&
+      agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
+        'success' &&
+      !openedByCommand(items, index, turn.userItemId)
+    ) {
+      return { line, resolvedAt: item.sequence }
+    }
+    const fact =
+      item.body.kind === 'status' ? readWholeAgentSessionFailureFact(item.body.failure) : undefined
+    if (!line && fact) {
+      line = { sequence: item.sequence, fact }
+    }
+  }
+  return { line, resolvedAt: Number.NEGATIVE_INFINITY }
+}
+
 /** Whether the turn at `index` ran a conversation command such as `/compact`, which proves no setup. */
 function openedByCommand(
   items: readonly AgentJournalRenderItem[],

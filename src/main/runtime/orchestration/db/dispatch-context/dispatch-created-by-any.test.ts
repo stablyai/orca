@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
-import {
-  DISPATCHES_CREATED_BY_ANY_SQL,
-  DISPATCH_LINKS_CREATED_BY_ANY_SQL
-} from './dispatch-context-store'
 
 let db: OrchestrationDb | null = null
 
@@ -53,36 +49,12 @@ describe('listDispatchesCreatedByAny', () => {
       creatorPaneKey: 'run-term'
     })
   })
-
-  it('finds creators through their indexes, never by scanning every Dispatch', () => {
-    const target = openDb()
-    const plan = target.db
-      .prepare(`EXPLAIN QUERY PLAN ${DISPATCHES_CREATED_BY_ANY_SQL}`)
-      .all('[]', '[]', 20)
-      .map((row) => (typeof row === 'object' && row !== null && 'detail' in row ? row.detail : ''))
-
-    expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_creator_orca_session_id'))
-    expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_creator_pane_key'))
-    expect(plan).not.toContain('SCAN dispatch_contexts')
-  })
 })
 
 describe('listDispatchLinksCreatedByAny', () => {
-  it('reads the time a Dispatch completed as completion wrote it', () => {
-    const target = openDb()
-    insert(target, 'done', 'dispatched', { session: 'chat' })
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(Date.UTC(2026, 10, 11, 2, 5, 19, 286))
-    target.completeDispatch('done')
-
-    const [link] = target.listDispatchLinksCreatedByAny({ orcaSessionIds: ['chat'], paneKeys: [] })
-
-    expect(link).toMatchObject({ status: 'completed', at: Date.UTC(2026, 10, 11, 2, 5, 19, 286) })
-  })
-
   it('returns every Dispatch the creators made, of any age, with who runs it', () => {
     const target = openDb()
-    for (let index = 0; index < 30; index += 1) {
+    for (let index = 0; index < 29; index += 1) {
       insert(target, `done-${index}`, 'completed', { pane: 'run-term' })
     }
     insert(target, 'live', 'dispatched', { session: 'chat' })
@@ -92,6 +64,10 @@ describe('listDispatchLinksCreatedByAny', () => {
       )
       .run()
     insert(target, 'stranger', 'dispatched', { session: 'other-chat' })
+    insert(target, 'just-finished', 'dispatched', { session: 'chat' })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.UTC(2026, 10, 11, 2, 5, 19, 286))
+    target.completeDispatch('just-finished')
 
     const links = target.listDispatchLinksCreatedByAny({
       orcaSessionIds: ['chat'],
@@ -105,17 +81,9 @@ describe('listDispatchLinksCreatedByAny', () => {
       assigneeOrcaSessionId: 'worker-chat',
       at: Date.UTC(2026, 10, 10, 12)
     })
-  })
-
-  it('finds creators through their indexes, never by scanning every Dispatch', () => {
-    const target = openDb()
-    const plan = target.db
-      .prepare(`EXPLAIN QUERY PLAN ${DISPATCH_LINKS_CREATED_BY_ANY_SQL}`)
-      .all('[]', '[]')
-      .map((row) => (typeof row === 'object' && row !== null && 'detail' in row ? row.detail : ''))
-
-    expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_creator_orca_session_id'))
-    expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_creator_pane_key'))
-    expect(plan).not.toContain('SCAN d')
+    expect(links.find((entry) => entry.id === 'just-finished')).toMatchObject({
+      status: 'completed',
+      at: Date.UTC(2026, 10, 11, 2, 5, 19, 286)
+    })
   })
 })

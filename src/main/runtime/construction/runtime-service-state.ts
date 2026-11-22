@@ -43,8 +43,6 @@ import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-termi
 import type { RecentPtyOutputBuffer } from '../terminal/output/recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
-import { TUI_IDLE_QUIESCENCE_MS } from '../terminal/wait/terminal-idle-policy'
-import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-screen-clear'
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
@@ -205,14 +203,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isRunning: (handle) => this.isTerminalRunningAgent(handle),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
     flushPendingBlockedStamp: (ptyId) => this.flushPendingWaitBlockedCheck(ptyId),
-    readScreenClearingBlockedTail: (ptyId, lastOutputAt) =>
-      readScreenClearingBlockedTail({
-        lastOutputAt,
-        quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
-        agent: () => this.getPaneAgentForTuiIdle(ptyId),
-        readScreen: () => this.readCaughtUpRuledScreen(ptyId),
-        clearStamp: () => this.clearWaitBlockedStamp(ptyId)
-      })
+    readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   })
 
   readonly crewChanges = new CrewChanges()
@@ -269,8 +260,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
         this.structuredMailReportItem?.(db, message) ?? Promise.resolve(null),
       conversationPlace: (sessionId, from) => this.chatConversationPlace?.(sessionId, from) ?? null,
       senderSnapshotReader: () => this.orchestrationSenderNames.snapshotReader(),
-      senderSnapshot: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId, recorded) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId, recorded),
       host: createStructuredMailboxPointerHost(this.structuredMailOwner?.())
     })
 

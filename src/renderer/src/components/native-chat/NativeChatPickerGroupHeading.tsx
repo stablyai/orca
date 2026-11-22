@@ -3,6 +3,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 const GROUP_HEADINGS = {
   commands: (t: Translate) => t('components.native-chat.composer.commands', 'Commands'),
   skills: (t: Translate) => t('components.native-chat.composer.skills', 'Skills'),
+  agents: (t: Translate) => t('components.native-chat.composer.agents', 'Agents'),
   bots: (t: Translate) => t('components.native-chat.composer.bots', 'Bots'),
   files: (t: Translate) => t('components.native-chat.composer.files', 'Files')
 }

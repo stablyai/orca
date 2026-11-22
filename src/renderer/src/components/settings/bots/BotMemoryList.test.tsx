@@ -49,11 +49,10 @@ describe('BotMemoryList', () => {
       })
     })
     const { getByRole } = render(<BotMemoryList file={file(MEMORY)} edits={memory} />)
-    fireEvent.click(getByRole('button', { name: 'Add memory' }))
-    fireEvent.change(getByRole('textbox', { name: 'Memory' }), { target: { value: 'A fact' } })
+    fireEvent.change(getByRole('textbox', { name: 'Add memory' }), { target: { value: 'A fact' } })
     fireEvent.click(getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(memory.add).toHaveBeenCalledWith('A fact'))
-    expect(getByRole('textbox', { name: 'Memory' })).toHaveProperty('value', 'A fact')
+    expect(getByRole('textbox', { name: 'Add memory' })).toHaveProperty('value', 'A fact')
   })
 
   it('shows where a fact came from, and forgets it by its words', async () => {
@@ -63,7 +62,7 @@ describe('BotMemoryList', () => {
       <BotMemoryList file={file(tagged)} edits={memory} />
     )
     expect(getByText('From Slack, Alice', { exact: false })).toBeTruthy()
-    fireEvent.click(getByRole('button', { name: 'link' }))
+    fireEvent.click(getByRole('button', { name: 'From Slack, Alice' }))
     expect(openAppHttpLink).toHaveBeenCalledWith(
       'https://app.slack.com/client/T1/C1',
       expect.anything()
@@ -75,8 +74,7 @@ describe('BotMemoryList', () => {
   it('saves an open draft when its screen closes, and nothing once it was cancelled', () => {
     const memory = edits()
     const added = render(<BotMemoryList file={file(MEMORY)} edits={memory} />)
-    fireEvent.click(added.getByRole('button', { name: 'Add memory' }))
-    fireEvent.change(added.getByRole('textbox', { name: 'Memory' }), {
+    fireEvent.change(added.getByRole('textbox', { name: 'Add memory' }), {
       target: { value: 'Ships on Tuesdays' }
     })
     added.unmount()
@@ -91,11 +89,10 @@ describe('BotMemoryList', () => {
     expect(memory.reword).toHaveBeenCalledWith('Jane owns checkout.', 'Jane owns billing.')
 
     const cancelled = render(<BotMemoryList file={file(MEMORY)} edits={memory} />)
-    fireEvent.click(cancelled.getByRole('button', { name: 'Add memory' }))
-    fireEvent.change(cancelled.getByRole('textbox', { name: 'Memory' }), {
+    fireEvent.change(cancelled.getByRole('textbox', { name: 'Add memory' }), {
       target: { value: 'Never mind' }
     })
-    fireEvent.keyDown(cancelled.getByRole('textbox', { name: 'Memory' }), { key: 'Escape' })
+    fireEvent.keyDown(cancelled.getByRole('textbox', { name: 'Add memory' }), { key: 'Escape' })
     cancelled.unmount()
     expect(memory.add).toHaveBeenCalledTimes(1)
   })

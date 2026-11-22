@@ -1,3 +1,5 @@
+import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
+
 // Client-created group IDs are unknown to host, so pending host-tab placements own destination. Consume on materialization or later user drags can be yanked back.
 const groupByPendingHostTabId = new Map<string, string>()
 const MAX_PENDING_TERMINAL_PLACEMENTS = 128
@@ -6,6 +8,11 @@ const MAX_PENDING_TERMINAL_PLACEMENTS = 128
 export function webTerminalPlacementParentTabId(hostTabId: string): string {
   const separator = hostTabId.indexOf('::')
   return separator === -1 ? hostTabId : hostTabId.slice(0, separator)
+}
+
+/** This client's id for the tab a create RPC returned. */
+export function webTerminalMirroredTabId(hostTabId: string): string {
+  return toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(hostTabId))
 }
 
 function hostTabKey(environmentId: string, worktreeId: string, hostTabId: string): string {

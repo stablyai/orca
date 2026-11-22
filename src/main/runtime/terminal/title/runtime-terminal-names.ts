@@ -66,7 +66,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       return mainTitle
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
+    if (!this.hasAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
       throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
     }
     const normalizedTitle = title?.trim() || null

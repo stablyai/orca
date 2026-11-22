@@ -1,4 +1,7 @@
-import { applyCodexDaemonSocketGuard } from '../shared-server/codex-daemon-socket-path-guard'
+import {
+  applyCodexDaemonOverride,
+  codexDaemonSocketPathExceedsLimit
+} from '../shared-server/codex-daemon-socket-path-guard'
 import {
   applyCodexSharedSqliteHome,
   readCodexSharedSqliteHome
@@ -13,8 +16,23 @@ export function applyRuntimeOwnedConfig(
   runtimeHomePath: string,
   previousConfig: string | null
 ): string {
+  return applyMeasuredRuntimeOwnedConfig(
+    config,
+    runtimeHomePath,
+    previousConfig,
+    codexDaemonSocketPathExceedsLimit(runtimeHomePath)
+  )
+}
+
+/** `applyRuntimeOwnedConfig` for a caller that already measured the home's daemon socket path. */
+export function applyMeasuredRuntimeOwnedConfig(
+  config: string,
+  runtimeHomePath: string,
+  previousConfig: string | null,
+  daemonSocketPathExceedsLimit: boolean
+): string {
   return applyCodexSharedSqliteHome(
-    applyCodexDaemonSocketGuard(config, runtimeHomePath),
+    applyCodexDaemonOverride(config, runtimeHomePath, daemonSocketPathExceedsLimit),
     readCodexSharedSqliteHome(previousConfig ?? '')
   )
 }

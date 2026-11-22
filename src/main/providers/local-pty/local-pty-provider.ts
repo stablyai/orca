@@ -226,8 +226,7 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(opts?: { ptyIds?: readonly string[] }): Promise<PtyProcessInfo[]> {
-    const rows = await listLocalPtyProcesses()
-    return opts?.ptyIds ? rows.filter((row) => opts.ptyIds?.includes(row.id)) : rows
+    return listLocalPtyProcesses(opts?.ptyIds)
   }
 
   getDefaultShell(): Promise<string> {

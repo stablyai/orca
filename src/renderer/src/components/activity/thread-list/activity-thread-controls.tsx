@@ -5,8 +5,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useNow } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   formatAbsoluteDate,
   activityThreadStatusId,
@@ -53,20 +51,6 @@ export function EventTime({
         {absolute}
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-export function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | null {
-  if (!repo) {
-    return null
-  }
-  return (
-    <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 dark:border-border/60 dark:bg-accent/50">
-      <RepoBadgeMark color={repo.badgeColor} />
-      <span className="max-w-[6rem] truncate text-[10px] font-semibold leading-none text-foreground lowercase">
-        {repo.displayName}
-      </span>
-    </div>
   )
 }
 

@@ -36,6 +36,8 @@ export const PeerMailDeliverParams = z.object({
   chat: OptionalString,
   /** With a `bot:` address: an item number of that bot's. */
   item: OptionalString,
+  /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
+  attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
   sender: PeerMailSender.optional()
 })
 

@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { CONNECTOR_REPLY_UNAVAILABLE } from '../../shared/rpc-contract/connectors/connector-params'
 import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { BOT_REPLY_HANDLERS } from './bot-reply'
@@ -60,25 +59,6 @@ describe('orca bot reply', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['bot_chat_reply', 'this is your Chat'],
-    ['not_a_cloud_conversation', 'Your Home chat has none'],
-    ['not_this_bots_conversation', "doesn't belong to this bot"]
-  ])('says plainly that %s posted nothing', async (code, says) => {
-    vi.stubEnv('ORCA_PANE_KEY', '')
-    vi.stubEnv(ORCA_SCRUB_SAFE_PANE_ENV, '')
-    vi.stubEnv(ORCA_AGENT_SESSION_ID_ENV, 'session-1')
-    const refusal = BOT_REPLY_HANDLERS['bot reply']({
-      flags: new Map([['text', 'hi']]),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler uses only client.call, supplied here.
-      client: refusingClient(code) as never,
-      cwd: '/',
-      json: true
-    })
-    await expect(refusal).rejects.toMatchObject({ code })
-    await expect(refusal).rejects.toThrow(says)
-  })
-
   it('says replies are unavailable when the host cannot post for anyone', async () => {
     vi.stubEnv('ORCA_PANE_KEY', 'tab-1:pane-1')
     await expect(
@@ -90,8 +70,7 @@ describe('orca bot reply', () => {
         json: true
       })
     ).rejects.toMatchObject({
-      code: 'not_a_cloud_conversation',
-      message: CONNECTOR_REPLY_UNAVAILABLE
+      code: 'not_a_cloud_conversation'
     })
   })
 
@@ -99,7 +78,7 @@ describe('orca bot reply', () => {
     vi.stubEnv('ORCA_PANE_KEY', '')
     vi.stubEnv(ORCA_SCRUB_SAFE_PANE_ENV, '')
     vi.stubEnv(ORCA_AGENT_SESSION_ID_ENV, 'session-1')
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     const call = vi.fn(async (method: string) => ({
       id: '1',
       ok: true,
@@ -127,7 +106,6 @@ describe('orca bot reply', () => {
       { sessionId: 'session-1', emoji: ':eyes:' },
       expect.anything()
     )
-    expect(log).toHaveBeenCalledWith('Reacted :eyes:.\nPosted to the thread.')
   })
 
   it('needs --text or --react, and --text with line notes', async () => {

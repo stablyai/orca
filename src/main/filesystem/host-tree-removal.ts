@@ -53,7 +53,7 @@ export async function removeHostCheckout(
         } else {
           markerGone = !(await authorize(true))
           if (!markerGone) {
-            const names = (await readdir(root)).filter((name) => name.toLowerCase() !== '.git')
+            const names = await namesExceptCheckoutMarker(root)
             const results = await Promise.allSettled(
               names.map((name) => rm(join(root, name), { recursive: true, force: true }))
             )
@@ -88,6 +88,49 @@ export async function removeHostCheckout(
     }
     throw describeRemovalFailure(error)
   }
+}
+
+// The volume decides case folding: `.GIT` is the marker only if it is the same file `.git` resolves to.
+async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
+  const names = await readdir(root)
+  if (names.includes('.git')) {
+    return names.filter((name) => name !== '.git')
+  }
+  // A case-folding volume may list the marker under another spelling; only the entry `.git` resolves to is it.
+  const marker = await lstat(join(root, '.git')).catch(() => null)
+  const kept: string[] = []
+  for (const name of names) {
+    if (name.toLowerCase() === '.git' && marker) {
+      const entry = await lstat(join(root, name)).catch(() => null)
+      if (entry && entry.ino === marker.ino && entry.dev === marker.dev) {
+        continue
+      }
+    }
+    kept.push(name)
+  }
+  return kept
+}
+
+/** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
+export async function removeUnregisteredHostCheckout(
+  targetPath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  let entry
+  try {
+    entry = await lstat(toHostRemovalPath(targetPath))
+  } catch (error) {
+    // Like rm -rf, an already-missing folder is done.
+    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
+      return
+    }
+    throw error
+  }
+  // lstat never reports a symlink as a directory; following one would empty its target.
+  if (!entry.isDirectory()) {
+    throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
+  }
+  await removeHostCheckout(targetPath, async () => true, signal)
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {

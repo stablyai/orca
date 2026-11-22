@@ -36,6 +36,7 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
 vi.mock('../api/cookies', () => ({ observeBrowserExtensionCookieChanges: vi.fn() }))
 vi.mock('../api-runtime/browser-extension-content-scripts', () => ({
   forgetBrowserExtensionContentScriptRestore: vi.fn(),
+  forgetBrowserExtensionSessionContentScripts: vi.fn(),
   restoreBrowserExtensionContentScripts: vi.fn()
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({

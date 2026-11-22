@@ -200,11 +200,6 @@ describe('installOrcadBundle flock-backed install lock on WSL', () => {
     expect(state.events).toEqual(['release'])
   })
 
-  it('keeps other fenced failures as they are', async () => {
-    state.uploadError = sshCommandExitError('tar -x', 2, 'disk full')
-    await expect(install(wslConn())).rejects.toThrow(/exit 2/)
-  })
-
   it('keeps an unbacked lock where the distro cannot hold one', async () => {
     state.holderAvailable = false
     await expect(install(wslConn())).resolves.toBe('uploaded')

@@ -1,4 +1,4 @@
-// A chat's worker drawn by the Crew panel's status rules (bar an open ask, which is its coordinator's), for the tray, Activity and bot feed.
+// A chat's worker drawn by the Crew panel's status rules (an open ask is its coordinator's), for the tray, Activity and bot feed.
 import { translate } from '@/i18n/i18n'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../shared/worktree/row-display/worktree-status-rollup'
@@ -6,7 +6,7 @@ import {
   crewPartyStatus,
   crewStatusGroup,
   type CrewStatusGroup
-} from '@/components/orchestration-crew/CrewAgentIcons'
+} from '@/components/orchestration-crew/crew-party-status'
 import {
   sessionWorkerAgentState,
   sessionWorkerAsksCoordinator,
@@ -26,8 +26,6 @@ export function sessionWorkerLook(
 ): SessionWorkerLook {
   const open = sessionWorkerIsRunning(worker)
   const status = crewPartyStatus({
-    // An open `ask` or gate waits on the chat that started the worker, not on you.
-    pendingQuestion: false,
     // What the host verdict knows that an agent state cannot: lost contact, or an exit before it reported.
     dot:
       worker.state === 'unverifiable'

@@ -3,6 +3,7 @@ import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
 } from './agent-startup-plan-inputs'
+import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 
 describe('a picked session option outranks configured launch arguments', () => {
@@ -50,28 +51,61 @@ it('projects own permission without dropping unrelated arguments, model or envir
   expect(plan?.sessionOptions?.permissionMode).toBe('own')
 })
 
-it.each([undefined, ''])(
-  'keeps a terminal-only choice from args %s and projects its flag once for a legacy launch',
-  (agentArgs) => {
-    const inputs = resolveAgentStartupPlanInputs({
-      agent: 'gemini',
-      settings: {},
-      agentArgs,
-      platform: 'win32',
-      isRemote: true,
-      shell: 'powershell',
-      sessionOptions: { permissionMode: 'full-access' }
-    })
-    const plan = buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })
-    expect(plan?.launchConfig.agentArgs.match(/--yolo/g)).toHaveLength(1)
-    expect(plan?.sessionOptions?.permissionMode).toBe('full-access')
-    const legacy = buildAgentStartupPlan({
-      ...inputs,
-      agentArgs: plan?.launchConfig.agentArgs,
-      sessionOptions: undefined,
-      prompt: '',
-      allowEmptyPromptLaunch: true
-    })
-    expect(legacy?.launchCommand.match(/--yolo/g)).toHaveLength(1)
-  }
-)
+it('keeps a terminal-only choice with explicit blank args and projects its flag once on a legacy launch', () => {
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: 'gemini',
+    settings: { agentDefaultArgs: { gemini: '--debug' } },
+    agentArgs: '',
+    platform: 'win32',
+    isRemote: true,
+    shell: 'powershell',
+    sessionOptions: { permissionMode: 'full-access' }
+  })
+  const plan = buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })
+  expect(plan?.launchConfig.agentArgs).not.toContain('--debug')
+  expect(plan?.launchConfig.agentArgs.match(/--yolo/g)).toHaveLength(1)
+  expect(plan?.sessionOptions?.permissionMode).toBe('full-access')
+  const legacy = buildAgentStartupPlan({
+    ...inputs,
+    agentArgs: plan?.launchConfig.agentArgs,
+    sessionOptions: undefined,
+    prompt: '',
+    allowEmptyPromptLaunch: true
+  })
+  expect(legacy?.launchCommand.match(/--yolo/g)).toHaveLength(1)
+})
+
+it('replays only the resolved Antigravity --model on resume, not --effort (#43154)', () => {
+  const initial = buildAgentStartupPlan({
+    ...resolveAgentStartupPlanInputs({
+      agent: 'antigravity',
+      settings: {
+        agentDefaultArgs: {
+          antigravity: "--dangerously-skip-permissions --model 'Default Model'"
+        }
+      },
+      platform: 'darwin',
+      isRemote: false,
+      shell: 'posix',
+      sessionOptions: { model: 'My Model', effort: 'high' }
+    }),
+    prompt: '',
+    allowEmptyPromptLaunch: true
+  })
+  const restored = buildAgentResumeStartupPlan({
+    agent: 'antigravity',
+    providerSession: { key: 'conversation_id', id: 'conv-1' },
+    cmdOverrides: {},
+    ...initial?.launchConfig,
+    platform: 'darwin',
+    shell: 'posix'
+  })
+
+  expect(restored?.launchCommand).toBe(
+    "agy '--dangerously-skip-permissions' '--model' 'My Model' '--conversation' 'conv-1'"
+  )
+  expect(restored?.launchCommand).not.toContain('--effort')
+  expect(restored?.launchConfig.agentArgs).toBe(
+    "'--dangerously-skip-permissions' '--model' 'My Model'"
+  )
+})

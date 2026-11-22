@@ -34,7 +34,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
-    if (this.getAvailableAuthoritativeWindow()) {
+    if (this.hasAuthoritativeWindow()) {
       // Switch point: the relay hands the move to a window that owns the layout. Where main owns
       // it, the window's move goes back through main and cannot keep the client's tab id.
       if (ORCA_LAYOUT_OWNER_IS_MAIN || !this.notifier?.movePaneToNewTab) {

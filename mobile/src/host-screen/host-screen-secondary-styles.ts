@@ -97,6 +97,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     marginTop: spacing.xs,
     lineHeight: 20
   },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
+  },
   confirmButtons: {
     flexDirection: 'row',
     gap: spacing.sm

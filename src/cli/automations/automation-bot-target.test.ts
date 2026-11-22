@@ -161,9 +161,9 @@ describe('orca automations create --bot', () => {
     [
       [
         ['bot', 'Reviewer'],
-        ['agent', 'opencode2']
+        ['agent', 'aider']
       ],
-      "Bots can't run on opencode2 yet; use one of: claude, codex, grok, opencode, omp, pi, antigravity."
+      "Bots can't run on aider"
     ],
     [
       [

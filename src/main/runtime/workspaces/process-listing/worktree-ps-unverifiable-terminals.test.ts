@@ -75,11 +75,15 @@ async function psRow(runtime: OrcaRuntimeService) {
 }
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
-  it('reports a terminal on an unreachable host as unverifiable, not zero', async () => {
+  it('reports an unreachable terminal as unverifiable until its host lists it again', async () => {
+    let reachable = false
     const runtime = await makeRuntime({
-      hasPty: () => null,
+      hasPty: () => (reachable ? true : null),
       listProcesses: async () => {
-        throw new Error('relay connection lost')
+        if (!reachable) {
+          throw new Error('relay connection lost')
+        }
+        return [{ id: PTY_ID, worktreeId: WORKTREE_ID }]
       }
     })
     // The relay drop reports every PTY of the host with an unconfirmed exit.
@@ -92,6 +96,13 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
       hasAttachedPty: false,
       unverifiableTerminalCount: 1
     })
+
+    reachable = true
+    expect(await psRow(runtime)).toMatchObject({
+      liveTerminalCount: 1,
+      hasAttachedPty: true,
+      unverifiableTerminalCount: 0
+    })
   })
 
   it('reports nothing for a terminal whose host confirmed the exit', async () => {
@@ -101,22 +112,6 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
     const row = await psRow(runtime)
 
     expect(row).toMatchObject({ liveTerminalCount: 0, hasAttachedPty: false })
-    expect(row?.unverifiableTerminalCount).toBe(0)
-  })
-
-  it('returns to live once the reconnected host lists the terminal again', async () => {
-    let reachable = false
-    const runtime = await makeRuntime({
-      hasPty: () => (reachable ? true : null),
-      listProcesses: async () => (reachable ? [{ id: PTY_ID, worktreeId: WORKTREE_ID }] : [])
-    })
-    runtime.onPtyExit(PTY_ID, -1)
-    expect((await psRow(runtime))?.unverifiableTerminalCount).toBe(1)
-
-    reachable = true
-    const row = await psRow(runtime)
-
-    expect(row).toMatchObject({ liveTerminalCount: 1, hasAttachedPty: true })
     expect(row?.unverifiableTerminalCount).toBe(0)
   })
 })

@@ -5,6 +5,8 @@ import {
 } from '../../messages/rows/NativeChatTranscriptRow'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
+import { nativeChatSlotJoinsNotesAbove } from '../../bot-items/native-chat-bot-item-note-clusters'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -49,10 +51,16 @@ export function NativeChatTranscriptItems({
             return null
           }
           const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+          const leavesWhole = nativeChatSlotLeavesWhole(slot)
           return (
             <Fragment key={item.key}>
               <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-              <div data-index={item.index} ref={window.measureRow} className="flow-root w-full">
+              {/* A leaving row's negative top margin passes through to close the gap before it. */}
+              <div
+                data-index={item.index}
+                ref={window.measureRow}
+                className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+              >
                 <NativeChatTranscriptRow
                   slot={slot}
                   context={rowContext}
@@ -63,6 +71,13 @@ export function NativeChatTranscriptItems({
                     newRowsMarker?.place === 'above-row' &&
                     rowKeys[item.index + 1] === newRowsMarker.key
                   }
+                  joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+                    slot,
+                    previous: slots[item.index - 1],
+                    timedRowsAfter: placed?.afterMessage,
+                    markerKey: newRowsMarker?.key,
+                    leavesWhole
+                  })}
                 />
               </div>
             </Fragment>
@@ -96,8 +111,19 @@ export function NativeChatWaitingTranscriptItems({
 }): React.JSX.Element {
   return (
     <>
-      {slots.map((slot) => (
-        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+      {slots.map((slot, index) => (
+        <NativeChatTranscriptRow
+          key={nativeChatSlotKey(slot)}
+          slot={slot}
+          context={context}
+          joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+            slot,
+            previous: slots[index - 1],
+            timedRowsAfter: context.timedRows,
+            markerKey: undefined,
+            leavesWhole: nativeChatSlotLeavesWhole(slot)
+          })}
+        />
       ))}
     </>
   )

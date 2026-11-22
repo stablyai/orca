@@ -90,7 +90,11 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         receivedAt: now,
         evidenceObservedAt: now,
         stateStartedAt,
-        observation: this.stampObservation(payload, 'osc', now)
+        observation: this.stampObservation(
+          payload,
+          previous.observation?.origin === 'launch' && !newRun ? 'launch' : 'osc',
+          now
+        )
       },
       mutationBefore ?? previous,
       this.cliWriterExecutionMatches,

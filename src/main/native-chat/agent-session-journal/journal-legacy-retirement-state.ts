@@ -33,15 +33,84 @@ export type LegacySourceRefusal = {
   reason: LegacySourceRefusalReason
 }
 
+/** The proof's page layout; progress saved under another is walked again from the start. */
+export const LEGACY_PROOF_LAYOUT = 1
+/** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
+export const LEGACY_PROOF_COPIES_TABLE = 7
+
 /**
  * The commit that makes every converted row durable before the original is unlinked. It names
- * the original it retires; nothing reads it to decide anything.
+ * the original it retires; a later launch whose deletion of the same original didn't go through
+ * resumes at the copies when the layout matches.
  */
 export type LegacySourceRetiring = {
   version: 2
   phase: 'retiring'
+  layout: typeof LEGACY_PROOF_LAYOUT
   proof: string
   store: string
+}
+
+/**
+ * How far the proof of this original into this store got, so a later launch resumes there instead
+ * of walking every chat again. Not durable: a lost write only repeats work.
+ */
+export type LegacySourceProving = {
+  version: 2
+  phase: 'proving'
+  layout: typeof LEGACY_PROOF_LAYOUT
+  proof: string
+  store: string
+  cursor: { table: number; after: string | null; epoch?: string }
+}
+
+export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
+  let data: unknown
+  try {
+    data = value ? JSON.parse(value) : null
+  } catch {
+    return null
+  }
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('phase' in data) ||
+    data.phase !== 'proving' ||
+    !('version' in data) ||
+    data.version !== 2 ||
+    !('proof' in data) ||
+    typeof data.proof !== 'string' ||
+    !('store' in data) ||
+    typeof data.store !== 'string' ||
+    !('layout' in data) ||
+    data.layout !== LEGACY_PROOF_LAYOUT ||
+    !('cursor' in data) ||
+    !data.cursor ||
+    typeof data.cursor !== 'object'
+  ) {
+    return null
+  }
+  const cursor: object = data.cursor
+  const table = 'table' in cursor ? cursor.table : undefined
+  const after = 'after' in cursor ? cursor.after : undefined
+  const epoch = 'epoch' in cursor ? cursor.epoch : undefined
+  if (
+    typeof table !== 'number' ||
+    !Number.isInteger(table) ||
+    table < 0 ||
+    (after !== null && typeof after !== 'string') ||
+    (epoch !== undefined && typeof epoch !== 'string')
+  ) {
+    return null
+  }
+  return {
+    version: 2,
+    phase: 'proving',
+    layout: LEGACY_PROOF_LAYOUT,
+    proof: data.proof,
+    store: data.store,
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }
+  }
 }
 
 export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {

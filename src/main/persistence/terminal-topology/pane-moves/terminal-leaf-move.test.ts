@@ -122,36 +122,7 @@ describe('moving a pane to a new tab', () => {
 
 // Relay reattach can duplicate SSH panes into local; all holders must move or future binds refuse.
 describe('moving an SSH pane held by both partitions', () => {
-  it('moves every copy, so the target reattach and the next relay reattach both bind', async () => {
-    const store = openStore(newDataFile())
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const hostId = toSshExecutionHostId('ssh-1')
-    await seedSplitSource(store, hostId)
-    const relay = { worktreeId: WT, leafId: MOVED, ptyId: 'pty-agent', incarnationId: 'inc-1' }
-    expect(
-      await store.persistPtyBinding({ ...relay, tabId: SOURCE, origin: 'relay_reattach' })
-    ).toBe(true)
-
-    await expect(
-      store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
-    ).resolves.toMatchObject({ status: 'moved' })
-
-    expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([TARGET])
-    expect(tabsHoldingLeaf(store.getWorkspaceSession(hostId), MOVED)).toEqual([TARGET])
-    expect(
-      await store.persistPtyBinding({ ...relay, tabId: TARGET, origin: 'reattach' }, hostId)
-    ).toBe(true)
-    expect(
-      await store.persistPtyBinding({
-        ...relay,
-        tabId: TARGET,
-        origin: 'relay_reattach',
-        mayReviveRetiredSurface: false
-      })
-    ).toBe(true)
-  })
-
-  it('keeps one holder per partition across a restart, and the next relay reattach binds', async () => {
+  it('keeps both partition holders reattachable before and after restart', async () => {
     const dataFile = newDataFile()
     const store = openStore(dataFile)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -159,22 +130,28 @@ describe('moving an SSH pane held by both partitions', () => {
     const hostId = toSshExecutionHostId('ssh-1')
     await seedSplitSource(store, hostId)
     const relay = { worktreeId: WT, leafId: MOVED, ptyId: 'pty-agent', incarnationId: 'inc-1' }
-    await store.persistPtyBinding({ ...relay, tabId: SOURCE, origin: 'relay_reattach' })
-    await store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
+    expect(
+      await store.persistPtyBinding({ ...relay, tabId: SOURCE, origin: 'relay_reattach' })
+    ).toBe(true)
+    await expect(
+      store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
+    ).resolves.toMatchObject({ status: 'moved' })
+    expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([TARGET])
+    expect(tabsHoldingLeaf(store.getWorkspaceSession(hostId), MOVED)).toEqual([TARGET])
     expect(
       await store.persistPtyBinding({ ...relay, tabId: TARGET, origin: 'reattach' }, hostId)
     ).toBe(true)
+    const targetRelay = {
+      ...relay,
+      tabId: TARGET,
+      origin: 'relay_reattach',
+      mayReviveRetiredSurface: false
+    } as const
+    expect(await store.persistPtyBinding(targetRelay)).toBe(true)
     store.flush()
 
     const restarted = openStore(dataFile)
-    expect(
-      await restarted.persistPtyBinding({
-        ...relay,
-        tabId: TARGET,
-        origin: 'relay_reattach',
-        mayReviveRetiredSurface: false
-      })
-    ).toBe(true)
+    expect(await restarted.persistPtyBinding(targetRelay)).toBe(true)
     for (const session of [
       restarted.getWorkspaceSession(),
       restarted.getWorkspaceSession(hostId)

@@ -23,13 +23,14 @@ enablePopupFixtureNativeControls()
 setPopupFixtureEvidenceName('background-electron-evidence.json')
 
 describe('hidden Chromium background OpenURL compatibility', () => {
-  it.each(
-    (['local', 'route'] as const).flatMap((name) =>
-      (['same-origin', 'cross-site', 'no-referrer', 'subframe', 'opaque'] as const).map(
-        (context) => ({ name, context })
-      )
+  // Route covers every initiator context; local keeps the cookie-bearing and null-origin extremes.
+  it.each([
+    { name: 'local', context: 'same-origin' },
+    { name: 'local', context: 'opaque' },
+    ...(['same-origin', 'cross-site', 'no-referrer', 'subframe', 'opaque'] as const).map(
+      (context) => ({ name: 'route' as const, context })
     )
-  )(
+  ] as const)(
     'matches native modifier GET and POST controls across initiating contexts: $name/$context',
     async ({ name, context }) => {
       const page = guest(name)

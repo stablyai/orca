@@ -1,5 +1,5 @@
 import React from 'react'
-import { finishGoogleSignInWithAddress, openInMyBrowser } from './google-connect-client'
+import { finishGoogleSignInWithAddress, openGoogleSignInAgain } from './google-connect-client'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -34,7 +34,7 @@ export function GoogleSignInWaiting({
           : t('bots.google.waitingHow', 'Pick your account and click Allow.')}
       </p>
       {link ? (
-        <Button variant="link" size="inlineText" onClick={() => openInMyBrowser(link)}>
+        <Button variant="link" size="inlineText" onClick={() => openGoogleSignInAgain(link)}>
           {t('bots.google.openAgain', 'Open again')}
           <ExternalLink />
         </Button>

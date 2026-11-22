@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from 'react'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
-import { callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import type { BotRef } from '@/lib/bot-hosts'
+import { callBotGroupRpc } from '@/lib/bot-group-rpc'
 import {
   reduceBotGroupTranscript,
   type BotGroupTranscript
@@ -11,7 +12,7 @@ function readPage(
   threadId: string | undefined,
   beforeSequence?: number
 ): Promise<BotGroupTranscript> {
-  return callBotRpc(group, 'bots.groups.read', {
+  return callBotGroupRpc(group, 'bots.groups.read', {
     groupId: group.id,
     threadId,
     beforeSequence

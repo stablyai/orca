@@ -7,6 +7,8 @@ import {
 import { installBrowserWindowPrompt } from './browser/window-controls/browser-window-prompt-installation'
 import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
 import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
+import { installBrowserGuestPageVisibilityReport } from './browser/visibility/browser-guest-page-visibility-report'
+import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../shared/browser/guest-lifecycle/browser-guest-page-visibility'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {
@@ -29,6 +31,10 @@ if (process.isMainFrame) {
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]
   })
 }
+// Electron's visibilityState override runs in every frame of the guest.
+installBrowserGuestPageVisibilityReport((state) =>
+  ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
+)
 // Every frame this preload runs in also got Electron's throwing prompt.
 contextBridge.executeInMainWorld({ func: installBrowserWindowPrompt, args: [] })
 

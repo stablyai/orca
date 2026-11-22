@@ -1,4 +1,4 @@
-import { PanelRight } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
@@ -30,7 +30,7 @@ export function RightSidebarToggle(): React.JSX.Element {
           onClick={toggleRightSidebar}
           aria-label={needsYouLabel ?? t('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >
-          <PanelRight size={16} />
+          <SidebarToggleIcon side="right" size={16} />
           {needsYouLabel ? (
             <span
               aria-hidden

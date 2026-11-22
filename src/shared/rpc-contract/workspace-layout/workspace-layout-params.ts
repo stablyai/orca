@@ -220,11 +220,16 @@ const OpenBrowserPageCommand = z.object({ type: z.literal('openBrowserPage'), ..
 
 const CloseBrowserPageCommand = z.object({ type: z.literal('closeBrowserPage'), ...OnBrowserPage })
 
-/** A converted page: the window's new page takes the old one's place. */
-const ReplaceBrowserPageCommand = z.object({
-  type: z.literal('replaceBrowserPage'),
-  ...OnBrowserPage,
-  newPageId: z.string().min(1)
+/** A converted page replaces the rendered resource without moving its tab-bar slot. */
+const ReplaceTabContentCommand = z.object({
+  type: z.literal('replaceTabContent'),
+  workspace: OnPane.workspace,
+  replacement: z.object({
+    kind: z.literal('browser-page'),
+    browserTabId: z.string().min(1),
+    pageId: z.string().min(1),
+    newPageId: z.string().min(1)
+  })
 })
 
 const SetBrowserTabProfileCommand = z.object({
@@ -319,7 +324,7 @@ export const LayoutApplyParams = z.object({
     OpenBrowserTabCommand,
     OpenBrowserPageCommand,
     CloseBrowserPageCommand,
-    ReplaceBrowserPageCommand,
+    ReplaceTabContentCommand,
     SetBrowserTabProfileCommand,
     OpenEditorTabCommand,
     OpenAgentSessionTabCommand,

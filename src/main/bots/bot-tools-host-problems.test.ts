@@ -46,3 +46,24 @@ describe('checking a bot’s URL servers only', () => {
     expect(mocks.launched).toHaveBeenCalledWith(['vercel'])
   })
 })
+
+describe('a bot on an agent its tools never reach', () => {
+  it('shows every tool off, without starting anything', async () => {
+    mocks.launched.mockReset()
+    mocks.servers.splice(
+      0,
+      Infinity,
+      { name: 'metrics', command: 'node', args: ['metrics.js'] },
+      { name: 'vercel', url: 'https://mcp.vercel.com' }
+    )
+    const off = {
+      kind: 'failed',
+      detail: "Off: Auggie doesn't load the tools Orca passes to its chats."
+    }
+    expect(await botToolProblems({ ...cli, agent: 'aug' })).toEqual({
+      metrics: off,
+      vercel: off
+    })
+    expect(mocks.launched).not.toHaveBeenCalled()
+  })
+})

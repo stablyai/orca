@@ -27,13 +27,6 @@ function cache(fetch: (url: string) => Promise<Response>, now = () => NOW) {
 }
 
 describe('ConnectorAvatarCache', () => {
-  it('fetches an avatar once and serves it from disk after', async () => {
-    const { calls, avatars } = cache(async () => png())
-    expect(await avatars.read(URL_A)).toEqual({ data: PNG, mimeType: 'image/png' })
-    expect(await avatars.read(URL_A)).toEqual({ data: PNG, mimeType: 'image/png' })
-    expect(calls).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses a body that is not an image, whatever its content type says', async () => {
     const { avatars } = cache(
       async () =>
@@ -63,10 +56,10 @@ describe('ConnectorAvatarCache', () => {
     }
   })
 
-  it('serves a week-old copy when the refresh fails', async () => {
+  it('reuses a fresh disk copy and later serves it when refresh fails', async () => {
     let now = NOW
     let online = true
-    const { avatars } = cache(
+    const { avatars, calls } = cache(
       async () => {
         if (!online) {
           throw new Error('offline')
@@ -75,13 +68,16 @@ describe('ConnectorAvatarCache', () => {
       },
       () => now
     )
-    await avatars.read(URL_A)
+    expect(await avatars.read(URL_A)).toEqual({ data: PNG, mimeType: 'image/png' })
+    expect(await avatars.read(URL_A)).toEqual({ data: PNG, mimeType: 'image/png' })
+    expect(calls).toHaveBeenCalledTimes(1)
     for (const name of readdirSync(directory)) {
       utimesSync(join(directory, name), new Date(now - 8 * DAY), new Date(now - 8 * DAY))
     }
     online = false
     now += DAY
     expect(await avatars.read(URL_A)).toEqual({ data: PNG, mimeType: 'image/png' })
+    expect(calls).toHaveBeenCalledTimes(2)
   })
 })
 

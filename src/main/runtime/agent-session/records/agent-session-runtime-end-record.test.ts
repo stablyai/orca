@@ -23,6 +23,7 @@ vi.mock('../../../filesystem/durable-file-write', async (importOriginal) => {
 
 import {
   beginAgentSessionRuntimeRecord,
+  previousAgentSessionRuntimeStartedAt,
   readAgentSessionRuntimeEnds,
   recordAgentSessionRuntimeEnd
 } from './agent-session-runtime-end-record'
@@ -76,6 +77,13 @@ describe('what a runtime records about itself', () => {
     beginAgentSessionRuntimeRecord(directory, RUNTIME_B, 1)
     recordAgentSessionRuntimeEnd('quit', 2)
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_B)).toBe('quit')
+  })
+
+  it('does not name an older run as the last one while a newer record cannot be read', async () => {
+    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
+    recordAgentSessionRuntimeEnd('quit', 2)
+    await writeFile(join(runtimesDirectory(), `${RUNTIME_B}.json`), '{not json')
+    expect(await previousAgentSessionRuntimeStartedAt(directory, 'current-runtime')).toBeUndefined()
   })
 
   it('names no cause when the records cannot be listed', async () => {

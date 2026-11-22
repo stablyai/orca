@@ -59,16 +59,6 @@ const greeting = item({
 const kickoff = submission(botKickoffFingerprint(CHAT))
 
 describe('a new bot whose kickoff ended silent', () => {
-  // test123 on 10-31: Stop landed 9 s in, after two tool calls and before any greeting.
-  it('is sent the kickoff once more', () => {
-    expect(
-      kickoffNeedsRetry(CHAT, {
-        submissions: [kickoff],
-        items: [turn('interrupted'), toolCall]
-      })
-    ).toBe(true)
-  })
-
   it('is sent it again whenever its owner asks, until it speaks or they write', () => {
     const ended = {
       submissions: [kickoff, kickoff],
@@ -99,6 +89,24 @@ describe('a new bot whose kickoff ended silent', () => {
     expect(kickoffNeedsRetry(CHAT, refused, true)).toBe(true)
   })
 
+  it('is sent again on Try again when the owner wrote while its agent could not start', async () => {
+    const refusedKickoff = submission(kickoff.payloadFingerprint, 'rejected')
+    // The owner's "hello" was refused by the same failed start: it never reached the agent.
+    const notSent = { ...submission('owner', 'rejected'), clientMessageId: 'hello' }
+    const fingerprints = async () => [
+      { clientMessageId: refusedKickoff.clientMessageId, fingerprint: kickoff.payloadFingerprint },
+      { clientMessageId: 'hello', fingerprint: 'owner' }
+    ]
+    const snapshot = async () => ({ submissions: [refusedKickoff, notSent], items: [] })
+    const send = vi.fn(async () => {})
+    const bot = { id: 'b1', name: 'Scout', firstRun: true as const, chatSessionId: CHAT }
+
+    expect(await retryBotKickoff(bot, { fingerprints, snapshot, send }, true)).toBe(true)
+    expect(send).toHaveBeenCalledOnce()
+    // Unasked, Orca still leaves a chat the owner wrote in alone.
+    expect(await retryBotKickoff(bot, { fingerprints, snapshot, send })).toBe(false)
+  })
+
   it('refuses Try again while the last kickoff is still on its way', () => {
     const first = [turn('interrupted')]
     // Sent but not taken yet, or taken with its turn not open yet.
@@ -109,7 +117,7 @@ describe('a new bot whose kickoff ended silent', () => {
     }
   })
 
-  it('is left alone while the kickoff runs, once it greeted, or once anything else was sent', () => {
+  it('leaves a running, greeted or not-yet-started kickoff alone', () => {
     expect(
       kickoffNeedsRetry(CHAT, {
         submissions: [kickoff],
@@ -122,15 +130,6 @@ describe('a new bot whose kickoff ended silent', () => {
         items: [turn('interrupted'), greeting]
       })
     ).toBe(false)
-    // The retry itself, or the owner's own message, ends it.
-    for (const second of [kickoff, submission('owner-typed')]) {
-      expect(
-        kickoffNeedsRetry(CHAT, {
-          submissions: [kickoff, second],
-          items: [turn('interrupted')]
-        })
-      ).toBe(false)
-    }
     // Not taken yet: nothing has ended.
     expect(kickoffNeedsRetry(CHAT, { submissions: [kickoff], items: [] })).toBe(false)
   })
@@ -139,7 +138,8 @@ describe('a new bot whose kickoff ended silent', () => {
     let release = (): void => {}
     const snapshot = vi.fn(async () => {
       await new Promise<void>((resolve) => (release = resolve))
-      return { submissions: [kickoff], items: [turn('interrupted')] }
+      // Stop after a tool call and before a greeting still permits one retry.
+      return { submissions: [kickoff], items: [turn('interrupted'), toolCall] }
     })
     const fingerprints = async () => [
       { clientMessageId: kickoff.clientMessageId, fingerprint: kickoff.payloadFingerprint }

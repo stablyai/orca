@@ -73,7 +73,7 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
 
-    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
+    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY, { confirmedExit: true })
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })

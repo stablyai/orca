@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   writeFileSync,
@@ -199,5 +200,29 @@ describe('profile index store', () => {
 
     expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
     expect(readJson(indexPath)).toEqual(index)
+  })
+
+  it('replaces a hard-linked backup without mutating the unrelated inode', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
+    const first = createDefaultLocalOrcaProfile(1)
+    const firstIndex: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: first.id,
+      profiles: [first]
+    }
+    store.writeProfileIndex(indexPath, firstIndex)
+
+    const unrelated = join(testState.dir, 'unrelated.json')
+    writeFileSync(unrelated, '{"preserve":true}', 'utf-8')
+    linkSync(unrelated, `${indexPath}.bak`)
+
+    const second = { ...first, name: 'Updated' }
+    const secondIndex: OrcaProfileIndex = { ...firstIndex, profiles: [second] }
+    store.writeProfileIndex(indexPath, secondIndex)
+
+    expect(readFileSync(unrelated, 'utf-8')).toBe('{"preserve":true}')
+    expect(readJson(`${indexPath}.bak`)).toEqual(firstIndex)
+    expect(readJson(indexPath)).toEqual(secondIndex)
   })
 })

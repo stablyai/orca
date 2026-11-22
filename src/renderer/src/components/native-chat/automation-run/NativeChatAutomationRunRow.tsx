@@ -14,6 +14,7 @@ import {
   NativeChatAutomationRunBody,
   NativeChatAutomationSendAgain
 } from './NativeChatAutomationRunBody'
+import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatAutomationRowFrame } from './NativeChatAutomationRowFrame'
 
 export type NativeChatAutomationRunRowProps = {
@@ -27,6 +28,8 @@ export type NativeChatAutomationRunRowProps = {
   error?: string
   /** Whether Send again is offered here, or already went. */
   resend?: AutomationRunResend
+  /** Earlier tries of this run that couldn't start, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   onRefolded: () => void
 }
 
@@ -40,6 +43,7 @@ export function NativeChatAutomationRunRow({
   timestamp,
   error,
   resend = 'none',
+  earlierFailures,
   onRefolded
 }: NativeChatAutomationRunRowProps): React.JSX.Element {
   const wording = useAutomationRunWording(run.automation)
@@ -80,6 +84,7 @@ export function NativeChatAutomationRunRow({
         instructions={instructions}
         facts={facts}
         error={error}
+        earlierFailures={earlierFailures}
         wording={wording}
         findQuery={findQuery}
       />

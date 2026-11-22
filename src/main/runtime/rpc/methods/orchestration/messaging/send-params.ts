@@ -38,6 +38,8 @@ export const SendParams = z
     chat: OptionalString,
     /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. */
     item: OptionalString,
+    /** With `item`: files on this computer, sent with the mail into the item's chat. */
+    files: z.array(z.string().min(1).max(4096)).max(30).optional(),
     // A paired server: this Orca carries the mail there and the replies back (`send --on`).
     on: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,

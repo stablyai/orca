@@ -45,7 +45,7 @@ export async function connectedGoogle(emails: string[] = ['ada@acme.dev']) {
   vi.doMock('os', () => ({ ...realOs, homedir: () => home }))
   const store = await import('./google-credential-store')
   for (const email of emails) {
-    store.saveGoogleAccount({
+    await store.saveGoogleAccount({
       email,
       client: { clientId: 'c.apps.googleusercontent.com', clientSecret: 's' },
       projectId: 'acme-orca',

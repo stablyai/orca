@@ -1,9 +1,18 @@
-import { existsSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { StandingDownloadClaim } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
 import {
+  abortClaimedClientDownload,
+  beginClientDownload,
+  setClientDownloadClaimant,
+  writeClaimedClientDownload
+} from '../runtime/browser/downloads/client-download-claims'
+import {
+  googleSetupClientDownloadClaimant,
   googleSetupKeyDownloadClaim,
   googleSetupWithholdsPageText
 } from './google-setup-key-download'
@@ -32,14 +41,21 @@ const desktopKey = (projectId = 'example-project-123') =>
     }
   })
 
+const IVY_HOME = 'folder:ivy-home'
+
 function setup(runs: GoogleSetupRun[]) {
   const deps = {
-    runs: () => runs,
+    runs: vi.fn(() => runs),
+    botWorkspace: (botId: string) => (botId === 'ivy' ? IVY_HOME : 'folder:other-home'),
     importKey: vi.fn(),
     keyArrived: vi.fn(async () => {}),
     keyRefused: vi.fn(async () => {})
   }
-  return { claim: googleSetupKeyDownloadClaim(deps), deps }
+  const claim = googleSetupKeyDownloadClaim(deps, {
+    stagingDir: join(mkdtempSync(join(tmpdir(), 'orca-key-test-')), 'staging'),
+    workspaceOfPage: (id) => (id === 'setup-page' ? IVY_HOME : 'folder:other-home')
+  })
+  return { claim, deps }
 }
 
 const KEY = {
@@ -49,6 +65,8 @@ const KEY = {
 }
 
 async function download(taken: StandingDownloadClaim, text: string): Promise<void> {
+  // Chromium creates the staging folder as it saves.
+  await mkdir(dirname(taken.savePath), { recursive: true })
   await writeFile(taken.savePath, text)
   taken.finish({ downloadId: 'd', status: 'completed', savePath: taken.savePath, error: null })
 }
@@ -84,6 +102,9 @@ describe('the Google key downloaded on a setup page', () => {
       claim({ ...KEY, documentUrl: 'https://console.cloud.google.com/home/dashboard' })
     ).toBeNull()
     expect(setup([run({ steps: { client: { status: 'done', at: 2 } } })]).claim(KEY)).toBeNull()
+    // The page is another agent's tab, or two runs name it: nobody's claim.
+    expect(setup([run({ botId: 'rex' })]).claim(KEY)).toBeNull()
+    expect(setup([run(), run({ id: 'run-2', botId: 'rex' })]).claim(KEY)).toBeNull()
   })
 
   it('cleans up refused downloads before reporting them and accepts a matching key on retry', async () => {
@@ -139,5 +160,88 @@ describe('the Google key downloaded on a setup page', () => {
     expect(deps.importKey).not.toHaveBeenCalled()
     expect(deps.keyArrived).not.toHaveBeenCalled()
     expect(deps.keyRefused).not.toHaveBeenCalled()
+  })
+})
+
+describe("a paired desktop's key download, claimed as it begins", () => {
+  const start = {
+    browserPageId: 'setup-page',
+    workspaceId: IVY_HOME,
+    pageHostGeneration: 4,
+    filename: 'client_secret_123.json',
+    documentUrl: KEY.documentUrl
+  }
+  const send = (transferId: string, text: string) => {
+    const chunk = { browserPageId: 'setup-page', transferId, pageHostGeneration: 4 }
+    expect(
+      writeClaimedClientDownload({
+        ...chunk,
+        contentBase64: Buffer.from(text).toString('base64'),
+        offset: 0,
+        final: false
+      })
+    ).toEqual({})
+    return writeClaimedClientDownload({
+      ...chunk,
+      contentBase64: '',
+      offset: Buffer.byteLength(text),
+      final: true
+    })
+  }
+
+  it('imports it for the run waiting when it began, and only for that run', async () => {
+    const runs = [run()]
+    const { deps } = setup(runs)
+    setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+    try {
+      expect(beginClientDownload('t1', { ...start, workspaceId: 'folder:other-home' })).toBe(false)
+      expect(beginClientDownload('t1', { ...start, filename: 'report.csv' })).toBe(false)
+
+      expect(beginClientDownload('t1', start)).toBe(true)
+      expect(send('t1', desktopKey())).toEqual({ workspaceRelativePath: 'Google setup in Orca' })
+      await vi.waitFor(() => expect(deps.keyArrived).toHaveBeenCalledWith('ivy'))
+      expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
+      // A late chunk of a handed-over claim never reaches the workspace path.
+      expect(() =>
+        writeClaimedClientDownload({
+          browserPageId: 'setup-page',
+          transferId: 't1',
+          pageHostGeneration: 4,
+          contentBase64: '',
+          offset: 0,
+          final: true
+        })
+      ).toThrow('browser_client_download_transfer_settled')
+
+      // Started over while the desktop was still downloading: the new run never gets this key.
+      expect(beginClientDownload('t2', start)).toBe(true)
+      runs[0] = run({ id: 'run-2', projectId: undefined })
+      const checks = deps.runs.mock.calls.length
+      send('t2', desktopKey())
+      // Its import checks the run once the bytes are in; nothing follows for a replaced run.
+      await vi.waitFor(() => expect(deps.runs.mock.calls.length).toBeGreaterThan(checks))
+      expect(deps.importKey).toHaveBeenCalledOnce()
+      expect(deps.keyArrived).toHaveBeenCalledOnce()
+    } finally {
+      setClientDownloadClaimant(null)
+    }
+  })
+
+  it('fails a claimed download when its desktop disconnects, so the agent hears it never arrived', async () => {
+    const { deps } = setup([run()])
+    setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+    const stopWatching = vi.fn()
+    try {
+      expect(beginClientDownload('t3', start, stopWatching)).toBe(true)
+      const disconnected = 'the desktop disconnected before the download finished.'
+      expect(abortClaimedClientDownload('setup-page', 't3', disconnected)).toBe(true)
+      await vi.waitFor(() =>
+        expect(deps.keyRefused).toHaveBeenCalledExactlyOnceWith('ivy', disconnected)
+      )
+      expect(stopWatching).toHaveBeenCalledOnce()
+      expect(deps.importKey).not.toHaveBeenCalled()
+    } finally {
+      setClientDownloadClaimant(null)
+    }
   })
 })

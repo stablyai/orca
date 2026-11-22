@@ -63,7 +63,7 @@ const fake = (real: string) => ({
 })
 
 describe('saved mapped-drive answers', () => {
-  it('keep each settled answer across a restart, without reading any drive', async () => {
+  it('keeps settled answers across restart and retains a WSL mapping after a failed lookup', async () => {
     const answers = await restart()
     await readWslMappedDriveShareNow('C', fake('C:\\'))
     await readWslMappedDriveShareNow('W', fake('\\\\wsl.localhost\\Ubuntu\\'))
@@ -75,10 +75,28 @@ describe('saved mapped-drive answers', () => {
         { letter: 'W', share: '\\\\wsl.localhost\\Ubuntu', at: 1_000 }
       ]
     })
-    await restart()
+    const reloaded = await restart()
     expect(wslMappedDriveLastKnownShare('C')).toEqual({ share: null })
     expect(wslMappedDriveLastKnownShare('W')).toEqual({ share: '\\\\wsl.localhost\\Ubuntu' })
     expect(realpathNative).not.toHaveBeenCalled()
+
+    const failing = {
+      ...fake(''),
+      realpathRoot: async (): Promise<string> => {
+        throw new Error('ENOENT')
+      }
+    }
+    await expect(readWslMappedDriveShareNow('W', failing)).resolves.toBe('unverifiable')
+    await expect(classifyWslMappedDrive('W', { ...failing, now: () => 120_000 })).resolves.toEqual({
+      share: '\\\\wsl.localhost\\Ubuntu'
+    })
+    await reloaded.saved()
+    await restart()
+
+    expect(wslMappedDriveLastKnownShare('W')).toEqual({ share: '\\\\wsl.localhost\\Ubuntu' })
+    writeUnreadableJournal()
+    loadWslMoveFence(userDataPath)
+    expect(isWslMoveProjectBlocked(storeOf({ w: 'W:\\home\\me\\app' }), { repoId: 'w' })).toBe(true)
   })
 
   it('ignore a malformed file', async () => {
@@ -109,29 +127,6 @@ describe('saved mapped-drive answers', () => {
     expect(isWslMoveProjectBlocked(store, { repoId: 'w' })).toBe(true)
     // C: is known from the file, so only the unknown W: is looked up.
     expect(realpathNative.mock.calls.map(([root]) => root)).toEqual(['W:\\'])
-  })
-
-  it('keep a WSL answer through a failed lookup and a restart, and report it unverifiable', async () => {
-    const answers = await restart()
-    await readWslMappedDriveShareNow('W', fake('\\\\wsl.localhost\\Ubuntu\\'))
-    await answers.saved()
-    const failing = {
-      ...fake(''),
-      realpathRoot: async (): Promise<string> => {
-        throw new Error('ENOENT')
-      }
-    }
-    // The mover sees a WSL drive that fails to answer as unverifiable, not as mapping nowhere.
-    await expect(readWslMappedDriveShareNow('W', failing)).resolves.toBe('unverifiable')
-    await expect(classifyWslMappedDrive('W', { ...failing, now: () => 120_000 })).resolves.toEqual({
-      share: '\\\\wsl.localhost\\Ubuntu'
-    })
-    await answers.saved()
-    await restart()
-    expect(wslMappedDriveLastKnownShare('W')).toEqual({ share: '\\\\wsl.localhost\\Ubuntu' })
-    writeUnreadableJournal()
-    loadWslMoveFence(userDataPath)
-    expect(isWslMoveProjectBlocked(storeOf({ w: 'W:\\home\\me\\app' }), { repoId: 'w' })).toBe(true)
   })
 
   it('classify unknown letters once for an unreadable journal, never a saved WSL one', async () => {

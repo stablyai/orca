@@ -63,6 +63,9 @@ export function installClientHostedPaneApi(overrides?: {
         reportViewportScrollState: vi.fn(),
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),
+        setAnnotationViewportBridge: vi.fn(async () => true),
+        onGrabModeToggle: inert,
+        onGrabActionShortcut: inert,
         ...overrides?.browser
       },
       ui: {

@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { useState, type ReactNode } from 'react'
 import {
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
@@ -10,7 +9,6 @@ import {
 } from '../../../src/shared/bots/bot-look-around'
 import { ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
-import { MobileStateButton } from '../components/feedback/MobileStateView'
 import { TextField } from '../components/composer-input/TextField'
 import {
   ChoiceRows,
@@ -19,20 +17,17 @@ import {
 } from '../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { SheetBot } from './bot-sheet-operations'
-import { lastLookedText } from './bot-up-next-copy'
-import { MobileBotSettingsSection } from './MobileBotSettingsSection'
-import { optionStyles } from './mobile-bot-option-styles'
+import { lookedWhen } from './bot-up-next-copy'
+import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 
 export type LookAroundPage = 'every' | 'focus'
 
 /** Saves only the changed field, so quick edits and the bot's own chat edits never undo each other. */
 type SaveLookAround = (change: Partial<BotLookAround>) => void
 
-/** The desktop's Look around settings, for a bot whose host runs looks. */
+/** The desktop's Look around page, for a bot whose host runs looks. */
 export function MobileLookAroundSection(props: {
   bot: SheetBot
   upNext: BotUpNext | undefined
@@ -45,12 +40,13 @@ export function MobileLookAroundSection(props: {
   useMobileColorScheme()
   const setting = botLookAround(props.bot)
   const state = props.upNext?.state
+  const lastLookedAt = state?.lastLookedAt
   return (
-    <MobileBotSettingsSection
-      title={t('bots.lookAround.title', 'Look around')}
-      detail={t(
+    <SettingsSection
+      first
+      footer={t(
         'bots.lookAround.detail',
-        'Reads connected apps and projects to suggest next steps. Read-only.',
+        'Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.',
         { name: props.bot.name }
       )}
     >
@@ -88,30 +84,26 @@ export function MobileLookAroundSection(props: {
             <ListRow
               key="last-looked"
               title={t('bots.lookAround.lastLooked', 'Last looked')}
-              subtitle={lastLookedText(state?.lastLookedAt, props.upNext?.items.length ?? 0)}
-              detail={
-                <Text style={optionStyles.optionRowDetail}>
-                  {t(
-                    'bots.lookAround.requirements',
-                    'Each look uses your agent plan. Orca must be running on the host.'
-                  )}
-                </Text>
+              value={
+                lastLookedAt === undefined
+                  ? t('bots.lookAround.notYet', 'Not yet')
+                  : lookedWhen(lastLookedAt)
               }
-              accessory={
-                <MobileStateButton
-                  label={
-                    state?.running
-                      ? t('bots.lookAround.looking', 'Looking…')
-                      : t('bots.lookAround.lookNow', 'Look now')
-                  }
-                  disabled={props.disabled || state?.running === true || props.bot.paused}
-                  onPress={props.onLookNow}
-                />
+            />,
+            <ListRow
+              key="now"
+              title={
+                state?.running
+                  ? t('bots.lookAround.looking', 'Looking…')
+                  : t('bots.lookAround.lookNow', 'Look now')
               }
+              disabled={props.disabled || state?.running === true || props.bot.paused}
+              onPress={props.onLookNow}
+              accessibilityRole="button"
             />
           ]
         : null}
-    </MobileBotSettingsSection>
+    </SettingsSection>
   )
 }
 
@@ -122,7 +114,7 @@ function FocusField(props: {
 }) {
   const t = useMobileTranslation()
   return (
-    <View style={pageStyles.focus}>
+    <>
       <TextField
         value={props.focus}
         onChangeText={props.onChange}
@@ -135,22 +127,25 @@ function FocusField(props: {
         returnKeyType="done"
         onSubmitEditing={props.onDone}
       />
-      <Text style={[optionStyles.optionRowDetail, pageStyles.hint]}>
+      <SettingsNote>
         {t(
           'bots.lookAround.focusDetail',
           'Optional. Leave it empty and it looks for anything waiting on you.'
         )}
-      </Text>
-    </View>
+      </SettingsNote>
+    </>
   )
 }
 
-/** How often or Look for, drilled into from the section, like the workspace options' pages. */
+/** How often or Look for, drilled into from Look around, like the workspace options' pages. */
 export function MobileLookAroundPage(props: {
   page: LookAroundPage
   bot: SheetBot
   save: SaveLookAround
   onBack: () => void
+  /** Offline: the choices and Save are off, and the typed text stays. */
+  disabled: boolean
+  banner: ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -163,6 +158,9 @@ export function MobileLookAroundPage(props: {
   const [initialFocus] = useState(setting.focus)
   const [focus, setFocus] = useState(initialFocus)
   const saveFocus = () => {
+    if (props.disabled) {
+      return
+    }
     const typed = focus.trim()
     if (typed !== initialFocus) {
       props.save({ focus: typed })
@@ -177,11 +175,21 @@ export function MobileLookAroundPage(props: {
     <>
       <SheetHeader
         title={title}
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.lookAround.backToLookAround', 'Back to Look around'),
+          onPress: props.onBack
+        }}
         {...(props.page === 'focus'
-          ? { trailing: { label: t('bots.lookAround.save', 'Save'), onPress: saveFocus } }
+          ? {
+              trailing: {
+                label: t('bots.lookAround.save', 'Save'),
+                onPress: saveFocus,
+                disabled: props.disabled
+              }
+            }
           : {})}
       />
+      {props.banner}
       {props.page === 'every' ? (
         <ChoiceRows
           choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
@@ -189,6 +197,7 @@ export function MobileLookAroundPage(props: {
             label: LOOK_AROUND_EVERY_LABELS[id]
           }))}
           selected={setting.every}
+          disabled={props.disabled}
           onSelect={(every) => {
             props.save({ every })
             props.onBack()
@@ -200,13 +209,3 @@ export function MobileLookAroundPage(props: {
     </>
   )
 }
-
-const pageStyles = themedStyleSheet(() => ({
-  focus: {
-    gap: spacing.sm,
-    alignItems: 'stretch'
-  },
-  hint: {
-    paddingHorizontal: spacing.xs
-  }
-}))

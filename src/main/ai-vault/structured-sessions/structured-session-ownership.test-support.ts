@@ -146,8 +146,9 @@ export function installChats(records: AgentSessionRecord[]) {
   return store
 }
 
-export function listResult(): AiVaultListResult {
-  const session: AiVaultSession = {
+/** One history row; the defaults are the owned Codex chat these tests share. */
+export function historySession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
+  return {
     id: `local:codex:${PROVIDER_SESSION}`,
     executionHostId: 'local',
     agent: 'codex',
@@ -167,7 +168,11 @@ export function listResult(): AiVaultListResult {
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
-    subagent: null
+    subagent: null,
+    ...overrides
   }
-  return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
+}
+
+export function listResult(): AiVaultListResult {
+  return { sessions: [historySession()], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
 }

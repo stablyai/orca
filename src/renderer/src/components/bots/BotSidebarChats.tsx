@@ -1,14 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import { botChatFoldKey, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
-import { pressFoldableRow } from '../../../../shared/bots/bot-row-press'
+import {
+  botChatFoldKey,
+  chatFoldSummary,
+  type BotChatTreeChat
+} from '../../../../shared/bots/bot-chat-tree'
 import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPagingLabel,
@@ -31,6 +34,8 @@ export function BotSidebarChats({
   workspaces,
   lineageChildrenByParentIdentity,
   activeLine,
+  steps,
+  onStep,
   onOpen
 }: {
   bot: Bot
@@ -39,6 +44,8 @@ export function BotSidebarChats({
   workspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
+  steps: Readonly<Record<string, number>>
+  onStep: (chatId: string, steps: number) => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -51,7 +58,6 @@ export function BotSidebarChats({
     [listed, bot.hostId, bot.id]
   )
   const folds = useAppStore(useShallow((s) => foldKeys.map((key) => s.botChatFolds[key])))
-  const [steps, setSteps] = useState<Readonly<Record<string, number>>>({})
   const view = useMemo(() => {
     const foldById = new Map(listed.map((chat, index) => [chat.chatId, folds[index]]))
     return buildBotSidebarTree({
@@ -104,7 +110,7 @@ export function BotSidebarChats({
           view={chatView}
           notes={notes}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => setSteps((shown) => ({ ...shown, [chatView.chat.chatId]: next }))}
+          onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
         />
       ))}
@@ -126,11 +132,13 @@ function chatTitle(t: ReturnType<typeof useTranslate>, chat: BotChatTreeChat): s
   return chat.origin === 'home' ? t('bots.chats.home', 'Home Chat') : chat.title
 }
 
-function trailingText(trailing: BotSidebarChatTrailing | null): string | null {
+function trailingText(t: Translate, trailing: BotSidebarChatTrailing | null): string | null {
   if (!trailing) {
     return null
   }
-  return trailing.kind === 'summary' ? trailing.text : formatShortTimeAgo(trailing.at)
+  return trailing.kind === 'summary'
+    ? chatFoldSummary(t, trailing.counts)
+    : formatShortTimeAgo(trailing.at)
 }
 
 function BotSidebarChat({
@@ -153,23 +161,18 @@ function BotSidebarChat({
   const { active, toggle } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
-  const trailing = trailingText(view.trailing)
-  const pressRow = (event: Parameters<typeof pressFoldableRow>[1]): void =>
-    pressFoldableRow(
-      {
-        active,
-        folded: foldable && !open,
-        open: () => {
-          if (chat.origin === 'home') {
-            void openBotHomeTab(bot)
-          } else {
-            openBotSession(bot, chat.chatId)
-          }
-        },
-        toggle: foldable ? () => toggle(open) : null
-      },
-      event
-    )
+  const trailing = trailingText(t, view.trailing)
+  // A press only switches to the chat; only the chevron shows or hides its workers.
+  const pressRow = (event: { detail: number; repeat?: boolean }): void => {
+    if (event.detail > 1 || event.repeat) {
+      return
+    }
+    if (chat.origin === 'home') {
+      void openBotHomeTab(bot)
+    } else {
+      openBotSession(bot, chat.chatId)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-1">

@@ -217,6 +217,40 @@ describe('WorkerThreadChildProcessHost availability', () => {
     expect(created).toBe(1)
   })
 
+  it('answers not ready for a worker whose entry fails to load, and never builds another', async () => {
+    let created = 0
+    const host = new WorkerThreadChildProcessHost(() => {
+      created += 1
+      const transport = new EventEmitter()
+      setImmediate(() => {
+        transport.emit(
+          'error',
+          new Error("Cannot find module 'worker-thread-child-process-entry.js'")
+        )
+        transport.emit('exit', 1)
+      })
+      return Object.assign(transport, {
+        postMessage: () => {},
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    await expect(host.whenReady()).resolves.toBe(false)
+    await expect(host.whenReady()).resolves.toBe(false)
+    expect(created).toBe(1)
+  })
+
+  it('answers ready once a live worker has loaded its entry', async () => {
+    await expect(makeConnectedHost().whenReady()).resolves.toBe(true)
+  })
+
+  it('starts a cold worker without waiting and reports it ready only once it loaded its entry', async () => {
+    const host = makeConnectedHost()
+    expect(host.isReady()).toBe(false)
+    await expect(host.whenReady()).resolves.toBe(true)
+    expect(host.isReady()).toBe(true)
+  })
+
   it('still counts a ready message that arrives after the worker error that killed it', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()
@@ -235,10 +269,11 @@ describe('WorkerThreadChildProcessHost availability', () => {
     const child = host.spawn({ program: 'git', args: ['status'] })
     const failure = new Promise<Error>((resolve) => child.once('error', resolve))
     await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
-    expect(child.closed).toBe(false)
+    // It answered, so it is offered again.
+    expect(host.available()).toBe(true)
   })
 
-  it('keeps a child unproven when a worker that was ready dies before acknowledging it', async () => {
+  it('fails a child the ready worker never started as a spawn error', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()
       setImmediate(() => transport.emit('message', { type: 'ready' }))
@@ -252,8 +287,9 @@ describe('WorkerThreadChildProcessHost availability', () => {
     await new Promise((resolve) => setImmediate(resolve))
     const child = host.spawn({ program: 'git', args: ['status'] })
     const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
     await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
-    expect(child.closed).toBe(false)
+    await closed
   })
 })
 
