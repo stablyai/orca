@@ -98,16 +98,20 @@ try {
       const pending = pendingTruncate;
       // A revoked or declined truncate never starts, and the reply reports the WAL as it is.
       let busy = false;
-      if (Atomics.compareExchange(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, ${JOURNAL_TRUNCATE_GRANTED}, ${JOURNAL_TRUNCATE_RUNNING}) === ${JOURNAL_TRUNCATE_GRANTED}) {
-        const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
-        db.exec('PRAGMA busy_timeout = 0;');
-        try {
-          busy = truncate.get().busy !== 0;
-        } finally {
-          // SQLite's write lock is free again; the owner may hand writes back before this reply lands.
-          Atomics.store(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, 0);
-          db.exec('PRAGMA busy_timeout = ' + timeout);
+      const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
+      db.exec('PRAGMA busy_timeout = 0;');
+      try {
+        // Marked running only around the call that holds SQLite's write lock.
+        if (Atomics.compareExchange(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, ${JOURNAL_TRUNCATE_GRANTED}, ${JOURNAL_TRUNCATE_RUNNING}) === ${JOURNAL_TRUNCATE_GRANTED}) {
+          try {
+            busy = truncate.get().busy !== 0;
+          } finally {
+            // The lock is free again; the owner may hand writes back before this reply lands.
+            Atomics.store(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, 0);
+          }
         }
+      } finally {
+        db.exec('PRAGMA busy_timeout = ' + timeout);
       }
       const state = frames.get();
       // Nothing that touches the filesystem runs between a truncate and its reply; one that didn't

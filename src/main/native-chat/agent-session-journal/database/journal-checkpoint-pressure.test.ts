@@ -392,3 +392,44 @@ it('hands checkpoints to the writer at the first deadline once writes are parked
   expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(1000)
   expect(worker.terminated).toBe(false)
 })
+
+it('skips a truncate the worker measured before it last took checkpoints over', async () => {
+  const { filename, writer } = fixture()
+  let worker!: LivenessCheckpoint
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    factory: (workerData) => {
+      worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  const autocheckpoint = () => writer.pragma('wal_autocheckpoint', { simple: true })
+  worker.busy(false)
+  worker.ready()
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  worker.busy(true)
+  owner.afterCommit()
+  const measured = worker.sent.at(-1)!
+  // The worker is late, the writer takes checkpoints back and its commits recycle the WAL.
+  await vi.waitFor(() => expect(autocheckpoint()).toBe(1000))
+  writer.prepare("INSERT INTO writes VALUES(2, 'small')").run()
+  writer.prepare("INSERT INTO writes VALUES(3, 'small')").run()
+  worker.busy(false)
+  worker.emit('message', {
+    type: 'truncate-request',
+    id: measured.id,
+    generation: measured.generation,
+    truncateId: 5,
+    log: 36865,
+    checkpointed: 36865,
+    blocked: false
+  })
+  expect(autocheckpoint()).toBe(0)
+  expect(worker.sent.at(-1)).toMatchObject({ type: 'truncate', truncateId: 5 })
+  expect(Atomics.load(worker.liveness, 1)).not.toBe(1)
+  await new JournalSqlBatch(writer, owner).run([4], (id) =>
+    writer.prepare("INSERT INTO writes VALUES(?, 'bulk')").run(id)
+  )
+})
