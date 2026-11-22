@@ -63,12 +63,15 @@ describe("a Run whose coordinator's terminal ended", () => {
     expect(db.getQuestionRaw(open)?.status).toBe('pending')
   })
 
-  it('keeps its coordinator through a restart in place, and run-use binds a new one', async () => {
+  it('keeps its coordinator through a restart in place', async () => {
     runtime.intentionalPtyStops.mark('pty-c', 'replaced', null)
     await runtime.onPtyExit('pty-c', 0)
     expect(getQuestionTaker(db, ask())).toBeNull()
+  })
 
+  it('reads again once run-use binds the Run to a new terminal', async () => {
     await runtime.onPtyExit('pty-c', 0)
+    expect(getQuestionTaker(db, ask())).toBe('dropped:no-reader')
     db.bindRun({ runId, coordinatorHandle: 'term_n', coordinatorPaneKey: `tab_n:${LEAF}` })
     expect(getQuestionTaker(db, ask())).toBeNull()
   })

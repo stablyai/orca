@@ -1184,7 +1184,7 @@
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
-1 src/main/runtime/orchestration/db/runs/retired-chat-runs.ts # one savepoint when a replaced or deleted Chat retires its Runs, around orchestration DB writes that were already synchronous
+1 src/main/runtime/orchestration/db/runs/retired-coordinator-runs.ts # one savepoint when a deleted chat or an ended coordinator terminal retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts
