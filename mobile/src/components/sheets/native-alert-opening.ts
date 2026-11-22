@@ -36,6 +36,14 @@ export function useNativeAlertOpening<P>(
     }
   }, [visible, opening])
 
+  // A press already on its way when the owner unmounts must not reach its handlers.
+  useEffect(
+    () => () => {
+      live.current = false
+    },
+    []
+  )
+
   const answer = useCallback((id: number, respond: () => void) => {
     if (answered.current === id || !live.current) {
       return
