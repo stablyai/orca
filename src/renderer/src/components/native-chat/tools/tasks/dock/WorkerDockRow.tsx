@@ -11,7 +11,7 @@ import { cn } from '@/lib/class-names'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { subagentModelLabel } from '../../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 
-function Age({ at, visible }: { at: number | null; visible: boolean }) {
+function Age({ at, visible, fit }: { at: number | null; visible: boolean; fit?: boolean }) {
   const t = useTranslate()
   const locale = useIntlLocale()
   const label = useNowSnapshot(
@@ -21,7 +21,10 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
   return (
     <span
-      className="w-11 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
+      className={cn(
+        'shrink-0 text-right text-xs tabular-nums text-muted-foreground',
+        !fit && 'w-11'
+      )}
       title={
         at === null
           ? t('components.native-chat.workerDock.timeUnavailable', 'Status time unavailable')
@@ -135,7 +138,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                 {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
                 {state}
               </span>
-              <Age at={row.changedAt} visible={visible} />
+              <Age at={row.changedAt} visible={visible} fit />
             </div>
             <p
               data-worker-dock-question=""

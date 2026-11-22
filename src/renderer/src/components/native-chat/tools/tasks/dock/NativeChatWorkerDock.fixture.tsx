@@ -106,16 +106,18 @@ function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
   )
 }
 
-function botChat(expanded: boolean, list: readonly WorkerDockRowView[] = rows) {
+function botChat(
+  expanded: boolean,
+  list: readonly WorkerDockRowView[] = rows,
+  note = 'Both fix workers are running in parallel; ORCA-20 needs your approval.'
+) {
   return (
     <div
       className="native-chat-appearance flex flex-col gap-2 bg-chat-canvas p-3"
       style={nativeChatAppearanceStyle({})}
     >
       <p className="text-xs text-muted-foreground">Perf Issue · Home Chat</p>
-      <p className="text-sm text-chat-foreground">
-        Both fix workers are running in parallel; ORCA-20 needs your approval.
-      </p>
+      <p className="text-sm text-chat-foreground">{note}</p>
       <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
         {dock(expanded, list)}
         <p className="px-2 py-2 text-sm text-muted-foreground">
@@ -223,6 +225,15 @@ export const botHomeChatNarrowOpen = defineFixture({ width: 390, render: () => b
 export const botHomeChatSmallFolded = defineFixture({ width: 320, render: () => botChat(false) })
 
 export const botHomeChatSmallOpen = defineFixture({ width: 320, render: () => botChat(true) })
+
+// Nothing waits on you, so the folded header shows the failed state icon instead of the robot.
+const failedOnly = () => botChat(false, [failed], 'ORCA-21 stopped with a typecheck failure.')
+
+export const failedOnlyFolded = defineFixture({ width: 720, render: failedOnly })
+
+export const failedOnlyNarrowFolded = defineFixture({ width: 390, render: failedOnly })
+
+export const failedOnlySmallFolded = defineFixture({ width: 320, render: failedOnly })
 
 export const longListMidScroll = defineFixture({
   width: 720,
