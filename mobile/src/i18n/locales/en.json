@@ -5896,7 +5896,8 @@
         "notSent": "Not sent.",
         "retry": "Retry",
         "discard": "Discard",
-        "mayHaveArrived": "May have arrived."
+        "mayHaveArrived": "May have arrived.",
+        "replyingTo": "Replying to: {{question}}. Go to the question"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
