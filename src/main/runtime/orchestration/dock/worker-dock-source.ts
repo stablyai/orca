@@ -45,7 +45,7 @@ export function workerDockSourceSessions(
       return null
     }
   }
-  for (let next = record(source); next; ) {
+  for (let next = record(source); next;) {
     const successor = clearedInto(next)
     if (!successor || sessions.includes(successor)) {
       break
