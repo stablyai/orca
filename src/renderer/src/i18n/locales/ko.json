@@ -24069,7 +24069,7 @@
       "state": "Orca가 이 프로젝트에서 안전하게 변환할 수 없는 저장된 상태를 발견하여 아무것도 변경하지 않았습니다.",
       "duplicate": "{{drivePath}}은(는) 이미 Orca의 프로젝트입니다.",
       "mixed": "이 프로젝트의 일부 폴더가 Windows 드라이브가 아니라 WSL 안에 있습니다.",
-      "overlap": "이 프로젝트는 Orca가 변환할 수 없는 프로젝트와 폴더를 공유하므로 분리됩니다.",
+      "overlap": "이 프로젝트는 Orca가 변환할 수 없는 프로젝트와 폴더를 공유하므로, 변환하면 폴더가 나뉩니다.",
       "notDriveMount": "이 배포판에서 해당 폴더는 {{drivePath}}이(가) 아닙니다. 해당 Windows 드라이브에서 마운트된 폴더가 아닙니다.",
       "notConvertible": "이 프로젝트는 이 컴퓨터의 Windows 드라이브에 있지 않습니다.",
       "differingState": "Orca가 이 폴더에 대해 WSL 경로와 {{drivePath}} 아래에 서로 다른 정보를 저장해 두어 아무것도 변경하지 않았습니다.",
