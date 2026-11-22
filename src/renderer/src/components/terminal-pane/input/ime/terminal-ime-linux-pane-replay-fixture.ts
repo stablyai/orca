@@ -16,6 +16,8 @@ export type RecordedDomEvent = {
   charCode?: number
   shiftKey?: boolean
   isComposing?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
   inputType?: string
   data?: string
   value?: string
@@ -67,6 +69,8 @@ export function buildRecordedDomEvent(recorded: RecordedDomEvent): Event {
       code: recorded.code,
       shiftKey: recorded.shiftKey,
       isComposing: recorded.isComposing,
+      ctrlKey: recorded.ctrlKey,
+      shiftKey: recorded.shiftKey,
       bubbles: true,
       cancelable: true
     })
