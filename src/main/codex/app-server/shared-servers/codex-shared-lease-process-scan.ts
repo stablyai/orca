@@ -1,4 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { spawnTokenFromEnvironBlock } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import {
@@ -11,6 +12,8 @@ import { scanDarwin } from './codex-shared-lease-process-scan-darwin'
 /** Bounds the /proc reads in flight, so one walk can't monopolize the fs thread pool. */
 const PROC_READ_BATCH = 128
 const UNREADABLE_TAG = Symbol('unreadable')
+const PS_TIMEOUT_MS = 5_000
+const PS_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 
 /** This user's processes by their lease tag. `unreadable`: own processes whose environment
  *  couldn't be read, so a scan with any is no proof that a lease's commands are gone.
@@ -60,8 +63,37 @@ function parseStat(stat: string): LinuxProcess {
 const isLauncherName = (name: string | undefined): boolean =>
   (name ?? '').startsWith('orca-provider-e')
 
+/** Own-user processes with their parent and name, from one `ps` child so Electron main parses one
+ *  table instead of walking /proc; the walk is the fallback where ps can't run. */
+const readOwnLinuxProcesses = coalescedReading(
+  async () => (await readOwnLinuxProcessesWithPs()) ?? (await walkOwnLinuxProcesses())
+)
+
+async function readOwnLinuxProcessesWithPs(): Promise<Map<number, LinuxProcess> | null> {
+  const uid = process.getuid?.()
+  const result = await runProcess({
+    program: 'ps',
+    args: [...(uid === undefined ? ['-e'] : ['-u', String(uid)]), '-o', 'pid=,ppid=,comm='],
+    timeoutMs: PS_TIMEOUT_MS,
+    maxOutputBytes: PS_MAX_OUTPUT_BYTES,
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
+  }).catch(() => null)
+  if (!result || result.timedOut || result.outputTruncated || result.code !== 0) {
+    return null
+  }
+  const processes = new Map<number, LinuxProcess>()
+  for (const line of result.stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.*?)\s*$/.exec(line)
+    const pid = Number(match?.[1])
+    if (match && pid !== process.pid) {
+      processes.set(pid, { parent: Number(match[2]), name: match[3]! })
+    }
+  }
+  return processes.size > 0 ? processes : null
+}
+
 /** Own-user processes with their parent and name; null when /proc can't be listed. */
-const readOwnLinuxProcesses = coalescedReading(async () => {
+async function walkOwnLinuxProcesses(): Promise<Map<number, LinuxProcess> | null> {
   let names: string[]
   try {
     names = await readdir('/proc')
@@ -90,7 +122,7 @@ const readOwnLinuxProcesses = coalescedReading(async () => {
     )
   }
   return processes
-})
+}
 
 async function readLinuxTags(
   pids: readonly number[],
