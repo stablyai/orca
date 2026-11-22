@@ -27215,7 +27215,14 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
