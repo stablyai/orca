@@ -148,10 +148,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
+  protected abstract pendingMainDaemonAttach(ptyId: string): Promise<boolean> | undefined
+
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
     getController: () => this.ptyController,
     getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+    pendingAttach: (ptyId) => this.pendingMainDaemonAttach(ptyId),
     finishDelayedSnapshot: (ptyId, changed) => {
       if (this.mobileSessionTabListeners.size > 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)

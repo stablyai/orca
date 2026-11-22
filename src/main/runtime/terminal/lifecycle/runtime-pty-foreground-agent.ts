@@ -15,6 +15,8 @@ type Dependencies = {
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
   touchSnapshot(ptyId: string): void
   finishDelayedSnapshot(ptyId: string, changed: boolean): void
+  /** Main's attach of a surviving session, while in flight; it can restore the launch's agent. */
+  pendingAttach(ptyId: string): Promise<unknown> | undefined
 }
 
 const NATIVE_CLAUDE_VERSION_NAME = /^\d+\.\d+\.\d+$/
@@ -29,8 +31,8 @@ export class RuntimePtyForegroundAgent {
     string,
     { foregroundName: string; agent: TerminalAgent }
   >()
-  // A scan in flight per PTY; forget() drops it so a late answer cannot cache for a torn-down PTY.
-  private readonly scansByPtyId = new Map<string, object>()
+  // Replaced when a read or forget() supersedes the PTY's foreground, so an older scan cannot write.
+  private readonly foregroundEpochs = new Map<string, object>()
 
   constructor(private readonly deps: Dependencies) {}
 
@@ -87,13 +89,13 @@ export class RuntimePtyForegroundAgent {
       requestedAfterTitleObservation: afterTitle
     }
     entry.promise = (async () => {
-      while (true) {
+      let changed = false
+      // A title after this load started can name a newer foreground, even when this load changed it.
+      do {
         entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
-        const changed = await this.load(ptyId, entry.startedAfterTitleObservation)
-        if (changed || entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation) {
-          return changed
-        }
-      }
+        changed = (await this.load(ptyId, entry.startedAfterTitleObservation)) || changed
+      } while (entry.requestedAfterTitleObservation > entry.startedAfterTitleObservation)
+      return changed
     })().finally(() => {
       if (this.refreshes.get(ptyId) === entry) {
         this.refreshes.delete(ptyId)
@@ -155,7 +157,7 @@ export class RuntimePtyForegroundAgent {
   forget(ptyId: string): void {
     this.delayedTitles.delete(ptyId)
     this.confirmedByPtyId.delete(ptyId)
-    this.scansByPtyId.delete(ptyId)
+    this.foregroundEpochs.delete(ptyId)
   }
 
   private async load(ptyId: string, afterTitle: number): Promise<boolean> {
@@ -168,9 +170,10 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = await this.agentOfRead(ptyId, result)
-    // The confirm scan awaits: a launch or disconnect in the meantime owns the pane instead.
+    const { agent, superseded } = await this.agentOfRead(ptyId, result)
+    // The confirm scan awaits: a launch, disconnect or newer read in the meantime owns the pane instead.
     if (
+      superseded ||
       result.controller !== this.deps.getController() ||
       this.deps.getPty(ptyId) !== pty ||
       !pty.connected ||
@@ -195,45 +198,52 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return null
     }
-    return this.agentOfRead(ptyId, result)
+    return (await this.agentOfRead(ptyId, result)).agent
   }
 
-  /** The agent a foreground read names; a native Claude's version name is confirmed by one scan. */
+  /** The agent a foreground read names; a native Claude's version name is confirmed by one scan
+   *  unless the pane's launch names Claude. `superseded`: a newer read or forget() overtook the scan. */
   private async agentOfRead(
     ptyId: string,
     result: PtyForegroundProcessRead
-  ): Promise<TerminalAgent | null> {
+  ): Promise<{ agent: TerminalAgent | null; superseded: boolean }> {
     const foregroundName = result.process
     const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const confirmed = this.confirmedByPtyId.get(ptyId)
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
     if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
-      this.confirmedByPtyId.delete(ptyId)
-      return agent
+      // The tracker names `claude` for a second after a scan; that agrees with, not replaces, the scan.
+      if (!agent || agent !== confirmed?.agent) {
+        this.confirmedByPtyId.delete(ptyId)
+        this.foregroundEpochs.delete(ptyId)
+      }
+      return { agent, superseded: false }
     }
-    const confirmed = this.confirmedByPtyId.get(ptyId)
     if (confirmed?.foregroundName === foregroundName) {
-      return confirmed.agent
+      return { agent: confirmed.agent, superseded: false }
     }
     // Windows native Claude is claude.exe (recognized by name), and confirm there forces a full scan.
     if (process.platform === 'win32') {
-      return null
+      return { agent: null, superseded: false }
     }
-    const scan = {}
-    this.scansByPtyId.set(ptyId, scan)
+    const epoch = this.foregroundEpochs.get(ptyId) ?? {}
+    this.foregroundEpochs.set(ptyId, epoch)
+    // A surviving session's attach restores the agent Orca launched in it, which then needs no scan.
+    await this.deps.pendingAttach(ptyId)
+    if (this.deps.getPty(ptyId)?.launchAgent === 'claude') {
+      return { agent: 'claude', superseded: this.foregroundEpochs.get(ptyId) !== epoch }
+    }
     const confirmedAgent =
       recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
-    const current = this.scansByPtyId.get(ptyId) === scan
-    if (current) {
-      this.scansByPtyId.delete(ptyId)
-    }
+    const superseded = this.foregroundEpochs.get(ptyId) !== epoch
     if (result.controller !== this.deps.getController()) {
-      return null
+      return { agent: null, superseded }
     }
     // Only a recognized agent is kept, so a "not an agent" verdict is rescanned on the next dialog.
-    if (confirmedAgent && current) {
+    if (confirmedAgent && !superseded) {
       this.confirmedByPtyId.set(ptyId, { foregroundName, agent: confirmedAgent })
     }
-    return confirmedAgent
+    return { agent: confirmedAgent, superseded }
   }
 
   private async confirm(controller: RuntimePtyController, ptyId: string): Promise<string | null> {

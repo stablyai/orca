@@ -220,6 +220,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
   })
 
+  protected pendingMainDaemonAttach(ptyId: string): Promise<boolean> | undefined {
+    return this.mainDaemonAttachments.pending(ptyId)
+  }
+
   // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).
   protected readonly terminalViewSubscribers = new RuntimeTerminalViewSubscribers({
     notifyPresenceChanged: (ptyId) => this.notifyRemoteTerminalViewPresenceChanged(ptyId),
