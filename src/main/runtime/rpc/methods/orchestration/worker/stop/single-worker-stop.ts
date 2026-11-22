@@ -1,6 +1,6 @@
 import { stopAwaitingWorker } from './awaiting-worker-stop'
 import { isWorkerAwaitingAgent } from '../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
-import { cancelWorkerStartWait } from '../start/readiness/worker-start-background-readiness'
+import { cancelWorkerStartWait } from '../start/readiness/worker-start-waits'
 import type { WorkerStopReceipt } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
