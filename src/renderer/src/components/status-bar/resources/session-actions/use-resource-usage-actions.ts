@@ -1,6 +1,7 @@
 import { selectWorktreesByRepo } from '../../../../store/workspaces/catalog/workspace-record-fields'
 import {
   useCallback,
+  useRef,
   useState,
   type Dispatch,
   type MutableRefObject,
@@ -136,15 +137,24 @@ export function useResourceUsageActions({
     [setActiveView, navigateToWorktree]
   )
 
+  // Set while a chat row closes the panel, so the close leaves focus with the chat instead of the trigger.
+  const chatOpenedRef = useRef(false)
   // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.
   const openChat = useCallback(
     (worktreeId: string, agentSessionId: string, runtimeHostId?: string): void => {
       // Close first: an open panel keeps focus, so the chat's composer couldn't take it.
+      chatOpenedRef.current = true
       setOpen(false)
       openResourceChat(worktreeId, agentSessionId, runtimeHostId)
     },
     [setOpen]
   )
+  /** True once after a chat row closed the panel. */
+  const takeChatOpenedClose = useCallback((): boolean => {
+    const opened = chatOpenedRef.current
+    chatOpenedRef.current = false
+    return opened
+  }, [])
 
   const deleteWorktree = useCallback(
     (worktreeId: string): void => {
@@ -274,6 +284,7 @@ export function useResourceUsageActions({
     navigateToWorktree,
     navigateToTab,
     openChat,
+    takeChatOpenedClose,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,
