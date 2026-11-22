@@ -12,7 +12,7 @@ import {
   settleWorkerRestUnreported
 } from '../../db/worker-presence/worker-presence-store'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import { resolveTerminalWorkerDispatch } from './terminal-worker-turn-stops'
+import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
 import {
