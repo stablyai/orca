@@ -1,3 +1,4 @@
+import type { BotGroup } from '../../../../../../shared/bots/bot-group'
 import {
   getFolderWorkspaceHostIdentity,
   getFolderWorkspaceWorktree
@@ -49,7 +50,10 @@ export function getPreferredWorktreeRows(
   return preferredRows
 }
 
-export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'>
+export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'> & {
+  section?: 'bots' | 'projects'
+  botGroup?: BotGroup
+}
 
 export function getRenderedWorkspaceRowsInSidebarOrder(
   rows: readonly HostSectionRow[],

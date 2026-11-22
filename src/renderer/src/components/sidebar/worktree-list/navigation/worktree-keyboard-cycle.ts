@@ -132,10 +132,37 @@ export function resolveCycledWorktreeId(args: {
   return worktreeIds[nextIndex] ?? null
 }
 
+/** Combine visible Bots and Projects rows in sidebar order with one stop per host-qualified workspace. */
+export function composeSidebarCycleRows(args: {
+  botsRows: readonly RenderedWorkspaceRow[]
+  projectsRows: readonly RenderedWorkspaceRow[]
+  projectsFirst: boolean
+  projectsCollapsed: boolean
+}): RenderedWorkspaceRow[] {
+  const visibleProjects = args.projectsCollapsed ? [] : args.projectsRows
+  const ordered = args.projectsFirst
+    ? [...visibleProjects, ...args.botsRows]
+    : [...args.botsRows, ...visibleProjects]
+  const seen = new Set<string>()
+  const deduped: RenderedWorkspaceRow[] = []
+  for (const row of ordered) {
+    const identity = getCyclableRowIdentity(row)
+    if (seen.has(identity)) {
+      continue
+    }
+    seen.add(identity)
+    deduped.push(row)
+  }
+  return deduped
+}
+
 /** The rendered row one keyboard step lands on, in exact sidebar order. */
 export function resolveCycledWorkspaceRow(args: {
   rows: readonly HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  botsRows?: readonly RenderedWorkspaceRow[]
+  projectsFirst?: boolean
+  projectsCollapsed?: boolean
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   lastActiveWorkspace: LastActiveCycleWorkspace | null
@@ -143,7 +170,16 @@ export function resolveCycledWorkspaceRow(args: {
   navHistoryIndex: number
   direction: 'up' | 'down'
 }): RenderedWorkspaceRow | null {
-  const worktreeRows = getCyclableWorktreeRows(args.rows, args.pinnedDisplayPolicy)
+  const projectRows = getCyclableWorktreeRows(args.rows, args.pinnedDisplayPolicy)
+  const worktreeRows =
+    args.botsRows !== undefined || args.projectsCollapsed
+      ? composeSidebarCycleRows({
+          botsRows: args.botsRows ?? [],
+          projectsRows: projectRows,
+          projectsFirst: args.projectsFirst ?? false,
+          projectsCollapsed: args.projectsCollapsed ?? false
+        })
+      : projectRows
   const anchorWorktreeId = resolveCycleAnchorWorktreeId({
     activeWorktreeId: args.activeWorktreeId,
     navHistory: args.navHistory,

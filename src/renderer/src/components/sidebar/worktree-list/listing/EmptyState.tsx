@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
+import { EmptyWorktreeListKeyboardNavigation } from '../navigation/EmptyWorktreeListKeyboardNavigation'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -22,6 +23,7 @@ export function SidebarWorktreeListEmptyState({
       data-contextual-tour-target="workspace-list"
       className="relative min-h-0 flex-1"
     >
+      <EmptyWorktreeListKeyboardNavigation />
       <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           {discoveryCompleted && (

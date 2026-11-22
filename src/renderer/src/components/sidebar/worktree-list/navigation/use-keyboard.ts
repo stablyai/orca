@@ -1,7 +1,6 @@
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -18,6 +17,11 @@ import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/co
 import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
+import {
+  activateAndRevealCycledRow,
+  readCurrentSidebarWorkspaceId,
+  readGlobalSidebarCycleOptions
+} from './cycled-workspace-activation'
 
 const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
 const PREVIEW_COMMIT_MIN_MS = 50
@@ -96,12 +100,8 @@ export function useWorktreeListKeyboardNavigation(args: {
   const commitPreview = useCallback(() => {
     const preview = previewRef.current
     dropPreview()
-    if (preview && preview.fromWorktreeId === useAppStore.getState().activeWorktreeId) {
-      void activateWorktreeFromSidebar(
-        preview.row.worktree.id,
-        getWorktreeExecutionHostId(preview.row.worktree, preview.row.repo),
-        { revealInSidebar: false }
-      )
+    if (preview && preview.fromWorktreeId === readCurrentSidebarWorkspaceId()) {
+      activateAndRevealCycledRow(preview.row)
     }
   }, [dropPreview])
   useEffect(() => clearPreviewCommitTimer, [clearPreviewCommitTimer])
@@ -113,10 +113,11 @@ export function useWorktreeListKeyboardNavigation(args: {
       const preview =
         previewState && previewState.fromWorktreeId === activeWorktreeId ? previewState.row : null
       const focused = selectInList ? focusedWorktree : null
-      // Cycle actual rendered rows so collapse, pins, hosts and folder workspaces stay aligned with the screen.
+      // Cycle actual rendered rows so collapse, pins, hosts, Bots and folder workspaces stay aligned with the screen.
       const nextRow = resolveCycledWorkspaceRow({
         rows,
         pinnedDisplayPolicy,
+        ...(selectInList ? {} : readGlobalSidebarCycleOptions()),
         activeWorktreeId: preview?.worktree.id ?? focused?.id ?? activeWorktreeId,
         activeWorkspaceExecutionHostId: preview
           ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
@@ -159,18 +160,17 @@ export function useWorktreeListKeyboardNavigation(args: {
                 Math.max(PREVIEW_COMMIT_MIN_MS, repeatIntervalMs * 1.5)
               )
         )
+        if (nextRow.section !== 'bots') {
+          useAppStore.getState().revealWorktreeInSidebar(nextWorktree.id, {
+            behavior: 'auto',
+            executionHostId,
+            rowKey: nextRow.rowKey
+          })
+        }
       } else {
         dropPreview()
-        void activateWorktreeFromSidebar(nextWorktree.id, executionHostId, {
-          revealInSidebar: false
-        })
+        activateAndRevealCycledRow(nextRow)
       }
-
-      useAppStore.getState().revealWorktreeInSidebar(nextWorktree.id, {
-        behavior: 'auto',
-        executionHostId,
-        rowKey: nextRow.rowKey
-      })
     },
     [
       rows,

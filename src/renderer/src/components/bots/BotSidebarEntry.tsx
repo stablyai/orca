@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo } from 'react'
 import { ChevronDown, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
@@ -36,6 +36,10 @@ import { useBotSidebarPaging } from './bot-sidebar-paging'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
+import {
+  collectVisibleBotWorkerWorktrees,
+  setBotSidebarCycleWorkers
+} from './bot-sidebar-cycle-entries'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
 export const BOT_WORKSPACE_LINE_INDENT = 19
@@ -132,6 +136,12 @@ export function BotSidebarEntry({
       toggleCollapsedGroup(groupKey)
     }
   }, [activeLineId, groupKey, listedOnlyHere, toggleCollapsedGroup])
+  const listsUnderRow = botListsUnderRow({ folded, hostDown: offline })
+  useLayoutEffect(() => {
+    if (!listsUnderRow) {
+      setBotSidebarCycleWorkers(entryKey, [])
+    }
+  }, [entryKey, listsUnderRow])
   return (
     <BotSidebarDragFrame id={botSidebarEntryKey(bot)} drag={frameDrag}>
       <BotRow
@@ -153,7 +163,7 @@ export function BotSidebarEntry({
         }
       />
       {/* Folded, the bot reads nothing from its host. */}
-      {!botListsUnderRow({ folded, hostDown: offline }) ? null : (
+      {!listsUnderRow ? null : (
         <div
           className={cn(
             // Nested workspace rows' spacing, so a selected row's highlight clears its neighbours.
@@ -207,8 +217,38 @@ function BotSidebarList({
   }, [entryKey, chatTree.state, chatTree.chats.length])
   const { showAllWorkspaces, toggleWorkspaces, chatSteps, setChatSteps } =
     useBotSidebarPaging(entryKey)
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
   useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
+  const shown = useMemo(
+    () =>
+      chatTree.state === 'loading' || chatTree.chats.length > 0 || workspaces.length === 0
+        ? []
+        : showAllWorkspaces
+          ? workspaces
+          : capBotWorkspaceLines(workspaces, activeLine),
+    [chatTree.state, chatTree.chats.length, workspaces, showAllWorkspaces, activeLine]
+  )
+  useLayoutEffect(() => {
+    if (chatTree.state === 'loading') {
+      setBotSidebarCycleWorkers(entryKey, [])
+      return
+    }
+    if (chatTree.chats.length > 0) {
+      return
+    }
+    setBotSidebarCycleWorkers(
+      entryKey,
+      collectVisibleBotWorkerWorktrees(shown, lineageChildrenByParentIdentity, collapsedGroups)
+    )
+  }, [
+    entryKey,
+    chatTree.state,
+    chatTree.chats.length,
+    shown,
+    lineageChildrenByParentIdentity,
+    collapsedGroups
+  ])
   if (chatTree.state === 'loading') {
     return null
   }
@@ -229,7 +269,6 @@ function BotSidebarList({
   if (workspaces.length === 0) {
     return null
   }
-  const shown = showAllWorkspaces ? workspaces : capBotWorkspaceLines(workspaces, activeLine)
   const hidden = workspaces.length - shown.length
   return (
     <>

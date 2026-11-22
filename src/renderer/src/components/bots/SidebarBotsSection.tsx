@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -57,6 +57,7 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
+import { setBotSidebarCycleEntries } from './bot-sidebar-cycle-entries'
 
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
@@ -168,6 +169,10 @@ export function SidebarBotsSection({
     getScrollContainer: () => listRef.current
   })
   const listShown = !collapsed && entries.length > 0
+  useLayoutEffect(() => {
+    setBotSidebarCycleEntries(listShown && !searchOpen ? entries : [])
+  }, [entries, listShown, searchOpen])
+  useLayoutEffect(() => () => setBotSidebarCycleEntries([]), [])
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')

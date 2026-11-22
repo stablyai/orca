@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -27,6 +27,10 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+import {
+  collectVisibleBotWorkerWorktrees,
+  setBotSidebarCycleWorkers
+} from './bot-sidebar-cycle-entries'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
 export function BotSidebarChats({
@@ -70,8 +74,24 @@ export function BotSidebarChats({
       activeLineId: activeLine?.id ?? null
     })
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
+  const entryKey = botSidebarEntryKey(bot)
+  useLayoutEffect(() => {
+    const visibleRoots = [
+      ...view.chats.flatMap((chatView) => (chatView.open ? chatView.lines : [])),
+      ...view.stray
+    ]
+    setBotSidebarCycleWorkers(
+      entryKey,
+      collectVisibleBotWorkerWorktrees(
+        visibleRoots,
+        lineageChildrenByParentIdentity,
+        collapsedGroups
+      )
+    )
+  }, [entryKey, view.chats, view.stray, lineageChildrenByParentIdentity, collapsedGroups])
   // A reveal of a worker line under a folded chat opens that chat, once per request.
-  const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
+  const reveal = useBotsRevealRequest(entryKey)
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
   const revealLineId = revealWorker ? (revealWorker.ancestors[0]?.id ?? revealWorker.id) : null
   const revealNonce = reveal?.nonce ?? null
