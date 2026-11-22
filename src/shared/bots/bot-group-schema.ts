@@ -171,8 +171,24 @@ export const BotGroupMessageSchema = z.object({
   mentioned: z.literal(true).optional(),
   /** Legacy: the paused line older builds saved after a hand-off cap; it starts no turn. */
   pausedAfter: z.number().int().positive().optional(),
+  /** A member's line for a change to its items made outside the room, such as the owner's answer: a
+   *  request of its own, like a person's post, that hand-offs, peer mail and Stop attach to. */
+  fromItems: z.literal(true).optional(),
   /** On a post an automation's run made, served as its owner's: the run, shown as its run row. */
   automationRun: AutomationRunMessageSchema.optional().catch(undefined),
+  /** Beside `automationRun`: where the run's words came from and who did its event, so a hand-off
+   *  or a replay of the post keeps them out of the owner's own words. */
+  memorySource: z.string().min(1).optional().catch(undefined),
+  triggeredBy: z
+    .object({
+      source: z.string(),
+      event: z.string().optional(),
+      actor: z.string().optional(),
+      actorId: z.string().optional(),
+      place: z.string().optional()
+    })
+    .optional()
+    .catch(undefined),
   turns: z.array(BotGroupTurnSchema),
   /** The post's questions to remote members; older or unreadable ones are dropped, never the post. */
   remoteAsks: z.array(BotGroupRemoteAskSchema).optional().catch(undefined)
@@ -204,6 +220,13 @@ export type BotGroup = z.infer<typeof BotGroupSchema>
 export type BotGroupTurn = z.infer<typeof BotGroupTurnSchema>
 export type BotGroupMessageImage = z.infer<typeof BotGroupMessageImageSchema>
 export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
+
+/** Whether a line starts a request of its own: a person's post, or an item change made outside the room. */
+export function startsBotGroupRequest(
+  message: Pick<BotGroupMessage, 'author' | 'fromItems'>
+): boolean {
+  return message.author.kind === 'owner' || message.fromItems === true
+}
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>

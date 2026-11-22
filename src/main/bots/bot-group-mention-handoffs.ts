@@ -10,6 +10,7 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { botGroupReplyMentions } from '../../shared/bots/bot-group-mentions'
+import { startsBotGroupRequest } from '../../shared/bots/bot-group-schema'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
@@ -74,7 +75,7 @@ export async function handOffGroupMentions(
       .message(message.id)
       ?.turns.find((candidate) => candidate.operationId === turn.operationId)
     const root = groups.store.message(rootRequestId)
-    if (!speaking || speaking.handedOff || root?.author.kind !== 'owner') {
+    if (!speaking || speaking.handedOff || !root || !startsBotGroupRequest(root)) {
       return []
     }
     const room = groups.store.room(groupId, threadId)

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
@@ -50,6 +51,18 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
+  const { closeHover } = detailsHoverControl
+  const { setTitleRenaming: setFoundationTitleRenaming } = foundation
+  // The details hover stays mounted (held shut) while renaming; close it so it can't reopen when the rename ends.
+  const setTitleRenaming = useCallback(
+    (renaming: boolean) => {
+      if (renaming) {
+        closeHover()
+      }
+      setFoundationTitleRenaming(renaming)
+    },
+    [closeHover, setFoundationTitleRenaming]
+  )
   const referenceDetails = useWorkspaceReferenceDetails(
     worktree,
     repo,
@@ -165,6 +178,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     ...foundation,
     ...review,
     ...linked,
+    setTitleRenaming,
     detailsHoverControl,
     referenceDetails,
     reviewChecks,

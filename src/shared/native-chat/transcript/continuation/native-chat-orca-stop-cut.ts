@@ -5,10 +5,11 @@ import {
   type AgentSessionOrcaStopCause
 } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
+import {
+  agentJournalCardReturnedItemIds,
+  type AgentJournalCardSubmission
+} from '../../../agent-session/requests/agent-session-queued-submission'
 import { STALE_SESSION_ROW_PREFIX } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
   readAgentJournalTurn,
@@ -47,10 +48,10 @@ export type NativeChatOrcaStopCut = {
   cause: AgentSessionOrcaStopCause
 }
 
-/** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
+/** Latest root turn only if no later request or in-flight send exists; steers, conversation commands and sends a queued card took back do not count as new requests. */
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  submissions: readonly AgentJournalCardSubmission[],
   /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
   bodyOf?: AgentJournalBodyLookup
 ): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
@@ -58,11 +59,13 @@ export function latestNativeChatTurnSinceRequest(
     return null
   }
   const commandTurns = commandTurnsOf(items, bodyOf)
+  const returnedToCard = agentJournalCardReturnedItemIds(submissions)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     if (
       !isRootAgentJournalItem(item) ||
-      isStructuredAgentSessionNonRequestRow(item, commandTurns)
+      isStructuredAgentSessionNonRequestRow(item, commandTurns) ||
+      returnedToCard.has(item.itemId)
     ) {
       continue
     }
@@ -97,7 +100,7 @@ export function findInNativeChatTurn<T>(
 
 export function latestNativeChatOrcaStopCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  submissions: readonly AgentJournalCardSubmission[],
   bodyOf?: AgentJournalBodyLookup
 ): NativeChatOrcaStopCut | null {
   const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
@@ -113,7 +116,7 @@ export function latestNativeChatOrcaStopCut(
 export function nativeChatStatusTurnOutcome(
   request: StructuredAgentSessionLatestRequest | null,
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  submissions: readonly AgentJournalCardSubmission[],
   bodyOf?: AgentJournalBodyLookup
 ): AgentTurnOutcome | null {
   const verdict = request

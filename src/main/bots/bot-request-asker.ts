@@ -152,7 +152,8 @@ function stampedAsker(
       userId: asker.userId,
       ...(asker.name ? { name: asker.name } : {}),
       workspaceId,
-      role: asker.role,
+      // Another Slack app is no person: never the owner, nor a member with their rights.
+      role: asker.app ? null : asker.role,
       placeKind: asker.place.kind
     },
     wokenAt: {

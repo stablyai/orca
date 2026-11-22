@@ -556,7 +556,8 @@
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -564,6 +565,13 @@
         "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browsers on this device",
+        "destination": "Imports into the browser for {{host}}.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "stored": "Stored in the browser for {{host}}.",
+        "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
     },
     "passwords": {
@@ -1950,6 +1958,16 @@
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Manage in browser",
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage your team in your browser."
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
@@ -19131,11 +19149,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -19205,7 +19221,6 @@
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
-          "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
@@ -19475,7 +19490,6 @@
           "failed7d": "Failed · 7d",
           "automation": "Automation",
           "triggered": "Triggered",
-          "trigger": "Trigger",
           "loading": "Loading runs…",
           "noRuns": "No runs yet",
           "emptyDescription": "Runs appear here after an automation is triggered.",
@@ -19554,7 +19568,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} spent",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19601,7 +19618,6 @@
           "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
           "signIn": "Sign in to {{host}}",
           "output": "Output",
-          "details": "Details",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
@@ -21567,7 +21583,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21734,6 +21760,13 @@
           "task": "Task from",
           "update": "Update from",
           "message": "Message from"
+        },
+        "kind": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Follow-up",
+          "handedOff": "Handed off",
+          "task": "Task"
         }
       },
       "goal": {
@@ -21802,7 +21835,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",
@@ -21823,7 +21855,11 @@
         "commandsUnsupported": "Commands can't be saved in a queued message.",
         "imageCount": "{{count}} images",
         "queuedCount_one": "{{count}} queued",
-        "queuedCount_other": "{{count}} queued"
+        "queuedCount_other": "{{count}} queued",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -22048,6 +22084,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
@@ -22602,6 +22639,9 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {
@@ -22640,9 +22680,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24751,7 +24788,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
@@ -26728,7 +26766,8 @@
     "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
-    "openConnectors": "Open connectors"
+    "openConnectors": "Open connectors",
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
   },
   "codeHost": {
     "errors": {
@@ -27215,7 +27254,14 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
@@ -27612,7 +27658,14 @@
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
-        "tryIt": "Try it on any issue or pull request",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "label": "Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”.",
+          "commented": "commented now",
+          "ask": "review this PR",
+          "bot": "bot",
+          "reply": "On it."
+        },
         "connectTitle": "Connect GitHub",
         "manage": "Manage"
       },
@@ -28117,6 +28170,7 @@
       "peerAsked": "{{from}} asked {{to}}",
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
+      "peerReadItems": "{{bot}} read an update to its items",
       "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
@@ -29347,7 +29401,6 @@
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
-        "chatNeedsYou": "Nothing in {{chat}} needs you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
@@ -29361,7 +29414,6 @@
         "title": "title"
       },
       "filter": {
-        "all": "All chats",
         "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
@@ -29461,8 +29513,11 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet",
         "next": "Next question",
         "notSentYet": "not sent yet",
+        "sendHeld": "Send now",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
@@ -29803,6 +29858,8 @@
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
