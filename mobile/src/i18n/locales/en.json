@@ -3888,7 +3888,8 @@
         "added": "Added",
         "removed": "Removed",
         "noteChanged": "Note changed",
-        "indexChanged": "MEMORY.md changed"
+        "indexChanged": "MEMORY.md changed",
+        "openMemory": "Open memory"
       },
       "google": {
         "ended": "This Google setup ended.",
@@ -4110,7 +4111,8 @@
         "goneDetail": "Set it up again from the bot’s Tools.",
         "readyAs": "As {{label}}. Your app sign-ins are held by Composio.",
         "custody": "Your app sign-ins are held by Composio.",
-        "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer."
+        "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer.",
+        "browse": "Browse more apps"
       }
     },
     "eventRow": {
@@ -5578,7 +5580,8 @@
       "google": "Let the bot work in your Gmail, Calendar and Drive, and start automations on new mail.",
       "linear": "Hand the bot issues by @mentioning or assigning it, and start automations on Linear events.",
       "github": "Hand the bot work by @mentioning it, and start automations on GitHub events.",
-      "heading": "Connect a service"
+      "heading": "Connect a service",
+      "connect": "Connect {{service}}"
     },
     "workspaces": {
       "show": "Show {{name}}’s workspaces",
