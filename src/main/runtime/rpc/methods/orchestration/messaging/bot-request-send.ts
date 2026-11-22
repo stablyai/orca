@@ -264,9 +264,7 @@ async function admitBotRequestMail(
     }
     // The bot may have been paused or removed while the Chat was found.
     check()
-    if (groupScope) {
-      runtimeBotGroups(runtime).assertPeerScope(groupScope)
-    }
+    runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {
       id: messageId,
       from: args.from,
@@ -289,6 +287,7 @@ async function admitBotRequestMail(
       return blockedReceipt(admission)
     }
     const { message } = admission
+    runtimeBotGroups(runtime).noteMailed(groupScope?.operationId, target.id)
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
       args.recordMutationReceipt,
