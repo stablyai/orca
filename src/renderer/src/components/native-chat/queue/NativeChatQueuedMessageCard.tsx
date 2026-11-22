@@ -228,9 +228,9 @@ export function NativeChatQueuedMessageCard({
       style={rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      // Touch has no hover: a tap focuses the row, and focus-within reveals its tools.
+      // Touch has no hover: a tap focuses the row, and focus-within reveals its tools there only, so a mouse click never pins them.
       tabIndex={-1}
-      className="group/queued relative rounded-md py-1 pr-1 pl-1.5 outline-none hover:bg-accent/50 focus-within:bg-accent/50"
+      className="group/queued relative rounded-md py-1 pr-1 pl-1.5 outline-none hover:bg-accent/50 has-[:focus-visible]:bg-accent/50 [@media(hover:none)]:focus-within:bg-accent/50"
     >
       {drag?.insertion ? (
         <span
@@ -250,7 +250,7 @@ export function NativeChatQueuedMessageCard({
               className={cn(
                 'size-3.5 text-muted-foreground',
                 drag?.grip &&
-                  'group-hover/queued:opacity-0 group-focus-within/queued:opacity-0 [@media(hover:none)]:opacity-0'
+                  'group-hover/queued:opacity-0 group-has-[:focus-visible]/queued:opacity-0 [@media(hover:none)]:opacity-0'
               )}
               aria-hidden
             />
@@ -263,7 +263,7 @@ export function NativeChatQueuedMessageCard({
             toolCount > 0 &&
               (toolsPinned
                 ? '[mask-image:var(--queued-tools-mask)]'
-                : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
+                : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
         >
           {sender}
