@@ -5,7 +5,7 @@ import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/t
 
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 
-export type ForegroundAgentIdentity = { processName: string; pid: number }
+export type ForegroundAgentIdentity = { processName: string; pid: number; identifiedAt: number }
 
 export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
 

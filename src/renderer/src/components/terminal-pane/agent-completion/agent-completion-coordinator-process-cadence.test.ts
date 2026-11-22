@@ -278,6 +278,30 @@ describe('agent completion coordinator', () => {
     }
   })
 
+  it('keeps re-checking a proven idle shell on a pane that cannot receive host facts', async () => {
+    // Runtime input notices travel as host facts; without them the proof could strand a later silent launch.
+    const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false,
+      idleShellProven: true
+    }))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      receivesForegroundExitNotices: () => false
+    })
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(20_000)
+    const reads = inspectProcess.mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(inspectProcess.mock.calls.length - reads).toBe(8)
+    coordinator.dispose()
+  })
+
   it('reads after accepted input that prints nothing', async () => {
     // `read -s -n1; run-agent`: the key is not echoed, and the agent's output goes to a log.
     const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({

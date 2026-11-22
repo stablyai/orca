@@ -145,8 +145,11 @@ export function handleAgentCompletionInspectionResult(args: {
   const recognized = recognizeAgentProcess(result.foregroundProcess)
   const exitNoticed =
     result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
-  // A command can start an agent with no OS event, so only a host's proof of an idle shell ends re-checks.
-  state.idleShellUnproven = !recognized && result.idleShellProven !== true
+  // A command can start an agent with no OS event, so only a host's proof of an idle shell ends re-checks; a pane
+  // that cannot receive host facts would also miss runtime-input notices, so it keeps re-checking.
+  state.idleShellUnproven =
+    !recognized &&
+    (result.idleShellProven !== true || options.receivesForegroundExitNotices?.() === false)
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.

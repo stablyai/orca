@@ -29,26 +29,16 @@ import {
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
-import type { ForegroundAgentIdentity } from '../sessions/session-subprocess-handle'
+import type {
+  CachedAgentForeground,
+  PtyForegroundProcessTracker
+} from './pty-foreground-tracker-types'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
 const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-
-type CachedAgentForeground = { processName: string; pid: number | null; refreshedAt: number }
-
-export type PtyForegroundProcessTracker = {
-  recordOutput(data: string): void
-  markDead(): void
-  /** rawFallback bypasses cached identity and process-table refreshes for cheap polling. */
-  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
-  confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
-  confirmShellForeground(): Promise<boolean>
-  cachedAgent(): ForegroundAgentIdentity | null
-  pendingForegroundRefresh(): Promise<unknown> | null
-}
 
 export function createPtyForegroundProcessTracker(args: {
   process: pty.IPty
@@ -77,8 +67,12 @@ export function createPtyForegroundProcessTracker(args: {
       : null
   let foregroundRefresh: Promise<unknown> | null = null
   let lastForegroundRefreshStartedAt = 0
-  const cacheAgentForeground = (processName: string, pid: number | null): void => {
-    cachedAgentForeground = { processName, pid, refreshedAt: Date.now() }
+  const cacheAgentForeground = (
+    processName: string,
+    pid: number | null,
+    identifiedAt = Date.now()
+  ): void => {
+    cachedAgentForeground = { processName, pid, refreshedAt: Date.now(), identifiedAt }
     startupAgentForeground = null
   }
   const getFallbackProcess = (): string | null =>
@@ -190,8 +184,7 @@ export function createPtyForegroundProcessTracker(args: {
           retireStaleForegroundIdentity()
           return
         }
-        cachedAgentForeground = { processName, pid: processId ?? null, refreshedAt: Date.now() }
-        startupAgentForeground = null
+        cacheAgentForeground(processName, processId ?? null, now)
         return processName
       })
       .catch(() => {
@@ -214,7 +207,7 @@ export function createPtyForegroundProcessTracker(args: {
     },
     cachedAgent: () =>
       cachedAgentForeground?.pid != null
-        ? { processName: cachedAgentForeground.processName, pid: cachedAgentForeground.pid }
+        ? { ...cachedAgentForeground, pid: cachedAgentForeground.pid }
         : null,
     pendingForegroundRefresh: () => foregroundRefresh,
     getForegroundProcess: (options) => {

@@ -1,4 +1,3 @@
-import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import { getFreshProcessTableSnapshot } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   ForegroundExitWatches,
@@ -12,17 +11,16 @@ export async function isSameForegroundAgent(
   expected: ForegroundAgentIdentity
 ): Promise<boolean> {
   if (process.platform === 'win32') {
-    // Windows recycles pids fast; the cached identity carries no creation time, so the name must still match.
+    // Windows recycles pids fast: a process created after the agent was identified is another process.
     const row = (await readWindowsProcessIdentityTableFresh()).find((entry) => entry.pid === pid)
-    const agent = recognizeAgentProcess(expected.processName)?.agent
     return (
-      row !== undefined && agent !== undefined && recognizeAgentProcess(row.name)?.agent === agent
+      row?.creationTimeMs !== undefined &&
+      expected.identifiedAt !== undefined &&
+      row.creationTimeMs <= expected.identifiedAt
     )
   }
   const row = (await getFreshProcessTableSnapshot()).find((entry) => entry.pid === pid)
-  return (
-    row !== undefined && (expected.startTime === undefined || row.startTime === expected.startTime)
-  )
+  return row !== undefined && row.startTime !== undefined && row.startTime === expected.startTime
 }
 
 export function createForegroundExitWatches(
