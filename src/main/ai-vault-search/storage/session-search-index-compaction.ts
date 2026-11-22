@@ -4,6 +4,8 @@ import { traceSessionSearch } from '../session-search-trace'
 
 const DELETED_KEY = 'fts_deleted_rows'
 const ROWS_KEY = 'fts_rows_at_compaction'
+// Set with a pass's first merge and cleared when it completes, so a pass cut short resumes.
+const STARTED_KEY = 'fts_compaction_started_at_deleted'
 
 /**
  * FTS5 keeps a deleted row's postings until a merge reaches the segment holding them, and
@@ -43,20 +45,24 @@ function metaInteger(db: SyncDatabase, key: string): number {
   return Number.isSafeInteger(value) && value > 0 ? value : 0
 }
 
-/** Due once deletes since the last compaction reach half the rows it left. */
+/** Due once deletes since the last compaction reach half the rows it left, or a pass was cut short. */
 export function sessionSearchIndexCompactionDue(db: SyncDatabase): boolean {
+  if (db.prepare('SELECT 1 FROM meta WHERE key = ?').get(STARTED_KEY)) {
+    return true
+  }
   const deleted = metaInteger(db, DELETED_KEY)
   return deleted >= Math.max(MIN_DELETED_ROWS, metaInteger(db, ROWS_KEY) / 2)
 }
 
-/** Merges every segment in bounded steps, then returns the freed pages. */
+/** Merges every segment in steps of 64 written pages, then returns the freed pages. */
 export async function compactSessionSearchIndex(
   db: SyncDatabase,
   closed: () => boolean,
   /** Called after every step with its duration, so the caller paces the pass. */
   rest: (workMs: number) => Promise<void>
 ): Promise<void> {
-  const deletedAtStart = metaInteger(db, DELETED_KEY)
+  const resumed = db.prepare('SELECT 1 FROM meta WHERE key = ?').get(STARTED_KEY) !== undefined
+  const deletedAtStart = metaInteger(db, resumed ? STARTED_KEY : DELETED_KEY)
   const changes = db.prepare('SELECT total_changes() AS n')
   const merge = db.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES('merge', ?)")
   // Writing the whole file twice bounds the pass even if indexing keeps adding segments.
@@ -65,10 +71,25 @@ export async function compactSessionSearchIndex(
   for (let step = 0; step < maxSteps && !closed(); step++) {
     const before = Number(changes.get()!.n)
     const started = performance.now()
-    // Only the first step is negative: it starts one merge over every segment present now. The
-    // rest continue that merge, so segments indexing commits meanwhile aren't pulled in again.
-    const pages = step === 0 ? -MERGE_PAGES_PER_STEP : MERGE_PAGES_PER_STEP
-    traceSessionSearch('merge', () => merge.run(pages))
+    if (step === 0 && !resumed) {
+      // A negative step starts one merge over every segment present now; the marker commits with
+      // it. Later steps, including a resumed pass's, only continue that merge, so segments
+      // indexing commits meanwhile aren't pulled in and merged work isn't redone.
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        traceSessionSearch('merge', () => merge.run(-MERGE_PAGES_PER_STEP))
+        db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)').run(
+          STARTED_KEY,
+          String(deletedAtStart)
+        )
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+    } else {
+      traceSessionSearch('merge', () => merge.run(MERGE_PAGES_PER_STEP))
+    }
     const merged = Number(changes.get()!.n) - before >= 2
     await rest(performance.now() - started)
     if (!merged) {
@@ -79,12 +100,20 @@ export async function compactSessionSearchIndex(
     return
   }
   // Deletes during the merge may sit in segments it already wrote; they count toward the next.
-  db.prepare('UPDATE meta SET value = MAX(0, CAST(value AS INTEGER) - ?) WHERE key = ?').run(
-    deletedAtStart,
-    DELETED_KEY
-  )
-  db.prepare(`INSERT INTO meta(key, value) SELECT ?, COUNT(*) FROM messages WHERE true
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(ROWS_KEY)
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.prepare('UPDATE meta SET value = MAX(0, CAST(value AS INTEGER) - ?) WHERE key = ?').run(
+      deletedAtStart,
+      DELETED_KEY
+    )
+    db.prepare(`INSERT INTO meta(key, value) SELECT ?, COUNT(*) FROM messages WHERE true
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(ROWS_KEY)
+    db.prepare('DELETE FROM meta WHERE key = ?').run(STARTED_KEY)
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
   await reclaimSessionSearchFreePages(db, closed, PACED_RECLAIM_PAGES_PER_STEP, rest)
 }
 
