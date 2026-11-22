@@ -5351,6 +5351,9 @@
             "3ccc7981bb": "Host unavailable",
             "54f29b7c0d": "Loading host…"
           },
+          "CodexAgentSwitchCover": {
+            "switching": "Switching agent…"
+          },
           "TerminalRestoringPlaceholder": {
             "restoring": "Restoring terminal…"
           },
@@ -29958,6 +29961,18 @@
       "groupRoom": "A group room's chat can't be deleted",
       "workerOwed": "An orchestration still waits on this chat",
       "home": "A managed agent's Home Chat can't be deleted"
+    }
+  },
+  "codex": {
+    "agentView": {
+      "draft": "Clear the Codex message box before switching agents.",
+      "finished": "This Codex agent is no longer running.",
+      "permission": "Answer Codex’s approval prompt before switching agents.",
+      "unavailable": "Codex could not switch to this agent. Try /subagents in the Codex pane."
+    },
+    "nativeChild": {
+      "open": "Open live agent",
+      "openHint": "Show this agent in its parent's Codex pane"
     }
   }
 }

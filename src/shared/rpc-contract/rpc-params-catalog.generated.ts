@@ -922,6 +922,7 @@ import { SendRecordedParams } from './structured-agent-session/structured-agent-
 import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
+import { TerminalViewCodexAgent } from './terminal/terminal-codex-agent-view-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
@@ -2127,6 +2128,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.viewClaudeAgent': TerminalViewClaudeAgent,
+  'terminal.viewCodexAgent': TerminalViewCodexAgent,
   'terminal.wait': TerminalWait,
   'terminalDaemon.limit': null,
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,

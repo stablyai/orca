@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../../snapshots/replay-guard'
+import { isCodexAgentSwitching } from '@/lib/agent-session/navigation/codex-child-row-view'
 import {
   isXtermMouseReport,
   isXtermWheelCursorKey
@@ -49,6 +50,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     // Mobile driver lock withholds desktop input until explicit Take back restores input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
+      session.clearPendingTerminalInputIntent()
+      return
+    }
+    // Keys typed under the switch cover would land in Codex's picker and could pick a row.
+    if (isCodexAgentSwitching(session.cacheKey)) {
       session.clearPendingTerminalInputIntent()
       return
     }
