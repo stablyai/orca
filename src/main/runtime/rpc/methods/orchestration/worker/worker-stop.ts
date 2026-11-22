@@ -10,7 +10,7 @@ import type {
   WorkerStopReceipt
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
-import { settleRestartCutWorkerStart } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
+import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -65,7 +65,7 @@ async function stopHelpers(
     async (dispatchId): Promise<HelperStopOutcome[]> => {
       const helper = { dispatchId, creatorDispatchId }
       // A runtime that restarted mid-start never finishes it; settle it as worker-show does, then stop it.
-      const state = settleRestartCutWorkerStart(db, dispatchId, runtime.getRuntimeId())?.state
+      const state = settleRestartCutStart(db, dispatchId, runtime)?.state
       if (state === 'starting') {
         return [
           { ...helper, outcome: 'starting', state },

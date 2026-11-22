@@ -1,3 +1,4 @@
+import { cancelWorkerStartWait } from '../start/readiness/worker-start-background-readiness'
 import type { WorkerStopReceipt } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
@@ -129,6 +130,7 @@ export async function stopSingleWorker(
   }
 
   const begun = db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
+  cancelWorkerStartWait(dispatchId)
   if (begun.disposition === 'already_settled') {
     return settledReceipt(dispatchId, begun.worker.state)
   }

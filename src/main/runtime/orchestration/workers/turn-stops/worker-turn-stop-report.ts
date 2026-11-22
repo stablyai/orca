@@ -19,6 +19,8 @@ export type WorkerTurnStopReason =
   | 'exited'
   | 'lost'
   | 'start-unconfirmed'
+  | 'start-blocked'
+  | 'never-ready'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -41,6 +43,9 @@ export type WorkerTurnStop = {
   leftover?: string
   /** A start that never got a terminal has no output to read. */
   neverStarted?: true
+  /** For `start-blocked`: the screen a person must answer, and when the start fails if its agent
+   *  is still not ready. */
+  blockedStart?: { screen: string; readyBy: number }
   /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
   startSurface?: 'terminal' | 'chat'
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */

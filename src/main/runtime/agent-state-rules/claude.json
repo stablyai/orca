@@ -13,6 +13,41 @@
       "why": "Claude Code's ASCII rest prefix, `* ` (`. ` while working).",
       "when": { "region": "title", "match": { "regex": "^\\* " } },
       "answer": { "state": "idle" }
+    },
+    {
+      "id": "theme_picker",
+      "why": "First-run Claude opens its theme picker before any prompt, where Enter picks a theme and a typed brief is lost. Its syntax preview pushes the heading out of the live window, so the preview's footer is the stable text.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "syntax theme:" },
+        "after": { "all": [{ "regex": "ctrl\\+t\\s*to\\s*(?:disable|enable)" }] }
+      },
+      "answer": { "state": "blocked", "reason": "agent-startup-menu-prompt" }
+    },
+    {
+      "id": "theme_picker_heading",
+      "why": "The same picker drawn without its syntax preview.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "choose the text style that looks best" },
+        "after": { "all": [{ "contains": "dark mode" }] }
+      },
+      "answer": { "state": "blocked", "reason": "agent-startup-menu-prompt" }
+    },
+    {
+      "id": "login_method_menu",
+      "why": "A signed-out Claude asks how to sign in before any prompt, where Enter picks a login method; only a person can get past it.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "select login method:" },
+        "after": {
+          "any": [
+            { "contains": "claude account with subscription" },
+            { "contains": "anthropic console account" }
+          ]
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-sign-in-prompt" }
     }
   ],
   "rules": [
