@@ -32,6 +32,10 @@ export function journalWalGated(state: JournalWalState, urgent: boolean): boolea
 export class JournalWalWaiters {
   private readonly parked = new Set<{ urgent: boolean; resume: () => void }>()
 
+  get waiting(): boolean {
+    return this.parked.size > 0
+  }
+
   park(urgent: boolean, resume: () => void): void {
     this.parked.add({ urgent, resume })
   }

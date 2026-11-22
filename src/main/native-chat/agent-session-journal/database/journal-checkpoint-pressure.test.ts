@@ -531,3 +531,64 @@ it('hands parked writes back at the first deadline even while unrelated worker p
   }
   await write
 })
+
+it('re-measures the WAL after a hand-back only when the writer committed in between', async () => {
+  const { filename, writer } = fixture()
+  let worker!: LivenessCheckpoint
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    factory: (workerData) => {
+      worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  worker.busy(false)
+  worker.ready()
+  const forced = () =>
+    worker.sent.filter((message) => (message as { force?: boolean }).force).length
+  const handBack = async () => {
+    writer.prepare('INSERT INTO writes VALUES(NULL, zeroblob(1048576))').run()
+    worker.busy(true)
+    owner.afterCommit()
+    await vi.waitFor(() => expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(1000))
+    writer.pragma('wal_checkpoint(PASSIVE)')
+    worker.busy(false)
+  }
+
+  await handBack()
+  const before = forced()
+  worker.answer()
+  expect(forced()).toBe(before)
+
+  await handBack()
+  writer.prepare("INSERT INTO writes VALUES(NULL, 'during the outage')").run()
+  owner.afterCommit()
+  worker.answer()
+  expect(forced()).toBe(before + 1)
+})
+
+it('leaves retries to the worker while WAL pressure holds no write', () => {
+  const { filename, writer } = fixture()
+  const worker = new ControlledCheckpoint()
+  const owner = new JournalCheckpointOwner(writer, filename, { factory: () => worker })
+  worker.ready()
+  cleanup.push(() => {
+    const closed = owner.close()
+    worker.exited()
+    return closed
+  })
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  owner.afterCommit()
+  const request = worker.sent.at(-1)!
+  const sent = worker.sent.length
+  worker.emit('message', {
+    type: 'checked',
+    id: request.id,
+    generation: request.generation,
+    log: 40000,
+    checkpointed: 0,
+    blocked: true
+  })
+  expect(worker.sent.length).toBe(sent)
+})

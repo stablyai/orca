@@ -19,6 +19,8 @@ export class JournalCheckpointOwner {
   private generation = 0
   private attachedGeneration = 0
   private checkAgain = false
+  /** The writer committed while it checkpointed for itself, so the WAL may have grown. */
+  private wroteWhileStopped = false
   /** WAL frames since the last reset; the writer reports it beside each commit. */
   log = 0
   private checkpointed = 0
@@ -92,6 +94,7 @@ export class JournalCheckpointOwner {
       return
     }
     if (this.stopped) {
+      this.wroteWhileStopped = true
       this.worker.wanted()
       return
     }
@@ -151,10 +154,11 @@ export class JournalCheckpointOwner {
       this.writer.pragma('wal_autocheckpoint = 0')
       this.afterCommit()
       this.attachedGeneration = this.generation
-      // After an outage the WAL file can be oversized while few frames are left: measure it anyway.
-      if (fresh && this.pending === undefined) {
+      // Writes during an outage can leave the WAL file oversized with few frames left: measure it anyway.
+      if (fresh && this.wroteWhileStopped && this.pending === undefined) {
         this.request(false, true)
       }
+      this.wroteWhileStopped = false
     } catch (error) {
       this.lose(error, 'error')
     }
@@ -231,7 +235,7 @@ export class JournalCheckpointOwner {
         // for is measured after its newest commit and a silent worker is still caught.
         const again = this.checkAgain
         this.checkAgain = false
-        if (again || this.gated()) {
+        if (again || (this.waiters.waiting && this.gated())) {
           this.request(!again)
         }
       }

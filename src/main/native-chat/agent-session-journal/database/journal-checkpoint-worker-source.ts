@@ -63,9 +63,9 @@ try {
   const truncate = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)');
   const oversized = () => statSync(workerData.filename + '-wal').size > workerData.sizeLimit;
   const ceiling = (state) => state.log >= workerData.backpressureFrames;
-  const schedule = (state, blocked) => {
+  const schedule = (state, blocked, retry = false) => {
     // While writes wait on the WAL, retry soon: a truncate needs a gap between readers' snapshots.
-    if (blocked || state.log - state.checkpointed >= 1000) {
+    if (blocked || retry || state.log - state.checkpointed >= 1000) {
       idle = setTimeout(() => work(() => check(true)), blocked ? 100 : 1000);
     }
   };
@@ -115,12 +115,12 @@ try {
       }
       const state = frames.get();
       // Nothing that touches the filesystem runs between a truncate and its reply; one that didn't
-      // succeed blocks only above the ceiling, as on main, and the worker's next retry measures again.
+      // succeed blocks only above the ceiling, as on main, and is retried, so an oversized file still shrinks.
       const blocked = ceiling(state) && (busy || state.checkpointed < state.log);
       pendingTruncate = undefined;
       reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });
-      schedule(state, blocked);
+      schedule(state, blocked, busy);
       return;
     }
     // The owner asks again while writes wait; it is answered after a short pause, so retries stay paced.
