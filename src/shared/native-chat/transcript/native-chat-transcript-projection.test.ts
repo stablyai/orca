@@ -7,7 +7,8 @@ import type { AgentJournalTurnScope } from '../../agent-session/journal/agent-se
 import type { NativeChatMessage } from '../native-chat-types'
 import {
   projectNativeChatTranscript,
-  projectNativeChatTranscriptMessages
+  projectNativeChatTranscriptMessages,
+  sameNativeChatRowPlacement
 } from './native-chat-transcript-projection'
 
 let sequence = 0
@@ -266,4 +267,14 @@ describe('automation run rows', () => {
     const [card] = projectNativeChatTranscriptMessages([notStarted(), sent()])
     expect(card!.automationRunNotStarted!.sentAgain).toBe(true)
   })
+})
+
+it('keeps a row in place when a save only bumps its revision and text', () => {
+  const before = row('reply', [{ type: 'text', text: 'one' }], { journalRevision: 1 })
+  const saved = {
+    ...before,
+    blocks: [{ type: 'text' as const, text: 'one two' }],
+    journalRevision: 2
+  }
+  expect(sameNativeChatRowPlacement(before, saved)).toBe(true)
 })

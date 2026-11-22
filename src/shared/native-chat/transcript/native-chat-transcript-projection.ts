@@ -79,7 +79,8 @@ export function sameNativeChatRowPlacement(
       if (!Object.hasOwn(next, key)) {
         return false
       }
-      if (key === 'blocks') {
+      // A save bumps the revision without moving the row; only the reveal reads it.
+      if (key === 'blocks' || key === 'journalRevision') {
         return true
       }
       if (key === 'journalPosition') {
