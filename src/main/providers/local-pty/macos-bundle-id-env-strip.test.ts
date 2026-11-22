@@ -124,7 +124,7 @@ describe('macOS __CFBundleIdentifier environment stripping (#21768)', () => {
       const outcome = await prepareMacosTccLoginShell()
       expect(outcome?.ok).toBe(true)
 
-      const env = {
+      const env: NodeJS.ProcessEnv = {
         ...process.env,
         __CFBundleIdentifier: 'com.stablyai.orca',
         ORCA_SENTINEL: 'kept'
