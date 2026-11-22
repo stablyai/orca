@@ -68,6 +68,8 @@ export function structuredMailSource(input: {
     const saved = readAnswerSenderSnapshot(group[0]!.message.answer_sender_snapshot)
     const accepted = saved?.party.address === address ? saved : undefined
     const reported = group.find(({ report }) => report.kind === 'valid')?.report
+    // Orca's record of the sending Dispatch proves lineage whatever that Dispatch's state at delivery.
+    const recordedDispatchId = group[0]!.recorded?.dispatchId
     const guardedAnswer = accepted
       ? undefined
       : historicalAnswerSender(group[0]!.message, input.db, input.senderSnapshot)
@@ -78,8 +80,7 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        group[0]!.recorded?.dispatchId ??
-          (reported?.kind === 'valid' ? reported.dispatchId : undefined),
+        recordedDispatchId ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
         group.map(({ message }) => message.created_at).toSorted()[0],
         group[0]!.recorded
@@ -104,7 +105,8 @@ export function structuredMailSource(input: {
                 sender: sender.party,
                 recipient: input.mailboxHandle,
                 runId: message.run_id,
-                reportedDispatchId: report.kind === 'valid' ? report.dispatchId : undefined,
+                reportedDispatchId:
+                  recordedDispatchId ?? (report.kind === 'valid' ? report.dispatchId : undefined),
                 recipientDispatchId: input.dispatchId,
                 messageType: message.type
               })

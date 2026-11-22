@@ -164,6 +164,7 @@ export function registerRuntimeWindowLifecycle(
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),
     rememberLaunchRecipe: (recipe) => send('ui:launchRecipe', recipe),
+    restartOffersChanged: () => send('agentStatus:restartOffersChanged', {}),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,
