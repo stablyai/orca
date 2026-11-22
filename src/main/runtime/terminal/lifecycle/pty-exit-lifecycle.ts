@@ -1,4 +1,4 @@
-import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
+import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -19,19 +19,10 @@ import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceReads {
+export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
   protected abstract pruneDisconnectedPtyRecords(): void
-
-  protected abstract failActiveDispatchOnExit(
-    handle: string,
-    paneKey: string | null,
-    cause: TerminalExitCause,
-    lastOutput?: string
-  ): void
-
-  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -59,6 +50,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       viewShown?: boolean
       /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
       hostLost?: boolean
+      /** Its pane is starting again in place because the host no longer had its process (a daemon crash). */
+      paneRespawning?: boolean
     } = {}
   ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -205,6 +198,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
+      this.reattachedProviderSequenceByPtyId.delete(ptyId)
       this.providerSnapshotPreferredPtys.delete(ptyId)
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
@@ -328,7 +322,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       })
     }
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
-      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
+        paneRespawning: options.paneRespawning === true && pty?.connectionId == null
+      })
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

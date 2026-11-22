@@ -10,6 +10,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   REMOTE_BROWSER_STREAM_IDLE,
@@ -27,7 +28,7 @@ import {
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
+import { remoteBrowserPagePromptAsks } from './remote-browser-page-prompt-asks'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -36,7 +37,7 @@ export function useRemoteBrowserPageLifecycle({
   isActive,
   setPaneNotice,
   setPaneBusy,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   resetRemoteInputQueue
 }: {
   browserTab: BrowserPageState
@@ -45,11 +46,12 @@ export function useRemoteBrowserPageLifecycle({
   isActive: boolean
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   resetRemoteInputQueue: () => void
 }) {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
+  const [pagePointer, setPagePointer] = useState<BrowserScreencastPointer | null>(null)
   const setFrameUrlRef = useRef(setFrameUrl)
   const setFrameMetadataRef = useRef(setFrameMetadata)
   // Derive busy, notice and reconnect from one status so they cannot disagree.
@@ -134,12 +136,13 @@ export function useRemoteBrowserPageLifecycle({
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
+      setPointer: setPagePointer,
       closeMissingRemotePage: (remotePageId) =>
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
       syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
-      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
+      ...remoteBrowserPagePromptAsks(confirm)
     })
   }
   const lifecycle = lifecycleRef.current
@@ -224,23 +227,23 @@ export function useRemoteBrowserPageLifecycle({
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
-      clearPendingRemoteWheel()
+      clearPendingRemoteInput()
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
       }
     }
-  }, [clearPendingRemoteWheel, lifecycle])
+  }, [clearPendingRemoteInput, lifecycle])
 
   useEffect(() => {
     // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     lifecycle.forgetStreamViewportSize()
-    clearPendingRemoteWheel()
+    clearPendingRemoteInput()
     clearStreamFrame()
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     clearStreamFrame,
     lifecycle
   ])
@@ -292,6 +295,8 @@ export function useRemoteBrowserPageLifecycle({
     streamStatus,
     frameUrl,
     frameMetadata,
+    // Only the live stream's report is current; a new stream's ready replaces it.
+    pagePointer: streamStatus.kind === 'live' ? pagePointer : null,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,

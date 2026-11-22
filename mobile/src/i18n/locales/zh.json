@@ -31,7 +31,6 @@
       "emptyScope": "此范围内暂无历史智能体会话",
       "hideDetails": "隐藏详情",
       "showDetails": "显示详情",
-      "dismissNotice": "关闭",
       "loading": "正在加载智能体会话…",
       "missingResumeId": "此会话缺少恢复 ID",
       "noSearchResults": "没有符合搜索条件的会话",
@@ -123,7 +122,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... 或粘贴配对码",
       "pasteCodeTitle": "粘贴配对码",
       "pasteInstead": "改为粘贴配对码",
-      "pastePairingCode": "或粘贴配对码",
+      "pastePairingCode": "粘贴配对码",
       "scanCodeStep": "扫描二维码",
       "title": "与桌面配对",
       "tryAgain": "重试",
@@ -157,7 +156,7 @@
       "installTitle": "下载新应用",
       "installDescription": "如果手机询问，请允许浏览器安装应用。",
       "download": "下载",
-      "keepThisVersion": "继续使用此版本",
+      "keepThisVersion": "保留此版本",
       "keepThisVersionNote": "你将收不到安全修复。我们会在一周后再提醒你。"
     },
     "pairTitle": "与电脑配对",
@@ -346,7 +345,7 @@
       "triedSearchWeb": "尝试搜索网页"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "显示完整消息——加载失败，点按重试",
+      "loadFailed": "重试加载完整消息",
       "showFullMessage": "显示完整消息",
       "showLess": "收起"
     },
@@ -418,8 +417,7 @@
       "submitSelectedOptions": "提交所选选项"
     },
     "queuedMessages": {
-      "clearAll": "全部清除",
-      "deleteAll": "删除所有排队的消息",
+      "deleteAll": "全部删除",
       "editMessage": "编辑消息",
       "showLess": "收起",
       "moreCount_one": "另外 {{count}} 条",
@@ -659,17 +657,6 @@
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
     },
-    "agentMessage": {
-      "startedWorker": "已启动工作者",
-      "reopenedWorker": "已重新打开工作者",
-      "sentFollowUpToWorker": "已向工作者发送后续消息",
-      "handedOffToAgent": "已移交给智能体",
-      "startedAgent": "已启动智能体",
-      "taskFromCoordinator": "来自协调者的任务",
-      "messageFromCoordinator": "来自协调者的消息",
-      "updateFromWorker": "来自工作者的更新",
-      "messageFrom": "消息来自"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "无法读取附件响应。请重试。",
       "incompleteReply": "附件已更改或响应不完整。请关闭后重试。",
@@ -758,7 +745,8 @@
         "waitingForSignIn": "正在等待登录…",
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
-        "off": "已关闭"
+        "off": "已关闭",
+        "notStarted": "尚未启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -788,7 +776,6 @@
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支。",
       "unconfirmed": "{{agent}} 无法确认是否已创建分支。它可能已经打开；请先检查会话历史，再重试。",
       "failed": "{{agent}} 无法从此聊天创建分支。{{detail}}",
-      "unsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
@@ -796,6 +783,9 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "将所选文本作为引用添加到消息中"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "common": {
@@ -908,7 +898,7 @@
       "manageShortcuts": "管理快捷键",
       "manageShortcutsHint": "显示、隐藏快捷键或调整其顺序",
       "modifiers": "修饰键",
-      "moreKeys": "更多按键：Tab、方向键、F1–F12…",
+      "moreKeys": "更多按键",
       "navigation": "导航键",
       "pickKey": "选择按键",
       "pressEnter": "按下 Enter",
@@ -1089,12 +1079,10 @@
       "dismissDrawer": "关闭抽屉"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "钩子",
       "label": "设置脚本",
-      "run": "执行",
-      "runSetupCommand": "执行设置命令",
+      "runSetup": "执行设置",
       "skip": "跳过",
-      "waitForSetup": "等待设置完成后再启动代理",
+      "startAgentAfterSetup": "设置完成后再启动代理",
       "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {
@@ -1431,7 +1419,7 @@
       "privacyHint": "发送一份经过脱敏且大小受限的报告，包含主机名、端点、版本、连接状态和事件，绝不包含终端内容或凭据",
       "reconnecting": "重新连接中",
       "retrySending": "重试发送",
-      "sendDiagnostics": "向 Orca 发送诊断信息",
+      "sendDiagnostics": "发送诊断信息",
       "sending": "正在发送…",
       "sent": "诊断信息已发送",
       "stateWithAttempt": "{{state}} · 第 {{attempts}} 次尝试",
@@ -1840,10 +1828,8 @@
   "host": {
     "edit": {
       "address": "地址",
-      "addressHint": "支持 IP、host:port 或 ws:// / wss://。wss:// URL 未指定端口时使用 443。仅输入地址时保留当前端口（或使用 6768）",
       "connectionPreview": "连接到 {{endpoint}}",
       "goBack": "返回",
-      "help": "更改显示名称或连接地址。名称留空时，将使用桌面提供的名称。更改地址只会切换此手机的连接地址，不会重新配对。当同一桌面可通过不同 IP 访问时（例如家庭局域网与 Tailscale），可使用此功能",
       "hostNamePlaceholder": "主机名",
       "hostRemoved": "此主机已从这部手机上移除",
       "loadFailed": "加载主机失败",
@@ -1887,7 +1873,12 @@
       "deleteFailed": "无法删除“{{name}}”",
       "sleep": "休眠",
       "unpin": "取消固定",
-      "rename": "重命名"
+      "rename": "重命名",
+      "markRead": "标记为已读",
+      "markUnread": "标记为未读",
+      "muteNotifications": "静音通知",
+      "unmuteNotifications": "取消静音通知",
+      "moveToStatus": "移至状态"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",
@@ -2379,7 +2370,7 @@
       "branchNotLinked": "{{branch}} 未关联到开放的 PR",
       "branchRequired": "创建 PR 前，请先检出分支",
       "currentBranchNotLinked": "当前分支未关联到开放的 PR",
-      "linkExistingPullRequest": "关联现有 PR",
+      "linkExistingPullRequest": "关联 PR",
       "linkedPrUnavailable": "关联的 PR #{{number}} 不可用",
       "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR"
     },
@@ -2456,6 +2447,9 @@
       "sendFailed": "发送恢复命令失败"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 会话已在聊天中打开，请刷新会话历史以打开它",
+      "ownershipUnknown": "Orca 无法确认此 {{agent}} 会话的归属，请刷新会话历史并重试",
+      "preparationRefused": "Orca 无法准备此 {{agent}} 对话。请开启新聊天继续",
       "prepareFailed": "无法准备此旧版 Codex 会话。请重试恢复"
     },
     "backgroundTask": {
@@ -2576,6 +2570,7 @@
     "failure": {
       "accountSwitchInProgress": "正在此主机上更改 {{agent}} 的设置。请在完成后重试",
       "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置",
+      "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
       "agentCommandNotSignedIn": "请在运行此聊天的电脑上使用 `{{loginCommand}}` 登录 {{agent}}",
       "agentNotSignedIn": "请登录 {{agent}}",
       "agentStarting": "智能体仍在启动",
@@ -2708,6 +2703,7 @@
       "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
       "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
       "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
       "selectedModel": "所选模型"
     },
     "fileReader": {
@@ -2744,7 +2740,8 @@
       "fileExplorer": "文件资源管理器",
       "sourceControl": "源代码管理",
       "newTab": "新标签页",
-      "quickCommands": "快捷命令"
+      "quickCommands": "快捷命令",
+      "items": "条目"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "智能体历史记录",
@@ -2783,8 +2780,8 @@
       "scrollToLatest": "滚动到最新消息"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "显示完整消息：加载失败，点按重试",
-      "loadOutputFailed": "显示完整输出：加载失败，点按重试",
+      "loadMessageFailed": "重试加载完整消息",
+      "loadOutputFailed": "重试加载完整输出",
       "partialMessage": "仅显示此消息的部分内容",
       "partialOutput": "正在显示 {{total}} 中的 {{shown}}",
       "showFullMessage": "显示完整消息",
@@ -2800,8 +2797,8 @@
       "notFoundTitle": "暂未找到此对话"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "切换到聊天视图",
-      "switchToTerminalView": "切换到终端视图"
+      "switchToChatView": "切换到聊天",
+      "switchToTerminalView": "切换到终端"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "智能体已启动，但笔记未发送",
@@ -3434,6 +3431,8 @@
       "loadFailed": "无法加载已配对的桌面",
       "pairDesktop": "请先配对桌面，然后重试",
       "pushServiceFailed": "无法通过 Orca 推送服务发送。请重试",
+      "hostClockSkew": "{{host}} 的时钟偏差了 {{seconds}} 秒，因此 Orca 的推送服务拒绝了它。请将时钟设为正确时间后重试。",
+      "hostClockSkewDuration": "{{host}} 的时钟偏差了 {{duration}}，因此 Orca 的推送服务拒绝了它。请将时钟设为正确时间后重试。",
       "rateLimited": "通知发送过于频繁。请稍后重试",
       "sendButton": "发送测试通知",
       "sendFailed": "无法发送测试推送",
@@ -4021,7 +4020,7 @@
       "updateBranch": "更新分支",
       "back": "返回源代码管理",
       "title": "提交记录",
-      "loadMoreFailed": "无法加载更多提交，重试",
+      "loadMoreFailed": "重试加载提交",
       "notPushed": "未推送 {{count}}",
       "onOrigin": "origin 上 {{count}}"
     },
@@ -4585,7 +4584,7 @@
       "issueSource": "议题来源",
       "keySecurityHint": "密钥通过主机操作系统的钥匙串加密，并存储在本地",
       "linearConnectSubtitle": "粘贴个人 API 密钥，即可浏览该工作区的议题",
-      "linearSettingsLink": "Linear 设置 / 安全 / 新建 API 密钥",
+      "linearSettingsLink": "打开 Linear 设置",
       "linearTeam": "Linear 团队",
       "linearTeamSubtitle": "在所选 Linear 团队中创建议题",
       "newIssueTitle": "新建 {{providerLabel}} 议题",
@@ -4660,7 +4659,7 @@
       "runSetupAndCreate": "运行设置脚本并创建",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
       "setupTitle": "运行设置脚本？",
-      "skipSetupAndCreate": "跳过设置脚本并创建",
+      "skipSetupAndCreate": "跳过设置并创建",
       "trustFailed": "无法将设置脚本设为可信"
     },
     "worktreeCreateRetry": {
@@ -5200,18 +5199,568 @@
   "bots": {
     "link": {
       "pairTitle": "配对电脑",
-      "pairRequired": "要打开此链接，请将这部手机与电脑配对。",
+      "pairRequired": "要打开此链接，请将这部手机与电脑配对，然后重新打开该链接。",
       "pairAction": "配对电脑",
       "openFailed": "无法打开此链接",
-      "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
+      "ambiguous": "此 bot 位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
       "computer": "你的电脑",
       "updateNeeded": "请更新 {{names}} 上的 Orca 以打开此链接。",
       "unreachable": "无法连接到 {{names}}。请确认其中一台电脑正在运行 Orca，然后重试。",
-      "missing": "你配对的电脑上都没有此机器人。",
+      "missing": "你配对的电脑上都没有此 bot。",
       "offline": "{{name}} 已离线。请在它重新上线后再次打开链接。",
       "chatOpenFailed": "{{name}} 无法打开此聊天。请重试此链接。",
       "unreachableSingle": "无法连接到 {{name}}。请确认该电脑正在运行 Orca，然后重试。",
       "workspaceDeleted": "此聊天的工作区已在 {{name}} 上被删除。"
+    },
+    "settings": {
+      "remove": "移除",
+      "removeName": "移除 {{name}}",
+      "permissionsDetail": "新会话的初始权限。超出此权限的操作会在会话中请求批准。",
+      "nameTaken": "已有其他机器人使用此名称。",
+      "deleteFailed": "出了点问题。请重试。",
+      "deleteTitle": "要删除 {{name}} 吗？",
+      "deleteDetail": "其文件夹及其中的灵魂和记忆会保留在 {{path}}。",
+      "deleteConfirm": "删除机器人",
+      "staleTitle": "多久后将条目标记为“长期无活动”",
+      "staleDetail": "无活动达到此时长后标记为“长期无活动”。计划中的条目使用 3 倍时长。",
+      "staleNever": "从不",
+      "staleDays": "{{days}} 天",
+      "paused": "已暂停",
+      "agent": "智能体",
+      "agentAndModel": "智能体和模型",
+      "chatDefault": "你的聊天默认设置",
+      "computer": "电脑",
+      "schedule": "计划",
+      "items": "条目",
+      "access": "访问权限",
+      "whoCanAsk": "谁可以提问",
+      "deleteBot": "删除机器人…",
+      "agentDetail": "用于机器人对话和自动化。新模型对新对话生效；Home Chat 继续使用当前模型。",
+      "accountChecking": "检查中…",
+      "signedOut": "已从 Orca 退出登录",
+      "orcaAccount": "Orca 账号",
+      "folder": "文件夹",
+      "copyPath": "复制路径",
+      "pathCopied": "路径已复制",
+      "off": "关闭",
+      "lastLooked": "上次查看于 {{when}}",
+      "tidyNightLine": "每晚凌晨 3 点之后",
+      "tidyWeekLine": "每周一次，凌晨 3 点之后",
+      "today": "今天",
+      "yesterday": "昨天",
+      "lastTidied": "上次整理于 {{when}}",
+      "withAccess": "{{service}} 中有 {{people}} 人拥有访问权限",
+      "requests_one": "{{count}} 个请求",
+      "requests_other": "{{count}} 个请求",
+      "onlyYou": "仅你",
+      "model": "模型",
+      "effort": "推理强度",
+      "chatDefaultNote": "使用你的聊天默认设置。后台运行使用你的“智能体”设置。",
+      "useChatDefaults": "使用聊天默认设置",
+      "modelDefault": "默认",
+      "signInChanged": "Orca 登录状态已变更",
+      "sameAsChatsDetail": "使用你的聊天权限设置。",
+      "needsPermissionDetail": "当它或工作者需要你的批准时。",
+      "taskCompleteDetail": "讨论串、自动化或工作者完成时。",
+      "deleteUnsavedDrafts": "它的文件夹中有未保存的编辑。请在 {{host}} 上保存或关闭相关文件，然后再次删除。",
+      "editIdentity": "编辑 {{name}} 的名称和图片",
+      "computerFoot": "它的连接器、工具和文件都在 {{host}} 上。",
+      "computerDetail": "运行此机器人的聊天、工具和自动化",
+      "copyFailed": "无法复制",
+      "deleteDetailNoPath": "它的文件夹及其中的灵魂和记忆会保留在 {{host}} 上。",
+      "backToAgent": "返回智能体和模型"
+    },
+    "newHomeChat": {
+      "action": "新建 Home Chat",
+      "hint": "重新开始",
+      "title": "开始新的 Home Chat？",
+      "description": "{{name}} 会保留灵魂和记忆，但不会保留此对话。"
+    },
+    "sideChatsWith": "与 {{name}} 的支线聊天",
+    "newAgentChat": "新建 {{agent}} 聊天",
+    "lookAround": {
+      "looking": "巡视中…",
+      "lookNow": "立即查看",
+      "save": "保存",
+      "detail": "读取已连接的应用和项目，建议下一步操作。仅限读取。每次查看都会使用你的智能体套餐额度，且主机上必须运行 Orca。",
+      "notYet": "尚未",
+      "backToLookAround": "返回四处看看"
+    },
+    "connectorOffer": {
+      "slack": "通过 Slack 频道和私信与机器人聊天。",
+      "google": "让机器人在你的 Gmail、Calendar 和 Drive 中工作，并在收到新邮件时启动自动化。",
+      "linear": "通过 @提及机器人或将议题分配给它来交办议题，并通过 Linear 事件启动自动化。",
+      "github": "通过 @提及机器人来交办工作，并通过 GitHub 事件启动自动化。",
+      "heading": "连接服务"
+    },
+    "groups": {
+      "group": "分组",
+      "peerTold": "{{from}} 通知了 {{to}}",
+      "startAConversationWithThisGroupMentionBots": "在此分组中开始对话。使用 @Name 或 @everyone 提及机器人。",
+      "items": {
+        "thisGroup": "此分组",
+        "thread": "话题",
+        "all": "它们的所有工作",
+        "orNames": "{{names}} 或 {{last}}",
+        "outsideRoom_one": "此聊天室外还有 {{count}} 个",
+        "outsideRoom_other": "此聊天室外还有 {{count}} 个",
+        "outsideThread_one": "此话题外还有 {{count}} 个",
+        "outsideThread_other": "此话题外还有 {{count}} 个",
+        "outside_one": "此分组外还有 {{count}} 个",
+        "outside_other": "此分组外还有 {{count}} 个",
+        "emptyTitle": "此分组暂无条目",
+        "emptyBody": "当 {{names}} 在此分组中开始处理工作时，相关条目就会显示在这里。",
+        "needsYouCount_one": "{{count}} 个需要你处理",
+        "needsYouCount_other": "{{count}} 个需要你处理",
+        "workingCount_one": "{{count}} 个处理中",
+        "workingCount_other": "{{count}} 个处理中",
+        "filterBot": "机器人",
+        "outsideRoom": "此聊天室外还有 {{count}} 个",
+        "outsideThread": "此话题外还有 {{count}} 个",
+        "outside": "此分组外还有 {{count}} 个",
+        "needsYouCount": "{{count}} 个需要你处理",
+        "workingCount": "{{count}} 个处理中"
+      },
+      "newThreadTab": "新建话题",
+      "newThreadHint": "全新开始",
+      "newThread": "在 {{name}} 中新建话题",
+      "handoffsPaused": "已在 {{count}} 次交接后暂停。回复即可继续。"
+    },
+    "templates": {
+      "title": "机器人模板",
+      "useTemplate": "使用模板…",
+      "firstChat": "它首先会做什么",
+      "needsSetup": "需要设置",
+      "comesWith": "包含",
+      "comesWithNote": "计划默认关闭。选好仓库或频道后，在首次聊天中设置自动化和连接器。",
+      "stateOff": "关闭",
+      "stateFirstChat": "首次聊天",
+      "stateNotConnected": "未连接",
+      "search": "搜索模板",
+      "category": {
+        "support": "支持与分类处理",
+        "personal": "个人助手"
+      },
+      "allCategories": "全部",
+      "backToTemplates": "返回模板"
+    },
+    "tidyUp": {
+      "title": "记忆维护",
+      "never": "尚未",
+      "footer": "仅更改记忆文件。会使用你的智能体套餐额度，类似于一次简短聊天。你的电脑上必须运行 Orca。",
+      "undoNote": "撤销会将 MEMORY.md 一次性恢复到此次整理前的状态。完整历史记录和记忆编辑功能位于电脑上的“设置 → 记忆”中。",
+      "backToTidyUp": "返回记忆维护"
+    },
+    "items": {
+      "filter": {
+        "clearAll": "清除筛选",
+        "chat": "聊天"
+      },
+      "tab": "条目",
+      "activity": {
+        "notSent": "未发送。",
+        "retry": "重试",
+        "discard": "放弃",
+        "mayHaveArrived": "可能已送达。"
+      },
+      "comment": {
+        "replyingTo": "正在回复："
+      },
+      "view": {
+        "title": "条目",
+        "subWhere": "条目 {{number}} · {{chat}}",
+        "placeOf": "第 {{index}} 个，共 {{total}} 个",
+        "previous": "上一个条目",
+        "next": "下一个条目"
+      },
+      "ask": {
+        "notNow": "暂不"
+      },
+      "write": {
+        "offline": "{{host}} 已离线。"
+      },
+      "thisComputer": "电脑",
+      "readFailedClosedPage": "无法读取更多已关闭的条目。"
+    },
+    "needs": {
+      "chat": "你与 {{name}} 的聊天",
+      "access": "{{person}} 请求了访问权限",
+      "connector": "{{name}} 需要你重新登录或修复连接。",
+      "fixConnector": "打开 {{name}}",
+      "runSignIn": "你登录后才能运行。",
+      "openRun": "打开运行"
+    },
+    "waits": {
+      "cancel": "取消",
+      "cancelNamed": "取消等待 {{name}}",
+      "noDeadline": "无截止时间",
+      "until": "直到 {{time}}"
+    },
+    "webhooks": {
+      "copiedUrl": "URL 已复制",
+      "copyFailed": "无法复制。请重试。",
+      "resume": "恢复",
+      "pause": "暂停",
+      "more": "更多操作",
+      "orphanedNote": "{{bot}} 的 Orca 中已没有此自动化，因此调用不会执行。",
+      "url": "URL",
+      "copy": "复制",
+      "copyUrl": "复制 URL",
+      "checksLabel": "检查项",
+      "starts": "启动",
+      "onlyWhen": "仅当",
+      "editInChat": "在聊天中编辑",
+      "editDraft": "更改“{{automation}}”的运行条件：",
+      "quotes": "引用字段",
+      "sample": {
+        "send": "发送示例调用",
+        "note": "示例调用会启动一次真实运行。",
+        "sent": "示例调用已发送"
+      },
+      "rotate": {
+        "open": "更换密钥…",
+        "title": "更换“{{automation}}”的密钥？",
+        "confirm": "更换密钥",
+        "note": "URL 将使用新密钥。请用它更新所有发送方。",
+        "overlap": "让旧密钥继续有效 24 小时",
+        "overlapNote": "更新期间，发送方仍可正常调用。",
+        "stop": "立即停用旧密钥",
+        "stopCancels_one": "适用于密钥泄露的情况。通过该密钥接收的 {{count}} 个待处理调用将被取消。",
+        "stopCancels_other": "适用于密钥泄露的情况。通过该密钥接收的 {{count}} 个待处理调用将被取消。",
+        "stopNote": "适用于密钥泄露的情况。",
+        "done": "密钥已更换。请复制新的 URL。"
+      },
+      "secret": {
+        "add": "添加签名密钥…",
+        "generatedTitle": "签名密钥已就绪",
+        "done": "完成",
+        "generatedNote": "将其复制到 {{sender}} 的 Webhook 设置中。此后，调用必须携带该密钥生成的签名。",
+        "copy": "复制密钥",
+        "copied": "密钥已复制",
+        "changeTitle": "更改签名密钥",
+        "addTitle": "添加签名密钥",
+        "note": "此后，Orca 只接受使用此密钥签名的调用，因此仅凭泄露的 URL 无法启动“{{automation}}”。",
+        "sender": "发送方",
+        "modeGenerate": "由 Orca 生成",
+        "modePaste": "粘贴发送方的密钥",
+        "generateNote": "Orca 会生成此密钥。接下来，将其复制到 {{sender}} 中。",
+        "paste": "{{sender}} 密钥",
+        "pasteNote": "发送方提供自己的密钥时，使用此选项。",
+        "generate": "生成密钥",
+        "save": "保存",
+        "saved": "签名密钥已保存",
+        "changeOpen": "更改签名密钥…",
+        "back": "返回签名密钥"
+      },
+      "delete": {
+        "open": "删除 Webhook…",
+        "title": "删除“{{automation}}”的 Webhook？",
+        "note": "其 URL 将失效，仍在等待的调用将被取消。新建 Webhook 会获得新的 URL。",
+        "confirm": "删除 Webhook",
+        "done": "Webhook 已删除",
+        "withAutomation": {
+          "title": "删除“{{automation}}”及其 Webhook？",
+          "note": "没有其他方式会启动此自动化，因此它及其运行历史会一并删除。Webhook 的 URL 将失效，仍在等待的调用将被取消。",
+          "confirm": "删除两者"
+        }
+      },
+      "recentCalls": "最近调用",
+      "showFewer": "显示较少",
+      "showAll": "显示全部",
+      "noCalls": "暂无调用。",
+      "cancel": "取消",
+      "lastCallLower": "上次调用于 {{ago}}",
+      "noCallsLower": "暂无调用",
+      "status": {
+        "on": "开启",
+        "noCalls": "暂无调用",
+        "paused": "已暂停",
+        "receiving": "接收中"
+      },
+      "hookCount_one": "{{count}} 个 Webhook",
+      "hookCount_other": "{{count}} 个 Webhook",
+      "name": "Webhook",
+      "hooks": "Webhook",
+      "addInChat": "在聊天中添加",
+      "setUpDraft": "设置一个 Webhook，用于 ",
+      "resumed": "Webhook 已恢复",
+      "paused": "Webhook 已暂停",
+      "resultsToChat": "结果发送到聊天",
+      "resultsToThread": "结果发送到事件所在的话题",
+      "resultsNowhere": "不发送结果",
+      "resultsToPlace": "结果发送到 {{place}}",
+      "checks": {
+        "key": "URL 或请求头中的密钥",
+        "generated": "{{sender}} 签名，使用其签名密钥",
+        "pasted": "{{sender}} 签名，使用你的 {{sender}} 密钥"
+      },
+      "where": {
+        "is": "为 {{values}}",
+        "isNot": "不为 {{values}}",
+        "contains": "包含 {{values}}",
+        "exists": "存在",
+        "missing": "不存在",
+        "text": "请求正文包含“{{text}}”",
+        "subject": "主题为 {{subject}}",
+        "and": "，以及"
+      },
+      "everyCall": "每次调用",
+      "hostOffline": "{{bot}} 的电脑已离线",
+      "hostNeedsUpdate": "你需要更新 Orca，{{bot}} 才能执行此操作。",
+      "errors": {
+        "notFound": "此 Webhook 已删除。",
+        "unavailable": "Webhook 暂时不可用。"
+      },
+      "calls": {
+        "run": "运行 #{{number}}",
+        "chat": "聊天",
+        "runIn": "运行 #{{number}}，结果发送到 {{place}}",
+        "refused": "已拒绝 ×{{count}}",
+        "refusedDetail": "密钥或签名错误 · 未保留任何内容",
+        "overBudget": "超出限额 ×{{count}}",
+        "overBudgetDetail": "调用过多 · 未保留任何内容",
+        "duplicate": "重复调用 ×{{count}}",
+        "duplicateDetail": "已接收过",
+        "sample": "示例",
+        "queued": "已排队",
+        "queuedDetail": "等待 {{bot}} 的电脑",
+        "delivered": "已送达",
+        "deliveredDetail": "在 {{bot}} 的电脑上",
+        "ignored": "已忽略",
+        "ignoredDetail": "不符合“仅当”条件",
+        "paused": "已暂停",
+        "pausedDetail": "未启动任何运行",
+        "cancelled": "已取消",
+        "cancelledDetail": "此前已暂停、更换密钥或删除",
+        "waiting": "等待中",
+        "waitingDetail": "等待每小时运行限额释放",
+        "started": "已开始",
+        "folded": "已合并",
+        "foldedDetail": "已计数，未传给本次运行",
+        "refusedOne": "已拒绝",
+        "missed": "已跳过",
+        "missedDetail": "已超过自动化的补跑宽限期",
+        "unavailable": "不可用",
+        "completed": "完成",
+        "failed": "失败",
+        "unverifiable": "无法验证",
+        "unverifiableDetail": "无法连接 {{bot}} 的电脑"
+      },
+      "back": "返回 Webhook",
+      "howToCallShort": "任何工具或脚本都可以向 Webhook 的 URL 发送 POST 请求。每个 Webhook 启动一个自动化。"
+    },
+    "errors": {
+      "generic": "出了点问题。请重试。"
+    },
+    "firstScreen": {
+      "stepCreate": "创建机器人",
+      "startAgent": "启动 {{agent}}",
+      "stepReply": "第一条消息",
+      "retryFailed": "无法重试。请稍后再试。",
+      "subtitle": "你的新机器人 · 运行你的 {{agent}}",
+      "setup": "设置",
+      "failed": "无法完成设置",
+      "tryAgain": "重试",
+      "reading": "正在了解你的配置…",
+      "read": "正在了解你的配置",
+      "namesMore": "{{names}}，另有 {{count}} 个",
+      "projectsReading": "项目：正在查看你在 Orca 中的项目…",
+      "projectsDone": "已查看你的项目",
+      "projectsNone": "Orca 中暂无项目",
+      "projectsOne": "找到 1 个项目：{{names}}",
+      "projectsMany": "找到 {{count}} 个项目：{{names}}",
+      "githubReading": "GitHub：正在读取你未关闭的 PR…",
+      "githubDone": "GitHub：已查看你的工作",
+      "githubOne": "GitHub：你有 1 个未关闭的 PR",
+      "githubMany": "GitHub：你有 {{count}} 个未关闭的 PR",
+      "linearReading": "Linear：正在读取你未关闭的议题…",
+      "linearDone": "Linear：已查看你的议题",
+      "linearMore": "Linear：有 {{count}}+ 个未关闭的议题分配给你",
+      "linearOne": "Linear：有 1 个未关闭的议题分配给你",
+      "linearMany": "Linear：有 {{count}} 个未关闭的议题分配给你",
+      "workspacesReading": "工作区：正在查看你的智能体在做什么…",
+      "workspacesDone": "已查看你的工作区",
+      "workspacesNone": "没有打开智能体的工作区",
+      "workspacesOne": "工作区：有 1 个打开了智能体",
+      "workspacesMany": "工作区：有 {{count}} 个打开了智能体",
+      "toolsReading": "你的工具：MCP 服务器…",
+      "toolsDone": "已查看你的 MCP 服务器",
+      "toolsNone": "暂无 MCP 服务器",
+      "toolsOne": "1 个 MCP 服务器：{{names}}",
+      "toolsMany": "{{count}} 个 MCP 服务器：{{names}}"
+    },
+    "accessRequest": {
+      "review": "审核"
+    },
+    "picture": {
+      "invalid": "无法使用此图片。请选择 PNG 或 JPG 图片。",
+      "permissionDenied": "照片访问权限被拒绝",
+      "unreadable": "Orca 无法读取这张图片。请尝试 PNG 或 JPEG。",
+      "colorSky": "天蓝",
+      "colorWhite": "白色",
+      "colorLavender": "薰衣草紫",
+      "colorPink": "粉色",
+      "colorPeach": "蜜桃色",
+      "colorButter": "奶油黄",
+      "colorSage": "鼠尾草绿",
+      "colorMint": "薄荷绿",
+      "colorSlate": "石板灰",
+      "colorGraphite": "石墨色",
+      "colorInk": "墨黑",
+      "nameLabel": "机器人名称",
+      "mascotN": "吉祥物 {{n}}（共 {{total}} 个）",
+      "background": "背景颜色",
+      "tooBig": "这张图片超过 10 MB。",
+      "tooSmall": "图片太小。请使用至少 128 px 的图片。",
+      "title": "名称和图片",
+      "mascot": "吉祥物",
+      "choosePhoto": "从照片中选择",
+      "slackToo": "也会更改你的机器人在 Slack 中的图片。"
+    },
+    "agentSwitch": {
+      "title": "将 {{name}} 切换为 {{agent}}？",
+      "kept": "保留：灵魂、记忆、自动化、连接器",
+      "notKept": "不保留：当前对话",
+      "threads": "正在运行的 Slack 话题会继续使用 {{agent}}，直至结束",
+      "action": "切换为 {{agent}}",
+      "description": "{{name}} 的主聊天将在 {{agent}} 上重新开始。当前对话会保留在历史记录中。"
+    },
+    "tools": {
+      "add": "添加工具",
+      "addButton": "添加",
+      "sourceLabel": "服务器 URL 或启动命令",
+      "sourcePlaceholder": "https://… or npx …",
+      "scope": "在你自己的工具之外，仅为 {{name}} 添加此工具。",
+      "details": "详情",
+      "commandWarning": "该命令会在 {{host}} 上此机器人的主文件夹中运行。添加或保存时，智能体的内置检查可能会启动该命令。只添加你信任的软件。",
+      "serverType": "服务器类型",
+      "urlMode": "连接到 URL",
+      "commandMode": "运行命令",
+      "serverName": "服务器名称",
+      "removeTitle": "要移除 {{app}} 吗？",
+      "removeNote": "{{bot}} 将无法再使用 {{app}}。你随时可以重新添加。",
+      "remove": "移除",
+      "signInOrca": "支持 Claude 和 Codex",
+      "signInMissing": "{{agent}} 尚未登录",
+      "signInHeld": "由 {{agent}} 保管",
+      "wontStart": "无法启动",
+      "unconfirmed": "未确认",
+      "checkAgain": "重新检查",
+      "uses": "用途",
+      "address": "地址",
+      "runs": "执行",
+      "people": "人员",
+      "peopleNote": "可以向 {{bot}} 提问的任何人都能使用此应用",
+      "signInLabel": "登录信息",
+      "face": {
+        "signInAgain": "重新登录",
+        "signedIn": "已登录",
+        "needsSignIn": "需要登录",
+        "finishInBrowser": "在浏览器中完成",
+        "finishing": "正在完成登录…",
+        "updateHost": "更新 {{host}} 上的 Orca",
+        "cantReach": "无法连接",
+        "unsupported": "暂不支持此应用"
+      },
+      "removeNamed": "移除 {{app}}",
+      "signIn": {
+        "action": "登录",
+        "step1Detail": "登录 {{app}} 并授予访问权限。",
+        "openAgain": "重新打开页面",
+        "finish": "完成",
+        "open": "打开登录页面",
+        "pasteLanded": "登录后，粘贴最终跳转到的地址。",
+        "step2": "复制地址",
+        "step2Detail": "最后一个页面无法加载，这是正常的。请复制该页面的地址。",
+        "step3": "粘贴到这里",
+        "step3Detail": "Orca 会在 {{host}} 上完成登录。",
+        "title": "登录 {{app}}",
+        "pastePlaceholder": "粘贴地址",
+        "notThisSignIn": "该地址不属于本次登录。请粘贴登录后跳转到的页面地址。"
+      },
+      "updateHost": "更新 {{host}} 上的 Orca 以登录应用",
+      "none": "无",
+      "from": "来自 {{agent}} 的 {{count}} 个工具",
+      "more": "另有 {{count}} 个工具来自 {{agent}}",
+      "title": "工具",
+      "readOnly": "此处为只读。请在 {{agent}} 中更改。",
+      "fromYours": "{{count}} 个来自你的 {{agent}}",
+      "tryAgain": "重试",
+      "signedInTo": "已登录 {{app}}",
+      "back": "返回工具",
+      "problem": "问题"
+    },
+    "handToBot": {
+      "menu": "移交给机器人…",
+      "title": "将 {{name}} 移交给机器人",
+      "noAgents": "其中没有正在运行的智能体。",
+      "oneAgent": "其中的智能体会继续运行，并为机器人工作。",
+      "agents": "其中的 {{n}} 个智能体会继续运行，并为机器人工作。",
+      "newBot": "新建机器人…",
+      "newBotNote": "为此工作区设置一个机器人",
+      "hasIt": "当前拥有此工作区",
+      "goal": "机器人应该用它做什么？",
+      "optional": "（可选）",
+      "goalPlaceholder": "例如，在周五前完成合并",
+      "moveNote": "{{owner}} 当前管理此工作区。移交会将此工作区及其中的智能体移到 {{bot}} 下。",
+      "moveTo": "移到 {{bot}}",
+      "handOver": "移交",
+      "newBotOrigin": "来自 {{name}}。创建机器人后，它将接管此工作区。",
+      "putBack": "{{reason}} {{name}} 仍在原处。",
+      "movedSince": "{{reason}} {{name}} 仍在你移动后的位置。",
+      "leftMoved": "{{reason}} {{name}} 现在位于 {{bot}} 下；请通过其菜单将它移回。"
+    },
+    "import": {
+      "onHost": "位于 {{host}}",
+      "selectFolder": "选择文件夹",
+      "oldBot": "旧机器人",
+      "importedAs": "之前已导入为 {{bot}}",
+      "defaultProfile": "默认配置文件",
+      "profile": "配置文件",
+      "agent": "智能体",
+      "rowDetail": "{{app}} {{kind}}",
+      "bringOver": "导入",
+      "otherApp": "其他应用…",
+      "otherAppNote": "旧机器人会为你复制其文件",
+      "noneFoundNote": "在 OpenClaw（~/.openclaw）、Hermes（~/.hermes）或 OpenBot 中未找到机器人。",
+      "sendStep": "向旧机器人发送这条消息",
+      "copyMessage": "复制消息",
+      "seeMessage": "查看消息",
+      "addStep": "添加它生成的文件夹",
+      "folderItems_one": "{{count}} 个条目",
+      "folderItems_other": "{{count}} 个条目",
+      "removePath": "移除 {{name}}",
+      "replyPlaceholder": "如果它有回复，请粘贴到这里",
+      "replyLabel": "它的回复",
+      "title": "从其他应用导入",
+      "newBot": "新机器人",
+      "exportDescription": "让旧机器人导出自身的副本，再将副本交给新机器人。",
+      "description": "新机器人会读取旧机器人的内容，并完成自身设置。",
+      "nameAnother": "为新机器人命名",
+      "importedBefore": "{{bot}} 是从这个机器人导入的",
+      "keysStay": "密钥和登录信息不会迁移",
+      "nudgeOne": "在 {{app}} 中找到了一个机器人。",
+      "nudgeMany": "在 {{app}} 中找到了 {{count}} 个机器人。",
+      "chooseFolderTitle": "选择文件夹",
+      "loadingFolders": "正在加载文件夹…",
+      "lookingOn": "正在 {{host}} 上查找…",
+      "foundOn": "在 {{host}} 上找到 {{count}} 个",
+      "copiedNote": "已复制。请在你与旧机器人聊天的地方，将内容粘贴给它。",
+      "copyAgain": "再次复制",
+      "addStepNote": "它会将一个以 -export 结尾的文件夹保存到 {{host}} 上的“下载”文件夹中。",
+      "chooseAnother": "选择其他文件夹…",
+      "chooseFolderRow": "选择文件夹…",
+      "noFolders": "没有文件夹"
+    },
+    "saveFailed": "无法保存",
+    "chats": {
+      "readFailedTitle": "无法加载聊天"
+    },
+    "panel": {
+      "backTo": "返回 {{name}}"
+    },
+    "composio": {
+      "toolName": "Composio 应用"
     }
   },
   "hostMutation": {

@@ -3,13 +3,15 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   agentSessionInstallCommand,
-  agentSessionSignInCommand
+  agentSessionSignInCommand,
+  agentSessionSignInEnv
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -26,6 +28,7 @@ import {
 } from './native-chat-host-command-terminal'
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
+import { openAgentSettingsAction } from '@/components/settings/navigation/open-agent-settings'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -61,6 +64,8 @@ export function isNativeChatFailureRowResolved(
 
 export type NativeChatSignIn = {
   signingIn: boolean
+  /** Signed in since this failure; nothing to press until the user sends again. */
+  signedIn?: boolean
   signIn: () => void
   loginCommand?: string
 }
@@ -81,6 +86,8 @@ export type NativeChatHostSetup = {
   host?: RuntimeClientTarget
   /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
   unresolvedFailureRows?: ReadonlySet<string>
+  /** The composer's notice shows Sign in, so transcript rows only say what wasn't sent. */
+  signInInComposer?: boolean
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -96,7 +103,7 @@ export function nativeChatSetupAction(
   t: Translate = translate
 ): { label: string; primary: true; disabled: boolean; onClick: () => void } | undefined {
   const signIn = setup?.signIn
-  if (signIn && isNativeChatSignInFailureKind(kind, signIn)) {
+  if (signIn && !signIn.signedIn && isNativeChatSignInFailureKind(kind, signIn)) {
     return {
       label: signIn.signingIn
         ? t('components.native-chat.claudeSignIn.signingIn', 'Signing in…')
@@ -118,10 +125,13 @@ export function nativeChatSetupAction(
       onClick: install.run
     }
   }
+  if (kind === 'agentCommandNotRunnable') {
+    return { ...openAgentSettingsAction(setup?.host, t), primary: true }
+  }
   return undefined
 }
 
-/** Offer selected-account sign-in until successful, then suppress it until the failure or failure-row count changes. */
+/** Offer selected-account sign-in until successful, then report signed in until the failure or failure-row count changes. */
 function useManagedClaudeSignIn(
   accountId: string | null,
   failure: unknown,
@@ -152,7 +162,7 @@ function useManagedClaudeSignIn(
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
   return useMemo(
-    () => (accountId && !signedInSinceFailure ? { signingIn, signIn } : null),
+    () => (accountId ? { signingIn, signedIn: signedInSinceFailure, signIn } : null),
     [accountId, signedInSinceFailure, signingIn, signIn]
   )
 }
@@ -187,10 +197,10 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStore((s) => {
+  const shell = useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
         : null
     const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
     if (!platform) {
@@ -212,16 +222,17 @@ function useNativeChatSignIn(
     remote: input.target.kind !== 'local',
     shell
   })
+  const { agent } = input
   const viaTerminal = useMemo(
     () =>
       command && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(command),
+            signIn: () => void terminal.open(command, agentSessionSignInEnv(agent)),
             loginCommand: command
           }
         : null,
-    [command, terminal]
+    [agent, command, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : viaTerminal
@@ -235,8 +246,8 @@ function useNativeChatInstall(
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
     input.agent,
-    useAppStore((s) =>
-      environmentId ? runtimeHostPlatform(s, environmentId) : getRendererAppPlatform()
+    useAppStoreWithHostStatuses((_s, statuses) =>
+      environmentId ? runtimeHostPlatform(statuses, environmentId) : getRendererAppPlatform()
     )
   )
   const [opened, setOpened] = useState(false)

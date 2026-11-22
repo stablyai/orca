@@ -160,5 +160,9 @@ export const SLACK_HANDLERS: Record<string, CommandHandler> = {
   'slack react': act('react', 'ref'),
   'slack edit': act('edit', 'ref'),
   'slack delete': act('delete', 'ref'),
+  'slack pin': act('pin', 'ref'),
+  'slack canvas': act('canvas', 'ref'),
+  'slack list': act('list', 'ref'),
+  'slack scheduled': act('scheduled', 'ref'),
   'slack attach': attach
 }

@@ -16,7 +16,11 @@ import { agentStatusGroup, listedAgentVerdict } from '../../agents/agent-list-ro
 import type { BotComputerAnswer } from '../../bots/bot-link-host-reads'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import type { PhoneBot } from '../../bots/host-bots-operations'
-import { mobileBotRowLine, mobileBotRowLineText } from '../../bots/mobile-bot-row-line'
+import {
+  mobileBotRowLine,
+  mobileBotRowLineText,
+  mobileBotRowNeedsYou
+} from '../../bots/mobile-bot-row-line'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   agentDotState,
@@ -37,7 +41,8 @@ export type HomeRowBase = {
   preview: string
   age: string | null
   unread: boolean
-  /** Its live Needs you items: the Bots badge counts these, and they sort it first. */
+  /** Its Needs you count (`mobileBotRowNeedsYou`) from what Home reads: its own asks and items, not
+   *  its workers or access requests. The Bots badge sums these, and they sort it first. */
   needsYou: number
   activityAt: number
   /** Kept from before its computer went offline: dimmed, and tapping it says so. */
@@ -67,7 +72,7 @@ export function agentsByHome(info: HostWorktreeInfo | undefined): Map<string, Ho
   return byHome
 }
 
-/** The bot's own turn: needs you, working, else idle (grey, as Home's mock draws it). */
+/** The bot's own turn, folded as on its computer's Bots list: needs you, working, else available or paused. */
 function botDot(agents: readonly HomeAgentEntry[], paused: boolean, now: number): BotRowStatus {
   let status: WorktreeStatus = 'inactive'
   for (const { agent } of agents) {
@@ -79,7 +84,7 @@ function botDot(agents: readonly HomeAgentEntry[], paused: boolean, now: number)
       status = 'working'
     }
   }
-  return status === 'inactive' ? 'inactive' : foldBotStatus(status, paused)
+  return foldBotStatus(status, paused)
 }
 
 /** Where a row runs, kept apart from which paired computer reached it. */
@@ -103,18 +108,17 @@ export function botRow(
   agents: readonly HomeAgentEntry[],
   now: number
 ): HomeBotRow {
-  const line = mobileBotRowLine(
-    {
-      paused: bot.paused,
-      line: {
-        chatSessionId: bot.chatSessionId ?? null,
-        links: [],
-        waits: answer.waits[bot.id] ?? []
-      }
-    },
-    agents.map((entry) => entry.agent),
-    now
-  )
+  const facts = {
+    paused: bot.paused,
+    line: {
+      chatSessionId: bot.chatSessionId ?? null,
+      links: [],
+      waits: answer.waits[bot.id] ?? [],
+      itemsNeedingYou: answer.needsYou[bot.id] ?? 0
+    }
+  }
+  const rows = agents.map((entry) => entry.agent)
+  const line = mobileBotRowLine(facts, rows, now)
   const lineAt = line?.kind === 'activity' ? line.at : null
   return {
     kind: 'bot',
@@ -129,8 +133,8 @@ export function botRow(
     preview: line ? mobileBotRowLineText(line, now) : '',
     age: lineAt === null ? null : formatTimeAgo(lineAt, now),
     unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
-    needsYou: answer.needsYou[bot.id] ?? 0,
-    activityAt: Math.max(lineAt ?? 0, ...agents.map((entry) => agentRowTimeAt(entry.agent)))
+    needsYou: mobileBotRowNeedsYou(facts.line, rows, now),
+    activityAt: Math.max(lineAt ?? 0, ...rows.map(agentRowTimeAt))
   }
 }
 
@@ -145,7 +149,7 @@ export function groupRow(
   const faces = botGroupMemberBots(group, bots).map((bot) => ({
     id: bot.id,
     name: bot.name,
-    avatar: mobileBotAvatarSource(bot, undefined)
+    avatar: mobileBotAvatarSource(bot)
   }))
   const line = botGroupRowLine(group, faces, translate('bots.groups.you', 'You'))
   return {
@@ -210,7 +214,7 @@ export function keptRows(
       faces: botGroupMemberBots(group, bots).map((bot) => ({
         id: bot.id,
         name: bot.name,
-        avatar: mobileBotAvatarSource(bot, undefined)
+        avatar: mobileBotAvatarSource(bot)
       })),
       dot: null
     }))

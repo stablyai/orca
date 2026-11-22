@@ -19,6 +19,11 @@ function stamp(hostId: ExecutionHostId, next: readonly BotGroup[]): readonly Bot
       next.map((group) => ({ ...group, hostId }) as BotGroup)
 }
 
+/** A group a host answered with, stamped with that host, as its listing would. */
+export function stampBotGroupHost(hostId: ExecutionHostId, group: BotGroup): BotGroup {
+  return stamp(hostId, [group])[0]
+}
+
 function reflatten(): void {
   const hostIds = readBotHostIds()
   // One host hands out its own list, so React sees a stable value.

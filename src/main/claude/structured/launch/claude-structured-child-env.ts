@@ -45,9 +45,7 @@ export type ClaudeEnvDeps = {
   resolveInheritedEnv?: () => Promise<Record<string, string>>
 }
 
-export type ClaudeChildEnvSources = {
-  command: string
-  prefixArgs: string[]
+export type ClaudeChildEnvSources = StructuredAgentCommand & {
   overlay: Record<string, string> | undefined
   inheritedEnv: Record<string, string>
 }

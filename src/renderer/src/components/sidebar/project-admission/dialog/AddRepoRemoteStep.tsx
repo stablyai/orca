@@ -195,7 +195,7 @@ export function RemoteStep({
         >
           {isAddingRemote
             ? t('auto.components.sidebar.AddRepoRemoteStep.35831a7312', 'Adding...')
-            : t('auto.components.sidebar.AddRepoRemoteStep.36d427bb66', 'Add project on SSH host')}
+            : t('auto.components.sidebar.AddRepoRemoteStep.36d427bb66', 'Add SSH project')}
         </Button>
       </div>
     </>

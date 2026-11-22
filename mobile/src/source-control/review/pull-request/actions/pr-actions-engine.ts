@@ -176,13 +176,14 @@ export class PrActionsEngine {
     this.setError(outcome.error)
   }
 
-  async merge(method?: GitHubPRMergeMethod): Promise<boolean> {
+  /** `expectedHeadSha`: the PR head the user saw when choosing to merge; GitHub refuses if it moved. */
+  async merge(method?: GitHubPRMergeMethod, expectedHeadSha?: string | null): Promise<boolean> {
     const { cfg, identity } = this
     const { prNumber, prRepo } = cfg
     this.setBusy({ kind: 'merge' })
     this.setError(null)
     try {
-      const outcome = await cfg.mutations.mergePR({ prNumber, method, prRepo })
+      const outcome = await cfg.mutations.mergePR({ prNumber, method, prRepo, expectedHeadSha })
       this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
       return outcome.ok
     } catch (err) {

@@ -20,6 +20,7 @@ import {
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
   AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY,
@@ -81,6 +82,8 @@ export type StructuredAgentSessionHostSupport = {
   phoneThreadGoal?: boolean
   /** The host answers `agentSession.mcp` for the `/mcp` tray. */
   mcp?: boolean
+  /** The host answers a phone's `agentSession.accountUsage` for `/usage`. */
+  phoneAccountUsage?: boolean
   /** Older hosts advertise rewind but refuse it from a phone. */
   phoneRewind?: boolean
   /** The host continues a usage-limited chat at its reset and publishes that on the status feed. */
@@ -131,6 +134,7 @@ export function structuredAgentSessionHostSupport(
     ),
     phoneThreadGoal: capabilities.includes(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
     mcp: capabilities.includes(AGENT_SESSION_MCP_RUNTIME_CAPABILITY),
+    phoneAccountUsage: capabilities.includes(AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY),
     phoneRewind: capabilities.includes(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY),
     usageLimitAutoContinue: capabilities.includes(
       AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY

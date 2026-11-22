@@ -1,4 +1,5 @@
 import { shellReadyMarkerComesFromLineEditor } from '../../../shared/terminal/output/shell-ready-marker-timing'
+import { extractOnlyTerminalQueryReplies } from '../../../shared/terminal/protocol/queries/terminal-query-reply'
 import {
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE
@@ -16,6 +17,9 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from '../protocol/daemon-rpc-contract'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
+// Ctrl+U kills typed text left of the cursor in zsh, bash and fish, the only shells this barrier holds commands for.
+// The leading space keeps the cursor off column 0, where bash rings the bell on ^U (e.g. on an already empty line).
+const KILL_TYPED_LINE = ' \x15'
 
 export type SessionShellReadyBarrierDeps = {
   sessionId: string
@@ -37,6 +41,7 @@ export class SessionShellReadyBarrier {
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
+  private typedAhead = false
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
@@ -79,6 +84,13 @@ export class SessionShellReadyBarrier {
     }
     this.preReadyStdinQueue.push(data)
     return true
+  }
+
+  /** Track input typed while a startup command is held, so the flush can clear the line first. */
+  observeTypedInput(data: string): void {
+    if (this.preReadyStdinQueue.length > 0 && !extractOnlyTerminalQueryReplies(data)) {
+      this.typedAhead = true
+    }
   }
 
   ingestSubprocessData(data: string): void {
@@ -181,6 +193,10 @@ export class SessionShellReadyBarrier {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
+    if (this.typedAhead) {
+      this.deps.subprocess.write(KILL_TYPED_LINE)
+    }
+    this.typedAhead = false
     for (const data of queued) {
       this.deps.subprocess.write(data)
     }

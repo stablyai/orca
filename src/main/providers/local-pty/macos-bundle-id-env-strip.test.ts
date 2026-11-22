@@ -31,7 +31,6 @@ import {
 } from '../../daemon/pty-subprocess/spawn-environment'
 import {
   prepareMacosTccLoginShell,
-  resetMacosLoginShellPreflightForTests,
   wrapShellSpawnForMacosTccAttribution
 } from '../shell-launch/macos/tcc-login-shell'
 import {
@@ -50,7 +49,6 @@ describe('macOS __CFBundleIdentifier environment stripping (#21768)', () => {
     previousBundleId = process.env.__CFBundleIdentifier
     previousDisableLoginShell = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
-    resetMacosLoginShellPreflightForTests()
     runProcessMock.mockReset()
     runProcessMock.mockResolvedValue({
       timedOut: false,
@@ -61,7 +59,6 @@ describe('macOS __CFBundleIdentifier environment stripping (#21768)', () => {
   })
 
   afterEach(() => {
-    resetMacosLoginShellPreflightForTests()
     Object.defineProperty(process, 'platform', platformDescriptor)
     if (previousBundleId === undefined) {
       delete process.env.__CFBundleIdentifier

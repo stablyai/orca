@@ -1,6 +1,9 @@
+import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
+import { forgetPairedServerAsksOf } from './orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
+import * as botGroupRemote from '../bots/bot-group-remote-answers'
 import { chatReplyFollowUp } from './rpc/methods/orchestration/messaging/reply-follow-up'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
@@ -14,11 +17,8 @@ import {
   publishWorkspaceViewChanges
 } from './client/settings/runtime-workspace-view-change-events'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
-import {
-  OrcaRuntimeWithSidebarTemporal,
-  sidebarFactsRuntime
-} from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentTransitions } from './construction/orca-runtime-agent-transitions'
+import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
+import { OrcaRuntimeWithAgentQuestions } from './construction/orca-runtime-agent-questions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -54,8 +54,8 @@ import {
 } from './agent-session/launch/structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
+import { runtimeIconFetch } from './sidebar-inputs/repo-icons/repo-icon-remote-fetch'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows/workspace-rows-producer'
-import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
 import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-writes'
 import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
@@ -73,12 +73,8 @@ import {
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithAgentTransitions
-
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -94,7 +90,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.store ? chatMailPlace(this.store, sessionId, from) : null
   }
 
+  protected override botGroupRoomMailArrived(groupId: string): void {
+    botGroupRemote.remoteRoomMailArrived(botGroups.runtimeBotGroups(this), groupId)
+  }
+
+  // Runs only when a bot is deleted, before its workspace goes.
   protected override leaveBotGroups(botId: string): Promise<void> {
+    forgetPairedServerAsksOf(this, botId)
     return botGroups.runtimeBotGroups(this).removeBot(botId)
   }
 
@@ -141,19 +143,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
         hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        // The desktop net.fetch wrapper rejects manual redirects.
-        fetch: (url, init) => {
-          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
-          return manualRedirectFetch
-            ? manualRedirectFetch(url, init)
-            : getMainHttpClient().fetch(url, init)
-        },
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
+  // The phone's page shell loads no https image, so it draws repo icons from these.
+  readonly repoIconDataUrls = new RepoIconDataUrls({
+    repos: () => this.store?.getRepos() ?? [],
+    fetch: runtimeIconFetch,
+    encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+  })
   readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
@@ -174,7 +169,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
             workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
-            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            repoIcons: this.repoIconDataUrls,
             store: () => this.store,
             onClientEvent: (listener, options) => this.onClientEvent(listener, options)
           }),
@@ -205,7 +200,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentQuestions>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
@@ -217,6 +212,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
+    this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
   }
 
@@ -235,14 +231,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Whether a layout-owning window can show a tab before process creation. */
   canPublishAgentLaunchTab(): boolean {
-    return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
+    return Boolean(this.notifier?.publishAgentLaunchTab && this.hasAuthoritativeWindow())
   }
 
   /** Publish before spawn when a window owns the layout; otherwise return null. */
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
-    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)
@@ -297,13 +293,16 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     ...this.paneFactSources()
   })
 
-  protected markPaneLiveTitlesDirty(): void {
-    this.workspaceLayoutStream.markLiveTitlesDirty()
+  protected markPaneLiveTitlesDirty(ref: string): void {
+    this.workspaceLayoutStream.markLiveTitlesDirty(ref)
   }
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
     botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
+    this.startQuestionReconciler(db, (taker, ids, chat) =>
+      agentQuestionNotices(this, taker, ids, chat)
+    )
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */

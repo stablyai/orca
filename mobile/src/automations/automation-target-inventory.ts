@@ -23,9 +23,9 @@ import {
   preflightRefreshAgentsRead
 } from '../session/agent-launch/mobile-agent-detection-operations'
 import { buildMobileNewTabAgentOptions } from '../session/agent-launch/mobile-new-tab-agent-options'
+import { agentLaunchPolicyRead } from '../session/agent-launch/mobile-new-tab-settings-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
-  automationAgentSettingsRead,
   automationWorkspacesRead,
   automationProjectsRead,
   automationSetupsRead,
@@ -184,13 +184,13 @@ export async function loadAutomationAgents(
       )
     }
     const [settingsReply, detectedReply] = await Promise.all([
-      automationAgentSettingsRead.request(client),
+      agentLaunchPolicyRead.request(client),
       refresh
         ? preflightRefreshAgentsRead.request(client, params)
         : preflightDetectAgentsRead.request(client, params)
     ])
     requireCurrent()
-    const settings = automationAgentSettingsRead.interpret(settingsReply).settings
+    const settings = agentLaunchPolicyRead.interpret(settingsReply).settings
     const detected = refresh
       ? preflightRefreshAgentsRead.interpret(detectedReply)
       : preflightDetectAgentsRead.interpret(detectedReply)

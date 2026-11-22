@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import type { MutableRefObject, RefObject } from 'react'
+import type { RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
 import {
   DropdownMenu,
@@ -15,7 +15,9 @@ import type { MarkupModeController } from './capture/useMarkupMode'
 import type { GrabModeHook } from './grab/useGrabMode'
 import {
   getBrowserOverlayAnchor,
-  type BrowserOverlayViewport
+  mapGuestRectToContainer,
+  type BrowserOverlayViewport,
+  type OverlayRectSource
 } from '../describe-page/browser-annotation-geometry'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
 import { BrowserPageGrabToast } from './grab/browser-page-grab-toast'
@@ -32,19 +34,20 @@ export function BrowserGuestAnnotateOverlays({
   containerRef,
   markupPortalContainer,
   markupControlsContainer,
-  webviewRef,
+  guestSurfaceRef,
   browserOverlayViewport,
   worktreeId,
   currentUrl
 }: {
-  markup: MarkupModeController
+  /** Omitted where the surface draws its own markup over a hidden guest. */
+  markup?: MarkupModeController
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   containerRef: RefObject<HTMLDivElement | null>
   markupPortalContainer?: HTMLDivElement | null
   markupControlsContainer?: HTMLDivElement | null
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  guestSurfaceRef: RefObject<OverlayRectSource | null>
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
   currentUrl?: string
@@ -84,7 +87,7 @@ export function BrowserGuestAnnotateOverlays({
 
   return (
     <>
-      {markup.isActive && markup.baseImage && markupTarget
+      {markup?.isActive && markup.baseImage && markupTarget
         ? createPortal(
             <MarkupOverlay
               baseImage={markup.baseImage}
@@ -104,7 +107,7 @@ export function BrowserGuestAnnotateOverlays({
             getBrowserOverlayAnchor(
               pendingAnnotationPayload,
               containerRef.current,
-              webviewRef.current,
+              guestSurfaceRef.current,
               browserOverlayViewport,
               cardHeight
             )
@@ -157,16 +160,13 @@ export function BrowserGuestAnnotateOverlays({
               if (!grab.payload) {
                 return { left: 0, top: 0 }
               }
-              const rect = grab.payload.target.rectViewport
-              const webview = webviewRef.current
-              const webviewRect = webview?.getBoundingClientRect()
-              const cRect = containerRef.current?.getBoundingClientRect()
-              const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
-              const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
-              return {
-                left: offsetX + rect.x + rect.width / 2,
-                top: offsetY + rect.y + rect.height / 2
-              }
+              const rect = mapGuestRectToContainer(
+                grab.payload.target.rectViewport,
+                containerRef.current?.getBoundingClientRect(),
+                guestSurfaceRef.current?.getBoundingClientRect(),
+                grab.payload.page.viewportWidth
+              )
+              return { left: rect.x + rect.width / 2, top: rect.y + rect.height / 2 }
             })()}
           />
         </DropdownMenuTrigger>

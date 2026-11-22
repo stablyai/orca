@@ -197,16 +197,6 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
   return loginPreflightSucceeds(username, accountHome)
 }
 
-export function resetMacosLoginShellPreflightForTests(): void {
-  cachedLoginPreflightResult = null
-  cachedRejectionAtMs = null
-  loginPreflightInFlight = null
-  transientLoginPreflightFailure = null
-  loginPreflightCacheEpoch = 0
-  loginSessionProbeInFlight = false
-  loginSessionAcceptedInProcess = false
-}
-
 /** Fresh death-watch check bypasses spawn cache/backoff and updates conclusive verdicts (#7936).
  * Ambiguous results or rejection after prior acceptance require PTY confirmation; null means wrapping does not apply. */
 export async function probeMacosLoginSessionAlive(

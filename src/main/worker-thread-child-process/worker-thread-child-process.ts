@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { Worker } from 'node:worker_threads'
+import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
@@ -47,7 +48,7 @@ export function isWorkerChildStdinWriteError(error: unknown): boolean {
     : false
 }
 
-// Never emits: the worker reports stdin failures as child 'error' events.
+/** Stdin pipe failures reach its 'error' listeners, as on a native pipe; without one they surface as child 'error' events. */
 class WorkerThreadChildStdin extends EventEmitter {
   constructor(
     private readonly id: number,
@@ -56,12 +57,15 @@ class WorkerThreadChildStdin extends EventEmitter {
     super()
   }
 
-  write(data: string): boolean {
+  write(data: string | Uint8Array): boolean {
     this.send({ type: 'stdin-write', id: this.id, data })
     return true
   }
 
-  end(): void {
+  end(data?: string | Uint8Array): void {
+    if (data !== undefined && data.length > 0) {
+      this.write(data)
+    }
     this.send({ type: 'stdin-end', id: this.id })
   }
 }
@@ -95,10 +99,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
-  /** The reader is done; later output stays on the worker instead of crossing to this thread. */
-  discardOutput(): void {
+  /** The reader is done with one stream, or both; later output stays on the worker instead of crossing to this thread. */
+  discardOutput(stream?: 'stdout' | 'stderr'): void {
     if (!this.closed) {
-      this.send({ type: 'discard-output', id: this.id })
+      this.send({ type: 'discard-output', id: this.id, ...(stream ? { stream } : {}) })
     }
   }
 
@@ -136,6 +140,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
         }
         return
       case 'error':
+        if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
+          this.stdin.emit('error', toError(event.error))
+          return
+        }
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
@@ -168,10 +176,11 @@ export class WorkerThreadChildProcessHost {
   private readonly children = new Map<number, WorkerThreadChildProcess>()
   private nextId = 1
   private workerAnswered = false
-  private workerReady = false
   private workerError: string | null = null
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
+  // Settles true on the current worker's 'ready', false if it exits first.
+  private ready: { promise: Promise<boolean>; settle: (ready: boolean) => void } | null = null
 
   constructor(factory: WorkerThreadFactory) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
@@ -201,6 +210,16 @@ export class WorkerThreadChildProcessHost {
     return this.ensureWorker()
   }
 
+  /** True once the worker has loaded its entry; false if it can't start or dies first. */
+  whenReady(): Promise<boolean> {
+    return this.ensureWorker() && this.ready ? this.ready.promise : Promise.resolve(false)
+  }
+
+  /** Starts a cold worker without waiting; its first message is 'ready', so having answered means loaded. */
+  isReady(): boolean {
+    return this.ensureWorker() && this.workerAnswered
+  }
+
   private ensureWorker(): boolean {
     // A worker that died before answering is not started again; direct spawns report it unavailable.
     if (this.failedToStart) {
@@ -209,8 +228,10 @@ export class WorkerThreadChildProcessHost {
     if (!this.host.current) {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
-      this.workerReady = false
       this.workerError = null
+      this.ready?.settle(false)
+      const ready = Promise.withResolvers<boolean>()
+      this.ready = { promise: ready.promise, settle: ready.resolve }
     }
     return this.host.ensure() !== null
   }
@@ -253,7 +274,11 @@ export class WorkerThreadChildProcessHost {
   private route(event: WorkerThreadChildEvent): void {
     this.workerAnswered = true
     if (event.type === 'ready') {
-      this.workerReady = true
+      this.ready?.settle(true)
+      // Every launch that started this worker may have been cancelled while it loaded.
+      if (this.children.size === 0) {
+        this.host.scheduleIdleTeardown()
+      }
       return
     }
     const child = this.children.get(event.id)
@@ -261,7 +286,7 @@ export class WorkerThreadChildProcessHost {
       return
     }
     child.receive(event)
-    if (event.type === 'close') {
+    if (event.type === 'close' && event.retained) {
       this.post({ type: 'release', id: event.id })
     }
     if (
@@ -281,21 +306,21 @@ export class WorkerThreadChildProcessHost {
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
   private abandonAll(message: string): void {
-    if (!this.workerAnswered && this.children.size > 0 && !this.failedToStart) {
+    this.ready?.settle(false)
+    if (!this.workerAnswered && !this.failedToStart) {
       this.failedToStart = true
       console.warn(`[worker-thread-child-process] worker died before answering. ${message}`)
     }
-    // A worker lost before it was ready never ran a request, so its children never existed: they fail to start.
-    const ran = this.workerReady
     this.workerAnswered = false
-    this.workerReady = false
     this.workerError = null
     const abandoned = [...this.children.values()]
     this.children.clear()
     this.host.destroy()
+    // The worker posts a pid in the turn it creates the process and its messages arrive before 'exit',
+    // so a child without one was never created (queued, or the worker was not ready): it fails to start.
     for (const child of abandoned) {
       child.receive({
-        type: ran ? 'error' : 'spawn-error',
+        type: child.pid === undefined ? 'spawn-error' : 'error',
         id: child.id,
         error: { message, code: WORKER_CHILD_ABANDONED_CODE }
       })
@@ -313,14 +338,27 @@ function defaultWorkerFactory(): Worker {
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
+const shared = (): WorkerThreadChildProcessHost =>
+  (sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory))
+const workerDisabled = (): boolean => process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED === '1'
 
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.spawn(spec)
+  // The worker has its own module state, so only main knows WSL was proven absent.
+  assertWslNotLatchedAbsent(spec.program)
+  return shared().spawn(spec)
+}
+
+/** Resolves true once a spawn would reach a worker that loaded its entry; false means spawn locally. */
+export function whenSpawnWorkerReady(): Promise<boolean> {
+  return workerDisabled() ? Promise.resolve(false) : shared().whenReady()
+}
+
+/** Never waits: false while the worker boots (the boot starts), so the caller spawns locally meanwhile. */
+export function spawnWorkerReadyNow(): boolean {
+  return !workerDisabled() && shared().isReady()
 }
 
 /** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */
 export function canSpawnOnWorkerThread(): boolean {
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.available()
+  return shared().available()
 }

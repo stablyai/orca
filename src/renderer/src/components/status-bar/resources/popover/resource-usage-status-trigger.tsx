@@ -12,9 +12,7 @@ export function renderResourceUsageStatusTrigger(
     daemonUnreachable,
     resourceManagerAriaLabel,
     spaceScanReady,
-    iconOnly,
     commitToneClass,
-    memBadgeLabel,
     triggerSessionCount,
     orphanCount,
     resourceManagerTooltipLines
@@ -22,9 +20,7 @@ export function renderResourceUsageStatusTrigger(
     daemonUnreachable: boolean
     resourceManagerAriaLabel: string
     spaceScanReady: boolean
-    iconOnly: boolean
     commitToneClass: string | null
-    memBadgeLabel: string
     triggerSessionCount: number | null
     orphanCount: number
     resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
@@ -55,34 +51,15 @@ export function renderResourceUsageStatusTrigger(
                 aria-hidden="true"
               />
             ) : null}
-            <MemoryStick className="size-3 text-muted-foreground" />
-            {!iconOnly && (
-              <>
-                {/* Tint only: the number stays the resident sum it has always been,
-                    and the tooltip names the commit figure that raised the tone. */}
-                <span
-                  className={cn(
-                    'text-[11px] font-medium tabular-nums',
-                    commitToneClass ?? 'text-muted-foreground'
-                  )}
-                >
-                  {memBadgeLabel}
-                </span>
-                <span className="text-muted-foreground/50">·</span>
-                <Terminal className="size-3 text-muted-foreground" />
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {triggerSessionCount}
-                  {orphanCount > 0 && (
-                    <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
-                  )}
-                </span>
-              </>
-            )}
-            {iconOnly && triggerSessionCount !== null && triggerSessionCount > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {triggerSessionCount}
-              </span>
-            )}
+            {/* Why no memory total: it read as Orca's own usage; the tooltip names each owner. */}
+            <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
+            <Terminal className="size-3 text-muted-foreground" />
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {triggerSessionCount}
+              {orphanCount > 0 && (
+                <span className="ml-0.5 text-status-warning-text">({orphanCount})</span>
+              )}
+            </span>
             {daemonUnreachable && (
               <AlertTriangle
                 className="size-3 text-yellow-500"

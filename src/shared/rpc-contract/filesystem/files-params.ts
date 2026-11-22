@@ -104,7 +104,10 @@ export const FileChunkRange = {
 
 export const FileReadChunk = FileOpen.extend(FileChunkRange)
 
-export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange)
+export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange).extend({
+  /** Streams audio/video past the whole-read caps; older hosts drop it and keep refusing media. */
+  media: z.boolean().optional()
+})
 
 export const FileSearch = WorktreeSelector.extend({
   query: z

@@ -7,7 +7,6 @@ import {
 } from '../mobile-native-chat-bot-identity'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
-  automationRowAccessibleName,
   automationRowMark,
   waitRowLabel,
   waitRowStatus,
@@ -18,10 +17,9 @@ import {
 import { automationWhenText } from '../../../bots/mobile-bot-sheet-copy'
 import { typography } from '../../../theme/mobile-theme'
 import { scaledType, styles as chat } from './messages/mobile-native-chat-message-styles'
-import { useMobileNativeChatDisclosure } from './viewport/mobile-native-chat-disclosure-store'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
 import { styles } from './mobile-automation-run-row-styles'
-import { MobileAutomationRowFrame, mobileAutomationRowTime } from './MobileAutomationRowFrame'
+import { MobileAutomationRowFrame } from './MobileAutomationRowFrame'
 import {
   MobileAutomationRunMessage,
   useMobileAutomationRowWording
@@ -56,7 +54,6 @@ export function MobileAutomationSavedMessage({
   const automation = message.automationSaved?.automation ?? message.waitEnded?.automation
   const bot = useContext(MobileNativeChatBotIdentityContext)
   const waits = useContext(MobileNativeChatBotWaitsContext)
-  const [open, setOpen] = useMobileNativeChatDisclosure(`automation-row:${message.id}`, false)
   const wording = useMobileAutomationRowWording(
     automation ?? { dtstart: Number.MAX_SAFE_INTEGER, rrule: '' }
   )
@@ -80,21 +77,17 @@ export function MobileAutomationSavedMessage({
       ? when
       : say('paused')
   const at = waitState ? waitRowTime(waitState, message.timestamp) : message.timestamp
-  const time = at ? mobileAutomationRowTime(at) : null
   const meta = scaledType(typography.metaSize, fontScale, 4)
   return (
     <View style={chat.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
       <MobileAutomationRowFrame
         testID="automation-row"
         mark={automationRowMark(automation)}
+        lead={label}
         name={automation.name}
-        meta={[label, status, time].filter(Boolean).join(' · ')}
-        accessibilityLabel={automationRowAccessibleName(
-          { label, name: automation.name, status, time },
-          say
-        )}
-        open={open}
-        onToggle={() => setOpen(!open)}
+        status={status}
+        timestamp={at}
+        disclosureKey={`automation-row:${message.id}`}
         fontScale={fontScale}
       >
         {when ? (

@@ -7,6 +7,7 @@ import { ClaudeAccountRegistration } from './sign-in/claude-account-registration
 import {
   ClaudeAccountSelection,
   type ClaudeAccountRuntime,
+  type ClaudeAccountSettings,
   type ClaudeAccountStore,
   type ClaudeAccountUsage
 } from './selection/claude-account-selection'
@@ -16,6 +17,12 @@ import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
 import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
+import type { NetworkProxySettings } from '../../shared/network/network-proxy'
+
+// Sign-in only reads the proxy, so selection and registration never see network fields.
+type ClaudeAccountServiceStore = Omit<ClaudeAccountStore, 'getSettings'> & {
+  getSettings: () => ClaudeAccountSettings & NetworkProxySettings
+}
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -27,7 +34,7 @@ export class ClaudeAccountService {
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    private readonly store: ClaudeAccountStore,
+    private readonly store: ClaudeAccountServiceStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
@@ -39,6 +46,19 @@ export class ClaudeAccountService {
       rateLimits,
       runtimeAuth,
       selection: this.selection
+    })
+  }
+
+  private readonly runProxiedLoginCommand: typeof runClaudeCommandProcess = (
+    args,
+    config,
+    timeoutMs,
+    options
+  ) => {
+    const { httpProxyUrl, httpProxyBypassRules } = this.store.getSettings()
+    return this.runLoginCommand(args, config, timeoutMs, {
+      ...options,
+      networkProxySettings: { httpProxyUrl, httpProxyBypassRules }
     })
   }
 
@@ -68,7 +88,7 @@ export class ClaudeAccountService {
     this.supersedePendingLogin()
     return this.serializeMutation(() =>
       this.registration.signIn(accountId ? { accountId } : { runtime: 'host' }, (folder) =>
-        runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
+        runClaudePastedCodeLogin(folder, this.runProxiedLoginCommand, channel, (cancel) => {
           this.cancelPendingClaudeLogin = cancel
         })
       )
@@ -161,7 +181,7 @@ export class ClaudeAccountService {
           runClaudeLoginSession(
             folder,
             {
-              runCommand: this.runLoginCommand,
+              runCommand: this.runProxiedLoginCommand,
               setCancel: (cancel) => {
                 this.cancelPendingClaudeLogin = cancel
               },

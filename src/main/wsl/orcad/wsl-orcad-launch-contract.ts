@@ -1,5 +1,8 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type {
+  WslHostDeferredUpdate,
+  WslHostPastUncountedTerminals
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { InstallLockWait } from '../../managed-server/install/remote-install-lock'
@@ -33,6 +36,8 @@ export type WslOrcadDeployOptions = {
   label?: string
   /** Defaults to a connect. */
   intent?: OrcadUpdateIntent
+  /** With intent `update`: force past an uncounted census, but only over this confirmed build. */
+  pastUncountedTerminals?: WslHostPastUncountedTerminals
   signal?: AbortSignal
   /** Defaults to one created over `userData`; the app should pass its shared instance. */
   holder?: WslDistroHolder

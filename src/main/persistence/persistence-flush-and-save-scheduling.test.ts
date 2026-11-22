@@ -13,9 +13,18 @@ import {
 } from './persistence-test-harness'
 import './persistence-session-fixtures'
 import '../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
 
 import '../observability/tracer'
 import { _resetPtyBindingSpanSamplingForTests } from './loading-store/terminal-bindings/pty-binding-span'
+
+type PrCacheEntry = PersistedState['githubCache']['pr'][string]
+
+// Omit `data` so the reload assertions compare exactly the fetchedAt each profile persisted.
+function dataLessPrCacheEntry(fetchedAt: number): PrCacheEntry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store persists cache entries opaquely and never reads `data` on this path; the reload assertions require the field to stay absent.
+  return { fetchedAt } as PrCacheEntry
+}
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -162,12 +171,12 @@ describe('Store', () => {
     const { initDataPath } = await import('./loading-store/user-data-path')
     initDataPath()
     const profileAStore = createSqliteTestStore(Store, { dataFile: profileADataFile })
-    profileAStore.setGitHubCache({ pr: { 'o/r#a': { fetchedAt: 10 } as never }, issue: {} })
+    profileAStore.setGitHubCache({ pr: { 'o/r#a': dataLessPrCacheEntry(10) }, issue: {} })
     await profileAStore.flushPendingOrThrowAsync()
 
     const profileBStore = createSqliteTestStore(Store, { dataFile: profileBDataFile })
     expect(profileBStore.getGitHubCache().pr['o/r#a']).toBeUndefined()
-    profileBStore.setGitHubCache({ pr: { 'o/r#b': { fetchedAt: 20 } as never }, issue: {} })
+    profileBStore.setGitHubCache({ pr: { 'o/r#b': dataLessPrCacheEntry(20) }, issue: {} })
     await profileBStore.flushPendingOrThrowAsync()
 
     const restartedProfileA = createSqliteTestStore(Store, { dataFile: profileADataFile })
