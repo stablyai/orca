@@ -17,7 +17,7 @@ export async function clearClientRouteDefaultCookies(
   }
   const partition = bindRoutePartition(routeIdentity, DEFAULT_PROFILE_ID)
   // Badge first, like the local clear, so quitting mid-clear can't leave "Imported from" behind.
-  forgetClientRouteCookieImportSource({ environmentId, profileId: DEFAULT_PROFILE_ID })
+  await forgetClientRouteCookieImportSource({ environmentId, profileId: DEFAULT_PROFILE_ID })
   // A route jar restores its saved session cookies lazily; a later restore would undo this clear.
   await restoreBrowserRoutePartitionSessionCookies(partition)
   const target = session.fromPartition(partition)
