@@ -18,8 +18,16 @@ function edgeCache(): Cache | null {
   }
 }
 
+// jose's own check: a set it would refuse (e.g. {"keys":[null]}) must never replace the last good one.
+// Same gap in relay-edge/src/jwks-persist.ts.
 function isKeySet(value: unknown): value is JSONWebKeySet {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { keys?: unknown }).keys)
+  if (typeof value !== 'object' || value === null || !Array.isArray((value as { keys?: unknown }).keys)) { return false }
+  try {
+    createLocalJWKSet(value as JSONWebKeySet)
+    return true
+  } catch {
+    return false
+  }
 }
 
 // The key set's fetch, plus a copy of every 200 answer into the Cache API (best effort; never fails a fetch).

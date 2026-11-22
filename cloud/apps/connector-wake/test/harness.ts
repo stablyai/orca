@@ -2,7 +2,7 @@
 // and a local `wrangler dev` runner. Test keys only.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -98,6 +98,8 @@ async function freePort(): Promise<number> {
 export async function startDev(vars: Record<string, string>): Promise<{ origin: string; stop: () => Promise<void>; log: () => string }> {
   const cwd = new URL('..', import.meta.url).pathname
   const port = await freePort()
+  const devVars = join(cwd, '.dev.vars')
+  const devVarsBefore = existsSync(devVars) ? readFileSync(devVars) : null
   // Per run, in its own temp dir: a developer's .dev.vars is never read, written or removed.
   const stateDir = mkdtempSync(join(tmpdir(), 'connector-wake-dev-'))
   const envFile = join(stateDir, 'vars.env')
@@ -126,6 +128,9 @@ export async function startDev(vars: Record<string, string>): Promise<{ origin: 
       process.kill(-dev.pid!, 'SIGKILL')
     } catch {}
     rmSync(stateDir, { recursive: true, force: true })
+    // Guard: a run must leave a developer's .dev.vars exactly as it found it.
+    const devVarsAfter = existsSync(devVars) ? readFileSync(devVars) : null
+    if (devVarsBefore === null ? devVarsAfter !== null : !devVarsAfter?.equals(devVarsBefore)) { throw new Error('startDev changed .dev.vars') }
   }
   for (let i = 0; ; i++) {
     try {

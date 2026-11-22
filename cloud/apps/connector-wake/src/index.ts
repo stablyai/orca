@@ -67,8 +67,9 @@ async function handleUpgrade(env: Env, request: Request): Promise<Response> {
     metric(env, 'refuse', 1, '401', [], 'token', place)
     return reject(401)
   }
-  const gap = Number(request.headers.get(CONNECTOR_WAKE_GAP_HEADER) ?? Number.NaN)
-  if (Number.isSafeInteger(gap) && gap >= 0) { metric(env, 'reconnect_gap', Math.min(gap, GAP_MAX_MS), '', [], '', place) }
+  const gapHeader = request.headers.get(CONNECTOR_WAKE_GAP_HEADER) ?? ''
+  const gap = /^\d{1,16}$/.test(gapHeader) ? Number(gapHeader) : Number.NaN
+  if (Number.isSafeInteger(gap)) { metric(env, 'reconnect_gap', Math.min(gap, GAP_MAX_MS), '', [], '', place) }
   const headers = new Headers(request.headers)
   for (const name of [...headers.keys()]) {
     if (INTERNAL_HEADER_PREFIXES.some((prefix) => name.startsWith(prefix)) || name === 'authorization') { headers.delete(name) }
@@ -128,7 +129,10 @@ export default {
     if (url.pathname === CONNECTOR_WAKE_PATH) { return handleUpgrade(env, request) }
     const spike = env.SPIKE_DEBUG === '1' ? /^\/__spike\/object\/([^/]+)$/.exec(url.pathname) : null
     if (spike) {
-      const hostId = decodeURIComponent(spike[1])
+      let hostId = ''
+      try {
+        hostId = decodeURIComponent(spike[1])
+      } catch {}
       if (!isHostId(hostId)) { return reject(400) }
       return Response.json({ worker: requestPlace(request), ...(await host(env, hostId).spikePlace()) })
     }

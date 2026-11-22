@@ -93,8 +93,9 @@ export class ConnectorHost extends DurableObject<Env> {
   // Any frame other than the exact keepalive wakes the object. Oversized ones close 1009; others
   // are ignored (a keepalive with different bytes, or a later frame type).
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (!frameOver(message, CONNECTOR_WAKE_MAX_INBOUND_FRAME_BYTES)) { return }
-    const place = this.attachment(ws)?.place ?? ''
+    const a = this.attachment(ws)
+    if (!a || !frameOver(message, CONNECTOR_WAKE_MAX_INBOUND_FRAME_BYTES)) { return }
+    const place = a.place
     metric(this.env, 'refuse', 1, String(CONNECTOR_WAKE_CLOSE_CODE.FRAME_TOO_BIG), [], 'frame', place)
     this.drop(ws, CONNECTOR_WAKE_CLOSE_CODE.FRAME_TOO_BIG, 'frame too big')
   }
