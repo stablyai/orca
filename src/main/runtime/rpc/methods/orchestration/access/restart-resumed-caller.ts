@@ -1,4 +1,6 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import { paneRunsConversation } from '../../../../orchestration/workers/restart-resume/pane-runs-conversation'
 import { isTerminalHandle } from '../../../../../../shared/terminal/terminal-handle-prefix'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -13,7 +15,10 @@ import {
 export function restartResumedCallerHandle(
   runtime: Pick<
     OrcaRuntimeService,
-    'getLiveTerminalPaneKey' | 'getTerminalHandleForPaneKey' | 'getExistingOrchestrationDb'
+    | 'getLiveTerminalPaneKey'
+    | 'getTerminalHandleForPaneKey'
+    | 'getExistingOrchestrationDb'
+    | 'getAgentStatusRowsForPane'
   >,
   from: string,
   evidence: OrchestrationCompatibilityEvidence | undefined
@@ -34,8 +39,12 @@ export function restartResumedCallerHandle(
   }
   const dispatch = db.getActiveDispatchForIdentity(handle, paneKey)
   const stage = dispatch?.assignee_handle === handle && db.getWorkerDispatch(dispatch.id)?.stage
-  // An offered worker's pane started again in place already runs its own conversation there.
-  return stage === WORKER_RESTART_RESUMED_STAGE || stage === WORKER_RESTART_OFFERED_STAGE
+  const session =
+    dispatch && readWorkerResumeSession(db.getWorkerTerminalResourceByOwner(dispatch.id))
+  // Only the worker's own conversation in that pane speaks for it, never another agent started there.
+  return (stage === WORKER_RESTART_RESUMED_STAGE || stage === WORKER_RESTART_OFFERED_STAGE) &&
+    session &&
+    paneRunsConversation(runtime, paneKey, session.providerSession.id)
     ? handle
     : null
 }

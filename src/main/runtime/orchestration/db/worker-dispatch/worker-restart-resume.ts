@@ -215,13 +215,14 @@ export function rebindRestartedWorkerTerminal(
           WHERE dispatch_id = ?`
       )
       .run(params.handle, params.dispatchId)
-    db.db
+    const resource = db.db
       .prepare(
         `UPDATE worker_terminal_resources
             SET terminal_handle = ?, pane_key = ?, process_incarnation = ?,
                 endpoint_incarnation = ?, host_scope = COALESCE(?, host_scope),
                 updated_at = datetime('now')
-          WHERE owner_dispatch_id = ? AND ownership_state = 'owned'`
+          WHERE owner_dispatch_id = ? AND ownership_state = 'owned'
+            AND release_state = 'not_requested'`
       )
       .run(
         params.handle,
@@ -231,6 +232,11 @@ export function rebindRestartedWorkerTerminal(
         params.hostScope ?? null,
         params.dispatchId
       )
+    // A release that began meanwhile owns the terminal: the Dispatch keeps its lost one.
+    if (Number(resource.changes) === 0) {
+      db.db.exec('ROLLBACK')
+      return false
+    }
     // Mail the lost terminal never acknowledged is delivered again to the resumed one.
     db.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
     db.db.exec('COMMIT')

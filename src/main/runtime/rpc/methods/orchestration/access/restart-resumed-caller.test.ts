@@ -26,16 +26,30 @@ function resumedWorker(stage: string): OrchestrationDb {
     processIncarnation: 'pty-new:11111111-1111-4111-8111-111111111111',
     worktreeId: 'repo::/tmp/repo',
     setupState: 'not_applicable',
-    effects: []
+    effects: [],
+    terminalOwnership: 'created'
   })
   db.markWorkerDispatchReady(dispatch.id)
+  db.db
+    .prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?')
+    .run(
+      JSON.stringify({
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'worker-conversation' },
+        connectionId: null
+      }),
+      dispatch.id
+    )
   db.db
     .prepare('UPDATE worker_dispatches SET stage = ? WHERE dispatch_id = ?')
     .run(stage, dispatch.id)
   return db
 }
 
-const runtime = (orchestrationDb: OrchestrationDb) => ({
+const runtime = (orchestrationDb: OrchestrationDb, paneConversation = 'worker-conversation') => ({
+  getAgentStatusRowsForPane: () =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only these fields.
+    [{ providerSession: { key: 'session_id', id: paneConversation } }] as never,
   getLiveTerminalPaneKey: (handle: string) =>
     handle === 'term_resumed' ? 'tab_new:leaf_new' : null,
   getTerminalHandleForPaneKey: (paneKey: string) =>
@@ -51,6 +65,15 @@ describe('restartResumedCallerHandle', () => {
         paneKey: 'tab_new:leaf_new'
       })
     ).toBe('term_resumed')
+  })
+
+  it('leaves another agent started in the resumed pane as it names itself', () => {
+    const orchestrationDb = resumedWorker('restart_resumed')
+    expect(
+      restartResumedCallerHandle(runtime(orchestrationDb, 'another-agent'), 'term_brief_handle', {
+        paneKey: 'tab_new:leaf_new'
+      })
+    ).toBeNull()
   })
 
   it('leaves a worker that was never resumed as it names itself', () => {

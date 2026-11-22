@@ -169,8 +169,8 @@ export class TerminalWorkerRestartResume {
     const handle = paneKey ? this.deps.handleForPane(paneKey) : null
     const live = handle ? this.deps.terminalAuthority(handle)?.processIncarnation : undefined
     const bound = live !== undefined && live === dispatch?.process_incarnation
-    // Its pane already runs its own conversation, bound or restored late: never a second copy.
-    const own = bound || this.deps.paneRunsSession(paneKey, claim.session.providerSession.id)
+    // Its pane runs its own conversation, bound or restored late: never a second copy, nor another's.
+    const own = this.deps.paneRunsSession(paneKey, claim.session.providerSession.id)
     if (handle && live !== undefined && own) {
       return this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
         this.giveUp(dispatchId)

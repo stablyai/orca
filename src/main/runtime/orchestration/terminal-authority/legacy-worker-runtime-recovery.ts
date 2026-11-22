@@ -71,9 +71,13 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     // Restored terminals are placed: workers held for a restart resume reopen now.
     this.terminalWorkerRestartResume.settleStartup()
     // Workers still offered from before this start are shown with the cut chats, as their offers are.
-    const db = this.getExistingOrchestrationDb()
-    if (db && listWorkerRestartOffers(db).length > 0) {
-      this.notifier?.restartOffersChanged?.()
+    try {
+      const db = this.getExistingOrchestrationDb()
+      if (db && listWorkerRestartOffers(db).length > 0) {
+        this.notifier?.restartOffersChanged?.()
+      }
+    } catch (error) {
+      console.warn('[orchestration] reading offered terminal workers failed', error)
     }
     if (this.restartWorkerStopReport === null) {
       // A restoration retried after a failure passes over what it continued and left, again.
