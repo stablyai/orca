@@ -810,6 +810,8 @@
       "active": "Active",
       "openAccountsHint": "Opens this desktop’s accounts",
       "emptyTitle": "No usage yet",
+      "widgetAutomaticDesktop": "Most recently updated",
+      "widgetNoAgent": "None",
       "widgetResetsIn": "Resets in {{duration}}"
     },
     "activeAgents": {

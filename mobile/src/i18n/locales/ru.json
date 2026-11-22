@@ -1716,6 +1716,8 @@
       "showUsageFor": "Показать использование для",
       "updatedAgo": "Обновлено {{time}} назад",
       "updatedJustNow": "Обновлено только что",
+      "widgetAutomaticDesktop": "Обновлённый последним",
+      "widgetNoAgent": "Нет",
       "widgetResetsIn": "Сброс через {{duration}}"
     }
   },

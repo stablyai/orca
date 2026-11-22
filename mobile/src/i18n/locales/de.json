@@ -1630,6 +1630,8 @@
       "showUsageFor": "Nutzung anzeigen für",
       "updatedAgo": "Vor {{time}} aktualisiert",
       "updatedJustNow": "Gerade eben aktualisiert",
+      "widgetAutomaticDesktop": "Zuletzt aktualisiert",
+      "widgetNoAgent": "Keiner",
       "widgetResetsIn": "Zurücksetzung in {{duration}}"
     }
   },

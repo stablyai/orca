@@ -1,5 +1,5 @@
-import { useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -31,7 +31,7 @@ import { mobileConnectionPathLabel } from '../transport/connection/mobile-connec
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
-import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { HOME_TABS, isHomeTabId, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
@@ -42,6 +42,7 @@ import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
 import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
 import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
+import { UsageWidgetSync } from './usage-widget/UsageWidgetSync'
 
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
@@ -80,6 +81,22 @@ export function MobileHomeScreen() {
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
   }, [])
 
+  // The usage widget opens ?tab=usage; it can't fetch, so landing there refreshes. Clearing the
+  // param lets the same tap work again.
+  const { router, setHostCatalog } = data
+  const link = useLocalSearchParams<{ tab?: string }>()
+  const [usageRefreshRequest, setUsageRefreshRequest] = useState(0)
+  useEffect(() => {
+    if (!isHomeTabId(link.tab)) {
+      return
+    }
+    selectTab(link.tab)
+    if (link.tab === 'usage') {
+      setUsageRefreshRequest((request) => request + 1)
+    }
+    router.setParams({ tab: undefined })
+  }, [link.tab, router, selectTab])
+
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
     useCallback(() => {
@@ -95,7 +112,6 @@ export function MobileHomeScreen() {
   )
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
-  const { router, setHostCatalog } = data
   const seeAllAgents = useCallback(() => selectTab('agents'), [selectTab])
   const seeAllBots = useCallback(() => selectTab('bots'), [selectTab])
 
@@ -210,6 +226,11 @@ export function MobileHomeScreen() {
   return (
     // Agent rows swipe; no gesture root sits above Home.
     <GestureHandlerRootView style={styles.fill}>
+      <UsageWidgetSync
+        hosts={data.sortedHostCatalog}
+        hostsLoaded={data.hostCatalogLoaded}
+        accountsByHost={data.accountsByHost}
+      />
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.fill}>
           {HOME_TABS.map((id) =>
@@ -250,6 +271,7 @@ export function MobileHomeScreen() {
                     accountsByHost={data.accountsByHost}
                     stats={data.stats}
                     bottomInset={contentBottom}
+                    refreshRequest={usageRefreshRequest}
                     onOpenAccounts={openMobileAccounts}
                   />
                 ) : (

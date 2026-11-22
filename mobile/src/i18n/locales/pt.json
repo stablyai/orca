@@ -1797,6 +1797,8 @@
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Atualizado há {{time}}",
       "updatedJustNow": "Atualizado agora mesmo",
+      "widgetAutomaticDesktop": "Atualizado mais recentemente",
+      "widgetNoAgent": "Nenhum",
       "widgetResetsIn": "Redefinição em {{duration}}"
     },
     "bottomBar": {

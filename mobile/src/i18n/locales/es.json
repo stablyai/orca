@@ -1673,6 +1673,8 @@
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Actualizado hace {{time}}",
       "updatedJustNow": "Actualizado ahora mismo",
+      "widgetAutomaticDesktop": "Actualizado más recientemente",
+      "widgetNoAgent": "Ninguno",
       "widgetResetsIn": "Se restablece en {{duration}}"
     }
   },
