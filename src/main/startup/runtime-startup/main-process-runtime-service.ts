@@ -36,6 +36,7 @@ import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-envir
 import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
 import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
+import { createHostTextAccountFailover } from '../../text-generation/execution/host-text-account-failover'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
@@ -193,6 +194,16 @@ export function configureRuntimeServices(
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => core.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings()),
+    ...(core.claudeRuntimeAuth && core.codexRuntimeHome
+      ? {
+          prepareTextAccountFailover: createHostTextAccountFailover({
+            store,
+            claudeRuntimeAuth: core.claudeRuntimeAuth,
+            codexRuntimeHome: core.codexRuntimeHome,
+            rateLimits
+          })
+        }
+      : {})
   })
 }

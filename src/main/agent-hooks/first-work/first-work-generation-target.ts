@@ -13,5 +13,10 @@ export async function resolveGenerationTarget(
   if (!localEnv.ok) {
     return null
   }
-  return { kind: 'local', cwd: worktreePath, ...(localEnv.env ? { env: localEnv.env } : {}) }
+  return {
+    kind: 'local',
+    cwd: worktreePath,
+    ...(localEnv.env ? { env: localEnv.env } : {}),
+    ...(localEnv.accountFailover ? { accountFailover: localEnv.accountFailover } : {})
+  }
 }

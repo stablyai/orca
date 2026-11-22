@@ -56,8 +56,25 @@ export type TextGenerationOperation =
   | 'bot-suggestions'
   | 'dictation-cleanup'
 
+/** Retries a one-shot helper on another saved account after a subscription quota refusal. */
+export type TextAccountFailover = {
+  /** The best saved account with room left that is not in `tried`, ready to launch; null when none is. */
+  next: (
+    tried: ReadonlySet<string>
+  ) => Promise<{ accountId: string; env: NodeJS.ProcessEnv } | null>
+  /** The account the first attempt ran on; null for the provider's System default login. */
+  initialAccountId: string | null
+}
+
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string; laneId?: string }
+  | {
+      kind: 'local'
+      cwd: string
+      env?: NodeJS.ProcessEnv
+      wslDistro?: string
+      laneId?: string
+      accountFailover?: TextAccountFailover
+    }
   | {
       kind: 'remote'
       cwd: string

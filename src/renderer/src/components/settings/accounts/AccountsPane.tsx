@@ -34,6 +34,7 @@ import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-acc
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
+import { TextGenerationAccountFailoverSetting } from './TextGenerationAccountFailoverSetting'
 import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
@@ -359,6 +360,7 @@ export function AccountsPane({
   // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
   const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
   const visibleSections = [
+    <TextGenerationAccountFailoverSetting key="text-failover" hostScope={hostScope} />,
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
         <ManagedDataAccountsSection provider="opencode" target={accountOwner} />

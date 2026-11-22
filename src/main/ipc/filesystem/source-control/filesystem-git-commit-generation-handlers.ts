@@ -120,7 +120,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
           return generateCommitMessageFromContext(
             context,
             resolvedSettings.params,
-            getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+            getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv)
           )
         }
       )

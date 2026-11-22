@@ -125,7 +125,8 @@ export async function generateJiraIssueSummaryRequest(
     const result = await generateJiraIssueSummaryFromContext(args, resolved.params, {
       kind: 'local',
       cwd,
-      ...(localEnv.env ? { env: localEnv.env } : {})
+      ...(localEnv.env ? { env: localEnv.env } : {}),
+      ...(localEnv.accountFailover ? { accountFailover: localEnv.accountFailover } : {})
     })
     return activeRequest === request
       ? result

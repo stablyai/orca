@@ -18,6 +18,7 @@ import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/cod
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import { createHostTextAccountFailover } from '../../text-generation/execution/host-text-account-failover'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
 type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
@@ -117,7 +118,13 @@ export function createOrcadAccountServices(args: {
       runtime.setCommitMessageAgentEnvironmentResolvers({
         prepareForCodexLaunch: prepareCodexHome,
         prepareForClaudeLaunch: prepareClaudeAuth,
-        resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+        resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings()),
+        prepareTextAccountFailover: createHostTextAccountFailover({
+          store,
+          claudeRuntimeAuth: services.claudeRuntimeAuth,
+          codexRuntimeHome,
+          rateLimits: services.rateLimits
+        })
       })
     }
   }
