@@ -102,6 +102,11 @@ export class PushBadgeSync {
       this.running = false
     }
     this.backingOff = next !== 'done'
+    if (this.backingOff) {
+      // A write during the failed send may have armed a short timer; the backoff replaces it.
+      this.timer?.cancel()
+      this.timer = null
+    }
     if (next === 'paused') {
       this.request(this.pausedUntil - Date.now())
     } else if (next === 'retry') {

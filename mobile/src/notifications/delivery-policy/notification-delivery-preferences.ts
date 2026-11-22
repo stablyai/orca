@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform } from 'react-native'
 import type { MobilePushFilter } from '../../../../src/shared/notifications/mobile-push-contract'
 
 const KEY = 'orca:notificationDeliveryPreferences'
@@ -48,7 +49,7 @@ export function notificationPreferencesFilter(
     onlyWhenDesktopAway: value.onlyWhenDesktopAway,
     onlyWhenAgentNeedsInput: value.onlyWhenAgentNeedsInput,
     sound: value.sound,
-    // An app before this lowered no icon count in the foreground and never cleared one.
-    badge: true
+    // Only iOS shows a count on the icon; an older app never lowered or cleared one, so it never asks.
+    badge: Platform.OS === 'ios'
   }
 }

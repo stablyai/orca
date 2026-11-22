@@ -1,8 +1,6 @@
 import { PUSH_LIMITS } from '@orca-cloud/push-contract/push-limits'
 import type { CloudDatabase as PushDatabase } from '@orca-cloud/cloud-database/cloud-database'
 
-type BadgeDevice = { registrationId: string; hostFingerprint: string; token: string }
-
 // Each host sends only its own unread count; only the gateway sees every host a phone is paired with.
 export class PushBadgeCountStore {
   constructor(
@@ -10,12 +8,11 @@ export class PushBadgeCountStore {
     private readonly now: () => number = Date.now
   ) {}
 
-  async record(device: BadgeDevice, badge: number): Promise<void> {
+  async record(registrationId: string, badge: number): Promise<void> {
     await this.database.query(
-      `INSERT INTO push_badge_counts(registration_id, host_fingerprint, token, badge, updated_at)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(registration_id) DO UPDATE SET
-      host_fingerprint = excluded.host_fingerprint, token = excluded.token, badge = excluded.badge, updated_at = excluded.updated_at`,
-      [device.registrationId, device.hostFingerprint, device.token, badge, this.now()]
+      `INSERT INTO push_badge_counts(registration_id, badge, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(registration_id) DO UPDATE SET badge = excluded.badge, updated_at = excluded.updated_at`,
+      [registrationId, badge, this.now()]
     )
   }
 
@@ -23,10 +20,10 @@ export class PushBadgeCountStore {
   async total(token: string): Promise<number | null> {
     // A host the phone stopped renewing (removed while offline, or unused past the lease) drops out.
     const rows = await this.database.query(
-      `SELECT c.host_fingerprint, c.badge, c.updated_at FROM push_badge_counts c
-      JOIN push_devices d ON d.registration_id = c.registration_id
-      WHERE c.token = ? AND d.token = ? AND d.dead_at IS NULL AND d.updated_at > ?`,
-      [token, token, this.leaseStart()]
+      `SELECT d.host_fingerprint, c.badge, c.updated_at FROM push_devices d
+      JOIN push_badge_counts c ON c.registration_id = d.registration_id
+      WHERE d.token = ? AND d.dead_at IS NULL AND d.updated_at > ?`,
+      [token, this.leaseStart()]
     )
     // A host holding two registrations for one phone (a re-pair) counts once.
     const latest = new Map<string, { badge: number; at: number }>()
@@ -55,7 +52,6 @@ export class PushBadgeCountStore {
 
   /** Any live registration of this phone, from any host, to carry a new total. */
   async carrier(token: string): Promise<{ registrationId: string; hostFingerprint: string } | null> {
-    // Unindexed on token; only a removal that held a count reaches it.
     const [row] = await this.database.query(
       `SELECT registration_id, host_fingerprint FROM push_devices
       WHERE token = ? AND platform = 'ios' AND dead_at IS NULL AND updated_at > ? LIMIT 1`,

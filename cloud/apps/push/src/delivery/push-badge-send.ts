@@ -50,7 +50,7 @@ export async function sendHostBadge(
         return { registrationId, status: device ? 'dead' : 'error' }
       }
       // Recorded even when throttled: the phone's next alert carries the total.
-      await deps.badges.record(device, notification.badge)
+      await deps.badges.record(registrationId, notification.badge)
       if (!admitted) return { registrationId, status: 'rate_limited' }
       return {
         registrationId,
