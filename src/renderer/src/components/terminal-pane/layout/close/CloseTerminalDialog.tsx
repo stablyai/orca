@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isEventTargetInsideCloseTerminalDialog } from '@/lib/pane-manager/pane-focus/terminal-pane-focus'
 import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { useAppStore } from '@/store/index'
 import { isTerminalPaneCloseChord } from '../../input/keyboard/terminal-shortcut-policy'
@@ -83,6 +84,12 @@ export default function CloseTerminalDialog({
       ) {
         return
       }
+
+      // Ensure this listener only processes the chord if focus is actually inside this dialog content.
+      if (!isEventTargetInsideCloseTerminalDialog(event.target)) {
+        return
+      }
+
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
