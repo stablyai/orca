@@ -1796,7 +1796,8 @@
       "refresh": "Atualizar uso",
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Atualizado há {{time}}",
-      "updatedJustNow": "Atualizado agora mesmo"
+      "updatedJustNow": "Atualizado agora mesmo",
+      "widgetResetsIn": "Redefinição em {{duration}}"
     },
     "bottomBar": {
       "connectFirst": "Conecte um computador para iniciar um novo trabalho.",

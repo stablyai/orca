@@ -809,7 +809,8 @@
       "updatedAgo": "Updated {{time}} ago",
       "active": "Active",
       "openAccountsHint": "Opens this desktop’s accounts",
-      "emptyTitle": "No usage yet"
+      "emptyTitle": "No usage yet",
+      "widgetResetsIn": "Resets in {{duration}}"
     },
     "activeAgents": {
       "heading": "Active",

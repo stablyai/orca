@@ -1672,7 +1672,8 @@
       "refresh": "Actualizar uso",
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Actualizado hace {{time}}",
-      "updatedJustNow": "Actualizado ahora mismo"
+      "updatedJustNow": "Actualizado ahora mismo",
+      "widgetResetsIn": "Se restablece en {{duration}}"
     }
   },
   "hooks": {

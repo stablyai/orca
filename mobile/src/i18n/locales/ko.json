@@ -1623,7 +1623,8 @@
       "refresh": "사용량 새로고침",
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
-      "updatedJustNow": "방금 업데이트됨"
+      "updatedJustNow": "방금 업데이트됨",
+      "widgetResetsIn": "{{duration}} 후 초기화"
     }
   },
   "hooks": {

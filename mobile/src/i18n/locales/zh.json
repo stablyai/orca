@@ -1803,7 +1803,8 @@
       "refresh": "刷新使用情况",
       "showUsageFor": "选择要显示使用情况的桌面",
       "updatedAgo": "{{time}}前更新",
-      "updatedJustNow": "刚刚更新"
+      "updatedJustNow": "刚刚更新",
+      "widgetResetsIn": "{{duration}}后重置"
     },
     "activeAgents": {
       "heading": "活跃",
