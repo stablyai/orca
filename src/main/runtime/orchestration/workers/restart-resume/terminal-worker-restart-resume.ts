@@ -39,8 +39,8 @@ export type TerminalWorkerRestartResumeDeps = {
     handle: string
   ) => { paneKey: string; processIncarnation: string; hostScope?: string } | null
   handleForPane: (paneKey: string) => string | null
-  /** Whether this pane's live agent runs this conversation now. */
-  paneRunsSession: (paneKey: string, sessionId: string) => boolean
+  /** What this pane's live agent runs, as far as its hooks have said. */
+  paneConversation: (paneKey: string, sessionId: string) => 'own' | 'other' | 'unknown'
   /** Resolves once the resumed agent's composer takes input; false when it never does. */
   waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
   /** False when the agent provably did not start the turn. */
@@ -170,7 +170,8 @@ export class TerminalWorkerRestartResume {
     const live = handle ? this.deps.terminalAuthority(handle)?.processIncarnation : undefined
     const bound = live !== undefined && live === dispatch?.process_incarnation
     // Its pane runs its own conversation, bound or restored late: never a second copy, nor another's.
-    const own = this.deps.paneRunsSession(paneKey, claim.session.providerSession.id)
+    const inPane = this.deps.paneConversation(paneKey, claim.session.providerSession.id)
+    const own = inPane === 'own' || (bound && inPane === 'unknown')
     if (handle && live !== undefined && own) {
       return this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
         this.giveUp(dispatchId)

@@ -7,7 +7,7 @@ import {
 import { TerminalWorkerRestartOffers } from '../orchestration/workers/restart-resume/terminal-worker-restart-offers'
 import { waitForWorkerAgentReady } from '../terminal/wait/launched-agent-composer-readiness'
 import { reconsiderRestAfterWait } from '../orchestration/workers/turn-stops/worker-presence-report'
-import { paneRunsConversation } from '../orchestration/workers/restart-resume/pane-runs-conversation'
+import { paneConversation } from '../orchestration/workers/restart-resume/pane-runs-conversation'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 
@@ -65,7 +65,7 @@ function createTerminalWorkerRestartResume(
         : null
     },
     handleForPane: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey),
-    paneRunsSession: (paneKey, sessionId) => paneRunsConversation(runtime, paneKey, sessionId),
+    paneConversation: (paneKey, sessionId) => paneConversation(runtime, paneKey, sessionId),
     // A resumed agent is a fresh launch: its composer must be up, or it drops the prompt.
     waitForAgentReady: (handle, agent) =>
       waitForWorkerAgentReady(runtime, handle, {

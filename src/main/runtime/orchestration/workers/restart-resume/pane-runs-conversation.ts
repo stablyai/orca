@@ -1,18 +1,22 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
-/** Whether this pane's live agent runs this conversation now; a row restored from disk names only
- *  what ran there before. */
-export function paneRunsConversation(
+/** What this pane's live agent runs, as far as its hooks have said: `own` is this conversation,
+ *  `other` another one, `unknown` no live turn yet (a launch-only or restored-from-disk row). */
+export function paneConversation(
   runtime: Pick<OrcaRuntimeService, 'getAgentStatusRowsForPane'>,
   paneKey: string,
   sessionId: string
-): boolean {
-  return runtime
-    .getAgentStatusRowsForPane(paneKey)
-    .some(
-      (row) =>
-        !row.providerSessionOnly &&
-        !row.restoredUnconfirmed &&
-        row.providerSession?.id === sessionId
-    )
+): 'own' | 'other' | 'unknown' {
+  let conversation: 'other' | 'unknown' = 'unknown'
+  for (const row of runtime.getAgentStatusRowsForPane(paneKey)) {
+    const id = row.providerSession?.id
+    if (!id || row.providerSessionOnly || row.restoredUnconfirmed) {
+      continue
+    }
+    if (id === sessionId) {
+      return 'own'
+    }
+    conversation = 'other'
+  }
+  return conversation
 }

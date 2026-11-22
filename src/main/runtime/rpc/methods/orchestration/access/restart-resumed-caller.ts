@@ -1,6 +1,6 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { paneRunsConversation } from '../../../../orchestration/workers/restart-resume/pane-runs-conversation'
+import { paneConversation } from '../../../../orchestration/workers/restart-resume/pane-runs-conversation'
 import { isTerminalHandle } from '../../../../../../shared/terminal/terminal-handle-prefix'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -44,7 +44,7 @@ export function restartResumedCallerHandle(
   // Only the worker's own conversation in that pane speaks for it, never another agent started there.
   return (stage === WORKER_RESTART_RESUMED_STAGE || stage === WORKER_RESTART_OFFERED_STAGE) &&
     session &&
-    paneRunsConversation(runtime, paneKey, session.providerSession.id)
+    paneConversation(runtime, paneKey, session.providerSession.id) !== 'other'
     ? handle
     : null
 }

@@ -59,6 +59,7 @@ function owner(
     decideHeldRest?: (dispatchId: string) => void
     offersChanged?: () => void
     resumeWorkOnRestart?: boolean
+    paneConversation?: 'own' | 'other' | 'unknown'
   } = {}
 ) {
   const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
@@ -75,7 +76,7 @@ function owner(
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
     }),
     handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
-    paneRunsSession: () => false,
+    paneConversation: () => overrides.paneConversation ?? 'unknown',
     waitForAgentReady: overrides.waitForAgentReady ?? (async () => true),
     sendPrompt,
     setTimer: () => ({ cancel: () => {} })
@@ -199,6 +200,29 @@ describe('TerminalWorkerRestartResume', () => {
     owner({ resumeWorkOnRestart: false }).resume.holdForReopen(dispatchId, vi.fn())
     expect(resolveTerminalWorkerDispatch(turnStops, 'tab_lost:leaf_lost')).toBeNull()
   })
+
+  for (const inPane of ['unknown', 'other'] as const) {
+    it(`resumes an offered worker bound in place ${inPane === 'unknown' ? 'in its pane' : 'elsewhere once another agent took its pane'}`, async () => {
+      const dispatchId = lostWorker('working')
+      const reopen = vi.fn(async () => ({ handle: 'term_reopened' }))
+      const { resume, sendPrompt } = owner({
+        reopen,
+        resumeWorkOnRestart: false,
+        paneConversation: inPane
+      })
+      resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())
+      resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+      await vi.waitFor(() =>
+        expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
+      )
+      // Its resting agent has not had a live turn since the restart: its pane is still its own.
+      await resume.resumeOffered(dispatchId, vi.fn())
+      expect(reopen).toHaveBeenCalledTimes(inPane === 'unknown' ? 0 : 1)
+      if (inPane === 'unknown') {
+        await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1))
+      }
+    })
+  }
 
   it('does not raise an offer again that a person was already shown', () => {
     const dispatchId = lostWorker('resting')
