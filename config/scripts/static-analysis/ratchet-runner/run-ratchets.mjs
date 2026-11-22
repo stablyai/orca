@@ -15,6 +15,11 @@ const RUN_ELSEWHERE = new Set([
   // ast-grep-gates.mjs checks it from the ast-grep lint scan instead of scanning again.
   'check-flaky-test-pattern-ratchet.mjs'
 ])
+const MAIN_BLOCKING_RATCHETS = new Set([
+  'check-main-blocking-api-ratchet.mjs',
+  'check-main-blocking-helper-ratchet.mjs',
+  'check-main-sync-fs-ratchet.mjs'
+])
 
 export function listRatchetScripts(scriptsDir) {
   return readdirSync(scriptsDir, { recursive: true })
@@ -41,10 +46,15 @@ function runRatchet(scriptsDir, name, root) {
   })
 }
 
-// Each ratchet is a single-threaded scan; half the cores leaves room for the overlapping typecheck.
+// Leave cores for the overlapping localization and generated-file checks.
 async function main(root) {
   const scriptsDir = path.join(root, 'config', 'scripts')
-  const pending = listRatchetScripts(scriptsDir)
+  const pending = [
+    path.join('static-analysis', 'ratchet-runner', 'run-main-blocking-ratchets.mjs'),
+    ...listRatchetScripts(scriptsDir).filter(
+      (name) => !MAIN_BLOCKING_RATCHETS.has(path.basename(name))
+    )
+  ]
   const failed = []
   await Promise.all(
     Array.from({ length: Math.max(2, Math.floor(availableParallelism() / 2)) }, async () => {

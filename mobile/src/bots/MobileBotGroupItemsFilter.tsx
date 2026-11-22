@@ -53,9 +53,7 @@ export function MobileBotGroupItemsFilter({
               <ListRow
                 key={bot.id}
                 title={bot.name}
-                leading={
-                  <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={26} />
-                }
+                leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={26} />}
                 {...(open ? { value: String(open) } : {})}
                 selected={on}
                 accessibilityRole="checkbox"

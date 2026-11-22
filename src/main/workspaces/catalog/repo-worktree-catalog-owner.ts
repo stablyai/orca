@@ -15,10 +15,7 @@ import {
   isLocalWorktreeScanGenerationCurrent,
   onWorktreeRouteInputsChanged
 } from './local-worktree-scan-generation'
-import {
-  isLiveWorktreeCatalogRoute,
-  setWorktreeCatalogRouteResolver
-} from './repo-worktree-catalog-route'
+import { isLiveWorktreeCatalogRoute } from './repo-worktree-catalog-route'
 import { verify } from './repo-worktree-catalog-verification'
 import { onWslDiscoveryChanged } from '../../wsl/discovery/wsl-discovery-change'
 
@@ -310,16 +307,4 @@ export function retireObsoleteWorktreeCatalogs(): void {
       retireEntry(key, entry)
     }
   }
-}
-
-export function _resetWorktreeCatalogOwnerForTests(): void {
-  // Shared test workers outlive the runtime whose store registered the resolver.
-  setWorktreeCatalogRouteResolver(null)
-  for (const [key, entry] of entries) {
-    retireEntry(key, entry)
-  }
-}
-
-export function _getWorktreeCatalogOwnerSizeForTests(): number {
-  return entries.size
 }

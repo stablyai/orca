@@ -167,6 +167,20 @@ export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ tex
   return {}
 }
 
+// Cline rebuilds its system prompt from the folder's rules at every start, reopens included
+// (checked live on 3.0.75); `.cline/rules` sits beside the user's own `.clinerules`.
+export const deliverClineInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, join('.cline', 'rules', 'orca.md'), 'Cline', text)
+  return {}
+}
+
+// Devin reads the folder's AGENTS.local.md as an always-on rule at `session/new` and keeps it with
+// the session, so a reopened chat keeps the text it began with (checked live on 3000.14.30821).
+export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text)
+  return {}
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({

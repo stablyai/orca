@@ -30,7 +30,9 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read, stays untouched. */
+ *  A symlink on the way, or a file that cannot be read, stays untouched. The result is readable
+ *  only by this host's user, a file the user wrote included, since it now carries the bot's
+ *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
@@ -47,7 +49,6 @@ export async function writeFolderContextFile(
   }
   const target = join(realCwd, path)
   let existing: string | null = null
-  let mode = 0o600
   const info = await lstat(target).catch(() => null)
   if (info) {
     // A link may point outside the folder or into a tracked file, so it is left as the user's.
@@ -56,7 +57,6 @@ export async function writeFolderContextFile(
     }
     try {
       existing = await readFile(target, 'utf8')
-      mode = info.mode & 0o777
     } catch {
       return
     }
@@ -65,7 +65,7 @@ export async function writeFolderContextFile(
   }
   const staged = `${target}.${randomUUID()}`
   try {
-    await writeFile(staged, withOrcaText(existing, text, agentName), { mode })
+    await writeFile(staged, withOrcaText(existing, text, agentName), { mode: 0o600 })
     await rename(staged, target)
   } catch (error) {
     await rm(staged, { force: true }).catch(() => undefined)

@@ -270,8 +270,3 @@ export function readClaudeRunningSessionsPolicy(
   // Why: no one at the phone sees a dialog here.
   return policy === 'ask' && madeElsewhere ? 'restart' : policy
 }
-
-export function resetClaudeAccountSwitchSessionsForTests(): void {
-  switchGeneration = 0
-  setPrompt(null)
-}
