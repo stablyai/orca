@@ -166,7 +166,8 @@ export type AcpHostBackend = {
 export const ACP_HOST_BACKEND_SETTING_KEYS = [
   'antigravityChatAuth',
   'antigravityManagedAgyEnabled',
-  'antigravityGoogleSignIn'
+  'antigravityGoogleSignIn',
+  'agentCmdOverrides'
 ] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>

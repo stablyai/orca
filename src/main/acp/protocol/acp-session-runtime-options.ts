@@ -10,6 +10,8 @@ export type AcpSessionRuntimeOptions = {
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
+  /** A bidirectional relay forwards requests without owning a session locally. */
+  forwardRequestsWithoutSession?: true
   /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
   onRequest?: (method: string, params: unknown, context: AcpRequestContext) => unknown
   /** Delivered synchronously in arrival order with subscription events. */

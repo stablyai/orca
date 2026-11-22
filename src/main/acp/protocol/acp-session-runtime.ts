@@ -276,7 +276,7 @@ export class AcpSessionRuntime {
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
-    if (method !== 'session/request_permission') {
+    if (method !== 'session/request_permission' || this.options.forwardRequestsWithoutSession) {
       if (!this.options.onRequest) {
         throw new AcpRpcError(-32601, `Unknown ACP client method: ${method}`)
       }
