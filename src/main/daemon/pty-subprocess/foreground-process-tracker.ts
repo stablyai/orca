@@ -271,6 +271,7 @@ export function createPtyForegroundProcessTracker(args: {
         if (!foreground.shouldConfirmPtyForeground(fallbackProcess, decision)) {
           return fallbackProcess
         }
+        const lookupStartedAt = Date.now()
         const { resolution, processName: name } = await foreground.confirmFreshPtyForeground({
           process: proc,
           fallbackProcess,
@@ -292,7 +293,7 @@ export function createPtyForegroundProcessTracker(args: {
           resolution.available &&
           shouldCachePtyForeground(cacheName, decision ? false : staticName)
         ) {
-          cacheAgentForeground(cacheName, resolution.processId ?? null)
+          cacheAgentForeground(cacheName, resolution.processId ?? null, lookupStartedAt)
         } else if (!decision || processName !== anchor?.processName) {
           cachedAgentForeground = null
           startupAgentForeground = null
