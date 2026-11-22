@@ -29,6 +29,7 @@ import {
   renderPendingCreationVirtualRow
 } from './notice-rows'
 import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
+import { LineageGuides } from './lineage-guides'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
@@ -184,10 +185,11 @@ export function renderWorktreeVirtualRow(
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
   const itemKey = folder ? null : getWorktreeHostIdentity(row.worktree)
+  const guidesInDraggedRange = ctx.hiddenDragRanges.some(
+    ({ start, end }) => vItem.index >= start && vItem.index <= end
+  )
   const sourceHidden =
-    itemKey !== null &&
-    ctx.worktreeDragState.draggingWorktreeId !== null &&
-    ctx.hiddenDragRanges.some(({ start, end }) => vItem.index >= start && vItem.index <= end)
+    itemKey !== null && ctx.worktreeDragState.draggingWorktreeId !== null && guidesInDraggedRange
   const itemPreviewOffset =
     (itemKey
       ? ctx.worktreeDragState.previewOffsetsByWorktreeId.get(
@@ -243,6 +245,7 @@ export function renderWorktreeVirtualRow(
     >
       <div
         className="relative"
+        data-worktree-lineage-row={frame.guides ? '' : undefined}
         style={{ paddingTop: frame.before, paddingBottom: frame.closing + frame.after }}
       >
         {activeFamily && (
@@ -263,7 +266,14 @@ export function renderWorktreeVirtualRow(
             }}
           />
         )}
-        <div className={cn(sourceHidden && 'pointer-events-none opacity-0')}>
+        {frame.guides && (
+          <LineageGuides
+            guides={frame.guides}
+            before={frame.before}
+            hidden={guidesInDraggedRange || familyHidden}
+          />
+        )}
+        <div className={cn('relative', sourceHidden && 'pointer-events-none opacity-0')}>
           {folder
             ? renderFolderWorkspaceOption({
                 ctx: ctx.folderWorkspace,
