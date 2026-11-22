@@ -4,9 +4,8 @@ import {
   isRepoOnCatalogHost,
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
+import { inspectWorkspaceHooks } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
@@ -86,15 +85,9 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         }
       }
 
-      const has = hasHooksFile(repo.path)
-      const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
-      // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
-      const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {
         status: 'ok',
-        hasHooks: has,
-        hooks,
-        mayNeedUpdate
+        ...(await inspectWorkspaceHooks(repo))
       }
     }
   )

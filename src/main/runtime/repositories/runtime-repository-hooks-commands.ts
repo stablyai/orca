@@ -11,7 +11,7 @@ import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-t
 import {
   getEffectiveHooks,
   hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys,
+  inspectWorkspaceHooks,
   loadHooks
 } from '../../workspace-hooks/hooks'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
@@ -118,13 +118,9 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
         }
       }
     }
-    const has = hasHooksFile(repo.path)
-    const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
     return {
       status: 'ok' as const,
-      hasHooks: has,
-      hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      ...(await inspectWorkspaceHooks(repo))
     }
   }
 
