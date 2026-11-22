@@ -2,7 +2,10 @@ import type { RefObject } from 'react'
 import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
-import { getOpenableExternalUrl, toDisplayUrl } from '../../describe-page/browser-page-url-display'
+import {
+  getRemoteRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import '@/lib/browser/documents/file-preview'
@@ -63,7 +66,7 @@ export function ClientHostedBrowserPageToolbar({
 }): React.JSX.Element {
   const browserPageId = browserTab.id
   const viewportPresetId = browserTab.viewportPresetId ?? null
-  const externalUrl = getOpenableExternalUrl(browserTab.url)
+  const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}

@@ -764,7 +764,8 @@
       },
       "userAgent": {
         "title": "Tarayıcı kimliği",
-        "description": "Her tarayıcı profili ve sayfası için user-agent seçin. Değişiklikler yeniden başlatmadan sonra etkin olur.",
+        "descriptionPageKinds": "Bu bilgisayarın gösterdiği her sayfa için user-agent seçin; SSH sayfaları ve Bu cihaz olarak ayarlanmış uzak sayfalar da dahil. Değişiklikler yeniden başlatmadan sonra etkin olur.",
+        "serverPagesNote": "Sunucu (akış) sayfaları o sunucunun kimliğini kullanır; orada orca browser identity set ile değiştirin.",
         "remoteUnsupported": "Uzak sunucudaki tarayıcı kimliğini Orca CLI ile yönetin.",
         "loading": "Yükleniyor…",
         "resetRequired": "Değiştirilmeden önce kimlik verileri açıkça sıfırlanmalıdır.",

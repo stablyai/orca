@@ -337,6 +337,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
         canGoForward={browserTab.canGoForward}
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        remoteRoutedNetwork
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
         <ClientHostedBrowserPageToolbar

@@ -924,7 +924,8 @@
       },
       "userAgent": {
         "title": "Browser identity",
-        "description": "Choose the user agent for every browser profile and page. Changes take effect after a restart.",
+        "descriptionPageKinds": "Choose the user agent for every page this computer shows, including SSH pages and remote pages set to This device. Changes take effect after a restart.",
+        "serverPagesNote": "Server (streamed) pages use that server's identity; set it there with orca browser identity set.",
         "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
         "loading": "Loading…",
         "resetRequired": "Identity data must be reset explicitly before it can be changed.",

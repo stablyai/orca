@@ -284,7 +284,8 @@
       },
       "userAgent": {
         "title": "ブラウザのアイデンティティ",
-        "description": "すべてのブラウザプロファイルとページのユーザー Agent を選択します。変更は再起動後に有効になります。",
+        "descriptionPageKinds": "このコンピューターが表示するすべてのページ (SSH ページと「このデバイス」に設定したリモートページを含む) のユーザー Agent を選択します。変更は再起動後に有効になります。",
+        "serverPagesNote": "「サーバー (ストリーミング)」のページはそのサーバーの設定を使います。サーバー側で orca browser identity set を実行して変更してください。",
         "remoteUnsupported": "Orca CLI を使用して、リモートホスト上のブラウザ ID を管理します。",
         "loading": "読み込み中…",
         "resetRequired": "ID データは変更する前に明示的にリセットする必要があります。",

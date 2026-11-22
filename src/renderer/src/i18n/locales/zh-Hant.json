@@ -735,7 +735,8 @@
       },
       "userAgent": {
         "title": "瀏覽器識別設定",
-        "description": "為所有瀏覽器設定檔與頁面選擇使用者代理程式。重新啟動後才會生效。",
+        "descriptionPageKinds": "為這台電腦顯示的所有頁面選擇使用者代理程式，包括 SSH 頁面和設為「目前裝置」的遠端頁面。重新啟動後才會生效。",
+        "serverPagesNote": "「伺服器（串流）」頁面使用該伺服器的設定；請在伺服器上執行 orca browser identity set 變更。",
         "remoteUnsupported": "使用 Orca CLI 管理遠端主機上的瀏覽器識別設定。",
         "loading": "載入中…",
         "resetRequired": "變更瀏覽器識別設定前，必須先手動重設識別資料。",
