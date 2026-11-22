@@ -219,7 +219,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     })
   }
 
-  private readHookRowJoinForPty(ptyId: string): {
+  protected readHookRowJoinForPty(ptyId: string): {
     handles: string[]
     paneKeys: Set<string>
     hookRows: readonly AgentStatusIpcPayload[]

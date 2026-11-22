@@ -33,7 +33,16 @@ export function normalizePiCompatibleEvent(
     hookPayload.model_switch_command === 'orca-model' ? 'orca-model' : undefined
   // Each post carries the whole live roster; absence means none.
   const subagents = hookPayload.subagents
-  if (eventName === 'model_select' || eventName === 'subagents_update') {
+  // Why: Orca's Pi extension reads the input box itself on every post, whatever editor draws it.
+  const composerDraft =
+    agentType === 'pi' && typeof hookPayload.composer_draft === 'boolean'
+      ? hookPayload.composer_draft
+      : undefined
+  if (
+    eventName === 'model_select' ||
+    eventName === 'subagents_update' ||
+    (eventName === 'composer_draft' && agentType === 'pi')
+  ) {
     // Restate inter-turn model/child changes on an existing visible row; hidden resume placeholders carry no state.
     const previous = state.lastStatusByPaneKey.get(paneKey)
     if (
@@ -47,7 +56,8 @@ export function normalizePiCompatibleEvent(
     return normalizeAgentStatusPayload({
       ...previous.payload,
       ...(eventName === 'model_select' ? { model, modelSwitchCommand } : {}),
-      subagents
+      subagents,
+      composerDraft
     })
   }
 
@@ -119,6 +129,7 @@ export function normalizePiCompatibleEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     subagents,
+    composerDraft,
     // Why: a compaction row and its settle carry one finish time, so the reply is announced once.
     turnCompletedAt: hookPayload.turn_completed_at,
     // Why: Pi reports a user-cancelled run as an ordinary end; the extension marks it.
