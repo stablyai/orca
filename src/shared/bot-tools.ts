@@ -17,7 +17,7 @@ const Text = z
 // React Native's URL reads username, password and origin with regexes over the whole text, so an `@`
 // in a path (https://server.smithery.ai/@owner/mcp) reads as a user there; read the authority instead.
 function botToolUrlAuthority(value: string): { userinfo: string; hostPort: string } | null {
-  const authority = /^https?:\/\/([^/?#\\]*)/i.exec(value)?.[1]
+  const authority = /^https?:\/\/[/\\]*([^/?#\\]*)/i.exec(value)?.[1]
   if (authority === undefined) {
     return null
   }
