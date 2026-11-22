@@ -1,0 +1,75 @@
+# Official upstream PKGBUILD for the orca-ide AUR package.
+# Source of truth: https://github.com/stablyai/orca/tree/main/aur
+# .github/workflows/aur-publish.yml rewrites pkgver and checksums on each stable release.
+
+pkgname=orca-ide
+pkgver=1.4.214
+pkgrel=1
+pkgdesc='Next-gen IDE for parallel agentic development'
+arch=('x86_64' 'aarch64')
+url='https://github.com/stablyai/orca'
+license=('MIT')
+depends=(
+  'alsa-lib'
+  'at-spi2-core'
+  'gtk3'
+  'libnotify'
+  'libsecret'
+  'libxss'
+  'libxtst'
+  'mesa'
+  'nss'
+  'python'
+  'python-gobject'
+  'util-linux-libs'
+  'xdg-utils'
+  'xclip'
+  'xdotool'
+  'xorg-server-xvfb'
+)
+optdepends=('libappindicator-gtk3: system tray indicator support')
+provides=('orca-ide-bin' 'onorca-bin' 'stably-orca' 'stably-orca-bin')
+conflicts=('orca-ide-bin' 'onorca-bin' 'stably-orca' 'stably-orca-bin')
+options=('!strip' '!debug')
+source=("LICENSE::https://raw.githubusercontent.com/stablyai/orca/main/LICENSE")
+source_x86_64=("${pkgname}-${pkgver}-x86_64.deb::https://github.com/stablyai/orca/releases/download/v${pkgver}/orca-ide_${pkgver}_amd64.deb")
+source_aarch64=("${pkgname}-${pkgver}-aarch64.deb::https://github.com/stablyai/orca/releases/download/v${pkgver}/orca-ide_${pkgver}_arm64.deb")
+noextract=("${pkgname}-${pkgver}-x86_64.deb" "${pkgname}-${pkgver}-aarch64.deb")
+b2sums=('fdce4a5f4313d37ca3f4a68dc9c31a242cd7f0fb7eae5a9764b9ca79b9316d328d2374154443338f9addc9134490c95fd1973c79c307d5f228f0f37dd6e3fa45')
+b2sums_x86_64=('63abff42c1ad42b3cbfdc308fdd67c9f07332822ce9f7e6a4b6fa3dd7cc57e604ad4fb4a3e7a8bdd4de88ee8570e3a1cfd05b370a959a2379f11dee57effd948')
+b2sums_aarch64=('f0d241c050ee427f44500e5ac98c3ff3d27163c2ad89a3245c715a0472d40aec4f35e0dcc8a74230619aa64bc680afceac930418fbe8ab5c6474ae2e7144b6ee')
+
+package() {
+  local deb="${srcdir}/${pkgname}-${pkgver}-${CARCH}.deb"
+  local data
+  data="$(bsdtar -tf "$deb" | grep -E '^data\.tar(\.[a-z0-9]+)?$' | head -n 1)"
+  if [[ -z "$data" ]]; then
+    echo "error: no data.tar.* member in $deb" >&2
+    return 1
+  fi
+  bsdtar -xOf "$deb" "$data" | bsdtar -xpf - -C "$pkgdir"
+
+  local appdir shim=''
+  for appdir in "$pkgdir"/opt/Orca "$pkgdir"/opt/orca-ide "$pkgdir"/opt/orca; do
+    if [[ -x "$appdir/resources/bin/orca-ide" ]]; then
+      shim="$appdir/resources/bin/orca-ide"
+      break
+    fi
+  done
+  if [[ -z "$shim" ]]; then
+    shim="$(find "$pkgdir/opt" -path '*/resources/bin/orca-ide' -type f -print -quit)"
+  fi
+
+  if [[ -n "$shim" ]]; then
+    appdir="${shim%/resources/bin/orca-ide}"
+    # Why: Chromium needs a setuid sandbox helper on kernels without unprivileged user namespaces.
+    if [[ -f "$appdir/chrome-sandbox" ]]; then
+      chmod 4755 "$appdir/chrome-sandbox"
+    fi
+    install -dm755 "$pkgdir/usr/bin"
+    ln -sfn "${shim#"$pkgdir"}" "$pkgdir/usr/bin/orca-ide"
+  fi
+
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  rm -rf "$pkgdir/usr/share/doc"
+}

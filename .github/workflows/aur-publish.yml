@@ -1,0 +1,212 @@
+name: AUR Publish
+
+# Validate aur/ on PRs; on manual dispatch, render aur/PKGBUILD for a stable desktop tag (b2sums of
+# the release .deb assets) and push it to the orca-ide AUR package.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to publish (e.g. v1.4.214)
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - 'aur/**'
+      - '.github/workflows/aur-publish.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      # Why: archlinux:base-devel does not ship git, which actions/checkout needs.
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+
+      - name: Checkout orca
+        uses: actions/checkout@v6
+
+      - name: Create unprivileged builder user
+        run: |
+          set -euo pipefail
+          # Why: makepkg refuses to run as root.
+          useradd --create-home builder
+
+      - name: Check PKGBUILD syntax and .SRCINFO sync
+        run: |
+          set -euo pipefail
+          bash -n aur/PKGBUILD
+          work="$(mktemp -d)"
+          cp aur/PKGBUILD "$work/PKGBUILD"
+          chown -R builder "$work"
+          su builder -c "cd '$work' && makepkg --printsrcinfo" >"$work/generated.SRCINFO"
+          if ! diff -u aur/.SRCINFO "$work/generated.SRCINFO"; then
+            echo "::error::aur/.SRCINFO is stale; run 'makepkg --printsrcinfo > .SRCINFO' in aur/." >&2
+            exit 1
+          fi
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    # Why: PR runs must never reach the AUR; only maintainers dispatch publishes.
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Resolve tag and version
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Why: RC, perf, and mobile tags must never become the AUR's stable package.
+          if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Only stable desktop tags (vX.Y.Z) can be published to the AUR: $INPUT_TAG" >&2
+            exit 1
+          fi
+          echo "tag=$INPUT_TAG" >>"$GITHUB_OUTPUT"
+          echo "version=${INPUT_TAG#v}" >>"$GITHUB_OUTPUT"
+
+      - name: Check AUR credentials
+        id: creds
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
+            echo "AUR publishing not configured; skipping"
+            echo "configured=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Install tools
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed git openssh github-cli python
+          useradd --create-home builder
+
+      - name: Checkout orca
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/checkout@v6
+
+      - name: Download .deb assets and compute b2sums
+        id: hash
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p debs
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "orca-ide_${VERSION}_amd64.deb" \
+            --pattern "orca-ide_${VERSION}_arm64.deb" \
+            --dir debs
+          x86_64=$(b2sum "debs/orca-ide_${VERSION}_amd64.deb" | awk '{print $1}')
+          aarch64=$(b2sum "debs/orca-ide_${VERSION}_arm64.deb" | awk '{print $1}')
+          # Why: the PKGBUILD fetches LICENSE from main, so hash that copy rather than the checkout.
+          curl -fsSL https://raw.githubusercontent.com/stablyai/orca/main/LICENSE -o LICENSE.main
+          license=$(b2sum LICENSE.main | awk '{print $1}')
+          echo "x86_64=$x86_64" >>"$GITHUB_OUTPUT"
+          echo "aarch64=$aarch64" >>"$GITHUB_OUTPUT"
+          echo "license=$license" >>"$GITHUB_OUTPUT"
+
+      - name: Clone AUR package
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Why: container ssh resolves ~ from passwd, not $HOME, so pass key and host file explicitly.
+          ssh_dir="$RUNNER_TEMP/aur-ssh"
+          install -dm700 "$ssh_dir"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" >"$ssh_dir/aur"
+          chmod 600 "$ssh_dir/aur"
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >"$ssh_dir/known_hosts"
+          ssh_cmd="ssh -i $ssh_dir/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts"
+          echo "GIT_SSH_COMMAND=$ssh_cmd" >>"$GITHUB_ENV"
+          git clone https://aur.archlinux.org/orca-ide.git aur-repo
+          git -C aur-repo remote set-url --push origin ssh://aur@aur.archlinux.org/orca-ide.git
+
+      - name: Render PKGBUILD and .SRCINFO
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          X86_64_B2: ${{ steps.hash.outputs.x86_64 }}
+          AARCH64_B2: ${{ steps.hash.outputs.aarch64 }}
+          LICENSE_B2: ${{ steps.hash.outputs.license }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, re
+
+          version = os.environ["VERSION"]
+          src = pathlib.Path("aur/PKGBUILD").read_text()
+
+          # Why: packaging-only fixes bump pkgrel in aur/PKGBUILD; a new upstream version resets it.
+          repo_ver = re.search(r"^pkgver=(\S+)$", src, re.M).group(1)
+          repo_rel = re.search(r"^pkgrel=(\d+)$", src, re.M).group(1)
+          pkgrel = int(repo_rel) if repo_ver == version else 1
+
+          def sub(pattern, repl, text):
+              out, n = re.subn(pattern, repl, text, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f"PKGBUILD pattern not found: {pattern}")
+              return out
+
+          src = sub(r"^pkgver=.*$", f"pkgver={version}", src)
+          src = sub(r"^pkgrel=.*$", f"pkgrel={pkgrel}", src)
+          src = sub(r"^b2sums=\([^)]*\)$", f"b2sums=('{os.environ['LICENSE_B2']}')", src)
+          src = sub(r"^b2sums_x86_64=\([^)]*\)$", f"b2sums_x86_64=('{os.environ['X86_64_B2']}')", src)
+          src = sub(r"^b2sums_aarch64=\([^)]*\)$", f"b2sums_aarch64=('{os.environ['AARCH64_B2']}')", src)
+          for arch in ("x86_64", "aarch64"):
+              if not re.search(rf"^source_{arch}=\(.*/v\$\{{pkgver\}}/", src, re.M):
+                  raise SystemExit(f"source_{arch} must be templated on ${{pkgver}}")
+
+          pathlib.Path("rendered").mkdir(exist_ok=True)
+          pathlib.Path("rendered/PKGBUILD").write_text(src)
+          pathlib.Path("rendered/pkgrel").write_text(str(pkgrel))
+          print(src)
+          PY
+          bash -n rendered/PKGBUILD
+          work="$(mktemp -d)"
+          cp rendered/PKGBUILD "$work/PKGBUILD"
+          chown -R builder "$work"
+          su builder -c "cd '$work' && makepkg --printsrcinfo" >rendered/.SRCINFO
+          cat rendered/.SRCINFO
+
+      - name: Commit and push to AUR
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          user="${AUR_USERNAME:-stablyai}"
+          cp rendered/PKGBUILD rendered/.SRCINFO aur-repo/
+          cd aur-repo
+          git config user.name "$user"
+          # Why: AUR does not verify commit emails; keep a non-routable address instead of a real inbox.
+          git config user.email "${user}@users.noreply.aur.archlinux.org"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR package already up-to-date for $VERSION; nothing to do."
+            exit 0
+          fi
+          pkgrel="$(cat ../rendered/pkgrel)"
+          published="$(git show HEAD:.SRCINFO 2>/dev/null || true)"
+          if grep -qE "^[[:space:]]*pkgver = ${VERSION//./\\.}$" <<<"$published" \
+            && grep -qE "^[[:space:]]*pkgrel = ${pkgrel}$" <<<"$published"; then
+            echo "::error::PKGBUILD changed for $VERSION-$pkgrel without a pkgrel bump; bump pkgrel in aur/PKGBUILD." >&2
+            exit 1
+          fi
+          git commit -m "Update to ${VERSION}-${pkgrel}"
+          # Why: AUR only accepts pushes to master.
+          git push origin HEAD:master
