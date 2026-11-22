@@ -9,8 +9,9 @@ export const keepFocusPressProps = {
   onMouseDown: (event: MouseEvent) => event.preventDefault()
 }
 
-// The workbench holds every pane (terminal hosts included); the floating terminal panel sits outside it.
-const PANE_SURFACE_SELECTOR = '[data-terminal-workbench-container], [data-floating-terminal-panel]'
+// Pane surfaces: the workbench (terminal hosts included), the floating terminal panel and Activity's terminal slots.
+const PANE_SURFACE_SELECTOR =
+  '[data-terminal-workbench-container], [data-floating-terminal-panel], [data-activity-terminal-slot-id]'
 
 /**
  * For sidebar and titlebar chrome: a press keeps focus only while it is in a pane (terminal, editor,
