@@ -126,3 +126,14 @@ export function availableManagedOrcadUpdate(input: {
   })
   return plan.action === 'update' ? candidateVersion : null
 }
+
+/** Update anyway was confirmed over one incumbent build; a build activated since then voids it. */
+export function admitConfirmedIncumbent(
+  admit: (record: OrcadActivationRecord, candidateVersion: string) => string | null,
+  incumbentVersion: string | null
+): (record: OrcadActivationRecord, candidateVersion: string) => string | null {
+  return (record, candidateVersion) =>
+    record.active !== incumbentVersion
+      ? "This host's server changed since the update was confirmed. Review it and update again."
+      : admit(record, candidateVersion)
+}

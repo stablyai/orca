@@ -62,7 +62,8 @@ export async function checkRunPendingMail(args: {
       ? db.acknowledgeRunDelivery({
           runId: run.id,
           consumerGeneration: generation,
-          deliveryId: params.ack
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
         })
       : undefined
   let acknowledged: { delivery: { id: string } } | undefined = residualAck

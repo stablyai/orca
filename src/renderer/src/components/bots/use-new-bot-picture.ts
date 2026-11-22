@@ -8,6 +8,10 @@ import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../.
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
 import { botMascotSrc } from './bot-mascot-color'
+import {
+  generatedPictureDescription,
+  keepSavedPictureDescription
+} from './generated-avatar-descriptions'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
@@ -68,7 +72,8 @@ export function useNewBotPicture(
     src: `data:image/png;base64,${upload.png}`,
     fallback: '',
     after: upload.after,
-    description: t('bots.new.pictureUpload', 'Your image')
+    description:
+      generatedPictureDescription(upload.png) ?? t('bots.new.pictureUpload', 'Your image')
   }
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =
@@ -98,10 +103,16 @@ export function useNewBotPicture(
     saveUpload: async (bot) =>
       showingUpload
         ? // Settings can try again if the upload is refused.
-          uploadBotAvatar(bot, upload.png).catch((error: unknown) => {
-            toast.error(botErrorMessage(error))
-            return bot
-          })
+          uploadBotAvatar(bot, upload.png).then(
+            (saved) => {
+              keepSavedPictureDescription(saved, upload.png)
+              return saved
+            },
+            (error: unknown) => {
+              toast.error(botErrorMessage(error))
+              return bot
+            }
+          )
         : bot,
     reset: () => {
       setColor(null)

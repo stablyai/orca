@@ -17,6 +17,7 @@ import {
 } from '../../../../src/shared/bots/bot-item-groups'
 import { mergeBotItemsByUid } from '../../../../src/shared/bots/bot-item-merge'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import { botItemWalkOf, type BotItemWalk } from '../../../../src/shared/bots/bot-item-walk'
 import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   MobileLoadErrorState,
@@ -79,11 +80,12 @@ export function MobileBotItemsTab({
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
-  onOpen: (item: BotItem) => void
+  /** `walk`: the list as it shows now, which the item page steps through. */
+  onOpen: (item: BotItem, walk: BotItemWalk) => void
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop. */
   after: ReactNode
-  /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
+  /** Orca's asks the phone reads; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
   client: RpcClient | null
@@ -114,6 +116,7 @@ export function MobileBotItemsTab({
   ) : null
   const asksOnly = (
     <MobileBotNeedsYouGroup
+      botName={botName}
       asks={asks}
       items={[]}
       disabled={!online}
@@ -182,11 +185,7 @@ export function MobileBotItemsTab({
   } else if (shown.length === 0) {
     body = (
       <MobileNoMatchState
-        message={
-          filter.needsYou
-            ? t('bots.items.empty.needsYou', 'Nothing needs you.')
-            : t('bots.items.empty.filtered', 'No items match.')
-        }
+        message={t('bots.items.empty.needsYou', 'Nothing needs you.')}
         onClear={onClearFilter}
         clearLabel={t('bots.items.filter.clear', 'Clear filter')}
       />
@@ -203,7 +202,9 @@ export function MobileBotItemsTab({
         checked={selecting ? selected.has(item.uid) : null}
         now={now}
         disabled={disabled}
-        onPress={() => (selecting ? toggle(item) : onOpen(item))}
+        onPress={() =>
+          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal))
+        }
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />
     )
@@ -211,6 +212,7 @@ export function MobileBotItemsTab({
       id === 'needs_you' ? (
         <MobileBotNeedsYouGroup
           key={id}
+          botName={botName}
           asks={asks}
           items={groups.needs_you}
           disabled={disabled}
@@ -226,7 +228,7 @@ export function MobileBotItemsTab({
           items={groups[id]}
           total={id === 'closed' ? Math.max(closedTotal, groups.closed.length) : groups[id].length}
           onMoreClosed={id === 'closed' && !filter.needsYou ? items.loadMoreClosed : null}
-          seenEventId={seenEventId}
+          isUnseen={(item) => isBotItemUnseen(item, seenEventId)}
           renderItem={(item) => row(item, id)}
           onCancelAll={
             id === 'stale' && groups.stale.length > 0 && !failed && online
@@ -247,7 +249,8 @@ export function MobileBotItemsTab({
   )
 }
 
-function ReadFailed({ onRetry }: { onRetry: () => void }) {
+/** A re-read that failed, over the last good list it keeps up. */
+export function ReadFailed({ onRetry }: { onRetry: () => void }) {
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
@@ -260,20 +263,22 @@ function ReadFailed({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-function ItemGroup({
+/** One folding group under its "Name N" header, five rows then Show N more; Closed reads more pages. */
+export function ItemGroup({
   id,
   items,
   total,
   onMoreClosed,
-  seenEventId,
+  isUnseen,
   renderItem,
   onCancelAll
 }: {
   id: BotItemGroupId
   items: BotItem[]
   total: number
-  onMoreClosed: (() => Promise<void>) | null
-  seenEventId: string
+  onMoreClosed: (() => Promise<unknown>) | null
+  /** Changed since its bot's Items were last opened. */
+  isUnseen: (item: BotItem) => boolean
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null
 }) {
@@ -284,7 +289,7 @@ function ItemGroup({
   if (total === 0) {
     return null
   }
-  const fresh = id === 'closed' ? items.filter((item) => isBotItemUnseen(item, seenEventId)) : []
+  const fresh = id === 'closed' ? items.filter(isUnseen) : []
   const more = total - Math.min(shown, items.length)
   const showMore = async () => {
     if (shown + BOT_ITEM_GROUP_ROWS > items.length && onMoreClosed) {

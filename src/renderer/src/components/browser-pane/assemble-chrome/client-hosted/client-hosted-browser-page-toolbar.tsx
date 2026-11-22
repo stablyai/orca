@@ -15,7 +15,11 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
-import type { BrowserChromeMarkupTool } from '../toolbar/browser-annotate-tool-button'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
+} from '../toolbar/browser-annotate-tool-button'
 
 /** The local page toolbar over a desktop-hosted page of a remote workspace, minus what its route session can't run. */
 export function ClientHostedBrowserPageToolbar({
@@ -33,7 +37,7 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
   navigateToUrl,
-  markup,
+  annotateTools,
   onOpenFind
 }: {
   browserTab: BrowserPage
@@ -50,7 +54,11 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
   navigateToUrl: (url: string) => void
-  markup: BrowserChromeMarkupTool
+  annotateTools: {
+    elementTools: BrowserChromeElementTools
+    markup: BrowserChromeMarkupTool
+    notes: BrowserChromeNoteActions
+  }
   onOpenFind: () => void
 }): React.JSX.Element {
   const browserPageId = browserTab.id
@@ -120,13 +128,12 @@ export function ClientHostedBrowserPageToolbar({
       }
       // Extensions load only into this desktop's profile sessions, not route partitions (#35178).
       extensionActions={null}
-      // The element picker isn't wired for desktop-hosted pages yet; Draw works.
-      elementTools={null}
-      markup={markup}
+      {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={null}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
           isActive={isActive}

@@ -209,9 +209,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
-  /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
-   *  you left off." once the limit resets, unless that chat was told not to. */
-  nativeChatAutoContinueAfterUsageLimit?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -275,6 +272,10 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
    *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
+  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
+   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
+   *  else agy. */
+  antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
   /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */

@@ -45,14 +45,12 @@ import {
   initializeBrowserSessionsForApp,
   whenBrowserSessionsReadyForRestoredTabs
 } from '../browser/sessions/browser-session-startup'
-import {
-  initializeBrowserExtensionSupport,
-  switchBrowserExtensionSupport
-} from '../browser/extensions/browser-extension-startup'
+import { initializeBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { createStoreNativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import { followNativeSettingChanges } from './native-setting-subscriptions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
@@ -179,7 +177,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
-  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
+  const nativeSettings = createStoreNativeSettingsProjection(store)
+  state.nativeSettings = nativeSettings
+  hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()
@@ -191,7 +191,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     store
   )
   // Publish proxy readiness before guarding default-session requests; network awaits it, while window creation can proceed.
-  state.initialProxyApplicationReady = applyElectronProxySettings(store.getSettings()).then(
+  state.initialProxyApplicationReady = applyElectronProxySettings(
+    nativeSettings.getSettings()
+  ).then(
     (result) => {
       if (result.source === 'invalid-settings') {
         // STA-3442: log invalid configured proxies so DIRECT fallback is diagnosable.
@@ -242,18 +244,16 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Refresh the tiny pre-ready marker so next launch avoids reparsing settings.
   writeHttp1CompatibilityMarker(
     canonicalUserDataPath,
-    store.getSettings().electronHttp1CompatibilityMode === true,
+    nativeSettings.getSettings().electronHttp1CompatibilityMode === true,
     profile.profile.id
   )
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  followNativeSettingChanges(nativeSettings, {
+    canonicalUserDataPath,
+    profileId: profile.profile.id,
+    hangWatchdog
+  })
   store.onSettingsChanged((updates, settings) => {
-    if ('electronHttp1CompatibilityMode' in updates) {
-      writeHttp1CompatibilityMarker(
-        canonicalUserDataPath,
-        settings.electronHttp1CompatibilityMode === true,
-        profile.profile.id
-      )
-    }
     if ('terminalWindowsWslDistro' in updates) {
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
@@ -273,14 +273,6 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('browserExtensionsEnabled' in updates) {
-      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
-    }
-    if ('showMenuBarIcon' in updates) {
-      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
-      // Store owns settings mutations; sync every menu-bar toggle through this listener.
-      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
-    }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
       // The ensure gate blocks only new relays; stop live guests/timers on disable and resume on enable for existing panes.
@@ -291,17 +283,17 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
   })
-  applyAppIcon(store.getSettings().appIcon)
+  applyAppIcon(nativeSettings.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
     suppressDevEducationForStore(store)
   }
   // Install the proxy resolver before partitions materialize.
-  setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
+  setBrowserNetworkProxySettingsResolver(() => nativeSettings.getSettings())
   installPreviewProtocolHandlers()
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().browserExtensionsEnabled !== false,
+    enabled: nativeSettings.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
@@ -318,7 +310,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       return currentStore.getSshTargets().map((target) => target.id)
     }
   })
-  browserSiteDisplayController.followZoomSettings(store)
+  browserSiteDisplayController.followZoomSettings(nativeSettings)
   browserManager.setSiteDisplayController(browserSiteDisplayController)
   await whenBrowserSessionsReadyForRestoredTabs()
 }

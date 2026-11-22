@@ -8,7 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { botAgentLabel, botErrorMessage } from '@/components/bots/bot-presentation'
-import { botResultsPlace } from '@/components/automations/authoring/automation-bot-results-to'
+import { botResultsPlace } from '../../../../shared/automation-bot-target'
 import { botTargetChatTitle } from '@/components/automations/authoring/automation-bot-runs-in-chat'
 import { eventTriggerLine } from '@/components/automations/authoring/AutomationBotEventsField'
 import { formatUiAutomationScheduleDescriptor } from '@/components/automations/details/automation-schedule-label'
@@ -25,6 +25,8 @@ import type {
 } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { useNow } from '@/lib/window-activity/use-now'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useAutomationCardDetails } from './use-automation-card-details'
 
 function whenLines(automation: Automation): string[] {
@@ -77,9 +79,11 @@ export function NativeChatCardFact({
 }
 
 function RecentRuns({
+  hostId,
   automationId,
   runs
 }: {
+  hostId: ExecutionHostId
   automationId: string
   runs: readonly AutomationRun[]
 }): React.JSX.Element {
@@ -102,7 +106,7 @@ function RecentRuns({
           <button
             type="button"
             className="flex w-full min-w-0 items-baseline justify-between gap-3 rounded-md px-1 py-1 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => openBotAutomation(automationId, run.id)}
+            onClick={() => openBotAutomation(hostId, automationId, run.id)}
           >
             <span className="min-w-0 truncate text-sm text-foreground">{run.title}</span>
             <span className="shrink-0 text-xs text-muted-foreground">
@@ -176,7 +180,11 @@ function ReadyDetails({
             {agentLabel(automation)}
           </NativeChatCardFact>
         </dl>
-        <RecentRuns automationId={automation.id} runs={runs} />
+        <RecentRuns
+          hostId={getRuntimeTargetHostId(target)}
+          automationId={automation.id}
+          runs={runs}
+        />
       </div>
       {automation.prompt ? (
         <p className="mt-3 line-clamp-6 whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm text-foreground">
@@ -259,7 +267,7 @@ export function NativeChatAutomationCardDetails({
           variant="link"
           size="inlineText"
           className="mt-3"
-          onClick={() => openBotAutomation(automationId, null)}
+          onClick={() => openBotAutomation(getRuntimeTargetHostId(target), automationId, null)}
         >
           {t('components.native-chat.automationSaved.openFullPage', 'Open page')}
         </Button>
