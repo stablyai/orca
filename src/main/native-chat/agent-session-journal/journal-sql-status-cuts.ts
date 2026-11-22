@@ -11,6 +11,7 @@ import {
   type NativeChatOrcaStopCut
 } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import { agentJournalSubmissionReturnedToCard } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -47,7 +48,10 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
     const item = candidate.item
     if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
       if (item.body.kind === 'message' && item.body.role === 'user') {
-        return null
+        const send = state.inputForItem(item.itemId)
+        if (!send || !agentJournalSubmissionReturnedToCard(send)) {
+          return null
+        }
       }
       const lifecycle = readAgentJournalTurn(item.body)
       if (lifecycle) {
