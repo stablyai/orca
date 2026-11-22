@@ -13,7 +13,6 @@ export type ClientAskListener = {
   /** The pairing fingerprint this Orca keys the computer's conversations by. */
   fingerprint: string
   session: string
-  inFlight: number
 }
 
 export type ClientAskPull = { key: string; session: string }
@@ -59,14 +58,12 @@ export function clientAskPullStarted(
       listeners.delete(other)
     }
   }
-  const same = current?.session === pull.session
   listeners.set(key, {
     deviceId: caller.deviceId,
     installationId: pull.installationId,
     name: pull.name,
     fingerprint: caller.fingerprint,
-    session: pull.session,
-    inFlight: (same ? current.inFlight : 0) + 1
+    session: pull.session
   })
   return { key, session: pull.session }
 }
@@ -79,14 +76,9 @@ export function clientAskPullEnded(
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
-  if (current?.session !== pull.session) {
-    return
-  }
-  if (outcome === 'caller_gone') {
+  if (outcome === 'caller_gone' && current?.session === pull.session) {
     listeners.delete(pull.key)
-    return
   }
-  current.inFlight = Math.max(0, current.inFlight - 1)
 }
 
 /** The listening computers a selector names: its installation id, or its name. */
@@ -120,7 +112,7 @@ export function requireListeningClient(
   if (listening.length > 1) {
     throw new OrchestrationError(
       'invalid_argument',
-      `Two paired computers share the id ${selector}. ${nothingDone}`,
+      `Two paired computers answer to ${selector}. ${nothingDone}`,
       { effectsApplied: false }
     )
   }
@@ -133,4 +125,22 @@ export function requireListeningClient(
     )
   }
   return client
+}
+
+/** The listening computer a conversation's environment names: the same device first, so copies
+ *  sharing an installation id stay apart; else the one installation that re-paired. */
+export function listenerForClientEnvironment(
+  owner: ClientAskListenerOwner,
+  deviceId: string,
+  installationId: string
+): ClientAskListener | null {
+  const listeners = listenersOf(owner)
+  const same = listeners.get(keyOf(deviceId, installationId))
+  if (same) {
+    return same
+  }
+  const repaired = [...listeners.values()].filter(
+    (listener) => listener.installationId === installationId
+  )
+  return repaired.length === 1 ? repaired[0]! : null
 }
