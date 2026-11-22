@@ -4,14 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, realGitExecFileAsync } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  realGitExecFileAsync: vi.fn()
 }))
 
-vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitExecFileAsync: gitExecFileAsyncMock
-}))
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => {
+  const original = await importOriginal<{ gitExecFileAsync: (...args: unknown[]) => unknown }>()
+  realGitExecFileAsync.mockImplementation(original.gitExecFileAsync)
+  return { ...original, gitExecFileAsync: gitExecFileAsyncMock }
+})
 
 import { PROBE_COALESCE_STALE_MS } from './coalesced-probe'
 import { createRemoteRefProbeCache, NEGATIVE_ENTRY_TTL_MS } from './remote-ref-probe-cache'
@@ -101,12 +103,9 @@ describe('remote ref probe cache (P1-D)', () => {
 describe('remote ref probe cache against a real checkout', () => {
   let repoPath: string
 
-  beforeEach(async () => {
-    const actual = await vi.importActual<{ gitExecFileAsync: typeof gitExecFileAsyncMock }>(
-      '../command-runner/git-exec-file'
-    )
+  beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockImplementation(actual.gitExecFileAsync)
+    gitExecFileAsyncMock.mockImplementation(realGitExecFileAsync)
     repoPath = mkdtempSync(join(tmpdir(), 'remote-ref-probe-cache-'))
     execFileSync('git', ['init', '-q', repoPath])
   })
