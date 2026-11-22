@@ -1,4 +1,5 @@
 import {
+  skillInstallPlacementSegments,
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderDefinition,
   type SkillInstallProviderId
@@ -31,7 +32,7 @@ export function groupSkillInstallProviders(
   const canonical: SkillInstallProviderDefinition[] = []
   const selectable: SkillInstallProviderChoice[] = []
   for (const provider of SKILL_INSTALL_PROVIDERS) {
-    const segments = scope === 'global' ? provider.globalSegments : provider.workspaceSegments
+    const segments = skillInstallPlacementSegments(provider, scope)
     if (segments) {
       selectable.push({ provider, directory: skillProviderDirectoryLabel(segments, scope) })
     } else {

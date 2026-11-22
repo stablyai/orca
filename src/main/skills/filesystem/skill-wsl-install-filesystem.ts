@@ -18,7 +18,10 @@ import {
   WSL_INSPECT_PATHS_SCRIPT,
   WSL_LIST_ENTRIES_SCRIPT
 } from './skill-wsl-enumeration-protocol'
-import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skills/installation/skill-install-providers'
+import {
+  skillInstallPlacementSegments,
+  SKILL_INSTALL_PROVIDERS
+} from '../../../shared/skills/installation/skill-install-providers'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 
@@ -297,9 +300,9 @@ export function createWslSkillInstallFilesystem(input: {
   const scopeRoot = input.workspaceDirectory ?? input.homeDirectory
   const scope = input.workspaceDirectory ? 'workspace' : 'global'
   const providerRoots = SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
-    const segments = scope === 'global' ? provider.globalSegments : provider.workspaceSegments
+    const segments = skillInstallPlacementSegments(provider, scope)
     const overriddenRoot =
-      scope === 'global' ? input.providerRootOverrides?.[provider.id] : undefined
+      segments && scope === 'global' ? input.providerRootOverrides?.[provider.id] : undefined
     return overriddenRoot ? [overriddenRoot] : segments ? [join(scopeRoot, ...segments)] : []
   })
   return new WslSkillInstallFilesystem(input.distro, [

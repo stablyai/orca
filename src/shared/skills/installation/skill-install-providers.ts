@@ -8,6 +8,8 @@ type SkillInstallProviderEntry = {
   workspaceSegments: readonly string[] | null
   /** Env var relocating the agent's home (skills in `<home>/skills`). */
   homeEnv?: string
+  /** Global installs use ~/.agents/skills. globalSegments stays a discovery root. */
+  canonicalGlobalInstall?: boolean
 }
 
 export const SKILL_INSTALL_PROVIDERS = Object.freeze([
@@ -35,7 +37,9 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     id: 'gemini',
     displayName: 'Gemini CLI',
     globalSegments: ['.gemini', 'skills'],
-    workspaceSegments: null
+    workspaceSegments: null,
+    // Gemini CLI warns when this folder and ~/.agents/skills both contain the skill.
+    canonicalGlobalInstall: true
   },
   {
     id: 'droid',
@@ -276,6 +280,17 @@ export type SkillInstallProviderId = SkillInstallProviderDefinition['id']
 
 export function isSkillInstallProviderId(value: string): value is SkillInstallProviderId {
   return SKILL_INSTALL_PROVIDERS.some((provider) => provider.id === value)
+}
+
+/** Separate placement for installs. Discovery keeps reading globalSegments on its own. */
+export function skillInstallPlacementSegments(
+  provider: SkillInstallProviderDefinition,
+  scope: 'global' | 'workspace'
+): readonly string[] | null {
+  if (scope === 'global' && provider.canonicalGlobalInstall) {
+    return null
+  }
+  return scope === 'global' ? provider.globalSegments : provider.workspaceSegments
 }
 
 /** Explicit choices include agents installed later; removal omits choices to clean every previously used root. */
