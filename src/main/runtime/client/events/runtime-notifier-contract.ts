@@ -61,6 +61,7 @@ export type RuntimeNotifier = {
   /** A bot, its automations or its Activity's work changed; debounced by the runtime. */
   botsChanged?(scope: BotChangeScope): void
   orchestrationSessionWorkersChanged?(sessionId: string): void
+  peerMailReturned?(): void
   workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,

@@ -4132,7 +4132,8 @@
       "title": "{{from}} wants to message {{to}} on this computer",
       "once": "Allow once",
       "always": "Always allow {{server}}",
-      "deny": "Deny"
+      "deny": "Deny",
+      "thisServer": "this server"
     }
   },
   "sourceControl": {

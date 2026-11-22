@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
+import { onPeerMailReturned } from '@/lib/peer-mail-returned-window-event'
 import { useOwnInstallation } from '@/components/bots/use-paired-server-client-mentions'
 import { useHeldPairedServerAsk } from '@/components/bots/use-paired-server-asks'
 import { BotMentionHostText } from '@/components/bots/BotMentionHostBadge'
@@ -46,10 +47,12 @@ function useClientAskReading(messageId: string | undefined): BotRequestCardReadi
         })
         .catch(() => {})
     read()
-    const stop = onBotsChanged(read, getRuntimeTargetHostId(target))
+    const hostId = getRuntimeTargetHostId(target)
+    // Its answer comes back as peer mail, also on a host with no bots to announce a change.
+    const stops = [onBotsChanged(read, hostId), onPeerMailReturned(read, hostId)]
     return () => {
       live = false
-      stop()
+      stops.forEach((stop) => stop())
     }
   }, [target, messageId, settled])
   return reading
