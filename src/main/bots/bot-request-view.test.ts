@@ -123,14 +123,20 @@ describe('what the sender reads', () => {
     )
   })
 
-  it('shows the answer on its card in a chat read in Orca, whoever asked there', () => {
-    // A teammate's request that woke the Home Chat, which sends a handoff on.
-    const fromHome = record({ conversation: null, askedInConversation: undefined })
-    expect(botRequestView(fromHome, 'msg_4').answerAppears).toBe(
-      "Ranger's conversation, where your owner reads it"
+  it("has a chat a teammate's request woke pass the answer back, whatever its card shows", () => {
+    // Dana's thread asked the Home Chat, which hands the job on.
+    const relayed = record({
+      conversation: null,
+      askedInConversation: undefined,
+      answersRequest: 'msg_dana'
+    })
+    expect(botRequestView(relayed, 'msg_4').answerAppears).toBe(
+      "Ranger's conversation, which passes it on to Nora on Slack"
     )
-    expect(botRequestSentNext(fromHome)).toMatch(/sees its answer here on its own card/)
-    expect(botAnswerView(fromHome, false).next).toMatch(/^Your owner already sees this answer/)
+    expect(botRequestSentNext(relayed)).toMatch(/you pass it on/)
+    expect(botAnswerView(relayed, false).next).toBe(
+      'Pass this answer on to Nora on Slack as your final message.'
+    )
   })
 
   it('never has a group room member repeat an answer the room shows, or redo a handoff', () => {

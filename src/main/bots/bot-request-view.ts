@@ -32,6 +32,8 @@ export type BotRequestRecord = {
   origin?: AutomationTriggeredBy
   /** The sending chat, when the turn that sent it was its conversation's: answers to it go there. */
   askedInConversation?: string
+  /** The request from another chat the sending turn was answering: what comes back goes on there. */
+  answersRequest?: string
 }
 
 const CHANNELS = new Set(['public_channel', 'private_channel', 'channel'])
@@ -111,6 +113,14 @@ export function answeredOnCard(
   return !record.fromWorker && record.askedInConversation === undefined
 }
 
+/** Shown on the card, and the sending turn answers no one outside its chat, so the card is enough;
+ *  a turn answering another chat's request passes the answer on there. */
+function answerStaysOnCard(
+  record: Pick<BotRequestRecord, 'fromWorker' | 'askedInConversation' | 'answersRequest'>
+): boolean {
+  return answeredOnCard(record) && record.answersRequest === undefined
+}
+
 /** What the receiving bot reads beside the message. */
 export function botRequestView(
   record: BotRequestRecord,
@@ -153,7 +163,7 @@ export function botRequestView(
     answerAppears:
       record.purpose === 'question'
         ? `${sender}'s conversation, waking it to finish the job`
-        : answeredOnCard(record)
+        : answerStaysOnCard(record)
           ? `${sender}'s conversation, where your owner reads it`
           : `${sender}'s conversation, which passes it on to ${askers}`
   }
@@ -171,14 +181,14 @@ export function botRequestSentNext(record: BotRequestRecord): string {
       : `${bot} has it now; the room shows its answer on ${bot}'s turn when it comes. Tell the asker in one line that ${bot} has it.`
   }
   if (record.purpose === 'question') {
-    return answeredOnCard(record)
+    return answerStaysOnCard(record)
       ? `${bot} answers you by mail, which wakes you; your owner sees the answer on its card, so finish the job with it without repeating it.`
       : `${bot} answers you by mail, which wakes you; then finish the job with its answer.`
   }
   if (botRequestAnswerRef(record)) {
     return `${bot} has it now and answers in this thread itself. Tell the asker in one line that ${bot} has it.`
   }
-  return answeredOnCard(record)
+  return answerStaysOnCard(record)
     ? `${bot} has it now; your owner sees its answer here on its own card when it comes. Tell them in one line that ${bot} has it.`
     : `${bot} has it now; its answer comes back to you by mail, and you pass it on. Tell the asker in one line that ${bot} has it.`
 }
@@ -197,7 +207,7 @@ export function botAnswerView(
   posted: boolean,
   shownInRoom = false
 ): Record<string, string> {
-  const owners = !record.group && answeredOnCard(record)
+  const owners = !record.group && answerStaysOnCard(record)
   const inRoom = `The room already shows this answer on ${record.toBotName}'s turn, so don't repeat, quote or summarize it.`
   const next = shownInRoom
     ? record.purpose === 'question'

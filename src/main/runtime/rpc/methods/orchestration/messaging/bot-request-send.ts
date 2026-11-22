@@ -40,7 +40,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
-import { askedInConversation } from './bot-request-record'
+import { answersRequest, askedInConversation } from './bot-request-record'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
@@ -203,7 +203,8 @@ async function admitBotRequestMail(
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
-    ...asked
+    ...asked,
+    ...answersRequest(db, acting)
   }
   // A worker's send is its own: another worker asking the same still gets an answer.
   const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey

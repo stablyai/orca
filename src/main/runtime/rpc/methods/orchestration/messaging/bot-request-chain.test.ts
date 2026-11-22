@@ -11,6 +11,7 @@ import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from './recipient-routing'
 import {
   askedBy,
+  cards,
   DOCS_CHAT,
   DOCS_THREAD,
   journals,
@@ -202,6 +203,34 @@ describe('a bot request chain', () => {
     const fifth = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
     expect(fifth.duplicate).toBeUndefined()
     expect(record(fifth).depth).toBe(5)
+  })
+
+  it("has a chat a teammate's request woke pass the onward answer back, beside its card", async () => {
+    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
+    conversationTurn.mockImplementation((_chats, sessionId) => sessionId === RANGER_THREAD)
+    const first = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
+    journals[DOCS_CHAT] = [
+      message('woken', {
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: `orca_session_id:${DOCS_CHAT}`,
+            dispatchId: null,
+            messages: [{ messageId: first.message.id, runId: 'run', from: 'x' }]
+          }
+        }
+      })
+    ]
+    const onward = await sent(DOCS_CHAT, { to: 'bot:Ranger', type: 'question' })
+    expect(cards.at(-1)).toMatchObject({ sessionId: DOCS_CHAT })
+    expect(onward.next).toBe(
+      'Ranger answers you by mail, which wakes you; then finish the job with its answer.'
+    )
+    expect(record(onward)).toMatchObject({
+      answersRequest: first.message.id
+    })
   })
 })
 
