@@ -63,6 +63,5 @@ export function decidePairedServerAsk(
   // Admitted now, connected or not; the loop starts so its answer goes back when it can.
   runtime.ensureOrchestrationPeerMailRelay(row.environment_id)
   admitPairedServerAsksNow(runtime, row.environment_id)
-  notifyPairedServerCardsChanged(runtime, [row.bot_id])
   return true
 }
