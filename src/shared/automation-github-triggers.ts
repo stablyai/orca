@@ -8,6 +8,7 @@ import type { Automation } from './automations/automation-definition'
 /** GitHub events only an Orca Cloud listing `triggers.github2` sends; an older one never would. */
 export const GITHUB2_EVENT_KINDS: readonly string[] = [
   'ci_passed',
+  'ci_finished',
   'pr_conflicted',
   'pr_closed',
   'pr_ready',
@@ -19,7 +20,7 @@ export const GITHUB2_EVENT_KINDS: readonly string[] = [
 
 /** A pull request's state, which Orca Cloud reads only for one it is told to follow: subject= names
  *  it, and nobody "does" it, so from= has nothing to match. */
-export const PR_STATE_EVENT_KINDS: readonly string[] = ['ci_passed', 'pr_conflicted']
+export const PR_STATE_EVENT_KINDS: readonly string[] = ['ci_passed', 'ci_finished', 'pr_conflicted']
 
 /** GitHub events only an Orca Cloud listing `triggers.workflows` sends. */
 export const WORKFLOW_EVENT_KINDS: readonly string[] = ['workflow_finished']

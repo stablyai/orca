@@ -95,6 +95,36 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['on']
   },
   {
+    path: ['automations', 'watch-pr'],
+    summary: 'Wait on a pull request until its next step is due',
+    usage:
+      'orca automations watch-pr <owner/repo#n> --bot <name> [--by <time> | --for <length>] [--prompt <text>] [--name <name>] [--agent <agent> [--model <id>] [--effort <level>]] [--runs-in new|chat|chat:<id>] [--results-to chat|thread|none|channel:<channel>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'pr',
+      'by',
+      'for',
+      'prompt',
+      'name',
+      'bot',
+      'agent',
+      'model',
+      'effort',
+      'runs-in',
+      'results-to'
+    ],
+    positionalArgs: ['pr'],
+    notes: [
+      'One --once wait (see `orca automations create --help`) on github.ci_finished, pr_conflicted, pr_merged, pr_closed, review, review_comment and comment for that pull request. It runs once, on the first of them, and is then deleted; to keep watching, run watch-pr again.',
+      'It also runs at its deadline if nothing came first: 2 hours after it is made, unless --by <ISO time> or --for <length> (45m, 2h, 1h30m) says otherwise. That run is told the deadline came, and to read the pull request fresh before acting.',
+      'The name defaults to "PR <owner/repo#n>". Without --prompt, the run reads the pull request and says what it needs next.'
+    ],
+    examples: [
+      'orca automations watch-pr stablyai/orca#482 --bot ranger --prompt "Fix what fails, then say when it is ready to merge"',
+      'orca automations watch-pr https://github.com/stablyai/orca/pull/482 --bot ranger --for 45m'
+    ]
+  },
+  {
     path: ['automations', 'edit'],
     summary: 'Edit an Orca automation',
     usage:

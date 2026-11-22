@@ -27164,6 +27164,7 @@
         "githubReviewRequested": "收到评审请求时",
         "githubAssigned": "在 GitHub 中被指派时",
         "githubCiFailed": "CI 失败时",
+        "githubCiFinished": "CI 完成时",
         "githubCiPassed": "CI 通过时",
         "githubPrConflicted": "PR 出现冲突时",
         "githubPrClosed": "关闭 PR 时",

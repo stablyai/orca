@@ -67,6 +67,7 @@ import {
 } from './automation-event-triggers-cli'
 import { callerChat } from './automation-caller-chat'
 import { getOnceFlags } from './automation-once-flag'
+import { watchPrCreateFlags } from './automation-watch-pr'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -168,6 +169,12 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     })
     printAutomationResult(result, json, formatAutomationShow)
   },
+  // The same create, with the rules and deadline a pull request watch stands for.
+  'automations watch-pr': async (context) =>
+    AUTOMATION_HANDLERS['automations create']({
+      ...context,
+      flags: watchPrCreateFlags(context.flags, Date.now())
+    }),
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
     const target = await getExplicitTarget(flags, cwd, client)
