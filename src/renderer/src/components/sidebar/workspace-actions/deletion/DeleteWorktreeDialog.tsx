@@ -11,10 +11,7 @@ import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
-import {
-  DeleteWorktreeChangesSummary,
-  DeleteWorktreeUnknownChangesWarning
-} from './DeleteWorktreeChangesSummary'
+import { DeleteWorktreeChangesSummary } from './DeleteWorktreeChangesSummary'
 import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
@@ -198,10 +195,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteStateByWorktreeId,
     repoMap
   })
-  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
-  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
-    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
-  )
 
   const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
@@ -329,11 +322,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          // Keep file checks from moving the footer. Only the user can expand the compact preview.
           <div
-            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'h-16 gap-1 has-[button[aria-expanded=true]]:h-auto'}`}
+            className={
+              hasTargetList
+                ? 'scrollbar-sleek flex h-48 max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto *:shrink-0'
+                : 'scrollbar-sleek flex h-5 min-w-0 flex-col empty:hidden has-[button[aria-expanded=true]]:h-auto has-[button[aria-expanded=true]]:max-h-[50vh] has-[button[aria-expanded=true]]:overflow-y-auto'
+            }
           >
-            {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
@@ -354,6 +349,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 dirtyChanges={dirtyChanges}
                 unsavedFiles={unsavedFiles}
                 atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
+                showRoutineCheckStatus={hasTargetList}
               />
             ) : null}
 

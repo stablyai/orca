@@ -30,7 +30,7 @@ export function useMobileBotGroupComposer(
     () => [
       ...memberBots.map((bot) => ({
         name: bot.name,
-        icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={18} />
+        icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={18} />
       })),
       { name: 'everyone', icon: <AtSign size={16} color={colors.textSecondary} /> }
     ],

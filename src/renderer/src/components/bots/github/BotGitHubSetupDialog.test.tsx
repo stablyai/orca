@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { awaitGitHubChange, readGitHubAwait, stopAwaitingGitHub } from '@/lib/bot-github-state'
@@ -32,8 +32,8 @@ vi.mock('@/lib/browser/navigation/app-http-link-open', async (actual) => ({
   openAppHttpLink
 }))
 
-import { botGitHubSetupStep } from './BotGitHubSetupDialog'
 import { GitHubInstallMount } from './GitHubInstallMount'
+import { botGitHubSetupStep } from './github-setup-step'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -150,6 +150,9 @@ function stateWith(installations: (typeof acme | ConnectorGitHubState['installat
   return { ok: true, value: state({ account: dana, installations }) }
 }
 
+// The mount loads the surface lazily; load it once so no test waits on the first import.
+beforeAll(() => import('./GitHubInstallSurface'))
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.updateBot.mockResolvedValue(bot)
@@ -199,9 +202,15 @@ describe('botGitHubSetupStep', () => {
     expect(botGitHubSetupStep(installed, idle, true)).toEqual({
       kind: 'done',
       login: 'dana',
+      userId: dana.userId,
       installations: [acme],
-      installUrl
+      installUrl,
+      error: null
     })
+    // Adding another login that didn't finish keeps saying so.
+    expect(
+      botGitHubSetupStep(installed, { status: 'failed', error: 'expired' }, true)
+    ).toMatchObject({ kind: 'done', error: 'expired' })
   })
 })
 
@@ -229,10 +238,21 @@ describe('BotGitHubSetupDialog', () => {
     await screen.findByText('Ranger is on GitHub')
     expect(screen.getByText('2 repositories in acme')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Turn on Ranger' })).toBeNull()
-    // The mention to type is set as code.
-    for (const mention of screen.getAllByText('@orca-bots ranger …')) {
-      expect(mention.tagName).toBe('CODE')
-    }
+    // How to ask is drawn as the GitHub comment that asks: the mention, the bot, a sample ask.
+    expect(screen.getByText('@orca-bots').closest('p')?.textContent).toBe(
+      '@orca-bots ranger review this PR'
+    )
+    expect(screen.getByRole('button', { name: 'Copy @orca-bots ranger' })).toBeDefined()
+    // The sample is hidden from screen readers, so one sentence says the ask and the reply.
+    expect(
+      screen.getByText(
+        'Mention @orca-bots ranger on an issue or pull request to ask Ranger. For example, “@orca-bots ranger review this PR”, and Ranger replies “On it.”.'
+      ).className
+    ).toBe('sr-only')
+    // The sample's two comments: the asker by name, the bot flagged as a bot.
+    const sample = screen.getByRole('region', { name: 'Try it on any issue or PR' })
+    expect(within(sample).getByText('dana')).toBeDefined()
+    expect(within(sample).getByText('bot')).toBeDefined()
   })
 
   it('leaves the bot off when the sign-in that linked was another surface’s, or another bot’s setup', async () => {

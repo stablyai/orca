@@ -228,7 +228,8 @@ describe.concurrent('Codex terminal image compatibility', () => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
         const powerShell = isPowerShell(shell)
         const direct = `${powerShell ? '& ' : ''}${quote(shell, sandbox.codex)}`
-        const command = `${direct} --prefill 'say hello'`
+        // PowerShell needs the wrapper to add `&` before a quoted path (#46114).
+        const command = `${quote(shell, sandbox.codex)} --prefill 'say hello'`
         const scoped = withCodexStartupImageCommand(command, powerShell ? 'powershell' : 'posix')
         if (!powerShell) {
           expect(hasCodexNativeDraftFlag(scoped)).toBe(true)

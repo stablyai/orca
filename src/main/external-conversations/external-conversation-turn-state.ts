@@ -67,7 +67,10 @@ function journalTurnOpening({
   if (
     stamps?.length ||
     (body?.kind === 'message' &&
-      (body.origin === 'connector' || body.connectorDelivery || body.connectorConversation))
+      (body.origin === 'connector' ||
+        body.connectorDelivery ||
+        body.connectorConversation ||
+        body.connectorClaim))
   ) {
     return 'delivery'
   }

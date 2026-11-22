@@ -128,18 +128,21 @@ describe('orca skills install/update', () => {
     await rm(paths.root, { recursive: true, force: true })
   })
 
-  it('prints the plan and its digest for --dry-run and writes nothing', async () => {
-    await writeCopy(paths.shared, OLD_TEXT)
+  it.each(['--dry-run', '--dry-run=true'])(
+    'prints the plan and its digest for %s and writes nothing',
+    async (dryRunFlag) => {
+      await writeCopy(paths.shared, OLD_TEXT)
 
-    const text = await run(['update', '--skill', NAME, '--agent', 'claude', '--dry-run'])
+      const text = await run(['update', '--skill', NAME, '--agent', 'claude', dryRunFlag])
 
-    // Updating must not install skills for an agent that lacks them.
-    expect(text).toContain(`${NAME}\n  ${paths.shared}: Update\n\n`)
-    expect(text).toMatch(/Plan digest: [0-9a-f]{64}\nRerun without --dry-run to update now\.\n$/u)
-    expect(await skillText(paths.shared)).toBe(OLD_TEXT)
-    expect(await lstat(paths.claude).catch(() => null)).toBeNull()
-    expect(process.exitCode).toBeUndefined()
-  })
+      // Updating must not install skills for an agent that lacks them.
+      expect(text).toContain(`${NAME}\n  ${paths.shared}: Update\n\n`)
+      expect(text).toMatch(/Plan digest: [0-9a-f]{64}\nRerun without --dry-run to update now\.\n$/u)
+      expect(await skillText(paths.shared)).toBe(OLD_TEXT)
+      expect(await lstat(paths.claude).catch(() => null)).toBeNull()
+      expect(process.exitCode).toBeUndefined()
+    }
+  )
 
   it('never installs a skill on update; install adds it', async () => {
     const text = await run(['update', '--skill', NAME, '--agent', 'claude'])

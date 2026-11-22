@@ -35,6 +35,16 @@ describe('fetchWithElectronManualRedirects', () => {
     )
   })
 
+  it("sends the request on the given session, so it takes that session's proxy route", async () => {
+    const routed = { id: 'routed-session' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the session is only handed to the mocked net.request
+    const pending = fetchWithElectronManualRedirects('https://site.test/i.png', {}, routed as never)
+    native.emit('redirect', 302, 'GET', 'https://site.test/j.png', {})
+    await pending
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ session: routed }))
+  })
+
   it('keeps a raw relative Location for the caller to resolve', async () => {
     const pending = fetchWithElectronManualRedirects('https://github.com/o.png', {})
     native.emit('redirect', 302, 'GET', 'https://github.com/u/3', { location: ['/u/3'] })

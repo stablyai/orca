@@ -53,6 +53,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
+  // Recorded, so a start a restart cuts from here on is known to have handed its brief over.
+  db.recordWorkerStage({ dispatchId: args.dispatchId, stage: 'dispatch_input' })
   const deliveryStartedAt = Date.now()
   const delivery = await deliverWorkerDispatchPreamble({
     runtime,
@@ -123,6 +125,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       reason,
       effects
     )
+    // The coordinator may end its turn on this receipt; a start that never begins must still reach it.
+    void runtime.reportUnconfirmedWorkerStart(args.dispatchId).catch((error: unknown) => {
+      console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
+    })
     return {
       runId: run.id,
       taskId: task.id,

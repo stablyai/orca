@@ -61,7 +61,7 @@ it('uses current selected ancestors, then refuses retargeted/foreign sources bef
       source: { providerSessionId: THREAD, workspaceCwd }
     }
   })
-  const probe = vi.spyOn(adoptedDirectoryProbes, 'matches')
+  const probe = vi.spyOn(adoptedDirectoryProbes, 'relate')
   await save('wrong-provider', sourceCwd)
   expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: false })
   expect(probe).not.toHaveBeenCalled()

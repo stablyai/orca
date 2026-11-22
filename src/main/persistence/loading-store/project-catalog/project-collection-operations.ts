@@ -140,6 +140,12 @@ export class ProjectCollectionOperations {
     return getProjectGroupOperations(this).updateProjectGroup(groupId, updates)
   }
 
+  setProjectGroupParents(
+    moves: Parameters<ProjectGroupPersistenceOperations['setProjectGroupParents']>[0]
+  ): ProjectGroup[] {
+    return getProjectGroupOperations(this).setProjectGroupParents(moves)
+  }
+
   deleteProjectGroup(groupId: string): boolean {
     return getProjectGroupOperations(this).deleteProjectGroup(groupId)
   }
@@ -271,8 +277,14 @@ export function getFolderWorkspaceOperations(
   owner[projectCollectionOperationsContext].runtime.folderWorkspaceOperations ??=
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
-      scheduleSave: (domains) =>
-        scheduleSave(owner[projectCollectionOperationsContext].scheduling, domains),
+      scheduleSave: (domains, options) =>
+        scheduleSave(
+          owner[projectCollectionOperationsContext].scheduling,
+          domains,
+          undefined,
+          undefined,
+          options
+        ),
       removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
         removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,

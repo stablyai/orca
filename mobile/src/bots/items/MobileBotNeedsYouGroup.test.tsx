@@ -60,7 +60,6 @@ const ask: PhoneAsk = {
   worker: null,
   number: null,
   tool: null,
-  chatId: 'chat-1',
   open: { chat }
 }
 
@@ -70,6 +69,7 @@ it('says the question a chat waits on and Skips it by its row, telling a failed 
   act(() => {
     renderer = create(
       createElement(MobileBotNeedsYouGroup, {
+        botName: 'Reviewer',
         asks: [ask],
         items: [],
         disabled: false,

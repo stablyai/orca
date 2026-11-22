@@ -81,7 +81,11 @@ function slackState(state: ConnectorBotSlackState): void {
 }
 
 function openDialog(subject = bot()): void {
-  render(<BotSlackSetupDialog bot={subject} open onOpenChange={() => {}} />)
+  render(
+    <TooltipProvider>
+      <BotSlackSetupDialog bot={subject} open onOpenChange={() => {}} />
+    </TooltipProvider>
+  )
 }
 
 beforeEach(() => {
@@ -352,12 +356,16 @@ describe('BotSlackSetupDialog', () => {
       teamId: 'T1',
       appId: 'A1',
       botUserId: 'U1',
-      installerUserId: 'U2'
+      installerUserId: 'U2',
+      installerName: 'Alice'
     })
     await act(() => vi.advanceTimersByTimeAsync(7_000))
     expect(screen.getByText('Scout is in Slack')).toBeDefined()
-    // How to ask shows once it's in; who can ask is edited from the Slack connector's settings.
-    expect(screen.getByText('@Scout')).toBeDefined()
+    // How to ask shows once it's in, as a Slack message from whoever installed it that mentions the
+    // bot; who can ask is edited from the Slack connector's settings.
+    const ask = screen.getByText('@Scout').closest('p')
+    expect(ask?.textContent).toBe('@Scout summarize this thread')
+    expect(ask?.parentElement?.textContent).toBe('Alicenow@Scout summarize this thread')
     vi.useRealTimers()
   })
 
@@ -367,7 +375,7 @@ describe('BotSlackSetupDialog', () => {
     api.setUpApp.mockResolvedValue({ ok: false, error: 'grant_expired' })
     openDialog()
 
-    expect(await screen.findByRole('button', { name: 'Reconnect Slack workspace' })).toBeDefined()
+    expect(await screen.findByRole('button', { name: 'Reconnect' })).toBeDefined()
   })
 
   it.each([
@@ -382,7 +390,7 @@ describe('BotSlackSetupDialog', () => {
       } as const,
       'Done'
     ],
-    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace']
+    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect']
   ])('opens on the step for the cloud’s %o', async (state, button) => {
     slackState(state)
     openDialog()

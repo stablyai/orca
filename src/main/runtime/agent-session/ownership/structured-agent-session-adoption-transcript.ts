@@ -8,6 +8,7 @@ import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings
 } from '../../../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export type StructuredAgentSessionAdoptionInput = {
   settings: StructuredAgentTranscriptImportSettings
@@ -65,6 +66,15 @@ export async function findStructuredAgentSessionAdoptionTranscript(
     ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
     candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
     resolveTranscript: async (args) => {
+      // A deleted chat's conversation is never adopted again.
+      if (
+        getStructuredAgentSessionHost()?.deps.store.deletedChats.hasConversation({
+          provider: input.agent,
+          providerSessionId: input.providerSessionId
+        })
+      ) {
+        return null
+      }
       const exact = admitted?.path
       if (exact) {
         try {

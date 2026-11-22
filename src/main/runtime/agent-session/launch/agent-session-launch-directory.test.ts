@@ -20,6 +20,13 @@ const FLOATING: AgentSessionExecutionLocation = {
   workspaceKind: 'folder'
 }
 
+const WORKTREE: AgentSessionExecutionLocation = {
+  executionHostId: 'local',
+  wslDistro: null,
+  workspaceId: 'repo-1::/home/me',
+  workspaceKind: 'git-worktree'
+}
+
 let root: string
 let store: AgentSessionRecordStore
 
@@ -104,5 +111,18 @@ describe('agent session launch directory', () => {
     await expect(
       resolveAgentSessionLaunchDirectory({ store, resolveWorkspacePath: async () => later }, pinned)
     ).resolves.toBe(current)
+  })
+
+  it('resumes a worktree chat adopted from a sub-folder in that folder, not the workspace root', async () => {
+    const workspace = await directory('workspace')
+    const saved = await directory('workspace/pkg/app')
+    const record = await reserve(WORKTREE, saved)
+
+    await expect(
+      resolveAgentSessionLaunchDirectory(
+        { store, resolveWorkspacePath: async () => workspace },
+        record
+      )
+    ).resolves.toBe(saved)
   })
 })

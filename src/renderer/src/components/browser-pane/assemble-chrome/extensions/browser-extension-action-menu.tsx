@@ -23,6 +23,10 @@ import type { BrowserExtensionContextMenuItem } from '../../../../../../shared/b
 import type { BrowserExtensionActionResult } from '../../../../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionToolbarAction } from '../../../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import { useBrowserExtensionActionContextMenu } from './browser-extension-action-context-items'
+import {
+  browserExtensionMenuCheck,
+  type BrowserExtensionMenuCheck
+} from './browser-extension-menu-check'
 
 export type BrowserExtensionMenuEntry =
   | {
@@ -30,7 +34,7 @@ export type BrowserExtensionMenuEntry =
       label: string
       icon?: LucideIcon
       /** Set for checkbox and radio items. */
-      checked?: boolean
+      check?: BrowserExtensionMenuCheck
       disabled?: boolean
       destructive?: boolean
       children?: BrowserExtensionMenuEntry[]
@@ -49,7 +53,7 @@ function contextMenuEntry(
   return {
     key,
     label: item.title,
-    checked: item.type === 'checkbox' || item.type === 'radio' ? item.checked : undefined,
+    check: browserExtensionMenuCheck(item),
     disabled: !item.enabled,
     children:
       item.children.length > 0
@@ -189,12 +193,11 @@ function MenuEntries({
         if ('separator' in entry) {
           return <Separator key={entry.key} />
         }
-        const icon =
-          entry.checked !== undefined ? (
-            <Check className={cn('size-3.5', !entry.checked && 'opacity-0')} />
-          ) : entry.icon ? (
-            <entry.icon className="size-3.5" />
-          ) : null
+        const icon = entry.check ? (
+          <Check className={cn('size-3.5', !entry.check.checked && 'opacity-0')} />
+        ) : entry.icon ? (
+          <entry.icon className="size-3.5" />
+        ) : null
         return entry.children ? (
           <Sub key={entry.key}>
             <SubTrigger disabled={entry.disabled}>
@@ -208,6 +211,8 @@ function MenuEntries({
         ) : (
           <Item
             key={entry.key}
+            role={entry.check?.role ?? 'menuitem'}
+            aria-checked={entry.check?.checked}
             disabled={entry.disabled}
             variant={entry.destructive ? 'destructive' : 'default'}
             onSelect={entry.onSelect}

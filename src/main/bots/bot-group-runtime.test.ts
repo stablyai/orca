@@ -319,21 +319,13 @@ describe('persistent native group lifecycle', () => {
       )
     ).toThrow(/no longer active/)
   })
-  it('blocks model-written human messages and model approval access to another group member', async () => {
+  it("lets any caller operate a member's session until it leaves; the group itself stays the owner's", async () => {
     const { runtime, groups } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
-    expect(() =>
-      assertBotGroupSessionAccess(runtime, group.members[0].sessionId, { kind: 'local-cli' })
-    ).toThrow(/human/)
-    expect(() =>
-      assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'desktop' }, true)
-    ).not.toThrow()
-    expect(() =>
-      assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'local-cli' }, true)
-    ).toThrow(/human/)
-    expect(() =>
-      assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'desktop' })
-    ).toThrow(/no longer/)
+    expect(() => assertBotGroupSessionAccess(runtime, group.members[0].sessionId)).not.toThrow()
+    expect(() => assertBotGroupSessionAccess(runtime, 'bot-group-member-archived')).toThrow(
+      /no longer/
+    )
     expect(() => assertBotGroupOwner({ caller: { kind: 'local-cli' } })).toThrow(/human owner/)
   })
   it('claims a dropped image for every member and delivers it as an image block', async () => {

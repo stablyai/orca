@@ -23,6 +23,9 @@ import { NativeChatForkContext } from '../actions/native-chat-fork-context'
 import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from '../../viewport/new-rows/NativeChatNewRowsMarker'
+import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlackMirrorPost'
+import { slackMirrorPostLine } from '../../../../../../shared/connectors/slack-mirror-post-line'
+import { nativeChatRowEndsInOwnBubbleMeta } from './native-chat-own-bubble-meta'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -51,13 +54,66 @@ export type NativeChatTranscriptRowContext = {
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
+/**
+ * Margins that space the "New" line evenly between what it separates: a full row gap above (20px
+ * at the default size), trimmed below so the next text reads as far from the line as the block above.
+ * Above the turn bar, the bar's own top padding asks for a deeper trim. Your sent bubble ends in its
+ * hover-only copy and time row; that blank row counts as space above, so the line moves up into it.
+ */
+function newRowsMarkerSpacing(
+  place: NativeChatNewRowsMarkerState['place'],
+  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>,
+  deliveryNotice: NativeChatDeliveryNotice | undefined,
+  slackPostLineDraws: boolean
+): string {
+  if (place === 'above-row') {
+    // A turn with no prompt opens on its bar, which needs the deeper trim too.
+    return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
+  }
+  // Only where your bubble's hover row is the last thing drawn: no delivery or Slack post line under it.
+  const afterHoverMeta =
+    slot.drawsMessage &&
+    !slot.receipt &&
+    !slot.itemNotes &&
+    deliveryNotice === undefined &&
+    !slackPostLineDraws &&
+    nativeChatRowEndsInOwnBubbleMeta(slot.message)
+  return cn('-mb-3', afterHoverMeta && '-mt-6')
+}
+
+/** Reads the row's Slack post only where the line draws, so other rows don't follow its posts. */
+function NativeChatRowNewRowsMarker({
+  marker,
+  slot,
+  deliveryNotice,
+  readerAtEnd,
+  onReveal
+}: {
+  marker: NativeChatNewRowsMarkerState
+  slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>
+  deliveryNotice: NativeChatDeliveryNotice | undefined
+  readerAtEnd: () => boolean
+  onReveal: (element: HTMLElement) => void
+}): React.JSX.Element {
+  const slackPostLineDraws =
+    slackMirrorPostLine(useNativeChatSlackMirrorPost(slot.message.id)) !== null
+  return (
+    <NativeChatNewRowsMarker
+      marker={marker}
+      readerAtEnd={readerAtEnd}
+      onReveal={onReveal}
+      className={newRowsMarkerSpacing(marker.place, slot, deliveryNotice, slackPostLineDraws)}
+    />
+  )
+}
+
 /** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
   context,
   newRowsMarker,
   newRowsMarkerBelow = false,
-  joinsNotesAbove = false
+  joinsActivityAbove = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -65,8 +121,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarker?: NativeChatNewRowsMarkerState
   /** The "New" marker opens the next row: left-side, so this row's actions keep their own height. */
   newRowsMarkerBelow?: boolean
-  /** Carries on the notes of the row above, 4 px below them (`nativeChatSlotJoinsNotesAbove`). */
-  joinsNotesAbove?: boolean
+  /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
+  joinsActivityAbove?: boolean
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
@@ -86,8 +142,10 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker
+    <NativeChatRowNewRowsMarker
       marker={newRowsMarker}
+      slot={slot}
+      deliveryNotice={deliveryNotice}
       readerAtEnd={context.readerAtEnd}
       onReveal={context.onScrollMessageToTop}
     />
@@ -118,12 +176,16 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
+    // So does a row the "New" line follows, so the line sits the same full gap below any row.
     <div
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
-        // Into the row gap (gap-5) all but the notes' own gap (gap-1).
-        joinsNotesAbove && '-mt-4'
+        slot.continuesTurn &&
+          !(slot.endsResponse && !slot.activeTurnIsWorking) &&
+          !newRowsMarkerBelow &&
+          '-mb-3',
+        // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
+        joinsActivityAbove && '-mt-4'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}

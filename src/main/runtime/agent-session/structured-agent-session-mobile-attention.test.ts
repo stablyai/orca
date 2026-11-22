@@ -20,7 +20,7 @@ import {
 
 import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'
 import { makeTestBot } from '../../bots/bot.test-fixture'
-import { botGroupIdOfRoomPaneKey } from '../../../shared/bots/bot-group-room-pane-key'
+import { botGroupIdOfRoomPaneKey } from '../../../shared/bots/bot-notification-pane-keys'
 
 const SCOPE = {
   executionHostId: 'local',

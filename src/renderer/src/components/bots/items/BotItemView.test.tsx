@@ -43,7 +43,9 @@ vi.mock('./BotItemActivityList', () => ({
   }) => (
     <ol>
       {events.map((event) => (
-        <li key={event.id}>{event.id}</li>
+        <li key={event.id} data-bot-item-comment-id={event.id}>
+          {event.id}
+        </li>
       ))}
       {quickReplies ? (
         <>
@@ -152,6 +154,29 @@ afterEach(() => {
   fileContextOwners.mockReturnValue(new Map())
 })
 
+it('shows the skeleton only without an item, failure or deletion', () => {
+  show(0)
+  read.current = { ...read.current!, item: null, eventsRead: false }
+  const view = render(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
+
+  read.current = { ...read.current, failed: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('alert')).toBeTruthy()
+
+  read.current = { ...read.current, failed: false, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+
+  show(0, makeTestBotItem(190, { title: 'Keep the listed item visible' }))
+  read.current = { ...read.current!, eventsRead: false }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('heading', { level: 2 })).toBeTruthy()
+})
+
 it('follows new events until the reader scrolls up, then offers Jump to latest', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)
@@ -187,7 +212,16 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String), undefined)
+  expect(sent).toHaveBeenCalledWith(
+    BOT,
+    'uid-6',
+    'Ship it',
+    [],
+    expect.any(String),
+    undefined,
+    false,
+    undefined
+  )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -211,6 +245,8 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'Use the proposed flow',
     [],
     expect.any(String),
+    undefined,
+    false,
     undefined
   )
   expect(box.contains(document.activeElement)).toBe(false)
@@ -309,6 +345,8 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
     'Go ahead',
     [],
     expect.any(String),
+    undefined,
+    false,
     undefined
   )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
@@ -347,8 +385,39 @@ it('holds the answers to an ask of several questions and posts them as one comme
     'Ship it? → Yes\nTell the team? → Yes',
     [],
     expect.any(String),
-    'e1'
+    'e1',
+    false,
+    undefined
   )
+})
+
+it('shows the question "Replying to" names with focus kept in the box, and its × hides the mark without scrolling', () => {
+  const scrolledTo: Element[] = []
+  const scrollIntoView = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolledTo.push(this)
+  }
+  try {
+    show(3, WAITING)
+    render(<BotItemView bot={BOT} uid="uid-6" />)
+    const box = screen.getByRole('textbox', { name: 'Comment' })
+    const chip = screen.getByRole('button', { name: /^Replying to: Which flow should ship\?/ })
+
+    chip.focus()
+    fireEvent.click(chip)
+
+    const question = screen.getByText('e3')
+    expect(scrolledTo).toEqual([question])
+    expect(question.hasAttribute('data-flash')).toBe(true)
+    expect(document.activeElement).toBe(box)
+
+    scrolledTo.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: /^Replying to:/ })).toBeNull()
+    expect(scrolledTo).toEqual([])
+  } finally {
+    Element.prototype.scrollIntoView = scrollIntoView
+  }
 })
 
 it("puts a quick reply's words in the comment box to add to, without sending", () => {

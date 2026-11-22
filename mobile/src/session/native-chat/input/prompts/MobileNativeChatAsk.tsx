@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -48,6 +48,8 @@ type Props = {
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
   /** Tapping a choice is the whole answer: no Cancel or Skip, only the fold chevron. */
   choiceOnly?: true
+  /** Under the question: what the card's owner adds, e.g. a worker prompt's countdown. */
+  note?: ReactNode
 }
 
 function confirmLabels(t: Translate) {
@@ -71,7 +73,8 @@ export function MobileNativeChatAsk({
   onCollapse,
   allowOther,
   freeTextInputs,
-  choiceOnly
+  choiceOnly,
+  note
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -295,6 +298,7 @@ export function MobileNativeChatAsk({
             disabled={sending}
           />
         </View>
+        {note}
         {q.options.map((opt, optIndex) => (
           <MobileNativeChatAskOptionRow
             key={`${optIndex}:${opt.label}`}

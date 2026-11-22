@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from './local-build-compatibility-contract'
 import {
   getLocalBuildCompatibilityError,
   parseLocalBuildCompatibility,
@@ -41,5 +44,15 @@ describe('local build compatibility', () => {
     expect(() =>
       parseLocalBuildCompatibility(target({ attachableDaemonProtocolVersions: [] }))
     ).toThrow('invalid compatibility metadata')
+  })
+
+  it('ships a contract whose own daemon protocol is attachable, in both copies', () => {
+    expect(
+      parseLocalBuildCompatibility({ ...target(), ...LOCAL_BUILD_COMPATIBILITY_CONTRACT })
+    ).toBeTruthy()
+    const json: unknown = JSON.parse(
+      readFileSync(join(import.meta.dirname, 'local-build-compatibility-contract.json'), 'utf8')
+    )
+    expect(json).toEqual(LOCAL_BUILD_COMPATIBILITY_CONTRACT)
   })
 })
