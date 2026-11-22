@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import type { TelemetrySettings } from '../../shared/telemetry/telemetry-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 import type * as PostHogTransport from './posthog-transport'
+import type { ConsentState } from './consent'
 import type { CommonProps } from '../../shared/telemetry/telemetry-event-classification'
 
 const { createPostHogClient } = vi.hoisted(() => {
@@ -23,6 +24,7 @@ vi.mock('./posthog-transport', async (importOriginal) => ({
   createPostHogClient
 }))
 type MockPostHog = {
+  optedOut: boolean
   capture: ReturnType<typeof vi.fn>
   optIn: ReturnType<typeof vi.fn>
   optOut: ReturnType<typeof vi.fn>
@@ -49,7 +51,8 @@ function makeMockPostHog(): MockPostHog {
     }
   }
 
-  return {
+  const sdk: MockPostHog = {
+    optedOut: false,
     capture: vi.fn((message: { event?: string; uuid?: string }) => {
       queueMicrotask(() => {
         emitForTests('capture', {
@@ -58,8 +61,12 @@ function makeMockPostHog(): MockPostHog {
         })
       })
     }),
-    optIn: vi.fn(async () => {}),
-    optOut: vi.fn(async () => {}),
+    optIn: vi.fn(async () => {
+      sdk.optedOut = false
+    }),
+    optOut: vi.fn(async () => {
+      sdk.optedOut = true
+    }),
     shutdown: vi.fn(async () => {}),
     on: vi.fn((event: string, listener: (payload: unknown) => void) => {
       let eventListeners = listeners.get(event)
@@ -74,6 +81,7 @@ function makeMockPostHog(): MockPostHog {
     }),
     emitForTests
   }
+  return sdk
 }
 
 function makeFakeSettings(telemetry: GlobalSettings['telemetry']): GlobalSettings {
@@ -132,7 +140,8 @@ function restoreConsentEnv(stash: Record<string, string | undefined>): void {
   }
 }
 
-const { initTelemetry, shutdownTelemetry, track } = await import('./client')
+const { initTelemetry, setOptIn, shutdownTelemetry, track } = await import('./client')
+const { shouldOptOutSdkAtInit } = await import('./posthog-transport')
 const { reportFirstLaunchLayout } = await import('./first-launch-layout-report')
 
 afterAll(() => {
@@ -147,7 +156,10 @@ beforeEach(() => {
   envStash = stashAndClearConsentEnv()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   sdk = makeMockPostHog()
-  createPostHogClient.mockImplementation(() => sdk)
+  createPostHogClient.mockImplementation((_writeKey: string, consent: ConsentState) => {
+    sdk.optedOut = shouldOptOutSdkAtInit(consent)
+    return sdk
+  })
 })
 
 afterEach(async () => {
@@ -219,10 +231,14 @@ describe('first launch layout report', () => {
       for (const key of Object.keys(env)) {
         delete process.env[key]
       }
-      settings.telemetry = { ...settings.telemetry!, optedIn: true }
-      track('app_opened', {})
-      expect(captured().map((message) => message.event)).toEqual(['app_opened'])
-      expect(captured()[0].properties.first_launch_layout_v1).toBeUndefined()
+      await setOptIn('settings', true)
+      expect(captured().map((message) => message.event)).toEqual([
+        'app_opened',
+        'telemetry_opted_in'
+      ])
+      for (const message of captured()) {
+        expect(message.properties.first_launch_layout_v1).toBeUndefined()
+      }
 
       await shutdownTelemetry()
       sdk.capture.mockClear()
