@@ -79,25 +79,21 @@ describe('AgentTokenUsageReporter', () => {
     expect(sent.slice(1)).toEqual([{ ...tokens(20), provider: 'claude', usage_day: '2026-11-20' }])
   })
 
-  it('skips days an older build may have reported after a downgrade', async () => {
-    const { create, sent, at, file, legacyFile } = await setup()
-    const first = create()
-    await first.report([])
-    await first.flush()
-    await utimes(file, new Date(1_000), new Date(1_000))
-    await writeFile(legacyFile, JSON.stringify({ schemaVersion: 1, snapshots: [] }))
-
-    at(22)
+  it('starts the day after an older build, then keeps every later day across a downgrade', async () => {
+    const { create, sent, at, legacyFile } = await setup(true)
     const upgraded = create()
-    await upgraded.report([
-      { day: '2026-11-21', ...tokens(40) },
-      { day: '2026-11-22', ...tokens(10) }
-    ])
+    await upgraded.report([{ day: '2026-11-20', ...tokens(40) }])
+    await upgraded.flush()
+
+    // The older build ran after a downgrade and rewrote its own file.
+    await utimes(legacyFile, new Date(Date.now() + 60_000), new Date(Date.now() + 60_000))
     at(23)
-    await upgraded.report([
-      { day: '2026-11-21', ...tokens(40) },
+    // The daily state is intact, so the downgrade's days still count.
+    const reupgraded = create()
+    await reupgraded.report([
+      { day: '2026-11-20', ...tokens(40) },
       { day: '2026-11-22', ...tokens(10) }
     ])
-    expect(sent).toEqual([])
+    expect(sent).toEqual([{ ...tokens(10), provider: 'claude', usage_day: '2026-11-22' }])
   })
 })

@@ -140,12 +140,12 @@ export class AgentTokenUsageReporter {
   }
 
   private async load(today: string): Promise<State> {
-    const [current, legacy] = await Promise.all([
+    const [current, olderBuildFile] = await Promise.all([
       readIfExists(this.file),
-      // Only the older build's write time matters; an unreadable file must not stop reporting.
+      // Only whether an older build kept state matters; an unreadable file must not stop reporting.
       stat(this.legacyFile).then(
-        (info) => ({ mtimeMs: info.mtimeMs }),
-        () => null
+        () => true,
+        () => false
       )
     ])
     const raw = current ? parseJson(current.content) : undefined
@@ -154,20 +154,16 @@ export class AgentTokenUsageReporter {
       throw new Error('Agent token usage state was written by a newer build')
     }
     const parsed = current ? stateSchema.safeParse(raw) : null
-    // An older build reports with its own event; start after any day it may have covered.
-    const olderBuildRan = legacy !== null && (!current || legacy.mtimeMs > current.mtimeMs)
-    if (parsed?.success && !olderBuildRan) {
+    // Once daily rows have started they stay complete, including days an older build ran.
+    if (parsed?.success) {
       return { startDay: parsed.data.startDay, reported: new Map(parsed.data.reported) }
     }
-    if (current && !parsed?.success) {
+    if (current) {
       console.warn('[agent-token-usage] Unreadable token usage state; starting from today')
     }
     this.unsaved = true
-    // A first run starts today, so earlier history is never reported.
-    return {
-      startDay: olderBuildRan ? shiftDay(today, 1) : today,
-      reported: parsed?.success ? new Map(parsed.data.reported) : new Map()
-    }
+    // Earlier history is never reported; after an older build, today is left to its own event.
+    return { startDay: olderBuildFile ? shiftDay(today, 1) : today, reported: new Map() }
   }
 }
 
