@@ -199,7 +199,9 @@ export class EdgeMoveDeferredError extends Error {
     readonly ownControlOnly = false,
     // units_held only: which counters the row holds, so the deferral log shows what blocks moves.
     // Counts only, never identities.
-    readonly held?: EdgeHeldCounters
+    readonly held?: EdgeHeldCounters,
+    // units_held only: why drain-stale did not take the row. Counts and lease kinds, never identities.
+    readonly stale?: EdgeStaleDetail
   ) {
     super(`relay_edge_move_deferred:${reason}`)
   }
@@ -212,6 +214,16 @@ export type EdgeHeldCounters = {
   installs: number
   confirmations: number
   migrationLeases: number
+}
+
+// Why a units_held row did not move as stale: candidate is false when the ask carried no
+// reserve-mode cells or the row's cell is not one of them; otherwise the lease counts under the lock.
+export type EdgeStaleDetail = {
+  candidate: boolean
+  leases?: number
+  liveLeases?: number
+  liveKinds?: string[]
+  otherCellLeases?: number
 }
 
 type Identity = { userId: string; relayHostId: string }
@@ -899,7 +911,7 @@ export class EdgeAssignments {
     const cellId = text(row, 'cell_id')
     const staleCandidate = options.staleOnReserveCells?.has(cellId) === true
     if (!staleCandidate && (!ownControlOnly || options.ownControl !== true)) {
-      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row))
+      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row), { candidate: false })
     }
     let leases: SqlRow[]
     try {
@@ -927,8 +939,16 @@ export class EdgeAssignments {
       await this.deferIfMigrating(transaction, identity)
       return { cellId, assignmentEpoch: integer(row, 'assignment_epoch'), activityId: null, units: 0 }
     }
+    const live = leases.filter((lease) => integer(lease, 'expires_at') > now)
+    const stale: EdgeStaleDetail = {
+      candidate: staleCandidate,
+      leases: leases.length,
+      liveLeases: live.length,
+      liveKinds: [...new Set(live.map((lease) => text(lease, 'activity_kind')))].sort(),
+      otherCellLeases: leases.filter((lease) => text(lease, 'cell_id') !== cellId).length
+    }
     if (!ownControlOnly || options.ownControl !== true) {
-      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row))
+      throw new EdgeMoveDeferredError('units_held', ownControlOnly, heldCounters(row), stale)
     }
     const lease = leases[0]
     if (
@@ -938,7 +958,7 @@ export class EdgeAssignments {
       text(lease, 'cell_id') !== cellId ||
       integer(lease, 'request_units') !== 1
     ) {
-      throw new EdgeMoveDeferredError('units_held')
+      throw new EdgeMoveDeferredError('units_held', true, heldCounters(row), stale)
     }
     await this.deferIfMigrating(transaction, identity)
     return {

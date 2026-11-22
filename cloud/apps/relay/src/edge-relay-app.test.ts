@@ -191,7 +191,8 @@ describe('director routes with the relay edge', () => {
         event: 'orca_relay_edge_move_deferred',
         reason: 'relay_edge_move_deferred:units_held',
         ownControlOnly: true,
-        held: { controls: 1, splices: 0, invites: 0, installs: 0, confirmations: 0, migrationLeases: 0 }
+        held: { controls: 1, splices: 0, invites: 0, installs: 0, confirmations: 0, migrationLeases: 0 },
+        stale: { candidate: false }
       }
     ])
     // Which asks qualify is edgeMoveOwnControlAsk's (edge-relay-move-own-control.test.ts).
