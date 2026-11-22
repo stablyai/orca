@@ -69,9 +69,7 @@ function createTerminalWorkerRestartResume(
       })
   })
   // A pane started again in place is bound once its resumed agent reports its conversation there.
-  runtime.subscribeAgentProviderSessionChangesFn?.((sessions) =>
-    resume.observePaneAgents(sessions.map(({ paneKey }) => paneKey))
-  )
+  runtime.subscribeAgentProviderSessionChangesFn?.((sessions) => resume.observePaneAgents(sessions))
   return resume
 }
 

@@ -1,4 +1,5 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+import { isTerminalHandle } from '../../../../../../shared/terminal/terminal-handle-prefix'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { WORKER_RESTART_RESUMED_STAGE } from '../../../../orchestration/db/worker-dispatch/worker-restart-resume'
 
@@ -14,7 +15,12 @@ export function restartResumedCallerHandle(
   from: string,
   evidence: OrchestrationCompatibilityEvidence | undefined
 ): string | null {
-  if (!evidence?.paneKey || runtime.getLiveTerminalPaneKey(from) !== null) {
+  // Runs on every orchestration call: only a stale terminal handle is looked at further.
+  if (
+    !evidence?.paneKey ||
+    !isTerminalHandle(from) ||
+    runtime.getLiveTerminalPaneKey(from) !== null
+  ) {
     return null
   }
   const handle = runtime.getTerminalHandleForPaneKey(evidence.paneKey)

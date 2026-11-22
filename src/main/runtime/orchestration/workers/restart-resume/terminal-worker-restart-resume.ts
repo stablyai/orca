@@ -102,8 +102,12 @@ export class TerminalWorkerRestartResume {
   }
 
   /** Panes whose agent reported its conversation; a held pane's new process takes its Dispatch. */
-  observePaneAgents(paneKeys: Iterable<string>): void {
-    const reported = new Set(paneKeys)
+  observePaneAgents(sessions: readonly { paneKey: string }[]): void {
+    // Runs on every hook status change; nearly always nothing waits.
+    if (this.held.size === 0) {
+      return
+    }
+    const reported = new Set(sessions.map(({ paneKey }) => paneKey))
     for (const [dispatchId, worker] of this.held) {
       const inPlace = worker.inPlace
       if (!inPlace || !reported.has(inPlace.paneKey)) {
