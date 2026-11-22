@@ -6137,7 +6137,7 @@
           "removeWithChildrenGit_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
           "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
           "removeSingleFolderFromOrca": "Entfernt ihn aus Orca. Der Ordner auf der Festplatte bleibt erhalten.",
-          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und seinen Branch (bleibt erhalten, falls nicht gemergt)."
+          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und lokale Änderungen. Der zugehörige Branch wird gelöscht, wenn er gemergt wurde."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Geladene Pfade anzeigen",
@@ -7290,7 +7290,6 @@
           "stopped": "Gestoppt",
           "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
-          "description": "Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals nativ unter Linux laufen. Projekte in dieser Distribution, die über \\\\wsl.localhost geöffnet wurden, werden automatisch auf diesen Host verschoben, sobald ihre Terminals inaktiv sind; Projekte auf einem Windows-Laufwerk (/mnt/…) bleiben auf diesem Computer. Ein verschobenes Projekt lässt sich über die Seitenleiste auf diesen Computer zurückholen.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
