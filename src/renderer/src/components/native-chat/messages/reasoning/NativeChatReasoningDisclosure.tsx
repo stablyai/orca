@@ -7,16 +7,13 @@ import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
 export function NativeChatReasoningBody({
   markdown,
   rowKey,
-  streaming = false,
-  savedRevision
+  streaming = false
 }: {
   markdown: string
   /** The reasoning block's disclosure key, shared by its live line and finished row. */
   rowKey?: string
   /** The block is still arriving under the live activity line. */
   streaming?: boolean
-  /** The reasoning row's saved journal revision, while it streams. */
-  savedRevision?: number
 }): React.JSX.Element {
   const markdownProps = {
     variant: 'document' as const,
@@ -31,13 +28,7 @@ export function NativeChatReasoningBody({
     >
       {/* Streaming reasoning steps on the reveal clock, so a slow-to-draw block backs off as replies do. */}
       {streaming && rowKey !== undefined ? (
-        <NativeChatPacedMarkdown
-          {...markdownProps}
-          rowKey={rowKey}
-          content={markdown}
-          streaming
-          savedRevision={savedRevision}
-        />
+        <NativeChatPacedMarkdown {...markdownProps} rowKey={rowKey} content={markdown} streaming />
       ) : (
         <NativeChatMarkdown
           {...markdownProps}

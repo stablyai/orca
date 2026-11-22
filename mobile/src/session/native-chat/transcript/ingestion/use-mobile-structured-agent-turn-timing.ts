@@ -12,7 +12,6 @@ import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
 } from '../../../../../../src/shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
-import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 // Use journal durations and latch the host-to-phone start conversion once per turn so counters remain skew-free.
 export function useMobileStructuredAgentTurnTiming(
@@ -35,17 +34,13 @@ export function useMobileStructuredAgentTurnTiming(
   turnJournal: NativeChatTurnJournal
   workingStartedAt: number | null
 } {
-  // Turn timing never reads reply text, so a streaming reply keeps the memo.
-  const rows = rowsBesideStreamedText(items)
   const { settledTurns, runningTiming } = useMemo(
-    () => selectStructuredAgentTurnBars(rows, submissions, turnId, latestTurn),
-    [rows, submissions, turnId, latestTurn]
+    () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
+    [items, submissions, turnId, latestTurn]
   )
-  // Turn membership, fork points and the first screen read rows and turns, never reply text, so
-  // they keep their memos while a reply streams too.
   const turnJournal = useMemo(
-    () => ({ items: rows, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
-    [rows, submissions, latestTurn, working]
+    () => ({ items, submissions, latestTurn, ...(working !== undefined ? { working } : {}) }),
+    [items, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Derive during render so a new turn’s first paint counts from its correct start.

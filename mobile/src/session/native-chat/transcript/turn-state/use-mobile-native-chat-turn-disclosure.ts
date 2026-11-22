@@ -33,7 +33,6 @@ import {
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
 import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { projectionBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_TURN_KEYS: readonly undefined[] = []
 
@@ -79,29 +78,32 @@ export function useMobileNativeChatTurnDisclosure({
   liveLine: MobileNativeChatLiveLine | null
   onToggleReasoning: (key: string) => void
 } {
-  // Turn membership reads message order and turns, never reply text, so it holds while one streams.
-  const structure = projectionBesideStreamedText(messages)
-  const membership = useMemo(() => {
+  const {
+    rows: sourceRows,
+    turnKeys,
+    liveTurnKey,
+    unresolvedRowIds,
+    partialTurnKey
+  } = useMemo(() => {
     if (!enabled) {
-      return null
+      return {
+        rows: foldBotItemNotes(messages),
+        turnKeys: NO_TURN_KEYS,
+        liveTurnKey: undefined,
+        unresolvedRowIds: undefined,
+        partialTurnKey: undefined
+      }
     }
-    const found = nativeChatTurnMembership(structure, turnJournal)
-    return { ...found, turnKeys: nativeChatRowsInDrawOrder(found.turnKeys, found.drawOrder) }
-  }, [enabled, structure, turnJournal])
-  const turnKeys = membership?.turnKeys ?? NO_TURN_KEYS
-  const liveTurnKey = membership?.liveTurnKey
-  const partialTurnKey = membership?.partialTurnKey
-  const unresolvedRowIds = membership?.unresolvedRowIds
-  const sourceRows = useMemo(
-    () =>
-      membership
-        ? foldBotItemNotes(
-            nativeChatRowsInDrawOrder(messages, membership.drawOrder),
-            membership.turnKeys
-          )
-        : foldBotItemNotes(messages),
-    [membership, messages]
-  )
+    const membership = nativeChatTurnMembership(messages, turnJournal)
+    const turnKeys = nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder)
+    return {
+      rows: foldBotItemNotes(nativeChatRowsInDrawOrder(messages, membership.drawOrder), turnKeys),
+      turnKeys,
+      liveTurnKey: membership.liveTurnKey,
+      partialTurnKey: membership.partialTurnKey,
+      unresolvedRowIds: membership.unresolvedRowIds
+    }
+  }, [enabled, messages, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,

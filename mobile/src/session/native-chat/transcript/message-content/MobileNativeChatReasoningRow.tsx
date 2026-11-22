@@ -13,11 +13,6 @@ import type { NativeChatMessage } from '../../../../../../src/shared/native-chat
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
-import { useMobileNativeChatPacedText } from './use-mobile-native-chat-paced-text'
-import {
-  MobileNativeChatReplyRevealsContext,
-  useMobileNativeChatHeldReveals
-} from '../tool-results/mobile-native-chat-reply-reveals'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
@@ -52,7 +47,7 @@ export function MobileNativeChatReasoningRow({
   onToggle,
   onLongPress
 }: {
-  message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp' | 'journalRevision'>
+  message: Pick<NativeChatMessage, 'id' | 'state' | 'completedAt' | 'timestamp'>
   markdown: string
   fontScale: number
   live?: boolean
@@ -61,8 +56,6 @@ export function MobileNativeChatReasoningRow({
   onToggle?: (key: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
-  // The body unmounts when collapsed; this row outlives it, so its reveal resumes on reopening.
-  const heldReveals = useMobileNativeChatHeldReveals(nativeChatReasoningDisclosureKey(message.id))
   useMobileColorScheme()
   const [localExpanded, setLocalExpanded] = useState(false)
   const expanded = onToggle ? transcriptExpanded : localExpanded
@@ -90,16 +83,13 @@ export function MobileNativeChatReasoningRow({
         </View>
       </Pressable>
       {expanded ? (
-        <MobileNativeChatReplyRevealsContext.Provider value={heldReveals}>
-          <MobileNativeChatReasoningBody
-            positionKey={nativeChatReasoningDisclosureKey(message.id)}
-            markdown={markdown}
-            streaming={live}
-            savedRevision={message.journalRevision}
-            fontScale={fontScale}
-            onLongPress={onLongPress}
-          />
-        </MobileNativeChatReplyRevealsContext.Provider>
+        <MobileNativeChatReasoningBody
+          positionKey={nativeChatReasoningDisclosureKey(message.id)}
+          markdown={markdown}
+          streaming={live}
+          fontScale={fontScale}
+          onLongPress={onLongPress}
+        />
       ) : null}
     </View>
   )
@@ -110,7 +100,6 @@ export function MobileNativeChatReasoningBody({
   positionKey,
   markdown,
   streaming = false,
-  savedRevision,
   fontScale,
   onLongPress
 }: {
@@ -118,21 +107,11 @@ export function MobileNativeChatReasoningBody({
   markdown: string
   /** The turn is live, so the text may end mid-path. */
   streaming?: boolean
-  /** The reasoning row's saved journal revision, while it streams. */
-  savedRevision?: number
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const prose = useNativeChatProseText(fontScale)
-  // Streaming reasoning steps on the reveal clock, so a slow-to-draw block backs off as replies do.
-  const shown = useMobileNativeChatPacedText(
-    positionKey,
-    markdown,
-    streaming,
-    streaming,
-    savedRevision
-  )
   return (
     <MobileNativeChatOwnedScrollView
       positionKey={positionKey}
@@ -141,7 +120,7 @@ export function MobileNativeChatReasoningBody({
     >
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
         <MobileNativeChatMarkdown
-          content={shown.text}
+          content={markdown}
           streaming={streaming}
           rangeSelectable
           {...prose}

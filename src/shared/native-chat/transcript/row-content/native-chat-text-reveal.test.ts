@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nativeChatRevealStepFrames, receiveNativeChatText } from './native-chat-text-reveal'
 import {
-  savePacedNativeChatText,
-  savePacedNativeChatTextDue
-} from './native-chat-text-reveal-save-paced'
+  nativeChatRevealStepFrames,
+  receiveNativeChatText,
+  startNativeChatTextReveal
+} from './native-chat-text-reveal'
 
 let clock = 0
 let callbacks = new Map<number, (at: number) => void>()
@@ -28,8 +28,12 @@ afterEach(() => {
 })
 
 /** Runs a reveal that re-requests after every step, on frames `frameGaps` apart, and returns its steps. */
-function stepTimes(frameGaps: (frame: number) => number, frames: number, render = 0): number[] {
-  const clockFrames = nativeChatRevealStepFrames(60, 1 / 16)
+function stepTimes(
+  frameGaps: (frame: number) => number,
+  frames: number,
+  render = 0,
+  clockFrames = nativeChatRevealStepFrames(60, 1 / 16)
+): number[] {
   const steps: number[] = []
   const step = (): void => {
     steps.push(clock)
@@ -39,9 +43,12 @@ function stepTimes(frameGaps: (frame: number) => number, frames: number, render 
     clockFrames.stepCost?.(render)
   }
   clockFrames.request(step)
+  // Timers run on the same clock as the renders that move it.
+  let timersAt = clock
   for (let frame = 0; frame < frames; frame++) {
     const at = Math.max(clock, clock + frameGaps(frame))
-    vi.advanceTimersByTime(at - clock)
+    vi.advanceTimersByTime(at - timersAt)
+    timersAt = at
     clock = at
     const due = [...callbacks.values()]
     callbacks.clear()
@@ -81,7 +88,7 @@ it('still spaces its steps out when each step is slow to draw', () => {
 })
 
 describe('a reply redrawn whole each step', () => {
-  it('switches to save pacing once its steps are slow, and stays there', () => {
+  it('switches once its steps are slow, and stays switched', () => {
     const frames = nativeChatRevealStepFrames(60, 1 / 10)
     for (const ms of [20, 20, 150]) {
       frames.stepCost?.(ms)
@@ -96,47 +103,32 @@ describe('a reply redrawn whole each step', () => {
     expect(frames.redrawsWhole?.()).toBe(true)
   })
 
-  it('shows what it has at the switch, then only where a save would, and all of it at its end', () => {
-    const text = (length: number) => 'w'.repeat(length)
-    const switched = savePacedNativeChatText(
-      {
-        source: text(1000),
-        shown: 400,
-        arrivals: [{ from: 400, to: 1000, at: 0 }]
-      },
-      0
-    )
-    expect(switched.shown).toBe(1000)
-    // The next save comes at an eighth more: 1,125 characters.
-    const held = receiveNativeChatText(switched, text(1124), true, false, 0)
-    expect(held.shown).toBe(1000)
-    const saved = receiveNativeChatText(held, text(1125), true, false, 0)
-    expect(saved.shown).toBe(1125)
-    expect(saved.arrivals).toEqual([])
-    const ended = receiveNativeChatText(saved, text(1130), false, false, 0)
-    expect(ended.shown).toBe(1130)
-    // Held-back text is due 6 s after the reply last moved; with nothing held back, nothing is due.
-    expect(savePacedNativeChatTextDue(held, text(1124))).toBe(6000)
-    expect(savePacedNativeChatTextDue(held, text(1000))).toBeUndefined()
-    // Text short of the next save still shows once the reply has waited 6 s since it last moved.
-    expect(receiveNativeChatText(held, text(1124), true, false, 5999).shown).toBe(1000)
-    expect(receiveNativeChatText(held, text(1124), true, false, 6000).shown).toBe(1124)
-    // Drawn at once (a window shown again, or reduced motion), it shows all it has.
-    const caughtUp = receiveNativeChatText(held, text(1124), true, true, 0)
-    expect(caughtUp).toMatchObject({ shown: 1124, savePaced: true })
+  it('steps at a third of its time once redrawn whole, where an unswitched reply waits ten times its cost', () => {
+    const switched = spacings(
+      stepTimes(() => 1000 / 60, 600, 150, nativeChatRevealStepFrames(60, 1 / 10, 1 / 3))
+    ).slice(5)
+    expect(Math.min(...switched)).toBeGreaterThanOrEqual(450 - 1000 / 120 - 0.01)
+    expect(Math.max(...switched)).toBeLessThanOrEqual(450 + 1000 / 60 + 0.01)
+    const unswitched = spacings(
+      stepTimes(() => 1000 / 60, 600, 90, nativeChatRevealStepFrames(60, 1 / 10, 1 / 3))
+    ).slice(5)
+    expect(Math.min(...unswitched)).toBeGreaterThanOrEqual(900 - 1000 / 120 - 0.01)
   })
 
-  it('shows a save the moment its revision changes, whatever its length', () => {
+  it('a clock told the reply was already redrawn whole uses the third from its first steps', () => {
+    const frames = nativeChatRevealStepFrames(60, 1 / 10, 1 / 3)
+    frames.drawWhole?.()
+    expect(frames.redrawsWhole?.()).toBe(true)
+    const gaps = spacings(stepTimes(() => 1000 / 60, 300, 150, frames)).slice(1)
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(450 + 1000 / 60 + 0.01)
+  })
+
+  it('remembers it was redrawn whole across a remount and replaced text', () => {
     const text = (length: number) => 'w'.repeat(length)
-    const switched = savePacedNativeChatText(
-      { source: text(11000), shown: 11000, arrivals: [] },
-      0,
-      4
-    )
-    // The host saved at 10,000 and saves again at 11,250, short of an eighth more than 11,000.
-    const live = receiveNativeChatText(switched, text(11200), true, false, 0, undefined, 4)
-    expect(live.shown).toBe(11000)
-    const saved = receiveNativeChatText(live, text(11250), true, false, 0, undefined, 5)
-    expect(saved).toMatchObject({ shown: 11250, savedRevision: 5 })
+    const remembered = { source: text(1000), shown: 1000, arrivals: [], drawsWhole: true as const }
+    expect(startNativeChatTextReveal(text(1200), true, remembered, true, 0).drawsWhole).toBe(true)
+    expect(startNativeChatTextReveal(text(1000), true, remembered, true, 0).drawsWhole).toBe(true)
+    expect(receiveNativeChatText(remembered, 'other', true, false, 0).drawsWhole).toBe(true)
+    expect(receiveNativeChatText(remembered, text(1100), false, true, 0).drawsWhole).toBe(true)
   })
 })

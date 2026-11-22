@@ -1,7 +1,3 @@
-import {
-  NATIVE_CHAT_REVEAL_MAX_STEP_MS as MAX_STEP_MS,
-  receiveSavePacedText
-} from './native-chat-text-reveal-save-paced'
 /** Whitespace-free script ranges used as character-sized reveal units. */
 export const SPACELESS_SCRIPT_RANGES = String.raw`\u2e80-\ud7ff\uf900-\uffef`
 const SPACELESS_SCRIPT_CHAR = new RegExp(`[${SPACELESS_SCRIPT_RANGES}]`, 'u')
@@ -19,12 +15,8 @@ export type NativeChatTextReveal = {
   source: string
   shown: number
   arrivals: TextArrival[]
-  /** Shown only as a save would show it, for the rest of the reply (see `savePacedNativeChatText`). */
-  savePaced?: true
-  /** When a save-paced reply last showed its newest text. */
-  shownAt?: number
-  /** The saved revision a save-paced reply last showed; a new one is a save to show. */
-  savedRevision?: number
+  /** The reply redraws whole each step, so it steps plainly for the rest of the reply. */
+  drawsWhole?: true
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -36,6 +28,8 @@ export type NativeChatTextRevealFrames = {
   stepCost?: (ms: number) => void
   /** Whether this reply's steps have been slow enough to show it redrawn whole each step. */
   redrawsWhole?: () => boolean
+  /** Marks the reply redrawn whole, as a remount that already knew it was. */
+  drawWhole?: () => void
 }
 
 /** Until the display's own frames are measured, assume 60 Hz. */
@@ -63,6 +57,8 @@ function medianStepCost(costs: readonly number[]): number {
   const sorted = [...costs].sort((a, b) => a - b)
   return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0
 }
+/** However slowly the reply renders, it still moves at least this often. */
+const MAX_STEP_MS = 6000
 /** A step this slow redraws the whole reply (footnotes, reference links, raw HTML re-parse it all),
  *  so it costs more than the update a save would make, and stepping it only lengthens each wait. */
 export const NATIVE_CHAT_WHOLE_REDRAW_STEP_MS = 100
@@ -77,7 +73,9 @@ const HIDDEN_STEP_MS = 100
  *  time between steps. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
-  busyShare = 1
+  busyShare = 1,
+  /** The share for a reply redrawn whole: it shows plainly, so it may step more often. */
+  wholeRedrawShare = busyShare
 ): NativeChatTextRevealFrames {
   let steppedAt = -Infinity
   let spacing = stepMs
@@ -113,11 +111,15 @@ export function nativeChatRevealStepFrames(
         medianStepCost(stepCosts) > NATIVE_CHAT_WHOLE_REDRAW_STEP_MS
     },
     redrawsWhole: () => redrawsWhole,
+    drawWhole: () => {
+      redrawsWhole = true
+    },
     request: (step) => {
       const id = ++nextId
       const fire = (at: number): void => {
         cancel(id)
-        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / busyShare))
+        const share = redrawsWhole ? wholeRedrawShare : busyShare
+        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / share))
         steppedAt = at
         step()
       }
@@ -193,6 +195,11 @@ export function pacedTextEnd(text: string, position: number, holdPartialWord: bo
   return start
 }
 
+/** A reply redrawn whole stays so when its text is replaced. */
+function keptMode(previous: NativeChatTextReveal): Pick<NativeChatTextReveal, 'drawsWhole'> {
+  return previous.drawsWhole ? { drawsWhole: true } : {}
+}
+
 export function arriveNativeChatText(
   previous: NativeChatTextReveal,
   source: string,
@@ -202,7 +209,7 @@ export function arriveNativeChatText(
     return previous
   }
   if (!source.startsWith(previous.source)) {
-    return { source, shown: source.length, arrivals: [] }
+    return { ...keptMode(previous), source, shown: source.length, arrivals: [] }
   }
   return {
     ...previous,
@@ -241,18 +248,23 @@ export function startNativeChatTextReveal(
   remembered: NativeChatTextReveal | undefined,
   begun: boolean,
   now: number,
-  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS,
-  savedRevision?: number
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
-  if (remembered?.savePaced) {
-    return receiveNativeChatText(remembered, text, streaming, false, now, revealMs, savedRevision)
-  }
   // Text received while unmounted has no arrival timestamp: show it without adding latency.
   if (remembered?.source === text && streaming) {
     return advanceNativeChatText(remembered, now, revealMs)
   }
   const shown = streaming && !remembered && begun ? 0 : text.length
-  return arriveNativeChatText({ source: text.slice(0, shown), shown, arrivals: [] }, text, now)
+  return arriveNativeChatText(
+    {
+      ...(remembered ? keptMode(remembered) : {}),
+      source: text.slice(0, shown),
+      shown,
+      arrivals: []
+    },
+    text,
+    now
+  )
 }
 
 export function nativeChatTextAppended(previous: NativeChatTextReveal, text: string): boolean {
@@ -266,25 +278,49 @@ export function receiveNativeChatText(
   streaming: boolean,
   reducedMotion: boolean,
   now: number,
-  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS,
-  /** The row's saved revision, where the surface knows it, so a save-paced reply shows saves. */
-  savedRevision?: number
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
-  if (previous.savePaced) {
-    return receiveSavePacedText(previous, text, streaming, reducedMotion, now, savedRevision)
-  }
   const immediate =
     reducedMotion ||
     (!streaming &&
       !nativeChatTextAppended(previous, text) &&
       previous.shown === previous.source.length)
   return immediate
-    ? { source: text, shown: text.length, arrivals: [] }
+    ? { ...keptMode(previous), source: text, shown: text.length, arrivals: [] }
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
 }
 
-/** Step on the frame clock until complete and return cancellation. The clock spaces the steps. */
+/** Step each frame until complete and return cancellation. Deadline timers keep hidden windows on time when animation frames stop. */
 export function playNativeChatTextReveal(
+  current: () => NativeChatTextReveal,
+  step: (next: NativeChatTextReveal) => void,
+  frames: NativeChatTextRevealFrames,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
+): () => void {
+  let frame = 0
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  const tick = (): void => {
+    frames.cancel(frame)
+    clearTimeout(deadline)
+    const now = frames.now()
+    const next = advanceNativeChatText(current(), now, revealMs)
+    step(next)
+    if (next.shown >= next.source.length) {
+      return
+    }
+    frame = frames.request(tick)
+    const earliest = Math.min(...next.arrivals.map((arrival) => arrival.at + revealMs))
+    deadline = setTimeout(tick, Math.max(0, earliest - now))
+  }
+  tick()
+  return () => {
+    frames.cancel(frame)
+    clearTimeout(deadline)
+  }
+}
+
+/** Steps only when a clock that spaces its own steps fires (see `nativeChatRevealStepFrames`). */
+export function playNativeChatTextRevealOnClock(
   current: () => NativeChatTextReveal,
   step: (next: NativeChatTextReveal) => void,
   frames: NativeChatTextRevealFrames,

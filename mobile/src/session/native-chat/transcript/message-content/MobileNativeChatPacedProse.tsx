@@ -20,25 +20,16 @@ export function MobileNativeChatPacedProse({
   blocks,
   growingBlock,
   paced,
-  savedRevision,
   children
 }: {
   rowKey: string
   blocks: NativeChatBlock[]
   growingBlock: NativeChatBlock | undefined
   paced: boolean
-  /** The row's saved journal revision, where it has one. */
-  savedRevision?: number
   children: (block: NativeChatBlock, index: number, shown: MobileNativeChatPacedText) => ReactNode
 }): React.JSX.Element {
   const source = useMemo(() => nativeChatProseToMarkdown(blocks), [blocks])
-  const shown = useMobileNativeChatPacedText(
-    rowKey,
-    source,
-    growingBlock?.type === 'text',
-    paced,
-    savedRevision
-  )
+  const shown = useMobileNativeChatPacedText(rowKey, source, growingBlock?.type === 'text', paced)
   let end = 0
   const rows = blocks.map((block, index) => {
     const text = isTextBlock(block) ? block.text : ''

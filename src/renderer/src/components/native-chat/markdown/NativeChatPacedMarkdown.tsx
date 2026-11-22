@@ -7,16 +7,13 @@ export function NativeChatPacedMarkdown({
   rowKey,
   content,
   streaming,
-  savedRevision,
   ...props
 }: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeFrom' | 'fadeHold'> & {
   rowKey: string
   streaming: boolean
-  /** The row's saved journal revision, where it has one. */
-  savedRevision?: number
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null)
-  const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
+  const paced = useNativeChatPacedText(rowKey, content, streaming, root)
   return (
     <NativeChatMarkdown
       {...props}

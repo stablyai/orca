@@ -347,7 +347,6 @@ function MobileNativeChatMessageImpl({
                   blocks={drawnProse}
                   growingBlock={growingBlock}
                   paced={message.role === 'assistant'}
-                  savedRevision={message.journalRevision}
                   fontScale={fontScale}
                 >
                   {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}

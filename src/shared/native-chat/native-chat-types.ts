@@ -240,8 +240,6 @@ export type NativeChatBlock =
 export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Client projection: this answer preceded a goal check grouped into its goal row. */
   goalCheckAnswer?: true
-  /** The journal revision a structured row was saved at: a save bumps it, live text keeps it. */
-  journalRevision?: number
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole

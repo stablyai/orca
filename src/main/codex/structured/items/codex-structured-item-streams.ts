@@ -1,4 +1,3 @@
-import { nextStreamedTextCheckpointLength } from '../../../../shared/agent-session/journal/streamed-text-checkpoint-growth'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
@@ -109,7 +108,7 @@ export function createCodexStructuredItemStreams(
 
   const shouldPersist = (key: string, textLength: number): boolean => {
     const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = nextStreamedTextCheckpointLength(checkpointLength)
+    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     return !(checkpointLength > 0 && textLength < nextLength)
   }
 
