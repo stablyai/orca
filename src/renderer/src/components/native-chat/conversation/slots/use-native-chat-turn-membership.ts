@@ -20,6 +20,9 @@ export type NativeChatTurnRows = {
   /** The live turn, when only its tail is loaded (`NativeChatTurnMembership.partialTurnKey`). */
   partialTurnKey?: string
   unresolvedRowIds?: ReadonlySet<string>
+  /** `messages` as of their last change other than a streaming reply's text; scans that read
+   *  no reply text (turn diffs, opened pull requests) hold across live windows. */
+  structureMessages?: readonly NativeChatMessage[]
 }
 
 /** Resolve row order/live turn/membership once from host scopes or journal order. */
@@ -40,6 +43,7 @@ export function useNativeChatTurnMembership(
       )
     return {
       drawOrder,
+      structureMessages: nativeChatRowsInDrawOrder(structure, drawOrder),
       turnKeys: nativeChatRowsInDrawOrder(turnKeys, drawOrder),
       liveTurnKey,
       unresolvedRowIds,

@@ -411,7 +411,7 @@ export function NativeChatMessageList({
                   newRowsMarker={newRows.marker}
                 />
                 {liveLine ? (
-                  <NativeChatTurnActivityLine line={liveLine} />
+                  <NativeChatTurnActivityLine line={liveLine} context={rowContext} />
                 ) : tailRow === 'awaiting-input' ? (
                   <NativeChatAwaitingInputRow subject={null} pending />
                 ) : null}

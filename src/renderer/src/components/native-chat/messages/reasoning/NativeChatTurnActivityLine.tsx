@@ -1,7 +1,9 @@
 import {
+  NativeChatHeldTextSessionContext,
   NativeChatReplyRevealsContext,
   useNativeChatHeldReveals
 } from '../../markdown/native-chat-reply-reveals'
+import type { NativeChatTranscriptRowContext } from '../rows/NativeChatTranscriptRow'
 import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
@@ -36,9 +38,12 @@ function statusLabel(
 
 /** Keep the clock in the turn bar; this tail shows activity or discloses open reasoning. */
 export function NativeChatTurnActivityLine({
-  line
+  line,
+  context
 }: {
   line: NativeChatLiveLine
+  /** The transcript's, so reasoning held while the window was hidden is drawn at once too. */
+  context?: Pick<NativeChatTranscriptRowContext, 'heldTextSession'>
 }): React.JSX.Element {
   const t = useTranslate()
   const resolved = describeNativeChatActiveTurnLabel(line)
@@ -84,12 +89,14 @@ export function NativeChatTurnActivityLine({
       {reasoning ? (
         <CollapsibleContent>
           <NativeChatReplyRevealsContext.Provider value={heldReveals}>
-            <NativeChatReasoningBody
-              rowKey={disclosureKey}
-              markdown={reasoning.markdown}
-              streaming
-              savedRevision={reasoning.message.journalRevision}
-            />
+            <NativeChatHeldTextSessionContext.Provider value={context?.heldTextSession}>
+              <NativeChatReasoningBody
+                rowKey={disclosureKey}
+                markdown={reasoning.markdown}
+                streaming
+                savedRevision={reasoning.message.journalRevision}
+              />
+            </NativeChatHeldTextSessionContext.Provider>
           </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>
       ) : null}

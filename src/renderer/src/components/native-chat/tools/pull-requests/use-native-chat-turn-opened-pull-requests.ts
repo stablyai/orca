@@ -58,13 +58,17 @@ export function useNativeChatTurnOpenedPullRequests(
     outputs: ReadonlyMap<string, string | null>
   }>({ owner, outputs: NO_FULL_OUTPUTS })
   const ownedOutputs = fullOutputs.owner === owner ? fullOutputs.outputs : NO_FULL_OUTPUTS
+  // Pull requests come from tool output, never reply text, so a streaming reply leaves them be.
+  const messages = turns ? (turns.structureMessages ?? turns.messages) : null
+  const turnKeys = turns?.turnKeys
+  const partialTurnKey = turns?.partialTurnKey
   const opened = useMemo(() => {
-    if (!enabled || !turns) {
+    if (!enabled || !messages || !turnKeys) {
       return NONE
     }
-    const merged = nativeChatRowsInTranscriptOrder(turns.messages, turns.turnKeys, subagentRows)
+    const merged = nativeChatRowsInTranscriptOrder(messages, turnKeys, subagentRows)
     const found = nativeChatTurnOpenedPullRequests(merged.messages, merged.turnKeys, {
-      partialTurnKey: turns.partialTurnKey,
+      partialTurnKey,
       fullOutputs: ownedOutputs,
       cache: evidenceCacheFor(ownedOutputs)
     })
@@ -75,7 +79,7 @@ export function useNativeChatTurnOpenedPullRequests(
         .filter(([, list]) => list.length > 0)
     )
     return { ...found, byTurn }
-  }, [enabled, ownedOutputs, subagentRows, turns])
+  }, [enabled, messages, ownedOutputs, partialTurnKey, subagentRows, turnKeys])
 
   const clippedKey = opened.clippedCreateOutputs.join('\n')
   // A hidden chat reads nothing; what is still pending is asked again when it is shown.
