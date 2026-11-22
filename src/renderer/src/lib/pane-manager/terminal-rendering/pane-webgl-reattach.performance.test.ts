@@ -87,11 +87,11 @@ describe('atlas-rebuild context recreation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('recreates one context per frame without ever dropping a shown pane to DOM', async () => {
+  it('recreates one context per frame, starting on a frame of its own, without ever dropping a shown pane to DOM', async () => {
     const fakes = Array.from({ length: 6 }, fakePane)
     run(fakes)
-    expect(attaches.count).toBe(1)
-    for (let frame = 2; frame <= 6; frame++) {
+    expect(attaches.count).toBe(0)
+    for (let frame = 1; frame <= 6; frame++) {
       expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
       await vi.advanceTimersByTimeAsync(16)
       expect(attaches.count).toBe(frame)
@@ -101,6 +101,7 @@ describe('atlas-rebuild context recreation', () => {
   it('creates no context while the user types, clicks or scrolls, then resumes', async () => {
     const fakes = Array.from({ length: 3 }, fakePane)
     run(fakes)
+    await vi.advanceTimersByTimeAsync(16)
     expect(attaches.count).toBe(1)
     interactionHold.ms = 2_000
     await vi.advanceTimersByTimeAsync(1_000)
@@ -108,7 +109,7 @@ describe('atlas-rebuild context recreation', () => {
     // Held panes keep their old context meanwhile.
     expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
     interactionHold.ms = 0
-    // The hold ends 2 s after the frame that saw it (t = 16 ms), then waits one more frame.
+    // The hold ends 2 s after the frame that saw it (t = 32 ms), then waits one more frame.
     await vi.advanceTimersByTimeAsync(1_040)
     expect(attaches.count).toBe(2)
     await vi.advanceTimersByTimeAsync(16)
@@ -123,6 +124,7 @@ describe('atlas-rebuild context recreation', () => {
       (pane) => (onScreen.has(pane) ? 'now' : 'skip'),
       (pane) => onScreen.has(pane)
     )
+    await vi.advanceTimersByTimeAsync(16)
     expect(attaches.count).toBe(1)
     onScreen.add(revealed.pane)
     await vi.advanceTimersByTimeAsync(16 * 2)
@@ -131,29 +133,31 @@ describe('atlas-rebuild context recreation', () => {
     expect(attaches.count).toBe(2)
   })
 
-  it('recreates a pane mid synchronized-output frame only once its frame closes', async () => {
-    const [plain, framed] = Array.from({ length: 2 }, fakePane)
+  it('lets panes behind one mid synchronized-output frame go first, and recreates it once its frame closes', async () => {
+    const [framed, plain] = Array.from({ length: 2 }, fakePane)
     framed.raw.terminal.modes.synchronizedOutputMode = true
-    run([plain, framed], (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'))
-    await vi.advanceTimersByTimeAsync(16 * 5)
+    run([framed, plain], (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'))
+    await vi.advanceTimersByTimeAsync(16)
+    // The waiting pane went to the back; the plain one was recreated in its place.
+    expect(attaches.count).toBe(1)
+    expect(plain.raw.webglAddon).toBeTruthy()
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(attaches.count).toBe(1)
     // It keeps its old context while it waits.
     expect(framed.raw.webglAddon).toBeTruthy()
     framed.raw.terminal.modes.synchronizedOutputMode = false
-    await vi.advanceTimersByTimeAsync(16)
+    await vi.advanceTimersByTimeAsync(300)
     expect(attaches.count).toBe(2)
   })
 
-  it('never recreates a pane while its synchronized-output frame stays open, however long', async () => {
-    const [plain, framed] = Array.from({ length: 2 }, fakePane)
+  it('never paints a pane mid-frame: after 10 s of an open frame it keeps its old context and the queue ends', async () => {
+    const [framed] = Array.from({ length: 1 }, fakePane)
     framed.raw.terminal.modes.synchronizedOutputMode = true
-    run([plain, framed], (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'))
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(attaches.count).toBe(1)
+    run([framed], () => 'wait')
+    await vi.advanceTimersByTimeAsync(11_000)
+    expect(attaches.count).toBe(0)
     expect(framed.raw.webglAddon).toBeTruthy()
-    framed.raw.terminal.modes.synchronizedOutputMode = false
-    await vi.advanceTimersByTimeAsync(250)
-    expect(attaches.count).toBe(2)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('runs overlapping rebuilds through one queue: still one context per frame', async () => {
@@ -161,8 +165,7 @@ describe('atlas-rebuild context recreation', () => {
     const second = Array.from({ length: 3 }, fakePane)
     run(first)
     run(second)
-    expect(attaches.count).toBe(1)
-    for (let frame = 2; frame <= 6; frame++) {
+    for (let frame = 1; frame <= 6; frame++) {
       await vi.advanceTimersByTimeAsync(16)
       expect(attaches.count).toBe(frame)
     }
@@ -173,7 +176,7 @@ describe('atlas-rebuild context recreation', () => {
     run([first, closed, lost])
     closed.raw.container.isConnected = false
     lost.raw.webglAddon = null
-    await vi.advanceTimersByTimeAsync(16 * 3)
+    await vi.advanceTimersByTimeAsync(16 * 4)
     expect(attaches.count).toBe(1)
   })
 })
