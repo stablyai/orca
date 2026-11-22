@@ -12,7 +12,6 @@ import {
   type ShellStartupOutputScanState
 } from '../../pty/shell-startup/shell-startup-output-scanner'
 import { holdStartupInputWhileShellInitializes } from '../../pty/shell-startup/shell-startup-deadline-hold'
-import { createPtySlaveLineEditorProbe } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import type { HeadlessEmulator } from '../emulation/headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'
@@ -42,6 +41,7 @@ export class SessionShellReadyBarrier {
   private scanState: ShellStartupOutputScanState | null = null
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private cancelDeadlineHold: (() => void) | null = null
+  private shellPid: number | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
   private typedAhead = false
@@ -101,6 +101,7 @@ export class SessionShellReadyBarrier {
     if (this._state === 'pending' && this.scanState) {
       const scanned = scanShellStartupOutput(this.scanState, data)
       data = scanned.output
+      this.shellPid = scanned.shellPid ?? this.shellPid
       if (scanned.ready) {
         this.transitionToReady(scanned.postMarkerBytesObserved)
         releaseStartupDeviceAttributes = true
@@ -187,7 +188,7 @@ export class SessionShellReadyBarrier {
       return
     }
     this.cancelDeadlineHold = holdStartupInputWhileShellInitializes(
-      createPtySlaveLineEditorProbe(this.deps.subprocess.slavePath),
+      { slavePath: this.deps.subprocess.slavePath, shellPid: this.shellPid },
       () => this.timeOutShellReady()
     )
   }

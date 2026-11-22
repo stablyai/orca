@@ -83,6 +83,18 @@ export async function readShellProcessReadiness(
     : null
 }
 
+/** True while a child of the shell holds the foreground of its PTY, as when rc files run a command. */
+export async function shellRunsForegroundChild(
+  shellPid: number,
+  ttyPath: string
+): Promise<boolean> {
+  const stdout = await readPs(['-t', ttyPath.replace(/^\/dev\//, ''), '-o', 'ppid=,stat='])
+  return stdout.split('\n').some((line) => {
+    const [parentPid, status] = line.trim().split(/\s+/)
+    return parentPid === String(shellPid) && status?.includes('+') === true
+  })
+}
+
 export async function listChildProcessIds(pid: number): Promise<number[]> {
   const stdout = await readPs(['-axo', 'pid=,ppid='])
   return stdout

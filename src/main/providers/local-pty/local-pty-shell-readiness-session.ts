@@ -1,9 +1,6 @@
 import type * as pty from 'node-pty'
 import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
-import {
-  createPtySlaveLineEditorProbe,
-  readPtySlavePath
-} from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import { holdStartupInputWhileShellInitializes } from '../../pty/shell-startup/shell-startup-deadline-hold'
 import {
   createShellPromptReadinessProbe,
@@ -99,7 +96,7 @@ export function createLocalPtyShellReadinessSession(args: {
       shellReadyTimeout = setTimeout(() => {
         shellReadyTimeout = null
         cancelDeadlineHold = holdStartupInputWhileShellInitializes(
-          createPtySlaveLineEditorProbe(readPtySlavePath(proc)),
+          { slavePath: readPtySlavePath(proc), shellPid: shellStartupPid },
           () => {
             releaseHeldShellReadyBytes()
             finishShellReady({ postMarkerBytesObserved: false })
