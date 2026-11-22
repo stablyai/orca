@@ -3,9 +3,10 @@ import type { BrowserTabSetProfileResult } from '../../../../../../shared/browse
 
 /**
  * The server owns the page and runs the guest swap, so the switch goes to it; its next page snapshot
- * moves this desktop's guest. A timeout leaves the guest alone, since a late success still lands.
+ * moves a This-device page's guest here, and a streamed page's frames resume from the rebuilt page.
+ * A timeout leaves the guest alone, since a late success still lands.
  */
-export function switchClientHostedBrowserPageProfile(
+export function switchServerBrowserPageProfile(
   environmentId: string,
   browserPageId: string,
   profileId: string

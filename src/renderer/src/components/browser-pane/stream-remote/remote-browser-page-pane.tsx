@@ -354,6 +354,7 @@ export function RemoteBrowserPagePane({
         isActive={isActive}
         siteDisplaySource={zoom.siteDisplaySource}
         runtimeEnvironmentId={runtimeEnvironmentId}
+        remotePageId={remotePageId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
         onSubmitAddressBar={submitAddressBar}

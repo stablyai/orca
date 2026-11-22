@@ -23,7 +23,7 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
-import { useClientHostedBrowserProfileId } from './use-client-hosted-browser-profile-id'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
 import type {
   BrowserChromeElementTools,
   BrowserChromeMarkupTool,
@@ -76,7 +76,7 @@ export function ClientHostedBrowserPageToolbar({
     applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
-  const browserProfileId = useClientHostedBrowserProfileId(browserPageId)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}

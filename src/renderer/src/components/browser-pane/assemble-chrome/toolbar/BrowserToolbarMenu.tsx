@@ -27,10 +27,13 @@ import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
-import { switchClientHostedBrowserPageProfile } from '../client-hosted/client-hosted-browser-profile-switch'
+import { switchServerBrowserPageProfile } from '../profile-routing/server-browser-page-profile-switch'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
 import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY,
+  BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY
+} from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -57,8 +60,8 @@ type BrowserToolbarMenuProps = {
   extensionsSub: React.ReactNode
   /** Set on a server's page this desktop hosts: its profiles are that server's and its jar is its own. */
   clientHostEnvironmentId?: string | null
-  /** False where another machine's browser renders the page, so this desktop can't switch or import into its session. */
-  showProfiles?: boolean
+  /** Set on a page a server renders and streams here: Profile switches it on that server; its jar takes no imports from here. */
+  streamedPage?: { environmentId: string; remotePageId: string | null } | null
   overflow: BrowserChromeOverflowMenuProps
 }
 
@@ -76,7 +79,7 @@ export function BrowserToolbarMenu({
   pageActions,
   extensionsSub,
   clientHostEnvironmentId = null,
-  showProfiles = true,
+  streamedPage = null,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
@@ -85,9 +88,11 @@ export function BrowserToolbarMenu({
     clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
   )
   // The page's own host, not the one Settings › Browser shows.
-  const profileHostId = clientHostEnvironmentId
-    ? toRuntimeExecutionHostId(clientHostEnvironmentId)
+  const profileEnvironmentId = clientHostEnvironmentId ?? streamedPage?.environmentId ?? null
+  const profileHostId = profileEnvironmentId
+    ? toRuntimeExecutionHostId(profileEnvironmentId)
     : LOCAL_EXECUTION_HOST_ID
+  const showsCookieImport = !streamedPage
   const listedProfiles = useAppStore((s) => s.browserSessionProfilesByHostId[profileHostId])
   const browserSessionProfiles = listedProfiles ?? NO_PROFILES
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
@@ -105,18 +110,22 @@ export function BrowserToolbarMenu({
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
   const shouldForceMenuOpen =
-    showProfiles && browserCookieTourStepActive && isActive && !importHintOnPage
+    showsCookieImport && browserCookieTourStepActive && isActive && !importHintOnPage
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [switchingProfile, setSwitchingProfile] = useState(false)
   const serverSwitchesProfiles = useRuntimeHostStatusSelector(
-    clientHostEnvironmentId,
+    profileEnvironmentId,
     (entry) =>
-      entry?.status?.capabilities?.includes(BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY) ===
-      true
+      entry?.status?.capabilities?.includes(
+        streamedPage
+          ? BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY
+          : BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY
+      ) === true
   )
+  const serverPageId = streamedPage ? streamedPage.remotePageId : browserPageId
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
@@ -172,7 +181,7 @@ export function BrowserToolbarMenu({
       showSiteDisplay(siteDisplaySource.read())
     }
     // A failed listing lands as [], since a real one always has Default.
-    if (open && showProfiles && !listedProfiles?.length) {
+    if (open && !listedProfiles?.length) {
       void fetchBrowserSessionProfiles(profileHostId)
     }
     setMenuOpen(open)
@@ -205,15 +214,18 @@ export function BrowserToolbarMenu({
     profileId: string | null,
     partition: string | null
   ): Promise<boolean> => {
-    if (!clientHostEnvironmentId) {
+    if (!profileEnvironmentId) {
       // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
       switchBrowserTabProfile(workspaceId, profileId, partition)
       return true
     }
+    if (!serverPageId) {
+      return false
+    }
     setSwitchingProfile(true)
-    const switched = await switchClientHostedBrowserPageProfile(
-      clientHostEnvironmentId,
-      browserPageId,
+    const switched = await switchServerBrowserPageProfile(
+      profileEnvironmentId,
+      serverPageId,
       profileId ?? 'default'
     ).then(
       () => true,
@@ -354,7 +366,7 @@ export function BrowserToolbarMenu({
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
         profile={
-          showProfiles && (!clientHostEnvironmentId || serverSwitchesProfiles)
+          !profileEnvironmentId || (serverSwitchesProfiles && serverPageId)
             ? {
                 browserPageId,
                 allProfiles,
@@ -366,7 +378,7 @@ export function BrowserToolbarMenu({
             : null
         }
         cookieImport={
-          showProfiles
+          showsCookieImport
             ? {
                 browserPageId,
                 effectiveProfileId,
