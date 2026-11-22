@@ -125,6 +125,36 @@ export function AppearanceChatSection({
         />
       </SearchableSetting>
       <SearchableSetting
+        id={entries.agentIcon.targetSectionId}
+        {...entries.agentIcon}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsRow
+          label={entries.agentIcon.title}
+          description={entries.agentIcon.description}
+          control={
+            <SettingsSegmentedControl
+              value={appearance.composerAgentIcon}
+              onChange={(composerAgentIcon) => update({ composerAgentIcon })}
+              options={
+                [
+                  {
+                    value: 'model',
+                    label: t('settings.appearance.chat.agentIconModel', 'Next to model')
+                  },
+                  {
+                    value: 'field',
+                    label: t('settings.appearance.chat.agentIconField', 'Start of message')
+                  },
+                  { value: 'off', label: t('settings.appearance.chat.agentIconOff', 'Off') }
+                ] as const
+              }
+              ariaLabel={entries.agentIcon.title}
+            />
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}
         forceVisible={forceVisiblePrimary}

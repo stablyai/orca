@@ -1,3 +1,7 @@
+import { useAppStore } from '@/store'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from '../focus/native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -184,6 +188,25 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const iconPosition = useAppStore(
+    (state) => state.settings?.nativeChatAppearance?.composerAgentIcon ?? 'model'
+  )
+  const iconAgent = !launch && !editSession && (isTuiAgent(agent) || agent === 'dsb') ? agent : null
+  const icon = useMemo(
+    () =>
+      iconAgent ? (
+        <span
+          role="img"
+          aria-label={getAgentLabel(iconAgent)}
+          title={getAgentLabel(iconAgent)}
+          className="inline-flex shrink-0 items-center"
+        >
+          <AgentIcon agent={iconAgent} size={16} />
+        </span>
+      ) : null,
+    [iconAgent]
+  )
+  const fieldIcon = iconPosition === 'field' && icon
 
   return (
     <div
@@ -253,56 +276,63 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <NativeChatPromptEditor
-              key={draftScopeKey}
-              scopeKey={draftScopeKey}
-              positionTarget={positionTarget}
-              imageRow={imageRow}
-              inputRef={textareaRef}
-              isComposing={imeEnterGesture.isComposing}
-              initialValue={draft}
-              disabled={disabled}
-              onChange={editorChange}
-              onKeyDownCapture={editorKeyDownCapture}
-              onBlur={editorBlur}
-              onCompositionStart={editorCompositionStart}
-              onCompositionEnd={editorCompositionEnd}
-              onPasteCapture={editorPaste}
-              onSelect={editorSelect}
-              aria-expanded={autocomplete.mode !== 'none'}
-              aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
-              aria-activedescendant={
-                optionCount > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, optionCount - 1)}`
-                  : undefined
-              }
-              placeholder={
-                launchPrompt
-                  ? launchPrompt.placeholder
-                  : editSession
-                    ? t('components.native-chat.queuedMessages.editMessage', 'Edit message')
-                    : goalMode?.active
-                      ? t(
-                          'components.native-chat.goal.placeholder',
-                          'Describe your goal, define measurable outcomes for best results'
-                        )
-                      : (placeholderHint ??
-                        suggestion ??
-                        idleHint ??
-                        nativeChatComposerPlaceholder(hasPty, canSend, afterStop, t))
-              }
-              // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
-              // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put.
-              className={cn(
-                'w-full bg-transparent px-2 py-1 text-sm outline-none',
-                launch
-                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
-                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
-                'overflow-y-auto scrollbar-sleek',
-                // Why: the editor is a contenteditable, which `:disabled` never matches.
-                '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
+            <div className={fieldIcon ? 'relative ps-6' : undefined}>
+              {fieldIcon && (
+                <span className="pointer-events-none absolute start-2 top-1.5 inline-flex">
+                  {fieldIcon}
+                </span>
               )}
-            />
+              <NativeChatPromptEditor
+                key={draftScopeKey}
+                scopeKey={draftScopeKey}
+                positionTarget={positionTarget}
+                imageRow={imageRow}
+                inputRef={textareaRef}
+                isComposing={imeEnterGesture.isComposing}
+                initialValue={draft}
+                disabled={disabled}
+                onChange={editorChange}
+                onKeyDownCapture={editorKeyDownCapture}
+                onBlur={editorBlur}
+                onCompositionStart={editorCompositionStart}
+                onCompositionEnd={editorCompositionEnd}
+                onPasteCapture={editorPaste}
+                onSelect={editorSelect}
+                aria-expanded={autocomplete.mode !== 'none'}
+                aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
+                aria-activedescendant={
+                  optionCount > 0
+                    ? `${pickerListboxId}-option-${Math.min(activeSuggestion, optionCount - 1)}`
+                    : undefined
+                }
+                placeholder={
+                  launchPrompt
+                    ? launchPrompt.placeholder
+                    : editSession
+                      ? t('components.native-chat.queuedMessages.editMessage', 'Edit message')
+                      : goalMode?.active
+                        ? t(
+                            'components.native-chat.goal.placeholder',
+                            'Describe your goal, define measurable outcomes for best results'
+                          )
+                        : (placeholderHint ??
+                          suggestion ??
+                          idleHint ??
+                          nativeChatComposerPlaceholder(hasPty, canSend, afterStop, t))
+                }
+                // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
+                // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put.
+                className={cn(
+                  'w-full bg-transparent px-2 py-1 text-sm outline-none',
+                  launch
+                    ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
+                    : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                  'overflow-y-auto scrollbar-sleek',
+                  // Why: the editor is a contenteditable, which `:disabled` never matches.
+                  '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
+                )}
+              />
+            </div>
             <div
               className={cn(
                 'flex flex-wrap items-center gap-2 pt-0.5',
@@ -315,6 +345,7 @@ export function NativeChatComposerField({
               )}
             >
               <NativeChatComposerActions
+                modelAgentIcon={iconPosition === 'model' ? icon : null}
                 editSession={editSession}
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}
