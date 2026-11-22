@@ -128,6 +128,8 @@ describe('RateLimitService zcode plan credentials', () => {
     const fixtures = join(import.meta.dirname, '..', '..', 'zcode', 'fixtures', 'v2-upstream')
     vi.stubEnv('ZCODE_DATA_BASE_DIR', home)
     vi.stubEnv('ZCODE_CREDENTIAL_SECRET', 'synthetic-secret')
+    // Overrides ZCODE_DATA_BASE_DIR; ZCode sets it in processes it spawns, so clear it to read the fixture.
+    vi.stubEnv('ZCODE_PERSONAL_PROVIDER_CONFIG_FILE', '')
     try {
       cpSync(join(fixtures, 'zai'), join(home, '.zcode', 'v2'), { recursive: true })
       const selected = readZcodeUsageCredentials()

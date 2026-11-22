@@ -133,4 +133,75 @@ describe('sheets writes', () => {
       'No column "Phone". Use a header from row 1 (Name, Email, Score) or a column letter.'
     )
   })
+
+  it('upserts keys and headers that look like formulas by their text, escaping only the writes', async () => {
+    const { api, writes } = await sheetsApi([
+      route('GET', `${VALUES}'Q4'`, () =>
+        googleJson(200, {
+          range: "'Q4'!A1:B5",
+          values: [['@Handle', 'Score'], ['@ada'], ['=literal'], ['+phone'], ['-tag']]
+        })
+      ),
+      route('POST', `/v4/spreadsheets/${ID}/values:batchUpdate`, () => googleJson(200, {})),
+      route('POST', `${VALUES}'Q4'!A1:append`, () =>
+        googleJson(200, { updates: { updatedRange: "'Q4'!A6:B6" } })
+      )
+    ])
+    const view = await upsertSheet(api, {
+      ref: ID,
+      key: '@handle',
+      values: [
+        ['@Handle', 'Score'],
+        ['@ada', 9],
+        ['=literal', 8],
+        ['+phone', 7],
+        ['-tag', 6],
+        ['@new', 5]
+      ]
+    })
+    expect(view.done).toBe('Updated 4, added 1')
+    expect(writes()[0]?.body).toEqual({
+      valueInputOption: 'USER_ENTERED',
+      data: [
+        { range: "'Q4'!A2", values: [["'@ada", 9]] },
+        { range: "'Q4'!A3", values: [["'=literal", 8]] },
+        { range: "'Q4'!A4", values: [["'+phone", 7]] },
+        { range: "'Q4'!A5", values: [["'-tag", 6]] }
+      ]
+    })
+    expect(writes()[1]?.body).toEqual({ majorDimension: 'ROWS', values: [["'@new", 5]] })
+  })
+
+  it('upserts with formulas: true by writing formulas unescaped on update and append', async () => {
+    const { api, writes } = await sheetsApi([
+      route('GET', `${VALUES}'Q4'`, () =>
+        googleJson(200, {
+          range: "'Q4'!A1:B2",
+          values: [
+            ['Name', 'Total'],
+            ['Ada', '4']
+          ]
+        })
+      ),
+      route('POST', `/v4/spreadsheets/${ID}/values:batchUpdate`, () => googleJson(200, {})),
+      route('POST', `${VALUES}'Q4'!A1:append`, () =>
+        googleJson(200, { updates: { updatedRange: "'Q4'!A3:B3" } })
+      )
+    ])
+    const view = await upsertSheet(api, {
+      ref: ID,
+      key: 'Name',
+      formulas: true,
+      values: [
+        ['Ada', '=SUM(2,3)'],
+        ['Grace', '=B2*2']
+      ]
+    })
+    expect(view.done).toBe('Updated 1, added 1')
+    expect(writes()[0]?.body).toEqual({
+      valueInputOption: 'USER_ENTERED',
+      data: [{ range: "'Q4'!A2", values: [['Ada', '=SUM(2,3)']] }]
+    })
+    expect(writes()[1]?.body).toEqual({ majorDimension: 'ROWS', values: [['Grace', '=B2*2']] })
+  })
 })

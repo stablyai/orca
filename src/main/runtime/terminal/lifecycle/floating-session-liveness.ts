@@ -145,6 +145,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
+    this.orchestrationMailboxNotifications.forgetReleasedPointerPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
       // Pruning can bypass onPtyExit; release leader teams here too.

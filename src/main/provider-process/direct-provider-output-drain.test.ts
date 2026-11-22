@@ -12,7 +12,8 @@ async function readText(stream: PassThrough): Promise<string> {
   return result
 }
 
-describe('direct provider output retirement', () => {
+// Only supervised POSIX children are drained; Windows spawns providers unsupervised.
+describe.skipIf(process.platform === 'win32')('direct provider output retirement', () => {
   it('drains already-written output when its deadline expires before pipe readers run', async () => {
     const raw = spawn(
       process.execPath,
