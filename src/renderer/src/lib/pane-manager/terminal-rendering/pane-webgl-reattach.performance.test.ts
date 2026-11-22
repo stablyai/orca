@@ -4,6 +4,7 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 // Guards #43465: an atlas rebuild recreates at most one WebGL context per frame, decides each pane on its own frame, never leaves a shown pane on the DOM renderer or paints mid-frame, and pauses while the user interacts.
 const attaches = { count: 0 }
 const interactionHold = { ms: 0 }
+const parked: { value: boolean; resume: (() => void) | null } = { value: false, resume: null }
 type Verdict = 'now' | 'wait' | 'skip'
 let rebuilder:
   | ((
@@ -38,8 +39,14 @@ vi.mock('./terminal-webgl-atlas-memory-rebuild', () => ({
   setTerminalWebglAtlasRebuilder: (next: typeof rebuilder) => {
     rebuilder = next
   },
-  takeCoveredDetachedPane: () => undefined,
-  terminalWebglAtlasInteractionHoldMs: () => interactionHold.ms
+  takeCoveredDetachedPane: () => undefined
+}))
+vi.mock('./terminal-webgl-atlas-rebuild-interaction', () => ({
+  terminalWebglAtlasInteractionHoldMs: () => interactionHold.ms,
+  isTerminalWebglAtlasRebuildParked: () => parked.value,
+  whenTerminalWebglAtlasRebuildUnparked: (resume: () => void) => {
+    parked.resume = resume
+  }
 }))
 vi.mock('./terminal-render-pause-release', () => ({ paintReplacementCanvasNow: () => {} }))
 
@@ -79,6 +86,8 @@ describe('atlas-rebuild context recreation', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
     attaches.count = 0
     interactionHold.ms = 0
+    parked.value = false
+    parked.resume = null
     vi.resetModules()
     await import('./pane-webgl-reattach')
   })
@@ -158,6 +167,22 @@ describe('atlas-rebuild context recreation', () => {
     expect(attaches.count).toBe(0)
     expect(framed.raw.webglAddon).toBeTruthy()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('touches no context while the window is hidden or unfocused, and resumes when it is back', async () => {
+    const fakes = Array.from({ length: 3 }, fakePane)
+    run(fakes)
+    await vi.advanceTimersByTimeAsync(16)
+    expect(attaches.count).toBe(1)
+    parked.value = true
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(attaches.count).toBe(1)
+    expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+    parked.value = false
+    parked.resume?.()
+    await vi.advanceTimersByTimeAsync(16 * 2)
+    expect(attaches.count).toBe(3)
   })
 
   it('runs overlapping rebuilds through one queue: still one context per frame', async () => {

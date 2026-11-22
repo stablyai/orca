@@ -4,9 +4,13 @@ import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-pol
 import {
   setTerminalWebglAtlasRebuilder,
   takeCoveredDetachedPane,
-  terminalWebglAtlasInteractionHoldMs,
   type DeferredReattachVerdict
 } from './terminal-webgl-atlas-memory-rebuild'
+import {
+  isTerminalWebglAtlasRebuildParked,
+  terminalWebglAtlasInteractionHoldMs,
+  whenTerminalWebglAtlasRebuildUnparked
+} from './terminal-webgl-atlas-rebuild-interaction'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
 import { paintReplacementCanvasNow } from './terminal-render-pause-release'
 
@@ -117,6 +121,11 @@ function nextQueuedPane(): ManagedPaneInternal | undefined {
 
 /** One pane per frame, so no frame pays for more than one context; user input holds the rest, which keep rendering on their old context meanwhile. */
 function runRebuildQueue(): void {
+  if (isTerminalWebglAtlasRebuildParked()) {
+    // Hidden or unfocused mid-rebuild: the rest keep their old contexts until the window is back.
+    whenTerminalWebglAtlasRebuildUnparked(() => requestAnimationFrame(runRebuildQueue))
+    return
+  }
   const hold = terminalWebglAtlasInteractionHoldMs()
   if (hold > 0) {
     setTimeout(() => requestAnimationFrame(runRebuildQueue), hold)

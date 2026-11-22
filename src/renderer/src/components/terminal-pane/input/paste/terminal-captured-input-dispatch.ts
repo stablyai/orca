@@ -1,6 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-memory-rebuild'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 type CapturedTerminalInputDispatch = {
   targetPaneMounted: boolean

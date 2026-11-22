@@ -1,6 +1,6 @@
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
-import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-memory-rebuild'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 type TerminalPastePtyWriter = Pick<PtyTransport, 'sendInput' | 'sendInputAccepted'>
 
