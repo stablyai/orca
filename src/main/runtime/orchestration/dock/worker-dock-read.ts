@@ -21,13 +21,13 @@ import {
   readProviderFailureRows
 } from './worker-dock-provider-failures'
 import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
+import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
 
 const stateSql = `CASE f.state
-  WHEN 'ready' THEN COALESCE((SELECT state FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), 'unavailable') WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
+  WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
   WHEN 'stopped' THEN 'unexpected' WHEN 'abandoned' THEN 'unexpected'
   WHEN 'start_unknown' THEN 'unavailable' WHEN 'stop_unknown' THEN 'unavailable'
   ELSE f.state END`
-const changedSql = `CASE WHEN f.state = 'ready' THEN COALESCE((SELECT changed_at FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), f.changed_at) ELSE f.changed_at END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
 const Metadata = z.object({
   id: z.string(),
@@ -68,21 +68,33 @@ export function readWorkerDock(
 ): WorkerDockSnapshot {
   return readWorkerDockSnapshot(db.db, () => {
     const source = workerDockSession(request.party)
-    const revision = z
-      .object({ revision: z.number() })
-      .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get()).revision
+    // Both counters only rise, so their sum moves whenever either does.
+    const revision =
+      z
+        .object({ revision: z.number() })
+        .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get())
+        .revision + workerDockActivityRevision(db)
+    const activity = readWorkerDockActivity(db, source)
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
-      ${stateSql} AS state, ${changedSql} AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
-      NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS ownerActionsAvailable FROM worker_dock_facts f INDEXED BY worker_dock_eligible
+      ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
+      NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS ownerActionsAvailable,
+      f.state = 'ready' AS ready FROM worker_dock_facts f INDEXED BY worker_dock_eligible
       WHERE ${eligible}
       ORDER BY CASE WHEN f.state IN ('failed', 'stopped', 'abandoned') THEN 0 ELSE 1 END,
         changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
       .all(source)
-      .map((row) => Metadata.parse(row))
+      .map((row) => {
+        const identity = Metadata.parse(row)
+        // A ready worker shows the activity its agent status gives it, kept in memory.
+        const live = row.ready === 1 ? activity?.get(identity.dispatchId) : undefined
+        return live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity
+      })
     const providerFailures = readProviderFailureIdentities(db, source)
     if (providerFailures?.length) {
       identities.push(...providerFailures)
+    }
+    if (providerFailures?.length || activity?.size) {
       identities.sort(compareWorkerDockEntries)
     }
     const found = request.anchor ? identities.findIndex((row) => row.id === request.anchor) : 0
