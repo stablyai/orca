@@ -1,6 +1,5 @@
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { sendAgentTurn } from '../orchestration/turn-delivery/send-agent-turn'
 import { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
 import { waitForWorkerAgentReady } from '../terminal/wait/launched-agent-composer-readiness'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
@@ -20,6 +19,9 @@ type RestartResumeRuntime = Pick<
   | 'subscribeAgentProviderSessionChangesFn'
   | 'closeTerminal'
 >
+
+/** How long a restart continue prompt has to start the resumed agent's turn. */
+const RESTART_CONTINUE_OBSERVE_MS = 15_000
 
 export function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -65,13 +67,16 @@ function createTerminalWorkerRestartResume(
         (wait) => wait.satisfied,
         () => false
       ),
-    sendPrompt: (handle, prompt, operationId) =>
-      sendAgentTurn({
-        kind: 'terminal',
-        runtime,
-        handle,
-        turn: { purpose: 'external-message', body: prompt, operationId }
+    sendPrompt: async (handle, prompt, requestId) => {
+      const sent = await runtime.sendTerminalAgentPrompt(handle, prompt, {
+        inputKind: 'orchestration',
+        acceptQueued: true,
+        observationTimeoutMs: RESTART_CONTINUE_OBSERVE_MS,
+        requestId
       })
+      // Only a provider that reports turns can prove a dropped prompt.
+      return sent.prompt?.observation !== 'supported' || sent.prompt.stages.includes('turn_started')
+    }
   })
   // A pane started again in place is bound once its resumed agent reports its conversation there.
   runtime.subscribeAgentProviderSessionChangesFn?.((sessions) => resume.observePaneAgents(sessions))

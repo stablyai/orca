@@ -37,7 +37,8 @@ export type TerminalWorkerRestartResumeDeps = {
   handleForPane: (paneKey: string) => string | null
   /** Resolves once the resumed agent's composer takes input; false when it never does. */
   waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
-  sendPrompt: (handle: string, prompt: string, operationId: string) => Promise<unknown>
+  /** False when the agent provably did not start the turn. */
+  sendPrompt: (handle: string, prompt: string, operationId: string) => Promise<boolean>
   /** A terminal this resume opened for a Dispatch that settled meanwhile; nobody owns its agent. */
   closeTerminal: (handle: string) => Promise<unknown>
   /** The resumed worker is up but could not be asked to continue: its coordinator hears it rests. */
@@ -246,7 +247,9 @@ export class TerminalWorkerRestartResume {
       return
     }
     try {
-      await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent)
+      if (!(await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent))) {
+        throw new Error('restart_resume_continue_not_taken')
+      }
     } catch (error) {
       console.warn('[orchestration] continuing a resumed terminal worker failed', {
         dispatchId,
@@ -262,19 +265,19 @@ export class TerminalWorkerRestartResume {
     dispatchId: string,
     handle: string,
     agent: TuiAgent
-  ): Promise<void> {
+  ): Promise<boolean> {
     const deadline = Date.now() + RESTART_CONTINUE_BUDGET_MS
     for (;;) {
       try {
         if (!(await this.deps.waitForAgentReady(handle, agent))) {
           throw new Error('restart_resume_agent_not_ready')
         }
-        await this.deps.sendPrompt(
+        // Sent once: a second paste could stack a duplicate turn or double the composer text.
+        return await this.deps.sendPrompt(
           handle,
           AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
           `${dispatchId}:restart-continue`
         )
-        return
       } catch (error) {
         if (Date.now() >= deadline) {
           throw error

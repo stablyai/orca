@@ -50,15 +50,17 @@ function owner(
   overrides: {
     reopen?: () => Promise<{ handle: string } | null>
     handleForPane?: () => string
+    sendPrompt?: () => Promise<boolean>
+    reportResting?: () => Promise<void>
   } = {}
 ) {
-  const sendPrompt = vi.fn(async () => undefined)
+  const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
   const resume = new TerminalWorkerRestartResume({
     getDb: () => db ?? null,
     resumeWorkOnRestart: () => true,
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
     closeTerminal: async () => undefined,
-    reportResting: async () => undefined,
+    reportResting: overrides.reportResting ?? (async () => undefined),
     terminalAuthority: () => ({
       paneKey: 'tab_new:leaf_new',
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
@@ -86,6 +88,16 @@ describe('TerminalWorkerRestartResume', () => {
       db!.close()
       db = undefined
     }
+  })
+
+  it('tells the coordinator a resumed worker rests when it did not take its continue prompt', async () => {
+    const dispatchId = lostWorker('working')
+    const reportResting = vi.fn(async () => undefined)
+    const { resume, sendPrompt } = owner({ sendPrompt: async () => false, reportResting })
+    resume.holdForReopen(dispatchId, vi.fn())
+    resume.settleStartup()
+    await vi.waitFor(() => expect(reportResting).toHaveBeenCalledWith('tab_new:leaf_new'))
+    expect(sendPrompt).toHaveBeenCalledTimes(1)
   })
 
   it('reports the worker lost once when its conversation cannot reopen', async () => {
