@@ -1,4 +1,5 @@
 import type { ClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
+import { retainClaudeLeadModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 
@@ -11,10 +12,7 @@ export abstract class AgentHookServerClaudeStatusLineModel extends AgentHookServ
     if (!lead || this.state.claudeSessionOwnerByPaneKey.get(paneKey) !== report.sessionId) {
       return
     }
-    if (lead.model !== report.model) {
-      // Later lead events rebuild the row from this record.
-      this.state.claudeLeadStateByPaneKey.set(paneKey, { ...lead, model: report.model })
-    }
+    retainClaudeLeadModel(this.state, paneKey, report.model)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload

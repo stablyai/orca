@@ -19,7 +19,6 @@ import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryContext
 } from '../catalog/native-chat-session-option-discovery'
-import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
 
@@ -35,29 +34,18 @@ export function useNativeChatSessionOptions(args: {
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
-  readTerminalScreen?: () => string | null
-  /** OMP model evidence comes from its hook; Claude uses its terminal frame. */
+  /** The pane whose agent status reports the session's model, as it does on the phone. */
   paneKey?: string
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const {
-    agent,
-    terminalTabId,
-    targetPtyId,
-    dispatchCommand,
-    onAgentPicker,
-    readTerminalScreen,
-    paneKey
-  } = args
+  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, paneKey } = args
   const status = useAgentStatus(paneKey)
   const reportedModel = status?.model ?? null
   const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
   // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
   const appliedReportedModelRef = useRef<string | null>(null)
-  // Cache parsed screen text so late discovery can resolve real host model IDs.
-  const reportedScreenRef = useRef<string | null>(null)
   const discoveryContext = useMemo(
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
@@ -71,13 +59,6 @@ export function useNativeChatSessionOptions(args: {
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
-    const reportedValues =
-      agent === 'claude'
-        ? readClaudeSessionOptionsFromTerminalScreen(
-            readTerminalScreen?.(),
-            discoveredModels ?? undefined
-          )
-        : null
     return createNativeChatPtySessionOptions({
       agent,
       scopeKey,
@@ -86,7 +67,6 @@ export function useNativeChatSessionOptions(args: {
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
       modelLabel: sayNativeChatSessionOptionTranslated('model'),
-      reportedValues,
       dispatchCommand,
       canSwitchOmpModel,
       onAgentPicker,
@@ -104,55 +84,9 @@ export function useNativeChatSessionOptions(args: {
     dispatchCommand,
     discoveryContext,
     onAgentPicker,
-    readTerminalScreen,
     targetPtyId,
     terminalTabId
   ])
-
-  useEffect(() => {
-    if (!surface || agent !== 'claude') {
-      return
-    }
-    let cancelled = false
-    reportedScreenRef.current = null
-    const reportCurrentValues = async (): Promise<void> => {
-      let authoritativeScreen: string | null = null
-      if (targetPtyId && window.api?.pty?.getMainBufferSnapshot) {
-        try {
-          const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
-            scrollbackRows: 0
-          })
-          // Main-buffer snapshots are stale during alternate-screen TUIs; use mounted xterm then.
-          authoritativeScreen = snapshot?.alternateScreen ? null : (snapshot?.data ?? null)
-        } catch {
-          // The mounted renderer buffer remains a transport-neutral fallback.
-        }
-      }
-      const models = discoveryContext
-        ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
-        : null
-      for (const screen of [authoritativeScreen, readTerminalScreen?.() ?? null]) {
-        const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
-          screen,
-          models ?? undefined
-        )
-        if (!reportedValues) {
-          continue
-        }
-        // Retain parsed screen text for late discovery after the model frame scrolls away.
-        if (cancelled) {
-          return
-        }
-        reportedScreenRef.current = screen
-        surface.reportSessionOptions(reportedValues)
-        return
-      }
-    }
-    void reportCurrentValues()
-    return () => {
-      cancelled = true
-    }
-  }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
 
   // Scope survives surface rebuilds; reapplying an unchanged report would revert the user’s pick.
   useEffect(() => {
@@ -160,8 +94,7 @@ export function useNativeChatSessionOptions(args: {
   }, [agent, targetPtyId, terminalTabId])
 
   useEffect(() => {
-    // Claude uses terminal-frame evidence; other agents report model IDs in status hooks.
-    if (!surface || agent === 'claude' || !reportedModel) {
+    if (!surface || !reportedModel) {
       return
     }
     const catalog = getAgentSessionOptionCatalog(agent)
@@ -194,13 +127,6 @@ export function useNativeChatSessionOptions(args: {
       discoveryContext.hostKey,
       (models) => {
         surface.replaceModels(models)
-        const screen = agent === 'claude' ? reportedScreenRef.current : null
-        const reportedValues = screen
-          ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
-          : null
-        if (reportedValues) {
-          surface.reportSessionOptions(reportedValues)
-        }
       }
     )
     ensureNativeChatModelEnrichment({

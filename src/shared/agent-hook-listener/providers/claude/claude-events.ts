@@ -37,6 +37,7 @@ import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from './lifecycle/claude-prompt-turn-
 import { claudeHeldTurnEnd } from './lifecycle/claude-held-turn-end'
 import { normalizeClaudeSessionStart } from './lifecycle/claude-session-start-event'
 import { isClaudeToolEvent, restatePluginToolCall } from './lifecycle/claude-tool-events'
+import { readClaudeStopReplyModel } from './transcripts/claude-transcript-reply-model'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -305,7 +306,7 @@ export function normalizeClaudeEvent(
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
     ...heldEnd,
-    model: leadModel
+    model: leadModel ?? readClaudeStopReplyModel(eventName, hookPayload)
   })
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
