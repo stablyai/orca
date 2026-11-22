@@ -110,6 +110,10 @@ export function startPtyBindingSpan(entry: {
   }
 }
 
+export function _resetPtyBindingSpanSamplingForTests(): void {
+  fastLaneWindow = null
+}
+
 /** Reporting must not turn malformed state into a binding failure. */
 export function reportPtyBindingPlacement(
   span: PtyBindingSpan,

@@ -80,7 +80,8 @@ const NON_UNIT_TEST_RUNNERS = [
     'cloud/apps/relay-ingress',
     'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
-    'cloud/packages/push-contract'
+    'cloud/packages/push-contract',
+    'cloud/packages/relay-contract'
   ].map((dir) => ({
     name: dir,
     include: [`${dir}/${VITEST_DEFAULT_INCLUDE}`],
