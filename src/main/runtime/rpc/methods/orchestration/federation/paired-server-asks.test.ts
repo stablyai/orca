@@ -24,6 +24,7 @@ import { activePairedServerAsks } from '../../../../orchestration/federation/pai
 import { settleRemovedPairedServer } from '../../../../orchestration/federation/peer-mail/paired-server-changes'
 import { settlePairedServerAsksOnRemoval } from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import { RpcDispatcher } from '../../../dispatcher'
+import { BOT_REQUEST_OUTCOME_METHOD } from '../../bots-request-outcome'
 import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
@@ -498,6 +499,57 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(await cards()).toEqual([])
     expect(await call('pairedServerAsks.allowances', { botId: 'docs' })).toEqual({ servers: [] })
   })
+
+  it("reads the asking chat's card from the server: waiting, then declined or answered", async () => {
+    // As a window paired to the server reads it.
+    const outcome = (messageId: string) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+      BOT_REQUEST_OUTCOME_METHOD.handler({ messageId, onClient: true }, {
+        runtime: server.runtime,
+        pairedDeviceId: 'device_b'
+      } as RpcContext)
+    await introduce()
+    const denied = await ask()
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    expect(outcome(denied.message.id)).toMatchObject({ outcome: null, answer: null })
+    await call('pairedServerAsks.decide', { messageId: denied.message.id, decision: 'deny' })
+    await vi.waitFor(() => expect(outcome(denied.message.id).outcome).toBe('dropped'))
+
+    const answered = await ask({ subject: 'Second question' })
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    await call('pairedServerAsks.decide', { messageId: answered.message.id, decision: 'once' })
+    await vi.waitFor(() =>
+      expect(computer.db.getUnreadMessages(DOCS_HOME).map((mail) => mail.id)).toContain(
+        answered.message.id
+      )
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+    await ORCHESTRATION_REPLY_METHOD.handler({ id: answered.message.id, body: 'docs/install.md' }, {
+      runtime: computer.runtime,
+      orchestrationCaller: sessionCaller(DOCS_HOME)
+    } as RpcContext)
+    await vi.waitFor(() =>
+      expect(outcome(answered.message.id)).toMatchObject({
+        outcome: 'answered',
+        answer: 'docs/install.md'
+      })
+    )
+
+    const unpaired = await ask({ subject: 'Third question' })
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    await call('pairedServerAsks.decide', { messageId: unpaired.message.id, decision: 'once' })
+    await vi.waitFor(() =>
+      expect(computer.db.getUnreadMessages(DOCS_HOME).map((mail) => mail.id)).toContain(
+        unpaired.message.id
+      )
+    )
+    await settlePairedServerAsksOnRemoval(computer.runtime, 'env_s')
+    await vi.waitFor(() => expect(outcome(unpaired.message.id).outcome).toBe('dropped'))
+    expect(outcome(unpaired.message.id).answer).toContain(
+      "Docs's owner unpaired its computer from this one"
+    )
+  })
+
   /** An item as the server queued it for this computer, read from the server's relay. */
   function queued(messageId: string) {
     return PulledRow.parse(

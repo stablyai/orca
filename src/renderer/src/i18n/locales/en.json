@@ -22648,6 +22648,13 @@
         "title": "{{from}} wants to message {{to}} on this computer",
         "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
       },
+      "clientAsk": {
+        "declined": "Declined",
+        "notConnected": "Wasn’t connected",
+        "pairedComputer": "Paired computer",
+        "waitingForYou": "Waiting for you",
+        "waitingOn": "Waiting for approval on {{computer}}"
+      },
       "dock": {
         "label": "Message box and prompts"
       }

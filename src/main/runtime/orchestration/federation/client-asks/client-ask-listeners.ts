@@ -21,6 +21,8 @@ export type ClientAskPull = { key: string; session: string }
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
 
 const listenersByOwner = new WeakMap<ClientAskListenerOwner, Map<string, ClientAskListener>>()
+// The name each computer last pulled with, so a send while it's away can still name it.
+const namesByOwner = new WeakMap<ClientAskListenerOwner, Map<string, string>>()
 
 function listenersOf(owner: ClientAskListenerOwner): Map<string, ClientAskListener> {
   let listeners = listenersByOwner.get(owner)
@@ -58,6 +60,12 @@ export function clientAskPullStarted(
       listeners.delete(other)
     }
   }
+  let names = namesByOwner.get(owner)
+  if (!names) {
+    names = new Map()
+    namesByOwner.set(owner, names)
+  }
+  names.set(pull.installationId, pull.name)
   listeners.set(key, {
     deviceId: caller.deviceId,
     installationId: pull.installationId,
@@ -91,6 +99,14 @@ export function listeningClients(
     (listener) =>
       listener.installationId === selector.trim() || listener.name.trim().toLowerCase() === wanted
   )
+}
+
+/** The name a computer last pulled with since this Orca started; null for one it hasn't seen. */
+export function lastClientAskName(
+  owner: ClientAskListenerOwner,
+  installationId: string
+): string | null {
+  return namesByOwner.get(owner)?.get(installationId.trim()) ?? null
 }
 
 export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: string): void {

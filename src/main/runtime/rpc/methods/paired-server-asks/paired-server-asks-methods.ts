@@ -100,6 +100,8 @@ export const PAIRED_SERVER_ASKS_METHODS = [
         ctx,
         rows.map((row) => row.environment_id)
       )
+      // The agent's Home chat, where a phone shows its cards inline.
+      const botOf = new Map(ctx.runtime.bots.list().map((bot) => [bot.id, bot]))
       return {
         cards: rows.flatMap((row) => {
           const ask = ClientAskPayload.safeParse(safeJson(row.payload))
@@ -112,6 +114,8 @@ export const PAIRED_SERVER_ASKS_METHODS = [
               environmentId: row.environment_id,
               serverName: names.get(row.environment_id) ?? null,
               botId: row.bot_id,
+              botName: botOf.get(row.bot_id)?.name ?? null,
+              botChatSessionId: botOf.get(row.bot_id)?.chatSessionId ?? null,
               rootSession: row.root_session,
               from: { label: ask.data.senderLabel, sender: ask.data.sender ?? null },
               subject: ask.data.subject,

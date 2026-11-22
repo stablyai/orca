@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PeerMailSender } from './orchestration/orchestration-peer-mail-params'
 
 const ID = z.string().trim().min(1).max(500)
@@ -30,6 +30,9 @@ export const PairedServerAskCard = z.object({
   /** The server's name in this computer's own catalog; absent from older hosts. */
   serverName: z.string().nullish(),
   botId: z.string(),
+  /** The agent's name and Home chat, where a phone shows the card; absent from older hosts. */
+  botName: z.string().nullish(),
+  botChatSessionId: z.string().nullish(),
   /** The server's root chat the ask came from, as `orca_session_id:<id>`. */
   rootSession: z.string(),
   from: z.object({ label: z.string(), sender: PeerMailSender.nullable() }),

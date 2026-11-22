@@ -14,7 +14,7 @@ const OwnStatus = z.object({
 // This computer's installation id, read once: a server chat's mentions of agents here name it.
 let ownInstallation: Promise<string | null> | null = null
 
-function readOwnInstallation(): Promise<string | null> {
+export function readOwnInstallation(): Promise<string | null> {
   ownInstallation ??= callRuntimeRpc(ownBotHost().target, 'status.get', {})
     .then((status) => OwnStatus.safeParse(status).data?.hostDescriptor?.installationId ?? null)
     .catch(() => {
@@ -52,4 +52,21 @@ export function usePairedServerClientInstallation(hostId: ExecutionHostId | null
     }
   }, [environmentId])
   return read && read.environmentId === environmentId ? read.installationId : null
+}
+
+/** This computer's installation id once read; null until then. */
+export function useOwnInstallation(): string | null {
+  const [own, setOwn] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void readOwnInstallation().then((id) => {
+      if (live) {
+        setOwn(id)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  return own
 }

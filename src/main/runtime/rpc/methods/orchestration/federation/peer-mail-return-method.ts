@@ -20,6 +20,7 @@ export const ORCHESTRATION_PEER_MAIL_RETURN_METHOD = defineOrchestrationMethod({
     const db = runtime.getOrchestrationDb()
     const through = new Map<string, number>()
     const gone = new Set<string>()
+    let returned = false
     for (const item of params.items) {
       const conversation = db.getPeerMailConversation(item.conversationId)
       // Only this Orca's conversation with that computer, under the pairing it calls with now.
@@ -35,6 +36,7 @@ export const ORCHESTRATION_PEER_MAIL_RETURN_METHOD = defineOrchestrationMethod({
       if (payload.success) {
         const stored = storePeerReply(runtime, db, conversation, item.messageId, payload.data)
         if (stored) {
+          returned = true
           runtime.notifyMessageArrived(stored.to_handle, stored.type)
         }
       } else {
@@ -46,6 +48,9 @@ export const ORCHESTRATION_PEER_MAIL_RETURN_METHOD = defineOrchestrationMethod({
         item.conversationId,
         Math.max(through.get(item.conversationId) ?? 0, item.sequence)
       )
+    }
+    if (returned) {
+      runtime.notifyPeerMailReturned()
     }
     return {
       acknowledgments: [...through].map(([conversationId, throughSequence]) => ({

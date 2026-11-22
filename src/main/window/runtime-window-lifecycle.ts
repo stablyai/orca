@@ -55,6 +55,7 @@ export function registerRuntimeWindowLifecycle(
     botsChanged: (scope) => send('bots:changed', scope),
     orchestrationSessionWorkersChanged: (sessionId) =>
       send('runtime:orchestrationSessionWorkersChanged', { sessionId }),
+    peerMailReturned: () => send('runtime:peerMailReturned'),
     workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
