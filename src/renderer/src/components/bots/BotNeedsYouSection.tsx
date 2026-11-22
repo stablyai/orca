@@ -293,9 +293,13 @@ type GroupRow =
   | { key: string; approval: false; stopped: BotAutomationRow }
   | { key: string; approval: false; item: BotItem }
 
-/** A worker's own dot says it waits on a permission; a chat's prompt says so once read. */
+/** A worker's own dot says it waits on a permission; a chat's prompt says so once read; a paired
+ *  server's card always asks for one. */
 function knownApproval(need: BotNeedView): boolean {
-  return need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission'
+  return (
+    need.kind === 'paired-ask' ||
+    (need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission')
+  )
 }
 
 const itemKey = (item: BotItem): string => `item:${item.uid}`

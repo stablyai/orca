@@ -27,6 +27,8 @@ export const PairedServerDisallowParams = z.object({ botId: ID, serverKey: ID })
 export const PairedServerAskCard = z.object({
   messageId: z.string(),
   environmentId: z.string(),
+  /** The server's name in this computer's own catalog; absent from older hosts. */
+  serverName: z.string().nullish(),
   botId: z.string(),
   /** The server's root chat the ask came from, as `orca_session_id:<id>`. */
   rootSession: z.string(),
