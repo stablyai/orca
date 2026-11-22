@@ -43,6 +43,15 @@ export function describeUnconfirmedStartEvidence(
   }
   const typed = `Orca typed the brief ${seconds(submit.pastedAt - delivery.readyAt)} after the agent was ready`
   if ('withheldFor' in submit) {
+    if (aftermath?.processReplaced) {
+      // The dialog was the old process's; the new one's screen decides what Enter does now.
+      return {
+        lines: [
+          `${typed}, but did not press Enter: a dialog showed on its screen (${submit.withheldFor}).`,
+          describeAftermath(aftermath, submit.pastedAt)
+        ]
+      }
+    }
     return {
       lines: [
         `${typed}, but did not press Enter: a dialog showed on its screen (${submit.withheldFor}).`

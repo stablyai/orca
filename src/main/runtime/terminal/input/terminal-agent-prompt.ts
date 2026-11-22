@@ -158,10 +158,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
         }
-        // An Enter now would answer a dialog that opened over the paste, not submit it.
-        withheldFor = mayWithhold
-          ? await this.readAgentPromptSubmitHold(handle, ptyId, permissionBaseline)
-          : null
         try {
           await beforeWrite(deliverySignal)
         } catch (error) {
@@ -170,6 +166,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           }
           throw error
         }
+        // Last await before Enter, so the screen it reads is the one Enter would reach.
+        withheldFor = mayWithhold
+          ? await this.readAgentPromptSubmitHold(
+              handle,
+              ptyId,
+              permissionBaseline,
+              options.promptForSchedule
+            )
+          : null
       }
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)

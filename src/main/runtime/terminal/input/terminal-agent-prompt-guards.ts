@@ -3,6 +3,8 @@ import type { AgentPromptActivity } from './agent-prompt-submission-verification
 import type { AgentPromptExpectedBinding } from './agent-prompt-write-options'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection'
+import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
+import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 /** Checks a prompt write runs before it types or submits. */
@@ -38,13 +40,19 @@ export abstract class OrcaRuntimeWithAgentPromptWriteGuards extends OrcaRuntimeW
   protected async readAgentPromptSubmitHold(
     handle: string,
     ptyId: string,
-    permissionBaseline: AgentPromptActivity
+    permissionBaseline: AgentPromptActivity,
+    prompt: string | undefined
   ): Promise<RuntimeTerminalWaitBlockedReason | null> {
     const screen = await this.readCurrentTerminalWaitScreen(ptyId)
-    // A composer still showing a draft is what Enter reaches; a dialog takes its place. This also
-    // keeps a brief shown inline, whose text may read like a dialog, from holding itself back.
+    // A composer showing exactly this brief is what Enter reaches; reading the brief's own text,
+    // which may sound like a dialog, must not hold it back. Any other draft may be a dialog's row.
+    const holdsBrief = prompt !== undefined && isHeldAgentPromptDraft(screen?.draft, prompt, 0)
     const dialog =
-      screen && !screen.draft ? detectTerminalWaitBlockedReason(screen.lines.join('\n')) : null
+      screen && !holdsBrief
+        ? detectTerminalWaitBlockedReason(
+            restoreProjectedComposerDraft(screen.lines, screen.draft).join('\n')
+          )
+        : null
     return (
       dialog ??
       (this.isAgentPromptPermissionBlocked(
