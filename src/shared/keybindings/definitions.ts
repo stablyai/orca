@@ -85,13 +85,6 @@ export function isKeybindingActionId(value: string): value is KeybindingActionId
   return DEFINITION_IDS.has(value as KeybindingActionId) || isPluginKeybindingActionId(value)
 }
 
-// Removed actions that saved keybinding files may still name; parsers skip them without a warning.
-const RETIRED_KEYBINDING_ACTION_IDS: ReadonlySet<string> = new Set(['workspace.delete'])
-
-export function isRetiredKeybindingActionId(value: string): boolean {
-  return RETIRED_KEYBINDING_ACTION_IDS.has(value)
-}
-
 export function isPluginKeybindingActionId(value: string): value is PluginKeybindingActionId {
   return (
     value.length <= 400 &&

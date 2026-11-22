@@ -1,8 +1,5 @@
 import { findKeybindingConflicts } from '../../../../../shared/keybindings/formatting'
-import {
-  isKeybindingActionId,
-  isRetiredKeybindingActionId
-} from '../../../../../shared/keybindings/definitions'
+import { isKeybindingActionId } from '../../../../../shared/keybindings/definitions'
 import {
   keybindingFileDiagnostic,
   KEYBINDING_REASON_COPY
@@ -44,9 +41,6 @@ export function normalizeStoredWebOverrides(
 
   const overrides: KeybindingOverrides = {}
   for (const [actionId, rawBindings] of Object.entries(value)) {
-    if (isRetiredKeybindingActionId(actionId)) {
-      continue
-    }
     if (!isKeybindingActionId(actionId)) {
       diagnostics.push(
         keybindingFileDiagnostic({ severity: 'warning', section, actionId }, 'unknownAction', {

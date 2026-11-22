@@ -120,11 +120,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { markDirectScrollInput } = scrollSuppression
   const programmaticScrollMarks = useMemo(() => createProgrammaticScrollMarks(), [])
 
-  const { handleContainerKeyDown, keyboardPreview } = useWorktreeViewportKeyboardNavigation({
-    props,
-    scrollRef,
-    markDirectScrollInput
-  })
+  const { handleContainerKeyDown, handleContainerKeyUp, handleContainerBlur, keyboardPreview } =
+    useWorktreeViewportKeyboardNavigation({ props, scrollRef, markDirectScrollInput })
 
   const rowProps = useMemo(
     () => withKeyboardPreview(props, keyboardPreview),
@@ -394,6 +391,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
+        onKeyUp={handleContainerKeyUp}
+        onBlur={handleContainerBlur}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}
