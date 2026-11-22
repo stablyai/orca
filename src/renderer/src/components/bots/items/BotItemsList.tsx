@@ -1,7 +1,7 @@
 // A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
 // and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -32,7 +32,7 @@ import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-nam
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemRowsWindow } from './BotItemRowsWindow'
-import { focusBotItemBackRow } from './bot-item-row-tab-stops'
+import { useBotItemGroupBack } from './use-bot-item-group-back'
 import {
   BOT_ITEMS_SCROLLER_ATTR,
   useBotItemsViewport,
@@ -254,29 +254,17 @@ function BotItemGroup({
     [open, id, items, shown]
   )
   const section = useRef<HTMLElement | null>(null)
-  // Back's row, only in the group that held it at mount, until it has focus: found by uid, as an update
-  // can move it first. One that left the group, or the rows shown, has nothing to return to.
-  const [backDone, setBackDone] = useState(focusIndex < 0)
-  const backItem = useMemo(
-    () => (backDone ? undefined : items.slice(0, shown).find((item) => item.uid === focusUid)),
-    [backDone, focusUid, items, shown]
-  )
-  const backFocused = useCallback(() => setBackDone(true), [])
   const unfold = useLatestHandler(() => setOpen(true))
-  // Needs you's rows are all mounted, so its row is focused here; other groups' windows focus it as drawn.
-  useEffect(() => {
-    // Done already, or the row left the group (setting done again changes nothing).
-    if (!backItem) {
-      backFocused()
-    } else if (!open) {
-      unfold()
-    } else if (id === 'needs_you') {
-      backFocused()
-      focusBotItemBackRow(
-        section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)
-      )
-    }
-  }, [backItem, open, unfold, id, backFocused])
+  const { backItem, backFocused } = useBotItemGroupBack({
+    id,
+    items,
+    focusUid,
+    focusIndex,
+    shown,
+    open,
+    unfold,
+    section
+  })
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
