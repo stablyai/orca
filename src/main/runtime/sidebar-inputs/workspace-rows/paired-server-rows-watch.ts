@@ -3,6 +3,25 @@ import type {
   MobileDesktopRelayHostWatch
 } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import type { ServerEntry } from './paired-server-rows-state'
+
+/** Hears each paired server's agent-row change notices from the watch kept while it is in contact. */
+export class PairedServerAgentRowsChanges {
+  private readonly listeners = new Set<(environmentId: string) => void>()
+
+  onChange(listener: (environmentId: string) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  emit(environmentId: string): void {
+    for (const listener of this.listeners) {
+      listener(environmentId)
+    }
+  }
+}
+
 export function watchPairedServerRows(
   hosts: MobileDesktopRelayHosts,
   entry: ServerEntry,
@@ -10,6 +29,7 @@ export function watchPairedServerRows(
     attachment: () => object | null
     current: (entry: ServerEntry) => boolean
     refresh: (environmentId: string) => Promise<void>
+    agentRowsChanged: PairedServerAgentRowsChanges
   }
 ): void {
   const attachment = owner.attachment()
@@ -34,6 +54,11 @@ export function watchPairedServerRows(
             entry.refreshAgain ||= entry.refreshing !== null
             entry.catalogStale ||= catalog
             void owner.refresh(entry.environmentId)
+          }
+        },
+        onRowsChanged: () => {
+          if (current()) {
+            owner.agentRowsChanged.emit(entry.environmentId)
           }
         },
         onClose: () => {

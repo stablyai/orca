@@ -4,6 +4,13 @@ import type {
   MobileDesktopRelayHostWatch
 } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import type { PairedServerCatalog } from '../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+
+export type PairedServerRowsOptions = {
+  hasDemand: () => boolean
+  hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
+}
+
 export type ServerEntry = {
   environmentId: string
   fence: string

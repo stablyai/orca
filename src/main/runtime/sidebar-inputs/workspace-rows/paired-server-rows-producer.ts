@@ -1,10 +1,10 @@
 import { observeEnvironmentStoreReads } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
 import { newPairedServerEntry, type ServerEntry } from './paired-server-rows-state'
+import type { PairedServerRowsOptions } from './paired-server-rows-state'
 import { pairedServerRowsSnapshot } from './paired-server-rows-snapshot'
-import { watchPairedServerRows } from './paired-server-rows-watch'
+import { PairedServerAgentRowsChanges, watchPairedServerRows } from './paired-server-rows-watch'
 import { ProducerRevision } from '../producer-revision'
 import { environmentStoreWriteCount } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { describePairedServerHosts } from '../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import type { MobileRelayServerWorktreeRow } from '../../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { PairedServerRowsSnapshot } from '../../../../shared/sidebar-list/feed-facts/paired-server-rows'
@@ -39,13 +39,9 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
   private listingDirty = false
   private displayedHosts = ''
   readonly revision = new ProducerRevision()
+  readonly agentRowsChanged = new PairedServerAgentRowsChanges()
 
-  constructor(
-    private readonly options: {
-      hasDemand: () => boolean
-      hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
-    }
-  ) {}
+  constructor(private readonly options: PairedServerRowsOptions) {}
 
   attach(hosts: MobileDesktopRelayHosts): () => void {
     this.detachHosts?.()
@@ -225,7 +221,8 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
         watchPairedServerRows(hosts, entry, {
           attachment: () => this.attachment,
           current: (candidate) => this.servers.get(candidate.environmentId) === candidate,
-          refresh: (id) => this.refresh(id)
+          refresh: (id) => this.refresh(id),
+          agentRowsChanged: this.agentRowsChanged
         })
       } else if (!inContact) {
         entry.watchSetup = null

@@ -20,9 +20,9 @@ import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
-import {
+import type {
   RelayHostRowsAnnouncer,
-  type RelayHostRowsReader
+  RelayHostRowsReader
 } from './mobile-relay-host-rows-announcer'
 import {
   RelayHostListAnnouncer,
@@ -214,9 +214,8 @@ export class MobileRelayHostCatalog {
 
   private rowsAnnouncer: RelayHostRowsAnnouncer | null = null
 
-  /** Calls `changed` when a server a connected phone read has new agent rows, so phones need not poll them. */
-  publishRowChanges(changed: (hostId: `runtime:${string}`) => void): () => void {
-    const announcer = new RelayHostRowsAnnouncer(this.options.hosts, changed)
+  /** Servers a connected phone reads are announced through `announcer` until the returned detach. */
+  publishRowChanges(announcer: RelayHostRowsAnnouncer): () => void {
     this.rowsAnnouncer = announcer
     return () => announcer.dispose()
   }

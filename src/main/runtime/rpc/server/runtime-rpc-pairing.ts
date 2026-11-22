@@ -17,6 +17,7 @@ import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
+import { RelayHostRowsAnnouncer } from '../../mobile-desktop-relay/mobile-relay-host-rows-announcer'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
@@ -147,10 +148,15 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
         changed: () => this.runtime.notifyRelayHostsChanged()
       }) ?? null
+    // Rows change notices come from the watch the paired-server rows keep on each server.
     const detachRowChanges =
-      this.mobileRelayHostCatalog?.publishRowChanges((hostId) =>
-        this.runtime.notifyRelayHostRowsChanged(hostId)
-      ) ?? null
+      pairedServerRows && this.mobileRelayHostCatalog
+        ? this.mobileRelayHostCatalog.publishRowChanges(
+            new RelayHostRowsAnnouncer(pairedServerRows.agentRowsChanged, (hostId) =>
+              this.runtime.notifyRelayHostRowsChanged(hostId)
+            )
+          )
+        : null
     // Phones filter pending VM checkouts when they read; a change makes them read again.
     const detachPendingVmChanges = this.mobileRelayHostCatalog
       ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
