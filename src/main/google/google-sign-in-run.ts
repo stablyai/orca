@@ -46,7 +46,7 @@ export const NO_GOOGLE_CLIENT =
 export type GoogleSignInDeps = {
   http: GoogleHttp
   now: () => number
-  client: () => GoogleClientConfig | null
+  client: () => GoogleClientConfig | null | Promise<GoogleClientConfig | null>
   /** Absent on a host with no browser of its own (orca serve). */
   openBrowser?: (url: string) => Promise<void>
 }
@@ -100,7 +100,7 @@ export async function runGoogleSignIn(
   options: GoogleSignInOptions,
   channel: CallerOwnedSignInChannel<GoogleSignInPrompt, string>
 ): Promise<GoogleAccountRecord> {
-  const client = deps.client()
+  const client = await deps.client()
   if (!client) {
     throw new Error(NO_GOOGLE_CLIENT)
   }
@@ -228,7 +228,7 @@ async function finishGoogleSignIn(
   // A reconnect keeps what was picked before, whichever account the browser signed in to.
   const choices = googleChoices([
     ...asked,
-    ...(readGoogleAccount(account.email)?.choices ?? []),
+    ...((await readGoogleAccount(account.email))?.choices ?? []),
     ...grantedGoogleChoices(grantedScopes)
   ])
   const services = await checkGoogleServices({
@@ -253,6 +253,6 @@ async function finishGoogleSignIn(
     checkedAt: now,
     connectedAt: now
   }
-  saveGoogleAccount(record)
+  await saveGoogleAccount(record)
   return record
 }

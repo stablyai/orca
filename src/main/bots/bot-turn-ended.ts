@@ -1,9 +1,18 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { settleBotRequestTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
+import {
+  settleBotRequestFailure,
+  settleBotRequestTurn
+} from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
 import { botGroupRoomOfSession, markBotGroupRoomUnread } from './bot-group-runtime'
 import type { BotGroupRoomOfSession } from '../runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { noteBotGroupMemberReply } from './bot-group-latest'
 import { type BotRecentChatsSection, readBotRecentChats } from './bot-recent-chats'
+import {
+  type BotActiveWorkSection,
+  joinedTurnSections,
+  type TurnSectionsMemo
+} from './bot-active-work'
+import { readBotActiveWork } from './bot-active-work-read'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -14,21 +23,30 @@ import { sendBotItemMail } from '../runtime/rpc/methods/bots-items-mail'
 import type { BotItemMail } from './bot-items-schema'
 import { createBotUnansweredQuestionNote } from './bot-unanswered-question-note'
 import { requireStructuredHost } from './bot-chat-session'
+import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
+import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
 /** A bot session's turn ended: settle the request it answered, and raise its group room. */
-export function botTurnEnded(runtime: OrcaRuntimeService, sessionId: string): void {
+export function botTurnEnded(
+  runtime: OrcaRuntimeService,
+  sessionId: string,
+  turnId: string,
+  ended?: TurnEndedVerdict
+): void {
   markBotGroupRoomUnread(runtime, sessionId)
-  void noteBotGroupMemberReply(runtime, sessionId).catch((error: unknown) =>
+  void noteBotGroupMemberReply(runtime, sessionId, turnId).catch((error: unknown) =>
     console.warn('[bot-groups] could not note a reply for the sidebar', error)
   )
-  void settleBotRequestTurn(runtime, sessionId).catch((error: unknown) =>
+  void settleBotRequestTurn(runtime, sessionId, ended).catch((error: unknown) =>
     console.warn('[bots] could not settle a bot request turn', error)
   )
 }
 
 /** Bot session work the runtime base needs but only the whole runtime can do. */
 export type BotSessionHooks = {
-  turnEnded: (sessionId: string) => void
+  turnEnded: (sessionId: string, turnId: string, ended?: TurnEndedVerdict) => void
+  /** A chat's request failed; only a bot's tells its senders why. */
+  requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
   /** What a bot's other chats did lately, for a turn of one of its chats. */
   recentChats: (
@@ -44,6 +62,25 @@ export type BotSessionHooks = {
   sendItemMail: (mail: BotItemMail) => Promise<boolean>
 }
 
+/** The turn's live-work slot: who it acts for is settled first, so a block kept from an owner turn
+ *  is never reused for a turn whose audience is unknown or not the owner (null drops it); only an
+ *  owner turn's slow or failed read keeps what the chat last got (undefined). */
+async function activeWorkSlot(
+  runtime: OrcaRuntimeService,
+  botId: string,
+  sessionId: string,
+  message: AgentJournalMessageItem
+): Promise<BotActiveWorkSection | null | undefined> {
+  // One deadline for both steps, so the turn waits no longer than the existing bound.
+  const deadline = Date.now() + BOT_WORK_NOTE_TIMEOUT_MS
+  const gate = await withTimeout(
+    readBotActiveWork(runtime, botId, sessionId, message),
+    BOT_WORK_NOTE_TIMEOUT_MS,
+    null
+  )
+  return gate ? withTimeout(gate.section, Math.max(0, deadline - Date.now()), undefined) : null
+}
+
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   const unansweredQuestionNote = createBotUnansweredQuestionNote({
     getOrchestrationDb: () => runtime.getOrchestrationDb(),
@@ -56,15 +93,31 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
     endedTurns: async (sessionId) =>
       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   })
+  const sections: TurnSectionsMemo = new Map()
   return {
-    turnEnded: (sessionId) => botTurnEnded(runtime, sessionId),
+    turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
+    requestFailed: (failure) =>
+      void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
+        console.warn('[bots] could not settle a failed bot request', error)
+      ),
     groupRoomOf: (sessionId) => botGroupRoomOfSession(runtime, sessionId),
     // A stalled read never holds a message back: past the bound, this turn goes without it.
-    recentChats: (botId, sessionId, message) =>
-      withTimeout(
-        readBotRecentChats(runtime, botId, sessionId, message),
-        BOT_WORK_NOTE_TIMEOUT_MS,
-        null
+    // With the bot's live work, which rides the same resend-on-change key; only an owner turn's
+    // slow live-work read keeps what the chat last got.
+    recentChats: async (botId, sessionId, message) =>
+      joinedTurnSections(
+        sections,
+        sessionId,
+        await Promise.all([
+          // A slow read drops the recent chats (null), never keeps a section a turn for another
+          // audience got.
+          withTimeout(
+            readBotRecentChats(runtime, botId, sessionId, message),
+            BOT_WORK_NOTE_TIMEOUT_MS,
+            null
+          ),
+          activeWorkSlot(runtime, botId, sessionId, message)
+        ])
       ),
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.
     unansweredQuestionNote: (sessionId) =>

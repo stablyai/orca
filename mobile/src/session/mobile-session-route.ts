@@ -4,6 +4,7 @@ import {
   STANDALONE_SESSION_PARAM,
   type HostStackRouteTarget
 } from '../navigation/host-stack-navigation'
+import { nextPaneIntent, SESSION_PANE_INTENT_PARAM } from './session-pane-intent'
 
 export type MobileSessionRouteParams = {
   hostId: string
@@ -33,7 +34,7 @@ export function mobileSessionRouteTarget({
       hostId,
       worktreeId,
       ...(name ? { name } : {}),
-      ...(paneKey ? { paneKey } : {}),
+      ...(paneKey ? { paneKey, [SESSION_PANE_INTENT_PARAM]: nextPaneIntent() } : {}),
       ...(botItem ? { botItem } : {}),
       ...(executionHost ? { executionHost } : {}),
       ...(standalone ? { [STANDALONE_SESSION_PARAM]: '1' } : {})

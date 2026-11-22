@@ -10,6 +10,8 @@ import {
   type BotLookAround
 } from '../../shared/bots/bot-look-around'
 import { lastRunStartedAt, slotTaken, type BotLookState } from './bot-look-around-state'
+import { usageLimitedUntil } from './bot-look-around-failures'
+import { ASLEEP_RETRY_AFTER_MS } from './bot-background-run-history'
 
 /** A look started this soon before a slot, e.g. Look now, stands in for it. */
 export const LOOK_RECENT_MS = 60 * 60 * 1000
@@ -37,6 +39,7 @@ export function lookAroundDueAt(
     slot < firstAllowedAt(setting, state.armedAt) ||
     slot < startOfLocalDay(now) ||
     slot < (setting.since ?? 0) ||
+    now < usageLimitedUntil(state.runs) ||
     slot - lastRunStartedAt(state.runs) < LOOK_RECENT_MS ||
     slotTaken(state.runs, slot, retrySpacing ? now : Number.POSITIVE_INFINITY)
   ) {
@@ -54,6 +57,18 @@ export function lookAroundNextAt(
   if (state.armedAt === undefined) {
     return undefined
   }
-  const after = Math.max(now, firstAllowedAt(setting, state.armedAt) - 1)
-  return nextAutomationOccurrenceAfter(lookAroundSchedule(setting), state.armedAt, after)
+  // A usage limit holds looks until its reset, which then catches up a slot still owed that day.
+  const until = usageLimitedUntil(state.runs)
+  const after = Math.max(now, firstAllowedAt(setting, state.armedAt) - 1, until)
+  const next = nextAutomationOccurrenceAfter(lookAroundSchedule(setting), state.armedAt, after)
+  if (until === 0) {
+    return next
+  }
+  // The owed slot's catch-up: at the reset, or once its retry spacing ends, unless a new slot
+  // comes first.
+  const ended = state.runs.findLast((run) => run.endedAt !== undefined)?.endedAt ?? 0
+  const catchUp = [until, ended + ASLEEP_RETRY_AFTER_MS].find(
+    (at) => at > now && at >= until && at < next && lookAroundDueAt(setting, state, at) !== null
+  )
+  return catchUp ?? next
 }

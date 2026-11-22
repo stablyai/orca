@@ -12,9 +12,10 @@ import {
   foldContentHash,
   type SessionContentHash
 } from './session-search-content-hash'
-import type {
-  SessionSearchFileIdentity,
-  SessionSearchIndexedFile
+import {
+  PARTIAL_FILE_CURSOR,
+  type SessionSearchFileIdentity,
+  type SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import { SessionSearchFileRecords } from './session-search-file-records'
 import {
@@ -25,9 +26,6 @@ import {
 
 /** Chunk named reads at this decoded-text threshold; anonymous reads spill before atomic publication. */
 export const SESSION_SEARCH_COMMIT_CHARS = 32 * 1024 * 1024
-
-/** No resume offset exists for a mid-read chunk; force a whole read after interruption. */
-const PARTIAL_FILE_CURSOR = -1
 
 type FileRow = {
   dev: number | null

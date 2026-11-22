@@ -55,11 +55,13 @@ function useMemberSearch(
 const matches = (name: string, needle: string): boolean =>
   needle === '' || name.toLowerCase().includes(needle)
 
-// Saved as the chips draw it: a found person's picture is kept, their handle isn't.
+// Saved as the chips draw it: a found person's picture is kept, their handle isn't; an app is
+// marked so, so it draws as one.
 const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
   id: found.id,
   name: found.name,
   ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),
+  ...(found.app ? { kind: 'app' as const } : {}),
   ...service.stamp
 })
 
@@ -115,11 +117,13 @@ export function BotWhoCanAskPicker({
 
   const found = search.status === 'ready' ? search.found.members : []
   const handles = new Map(found.map((person) => [person.id, person.handle]))
-  const addable = found.filter((person) => !added.has(person.id) && person.id !== service.ownerId)
+  const isOwner = (id: string): boolean =>
+    id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
+  const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
   const withAccess = listed.filter(
     (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
   )
-  const ownerShown = needle === '' || found.some((person) => person.id === service.ownerId)
+  const ownerShown = needle === '' || found.some((person) => isOwner(person.id))
   const idle = needle === '' ? service.idleHint : undefined
 
   const pickRow = (member: BotMember, handle?: string): React.JSX.Element => {

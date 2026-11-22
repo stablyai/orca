@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { cn } from '@/lib/class-names'
-import { isQuietBotResult, quietBotResultText } from '../../../../../../shared/bot-quiet-result'
+import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
@@ -67,10 +67,14 @@ export function NativeChatAssistantMessageRow({
   // The same words slot construction chooses the turn's action holder by; Copy needs them.
   const words = nativeChatAgentRowWords(message, t)
   const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
-  // A bot's quiet result shows as a line, not its marker, unless an automation's row opened its turn.
   const inBotHome = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null) !== null
-  const quiet = inBotHome && message.role === 'assistant' && !streaming && isQuietBotResult(words)
-  const shownWords = withLegacyNativeChatIdeasAsList(quiet ? quietBotResultText(words) : words)
+  const quiet = quietBotAnswer(words, {
+    botAnswer: inBotHome && message.role === 'assistant',
+    streaming,
+    inAutomationTurn: props.inAutomationTurn === true,
+    inActingTurn: props.inActingTurn === true
+  })
+  const shownWords = withLegacyNativeChatIdeasAsList(quiet.words)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
   const showControls =
@@ -116,7 +120,7 @@ export function NativeChatAssistantMessageRow({
           streaming={streaming}
         />
       ) : null}
-      {quiet && !props.inAutomationTurn ? (
+      {quiet.nothingToReport ? (
         <p className="text-xs text-chat-foreground-faint">
           {t('bots.chat.nothingToReport', 'Nothing to report')}
         </p>
@@ -139,9 +143,9 @@ export function NativeChatAssistantMessageRow({
             !latestResponse &&
               fork?.pendingItemId !== message.id &&
               'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
-            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // They hang into the gap below only above the next turn's opening row. Never in a
             // section, which keeps them inside its border.
-            actionsHang && '-mb-5'
+            actionsHang && '-mb-1'
           )}
         />
       ) : null}

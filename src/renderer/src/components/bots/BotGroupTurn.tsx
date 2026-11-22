@@ -20,7 +20,10 @@ import {
 } from '../native-chat/subagents/native-chat-open-subagent'
 import { useBotAvatarSrc } from './bot-avatar-image'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
-import type { BotGroupTurn as Turn } from '../../../../shared/bots/bot-group'
+import {
+  type BotGroupTurn as Turn,
+  withBotGroupTurnAnswer
+} from '../../../../shared/bots/bot-group'
 import type { BotGroupSession } from './BotGroupSessionReader'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
@@ -65,8 +68,14 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   useUiLanguageRevision()
   const [expanded, setExpanded] = useState(false)
   const bot = useMemo(
-    () => ({ hostId, id: turn.botId, name: turn.botName, avatar: turn.avatar }),
-    [hostId, turn.botId, turn.botName, turn.avatar]
+    () => ({
+      hostId,
+      id: turn.botId,
+      name: turn.botName,
+      avatar: turn.avatar,
+      avatarColor: turn.avatarColor
+    }),
+    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
   )
   const src = useBotAvatarSrc(bot)
   const submissions = session?.submissions ?? noItems
@@ -106,8 +115,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     [project, projection.messages, items, submissions]
   )
   const messages = useMemo(
-    () => projected.conversation.filter((message) => message.role !== 'user'),
-    [projected.conversation]
+    () =>
+      withBotGroupTurnAnswer(
+        projected.conversation.filter((message) => message.role !== 'user'),
+        { operationId: turn.operationId, answer: turn.answer }
+      ),
+    [projected.conversation, turn.operationId, turn.answer]
   )
   useBotGroupTranscriptRows(roomRows, turn.operationId, messages)
   // Each room turn opens its subagents in place, as a chat pane does, keyed to this turn.
@@ -198,6 +211,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     onToggleExpandedTurn: () => setExpanded(!expanded),
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd: () => true,
     onRevealDiff: () => {},
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }

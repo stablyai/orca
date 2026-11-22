@@ -10,7 +10,7 @@ const ResultPlaceRef = { ref: z.string().min(1).optional(), label: z.string().op
 export const AutomationBotTarget = z.object({
   botId: requiredString('Missing bot id'),
   runsIn: z.enum(['new', 'chat']),
-  // No homeIfGone: only the host sets it, when it picks the chat that made a wait.
+  // No homeIfGone or toConversation: only the host sets them, when it picks the chat that made a wait.
   chat: z
     .object({ sessionId: requiredString('Missing chat id'), title: z.string().optional() })
     .optional(),

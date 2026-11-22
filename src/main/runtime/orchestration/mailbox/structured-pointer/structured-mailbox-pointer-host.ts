@@ -1,5 +1,8 @@
 import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
-import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
+import type {
+  ChatMailAdmitFacts,
+  UsageLimitContinueOff
+} from '../delivery-hold/mailbox-delivery-hold'
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
@@ -71,12 +74,54 @@ export async function readStructuredMailAdmitFacts(
       : null
   }
   const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
+  const failedTurn = work?.activeTurnId() ? null : await readFailedTurnHold(host, sessionId)
   return {
     attached: true,
     fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
     refusal: block ? block.refusal.message : null,
-    behindPrompt: work?.hasActionablePrompt() === true
+    behindPrompt: work?.hasActionablePrompt() === true,
+    ...(failedTurn ? { failedTurn } : {})
   }
+}
+
+/** Send admission queues agent mail behind a failed last turn; say whether Orca will lift it. */
+async function readFailedTurnHold(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): Promise<NonNullable<Extract<ChatMailAdmitFacts, { attached: true }>['failedTurn']> | null> {
+  try {
+    const { journal } = await host.conversation(sessionId)
+    if (!(await journal.queuedMessages.pauses()).some((pause) => pause.reason === 'failed')) {
+      return null
+    }
+    const cut = await journal.reads.usageLimitCut()
+    if (!cut) {
+      return {}
+    }
+    const state = host.usageLimitContinue.readState(sessionId, cut)
+    if (!state) {
+      return { usageLimit: { state: 'none' } }
+    }
+    return state.state === 'off'
+      ? { usageLimit: { ...state, off: usageLimitContinueOff(host, sessionId) } }
+      : { usageLimit: state }
+  } catch {
+    // An unreadable journal proves nothing about a failure.
+    return null
+  }
+}
+
+/** Why the host publishes `off`: only the setting means a person must continue the chat. */
+function usageLimitContinueOff(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): UsageLimitContinueOff {
+  const continues = host.deps.usageLimitAutoContinue
+  if (continues?.isEnabled() !== true) {
+    return 'setting'
+  }
+  const workspaceId = host.deps.store.getRecord(sessionId)?.location.workspaceId
+  return workspaceId !== undefined && continues.isWorkspaceAsleep(workspaceId) ? 'asleep' : 'other'
 }
 
 /** The host that admitted the send answers for it; this lane only acts on that answer. */

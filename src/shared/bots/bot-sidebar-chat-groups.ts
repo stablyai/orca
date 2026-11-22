@@ -95,7 +95,7 @@ export function botSidebarLineNotes(
 }
 
 /** How many of a capped list show after `steps` reveals of 8, and how many stay hidden. */
-export function pageSidebarList(
+function pageSidebarList(
   total: number,
   first: number,
   steps: number

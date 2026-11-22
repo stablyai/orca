@@ -3,6 +3,7 @@ import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../share
 import type { GitHubPullRequestStateUpdate } from '../../../shared/work-items/issue-mutation-types'
 import { markPRReadyForReview } from '../../github/client/update/pr-ready'
 import { mergePR } from '../../github/client/merge/merge-pr'
+import { normalizePRCheckHeadSha } from '../../../shared/github/checks/pr-check-head'
 import { removePRReviewers, requestPRReviewers } from '../../github/client/update/pr-reviewers'
 import { rerunPRChecks } from '../../github/client/check/rerun-pr-checks'
 import { setPRAutoMerge } from '../../github/client/merge/pr-auto-merge'
@@ -58,6 +59,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         prNumber: number
         method?: 'merge' | 'squash' | 'rebase'
         prRepo?: GitHubOwnerRepo | null
+        expectedHeadSha?: string | null
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -67,6 +69,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.method,
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
+        normalizePRCheckHeadSha(args.expectedHeadSha) ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)

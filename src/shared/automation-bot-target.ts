@@ -17,14 +17,20 @@ export type AutomationBotResultsTo =
   | 'none'
   | 'thread'
 
+/** The channel or Linear issue a result posts to, by its label where the host saved it as a ref. */
+export function botResultsPlace(resultsTo: Extract<AutomationBotResultsTo, object>): string {
+  return resultsTo.label ?? ('channel' in resultsTo ? resultsTo.channel : resultsTo.linearIssue)
+}
+
 /** The bot an automation runs as: its folder, agent and preamble replace the project target. */
 export type AutomationBotTarget = {
   botId: string
   runsIn: AutomationBotRunsIn
   /** With runsIn 'chat': the one of the bot's chats runs continue instead of its Home Chat, and its
    *  title when saved. A run whose chat is gone fails rather than going to the Home Chat, unless
-   *  homeIfGone: set when Orca chose the chat (a wait runs in the chat that made it), not a person. */
-  chat?: { sessionId: string; title?: string; homeIfGone?: true }
+   *  homeIfGone: set when Orca chose the chat (a wait runs in the chat that made it), not a person.
+   *  toConversation: that wait was made by a turn its chat's thread owns, so its run answers there. */
+  chat?: { sessionId: string; title?: string; homeIfGone?: true; toConversation?: true }
   resultsTo: AutomationBotResultsTo
   /** Results to the bot's Chat start a turn, as a message the bot answers; off, they wait there as a
    *  note it reads with the person's next message. Older hosts drop it and always start one. */

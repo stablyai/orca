@@ -90,6 +90,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.onUnpairedDeviceAuthFailure = callback
   }
 
+  // Registry instances are replaced on restart, so the listener lives here and is rebound per instance.
+  setOnPairedDevicesChanged(callback: (() => void) | null): void {
+    this.onPairedDevicesChanged = callback
+  }
+
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
   }
@@ -107,6 +112,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
+          sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(

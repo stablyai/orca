@@ -30,6 +30,7 @@ import { BotAvatar } from './BotAvatar'
 import { refreshBotPurposes, useKnownBotPurposes } from './use-bot-purposes'
 import { useBotMentionTargets } from './use-bot-mention-targets'
 import { BotMentionHostBadge } from './BotMentionHostBadge'
+import { useBotHostLabels } from './use-bot-host-label'
 import { botMentionServer } from './bot-mention-server'
 
 /** `@` lists the owner's bots above files, each with what it is for, sent as `[Bot: <name>](bot:<id>)`
@@ -55,6 +56,9 @@ export function useBotChatComposerRoom(
     return hostId === LOCAL_EXECUTION_HOST_ID ? [...first, ...bots.filter(isOnPairedServer)] : first
   }, [bots, self, hostId, selfChats])
   const live = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds, readLiveBotHostIds)
+  const hostLabels = useBotHostLabels(
+    listed.flatMap((bot) => (bot.hostId === hostId ? [] : [bot.hostId]))
+  )
   // What each is for is read once for every chat, and only when someone opens `@`.
   const purposes = useKnownBotPurposes()
   return useMemo(() => {
@@ -73,9 +77,20 @@ export function useBotChatComposerRoom(
           // Keyed by bot and computer, so same-named bots on two computers both list.
           key: botRefKey(bot),
           id: bot.id,
-          icon: <BotAvatar bot={bot} className="mt-0.5 size-5 shrink-0" />,
+          recentKey: botRefKey(bot),
+          icon: <BotAvatar bot={bot} className="size-5 shrink-0" />,
           ...(detail ? { detail } : {}),
-          ...(elsewhere ? { host: <BotMentionHostBadge hostId={bot.hostId} /> } : {}),
+          ...(elsewhere
+            ? {
+                host: (
+                  <BotMentionHostBadge
+                    label={hostLabels.get(bot.hostId)}
+                    inline
+                    offline={!live.includes(bot.hostId)}
+                  />
+                )
+              }
+            : {}),
           ...(elsewhere && !live.includes(bot.hostId) ? { dimmed: true as const } : {}),
           ...(own ? { note: t('bots.chat.mentionOwnChats', 'Your other chats') } : {}),
           ...(bot.paused ? { unavailable: t('bots.chat.mentionPaused', 'Paused') } : {})
@@ -96,7 +111,7 @@ export function useBotChatComposerRoom(
         'Ask anything, @ to mention bots or files, / for commands'
       )
     }
-  }, [listed, purposes, self, hostId, live, t])
+  }, [listed, purposes, self, hostId, live, hostLabels, t])
 }
 
 const isOnPairedServer = (bot: Bot): boolean => botMentionServer(bot.hostId) !== null
@@ -116,11 +131,36 @@ export function BotChatRoom({
   // The visual owner names the host the chat's agent runs on; only that host's bots can be asked.
   const target = useContext(NativeChatVisualOwnerContext)?.target
   const hostId = target ? getRuntimeTargetHostId(target) : null
+  return (
+    <BotWorkspaceChatRoom
+      workspaceId={workspaceId ?? undefined}
+      hostId={hostId}
+      sessionId={sessionId ?? null}
+    >
+      {children}
+    </BotWorkspaceChatRoom>
+  )
+}
+
+/** A bot's chat's `@` room for what writes to that chat from outside it, such as an item's comment
+ *  box: the bot's workspace and host stand in for the chat tab's. */
+export function BotWorkspaceChatRoom({
+  workspaceId,
+  hostId,
+  sessionId,
+  children
+}: {
+  workspaceId: string | undefined
+  hostId: ExecutionHostId | null
+  /** The chat's session, as which its bots' chats are read; null reads them as the owner. */
+  sessionId: string | null
+  children: ReactNode
+}): React.JSX.Element {
   const self = useBotForWorkspace(workspaceId ?? null)
   const bots = useBots(useBotsEnabled() && hostId !== null)
   const hostBots = useMemo(() => bots.filter((bot) => bot.hostId === hostId), [bots, hostId])
   const ownBot = (self && hostBots.find((bot) => isSameBot(bot, self))) || null
-  const picker = useBotChatPicker(hostId, hostBots, ownBot, sessionId ?? null)
+  const picker = useBotChatPicker(hostId, hostBots, ownBot, sessionId)
   const room = useBotChatComposerRoom(workspaceId ?? undefined, hostId, picker.selfId !== null)
   // Bots a draft names show as they are now, room or not: deleted, paused or renamed.
   const mentionTargets = useBotMentionTargets(hostId)

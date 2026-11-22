@@ -135,6 +135,7 @@ export type PersistedUIState = {
   workspaceBoardColumnWidth?: number
   /** Dragged cap on the sidebar Bots section in px; absent or null keeps the default 40% cap. */
   sidebarBotsHeight?: number | null
+  sidebarProjectsFirst?: boolean
   syncTaskStatusFromWorkspaceBoard?: boolean
   /** Migrate reversed defaults once; never infer later user order from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean

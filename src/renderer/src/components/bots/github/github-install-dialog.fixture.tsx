@@ -58,22 +58,39 @@ const afterGitHub: ConnectorGitHubInstallation[] = [
   }
 ]
 
+const triage: Bot = {
+  ...marketing,
+  id: 'bot-triage',
+  name: 'GitHub issue triage',
+  folder: 'github-issue-triage'
+}
+
 let installations: ConnectorGitHubInstallation[] = [stablyai]
+let account: { userId: string; login: string } | null = { userId: '42', login: 'carol-gh' }
+let shownBot = marketing
 const neverReturns = (): Promise<never> => new Promise(() => {})
 
-function stubGitHub(): void {
-  installations = [stablyai]
+function stubGitHub(
+  options: {
+    bot?: Bot
+    signedIn?: boolean
+    with?: ConnectorGitHubInstallation[]
+  } = {}
+): void {
+  installations = options.with ?? [stablyai]
+  account = options.signedIn === false ? null : { userId: '42', login: 'carol-gh' }
+  shownBot = options.bot ?? marketing
   stopAwaitingGitHub('local')
   cancelConnectorConnect('local', 'github')
   resetGitHubInstallForTests()
-  publishBots([marketing])
-  openGitHubInstall(marketing)
+  publishBots([shownBot])
+  openGitHubInstall(shownBot)
   Reflect.set(window.api, 'botGitHub', {
     state: async () => ({
       ok: true,
       value: {
         installUrl: 'https://github.com/apps/orca-ide/installations/new',
-        account: { userId: '42', login: 'carol-gh' },
+        account,
         installations,
         defaultBotId: null
       }
@@ -104,7 +121,7 @@ function Setup(): React.JSX.Element | null {
   }
   return (
     <ConfirmationDialogProvider>
-      <BotGitHubSetupDialog bot={marketing} record={record} />
+      <BotGitHubSetupDialog bot={shownBot} record={record} />
       {record.surface === 'pill' ? <GitHubInstallPill record={record} /> : null}
     </ConfirmationDialogProvider>
   )
@@ -173,7 +190,32 @@ const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeou
 export const before = defineFixture({
   width: 1100,
   store: inOrcaStore,
-  setup: stubGitHub,
+  setup: () => stubGitHub(),
+  render: () => <Scene />
+})
+
+export const connect = defineFixture({
+  width: 1100,
+  setup: () => stubGitHub({ bot: triage, signedIn: false }),
+  render: () => <Scene />
+})
+
+// Already on GitHub: how to ask, and the repositories on one line.
+export const done = defineFixture({
+  width: 1100,
+  setup: () =>
+    stubGitHub({
+      bot: { ...triage, github: {} },
+      with: [
+        {
+          installationId: '1',
+          accountLogin: 'stablyai',
+          repositories: ['orca', 'website', 'handbook', 'api', 'plugins', 'devex', 'widgets'].map(
+            (name) => ({ fullName: `stablyai/${name}` })
+          )
+        }
+      ]
+    }),
   render: () => <Scene />
 })
 
@@ -181,7 +223,7 @@ export const before = defineFixture({
 export const inOrcaMinimized = defineFixture({
   width: 1100,
   store: inOrcaStore,
-  setup: stubGitHub,
+  setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: () => clickWhenShown('Add repositories or an organization')
 })
@@ -190,7 +232,7 @@ export const inOrcaMinimized = defineFixture({
 export const inOrcaDone = defineFixture({
   width: 1100,
   store: inOrcaStore,
-  setup: stubGitHub,
+  setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
     await clickWhenShown('Add repositories or an organization')
@@ -204,7 +246,7 @@ export const inOrcaDone = defineFixture({
 export const inOrcaExpanded = defineFixture({
   width: 1100,
   store: inOrcaStore,
-  setup: stubGitHub,
+  setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
     await clickWhenShown('Add repositories or an organization')
@@ -215,7 +257,7 @@ export const inOrcaExpanded = defineFixture({
 
 export const systemBrowserWaiting = defineFixture({
   width: 1100,
-  setup: stubGitHub,
+  setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: () => clickWhenShown('Add repositories or an organization')
 })

@@ -18,3 +18,8 @@ export function openUsageLimitContinueSetting(): void {
   })
   openSettingsPage()
 }
+
+/** Turns the setting on in place; the host re-reads it and schedules the chat. */
+export function turnOnUsageLimitAutoContinue(): void {
+  void useAppStore.getState().updateSettings({ nativeChatAutoContinueAfterUsageLimit: true })
+}

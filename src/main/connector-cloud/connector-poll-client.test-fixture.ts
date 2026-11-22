@@ -35,8 +35,9 @@ export function pollClientHarness() {
     state.userDataPath = mkdtempSync(join(tmpdir(), 'orca-connector-client-'))
     state.fake = new FakeConnectorCloud()
   })
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers()
+    await ConnectorTurnEvents.settled()
     rmSync(state.userDataPath, { recursive: true, force: true })
   })
   return {

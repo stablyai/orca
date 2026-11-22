@@ -19,12 +19,10 @@ const QUEUED_HIT_SLOP = { top: 8, bottom: 8 }
 
 export function MobileAgentMessageSenders({
   from,
-  compact = false,
   queued = false,
   bare = false
 }: {
   from: AgentMessageSource
-  compact?: boolean
   queued?: boolean
   /** Names only, without the queued line's "From": the row draws its own lead. */
   bare?: boolean
@@ -35,10 +33,7 @@ export function MobileAgentMessageSenders({
   const occurrences = new Map<string, number>()
   const unnamed = t('session.agentMessageAttribution.unnamedSender', 'an agent')
   return (
-    <View
-      pointerEvents="box-none"
-      style={[styles.senders, compact && styles.compactSenders, queued && styles.queuedSenders]}
-    >
+    <View pointerEvents="box-none" style={[styles.senders, queued && styles.queuedSenders]}>
       {queued && !bare ? (
         <Text style={[styles.meta, styles.queuedLead]}>
           {t('session.agentMessageAttribution.fromSender', 'From')}
@@ -46,8 +41,7 @@ export function MobileAgentMessageSenders({
       ) : null}
       {shown.length === 0 ? (
         <Text
-          pointerEvents={compact ? 'none' : undefined}
-          numberOfLines={compact || queued ? 1 : undefined}
+          numberOfLines={queued ? 1 : undefined}
           style={queued ? [styles.meta, styles.queuedMeta] : styles.name}
         >
           {unnamed}
@@ -59,15 +53,7 @@ export function MobileAgentMessageSenders({
         occurrences.set(identity, occurrence + 1)
         return (
           <Fragment key={`${identity}:${occurrence}`}>
-            <SenderName
-              sender={sender}
-              from={from}
-              open={open}
-              compact={compact}
-              queued={queued}
-              shownCount={shown.length}
-              unnamed={unnamed}
-            />
+            <SenderName sender={sender} from={from} open={open} queued={queued} unnamed={unnamed} />
             {/* Outside the name, so truncating a long name keeps "A…, B". */}
             {queued && index < shown.length - 1 ? (
               <Text style={[styles.meta, styles.queuedMeta, styles.queuedComma]}>,</Text>
@@ -75,14 +61,7 @@ export function MobileAgentMessageSenders({
           </Fragment>
         )
       })}
-      {more > 0 ? (
-        <Text
-          pointerEvents={compact ? 'none' : undefined}
-          style={[styles.meta, queued && styles.queuedMeta, compact && styles.compactMoreSenders]}
-        >
-          +{more}
-        </Text>
-      ) : null}
+      {more > 0 ? <Text style={[styles.meta, queued && styles.queuedMeta]}>+{more}</Text> : null}
     </View>
   )
 }
@@ -91,14 +70,10 @@ function SenderName({
   sender,
   from,
   open,
-  compact,
   queued,
-  shownCount,
   unnamed
 }: {
-  compact: boolean
   queued: boolean
-  shownCount: number
   unnamed: string
   sender: AgentMessageSource['senders'][number]
   from: AgentMessageSource
@@ -115,13 +90,12 @@ function SenderName({
       hitSlop={queued ? QUEUED_HIT_SLOP : undefined}
       style={({ pressed }) => [
         styles.sender,
-        compact && [styles.compactSender, { maxWidth: `${100 / shownCount}%` }],
         queued && styles.queuedSender,
         pressed && pressedStyle
       ]}
     >
       <Text
-        numberOfLines={compact || queued ? 1 : undefined}
+        numberOfLines={queued ? 1 : undefined}
         style={
           queued
             ? [styles.meta, styles.queuedMeta, canOpen && styles.queuedOpenableName]
@@ -130,13 +104,7 @@ function SenderName({
       >
         {name}
       </Text>
-      {canOpen && !queued ? (
-        <ArrowUpRight
-          size={14}
-          color={colors.textPrimary}
-          style={compact ? styles.compactSenderArrow : undefined}
-        />
-      ) : null}
+      {canOpen && !queued ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}
     </Pressable>
   )
 }

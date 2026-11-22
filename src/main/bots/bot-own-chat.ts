@@ -6,13 +6,13 @@ import {
 } from '../../shared/agent-session/identity/orca-session-address'
 import { resolveOrcaSessionParty } from '../runtime/orchestration/addressing/orchestration-party'
 import type { AgentSessionRecordReader } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import type { SessionPartyReader } from '../runtime/orchestration/addressing/session-party-reader'
 import { botChatRecordRow } from '../runtime/rpc/methods/bots-chats'
 
 /** Orchestration's own answer: a structured worker's party carries its handle; a lost one throws. */
 function isStructuredWorkerSession(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb,
+  db: SessionPartyReader,
   store: AgentSessionRecordReader
 ): boolean {
   try {
@@ -24,7 +24,7 @@ function isStructuredWorkerSession(
 
 export function isBotOwnChat(
   record: AgentSessionConversationView,
-  db: OrchestrationDb,
+  db: SessionPartyReader,
   store: AgentSessionRecordReader
 ): boolean {
   // Whether the list shows a record does not depend on which root it is listed under.

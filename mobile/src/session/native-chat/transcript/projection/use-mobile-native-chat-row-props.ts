@@ -8,7 +8,7 @@ import { isActionableStructuredAgentSessionPrompt } from '../../../../../../src/
 import { nativeChatRowOffersRewind } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTurnDiff } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
-import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
+import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
@@ -18,21 +18,22 @@ export type MobileNativeChatTurnRow = {
   turnKey?: string
   /** The row is the user message its turn starts from, whether or not the turn folds. */
   opensTurn?: true
+  /** An automation's row opened the turn. */
+  inAutomationTurn?: true
+  /** The turn said something or did something others see. */
+  inActingTurn?: true
   activeTurnIsWorking: boolean
   trailingRun: boolean
   workRun?: readonly NativeChatMessage[]
   joinsWorkRun?: boolean
-  /** The sides where this item-note row touches another, which sit close. */
-  itemNoteJoin?: BotItemNoteJoin
+  /** The sides where this activity row touches another, which sit close. */
+  activityJoin?: NativeChatActivityJoin
   foldedAway?: boolean
   openReasoning?: ReadonlySet<string>
   mayStillGrow: boolean
   reasoningIsLive: boolean
   reasoningExpanded: boolean
   onToggleReasoning: (key: string) => void
-  // Pass roster disclosure only to roster rows so toggles cannot rerender every transcript row.
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup: (groupId: string) => void
   // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.
   userMessageOpen: boolean
   onToggleUserMessage: (messageId: string) => void

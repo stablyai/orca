@@ -89,9 +89,9 @@ export function droidFixture(): IncrementalAgentFixture {
     ],
     appendLines: [
       JSON.stringify({
-        type: 'completion',
-        finalText: 'droid incremental answer',
-        usage: { input_tokens: 50, output_tokens: 25 },
+        type: 'message',
+        role: 'assistant',
+        text: 'droid incremental answer',
         timestamp: '2026-05-01T10:01:00.000Z'
       })
     ],

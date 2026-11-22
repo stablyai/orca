@@ -68,3 +68,19 @@ export async function probeLinuxLibc(
   }
   throw new UnidentifiedHostLibcError()
 }
+
+let muslHost: boolean | undefined
+
+// Building a process report is slow and synchronous, and the libc can't change while running.
+export function isMuslHost(): boolean {
+  if (process.platform !== 'linux') {
+    return false
+  }
+  if (muslHost === undefined) {
+    // glibc builds report their runtime glibc version; musl builds have none.
+    const report: unknown = process.report?.getReport()
+    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  }
+  return muslHost
+}

@@ -1,3 +1,4 @@
+import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import type {
   JournalForkPreparationInput,
   JournalForkPreparationResult
@@ -16,7 +17,11 @@ import type {
 } from './journal-domain-history-page'
 import type { JournalDomainImportState } from './journal-domain-import-rows'
 
+/** A chat that can't be compared answers with its error. */
+export type JournalLegacyChatComparison = { revision: string; held: boolean } | { error: string }
+
 export type JournalSqlReaderOperation =
+  | { kind: 'legacy-proof'; cursor: LegacyProofCursor }
   | { kind: 'fork-prepare'; input: JournalForkPreparationInput }
   | { kind: 'fork-next'; preparationId: number }
   | { kind: 'fork-release'; preparationId: number }
@@ -31,9 +36,13 @@ export type JournalSqlReaderOperation =
   | { kind: 'import-state'; sessionId: string }
   | { kind: 'conversion-page'; conversionId: number }
   | { kind: 'conversion-release'; conversionId: number }
+  | { kind: 'legacy-compare'; sessionId: string }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
-export type JournalSqlReaderReply =
+/** A charged reply's bytes, which main releases once the caller has taken it. */
+type JournalSqlReaderReplyCharge = { bytes?: number; creditWaitExpired?: true }
+export type JournalSqlReaderReply = (
+  | { type: 'legacy-proof'; id: number; page: LegacyProofPage }
   | { type: 'fork-prepared'; id: number }
   | { type: 'fork-next'; id: number; result: JournalForkPreparationResult }
   | { type: 'ready' }
@@ -44,6 +53,9 @@ export type JournalSqlReaderReply =
   | { type: 'import-state'; id: number; state: JournalDomainImportState }
   | { type: 'rows'; id: number; page: JournalDomainImportPage | null }
   | { type: 'released'; id: number }
+  | { type: 'legacy-compare'; id: number; result: JournalLegacyChatComparison | null }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
+) &
+  JournalSqlReaderReplyCharge
 
 export type JournalSqlReaderResult = Exclude<JournalSqlReaderReply, { type: 'ready' | 'failed' }>

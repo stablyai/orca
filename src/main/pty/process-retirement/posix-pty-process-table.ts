@@ -19,11 +19,6 @@ let dialectProbe: Promise<void> | undefined
 
 class UnsupportedPsSelectionError extends Error {}
 
-export function resetPosixPtyProcessTableDialectForTests(): void {
-  psDialect = undefined
-  dialectProbe = undefined
-}
-
 type ProcessRow = {
   pid: number
   pgid: number

@@ -10,7 +10,7 @@ export const BOT_TEMPLATES_OPS: readonly BotTemplate[] = [
       'Follows the incident channel you pick and its threads, keeps a timestamped timeline, and drafts a blameless write-up when it’s over.',
     mascot: 'H2',
     watches: 'The incident channel you pick, and its threads',
-    does: 'Keep a timestamped timeline, then draft a blameless write-up.',
+    does: 'Keeps a timestamped timeline, then drafts a blameless write-up.',
     reports: 'Here, during and after an incident',
     connectors: ['slack'],
     schedules: [],
@@ -39,14 +39,13 @@ export const BOT_TEMPLATES_OPS: readonly BotTemplate[] = [
       'Reads your alert channel and incident issues from the past week and writes the handoff.',
     mascot: 'B1',
     watches: 'Your alert channel and incident issues',
-    does: 'Summarize the week’s alerts and incidents, and list open follow-ups.',
+    does: 'Summarizes the week’s alerts and incidents, and lists open follow-ups.',
     reports: 'Here, Fridays at 4 PM',
     connectors: ['slack', 'linear'],
     schedules: [
       {
         id: 'weekly-handoff',
         when: 'Fridays at 4 PM',
-        short: 'Fri 4 PM',
         what: 'Handoff',
         rrule: '0 16 * * 5',
         prompt:
@@ -73,14 +72,13 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       'Finds questions to you with no reply, and things you said you’d do, in Slack threads and issue comments.',
     mascot: 'E1',
     watches: 'Slack threads and Linear comments',
-    does: 'Find questions to you with no reply, and things you said you’d do.',
+    does: 'Finds questions to you with no reply, and things you said you’d do.',
     reports: 'Here, daily at 4 PM',
     connectors: ['slack', 'linear'],
     schedules: [
       {
         id: 'daily-owed',
         when: 'Daily at 4 PM',
-        short: 'Daily 4 PM',
         what: 'What you still owe',
         rrule: '0 16 * * *',
         prompt:
@@ -103,14 +101,13 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       'Writes yesterday’s notes from your workspaces, merged pull requests and moved issues. You copy them where your team reads them.',
     mascot: 'O1',
     watches: 'Your workspaces, pull requests and issues',
-    does: 'Write yesterday’s notes and today’s plan.',
+    does: 'Writes yesterday’s notes and today’s plan.',
     reports: 'Here, weekdays at 9 AM',
     connectors: ['github', 'linear'],
     schedules: [
       {
         id: 'daily-notes',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Standup notes',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -133,14 +130,13 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       'Reads today’s inbox and lists emails that need your reply, newest first. It never sends email.',
     mascot: 'I1',
     watches: 'Your inbox',
-    does: 'List emails that need a reply from my owner, newest first. Never send email.',
+    does: 'Lists emails that need a reply from you, newest first. Never sends email.',
     reports: 'Here, weekdays at 9 AM and 2 PM',
     connectors: ['google'],
     schedules: [
       {
         id: 'morning',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Emails that need you',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -149,7 +145,6 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       {
         id: 'afternoon',
         when: 'Weekdays at 2 PM',
-        short: 'Weekdays 2 PM',
         what: 'Emails that need you',
         rrule: '0 14 * * 1-5',
         prompt:
@@ -171,7 +166,7 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
     firstChat: 'Looks at today’s calendar and writes a short prep note for each meeting.',
     mascot: 'S2',
     watches: 'Your calendar',
-    does: 'Before each meeting, list the issues, pull requests and docs it is about.',
+    does: 'Before each meeting, lists the issues, pull requests and docs it is about.',
     reports: 'Here, before each meeting',
     connectors: ['google', 'github', 'linear'],
     schedules: [],

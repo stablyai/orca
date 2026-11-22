@@ -150,6 +150,7 @@ function subagentEvidence(update: AcpSubagentUpdate, observedAt: number): AgentC
     observedAt,
     handle,
     outcome,
+    ...(update.error ? { lastMessage: update.error } : {}),
     ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {})
   }
 }

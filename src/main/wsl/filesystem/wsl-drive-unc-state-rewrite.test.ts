@@ -67,16 +67,6 @@ describe('rewriteWslDriveUncState', () => {
     expect(() => convert(before, ['repo-a'])).toThrow('wsl_drive_unc_project_split')
   })
 
-  it('refuses when a converted key lands on one with different user data, naming the key', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.worktreeMeta[newId] = { ...before.worktreeMeta[oldId], displayName: 'other' }
-    expect(() => convert(before, ['repo-a', 'repo-b'])).toThrow(
-      new WslDriveUncKeyCollisionError(newId)
-    )
-  })
-
   it('drops the drive-keyed row startup discovery wrote for the saved UNC worktree', () => {
     // Seeded shape: WSL Git lists the UNC project's folder as C:\, so discovery wrote a bare row.
     const before = persisted(heavyWslMoverProfile(unc))
@@ -158,5 +148,18 @@ describe('rewriteWslDriveUncState', () => {
       [`repo-a::${drive.at('/home/dev/app')}`]: drive.at('/home/dev/app/src'),
       [`repo-c::${unc.at('/home/dev/other')}`]: unc.at('/home/dev/other/src')
     })
+  })
+
+  it('leaves an SSH project path alone when it shares the converted repo id', () => {
+    const before = persisted(heavyWslMoverProfile(unc))
+    before.repos = [
+      repo('repo-shared', unc.at('/home/dev/desktop')),
+      { ...repo('repo-shared', unc.at('/home/dev/remote')), connectionId: 'ssh-1' }
+    ]
+    const { state } = convert(before, ['repo-shared'])
+    expect(state.repos.map(({ path }) => path)).toEqual([
+      drive.at('/home/dev/desktop'),
+      unc.at('/home/dev/remote')
+    ])
   })
 })

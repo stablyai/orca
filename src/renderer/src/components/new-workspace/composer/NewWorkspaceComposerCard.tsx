@@ -252,7 +252,8 @@ export default function NewWorkspaceComposerCard(
         }
         const response = await window.api.runtimeEnvironments.getStatus({
           selector: action.environmentId,
-          timeoutMs: 15_000
+          timeoutMs: 15_000,
+          force: true
         })
         unwrapRuntimeRpcResult<RuntimeStatus>(response)
         await useAppStore.getState().readRuntimeHostStatusSnapshots()

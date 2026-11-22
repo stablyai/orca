@@ -10,8 +10,9 @@ import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
 const Text = (max: number) => z.string().trim().min(1).max(max)
 const Values = z.array(Text(320)).min(1).max(20)
 
-/** A bot names its run by the chat it runs from; the owner names the bot. */
+/** A bot names its run by its token and the chat it runs from; the owner names the bot. */
 const Who = {
+  botToken: Text(200).optional(),
   callerSessionId: Text(200).optional(),
   botId: Text(200).optional()
 }
@@ -67,4 +68,14 @@ export const GoogleSetupAnswer = z.object({
   botId: Text(200),
   card: z.enum(GOOGLE_SETUP_CARDS),
   values: Values
+})
+
+/** The owner's Import file for an agent on another host: that host looks for the key it saved, or
+ *  imports the one the owner picked from the candidates it listed. */
+/** A key file on the agent's host the owner may pick; `id` names this exact file. */
+export type GoogleSetupKeyCandidate = { name: string; id: string; savedAt: number }
+
+export const GoogleSetupImportHostKey = z.object({
+  botId: Text(200),
+  file: z.object({ name: Text(255), id: Text(200) }).optional()
 })

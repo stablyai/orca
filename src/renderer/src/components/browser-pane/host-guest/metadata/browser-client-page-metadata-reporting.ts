@@ -31,11 +31,13 @@ export function startBrowserClientPageMetadataPublisher(options: {
   environmentId: string
   placement: RuntimeBrowserClientPlacement
   nextRevision: () => number
+  faviconUrl: string | null
 }): ReturnType<typeof createBrowserClientPageMetadataPublisher> {
   return createBrowserClientPageMetadataPublisher({
     browserPageId: options.browserPageId,
     placement: options.placement,
     nextRevision: options.nextRevision,
+    faviconUrl: options.faviconUrl,
     publish: (params) =>
       e2eSuppressesBrowserClientPageMetadataPublish()
         ? Promise.resolve({ status: 'refused' as const })
