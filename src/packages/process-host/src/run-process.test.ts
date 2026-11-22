@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { runProcess, runProcessSync } from './run-process'
 import { resolveSpawn } from './spawn-resolution'
+import { setDefaultProcessLaunch } from './default-process-launch'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 describe('resolveSpawn', () => {
@@ -232,4 +233,39 @@ describe('a signal that is already aborted', () => {
     expect(result.timedOut).toBe(false)
     expect(onChildTerminated).toHaveBeenCalledOnce()
   }, 20_000)
+})
+
+describe('default launch', () => {
+  it('starts specs without their own launch there, sharing one termination report', async () => {
+    const launched = Object.assign(new EventEmitter(), {
+      pid: 4343,
+      exitCode: null,
+      signalCode: null,
+      stdin: Object.assign(new EventEmitter(), { end: () => {} }),
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      kill: vi.fn(() => true)
+    })
+    let reportFromLauncher = (): void => {}
+    setDefaultProcessLaunch((_spec, onTerminated) => {
+      reportFromLauncher = onTerminated
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries the surface runProcess reads.
+      return { child: launched as unknown as ChildProcess, withdrawPendingLaunch: () => {} }
+    })
+    try {
+      const onChildTerminated = vi.fn()
+      const pending = runProcess({ program: 'started-by-default', onChildTerminated })
+      launched.emit('exit', 0, null)
+      launched.emit('close', 0, null)
+      await expect(pending).resolves.toMatchObject({ code: 0 })
+      reportFromLauncher()
+      expect(onChildTerminated).toHaveBeenCalledOnce()
+
+      const own = vi.fn(() => null)
+      await runProcess({ program: process.execPath, args: ['-e', ''], launch: own })
+      expect(own).toHaveBeenCalledOnce()
+    } finally {
+      setDefaultProcessLaunch(undefined)
+    }
+  })
 })

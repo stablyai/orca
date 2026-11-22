@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'
@@ -35,7 +36,8 @@ export async function startSystemSshDynamicForwardProcess(
   // Configured forwards may already be held by the main login; probe our -D listener instead of exiting on their collisions.
   const dynamicArgs = ['-N', '-o', 'ExitOnForwardFailure=no', '-D', `127.0.0.1:${localPort}`]
   args.splice(destinationIndex === -1 ? 0 : destinationIndex, 0, ...dynamicArgs)
-  const process = spawn(sshPath, args, {
+  // Linux: `-N` forwards outlive a crashed main; they must not hold main's Chromium sockets.
+  const process = spawnWithoutInheritedFds(sshPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true
   })

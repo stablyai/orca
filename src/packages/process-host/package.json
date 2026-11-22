@@ -40,6 +40,16 @@
       "types": "./dist/fork-process.d.ts",
       "default": "./dist/fork-process.js"
     },
+    "./default-process-launch": {
+      "orca-source": "./src/default-process-launch.ts",
+      "types": "./dist/default-process-launch.d.ts",
+      "default": "./dist/default-process-launch.js"
+    },
+    "./fd-closing-exec-launch": {
+      "orca-source": "./src/fd-closing-exec-launch.ts",
+      "types": "./dist/fd-closing-exec-launch.d.ts",
+      "default": "./dist/fd-closing-exec-launch.js"
+    },
     "./process-tree-termination": {
       "orca-source": "./src/process-tree-termination.ts",
       "types": "./dist/process-tree-termination.d.ts",

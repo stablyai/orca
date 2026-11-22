@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
@@ -40,7 +41,8 @@ export function spawnSystemSsh(
   }
 
   const args = buildSshArgs(target, options)
-  const proc = spawn(sshPath, args, {
+  // Linux: a connection can outlive a crashed main; it must not hold main's Chromium sockets.
+  const proc = spawnWithoutInheritedFds(sshPath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
@@ -64,10 +66,14 @@ export function spawnSystemSshCommand(
     options?.wrapCommand === false
       ? command
       : wrapRemoteCommandForPosixShell(command, { compress: options?.compressCommand === true })
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const proc = spawnWithoutInheritedFds(
+    sshPath,
+    [...buildSshArgs(target, options), remoteCommand],
+    {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    }
+  )
   const channel = wrapCommandProcess(proc)
   if (options?.closeStdin) {
     channel.stdin.end()

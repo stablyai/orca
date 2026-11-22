@@ -10,6 +10,7 @@ import {
 } from './utility-worker-relay-budget'
 import {
   UTILITY_WORKER_MESSAGE_CHUNK_BYTES,
+  UTILITY_WORKER_NO_HEAP_SAMPLING_ARG,
   type UtilityWorkerFailure,
   type UtilityWorkerHostEvent,
   type UtilityWorkerHostRequest,
@@ -39,9 +40,10 @@ const LOADED = 'orca-hosted-worker-loaded'
 const control = parent
 const workers = new Map<number, Worker>()
 const ports = new Map<number, WorkerPort>()
-const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
-  control.postMessage({ type: 'heap', report })
-)
+// A launcher's workers only relay child processes, so periodic heap samples would be idle wakeups.
+const heaps = process.argv.includes(UTILITY_WORKER_NO_HEAP_SAMPLING_ARG)
+  ? { workersChanged: () => {} }
+  : sampleUtilityWorkerHeaps(workers, (report) => control.postMessage({ type: 'heap', report }))
 
 function failure(error: unknown): UtilityWorkerFailure {
   const value = error instanceof Error ? error : new Error(String(error))

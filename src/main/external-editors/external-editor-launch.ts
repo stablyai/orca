@@ -243,10 +243,12 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     // AppImage exports ARGV0, APPDIR, and mount PATH entries that editor shells must not inherit.
     env: process.platform === 'linux' ? envWithoutAppImageRuntime(process.env) : undefined
   } as const
+  // An editor can outlive main indefinitely; it must not keep a crashed main's children alive.
+  const hostOptions = { ...detachedOptions, closeInheritedFds: true }
   if (launchSpec.kind === 'shell') {
     const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
     return hideWindowsConsole
-      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...hostOptions })
       : spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
   }
   if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
@@ -254,7 +256,7 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     return spawnProcess({
       program: launchSpec.spawnCmd,
       args: launchSpec.spawnArgs,
-      ...detachedOptions
+      ...hostOptions
     })
   }
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
@@ -268,7 +270,7 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     // process-host hides consoles; Windows terminal editors need a visible console.
     return spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
   }
-  return spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+  return spawnProcess({ program: spawnCmd, args: spawnArgs, ...hostOptions })
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {

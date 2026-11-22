@@ -10,6 +10,8 @@ import type {
   WorkerThreadChildEvent,
   WorkerThreadChildRequest
 } from './worker-thread-child-process-protocol'
+import { SPAWN_KEY_ENV } from './lost-spawn-processes'
+import type { SpawnRecords } from './spawn-record-writes'
 
 // Worker-thread half; must stay electron-free (plain-Node entry guard).
 const OUTPUT_HIGH_WATER_BYTES = 256 * 1024
@@ -33,7 +35,11 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
   }
 }
 
-export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
+export function serveWorkerThreadChildProcesses(
+  port: WorkerThreadChildPort,
+  options: { closeInheritedFds?: boolean; records?: SpawnRecords | null } = {}
+): void {
+  const { records } = options
   const children = new Map<
     number,
     {
@@ -44,8 +50,17 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       closed: boolean
       groupTerminated: boolean
       discarding?: { stdout?: boolean; stderr?: boolean }
+      recordKey?: string
     }
   >()
+  // The record goes before the event that ends main's interest, so main never reads a stale one.
+  const forget = (id: number): void => {
+    const recordKey = children.get(id)?.recordKey
+    children.delete(id)
+    if (recordKey) {
+      records?.remove(recordKey)
+    }
+  }
 
   const spawnChild = (
     { id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>,
@@ -53,27 +68,44 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   ): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
+      child = spawnProcess(
+        {
+          ...spec,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          ...(options.closeInheritedFds ? { closeInheritedFds: true } : {})
+        },
+        selection
+      )
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
+    const key = records && child.pid !== undefined ? spec.env?.[SPAWN_KEY_ENV] : undefined
+    const recordKey =
+      key && child.pid !== undefined && records?.write(key, child.pid) ? key : undefined
+    const recorded = recordKey !== undefined
     // A failed creation has no pid and reports through 'error'; Node's own 'spawn' event would come a turn later.
     if (child.pid !== undefined) {
-      port.postMessage({ type: 'spawn', id, pid: child.pid })
+      port.postMessage({
+        type: 'spawn',
+        id,
+        pid: child.pid,
+        ...(recorded ? { recorded: true } : {})
+      })
     }
     const state: NonNullable<ReturnType<typeof children.get>> = {
       child,
       pendingOutputBytes: 0,
       stopping: false,
       closed: false,
-      groupTerminated: false
+      groupTerminated: false,
+      recordKey
     }
     if (spec.terminationBarrier && process.platform !== 'win32') {
       state.group = createPosixGroupTermination(child, () => {
         state.groupTerminated = true
         if (state.closed) {
-          children.delete(id)
+          forget(id)
         }
         port.postMessage({ type: 'group-terminated', id })
       })
@@ -112,7 +144,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       state.closed = true
       const retained = Boolean(state.group) && !state.groupTerminated
       if (!retained) {
-        children.delete(id)
+        forget(id)
       }
       port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
       if (state.stopping) {
@@ -217,7 +249,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
         }
       } else if (request.type === 'release') {
         if (!state.stopping && state.closed) {
-          children.delete(request.id)
+          forget(request.id)
         }
       } else if (request.type === 'output-consumed') {
         state.pendingOutputBytes = Math.max(0, state.pendingOutputBytes - request.bytes)
@@ -252,5 +284,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
   }
   port.on('message', handle)
-  port.postMessage({ type: 'ready' })
+  port.postMessage({
+    type: 'ready',
+    ...(records
+      ? {
+          spawnRecordDir: records.dir,
+          launcherCmdline: records.launcherCmdline,
+          launcherStartTicks: records.launcherStartTicks,
+          launcherSid: records.launcherSid
+        }
+      : {})
+  })
 }

@@ -36,6 +36,9 @@ export type ProcessSpec = {
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
   onStderr?: (chunk: Buffer | string) => void
+  /** Linux: start through the installed fd-closing helper, so a long-lived child holds none of
+   *  this process's other fds (e.g. Chromium IPC sockets). */
+  closeInheritedFds?: boolean
   /** Starts the child off this thread; null spawns it here. */
   launch?: (spec: ProcessSpec) => LaunchedProcess | null
 }

@@ -8,6 +8,7 @@ import { windowsTreeKillFor } from '@orca/process-host/windows-tree-kill'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import {
   canSpawnOnWorkerThread,
+  childSpawnerIsIsolated,
   isAbandonedWorkerChildError,
   spawnProcessOnWorkerThread
 } from '../../../worker-thread-child-process/worker-thread-child-process'
@@ -25,17 +26,30 @@ function isPlainPiped(spec: ProcessSpec): boolean {
   return piped && !spec.detached && !spec.windowsVerbatimArguments && !spec.serialization
 }
 
-/** runProcess `launch` for Windows, where CreateProcessW blocks its calling thread (#27362): a plain piped spec starts on the process worker. */
-export function launchProcessSpecOnWindowsWorker(
+/**
+ * runProcess `launch` that starts a plain piped spec on the process worker: on Windows because
+ * CreateProcessW blocks its calling thread (#27362); on Linux so the child starts from a utility
+ * process and holds none of main's Chromium sockets.
+ */
+export function launchProcessSpecOnWorker(
   spec: ProcessSpec,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
   /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
-  lifetimeEndsOnLoss = false
+  lifetimeEndsOnLoss = false,
+  /** runProcess may keep the tail or watch every stderr chunk, so forward all output. */
+  forwardAllOutput = false
 ): LaunchedProcess | null {
-  if (process.platform !== 'win32' || !isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
+  const linux = process.platform === 'linux' && childSpawnerIsIsolated()
+  if (
+    (process.platform !== 'win32' && !linux) ||
+    !isPlainPiped(spec) ||
+    !canSpawnOnWorkerThread()
+  ) {
     return null
   }
+  // Linux: a barrier needs the child to lead its own group, as spawnProcess would start it.
+  const ownsGroup = linux && spec.terminationBarrier === true
   const args = [...(spec.args ?? [])]
   const startedAt = performance.now()
   const child = spawnProcessOnWorkerThread({
@@ -43,12 +57,13 @@ export function launchProcessSpecOnWindowsWorker(
     args,
     cwd: spec.cwd,
     // The worker's env is a copy from its start; send main's current one.
-    env: spec.env ?? process.env
+    env: spec.env ?? process.env,
+    ...(ownsGroup ? { terminationBarrier: true as const } : {})
   })
   recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
   // runProcess keeps the head of each stream; past the cap, the rest stays on the worker.
   const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
-  for (const stream of ['stdout', 'stderr'] as const) {
+  for (const stream of forwardAllOutput ? [] : (['stdout', 'stderr'] as const)) {
     let received = 0
     const onData = (chunk: Buffer): void => {
       received += chunk.byteLength

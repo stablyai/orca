@@ -238,6 +238,7 @@
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
+2 src/main/filesystem/private-runtime-directory.ts # moved out of ssh-control-socket.ts (its count dropped by 2) so the process launcher shares it
 2 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
@@ -491,12 +492,13 @@
 1 src/main/ssh/config/ssh-config-parser.ts
 1 src/main/ssh/config/ssh-g-config-resolution.ts
 3 src/main/ssh/system-transport/file-transfer/system-ssh-sftp-transfer.ts
-3 src/main/ssh/system-transport/ssh-control-socket.ts
+1 src/main/ssh/system-transport/ssh-control-socket.ts
 3 src/main/ssh/system-transport/system-ssh-binary.ts
 3 src/main/startup/cli-launch/cli-launch-redirect.ts
 2 src/main/startup/configure-process.ts
 1 src/main/startup/diagnostics/startup-diagnostics.ts
 4 src/main/startup/gpu-recovery/gpu-fallback-marker.ts
+1 src/main/startup/linux-display/ensure-virtual-display.ts
 6 src/main/startup/linux-display/x-display-artifacts.ts
 1 src/main/startup/linux-runtime/linux-dev-shm-policy.ts
 4 src/main/startup/linux-runtime/linux-realtime-scheduling-guard.ts

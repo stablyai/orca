@@ -16,12 +16,13 @@ import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
-import { spawn } from 'node:child_process'
+import { spawn, type SpawnOptions } from 'node:child_process'
 import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -254,10 +255,9 @@ export function runHook(
       }
       resolve(result)
     }
-    // exec ignores detached; spawn creates the process group needed for tree termination.
-    const child = spawn(script, {
+    const shell = getHookShell()
+    const spawnOptions = {
       cwd,
-      shell: getHookShell(),
       // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
       env: promptGuardShellEnv(shellHookEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -265,7 +265,13 @@ export function runHook(
       windowsHide: true,
       // POSIX groups let signals reach descendants; Windows detached would create a new console.
       ...(process.platform === 'win32' ? {} : { detached: true })
-    })
+    } satisfies SpawnOptions
+    // exec ignores detached; spawn creates the process group needed for tree termination.
+    // Linux runs the same `<shell> -c script` argv Node's shell option builds, without main's fds.
+    const child =
+      process.platform === 'linux' && shell
+        ? spawnWithoutInheritedFds(shell, ['-c', script], spawnOptions)
+        : spawn(script, { ...spawnOptions, shell })
     const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))

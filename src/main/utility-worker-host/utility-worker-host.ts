@@ -59,7 +59,9 @@ export class UtilityWorkerHost {
     ) => CrashReportBreadcrumbData,
     crashCap?: UtilityWorkerHostCrashCap,
     /** Serialized reply bytes main may hold unconsumed; past it the host holds replies itself. */
-    private readonly relayBudgetBytes?: number
+    private readonly relayBudgetBytes?: number,
+    /** Arguments for the host entry, such as UTILITY_WORKER_NO_HEAP_SAMPLING_ARG. */
+    private readonly hostArgs: readonly string[] = []
   ) {
     this.crashLoop = crashCap && new UtilityWorkerHostCrashLoop(serviceName, crashCap)
     app.once('will-quit', () => {
@@ -142,7 +144,7 @@ export class UtilityWorkerHost {
     if (this.host && !this.host.retired) {
       return this.host
     }
-    const child = utilityProcess.fork(this.entryPath(), [], {
+    const child = utilityProcess.fork(this.entryPath(), [...this.hostArgs], {
       serviceName: this.serviceName,
       stdio: ['ignore', 'ignore', 'pipe']
     })

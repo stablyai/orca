@@ -12,8 +12,11 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-co
 
 import {
   capturesOnWorker,
+  keepsMainFdsOut,
   observeCapturedStderr,
   spawnedExecFile,
+  spawnWithoutMainFds,
+  withMainErrorText,
   workerExecFile
 } from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
@@ -235,25 +238,20 @@ export function execFileCapture(
             finish(createAbortError())
             return
           }
-          // Main's error text per platform; a Windows overflow ends the whole tree, or a hook holding the pipe blocks close.
-          const workerOptions = {
-            ...captureOptions,
-            ...(process.platform !== 'darwin'
-              ? { errorCommand: [command, ...args].join(' ') }
-              : {}),
-            ...(process.platform === 'win32' ? { onOverflow: stop } : {})
-          }
+          const workerOptions = withMainErrorText(captureOptions, command, args, stop)
+          const linuxOnMain = keepsMainFdsOut()
+          const spawnOnMain = (): ChildProcess =>
+            linuxOnMain
+              ? spawnWithoutMainFds(command, args, captureOptions)
+              : spawnNativeProcess(command, args, captureOptions, undefined, recordSubprocessSpawn)
           child = useWorker
             ? workerExecFile(command, args, workerOptions, complete)
-            : ownedPosixGroup
-              ? spawnedExecFile(command, captureOptions, complete, () =>
-                  spawnNativeProcess(
-                    command,
-                    args,
-                    captureOptions,
-                    undefined,
-                    recordSubprocessSpawn
-                  )
+            : ownedPosixGroup || linuxOnMain
+              ? spawnedExecFile(
+                  command,
+                  linuxOnMain ? workerOptions : captureOptions,
+                  complete,
+                  spawnOnMain
                 )
               : execFile(command, args, captureOptions, complete)
           if (useWorker || !ownedPosixGroup) {

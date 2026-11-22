@@ -2,6 +2,7 @@ import { STT_UTILITY_PROCESS_NAME } from '../../speech/stt-worker-process'
 import { BACKEND_UTILITY_PROCESS_NAME } from '../../../shared/backend/backend-service-contract'
 import { JOURNAL_SQL_READER_HOST_NAME } from '../../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { HEAVY_WORKER_HOST_NAME } from '../../utility-worker-host/heavy-worker-host-name'
+import { CHILD_SPAWNER_HOST_NAME } from '../../utility-worker-host/child-spawner-host-name'
 
 export type ProcessGoneSource = 'renderer' | 'child'
 export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'
@@ -21,7 +22,8 @@ const RECOVERABLE_ORCA_UTILITY_NAMES = new Set([
   STT_UTILITY_PROCESS_NAME,
   BACKEND_UTILITY_PROCESS_NAME,
   JOURNAL_SQL_READER_HOST_NAME,
-  HEAVY_WORKER_HOST_NAME
+  HEAVY_WORKER_HOST_NAME,
+  CHILD_SPAWNER_HOST_NAME
 ])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])
 const NON_RECOVERABLE_RENDERER_REASONS = new Set(['integrity-failure'])

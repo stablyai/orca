@@ -515,6 +515,7 @@
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
+1 src/main/filesystem/private-runtime-directory.ts # moved out of ssh-control-socket.ts (its row dropped by 1); per SSH control-socket lookup, not per RPC
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
@@ -1348,25 +1349,25 @@
 1 src/main/ssh/config/ssh-g-config-resolution.ts
 2 src/main/ssh/connection/channels/ssh-connection-session-channels.ts
 2 src/main/ssh/connection/ssh-connect-config.ts
-8 src/main/ssh/connection/ssh-connection.ts
+6 src/main/ssh/connection/ssh-connection.ts
 1 src/main/ssh/file-transfer/ssh-connection-file-transfers.ts
 1 src/main/ssh/host-keys/ssh2-host-key-verification.ts
 1 src/main/ssh/host-server/managed-server-update-deps.ts
 1 src/main/ssh/port-forwarding/system-ssh-port-forward-provider.ts
 5 src/main/ssh/system-transport/file-transfer/system-ssh-file-binary-transfer.ts
-6 src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts
-5 src/main/ssh/system-transport/file-transfer/system-ssh-sftp-transfer.ts
+5 src/main/ssh/system-transport/file-transfer/system-ssh-file-transfer.ts
+4 src/main/ssh/system-transport/file-transfer/system-ssh-sftp-transfer.ts
 5 src/main/ssh/system-transport/file-transfer/system-ssh-windows-write-strategy.ts
-2 src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.ts
-3 src/main/ssh/system-transport/forwarding/system-ssh-forward-process.ts
-4 src/main/ssh/system-transport/forwarding/system-ssh-loopback-route-admission.ts
+1 src/main/ssh/system-transport/forwarding/system-ssh-dynamic-forward-process.ts
+2 src/main/ssh/system-transport/forwarding/system-ssh-forward-process.ts
+2 src/main/ssh/system-transport/forwarding/system-ssh-loopback-route-admission.ts
 3 src/main/ssh/system-transport/forwarding/system-ssh-loopback-route.ts
-2 src/main/ssh/system-transport/forwarding/system-ssh-muxed-forward-cancel.ts
-2 src/main/ssh/system-transport/ssh-control-socket.ts
+1 src/main/ssh/system-transport/forwarding/system-ssh-muxed-forward-cancel.ts
+1 src/main/ssh/system-transport/ssh-control-socket.ts
 1 src/main/ssh/system-transport/ssh-transport-selection.ts
-3 src/main/ssh/system-transport/system-ssh-args.ts
+1 src/main/ssh/system-transport/system-ssh-args.ts
 1 src/main/ssh/system-transport/system-ssh-binary.ts
-4 src/main/ssh/system-transport/system-ssh-command.ts
+2 src/main/ssh/system-transport/system-ssh-command.ts
 3 src/main/ssh/targets/ssh-connection-store.ts
 5 src/main/ssh/targets/ssh-target-route-resolution.ts
 1 src/main/startup/agent-accounts/codex-launch-preparation.ts
@@ -1377,7 +1378,7 @@
 2 src/main/startup/diagnostics/startup-diagnostics.ts
 3 src/main/startup/gpu-recovery/gpu-fallback-marker.ts
 11 src/main/startup/gpu-recovery/gpu-lifecycle.ts
-21 src/main/startup/linux-display/ensure-virtual-display.ts
+22 src/main/startup/linux-display/ensure-virtual-display.ts # one-shot pre-ready Xvfb wait: /proc stat read ends the wait when the child exits
 3 src/main/startup/linux-display/x-display-artifacts.ts
 1 src/main/startup/linux-runtime/linux-dev-shm-policy.ts
 4 src/main/startup/linux-runtime/linux-realtime-scheduling-guard.ts

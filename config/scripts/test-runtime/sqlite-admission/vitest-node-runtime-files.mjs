@@ -76,6 +76,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
+  // Asserts the spawn, error and close order Node gives the Electron main process.
+  'src/main/provider-process/fd-closing-exec.integration.test.ts',
   'src/main/git/command-runner/process-capture/worker-exec-file.test.ts',
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
   'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',

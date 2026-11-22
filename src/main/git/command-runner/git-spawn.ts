@@ -18,6 +18,11 @@ import {
   routeLocalGitOptions
 } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
+import {
+  canSpawnOnWorkerThread,
+  childSpawnerIsIsolated,
+  spawnProcessOnWorkerThread
+} from '../../worker-thread-child-process/worker-thread-child-process'
 
 export type GitSpawnOptions = SpawnOptions & {
   cwd: string
@@ -164,6 +169,14 @@ export function gitSpawn(args: string[], callerOptions: GitSpawnOptions): ChildP
     ...(wslDistro ? { wslDistro } : {}),
     ...(spawnOptions.env ? { env: spawnOptions.env } : {})
   })
+  if (
+    process.platform === 'linux' &&
+    !resolved.wsl &&
+    childSpawnerIsIsolated() &&
+    canSpawnOnWorkerThread()
+  ) {
+    return gitSpawnFromIsolatedSpawner(resolved, spawnOptions)
+  }
   return spawnNativeProcess(
     resolved.binary,
     resolved.args,
@@ -176,4 +189,50 @@ export function gitSpawn(args: string[], callerOptions: GitSpawnOptions): ChildP
     undefined,
     recordSubprocessSpawn
   )
+}
+
+/**
+ * Linux: start Git from the utility-process spawner so it holds none of main's Chromium sockets.
+ * Keeps what callers read from a native spawn: stderr/stdout data, kill, error and close, and an
+ * aborted signal killing the child and failing with AbortError.
+ */
+function gitSpawnFromIsolatedSpawner(
+  resolved: ReturnType<typeof resolveGitCommand>,
+  options: SpawnOptions & { cwd: string }
+): ChildProcess {
+  const startedAt = performance.now()
+  const child = spawnProcessOnWorkerThread({
+    program: resolved.binary,
+    args: resolved.args,
+    cwd: resolved.cwd,
+    env: untranslatedGitOutputEnv(options.env ?? process.env),
+    // Its own group: if the launcher is lost, main ends the whole group, hooks included, before close.
+    terminationBarrier: true
+  })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - startedAt)
+  child.stdin.end()
+  const stdio = Array.isArray(options.stdio) ? options.stdio : [options.stdio, options.stdio]
+  if (stdio[1] === 'ignore') {
+    child.discardOutput('stdout')
+  }
+  if (stdio[2] === 'ignore') {
+    child.discardOutput('stderr')
+  }
+  const signal = options.signal
+  if (signal) {
+    const onAbort = (): void => {
+      child.kill('SIGTERM')
+      if (child.listenerCount('error') > 0) {
+        child.emit('error', createAbortError())
+      }
+    }
+    if (signal.aborted) {
+      process.nextTick(onAbort)
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true })
+      child.once('close', () => signal.removeEventListener('abort', onAbort))
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: clone and admission callers read only stdout/stderr data, kill, pid and the spawn/error/exit/close events, which the stand-in carries.
+  return child as unknown as ChildProcess
 }

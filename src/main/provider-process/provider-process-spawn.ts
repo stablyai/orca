@@ -88,6 +88,8 @@ function createLegacyProviderSpawnSpec(spec: ProviderSpawnSpec): PipedProcessSpe
     env: legacy.env,
     cwd: spec.cwd,
     detached: true,
-    stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    // The provider it starts inherits only what this supervisor holds.
+    closeInheritedFds: true
   }
 }
