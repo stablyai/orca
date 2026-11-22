@@ -19,7 +19,6 @@ import {
   handleAgentCompletionInspectionResult,
   type RemoteInspectionState
 } from './agent-completion-inspection-result'
-import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 export function createAgentCompletionProcessMonitor({
   options,
@@ -143,11 +142,10 @@ export function createAgentCompletionProcessMonitor({
         let inspectionSucceeded = false
         try {
           const steadyState = priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-          // A proven idle macOS shell answers from its group; a Windows shell-only job proves nothing (Store shells).
+          // A proven idle macOS shell answers from its group; newer daemons ignore it elsewhere for shells, and an older
+          // daemon keeps its cheap job-only read (it never proves a shell idle, so the pane keeps re-checking anyway).
           const jobMembershipOnly =
-            steadyState &&
-            !isWindowsUserAgent() &&
-            !(state.lastForegroundAgent && state.hasAgentRunEvidence)
+            steadyState && !(state.lastForegroundAgent && state.hasAgentRunEvidence)
           // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
           const inspectOptions = {
             ...(expectedIncarnationIdAtRequest

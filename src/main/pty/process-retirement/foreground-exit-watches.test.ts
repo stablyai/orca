@@ -38,6 +38,15 @@ describe('ForegroundExitWatches', () => {
     expect(notices).toEqual(['pane'])
   })
 
+  it('lets a read without a pid lean on a watch only for the agent that watch belongs to', () => {
+    // Codex keeps running in the background; Claude takes the foreground and the capture fails.
+    const source = { isAlive: true, foregroundAgentPid: () => null }
+    expect(watches.noteInspection('pane', source, 'codex', 10)).toBe(true)
+
+    expect(watches.noteInspection('pane', source, 'claude')).toBe(false)
+    expect(watches.noteInspection('pane', source, 'codex')).toBe(true)
+  })
+
   it('announces once an agent a lookup names after the read returned', async () => {
     let agentPid: number | null = null
     let land: () => void = () => {}

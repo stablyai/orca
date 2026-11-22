@@ -18,6 +18,8 @@ export class ForegroundExitWatches {
   /** Reported once per pid until a read shows a non-agent, so a group outliving its leader cannot loop. */
   private readonly reportedPids = new Map<string, number>()
   private readonly lookups = new Map<string, symbol>()
+  /** The agent the last proven read named; a read without a pid may lean on its watch only while it names the same agent. */
+  private readonly current = new Map<string, { name: string; pid: number }>()
 
   constructor(private readonly onAgentChange?: (ptyId: string) => void) {}
 
@@ -49,8 +51,10 @@ export class ForegroundExitWatches {
     }
     const pid = identifiedPid ?? source.foregroundAgentPid()
     if (pid === null) {
-      return this.isWatching(ptyId)
+      const current = this.current.get(ptyId)
+      return current?.name === foreground && this.watches.get(ptyId)?.has(current.pid) === true
     }
+    this.current.set(ptyId, { name: foreground, pid })
     if (this.reportedPids.get(ptyId) === pid) {
       return false
     }
@@ -116,6 +120,7 @@ export class ForegroundExitWatches {
   }
 
   private release(ptyId: string): void {
+    this.current.delete(ptyId)
     for (const watch of this.watches.get(ptyId)?.values() ?? []) {
       watch.dispose()
     }
@@ -134,5 +139,6 @@ export class ForegroundExitWatches {
     }
     this.reportedPids.clear()
     this.lookups.clear()
+    this.current.clear()
   }
 }
