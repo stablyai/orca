@@ -29,4 +29,11 @@ describe('shared Codex server key', () => {
     expect(a.key).not.toBe(b.key)
     expect(a.launch.cwd).toBe('/repo/wt-a')
   })
+
+  it('never shares a PATH-resolved Codex whose version is unknown', async () => {
+    const pathCodex = { ...launch('/repo/wt-a', []), command: 'codex' }
+    const a = await codexSharedServerSpec(pathCodex, [], null)
+    const b = await codexSharedServerSpec(pathCodex, [], null)
+    expect(a.key).not.toBe(b.key)
+  })
 })

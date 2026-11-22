@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
@@ -42,7 +42,11 @@ async function launchGeneration(
       }
     })
   )
-  return [codexVersion, ...mtimes]
+  // Nothing would change on an upgrade (no version, a PATH-resolved command): never share, so a
+  // chat can't be leased a server still running the old binary.
+  return codexVersion === null && !isAbsolute(launch.command)
+    ? [randomUUID()]
+    : [codexVersion, ...mtimes]
 }
 
 /** Chats share a server only when the binary, flags, account home, base env and skill roots match. */
