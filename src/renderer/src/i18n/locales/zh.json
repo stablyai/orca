@@ -21180,9 +21180,6 @@
           "multipleErrorsCount_other": "无法检查 {{count}} 个仓库（{{names}}）。部分工作区可能未显示。请刷新后重试",
           "readyCount_other": "找到 {{count}} 个工作区"
         },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "评审 Alpha 清理"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -22620,12 +22617,20 @@
         "safariFullDiskAccess": "macOS 拒绝访问 Safari 的 Cookie。请在系统设置 → 隐私与安全 → 完全磁盘访问权限中授予 Orca 完全磁盘访问权限",
         "connectionEnded": "导入期间与此服务器的连接已断开。请重新连接后重试",
         "serverRepaired": "此服务器在导入期间已重新配对。请重试",
-        "macFullDiskAccess": "macOS 拒绝访问 {{browser}} Cookie。请在“系统设置”→“隐私与安全性”→“完全磁盘访问权限”中授予 Orca 权限，然后重启 Orca。"
+        "macFullDiskAccess": "macOS 拒绝访问 {{browser}} Cookie。请在“系统设置”→“隐私与安全性”→“完全磁盘访问权限”中授予 Orca 权限，然后重启 Orca。",
+        "sshHostDisconnected": "此页面已不再通过其 SSH 主机连接。请重新连接后重试。"
       },
       "notice": {
         "importedMore_other": "已为 {{domains}} 及其他 {{more}} 个域名导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
+      },
+      "sshPage": {
+        "label": "此设备上的浏览器",
+        "destination": "导入到 {{host}} 的浏览器。",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
+        "stored": "已存储到 {{host}} 的浏览器。",
+        "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
       }
     },
     "googleCookieClear": {

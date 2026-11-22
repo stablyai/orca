@@ -46,10 +46,6 @@ function claimForegroundPush(payload: OrcaPushPayload): boolean {
   return true
 }
 
-export function resetForegroundPushClaimsForTests(): void {
-  recentForegroundPushes.clear()
-}
-
 export async function foregroundNotificationBehavior(notification: {
   request: Parameters<typeof readNativeNotificationData>[0]
 }): Promise<NotificationBehavior> {

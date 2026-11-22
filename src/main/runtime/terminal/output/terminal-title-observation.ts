@@ -165,6 +165,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+        if (agentStatus === 'working') {
+          pty.lastAgentStatusWorkingStartedAtEpochMs = observedAtEpochMs
+        }
       }
       if (prevStatus !== agentStatus || retiresDisplayClear) {
         this.onTitleAgentStatusChanged()
@@ -297,6 +300,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       // so the seed a same-id restore applies must not inherit its authority.
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
+      pty.lastAgentStatusWorkingStartedAtEpochMs = null
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.providerGenerationResetAtEpochMs = pty.lastAgentStatusRichInvalidatedAtEpochMs
       pty.managementTitle = null

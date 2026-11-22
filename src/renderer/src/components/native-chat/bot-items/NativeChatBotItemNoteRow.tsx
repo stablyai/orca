@@ -19,7 +19,10 @@ import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_CHIP } from '../messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
@@ -54,7 +57,13 @@ function ChipPreview({ item }: { item: BotItemNoteItem }): React.JSX.Element {
   )
 }
 
-export function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
+export function ItemChip({
+  item,
+  className
+}: {
+  item: BotItemNoteItem
+  className?: string
+}): React.JSX.Element {
   const t = useTranslate()
   // The preview, and its live read, exist only while the tooltip is open.
   const [open, setOpen] = useState(false)
@@ -68,7 +77,7 @@ export function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element
             title: item.title,
             status: botItemStatusName(item.status, t)
           })}
-          className={NATIVE_CHAT_INLINE_CHIP}
+          className={cn(NATIVE_CHAT_INLINE_CHIP, className)}
           onClick={() => openChipItem(item.uid)}
         >
           <BotItemStatusIcon status={item.status} />
@@ -108,7 +117,7 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
 const CHIPS_SHOWN = 3
 
 /** A linked worker this chat started as the Started row draws it: its chip, opening the worker.
- *  Any other link's name cuts short as early as an item chip, whole on hover. */
+ *  Any other link's name cuts short as a chip does, whole on hover. */
 function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
@@ -135,7 +144,7 @@ function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="min-w-0 max-w-[min(16rem,100%)] truncate">{link.name}</span>
+        <span className={NATIVE_CHAT_ROW_SHARE}>{link.name}</span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {link.name}
@@ -182,7 +191,7 @@ function LineWords({
         </button>
       ) : null}
       {line.tail || line.detail ? (
-        <span ref={detailRef} className={line.detail ? 'min-w-0 truncate' : 'shrink-0'}>
+        <span ref={detailRef} className={line.detail ? NATIVE_CHAT_ROW_SHARE : 'shrink-0'}>
           {line.tail}
           {line.detail ? <span className="text-chat-foreground">: {line.detail}</span> : null}
         </span>
@@ -279,7 +288,8 @@ function CommentRow({
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
-        <ItemChip item={line.item} />
+        {/* A bubble's head, not a row's share: it fits the bubble instead. */}
+        <ItemChip item={line.item} className="max-w-full flex-none" />
         {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
       </NativeChatUserBubble>
     </div>

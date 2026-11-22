@@ -35,10 +35,6 @@ export type WslOrcadHostRelaunch =
 // SSH client woke it first), later connects only offer the restart instead of bouncing it again.
 const restartedThisSession = new Set<string>()
 
-export function forgetWslHostRelaunchesForTests(): void {
-  restartedThisSession.clear()
-}
-
 function wslHostNotWslLaunchedDeferral(fullVersion: string, reason: string): WslHostDeferredUpdate {
   return {
     candidateVersion: fullVersion,
