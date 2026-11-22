@@ -19,11 +19,21 @@ export const ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY = 'orcad.migration-
 // Push desktop-owned host accounts (WSL) only to hosts supporting accounts.setHostLaunchEnv.
 export const HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY = 'accounts.host-launch-env.v1' as const
 
+// settings.update accepts nativeChatAutoName, so a WSL host's chat naming follows the desktop switch.
+export const HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY =
+  'settings.native-chat-auto-name.v1' as const
+
 // Older orcads reject --reclaim-stale-lock; without this capability offer manual instructions.
 export const ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY = 'orcad.stale-lock-reclaim.v1' as const
 
 // A WSL host's Remove asks host.peerDesktops before ending a server other desktops may share.
 export const ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY = 'orcad.peer-desktops.v1' as const
+
+// A socket whose handshake carries the passive client capability only watches: idle exit ignores it.
+// Advertised so a client can tell whether its passive socket will be ignored; sending it is always safe.
+export const ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY =
+  'orcad.idle-passive-clients.v1' as const
+export const IDLE_PASSIVE_CLIENT_CAPABILITY = 'client.idle-passive.v1' as const
 
 export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY,
@@ -31,5 +41,7 @@ export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY,
-  ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY
+  HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY,
+  ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY,
+  ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY
 ] as const

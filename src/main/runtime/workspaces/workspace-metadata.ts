@@ -18,8 +18,25 @@ import {
   parseWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
+import { countUnreadWorkspaces } from './metadata/unread-workspace-count'
 
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
+  countUnreadWorkspaces(): number {
+    return countUnreadWorkspaces(this.store)
+  }
+
+  /** Every unread write (window, phone, CLI, activation) lands in a workspace record. */
+  onWorkspaceRecordsWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains) => {
+        if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
+  }
+
   recordOptimisticReconcileToken(worktreeId: string): string {
     return this.worktreeBaseReconciliation.recordToken(worktreeId)
   }

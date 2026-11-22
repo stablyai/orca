@@ -13,7 +13,7 @@ import {
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { buildActivityEvents } from '../events/activity-event-builder'
-import { freshActivityLiveAgentState } from '../events/activity-event-state'
+import { hasFreshActivityLiveAgent } from '../events/activity-event-state'
 import {
   createActivityEventBuildCache,
   resetActivityEventBuildCache
@@ -21,6 +21,7 @@ import {
 import { standaloneActivityWorktreeScope } from '../events/activity-standalone-worktree'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 import type { AgentPaneThread } from './activity-thread-types'
+import { publishActivityThreadChanges } from './activity-thread-change-feed'
 import {
   releaseActivityTabProjection,
   selectAllAgentPaneThreadStoreData,
@@ -114,6 +115,7 @@ function releaseAll(): void {
   for (const mode of MODES) {
     threadProjections[mode] = createThreadProjection()
     snapshots[mode] = null
+    publishActivityThreadChanges(mode, null)
   }
   currentInputs = null
   currentState = null
@@ -138,6 +140,7 @@ function attach(): () => void {
 function releaseMode(mode: ActivityThreadMode): void {
   threadProjections[mode] = createThreadProjection()
   snapshots[mode] = null
+  publishActivityThreadChanges(mode, null)
   if (listenerCount() === 0) {
     releaseAll()
     return
@@ -242,23 +245,17 @@ function projectActivityEvents(inputs: ActivityThreadInputs): ActivityEventsBuil
   return build
 }
 
-function hasLiveActivity({ storeData }: ActivityThreadInputs): boolean {
-  if (Object.keys(storeData.migrationUnsupportedByPtyId).length > 0) {
-    return true
-  }
-  const now = Date.now()
-  for (const entry of storeData.agentStatusByPaneKey.values()) {
-    if (freshActivityLiveAgentState(entry, now)) {
-      return true
-    }
-  }
-  return false
-}
-
 function projectThreads(inputs: ActivityThreadInputs, mode: ActivityThreadMode): AgentPaneThread[] {
-  if (mode === 'live' && !hasLiveActivity(inputs)) {
+  if (
+    mode === 'live' &&
+    !hasFreshActivityLiveAgent(
+      inputs.storeData.agentStatusByPaneKey,
+      inputs.storeData.migrationUnsupportedByPtyId
+    )
+  ) {
     if (threadProjections.live.build !== null) {
       threadProjections.live = createThreadProjection()
+      publishActivityThreadChanges('live', null)
     }
     // An empty badge alone keeps nothing; with a full reader mounted the shared build stays warm.
     if (listeners.all.size === 0) {
@@ -272,6 +269,7 @@ function projectThreads(inputs: ActivityThreadInputs, mode: ActivityThreadMode):
   if (projection.build === build && projection.generatedTitlesEnabled === generatedTitlesEnabled) {
     return projection.threads
   }
+  const fresh = projection.build === null
   projection.threads = buildAgentPaneThreads(
     {
       events:
@@ -286,6 +284,7 @@ function projectThreads(inputs: ActivityThreadInputs, mode: ActivityThreadMode):
   )
   projection.build = build
   projection.generatedTitlesEnabled = generatedTitlesEnabled
+  publishActivityThreadChanges(mode, projection.cache, fresh)
   return projection.threads
 }
 

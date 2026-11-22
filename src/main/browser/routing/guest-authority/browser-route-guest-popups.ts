@@ -30,6 +30,7 @@ import {
   isNativeBrowserPopupRequest
 } from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
 import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
+import { trackBrowserPopupUserAgentDemand } from '../../guest-lifecycle/manager/navigation/browser-guest-frame-user-agent-demand'
 
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
 
@@ -137,6 +138,7 @@ export function createBrowserRouteGuestPopupController(input: {
       contents.on('will-redirect', onPopupNavigate)
       // Popups skip attachGuestPolicies, so install its unload rule here.
       contents.on('will-prevent-unload', allowPageUnload)
+      trackBrowserPopupUserAgentDemand(contents)
       // Register before first navigation so downloads can resolve the root page.
       registerPopupOwnership(popupWebContentsId)
       if (disposed || !navigationAllowed(ORCA_BROWSER_BLANK_URL)) {
