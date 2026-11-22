@@ -40,6 +40,11 @@ export const UI_STATE_DISPOSITIONS = {
     item: 38,
     note: 'Repo and project keys are kept; a collapsed host section maps to the WSL host.'
   },
+  expandedLineageGroups: {
+    disposition: 'rewrite-desktop',
+    item: 38,
+    note: 'Lineage keys for moved workspaces gain the WSL host copy, mirroring collapsedGroups.'
+  },
   workspaceCleanup: moveDisposition(38, {
     rewriteDesktopCopy: true,
     note: 'Dismissals are keyed by worktree id.'

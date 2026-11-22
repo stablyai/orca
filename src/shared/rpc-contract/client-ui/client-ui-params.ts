@@ -186,6 +186,7 @@ export const UiUpdateFields = z
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
+    expandedLineageGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: WorktreeCardProperties.optional(),

@@ -185,6 +185,10 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.store.getUI()
   }
 
+  isStartChildWorkspacesCollapsedEnabled(): boolean {
+    return this.store?.getSettings?.().startChildWorkspacesCollapsed === true
+  }
+
   getWorkspaceSessionForHost(hostId: ExecutionHostId): WorkspaceSessionState | null {
     return this.store?.getWorkspaceSession?.(hostId) ?? null
   }

@@ -123,6 +123,8 @@ export type PersistedUIState = {
   /** Agents-view thread grouping. Absent means 'status'. */
   agentsGroupBy?: ActivityGroupBy
   collapsedGroups: string[]
+  /** Lineage keys kept expanded while startChildWorkspacesCollapsed is on. */
+  expandedLineageGroups?: string[]
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
