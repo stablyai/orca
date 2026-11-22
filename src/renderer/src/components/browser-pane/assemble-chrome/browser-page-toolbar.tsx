@@ -125,6 +125,8 @@ export function BrowserPageToolbar({
   externalUrl: string | null
 }): React.JSX.Element {
   const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
   const canOpenSourceFile = useAppStore(
@@ -195,6 +197,7 @@ export function BrowserPageToolbar({
                 siteDisplaySource={siteDisplaySource}
                 url={currentBrowserUrl}
                 viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
                 isActive={isActive}
               />
               {openSourceFile ? <BrowserOpenSourceFileButton onOpen={openSourceFile} /> : null}
@@ -253,7 +256,7 @@ export function BrowserPageToolbar({
           worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onApplyViewportPreset={(nextId) => applyBrowserViewportPreset(browserPageId, nextId)}
+          onApplyViewportPreset={applyViewportPreset}
           siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankTab}

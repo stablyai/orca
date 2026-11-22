@@ -239,6 +239,7 @@ import {
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
   CertificateProceed,
+  FindInPage,
   PageZoom,
   Reload,
   SiteColorScheme
@@ -1376,6 +1377,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.extensionReload': ExtensionReload,
   'browser.fill': Fill,
   'browser.find': Find,
+  'browser.findInPage': FindInPage,
   'browser.focus': Element,
   'browser.forward': ExpectUrlBrowserTarget,
   'browser.fullScreenshot': FullScreenshot,
@@ -1432,6 +1434,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.siteDisplay': BrowserTarget,
   'browser.snapshot': Snapshot,
   'browser.stop': BrowserTarget,
+  'browser.stopFindInPage': BrowserTarget,
   'browser.storage.local.clear': ExpectUrlBrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
