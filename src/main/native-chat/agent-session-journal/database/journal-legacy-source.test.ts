@@ -15,6 +15,13 @@ import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
 import { journalSqlReaderPath } from '../journal-sql-worker-bundle.test-fixture'
 import { applyJournalSqlMaintenance } from '../journal-sql-maintenance'
+import Database from '../../../sqlite/sync-database'
+import {
+  createAgentSessionRecordTablesSql,
+  createJournalTablesSql,
+  JOURNAL_DB_SCHEMA_VERSION
+} from './journal-database-schema'
+import { journalLegacyRequiredTables } from './journal-legacy-source'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -93,4 +100,33 @@ it('still refuses a version-four journal that lost the record tables its version
     'no such table: agent_session_records'
   )
   expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
+})
+
+it('fails when the journal migration changes the tables an older file is judged by', () => {
+  // A migration changed the original journal's tables. Files a release wrote keep theirs: leave the
+  // released lists frozen, add the new version's list, and the recorded damage check changes too.
+  const migrated = new Database(':memory:')
+  migrated.exec(createJournalTablesSql() + createAgentSessionRecordTablesSql())
+  const created = new Set(
+    migrated
+      .prepare("SELECT name FROM sqlite_schema WHERE type='table'")
+      .all()
+      .map(({ name }) => String(name))
+  )
+  migrated.close()
+  expect(JOURNAL_DB_SCHEMA_VERSION).toBe(4)
+  expect([...created].sort()).toEqual([
+    'agent_session_operations',
+    'agent_session_records',
+    'agent_session_retired_claim_keys',
+    'agent_session_store_meta',
+    'agent_session_tabs',
+    'journal_imports',
+    'journal_repairs',
+    'journal_rows',
+    'journal_sessions',
+    'journal_set_aside'
+  ])
+  // Recovery tables are read only when present, so they are never required.
+  expect(journalLegacyRequiredTables(4).filter((table) => !created.has(table))).toEqual([])
 })

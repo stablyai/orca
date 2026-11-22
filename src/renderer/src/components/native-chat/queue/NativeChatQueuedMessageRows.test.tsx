@@ -79,6 +79,7 @@ it('only lets a live sortable owner commit pointer completion, including deferre
           <ul>
             <NativeChatQueuedMessageRows
               cards={cards}
+              allCards={cards}
               reorder={{ scope, pending: false, move }}
               renderCard={(card, drag) => (
                 <li

@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { HOST_GROUP_ROUTE, type HostStackRouteTarget } from '../../navigation/host-stack-navigation'
-import { botGroupIdOfRoomPaneKey } from '../../../../src/shared/bots/bot-group-room-pane-key'
+import { botGroupIdOfRoomPaneKey } from '../../../../src/shared/bots/bot-notification-pane-keys'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
 import { mobileSessionAccessTarget } from '../../session/mobile-session-item-target'
 import type { HostCredentialStatus } from '../../host-catalog/host-profile'

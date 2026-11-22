@@ -3691,6 +3691,7 @@
       "open": "Open {{name}}",
       "row": {
         "started": "Started",
+        "forItems": "for",
         "reopened": "Reopened",
         "followedUp": "Sent follow-up to",
         "handedOff": "Handed off to",
@@ -5589,7 +5590,9 @@
     "section": {
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "newBot": "New bot"
+      "newBot": "New bot",
+      "reorderTitle": "Reorder bots",
+      "reorder": "Reorder…"
     },
     "groups": {
       "manageMembers": "Manage members",
@@ -5661,7 +5664,8 @@
       },
       "newThreadTab": "New thread",
       "newThreadHint": "starts fresh",
-      "newThread": "New thread in {{name}}"
+      "newThread": "New thread in {{name}}",
+      "peerReadItems": "{{bot}} read an update to its items"
     },
     "templates": {
       "title": "Bot templates",
@@ -5857,7 +5861,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "all": "All chats",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters",

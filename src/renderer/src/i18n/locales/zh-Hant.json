@@ -8410,7 +8410,6 @@
           "running": "執行中",
           "stopped": "已停止",
           "title": "新增 WSL 發行版",
-          "description": "Orca 在發行版內執行其伺服器，因此 git、檔案和終端機都在 Linux 中原生執行。此發行版中透過 \\\\wsl.localhost 開啟的專案會在其終端機閒置時自動移到此主機；位於 Windows 磁碟機 (/mnt/…) 上的專案會留在此電腦。你可以從側邊欄將已移動的專案移回。",
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
@@ -21164,7 +21163,6 @@
         "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
         "loadingFiles": "正在載入檔案...",
         "noFiles": "沒有符合的檔案",
-        "noMembers": "沒有符合的機器人",
         "filesLoadFailed": "無法載入檔案",
         "attach": "附加檔案",
         "startDictation": "開始聽寫",
@@ -21550,7 +21548,17 @@
         "skip": "跳過",
         "sending": "正在傳送…",
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
-        "openTerminal": "在終端機中回答"
+        "openTerminal": "在終端機中回答",
+        "recommended": "推薦",
+        "stepAnswered": "{{value0}}，已回答",
+        "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
+        "answered": "已回答",
+        "title": "問題",
+        "previous": "上一個問題",
+        "nextQuestion": "下一個問題",
+        "back": "返回",
+        "skipAndSubmit": "略過並提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",
@@ -21775,7 +21783,6 @@
         "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
-        "moreActions": "更多操作",
         "moveChanged": "佇列在移動前已變更。請重新拖曳訊息。",
         "reorderHint": "拖曳以重新排序，或使用上、下方向鍵。",
         "reorderMessage": "重新排序訊息",
@@ -21785,7 +21792,6 @@
         "listLabel": "排隊的訊息",
         "alreadySent": "此訊息已傳送。",
         "withdrawnHold": "在傳送前已停止",
-        "pausedSendFailed": "無法傳送。點按傳送以重試。",
         "paused": "已暫停",
         "resume": "繼續",
         "fromSender": "來自",
@@ -21800,13 +21806,15 @@
         "editGonePrompt": "此訊息已傳送或移除。回答代理程式後，你編輯的內容會出現在聊天輸入框中。",
         "imageCount_one": "{{count}} 張圖片",
         "imageCount_other": "{{count}} 張圖片",
-        "collapse": "收合",
-        "expand": "展開",
         "queued": "已排隊",
         "clearAll": "全部清除",
         "editReturned": "你編輯的內容已放入聊天輸入框。",
         "commandsUnsupported": "排隊的訊息中無法儲存命令。",
-        "imageCount": "{{count}} 張圖片"
+        "imageCount": "{{count}} 張圖片",
+        "couldNotSend": "無法傳送",
+        "retry": "重試",
+        "showLessRows": "收合",
+        "moreRows": "還有 {{value0}} 則"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -22585,6 +22593,9 @@
         "agyItem": "agy 自身的登入",
         "agyHint": "這個聊天會在這部主機上執行 Antigravity CLI。其他方式適用於新的聊天。",
         "confirmSignIn": "使用 Google 登入？"
+      },
+      "dock": {
+        "label": "訊息框和提示"
       }
     },
     "tab": {
@@ -29323,7 +29334,6 @@
       "empty": {
         "allClear": "沒有需要你處理的事項，也沒有正在執行的工作。",
         "body": "當 {{bot}} 為你處理某件事時，它會顯示在這裡，並列出正在進行的動作與需要你處理的事項。",
-        "chatNeedsYou": "{{chat}} 中沒有需要你處理的事項。",
         "filtered": "沒有符合的項目。",
         "needsYou": "沒有需要你處理的事項。",
         "title": "尚無項目",
@@ -29337,7 +29347,6 @@
         "title": "標題"
       },
       "filter": {
-        "all": "所有聊天",
         "chat": "聊天",
         "clearAll": "清除篩選",
         "label": "篩選項目",

@@ -1267,7 +1267,7 @@
           "28810273af": "Kimi",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
-          "9e2a9bb87b": "Continuer",
+          "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
           "cbaf0c2e0b": "Cline",
@@ -5977,7 +5977,7 @@
           "removeWithChildrenGit_other": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeWithChildrenGit_many": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeSingleFolderFromOrca": "Le retire d'Orca. Le dossier sur le disque est conservé.",
-          "deleteSingleWorktreeAndBranch": "Supprime le worktree et sa branche (conservée si non fusionnée)."
+          "deleteSingleWorktreeAndBranch": "Supprime le worktree et ses modifications locales, ainsi que sa branche si elle a été fusionnée."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Afficher les chemins chargés",
@@ -7160,7 +7160,6 @@
           "stopped": "Arrêtée",
           "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
-          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
@@ -19710,7 +19709,17 @@
         "skip": "Ignorer",
         "sending": "Envoi…",
         "terminalRequired": "Répondez à cette question OMP dans le terminal.",
-        "openTerminal": "Répondre dans le terminal"
+        "openTerminal": "Répondre dans le terminal",
+        "recommended": "Recommandé",
+        "stepAnswered": "{{value0}}, répondue",
+        "stepOf": "{{value0}} sur {{value1}}",
+        "answered": "Répondue",
+        "title": "Question",
+        "previous": "Question précédente",
+        "nextQuestion": "Question suivante",
+        "back": "Retour",
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",
@@ -19985,12 +19994,10 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
-        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
         "withdrawnHold": "Arrêté avant l'envoi",
-        "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
         "paused": "En pause",
         "resume": "Reprendre",
         "fromSender": "De",
@@ -20006,14 +20013,16 @@
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
         "imageCount_many": "{{count}} images",
-        "collapse": "Réduire",
-        "expand": "Développer",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "couldNotSend": "Envoi impossible",
+        "retry": "Réessayer",
+        "showLessRows": "Afficher moins",
+        "moreRows": "+{{value0}} de plus"
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -20280,6 +20289,9 @@
       },
       "splitRight": "Diviser à droite",
       "splitDown": "Diviser vers le bas",
+      "dock": {
+        "label": "Zone de message et demandes"
+      },
       "automationSaved": {
         "openFullPage": "Ouvrir la page"
       },

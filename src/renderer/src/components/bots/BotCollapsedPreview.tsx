@@ -151,7 +151,7 @@ export function BotCollapsedPreview({
   return (
     <span
       ref={ref}
-      className="pointer-events-none flex min-w-0 flex-1 items-center justify-center overflow-hidden p-1"
+      className="pointer-events-none flex min-w-0 flex-1 items-center justify-start overflow-hidden p-1"
       data-bot-preview=""
     >
       <span className="isolate flex items-center gap-1">

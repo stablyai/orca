@@ -511,7 +511,7 @@
 3 src/main/ephemeral-vm/workspace-suspend.ts
 8 src/main/external-editors/external-editor-launch.ts
 1 src/main/external-editors/remote-ssh-editor-launch.ts
-24 src/main/filesystem/atomic-file-publication.ts
+23 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
@@ -705,8 +705,6 @@
 3 src/main/ipc/worktrees/removal/registered-worktree-roots-cache.ts
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
-2 src/main/ipc/worktrees/removal/remove-unregistered-worktree.ts
-1 src/main/ipc/worktrees/removal/worktree-removal-filesystem.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
 6 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
@@ -756,8 +754,8 @@
 6 src/main/managed-server/install/orcad-remote-deploy.ts
 4 src/main/managed-server/install/orcad-remote-install.ts
 1 src/main/managed-server/install/orcad-remote-rollback.ts
+1 src/main/managed-server/lifecycle/orcad-idle-restart-stop.ts # moved from orcad-managed-launch-session.ts with the idle-restart stop (withOrcadActivationLock), now shared with the WSL host relaunch
 4 src/main/managed-server/lifecycle/orcad-managed-auto-update.ts
-1 src/main/managed-server/lifecycle/orcad-managed-launch-session.ts
 1 src/main/managed-server/lifecycle/orcad-managed-runtime-context.ts
 1 src/main/managed-server/lifecycle/orcad-managed-stale-lock-reclaim.ts
 1 src/main/managed-server/lifecycle/orcad-managed-tunnel-transport.ts
@@ -1201,6 +1199,7 @@
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
+1 src/main/runtime/orchestration/db/runs/retired-chat-runs.ts # one savepoint when a replaced or deleted Chat retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts
@@ -1215,7 +1214,8 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
-2 src/main/runtime/orchestration/federation/peer-mail/peer-mail-relay.ts
+2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
+1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owed-actions.ts
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owned-calls.ts
 2 src/main/runtime/orchestration/federation/remote-owned/remote-owned-route.ts
@@ -1226,6 +1226,7 @@
 1 src/main/runtime/orchestration/legacy-remote/federation-relay-enqueue.ts # its own transaction became savepoint-aware so a worker report and its record commit together; no new statements
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
+1 src/main/runtime/orchestration/mailbox/questions/question-reconcile.ts # one savepoint per agent-question notice, around orchestration DB writes that were already synchronous, so the notice and its record commit together
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
 1 src/main/runtime/orchestration/workers/turn-stops/worker-presence-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
@@ -1255,7 +1256,11 @@
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
+1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
+2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
+1 src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-reply.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
+1 src/main/runtime/rpc/methods/orchestration/messaging/reply-method.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
 1 src/main/runtime/rpc/methods/workspaces/worktree.ts
@@ -1294,7 +1299,6 @@
 1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
 2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
-1 src/main/runtime/workspaces/catalog/runtime-worktree-filesystem.ts
 2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
 2 src/main/runtime/workspaces/catalog/workspace-catalog.ts
 1 src/main/runtime/workspaces/catalog/workspace-repo-scan-refresh.ts
@@ -1306,9 +1310,7 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
-2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts
@@ -1485,11 +1487,7 @@
 1 src/main/workspaces/execution-host/local-project-runtime-resolution.ts
 4 src/main/workspaces/execution-host/project-runtime-git-router.ts
 2 src/main/workspaces/removal/folder-workspace-archive-hook.ts
-2 src/main/workspaces/removal/local-orphaned-worktree-cleanup.ts
-3 src/main/workspaces/removal/local-worktree-filesystem.ts
-1 src/main/workspaces/removal/local-worktree-removal-recovery.ts
 1 src/main/workspaces/removal/retirement/worktree-retirement-discovery.ts
-1 src/main/workspaces/removal/worktree-prunable-git-file.ts
 1 src/main/workspaces/removal/worktree-removal-process-cleanup.ts
 1 src/main/workspaces/space-analysis/workspace-space-analysis.ts
 2 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts

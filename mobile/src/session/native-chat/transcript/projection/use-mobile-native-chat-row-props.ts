@@ -8,7 +8,7 @@ import { isActionableStructuredAgentSessionPrompt } from '../../../../../../src/
 import { nativeChatRowOffersRewind } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTurnDiff } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
-import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
+import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
@@ -26,8 +26,8 @@ export type MobileNativeChatTurnRow = {
   trailingRun: boolean
   workRun?: readonly NativeChatMessage[]
   joinsWorkRun?: boolean
-  /** The sides where this item-note row touches another, which sit close. */
-  itemNoteJoin?: BotItemNoteJoin
+  /** The sides where this activity row touches another, which sit close. */
+  activityJoin?: NativeChatActivityJoin
   foldedAway?: boolean
   openReasoning?: ReadonlySet<string>
   mayStillGrow: boolean

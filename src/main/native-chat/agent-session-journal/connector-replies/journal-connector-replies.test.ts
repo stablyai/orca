@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../../../shared/agent-session/journal/journal-connector-reply'
 import { automaticSubmissionFixture } from '../journal-automatic-submission.test-fixture'
 import { lifecycleFacts } from '../journal-domain-lifecycle.test-fixture'
 import { commandReceiptFixture } from '../writing/command-receipt-test-support'
@@ -10,13 +11,16 @@ import {
   cutJournalConnectorReplies,
   forgetJournalConnectorReplies,
   fillJournalConnectorReplies,
-  readJournalConnectorReplies,
   recutJournalConnectorReplies,
   releaseJournalConnectorClaim,
   repointJournalConnectorClaim,
   sentJournalConnectorReplies,
   withdrawJournalConnectorReplies
 } from './journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from './journal-connector-replies-read'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
 
 // Design item 125 §8, journal layer: the outbox row commits with its admission, its first fill
@@ -349,4 +353,79 @@ it('gives a withdrawn queued continuation’s rows back to their cut', async () 
       row.fill?.outcome
     ])
   ).toEqual([['d1', 'turn-1', undefined, undefined]])
+})
+
+it('pages one account’s filled, unsent rows in delivery id order after a cursor', () => {
+  const f = fixture()
+  const insert = (account: string, deliveryId: string, fields: { outcome?: string; sent?: true }) =>
+    f.db
+      .prepare(`INSERT INTO journal_connector_replies
+        (account,delivery_id,source,external_id,session_id,epoch,message_id,queued,outcome,
+         answer_delivery_id,prose,filled_at,sent_at)
+        VALUES(?,?,'slack',?,'chat-test','epoch',?,0,?,?,?,?,?)`)
+      .run(
+        account,
+        deliveryId,
+        SLACK.externalId,
+        `m-${deliveryId}`,
+        fields.outcome ?? null,
+        fields.outcome ? deliveryId : null,
+        fields.outcome ? `answer ${deliveryId}` : null,
+        fields.outcome ? 5 : null,
+        fields.sent ? 6 : null
+      )
+  // Inserted out of order: the page's order is the key's, not the insert's.
+  for (const id of ['d5', 'd2', 'd4', 'd1', 'd3']) {
+    insert('account-a', id, { outcome: 'answered' })
+  }
+  insert('account-a', 'd0-open', {})
+  insert('account-a', 'd2-sent', { outcome: 'answered', sent: true })
+  insert('account-b', 'd0-other', { outcome: 'answered' })
+  const page = (after: string | null) =>
+    readOwedJournalConnectorReplies(f.db, 'account-a', after, 2).map((row) => row.deliveryId)
+  expect(page(null)).toEqual(['d1', 'd2'])
+  expect(page('d2')).toEqual(['d3', 'd4'])
+  expect(page('d4')).toEqual(['d5'])
+  expect(page('d5')).toEqual([])
+  expect(readOwedJournalConnectorReplies(f.db, 'account-a', null, 1)[0]?.fill).toMatchObject({
+    outcome: 'answered',
+    answerDeliveryId: 'd1',
+    prose: 'answer d1',
+    filledAt: 5
+  })
+  expect(
+    readOwedJournalConnectorReplies(f.db, 'account-b', null, 10).map((row) => row.deliveryId)
+  ).toEqual(['d0-other'])
+})
+
+it('reads an oversize prose cut to just past the cap, and a capped one whole', () => {
+  const f = fixture()
+  const fill = (deliveryId: string, prose: string) => {
+    f.db
+      .prepare(`INSERT INTO journal_connector_replies
+        (account,delivery_id,source,external_id,session_id,epoch,message_id,queued)
+        VALUES('account-a',?,'slack',?,'chat-test','epoch',?,0)`)
+      .run(deliveryId, SLACK.externalId, `m-${deliveryId}`)
+    fillJournalConnectorReplies(
+      f.db,
+      [
+        {
+          account: 'account-a',
+          deliveryId,
+          outcome: 'answered',
+          answerDeliveryId: deliveryId,
+          prose
+        }
+      ],
+      5
+    )
+  }
+  const capped = 'é'.repeat(JOURNAL_CONNECTOR_REPLY_PROSE_BYTES / 2)
+  fill('d1', 'x'.repeat(8 * 1024 * 1024))
+  fill('d2', capped)
+  const [huge, whole] = readOwedJournalConnectorReplies(f.db, 'account-a', null, 10)
+  expect(huge?.fill?.prose).toHaveLength(JOURNAL_CONNECTOR_REPLY_PROSE_BYTES + 1)
+  expect(whole?.fill?.prose).toBe(capped)
+  // The whole-table read still keeps every prose as stored.
+  expect(readJournalConnectorReplies(f.db)[0]?.fill?.prose).toHaveLength(8 * 1024 * 1024)
 })

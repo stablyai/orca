@@ -5471,7 +5471,7 @@
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
           "removeSingleFolderFromOrca": "Orca에서 제거합니다. 디스크의 폴더는 유지됩니다.",
-          "deleteSingleWorktreeAndBranch": "워크트리와 해당 브랜치를 삭제합니다(병합되지 않은 브랜치는 유지)."
+          "deleteSingleWorktreeAndBranch": "워크트리와 로컬 변경 사항을 삭제합니다. 브랜치는 병합된 경우 삭제합니다."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "불러온 경로 표시",
@@ -6639,7 +6639,6 @@
           "stopped": "중지됨",
           "unverifiable": "알 수 없음",
           "title": "WSL 배포판 추가",
-          "description": "Orca는 배포판 안에서 서버를 실행하므로 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 이 배포판에서 \\\\wsl.localhost를 통해 연 프로젝트는 터미널이 유휴 상태가 되면 자동으로 이 호스트로 옮겨지며, Windows 드라이브(/mnt/…)에 있는 프로젝트는 이 컴퓨터에 남습니다. 옮겨진 프로젝트는 사이드바에서 다시 가져올 수 있습니다.",
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
@@ -18976,7 +18975,17 @@
         "skip": "건너뛰기",
         "sending": "전송 중…",
         "terminalRequired": "터미널에서 이 OMP 질문에 대답하세요.",
-        "openTerminal": "터미널에서 응답"
+        "openTerminal": "터미널에서 응답",
+        "recommended": "추천",
+        "stepAnswered": "{{value0}}, 답변함",
+        "stepOf": "{{value0}}/{{value1}}",
+        "answered": "답변함",
+        "title": "질문",
+        "previous": "이전 질문",
+        "nextQuestion": "다음 질문",
+        "back": "뒤로",
+        "skipAndSubmit": "건너뛰고 제출",
+        "stepLabel": "{{value0}}, {{value1}}/{{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",
@@ -19203,12 +19212,10 @@
         "steerHint": "에이전트가 작업하는 동안 지금 보냅니다",
         "sendHint": "이 메시지를 지금 보냅니다",
         "delete": "삭제",
-        "moreActions": "추가 작업",
         "editMessage": "메시지 편집",
         "showFullMessage": "전체 메시지 보기",
         "showLess": "접기",
         "withdrawnHold": "전송 전에 중지됨",
-        "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
         "paused": "일시 중지됨",
         "resume": "재개",
         "fromSender": "보낸 사람:",
@@ -19223,14 +19230,16 @@
         "editGonePrompt": "이 메시지는 이미 전송되었거나 삭제되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다.",
         "imageCount_one": "이미지 {{count}}개",
         "imageCount_other": "이미지 {{count}}개",
-        "collapse": "접기",
-        "expand": "펼치기",
         "queued": "대기 중",
         "clearAll": "모두 지우기",
         "moveChanged": "이동하기 전에 대기열이 변경되었습니다. 메시지를 다시 드래그해 보세요.",
         "reorderHint": "드래그하거나 위쪽 및 아래쪽 화살표 키를 사용하여 순서를 변경하세요.",
         "reorderMessage": "메시지 순서 변경",
-        "imageCount": "이미지 {{count}}개"
+        "imageCount": "이미지 {{count}}개",
+        "couldNotSend": "보내지 못함",
+        "retry": "다시 시도",
+        "showLessRows": "간단히 보기",
+        "moreRows": "+{{value0}}개 더"
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
@@ -19500,6 +19509,9 @@
       },
       "splitRight": "오른쪽으로 분할",
       "splitDown": "아래로 분할",
+      "dock": {
+        "label": "메시지 상자와 프롬프트"
+      },
       "automationSaved": {
         "openFullPage": "페이지 열기"
       },

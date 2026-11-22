@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentListPublication } from '../../../../../shared/agent-status/presentation/agent-list-status'
-import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RpcDispatcher } from '../../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'
@@ -47,7 +46,7 @@ function publication(unread: boolean, sortAt = 1): AgentListPublication {
 describe('session.tabs.subscribe unread marks for phones', () => {
   it('re-sends a tab when the desktop reads it, and stays quiet when its verdict does not move', async () => {
     let agentList = publication(true)
-    let onEvent: ((event: RuntimeClientEvent) => void) | undefined
+    let onChanged: ((paneKeys: ReadonlySet<string> | null) => void) | undefined
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session.tabs.subscribe for a phone reads only these members.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -56,8 +55,8 @@ describe('session.tabs.subscribe unread marks for phones', () => {
       registerSubscriptionCleanup: vi.fn(),
       onMobileSessionTabsChanged: vi.fn(() => () => {}),
       readAgentListPublication: () => agentList,
-      onClientEvent: vi.fn((listener: (event: RuntimeClientEvent) => void) => {
-        onEvent = listener
+      onAgentListChanged: vi.fn((listener: (paneKeys: ReadonlySet<string> | null) => void) => {
+        onChanged = listener
         return () => {}
       })
     } as unknown as OrcaRuntimeService
@@ -78,11 +77,11 @@ describe('session.tabs.subscribe unread marks for phones', () => {
 
     // A busy agent's recency moves on every step without changing what is unread.
     agentList = publication(true, 2)
-    onEvent!({ type: 'agentListChanged' })
+    onChanged!(new Set([PANE_KEY]))
     expect(frames).toHaveLength(1)
 
     agentList = publication(false, 3)
-    onEvent!({ type: 'agentListChanged' })
+    onChanged!(new Set([PANE_KEY]))
     expect(frames).toHaveLength(2)
     expect(frames[1]!.type).toBe('updated')
     expect(frames[1]!.tabs![0]!.unread).toBeUndefined()

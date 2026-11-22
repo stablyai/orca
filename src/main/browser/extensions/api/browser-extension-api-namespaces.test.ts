@@ -274,6 +274,16 @@ describe('context menus in the page menu', () => {
   })
 })
 
+describe('action.openPopup', () => {
+  it('treats empty options like omitted options and still checks windowId', async () => {
+    await expect(call(VAULT, 'action', 'openPopup', [], 'page')).rejects.toThrow('No active tab')
+    await expect(call(VAULT, 'action', 'openPopup', [{}], 'page')).rejects.toThrow('No active tab')
+    await expect(call(VAULT, 'action', 'openPopup', [{ windowId: 'x' }], 'page')).rejects.toThrow(
+      'Invalid arguments at 0.windowId'
+    )
+  })
+})
+
 describe('storage.sync', () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: another profile session over the same stubbed members.
   const workSession = { ...extensionSession } as unknown as Electron.Session

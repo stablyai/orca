@@ -1,8 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { createRunTempDirectory, sweepStaleRunDirectories } from './vitest-run-temp-directory.mjs'
+import {
+  createRunTempDirectory,
+  resolveRunTempBase,
+  sweepStaleRunDirectories
+} from './vitest-run-temp-directory.mjs'
 
 const bases = []
 
@@ -47,3 +51,11 @@ it('removes the run directory and leaves an unmarked one with the same name alon
   runDirectory(base, 105, false)
   expect(createRunTempDirectory({ base, pid: 105 })).toBeNull()
 })
+
+it.skipIf(process.platform === 'win32')(
+  'falls back to a root that is its own real path when the POSIX temp dir is too long',
+  () => {
+    const root = resolveRunTempBase(`/${'x'.repeat(60)}`, 'ov1', 'darwin')
+    expect(realpathSync(root)).toBe(root)
+  }
+)

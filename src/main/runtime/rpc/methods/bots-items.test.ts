@@ -19,6 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { BOT_ITEMS_METHODS } from './bots-items'
+import { BotItemsListReadSchema } from '../../../../shared/bots/bot-item-schema'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
 
 const paths = vi.hoisted(() => ({ userData: '' }))
@@ -101,6 +102,7 @@ vi.mock(import('./bots-chats'), async (importOriginal) => ({
 const sendToBot = vi.hoisted(() => vi.fn())
 vi.mock('./orchestration/messaging/bot-request-send', () => ({ sendToBot }))
 const messages = new Map<string, { to_handle: string }>()
+const ownerNotices = vi.fn()
 const mailed: { chatId: string; eventId: number; kind: string }[] = []
 
 /** A CLI call from a session: its verified evidence is the chat it names unless `from` says otherwise. */
@@ -118,9 +120,14 @@ const request = (
 
 let host: BotItemsHost | null = null
 
-function itemsRuntime() {
+function itemsRuntime(rangerAsks = true) {
   const bots = [
-    makeTestBot({ id: 'ranger', name: 'Ranger' }),
+    makeTestBot({
+      id: 'ranger',
+      name: 'Ranger',
+      folderWorkspaceId: 'ranger-home',
+      notifications: { needsPermission: rangerAsks, taskComplete: true, couldNotFinish: true }
+    }),
     makeTestBot({ id: 'docs', name: 'Docs' })
   ]
   const db = {
@@ -161,7 +168,9 @@ function itemsRuntime() {
     },
     botItems: host,
     getOrchestrationDb: () => db,
-    ensureStructuredAgentSessionHost: async () => {}
+    ensureStructuredAgentSessionHost: async () => {},
+    dispatchOwnerNotice: ownerNotices,
+    requireStore: () => ({ getSettings: () => ({ notifications: { enabled: true } }) })
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only bots, lookAround, botItems, the orchestration database and the runtime id, which the stub provides.
   const service = runtime as unknown as OrcaRuntimeService
@@ -178,6 +187,7 @@ beforeEach(() => {
   messages.clear()
   mailed.length = 0
   itemChat.sessionId = null
+  ownerNotices.mockReset()
 })
 
 afterEach(() => {
@@ -306,6 +316,96 @@ describe('bot items over RPC', () => {
       { chatId: RANGER_CHAT, eventId: 3, kind: 'status' }
     ])
   })
+
+  it('answers a summary list, a Closed page without the open items, and named items alone', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Share dialog', 'Old fix']) {
+      await dispatcher.dispatch(
+        request('bots.items.add', {
+          callerSessionId: RANGER_CHAT,
+          title,
+          description: 'Long text',
+          doneMeans: 'Shipped'
+        })
+      )
+    }
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    await dispatcher.dispatch(
+      request('bots.items.owner.status', { items: ['2'], status: 'done' }),
+      desktop
+    )
+    const list = async (params: Record<string, unknown>) => {
+      const answer = await dispatcher.dispatch(
+        request('bots.items.owner.list', { botId: 'ranger', summary: true, ...params }),
+        desktop
+      )
+      if (!answer.ok) {
+        throw new Error('list failed')
+      }
+      return BotItemsListReadSchema.parse(answer.result)
+    }
+
+    const whole = await list({})
+    expect(whole.items.map((item) => [item.number, item.description, item.doneMeans])).toEqual([
+      [1, null, null],
+      [2, null, null]
+    ])
+    const closedPage = await list({
+      closedCursor: `${Number.MAX_SAFE_INTEGER}:1000`,
+      closedOnly: true
+    })
+    expect(closedPage.items.map((item) => item.number)).toEqual([2])
+    const named = await list({ uids: [whole.items[0]!.uid] })
+    expect(named.items.map((item) => item.number)).toEqual([1])
+    expect(named.counts).toEqual({ planned: 1, done: 1 })
+  })
+
+  it.each([true, false])(
+    "tells the owner when the agent asks on an item, opening its page, only with the bot's Needs permission switch on (%s)",
+    async (asks) => {
+      const { dispatcher, service } = itemsRuntime(asks)
+      await dispatcher.dispatch(
+        request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Retry policy' })
+      )
+      await dispatcher.dispatch(
+        request('bots.items.set', {
+          callerSessionId: RANGER_CHAT,
+          item: '1',
+          title: 'Upload retries'
+        })
+      )
+      await dispatcher.dispatch(
+        request('bots.items.set', {
+          callerSessionId: RANGER_CHAT,
+          item: '1',
+          status: 'needs_you',
+          ask: {
+            context: 'Uploads fail on flaky networks.',
+            questions: [
+              {
+                prompt: 'Which **retry** policy?',
+                options: [{ label: 'Backoff' }, { label: 'Fixed' }]
+              }
+            ]
+          }
+        })
+      )
+      const uid = (await service.botItems.store().byNumber(1))?.uid
+      expect(ownerNotices.mock.calls.map(([notice]) => notice)).toEqual(
+        asks
+          ? [
+              {
+                id: `bot-item-ask:${uid}:4`,
+                title: 'Ranger asked you',
+                body: '#1 Upload retries · Which retry policy?',
+                worktreeId: 'folder:ranger-home',
+                paneKey: `bot-item:${uid}`
+              }
+            ]
+          : []
+      )
+    }
+  )
 
   it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
     const { dispatcher } = itemsRuntime()
@@ -593,7 +693,6 @@ describe('bot items over RPC', () => {
       expect.anything(),
       expect.objectContaining({
         to: `orca_session_id:${DOCS_CHAT}`,
-        keepChat: true,
         params: expect.objectContaining({
           type: 'status',
           subject: expect.stringMatching(/^Ranger commented/)

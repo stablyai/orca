@@ -46,6 +46,10 @@ export const BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY =
 // question, even while the agent waits on one. An older host refuses the field.
 export const BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY = 'bots.item-comment-plain.v1' as const
 
+// Host takes `skills` on the owner's item comments (bots.items.owner.comment) and names each skill's
+// file in the comment's mail. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-skills.v1' as const
+
 // Host stores a picture's background color (bots.update and bots.create `avatarColor`); an older host's strict
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
@@ -72,6 +76,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY

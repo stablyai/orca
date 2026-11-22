@@ -14,7 +14,6 @@ function listed(hostId: ListedHostBots['hostId'], createRefusal?: NewBotRefusal)
     view: DEFAULT_BOT_SIDEBAR_VIEW,
     workspaceLineage: {},
     worktreeLineage: {},
-    avatarUris: new Map(),
     ...(createRefusal ? { createRefusal } : {})
   }
 }
