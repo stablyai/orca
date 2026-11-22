@@ -4,12 +4,10 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session/j
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
-  JOURNAL_CONNECTOR_REPLY_OUTCOMES,
   type JournalConnectorReplyCut,
   type JournalConnectorReplyCutRows,
   type JournalConnectorReplyFill,
-  type JournalConnectorReplyKey,
-  type JournalConnectorReplyRow
+  type JournalConnectorReplyKey
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
 
 // The reply outbox's writes (design item 125 §2). Each runs on the journal's writer connection,
@@ -282,62 +280,4 @@ export function sentJournalConnectorReplies(
     mark.run(now, key.account, key.deliveryId)
     remove.run(key.account, key.deliveryId)
   }
-}
-
-/** Rows not yet accepted: unfilled, or filled and unsent; one session's, or every one. */
-export function readJournalConnectorReplies(
-  db: Database.Database,
-  sessionId?: string
-): JournalConnectorReplyRow[] {
-  const rows =
-    sessionId === undefined
-      ? db.prepare('SELECT * FROM journal_connector_replies WHERE sent_at IS NULL').all()
-      : db
-          .prepare('SELECT * FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL')
-          .all(sessionId)
-  return rows.map((row) => {
-    const outcome = JOURNAL_CONNECTOR_REPLY_OUTCOMES.find((known) => known === row.outcome)
-    return {
-      account: String(row.account),
-      deliveryId: String(row.delivery_id),
-      conversation: { source: String(row.source), externalId: String(row.external_id) },
-      sessionId: String(row.session_id),
-      epoch: String(row.epoch),
-      messageId: String(row.message_id),
-      queued: Number(row.queued) === 1,
-      ...(row.cut_turn_id === null || row.cut_turn_id === undefined
-        ? {}
-        : {
-            cut: {
-              turnId: String(row.cut_turn_id),
-              kind: row.cut_kind === 'usage_limit' ? ('usage_limit' as const) : ('restart' as const)
-            }
-          }),
-      ...(row.claim_message_id === null || row.claim_message_id === undefined
-        ? {}
-        : { claimMessageId: String(row.claim_message_id) }),
-      // An unfilled row's failure is its usage-limit cut's, kept for that cut's close.
-      ...(outcome === undefined && row.failure_json !== null && row.failure_json !== undefined
-        ? { cutFailure: JSON.parse(String(row.failure_json)) }
-        : {}),
-      ...(outcome === undefined
-        ? {}
-        : {
-            fill: {
-              outcome,
-              answerDeliveryId: String(row.answer_delivery_id),
-              ...(row.turn_item_id === null ? {} : { turnItemId: String(row.turn_item_id) }),
-              ...(row.prose === null ? {} : { prose: String(row.prose) }),
-              ...(row.failure_json === null
-                ? {}
-                : { failure: JSON.parse(String(row.failure_json)) }),
-              ...(row.links_json === null ? {} : { links: JSON.parse(String(row.links_json)) }),
-              ...(row.took_ms === null || row.took_ms === undefined
-                ? {}
-                : { tookMs: Number(row.took_ms) }),
-              filledAt: Number(row.filled_at)
-            }
-          })
-    }
-  })
 }

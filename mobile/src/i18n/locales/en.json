@@ -5662,7 +5662,8 @@
       },
       "newThreadTab": "New thread",
       "newThreadHint": "starts fresh",
-      "newThread": "New thread in {{name}}"
+      "newThread": "New thread in {{name}}",
+      "peerReadItems": "{{bot}} read an update to its items"
     },
     "templates": {
       "title": "Bot templates",

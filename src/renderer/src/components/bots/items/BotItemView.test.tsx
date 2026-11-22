@@ -154,6 +154,29 @@ afterEach(() => {
   fileContextOwners.mockReturnValue(new Map())
 })
 
+it('shows the skeleton only without an item, failure or deletion', () => {
+  show(0)
+  read.current = { ...read.current!, item: null, eventsRead: false }
+  const view = render(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
+
+  read.current = { ...read.current, failed: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('alert')).toBeTruthy()
+
+  read.current = { ...read.current, failed: false, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+
+  show(0, makeTestBotItem(190, { title: 'Keep the listed item visible' }))
+  read.current = { ...read.current!, eventsRead: false }
+  view.rerender(<BotItemView bot={BOT} uid="cold-item" />)
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+  expect(screen.getByRole('heading', { level: 2 })).toBeTruthy()
+})
+
 it('follows new events until the reader scrolls up, then offers Jump to latest', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)
@@ -196,7 +219,8 @@ it('scrolls to the end after a comment is sent', async () => {
     [],
     expect.any(String),
     undefined,
-    false
+    false,
+    undefined
   )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
@@ -222,7 +246,8 @@ it('focuses the comment box from its card and preserves focus outside it when su
     [],
     expect.any(String),
     undefined,
-    false
+    false,
+    undefined
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -321,7 +346,8 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
     [],
     expect.any(String),
     undefined,
-    false
+    false,
+    undefined
   )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
 })
@@ -360,7 +386,8 @@ it('holds the answers to an ask of several questions and posts them as one comme
     [],
     expect.any(String),
     'e1',
-    false
+    false,
+    undefined
   )
 })
 

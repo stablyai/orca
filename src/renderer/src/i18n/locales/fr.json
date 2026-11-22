@@ -1267,7 +1267,7 @@
           "28810273af": "Kimi",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
-          "9e2a9bb87b": "Continuer",
+          "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
           "cbaf0c2e0b": "Cline",
@@ -5983,7 +5983,7 @@
           "removeWithChildrenGit_other": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeWithChildrenGit_many": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeSingleFolderFromOrca": "Le retire d'Orca. Le dossier sur le disque est conservé.",
-          "deleteSingleWorktreeAndBranch": "Supprime le worktree et sa branche (conservée si non fusionnée)."
+          "deleteSingleWorktreeAndBranch": "Supprime le worktree et ses modifications locales, ainsi que sa branche si elle a été fusionnée."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Afficher les chemins chargés",
@@ -7166,7 +7166,6 @@
           "stopped": "Arrêtée",
           "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
-          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
@@ -20026,7 +20025,6 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
-        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
@@ -20047,8 +20045,6 @@
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
         "imageCount_many": "{{count}} images",
-        "collapse": "Réduire",
-        "expand": "Développer",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",

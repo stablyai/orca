@@ -1,5 +1,5 @@
-// A request's own conversation in the receiving bot's home: a teammate's, or one sent with `--chat new`.
-// It acts for whom the request is for, and is closed again when the request went nowhere.
+// A request sent with `--chat new` runs in a chat of its own in the receiving bot's home. It acts for
+// whom the request is for, and is closed again when the request went nowhere.
 import type { Bot } from '../../../../../../shared/bot-types'
 import {
   formatOrcaSessionAddress,
@@ -10,23 +10,18 @@ import {
   requireStructuredHost,
   startBotSession
 } from '../../../../../bots/bot-chat-session'
-import { noteInChat } from '../../../../../bots/bot-chat-status-line'
-import {
-  botRequestElsewhereNote,
-  botRequestSenderName,
-  type BotRequestRecord
-} from '../../../../../bots/bot-request-view'
+import { showBotSessionTab } from '../../../../../bots/bot-session-tab-show'
+import { botRequestSenderName, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
-/** A teammate's request, or one sent with `--chat new`, runs in a conversation of its own in the bot's
- *  home, never in the owner's Chat; the conversation acts for whom the request is for. */
+/** The chat `--chat new` starts in the bot's home; it acts for whom the request is for. */
 async function requestConversation(
   runtime: OrcaRuntimeService,
   bot: Bot,
   record: BotRequestRecord,
   subject: string
-): Promise<{ sessionId: string; title: string }> {
+): Promise<string> {
   const sessionId = await startBotSession(runtime, bot, {
     background: true,
     actsFor: {
@@ -42,31 +37,29 @@ async function requestConversation(
   )
     .setUserConversationName(sessionId, title, 'rename')
     .catch((error: unknown) => console.warn('[bots] could not name a request conversation', error))
-  return { sessionId, title }
+  return sessionId
 }
 
-/** Admits a reserved request into a conversation of its own; when it goes nowhere the conversation
- *  is closed again and the reservation given back. `home`: the owner's Chat, told it went elsewhere
- *  (`chat` is null while the bot has none); null tells none. */
-export async function admitInOwnConversation(
+/** Admits a reserved request into a chat of its own; when it goes nowhere the chat is closed again
+ *  and the reservation given back. The chat gets a tab in the bot's home and lists under the bot like
+ *  a chat opened from the tab bar, whoever it acts for: the owner's Orca holds it either way. */
+export async function admitInNewChat(
   runtime: OrcaRuntimeService,
   bot: Bot,
   record: BotRequestRecord,
   subject: string,
-  home: { chat: string | null } | null,
   reservation: {
     admit: (address: string) => { sent: boolean; receipt: unknown }
     release: () => void
   }
 ): Promise<unknown> {
-  let started: { sessionId: string; title: string }
+  let sessionId: string
   try {
-    started = await requestConversation(runtime, bot, record, subject)
+    sessionId = await requestConversation(runtime, bot, record, subject)
   } catch (error) {
     reservation.release()
     throw error
   }
-  const { sessionId, title } = started
   const close = () =>
     closeBotSession(runtime, sessionId).catch((error: unknown) =>
       console.warn('[bots] could not close an unused request conversation', error)
@@ -84,10 +77,20 @@ export async function admitInOwnConversation(
     await close()
     return admitted.receipt
   }
-  if (home) {
-    noteInChat(home.chat ?? undefined, botRequestElsewhereNote(record, title))
-  }
+  await showConversationTab(runtime, bot, sessionId)
   return admitted.receipt
+}
+
+/** The request is already delivered, so a tab that can't be shown only leaves the chat in the bot's
+ *  Chats, where it was before; reopening it from there publishes the same tab. */
+async function showConversationTab(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  sessionId: string
+): Promise<void> {
+  await showBotSessionTab(runtime, bot, sessionId).catch((error: unknown) =>
+    console.warn('[bots] could not show a new chat tab', error)
+  )
 }
 
 export function sessionAddress(sessionId: string): string {

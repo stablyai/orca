@@ -113,14 +113,6 @@ export function askedInOwnersChat(
   )
 }
 
-/** The line in the receiving bot's Chat, which its owner reads, when a request runs elsewhere. */
-export function botRequestElsewhereNote(record: BotRequestRecord, title: string): string {
-  const askedBy = askedByOf(record)
-    .map((asker) => (asker.kind === 'owner' ? 'you' : botRequestAskerLabel(asker)))
-    .join(', ')
-  return `Request from ${senderOf(record)}, for ${askedBy}; it runs in its own conversation: ${title}`
-}
-
 /** What the receiving bot reads beside the message. */
 export function botRequestView(
   record: BotRequestRecord,

@@ -6030,7 +6030,7 @@
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
           "removeSingleFolderFromOrca": "Orca から削除します。ディスク上のフォルダーは保持されます。",
-          "deleteSingleWorktreeAndBranch": "ワークツリーとそのブランチを削除します（未マージの場合ブランチは保持）。"
+          "deleteSingleWorktreeAndBranch": "ワークツリーとローカルの変更を削除します。ブランチはマージ済みの場合に削除します。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "読み込まれたパスを表示",
@@ -7222,7 +7222,6 @@
           "stopped": "停止中",
           "unverifiable": "不明",
           "title": "WSL ディストリビューションを追加",
-          "description": "Orca はディストリビューション内でサーバーを実行するため、git、ファイル、ターミナルは Linux 上でネイティブに動作します。このディストリビューション内で \\\\wsl.localhost 経由で開いたプロジェクトは、ターミナルがアイドル状態になると自動的にこのホストへ移動します。Windows ドライブ (/mnt/…) 上のプロジェクトはこのコンピューターに残ります。移動したプロジェクトはサイドバーから戻せます。",
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
@@ -20295,7 +20294,6 @@
         "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
-        "moreActions": "その他の操作",
         "editMessage": "メッセージを編集",
         "showFullMessage": "メッセージ全体を表示",
         "showLess": "折りたたむ",
@@ -20315,8 +20313,6 @@
         "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
         "imageCount_one": "画像 {{count}} 枚",
         "imageCount_other": "画像 {{count}} 枚",
-        "collapse": "折りたたむ",
-        "expand": "展開",
         "queued": "キュー待ち",
         "clearAll": "すべてクリア",
         "editReturned": "編集内容をチャットの入力欄に戻しました。",

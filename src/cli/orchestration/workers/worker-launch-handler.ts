@@ -11,7 +11,7 @@ import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isUnobservedTurnStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import { isLiveWorkerStart, WORKER_START_VIEW } from './worker-start-agent-view'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -108,8 +108,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     const keepOpenState =
-      (flags.has('keep-open') || startsInNewWorkspace(flags)) &&
-      (result.result.state === 'ready' || isUnobservedTurnStart(result.result))
+      (flags.has('keep-open') || startsInNewWorkspace(flags)) && isLiveWorkerStart(result.result)
         ? await keepWorkerOpen(client, result.result.dispatchId)
         : undefined
     const renderedResult = {

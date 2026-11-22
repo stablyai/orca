@@ -61,6 +61,11 @@ vi.mock('../../claude/configuration/claude-folder-trust-file', async (importOrig
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
 import { applyAgentWorkspaceTrustToSpawn } from './agent-workspace-trust-spawn'
 import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
+
+// Claude keys Windows projects with `/` separators.
+const claudeTrustKey = (folderPath: string): string =>
+  process.platform === 'win32' ? folderPath.replaceAll('\\', '/') : folderPath
+
 const local: AgentTrustLaunchContext = {
   env: {},
   claudeAuth: null,
@@ -103,7 +108,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     }
     await applyAgentWorkspaceTrustToSpawn(spawn)
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
-      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+      projects: { [claudeTrustKey(workspaceRoot)]: { hasTrustDialogAccepted: true } }
     })
     await applyAgentWorkspaceTrustToSpawn({
       ...spawn,
@@ -114,7 +119,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
       }
     })
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
-      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+      projects: { [claudeTrustKey(workspaceRoot)]: { hasTrustDialogAccepted: true } }
     })
     await applyAgentWorkspaceTrustToSpawn({
       ...spawn,
@@ -126,8 +131,8 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     })
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
       projects: {
-        [workspaceRoot]: { hasTrustDialogAccepted: true },
-        [outsideCwd]: { hasTrustDialogAccepted: true }
+        [claudeTrustKey(workspaceRoot)]: { hasTrustDialogAccepted: true },
+        [claudeTrustKey(outsideCwd)]: { hasTrustDialogAccepted: true }
       }
     })
   })
@@ -155,8 +160,8 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     })
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
       projects: {
-        [linked]: { hasTrustDialogAccepted: true },
-        [outside]: { hasTrustDialogAccepted: true }
+        [claudeTrustKey(linked)]: { hasTrustDialogAccepted: true },
+        [claudeTrustKey(outside)]: { hasTrustDialogAccepted: true }
       }
     })
   })
@@ -202,7 +207,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
       env: { CLAUDE_CONFIG_DIR: root }
     })
     expect(JSON.parse(readFileSync(join(root, '.claude.json'), 'utf-8'))).toEqual({
-      projects: { [root]: { hasTrustDialogAccepted: true } }
+      projects: { [claudeTrustKey(root)]: { hasTrustDialogAccepted: true } }
     })
   })
 })

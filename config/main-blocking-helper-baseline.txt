@@ -511,7 +511,7 @@
 3 src/main/ephemeral-vm/workspace-suspend.ts
 8 src/main/external-editors/external-editor-launch.ts
 1 src/main/external-editors/remote-ssh-editor-launch.ts
-24 src/main/filesystem/atomic-file-publication.ts
+23 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
@@ -705,8 +705,6 @@
 3 src/main/ipc/worktrees/removal/registered-worktree-roots-cache.ts
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
-2 src/main/ipc/worktrees/removal/remove-unregistered-worktree.ts
-1 src/main/ipc/worktrees/removal/worktree-removal-filesystem.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
 6 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
@@ -756,8 +754,8 @@
 6 src/main/managed-server/install/orcad-remote-deploy.ts
 4 src/main/managed-server/install/orcad-remote-install.ts
 1 src/main/managed-server/install/orcad-remote-rollback.ts
+1 src/main/managed-server/lifecycle/orcad-idle-restart-stop.ts # moved from orcad-managed-launch-session.ts with the idle-restart stop (withOrcadActivationLock), now shared with the WSL host relaunch
 4 src/main/managed-server/lifecycle/orcad-managed-auto-update.ts
-1 src/main/managed-server/lifecycle/orcad-managed-launch-session.ts
 1 src/main/managed-server/lifecycle/orcad-managed-runtime-context.ts
 1 src/main/managed-server/lifecycle/orcad-managed-stale-lock-reclaim.ts
 1 src/main/managed-server/lifecycle/orcad-managed-tunnel-transport.ts
@@ -1298,7 +1296,6 @@
 1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
 2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
-1 src/main/runtime/workspaces/catalog/runtime-worktree-filesystem.ts
 2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
 2 src/main/runtime/workspaces/catalog/workspace-catalog.ts
 1 src/main/runtime/workspaces/catalog/workspace-repo-scan-refresh.ts
@@ -1310,9 +1307,7 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
-2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts
@@ -1489,11 +1484,7 @@
 1 src/main/workspaces/execution-host/local-project-runtime-resolution.ts
 4 src/main/workspaces/execution-host/project-runtime-git-router.ts
 2 src/main/workspaces/removal/folder-workspace-archive-hook.ts
-2 src/main/workspaces/removal/local-orphaned-worktree-cleanup.ts
-3 src/main/workspaces/removal/local-worktree-filesystem.ts
-1 src/main/workspaces/removal/local-worktree-removal-recovery.ts
 1 src/main/workspaces/removal/retirement/worktree-retirement-discovery.ts
-1 src/main/workspaces/removal/worktree-prunable-git-file.ts
 1 src/main/workspaces/removal/worktree-removal-process-cleanup.ts
 1 src/main/workspaces/space-analysis/workspace-space-analysis.ts
 2 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts

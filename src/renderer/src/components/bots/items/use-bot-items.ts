@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
+import type {
+  BotItem,
+  BotItemCommentSkill,
+  BotItemEvent,
+  BotItemStatus
+} from '../../../../../shared/bots/bot-items'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
 import {
@@ -251,7 +256,8 @@ export function commentOnBotItem(
   images: readonly string[] = [],
   requestId?: string,
   questionId?: string,
-  plain = false
+  plain = false,
+  skills: readonly BotItemCommentSkill[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
@@ -260,7 +266,8 @@ export function commentOnBotItem(
     ...(images.length > 0 ? { images } : {}),
     ...(requestId ? { requestId } : {}),
     ...(questionId ? { questionId } : {}),
-    ...(plain ? { plain } : {})
+    ...(plain ? { plain } : {}),
+    ...(skills.length > 0 ? { skills } : {})
   })
 }
 

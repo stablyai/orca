@@ -13,12 +13,15 @@ import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requ
 import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
   fillJournalConnectorReplies,
-  readJournalConnectorReplies,
   sentJournalConnectorReplies,
   cutJournalConnectorReplies,
   recutJournalConnectorReplies,
   releaseJournalConnectorClaim
 } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
 import { readJournalDomainDispatchItem } from '../native-chat/agent-session-journal/journal-domain-dispatch-placement'
 import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
@@ -69,6 +72,8 @@ function openJournal(file: string) {
       readJournalConnectorReplies(db).filter(
         (row) => sessionId === undefined || row.sessionId === sessionId
       ),
+    readOwed: async (account, after, limit) =>
+      readOwedJournalConnectorReplies(db, account, after, limit),
     fillOutcomes: async (fills) => fillJournalConnectorReplies(db, fills, SERVER_NOW) > 0,
     sent: async (keys) => sentJournalConnectorReplies(db, keys, SERVER_NOW),
     cut: async (rows) => cutJournalConnectorReplies(db, rows) > 0,

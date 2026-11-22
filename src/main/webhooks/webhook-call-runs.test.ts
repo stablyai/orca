@@ -10,6 +10,7 @@ import { webhookActorId, webhookRuleId } from '../../shared/connector-webhook-co
 import { takingAutomation, type EventStartGate } from '../automations/automation-trigger-runs'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 import { WebhookCallRuns } from './webhook-call-runs'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import type { WebhookEnvelope } from '../../shared/connector-webhook-routes'
 import type { WebhookCloudCalls } from './webhook-cloud-routes'
 import { WebhookHostLedger } from './webhook-host-ledger'
@@ -103,9 +104,9 @@ beforeEach(() => {
   botFolder = mkdtempSync(join(tmpdir(), 'orca-webhook-bot-'))
 })
 
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
-  rmSync(botFolder, { recursive: true, force: true })
+afterEach(async () => {
+  // Windows hardens a secure write's directory ACL in the background, so a case can end with it held.
+  await removeTempDirs([userDataPath, botFolder])
 })
 
 function setup(options: {

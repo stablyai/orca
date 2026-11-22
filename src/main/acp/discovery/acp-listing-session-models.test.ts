@@ -5,13 +5,18 @@ import { join, sep } from 'node:path'
 import { createStructuredAgentSessionCatalogReads } from '../../native-chat/agent-session-wire/options/structured-agent-session-catalog-reads'
 import type { StructuredAgentSessionHostDeps } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { createAgentModelCatalogSuccessWriter } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry-lifetime'
-import { createAcpModelCatalogProbe } from './acp-model-catalog-probe'
+import {
+  createAcpModelCatalogProbe,
+  type AcpModelCatalogProbeDeps
+} from './acp-model-catalog-probe'
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { NewSessionResponseSchema } from '../generated/acp-protocol.generated'
 import recorded from '../fixtures/opencode-v2-start-options.json'
 import { expect, it, vi, onTestFinished } from 'vitest'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
+import { AcpLaunchGate } from '../launch/acp-launch-gate'
+import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import {
   readSessionModels,
   type AcpModelCatalogSessionConnection
@@ -128,7 +133,7 @@ function accumulatedCatalogHarness(count: number) {
       Awaited<ReturnType<AcpModelCatalogSessionConnection['setConfigOption']>>
     >
   }[] = []
-  const connect = vi.fn((): AcpModelCatalogSessionConnection => ({
+  const connect = vi.fn<NonNullable<AcpModelCatalogProbeDeps['connectSession']>>(() => ({
     initialize: async () => ({
       protocolVersion: 1,
       agentCapabilities: { sessionCapabilities: { delete: {} } }
@@ -143,7 +148,8 @@ function accumulatedCatalogHarness(count: number) {
       return reply.promise
     },
     deleteSession: async () => ({}),
-    close: async () => {}
+    close: async () => true,
+    onExit: () => {}
   }))
   const store = new AgentModelCatalogStore()
   const writes = vi.spyOn(
@@ -360,7 +366,8 @@ it('lists OpenCode 2.x models in a temporary private folder when no workspace is
           deletedSessions.push(sessionId)
           return {}
         },
-        close: async () => {}
+        close: async () => true,
+        onExit: () => {}
       })
     }
   )
@@ -393,4 +400,66 @@ it('lists OpenCode 2.x models in a temporary private folder when no workspace is
   )
   expect(deletedSessions).toEqual(['listing'])
   expect(existsSync(startedCwd)).toBe(false)
+})
+
+it('stops a waiting listing server before its launch gate changes the account', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-listing-gate-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const base = acpLaunchSpecFor('opencode')!
+  const launchGate = new AcpLaunchGate('OpenCode')
+  const started = Promise.withResolvers<void>()
+  const exits: (() => void)[] = []
+  let running = false
+  const probe = createAcpModelCatalogProbe(
+    { ...base, launchGate, account: { ...base.account, environment: (_home, env) => env } },
+    {
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => process.execPath,
+      probeVersion: async () => ({ version: '2.1.0' }),
+      dataDirectory: folder,
+      homePath: folder,
+      connectSession: () => {
+        running = true
+        return {
+          initialize: async () => ({
+            protocolVersion: 1,
+            agentCapabilities: { sessionCapabilities: { delete: {} } }
+          }),
+          // A signed-out server holds session/new open while it waits for a browser sign-in.
+          start: () => {
+            started.resolve()
+            return new Promise(() => {})
+          },
+          setConfigOption: async () => ({ configOptions: [] }),
+          deleteSession: async () => ({}),
+          close: async () => {
+            running = false
+            exits.forEach((exit) => exit())
+            return true
+          },
+          onExit: (listener) => exits.push(listener)
+        }
+      }
+    }
+  )
+  const home = { variable: 'HOME', path: folder }
+  const listing = probe(home).catch((error: unknown) => error)
+  await started.promise
+  let refused: unknown
+  await expect(
+    launchGate.run(
+      async () => {},
+      async () => {
+        refused = await probe(home).catch((error: unknown) => error)
+        return running
+      }
+    )
+  ).resolves.toBe(false)
+  // A refusal ends with the operation, so the catalog must not cache it either.
+  expect(refused).toBeInstanceOf(AgentModelCatalogListingStoppedError)
+  expect(String(refused)).toContain('setup is changing')
+  // A stop says nothing about the account, so the catalog must not cache it as a failure.
+  const stopped = await listing
+  expect(stopped).toBeInstanceOf(AgentModelCatalogListingStoppedError)
+  expect(String(stopped)).toContain('listing stopped')
 })

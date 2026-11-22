@@ -6315,7 +6315,7 @@
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
           "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹",
           "removeSingleFolderFromOrca": "将其从 Orca 中移除。磁盘上的文件夹会保留。",
-          "deleteSingleWorktreeAndBranch": "删除工作树及其分支（未合并的分支会保留）。"
+          "deleteSingleWorktreeAndBranch": "删除工作树和本地更改。如果其分支已合并，也会将其删除。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "显示已加载的路径",
@@ -7503,7 +7503,6 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。此发行版中通过 \\\\wsl.localhost 打开的项目会在其终端空闲时自动移到此主机；位于 Windows 驱动器 (/mnt/…) 上的项目会留在此电脑。你可以从侧边栏将已移动的项目移回",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -20548,7 +20547,6 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
-        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",
@@ -20571,8 +20569,6 @@
         "editGonePrompt": "此消息已发送或移除，回答代理后，你编辑的内容会出现在聊天输入框中",
         "imageCount_one": "{{count}} 张图片",
         "imageCount_other": "{{count}} 张图片",
-        "collapse": "收起",
-        "expand": "展开",
         "queued": "已排队",
         "clearAll": "全部清除",
         "imageCount": "{{count}} 张图片",

@@ -17,6 +17,7 @@ import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-termina
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import {
   projectSessionTabUnreadForClient,
+  sessionTabsShowAnyPane,
   sessionTabUnreadMarks
 } from './session-tab-unread-projection'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
@@ -180,19 +181,16 @@ export const SESSION_TAB_METHODS = [
       // Verdicts move on every agent step; project and re-send only when this workspace's unread tabs change.
       const stopObservingVerdicts =
         clientKind === 'mobile'
-          ? runtime.onClientEvent(
-              (event) => {
-                if (
-                  event.type === 'agentListChanged' &&
-                  !released &&
-                  currentSnapshot &&
-                  sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
-                ) {
-                  emitSnapshot(project(currentSnapshot), 'updated')
-                }
-              },
-              { consumesTerminalSideEffects: false }
-            )
+          ? runtime.onAgentListChanged((paneKeys) => {
+              if (
+                !released &&
+                currentSnapshot &&
+                (paneKeys === null || sessionTabsShowAnyPane(currentSnapshot, paneKeys)) &&
+                sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
+              ) {
+                emitSnapshot(project(currentSnapshot), 'updated')
+              }
+            })
           : () => {}
       stopReprojecting = () => {
         stopObservingCapabilities()

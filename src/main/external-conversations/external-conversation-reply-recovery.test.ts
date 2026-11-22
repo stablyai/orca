@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { owedPage } from '../connector-cloud/connector-reply-journal.test-fixture'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
@@ -109,6 +110,13 @@ function fixture(
   const observers: (() => void)[] = []
   const journal = {
     read: async () => rows.filter((candidate) => !('sent' in candidate)),
+    readOwed: async (account: string, after: string | null, limit: number) =>
+      owedPage(
+        rows.filter((candidate) => !('sent' in candidate)),
+        account,
+        after,
+        limit
+      ),
     fillOutcomes: async (fills: readonly JournalConnectorReplyFill[]) => {
       for (const { account, deliveryId, expect: state, ...fill } of fills) {
         const target = rows.find((r) => r.account === account && r.deliveryId === deliveryId)

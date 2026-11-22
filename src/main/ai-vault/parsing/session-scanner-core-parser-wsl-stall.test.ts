@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type * as NodePathModule from 'node:path'
+import type * as WslUncAccessGate from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
 const mocks = vi.hoisted(() => ({
@@ -23,6 +24,11 @@ vi.mock('node:path', async (importOriginal) => {
   const actual = await importOriginal<typeof NodePathModule>()
   return { ...actual.win32, default: actual.win32 }
 })
+
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGate>()),
+  blockedWslDistroForPath: async () => null
+}))
 
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'

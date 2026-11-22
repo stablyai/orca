@@ -150,6 +150,7 @@ export const SettingsUpdate = z
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     nativeChatQueueFollowUps: z.boolean().optional(),
     nativeChatCiResultLines: z.boolean().optional(),
+    nativeChatAutoName: z.boolean().optional(),
     /** This host's own notification switches; see HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY. */
     hostNotifications: HostNotificationSettingsUpdate.optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),

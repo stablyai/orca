@@ -231,7 +231,8 @@ export function MobileBotGroupRoom({
                   role: 'user',
                   blocks: botGroupOwnerMessageBlocks(message),
                   timestamp: message.createdAt,
-                  source: 'transcript'
+                  source: 'transcript',
+                  ...(message.automationRun ? { automationRun: message.automationRun } : {})
                 }}
               />
             ) : (

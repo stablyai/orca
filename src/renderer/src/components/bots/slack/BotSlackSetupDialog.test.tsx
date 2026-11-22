@@ -356,12 +356,16 @@ describe('BotSlackSetupDialog', () => {
       teamId: 'T1',
       appId: 'A1',
       botUserId: 'U1',
-      installerUserId: 'U2'
+      installerUserId: 'U2',
+      installerName: 'Alice'
     })
     await act(() => vi.advanceTimersByTimeAsync(7_000))
     expect(screen.getByText('Scout is in Slack')).toBeDefined()
-    // How to ask shows once it's in; who can ask is edited from the Slack connector's settings.
-    expect(screen.getByText('@Scout')).toBeDefined()
+    // How to ask shows once it's in, as a Slack message from whoever installed it that mentions the
+    // bot; who can ask is edited from the Slack connector's settings.
+    const ask = screen.getByText('@Scout').closest('p')
+    expect(ask?.textContent).toBe('@Scout summarize this thread')
+    expect(ask?.parentElement?.textContent).toBe('Alicenow@Scout summarize this thread')
     vi.useRealTimers()
   })
 
