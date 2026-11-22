@@ -48,6 +48,14 @@ const keydown = (target: Element, key: string): KeyboardEvent => {
   return event
 }
 
+// Runs first: the typing tracker is module state, and a later test types into a field.
+it('lets Enter pick the default right away when only navigation keys came before', () => {
+  keydown(document.body, 'Tab')
+  const allow = showCard()
+  expect(document.activeElement).toBe(allow)
+  expect(keydown(allow, 'Enter').defaultPrevented).toBe(false)
+})
+
 // Enter must approve the default, and a keystroke typed as the card appeared must not.
 it('focuses the default answer, but ignores Enter from a typing burst still going', () => {
   const composer = document.createElement('textarea')
