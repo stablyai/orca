@@ -33,6 +33,7 @@ import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
 import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
+import { botItemGroupName } from '../../../../shared/bots/bot-item-status-name'
 
 type ReportApproval = (key: string, approval: boolean) => void
 
@@ -385,40 +386,42 @@ export function BotNeedsYouSection({
   return (
     <div ref={cardRef} className="contents" onFocus={onFocus} onBlur={onBlur}>
       <NeedsYouRowCommit value={rowCommitted}>
-        {fold.ordered.map((row) => {
-          const folded = !shown.has(row.key)
-          const body =
-            'need' in row ? (
-              typeof bot === 'function' ? (
-                <MemberNeedItem
-                  bot={bot(row.need)}
-                  need={row.need}
-                  itemOf={itemOf}
-                  onApproval={onApproval}
-                />
+        <div role="list" aria-label={botItemGroupName('needs_you', t)} className="contents">
+          {fold.ordered.map((row) => {
+            const folded = !shown.has(row.key)
+            const body =
+              'need' in row ? (
+                typeof bot === 'function' ? (
+                  <MemberNeedItem
+                    bot={bot(row.need)}
+                    need={row.need}
+                    itemOf={itemOf}
+                    onApproval={onApproval}
+                  />
+                ) : (
+                  <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+                )
+              ) : 'stopped' in row ? (
+                <StoppedForSignInRow row={row.stopped} />
               ) : (
-                <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+                renderItem?.(row.item)
               )
-            ) : 'stopped' in row ? (
-              <StoppedForSignInRow row={row.stopped} />
-            ) : (
-              renderItem?.(row.item)
+            return (
+              <div
+                key={row.key}
+                data-need-key={row.key}
+                // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
+                hidden={folded}
+              >
+                {faces ? (
+                  <BotItemFaceFolded.Provider value={folded}>{body}</BotItemFaceFolded.Provider>
+                ) : (
+                  body
+                )}
+              </div>
             )
-          return (
-            <div
-              key={row.key}
-              data-need-key={row.key}
-              // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
-              hidden={folded}
-            >
-              {faces ? (
-                <BotItemFaceFolded.Provider value={folded}>{body}</BotItemFaceFolded.Provider>
-              ) : (
-                body
-              )}
-            </div>
-          )
-        })}
+          })}
+        </div>
       </NeedsYouRowCommit>
       {fold.hidden > 0 ? (
         <button

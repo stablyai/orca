@@ -368,7 +368,7 @@ function BotItemGroup({
         </div>
       ) : null}
       {open && needsYou ? (
-        <div role="list" aria-label={botItemGroupName(id, t)} className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5">
           <BotNeedsYouSection
             bot={owner.needBot}
             asks={asks}
