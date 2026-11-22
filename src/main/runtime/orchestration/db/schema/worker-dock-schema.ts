@@ -148,8 +148,9 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
   END;`)
   if (!installed) {
     runLifecycleWriteTransaction(this.db, 'worker_dock_install', () => {
+      const project = this.db.prepare(projection('?'))
       for (const row of this.db.prepare('SELECT dispatch_id FROM worker_dispatches').all()) {
-        this.db.prepare(projection('?')).run(row.dispatch_id)
+        project.run(row.dispatch_id)
       }
     })
   }

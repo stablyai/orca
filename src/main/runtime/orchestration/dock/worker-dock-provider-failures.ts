@@ -6,6 +6,7 @@ import {
   WorkerDockEntry,
   WorkerDockIdentity
 } from '../../../../shared/orchestration/dock/worker-dock'
+import { workerDockSourceOfSession } from './worker-dock-source'
 
 export function retainProviderFailures(
   db: OrchestrationDb,
@@ -14,6 +15,8 @@ export function retainProviderFailures(
 ): void {
   let changed = false
   runLifecycleWriteTransaction(db.db, 'worker_dock_provider_failure', () => {
+    const insert = db.db.prepare(`INSERT OR IGNORE INTO worker_dock_provider_failures
+        (id, source, settlement, changed_at, entry) VALUES (?, ?, ?, ?, ?)`)
     for (const { child, providerId } of failures) {
       const id = JSON.stringify(['provider', child.childWorkId, child.invocation])
       const at = child.settledAt ?? child.observedAt
@@ -33,17 +36,14 @@ export function retainProviderFailures(
         resultId: null,
         stoppable: false
       })
-      const saved = db.db
-        .prepare(`INSERT OR IGNORE INTO worker_dock_provider_failures
-        (id, source, settlement, changed_at, entry) VALUES (?, ?, ?, ?, ?)`)
-        .run(id, source, id, at, JSON.stringify(entry))
-      changed ||= saved.changes > 0
+      changed ||= insert.run(id, source, id, at, JSON.stringify(entry)).changes > 0
     }
   })
+  // A failure already kept (a replayed batch) changes nothing anyone reads.
   if (changed) {
     db.workerDockSources.providerFailed(source)
+    db.crewChanges.notify(new Set(['topology']))
   }
-  db.crewChanges.notify(new Set(['topology']))
 }
 
 export function workerDockFailureSink(
@@ -58,7 +58,12 @@ export function workerDockFailureSink(
     publishChildWork: (subject, evidence, provider) => {
       const result = sink.publishChildWork?.(subject, evidence, provider)
       if (result?.failures?.length) {
-        retainProviderFailures(runtime.getOrchestrationDb(), subject.sessionId, result.failures)
+        // Stored under the chat's /clear root, where its dock reads and clears them.
+        retainProviderFailures(
+          runtime.getOrchestrationDb(),
+          workerDockSourceOfSession(subject.sessionId),
+          result.failures
+        )
       }
       return result
     }

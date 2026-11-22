@@ -76,6 +76,7 @@ import { NativeChatHostSetupContext } from '@/components/native-chat/host-access
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import { nativeChatWorkerApprovalParty } from './worker-approvals/NativeChatWorkerApprovals'
 import { NativeChatWorkerTimeline } from './tools/tasks/dock/NativeChatWorkerResultTimeline'
+import { NativeChatPairedServerAskStack } from './paired-server-asks/NativeChatPairedServerAskStack'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
@@ -338,6 +339,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             </NativeChatDockTranscript>
             <NativeChatDock shown={!readFailure?.final}>
               {composerShown ? null : subagents.dock}
+              {/* Agents in this paired server's chat asking agents on this computer: answered here. */}
+              <NativeChatPairedServerAskStack target={props.target} party={workerApprovalParty} />
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
                   tabId={props.tabId}
