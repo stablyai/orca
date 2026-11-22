@@ -44,10 +44,6 @@ const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, nu
   now: () => Date.now()
 })
 
-export function resetIdleShellGroupSizesForTests(): void {
-  groupSizesReader.reset()
-}
-
 function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
 }

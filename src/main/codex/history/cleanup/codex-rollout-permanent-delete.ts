@@ -7,6 +7,7 @@ import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex
 import { rolloutNames, rolloutStem } from './codex-rollout-names'
 import { freedBytesOf, readName, readNames, type NameState } from './codex-rollout-name-states'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
+import { isEmptyLegacyCopyName, legacyCopyAsideNames } from './codex-rollout-legacy-copy-names'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import { isOpenInCodex } from './codex-rollout-writer-lock'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
@@ -75,10 +76,13 @@ async function deleteRollout(
       result.failed += 1
       return 'done'
     }
-    const names = rolloutNames(homes, stem)
     if (await isOpenInCodex(homes, stem)) {
       return 'done'
     }
+    const names = [
+      ...rolloutNames(homes, stem),
+      ...legacyCopyAsideNames(resolveOrcaManagedCodexHomePath(), stem)
+    ]
     // After the open check: a chat still open never reads the import folder (which can start WSL).
     const protectedRoots = await resolveProtectedRoots(listed, stem)
     // A forked chat reads its earlier turns from this file: deleting it would empty that chat.
@@ -104,7 +108,11 @@ async function deleteRollout(
     const stillEligible = async (): Promise<boolean> => {
       const checked = new Set<string>()
       for (const state of found) {
-        if (state.content === null || checked.has(state.content)) {
+        if (
+          state.content === null ||
+          checked.has(state.content) ||
+          isEmptyLegacyCopyName(state.path, state.size)
+        ) {
           continue
         }
         checked.add(state.content)

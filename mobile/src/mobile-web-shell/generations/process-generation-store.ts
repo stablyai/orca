@@ -23,7 +23,3 @@ export function processGenerationStore(): GenerationStore {
   }
   return processStore
 }
-
-export function resetProcessGenerationStoreForTests(): void {
-  processStore = null
-}

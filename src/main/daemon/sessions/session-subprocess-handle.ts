@@ -51,6 +51,8 @@ export type SubprocessHandle = {
   /** Fires once when input closes for a reason other than child exit. */
   onInputClosed?(cb: (reason: string) => void): void
   resize(cols: number, rows: number): void
+  /** WinPTY scrapes the console and redraws it itself on a resize, so no repaint there is the program's. */
+  resizeRedrawsOwnScreen?: true
   /** Omit pause when the handle cannot apply PTY backpressure. */
   pause?(): void
   resume?(): void

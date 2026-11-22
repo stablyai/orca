@@ -87,7 +87,13 @@ export function structuredMailSource(input: {
     const relations = new Map<string, Lineage | undefined>()
     const values = group.map(({ message, report }) => {
       // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
-      const key = JSON.stringify([input.mailboxHandle, input.dispatchId, message.run_id, report])
+      const key = JSON.stringify([
+        input.mailboxHandle,
+        input.dispatchId,
+        message.run_id,
+        message.type,
+        report
+      ])
       if (!relations.has(key)) {
         relations.set(
           key,
@@ -99,7 +105,8 @@ export function structuredMailSource(input: {
                 recipient: input.mailboxHandle,
                 runId: message.run_id,
                 reportedDispatchId: report.kind === 'valid' ? report.dispatchId : undefined,
-                recipientDispatchId: input.dispatchId
+                recipientDispatchId: input.dispatchId,
+                messageType: message.type
               })
         )
       }

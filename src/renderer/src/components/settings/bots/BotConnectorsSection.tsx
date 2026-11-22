@@ -160,7 +160,8 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
           <section className="flex flex-col gap-0.5" onKeyDown={onKeyDown}>
             {page === null ? (
               <>
-                <div className="flex items-center justify-between gap-2 pr-1 pb-1 pl-1">
+                {/* pl-3.25: the rows' logos sit 13 px in (the list's 1 px border, p-1 and a row's px-2). */}
+                <div className="flex items-center justify-between gap-2 pr-1 pb-1 pl-3.25">
                   <h3 className="text-sm font-semibold">
                     {t('settings.bots.connectors', 'Connectors')}
                   </h3>

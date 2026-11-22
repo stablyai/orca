@@ -16,19 +16,10 @@ import { isBotMascotId } from '../../../../../shared/bot-avatar'
 import type { BotShareReview } from '../../../../../shared/bots/bot-share-received'
 import { BOT_MASCOT_URLS } from '../bot-mascots'
 import { BotAvatarTile } from '../BotAvatar'
-import {
-  botShareCheckSummary,
-  botShareFlagLabel,
-  botShareFlagPage,
-  type BotShareFlagSpot
-} from './bot-share-flags'
-import {
-  reviewByline,
-  reviewFlagPage,
-  reviewFlagSpots,
-  reviewPartFiles,
-  type BotShareReviewPage
-} from './bot-share-review-parts'
+import { botShareCheckSummary, botShareFlagLabel, botShareFlagPage } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
+import { reviewFlagSpots, reviewPartFiles } from '../../../../../shared/bots/bot-share-review-files'
+import { reviewByline, reviewFlagPage, type BotShareReviewPage } from './bot-share-review-parts'
 import { BotShareFileList } from './BotSharePartView'
 import { BotShareBack } from './BotShareRows'
 import {

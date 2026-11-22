@@ -23,17 +23,11 @@ import {
 } from '../pty/process-inspection'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
-import {
-  _resetPtyOwnerHostColorsForTest,
-  setPtyOwnerHostColors
-} from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
+import { setPtyOwnerHostColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
-  clearPtyState,
-  pendingLocalPtySpawns,
   ptyProcesses,
   ptyIncarnations,
-  resetLoadGeneration,
   type DataCallback,
   type ExitCallback
 } from './local-pty-provider-state'
@@ -55,7 +49,6 @@ import {
   writeLocalPty
 } from './local-pty-session-operations'
 import { spawnLocalPty } from './local-pty-spawn'
-import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
 export class LocalPtyProvider implements IPtyProvider {
@@ -267,14 +260,4 @@ export class LocalPtyProvider implements IPtyProvider {
   killAll(): void {
     killAllLocalPtys()
   }
-}
-
-export function _resetLocalPtyProviderStateForTest(): void {
-  cancelAllPendingLocalPtySpawns()
-  pendingLocalPtySpawns.clear()
-  for (const id of ptyProcesses.keys()) {
-    clearPtyState(id)
-  }
-  resetLoadGeneration()
-  _resetPtyOwnerHostColorsForTest()
 }

@@ -96,6 +96,7 @@ export class AcpChildSessions {
                 state: child.state ?? 'working',
                 ...(child.label ? { label: child.label } : {}),
                 ...(child.started ? { restart: true as const } : {}),
+                ...(child.error ? { error: child.error } : {}),
                 ...(child.parentAgentId ? { ownerId: child.parentAgentId } : {})
               }
             ],

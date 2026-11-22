@@ -169,7 +169,6 @@ export function createAgentCompletionCoordinator(
   processMonitor = createAgentCompletionProcessMonitor({
     options,
     state: processState,
-    identityScope,
     pendingTitle,
     establishAgentEvidence,
     clearAgentRunEvidence,
@@ -280,7 +279,7 @@ export function createAgentCompletionCoordinator(
     consumePendingStampedTailForAgent,
     consumeStampedTailForCurrentCoordinator,
     clearOriginStampedTail: () => identityScope.clearOriginStampedTail(),
-    clearProcessExitCompletion: () => identityScope.clearProcessExitCompletion(),
+    retirePreviousTurnCompletion: () => identityScope.retirePreviousTurnCompletion(),
     recordWorkingBoundary,
     dropPendingTitle
   })

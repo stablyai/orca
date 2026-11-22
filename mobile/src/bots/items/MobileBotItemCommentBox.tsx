@@ -1,7 +1,9 @@
-// The item page's comment box, docked at the bottom: it sends with the
-// chat composer's arrow, and keeps its text until a send lands (closing the panel keeps each item's draft for
-// the session). Offline, Comment waits; a dropped reply says the comment may have arrived, never resends.
-// The chat's field and mic: the session's dictation lands here while the box is its target.
+// The item page's comment box, docked at the bottom: it sends with the chat composer's arrow, and a sent
+// comment shows in Activity at once while it goes (one that fails stays there with Retry). Closing the
+// panel keeps each item's draft, photos too, for the session. Offline, Comment waits. The ask card's
+// answer goes straight to the host; a dropped reply says it may have arrived, never resends.
+// The chat's field and mic: the session's dictation lands here while the box is its target. Photos
+// attach with the chat's + and thumbnails, each named [Image #N] in the words.
 import {
   useCallback,
   useContext,
@@ -13,8 +15,19 @@ import {
 } from 'react'
 import { Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff } from 'lucide-react-native'
-import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
+import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
+import { SkillRefLimitError } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import { sentBotItemCommentSkills } from '../../../../src/shared/bots/bot-item-comment-skills'
+import { MAX_SKILL_REFS } from '../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
+import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../src/shared/skills/capabilities/skill-install-capability'
+import { MobileNativeChatComposerSuggestions } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenu'
+import { useMobileNativeChatComposerMenu } from '../../session/native-chat/composer/menus/use-mobile-native-chat-composer-menu'
+import { useMobileNativeChatWorkspaceCatalog } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-workspace-catalog'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
+import { MobileNativeChatComposerAttachButton } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachButton'
+import { MobileNativeChatComposerAttachments } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachments'
 import { COMPOSER_COMPACT_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerError } from '../../platform/haptics/haptics'
@@ -33,9 +46,16 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { commentOnBotItem } from './bot-item-operations'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { botItemWriteFailure } from './use-bot-item-moves'
+import { useBotItemCommentImages } from './use-bot-item-comment-images'
 
 // Each item's unsent text, for this app session.
 const drafts = new Map<string, string>()
+// Skills picked into each item's draft, by the file the comment's mail names.
+const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
+const NO_SKILLS: readonly BotItemCommentSkill[] = []
+// The open box of each item, so a late photo's [Image #N] change reaches the field it shows in.
+const shownDrafts = new Map<string, (next: string) => void>()
+const NO_FILES: readonly never[] = []
 
 export type BotItemCommentBoxHandle = {
   /** Post `text` as the owner's comment, as Comment does (the ask card's answer): `unknown` when the
@@ -45,16 +65,33 @@ export type BotItemCommentBoxHandle = {
 
 export function MobileBotItemCommentBox({
   client,
+  hostId,
+  bot,
   item,
   online,
   hostName,
   waitingOn = null,
+  attachTo,
+  onComment,
+  showToast,
   ref
 }: {
   client: RpcClient | null
+  hostId: string
+  /** The item's bot: its folder's files list at `@` and its skills at `/`, as in its chat. */
+  bot: { folderWorkspaceId: string; agent: string }
   item: BotItem
   online: boolean
   hostName: string
+  /** The item's chat, which photos upload to; null when its comments take none. */
+  attachTo: string | null
+  /** Sends the comment: it shows in Activity until the host's read does. */
+  onComment: (
+    text: string,
+    paths: readonly string[],
+    skills: readonly BotItemCommentSkill[]
+  ) => void
+  showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply): who asked, and whether it
    *  gave quick replies. */
   waitingOn?: { replies: boolean; asker: string } | null
@@ -63,34 +100,72 @@ export function MobileBotItemCommentBox({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
-  const [text, setTextState] = useState(() => drafts.get(item.uid) ?? '')
+  // Keyed by host too: two hosts can hold the same item ids.
+  const key = `${hostId}\0${item.uid}`
+  const [text, setTextState] = useState(() => drafts.get(key) ?? '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
-  // Bumped on every change, so a send clears only the words it sent.
-  const revision = useRef(0)
   const setText = useCallback(
     (next: string) => {
-      revision.current += 1
       setTextState(next)
       setError(null)
       if (next) {
-        drafts.set(uid, next)
+        drafts.set(key, next)
       } else {
-        drafts.delete(uid)
+        drafts.delete(key)
       }
     },
-    [uid]
+    [key]
   )
+  useEffect(() => {
+    shownDrafts.set(key, setText)
+    return () => {
+      shownDrafts.delete(key)
+    }
+  }, [key, setText])
   // A late transcript lands in this item's draft even after the box closed.
   const insertDictation = useCallback(
-    (insert: (draft: string) => string) => setText(insert(drafts.get(uid) ?? '')),
-    [setText, uid]
+    (insert: (draft: string) => string) => setText(insert(drafts.get(key) ?? '')),
+    [setText, key]
   )
-  const [caret, setCaret] = useState<{ start: number; end: number } | null>(null)
-  const placeCaret = useCallback((at: number) => setCaret({ start: at, end: at }), [])
+  const boxRef = useRef<HostInstance>(null)
+  const catalog = useMobileNativeChatWorkspaceCatalog(
+    {
+      hostId,
+      client,
+      worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+      agentSessionHostSupport: {
+        discoverWorkspaceSkills: useRouteCapability(SKILL_DISCOVER_WORKSPACE_CAPABILITY)
+      }
+    },
+    bot.agent
+  )
+  // The chat composer's `@` files and `/` skills; commands act on a chat, which a comment is not.
+  const menu = useMobileNativeChatComposerMenu({
+    value: text,
+    onChangeText: setText,
+    agent: bot.agent,
+    structuredCatalog: undefined,
+    skillsOnly: true,
+    filePaths: catalog.nativeChatFilePaths,
+    onNeedFiles: catalog.loadNativeChatFiles,
+    skillDiscovery: catalog.nativeChatSkills,
+    onNeedSkills: catalog.loadNativeChatSkills,
+    // A scanned skill names no file chat would send; the comment's mail names the one it was found at.
+    onPickSkill: (skill) => {
+      const path = skill.path ?? skill.sources[0]?.skillFilePath
+      const name = skill.token.slice(1)
+      if (path) {
+        const kept = (pickedSkills.get(key) ?? NO_SKILLS).filter((held) => held.name !== name)
+        pickedSkills.set(key, [...kept, { name, path }])
+      }
+    },
+    focusField: () => input.current?.focus()
+  })
+  const placeCaret = menu.placeCaret
   const scope = `bot-item-comment:${uid}`
   useEffect(() => () => blurMobileNativeChatTextDestination(scope), [scope])
   const dictation = useMobileNativeChatComposerDictation({
@@ -106,35 +181,62 @@ export function MobileBotItemCommentBox({
       focusMobileNativeChatTextDestination(scope)
       run()
     })
+  const photos = useBotItemCommentImages({
+    client,
+    uid,
+    sessionId: attachTo,
+    editText: (change) => (shownDrafts.get(key) ?? setText)(change(drafts.get(key) ?? '')),
+    showToast
+  })
   const micActive = mic?.micActive ?? false
-  const canSend = online && text.trim().length > 0 && !micActive
-  const post = async (words: string, typed: boolean): Promise<'landed' | 'unknown' | 'failed'> => {
+  // Send waits for every photo's upload, as on the desktop.
+  const canSend =
+    online &&
+    (text.trim().length > 0 || photos.images.length > 0) &&
+    !photos.uploading &&
+    !micActive
+  const post = async (words: string): Promise<'landed' | 'unknown' | 'failed'> => {
     if (!online || !words || sending || !client) {
       return 'failed'
     }
     setSending(true)
-    const sentRevision = revision.current
     const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
       setError(null)
-      // Words put in the box while it was sending stay.
-      if (typed && revision.current === sentRevision) {
-        setText('')
-      }
       return 'landed'
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
     return outcome.kind === 'unknown' ? 'unknown' : 'failed'
   }
-  const send = async () => {
+  const send = () => {
     if (canSend) {
-      await post(text.trim(), true)
+      let skills: BotItemCommentSkill[]
+      try {
+        skills = sentBotItemCommentSkills(text, pickedSkills.get(key) ?? NO_SKILLS, bot.agent)
+      } catch (error) {
+        if (!(error instanceof SkillRefLimitError)) {
+          throw error
+        }
+        // The phone chat's words for the same refusal.
+        setError(
+          `Message not sent. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+        )
+        return
+      }
+      onComment(
+        text.trim(),
+        photos.images.map((image) => image.path),
+        skills
+      )
+      pickedSkills.delete(key)
+      setText('')
+      photos.clear()
     }
   }
   useImperativeHandle(ref, () => ({
-    send: (words) => post(words.trim(), false)
+    send: (words) => post(words.trim())
   }))
   const notice = !online
     ? t(
@@ -144,22 +246,48 @@ export function MobileBotItemCommentBox({
       )
     : null
   return (
-    <View style={styles.box}>
+    <View ref={boxRef} style={styles.box}>
+      <MobileNativeChatComposerSuggestions anchorRef={boxRef} rows={menu.rows} onPick={menu.pick} />
+      <MobileNativeChatComposerAttachments
+        images={photos.images}
+        files={NO_FILES}
+        onRemoveImage={photos.remove}
+        numbered
+      />
       <View style={styles.row}>
+        {attachTo ? (
+          <View style={styles.micSlot}>
+            <MobileNativeChatComposerAttachButton
+              onAttachImage={() => void photos.attach()}
+              onAttachFiles={undefined}
+              structured={false}
+              isAttaching={false}
+              disabled={!online || sending}
+            />
+          </View>
+        ) : null}
         <View style={styles.field}>
           <MobileNativeChatComposerField
             ref={input}
             value={text}
-            skillToken={null}
+            skillToken={menu.skillToken}
             dictationPreview={dictation.preview}
-            onChangeText={setText}
+            onChangeText={menu.onFieldChange}
             onFocus={() => focusMobileNativeChatTextDestination(scope)}
-            selection={caret ?? undefined}
+            // Controlled only transiently right after an autocomplete insert.
+            selection={menu.pendingSelection ?? undefined}
             onSelectionChange={(event) => {
               dictation.readSelection(event)
-              setCaret(null)
+              menu.onSelectionChange(event.nativeEvent.selection)
             }}
-            onKeyboardSubmit={() => void send()}
+            onKeyboardSubmit={() => {
+              const first = menu.rows[0]
+              if (first) {
+                menu.pick(first)
+              } else {
+                send()
+              }
+            }}
             editable={!sending}
             multiline
             accessibilityLabel={t('bots.items.comment.label', 'Comment')}
@@ -188,7 +316,7 @@ export function MobileBotItemCommentBox({
         ) : null}
         <ComposerSendButton
           size="compact"
-          onPress={() => void send()}
+          onPress={send}
           canSend={canSend}
           sending={sending}
           label={t('bots.items.comment.submit', 'Comment')}

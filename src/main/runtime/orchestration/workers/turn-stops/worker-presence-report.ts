@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import { confirmUnknownWorkerStart, observeWorkerWorking } from './worker-working-observation'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import {
   hasRelayedWorkerReport,
@@ -19,6 +20,7 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { awaitsAPerson, isWorkerGone, isWorkerStartRest } from './worker-turn-stop-wording'
 
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
@@ -34,12 +36,14 @@ export type WorkerRest = Pick<
   | 'turnStartedAt'
   | 'mailTaken'
   | 'requestError'
-> & { reason: 'finished' | 'errored' | 'needs-input' }
+  | 'startSurface'
+  | 'blockedStart'
+> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' | 'start-blocked' }
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
   'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
-> & { reason: 'exited' | 'lost' }
+> & { reason: 'exited' | 'lost' | 'never-ready' }
 
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
@@ -84,11 +88,7 @@ export function observeWorker(
   const dispatchId = workerTurnStopDispatchId(target)
   const current = readWorkerPresence(db, dispatchId)
   if (observation.presence === 'working') {
-    const fence = observation.newTurn ? `turn:${(current?.generation ?? 0) + 1}` : null
-    const next = nextWorkerPresence(current, { presence: 'working', fence, report: null })
-    if (next.changed) {
-      writeWorkerPresence(db, dispatchId, next)
-    }
+    observeWorkerWorking(db, target, observation.newTurn === true)
     return false
   }
   if (observation.presence === 'gone') {
@@ -122,12 +122,16 @@ export function observeWorker(
     return sent
   }
   const { rest } = observation
+  // A rest proves its turn ran, though a missed hook may have hidden the turn's start.
+  if (target.kind === 'local' && !isWorkerStartRest(rest.reason)) {
+    confirmUnknownWorkerStart(db, dispatchId)
+  }
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
   const sent = reconcileWorkerReport(
     db,
     target,
     nextWorkerPresence(current, {
-      presence: rest.reason === 'needs-input' ? 'prompt' : 'resting',
+      presence: awaitsAPerson(rest.reason) ? 'prompt' : 'resting',
       fence: observation.fence,
       report: storedReport(rest, observation)
     }),
@@ -268,10 +272,8 @@ function reconcileWorkerReport(
   // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
   // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
   if (
-    rest.reason !== 'exited' &&
-    rest.reason !== 'lost' &&
-    (db.isWorkerStopRequested(dispatchId) ||
-      (!('requestError' in rest && rest.requestError) && isDeliberateRest(db, target, rest, deps)))
+    !isWorkerGone(rest.reason) &&
+    (db.isWorkerStopRequested(dispatchId) || isDeliberateRest(db, target, rest, deps))
   ) {
     return keep()
   }
