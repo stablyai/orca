@@ -287,7 +287,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(id)
       return
     }
-    const witness = this.holds.attributionWitness(id)
+    const binding = this.holds.attributionBinding(id)
     const at = this.deps.now()
     const attempt: Attempt = {
       identity: identity(cut),
@@ -308,7 +308,7 @@ export class StructuredAgentSessionUsageLimitContinue {
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            !this.holds.witnessHolds(id, this.deps.host, witness) ||
+            !this.holds.bindingHolds(id, this.deps.host, binding) ||
             !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()
