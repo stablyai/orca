@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +8,7 @@ import {
   linkDirectory,
   makeSkillHome,
   NAME,
+  NEW_SOURCE,
   NEW_TEXT,
   OLD_TEXT,
   previewAndInstall,
@@ -17,6 +19,7 @@ import {
 } from './testing/bundled-skill-home'
 
 const EDITED_TEXT = `---\nname: ${NAME}\n---\nmine\n`
+const digestOf = (text: string) => createHash('sha256').update(text).digest('hex')
 const geminiSkill = (home: string) => join(home, '.gemini', 'skills', NAME)
 
 afterEach(removeSkillHomes)
@@ -47,6 +50,24 @@ describe('Gemini CLI bundled skill placement', () => {
       expect(await snapshot(target.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
       expect(await snapshot(geminiSkill(target.home))).toBe('missing')
     }
+  })
+
+  it("retires Orca's copy left under a skill's former name", async () => {
+    const home = await makeSkillHome()
+    const formerText = OLD_TEXT.replace(`name: ${NAME}`, 'name: former-skill')
+    await writeCopy(home.shared, NEW_TEXT)
+    await writeCopy(join(home.home, '.gemini', 'skills', 'former-skill'), formerText)
+    const source = {
+      ...NEW_SOURCE,
+      aliases: ['former-skill'],
+      releasedDigests: [...NEW_SOURCE.releasedDigests, digestOf(formerText)]
+    }
+    await autoUpdateInstalledBundledSkills({
+      ...serviceInput(home, { agents: ['gemini'] }),
+      sources: [source],
+      names: [NAME]
+    })
+    expect(await snapshot(join(home.home, '.gemini', 'skills', 'former-skill'))).toBe('missing')
   })
 
   it("leaves a user's edited ~/.gemini/skills folder alone", async () => {

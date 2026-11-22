@@ -21,7 +21,35 @@ const FORMER_GLOBAL_SKILL_ROOTS: readonly (readonly string[])[] = [
   ['.gemini', 'skills']
 ]
 
-/** Orca's own copies or links in former roots, retired once the shared copy is in place; a lone one moves there. */
+/** Retiring writes in these roots, so installs lock them like targets. */
+export function formerSkillRootPaths(
+  destination: Pick<BundledSkillPlanInput['destination'], 'scope' | 'homeDirectory'>
+): string[] {
+  return destination.scope === 'global'
+    ? FORMER_GLOBAL_SKILL_ROOTS.map((segments) => join(destination.homeDirectory, ...segments))
+    : []
+}
+
+/** Orca only made a plain folder here; a linked one, or one a target links to, is another root. */
+async function plainFormerRootRealPath(
+  input: BundledSkillPlanInput,
+  roots: readonly BundledSkillTargetRoot[],
+  segments: readonly string[]
+): Promise<string | null> {
+  const { destination, filesystem } = input
+  const home = await resolveBundledSkillRealPath(filesystem, destination.homeDirectory)
+  const realPath = await resolveBundledSkillRealPath(
+    filesystem,
+    join(destination.homeDirectory, ...segments)
+  )
+  const key = bundledSkillPathKey(realPath)
+  return key === bundledSkillPathKey(join(home, ...segments)) &&
+    !roots.some((root) => bundledSkillPathKey(root.realPath) === key)
+    ? realPath
+    : null
+}
+
+/** Orca's copies or links under any of the skill's names, retired once the shared copy is in place. */
 export async function planFormerRootPlacements(
   context: {
     input: BundledSkillPlanInput
@@ -36,46 +64,43 @@ export async function planFormerRootPlacements(
   if (sharedRoot.role !== 'shared' || destination.scope !== 'global') {
     return []
   }
-  const targetKeys = new Set(roots.map((root) => bundledSkillPathKey(root.realPath)))
-  const homeRealPath = await resolveBundledSkillRealPath(filesystem, destination.homeDirectory)
   const previous: NonNullable<BundledSkillOp['previous']>[number][] = []
   for (const segments of FORMER_GLOBAL_SKILL_ROOTS) {
     const root = join(destination.homeDirectory, ...segments)
-    const path = join(root, source.name)
-    const { folderClass, observed } = await classifyBundledSkillPath(
-      filesystem,
-      path,
-      source,
-      digest
-    )
-    if (observed.kind === 'absent' || observed.kind === 'unreadable') {
-      continue
-    }
-    // Orca only made a plain folder here; a linked one, or one a target links to, is another root.
-    const rootRealPath = await resolveBundledSkillRealPath(filesystem, root)
-    if (
-      bundledSkillPathKey(rootRealPath) !== bundledSkillPathKey(join(homeRealPath, ...segments)) ||
-      targetKeys.has(bundledSkillPathKey(rootRealPath))
-    ) {
-      continue
-    }
-    const keys = stateKeysFor(path, join(rootRealPath, source.name))
-    const owned =
-      observed.kind === 'link'
-        ? await linkPointsAt(
-            filesystem,
-            path,
-            observed.target,
-            join(sharedRoot.realPath, source.name)
-          )
-        : (folderClass === 'current' || folderClass === 'released') &&
-          !(await hasCloudReceipt(stateDirectory, keys))
-    if (
-      owned &&
-      !(await hasPendingCloudTransaction(stateDirectory, keys)) &&
-      (await filesystem.canWrite(rootRealPath))
-    ) {
-      previous.push({ path, observed })
+    let rootRealPath: string | null | undefined
+    for (const name of [source.name, ...(source.aliases ?? [])]) {
+      const path = join(root, name)
+      const { folderClass, observed } = await classifyBundledSkillPath(
+        filesystem,
+        path,
+        source,
+        digest
+      )
+      if (observed.kind === 'absent' || observed.kind === 'unreadable') {
+        continue
+      }
+      rootRealPath ??= await plainFormerRootRealPath(input, roots, segments)
+      if (!rootRealPath) {
+        break
+      }
+      const keys = stateKeysFor(path, join(rootRealPath, name))
+      const owned =
+        observed.kind === 'link'
+          ? await linkPointsAt(
+              filesystem,
+              path,
+              observed.target,
+              join(sharedRoot.realPath, source.name)
+            )
+          : (folderClass === 'current' || folderClass === 'released') &&
+            !(await hasCloudReceipt(stateDirectory, keys))
+      if (
+        owned &&
+        !(await hasPendingCloudTransaction(stateDirectory, keys)) &&
+        (await filesystem.canWrite(rootRealPath))
+      ) {
+        previous.push({ path, observed })
+      }
     }
   }
   return previous
