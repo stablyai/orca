@@ -78,6 +78,19 @@ describe("a command mark in a local agent's pane", () => {
     expect(exits).toEqual([PANE])
   })
 
+  it('asks again for a mark that lands while the last one is still probing', async () => {
+    let answerFirst: (verdict: 'unverifiable') => void = () => {}
+    probe.mockImplementationOnce(() => new Promise((resolve) => (answerFirst = resolve)))
+    server.retireProcessAuthority(PANE, { confirmedExit: true })
+    // The agent exits; its shell's mark arrives before the first probe answers.
+    probe.mockResolvedValue('exited')
+    server.retireProcessAuthority(PANE, { launchRetired: true })
+    answerFirst('unverifiable')
+    await settle()
+    await settle()
+    expect(exits).toEqual([PANE])
+  })
+
   it("reports an agent's own end hook", async () => {
     const response = await postHookEvent(
       server,

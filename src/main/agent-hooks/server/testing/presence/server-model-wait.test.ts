@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
-import { buildBody, postHookEvent } from '../server.test-fixtures'
+import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalModelWait } from '../../server-model-wait'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -14,24 +15,28 @@ const MINUTE = 60_000
 describe("terminal Claude's model-time stopwatch", () => {
   let server: AgentHookServer
   let userDataPath: string
-  let checks: Pick<TerminalModelWait, 'toolMaybeOpen'>[]
+  let checks: (Pick<TerminalModelWait, 'toolMaybeOpen'> & { paneKey: string })[]
 
-  beforeEach(async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    userDataPath = mkdtempSync(join(tmpdir(), 'orca-model-wait-'))
+  const boot = async () => {
     server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
-    checks = []
     server.setTerminalPaneLifecycle({
       ownsProcess: () => true,
       isStopping: () => false,
       isReversibleStop: () => false,
       isPlaced: () => true,
-      modelWaitElapsed: async (_paneKey, wait) => {
-        checks.push({ toolMaybeOpen: wait.toolMaybeOpen })
+      modelWaitElapsed: async (paneKey, wait) => {
+        checks.push({ paneKey, toolMaybeOpen: wait.toolMaybeOpen })
         return true
       }
     })
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-model-wait-'))
+    checks = []
+    await boot()
   })
 
   afterEach(() => {
@@ -53,7 +58,7 @@ describe("terminal Claude's model-time stopwatch", () => {
     await vi.advanceTimersByTimeAsync(9 * MINUTE)
     expect(checks).toEqual([])
     await vi.advanceTimersByTimeAsync(1 * MINUTE)
-    expect(checks).toEqual([{ toolMaybeOpen: false }])
+    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: false }])
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
     expect(checks).toHaveLength(2)
   })
@@ -66,7 +71,7 @@ describe("terminal Claude's model-time stopwatch", () => {
     await vi.advanceTimersByTimeAsync(6 * MINUTE)
     expect(checks).toEqual([])
     await vi.advanceTimersByTimeAsync(4 * MINUTE)
-    expect(checks).toEqual([{ toolMaybeOpen: false }])
+    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: false }])
   })
 
   it('counts a running lead tool as tool time once Claude has shown it sends PostToolBatch', async () => {
@@ -83,7 +88,7 @@ describe("terminal Claude's model-time stopwatch", () => {
     await prompt()
     await tool('PreToolUse', 'tool-1')
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
-    expect(checks).toEqual([{ toolMaybeOpen: true }])
+    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: true }])
   })
 
   it("keeps a nested Claude, run by the lead's open tool, from ending the lead's tool time", async () => {
@@ -102,6 +107,41 @@ describe("terminal Claude's model-time stopwatch", () => {
     await hook({ hook_event_name: 'PostToolUse', session_id: 'session-nested', ...nested })
     await vi.advanceTimersByTimeAsync(25 * MINUTE)
     expect(checks).toEqual([])
+  })
+
+  it('keeps counting an open tool as tool time in the turns after the one that sent PostToolBatch', async () => {
+    await prompt()
+    await tool('PreToolUse', 'tool-1')
+    await hook({ hook_event_name: 'PostToolBatch' })
+    await hook({ hook_event_name: 'Stop' })
+    await prompt()
+    await tool('PreToolUse', 'tool-2')
+    await vi.advanceTimersByTimeAsync(25 * MINUTE)
+    expect(checks).toEqual([])
+  })
+
+  it('follows the pane to its new key when the pane is reminted mid-wait', async () => {
+    const moved = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+    await prompt()
+    server.transferPaneAuthority(PANE, moved, 'pty-1')
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    expect(checks).toEqual([{ paneKey: moved, toolMaybeOpen: false }])
+  })
+
+  it('starts the stopwatch for a turn still working when Orca restarts', async () => {
+    await prompt()
+    const before = server
+    before.stop()
+    // Only the restarted server's stopwatch may ask.
+    before.setTerminalPaneLifecycle({
+      ownsProcess: () => true,
+      isStopping: () => false,
+      isReversibleStop: () => false,
+      isPlaced: () => true
+    })
+    await boot()
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    expect(checks).toEqual([{ paneKey: PANE, toolMaybeOpen: false }])
   })
 
   it('stops at the turn end', async () => {

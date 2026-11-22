@@ -90,6 +90,8 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
   }
 
   private async recordMarkedExitIfGone(resolved: string, marked: MarkedAgent): Promise<void> {
+    // Held while probing, so a mark landing meanwhile asks again.
+    this.aliveAfterMark.set(resolved, marked)
     const verdict = await probeAgentProcessPresence(marked.process).catch(() => null)
     const retained = this.aliveAfterMark.get(resolved)
     if (retained && isSameAgentProcess(retained.process, marked.process)) {

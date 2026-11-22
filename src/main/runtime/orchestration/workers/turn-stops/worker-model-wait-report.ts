@@ -9,6 +9,7 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { redactFailure } from './worker-turn-stop-wording'
 
 /** A worker's turn is still open but its model is not answering. Neither notice stops or settles anything. */
 export type WorkerModelWaitNotice = {
@@ -104,8 +105,9 @@ function describeModelWait(notice: WorkerModelWaitNotice, task: string): string 
   return `Worker ${notice.from} has been waiting on the model for ${minutes} min with no reply on task ${task}.${seen} It is still running; nothing was stopped.`
 }
 
+/** A screen line or a retry's words can carry a credential, as any failure text can. */
 function oneLine(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim()
+  const line = redactFailure(text).replace(/\s+/g, ' ').trim()
   return line.length > LAST_SEEN_MAX_CHARS
     ? `${line.slice(0, LAST_SEEN_MAX_CHARS - 1)}\u2026`
     : line

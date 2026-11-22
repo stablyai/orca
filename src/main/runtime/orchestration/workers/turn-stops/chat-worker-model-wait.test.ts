@@ -179,6 +179,18 @@ describe('a chat worker waiting on its model', () => {
     db.close()
   })
 
+  it("keeps a credential in the retry's words out of the coordinator's mail", async () => {
+    const { db, watch, write, mail } = rig()
+    watch.observe(SESSION, 'working')
+    const leaky = { ...retry(1), text: 'Retrying: Bearer abc123SECRETxyz was refused' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a provider's echo can put any words in the row.
+    await write('retry-1', leaky as AgentJournalItemBody)
+    expect(mail()).toHaveLength(1)
+    expect(mail()[0]?.body).not.toContain('abc123SECRETxyz')
+    watch.dispose()
+    db.close()
+  })
+
   it('stops at the turn end', async () => {
     const { db, watch, mail } = rig()
     watch.observe(SESSION, 'working')
