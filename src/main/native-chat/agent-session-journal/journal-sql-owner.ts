@@ -19,14 +19,11 @@ import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-w
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
-// After the store acknowledges close, how long close still waits for its thread to exit.
-const CLOSED_EXIT_GRACE_MS = 2000
-
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
 }
 
-/** A lost acknowledgement never authorizes replay; close waits for the owned worker's exit, bounded once the store closed. */
+/** A lost acknowledgement never authorizes replay; close waits for the owned worker's observed exit. */
 export class JournalSqlOwner {
   private readonly worker: Worker
   private readonly ready = Promise.withResolvers<boolean>()
@@ -213,14 +210,6 @@ export class JournalSqlOwner {
         }
         throw error
       }
-      // The store is closed; only a checkpoint thread stuck in a native call can keep the writer
-      // thread from exiting, and it ends with the process.
-      await Promise.race([
-        this.exited.promise,
-        new Promise((resolve) => setTimeout(resolve, CLOSED_EXIT_GRACE_MS).unref())
-      ])
-      this.worker.unref()
-      return
     }
     await this.exited.promise
   }

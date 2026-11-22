@@ -266,7 +266,14 @@ it('restarts a crashed checkpoint worker within the launch and shrinks the WAL i
     writer.prepare('INSERT INTO writes VALUES(?, zeroblob(18874368))').run(id)
   )
   expect(walBytes()).toBeGreaterThan(16 * 1024 * 1024)
-  await vi.waitFor(() => expect(outages).toHaveLength(1), { timeout: 10_000 })
+  // Replacements start on the writer's next commit once the backoff has passed.
+  await vi.waitFor(
+    () => {
+      owner.afterCommit()
+      expect(outages).toHaveLength(1)
+    },
+    { timeout: 10_000 }
+  )
   expect(workers.at(-1)).not.toBe(workers[0])
   expect(outages[0]).toMatchObject({ cause: 'exited', recovered: true, restarts: 1 })
   expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(0)
@@ -351,7 +358,10 @@ it('keeps a late busy checkpoint worker, reports it once stuck, and replaces one
   ])
 
   // Its next check goes unanswered while it sits idle: dead after two silent deadlines, then replaced.
-  await vi.waitFor(() => expect(workers.at(-1)).not.toBe(workers[0]))
+  await vi.waitFor(() => {
+    owner.afterCommit()
+    expect(workers.at(-1)).not.toBe(workers[0])
+  })
   expect(workers[0]!.terminated).toBe(true)
   workers.at(-1)!.busy(false)
   workers.at(-1)!.ready()

@@ -27,8 +27,6 @@ export class JournalCheckpointOwner {
   private truncate: { id: number; acknowledged: boolean } | undefined
   private readonly waiters = new JournalWalWaiters()
   private restoreNeeded = false
-  /** Writes wait for a retired worker that may hold a truncate's write lock to exit. */
-  private draining: Promise<void> | undefined
   private closePromise: Promise<void> | undefined
 
   constructor(
@@ -41,7 +39,8 @@ export class JournalCheckpointOwner {
       {
         receive: (message) => this.receive(message),
         lose: (error, cause) => this.lose(error, cause),
-        late: (stuck) => this.late(stuck)
+        late: (stuck) => this.late(stuck),
+        drained: () => this.wake()
       },
       options
     )
@@ -89,7 +88,11 @@ export class JournalCheckpointOwner {
       this.attach()
       return
     }
-    if (this.stopped || this.closing || this.writer.isTransaction) {
+    if (this.closing || this.writer.isTransaction) {
+      return
+    }
+    if (this.stopped) {
+      this.worker.wanted()
       return
     }
     try {
@@ -121,7 +124,7 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent = false): boolean {
-    if (this.draining) {
+    if (this.worker.draining) {
       return true
     }
     const { stopped, unknown, blocked, log } = this
@@ -258,20 +261,8 @@ export class JournalCheckpointOwner {
     if (this.closing) {
       return
     }
-    // A retired worker may still be inside the truncate it was sent, holding SQLite's write lock.
-    const truncating = this.truncate?.acknowledged === true && this.worker.revokeTruncate()
     this.release()
     this.worker.fail(error, cause)
-    if (truncating) {
-      const draining = this.worker.retired()
-      this.draining = draining
-      void draining.then(() => {
-        if (this.draining === draining) {
-          this.draining = undefined
-          this.wake()
-        }
-      })
-    }
     this.wake()
   }
 
@@ -320,7 +311,6 @@ export class JournalCheckpointOwner {
     this.closing = true
     this.stopped = true
     this.truncate = undefined
-    this.draining = undefined
     // Timers stop first, so no restart or deadline lands while admission is handed back.
     const retired = this.worker.close()
     retired.catch(() => undefined)

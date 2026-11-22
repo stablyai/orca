@@ -3,11 +3,9 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
   JOURNAL_CHECKPOINT_PROGRESS,
-  JOURNAL_CHECKPOINT_TRUNCATE,
-  JOURNAL_TRUNCATE_GRANTED,
-  JOURNAL_TRUNCATE_REVOKED,
-  JOURNAL_TRUNCATE_RUNNING,
-  journalCheckpointWorkerSource
+  grantJournalTruncate,
+  journalCheckpointWorkerSource,
+  revokeJournalTruncate
 } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
 import { JOURNAL_WAL_BACKPRESSURE_FRAMES } from './journal-wal-admission'
@@ -21,8 +19,6 @@ const HEALTH_TIMEOUT_MS = 5000
 // outage and kept (terminating can't interrupt that call) until it answers, errors or exits.
 const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
-// A worker that never answered holds no checkpoint, so close stops waiting for its thread after this.
-const UNANSWERED_CLOSE_MS = 2000
 // Also how long a restarted worker must stay up before its backoff starts over.
 const RESTART_MAX_MS = 60_000
 
@@ -48,6 +44,7 @@ export type JournalCheckpointWorkerHost<Message> = {
   lose(error: unknown, cause: JournalCheckpointOutage['cause']): void
   /** The worker is busy past a deadline; the owner may take checkpoints back without retiring it. */
   late(stuck: boolean): void
+  drained(): void
 }
 
 type Attached = {
@@ -61,7 +58,6 @@ type Attached = {
   stuck: boolean
   /** An idle worker silent for one deadline may just be descheduled; a second makes it dead. */
   silent: boolean
-  answered: boolean
 }
 
 /** Starts, watches and restarts the checkpoint thread; at most one ever runs. */
@@ -73,6 +69,9 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   private closed = false
   private permanent = false
   private failedStarts = 0
+  private restartDue = false
+  /** Writes wait: a retired worker may still hold a truncate's write lock. */
+  draining = false
   private readonly now: () => number
   private readonly outages: JournalCheckpointOutages
 
@@ -89,30 +88,14 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     return this.current !== undefined
   }
 
-  /** Lets the worker run the truncate about to be sent. */
   grantTruncate(): void {
     if (this.current) {
-      Atomics.store(this.current.liveness, JOURNAL_CHECKPOINT_TRUNCATE, JOURNAL_TRUNCATE_GRANTED)
+      grantJournalTruncate(this.current.liveness)
     }
   }
 
-  /** Takes back a granted truncate the worker hasn't started; true when it is inside one now. */
   revokeTruncate(): boolean {
-    const liveness = this.current?.liveness
-    return (
-      liveness !== undefined &&
-      Atomics.compareExchange(
-        liveness,
-        JOURNAL_CHECKPOINT_TRUNCATE,
-        JOURNAL_TRUNCATE_GRANTED,
-        JOURNAL_TRUNCATE_REVOKED
-      ) === JOURNAL_TRUNCATE_RUNNING
-    )
-  }
-
-  /** Settles once every retired worker thread has exited. */
-  retired(): Promise<void> {
-    return this.retiring
+    return this.current !== undefined && revokeJournalTruncate(this.current.liveness)
   }
 
   get watching(): boolean {
@@ -159,7 +142,6 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       busySince: undefined,
       stuck: false,
       silent: false,
-      answered: false,
       exited: new Promise((resolve) => {
         worker.on('exit', () => {
           resolve()
@@ -175,7 +157,6 @@ export class JournalCheckpointWorkerSupervisor<Message> {
         attached.busySince = undefined
         attached.silent = false
         attached.stuck = false
-        attached.answered = true
         this.host.receive(message)
       }
     })
@@ -222,6 +203,14 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     const attached = this.current
     this.current = undefined
     if (attached) {
+      // A retired worker inside a truncate holds SQLite's write lock until its thread exits.
+      if (revokeJournalTruncate(attached.liveness)) {
+        this.draining = true
+        void attached.exited.then(() => {
+          this.draining = false
+          this.host.drained()
+        })
+      }
       this.failedStarts = this.now() - attached.spawnedAt >= RESTART_MAX_MS ? 0 : this.failedStarts
       // Terminating can't stop a native call; the next worker starts only after this one exits.
       this.retiring = attached.exited
@@ -246,6 +235,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   close(): Promise<void> {
     if (!this.closed) {
       this.closed = true
+      this.draining = false
       this.unwatch()
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
@@ -257,17 +247,9 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   private async retire(): Promise<void> {
     const attached = this.current
     if (attached) {
-      const exited = attached.worker.terminate().then(() => attached.exited)
-      if (attached.answered) {
-        await exited
-      } else {
-        // One stuck opening SQLite on a hung disk would otherwise hold up quit; it dies with the process.
-        exited.catch(() => undefined)
-        await Promise.race([
-          exited,
-          new Promise((resolve) => setTimeout(resolve, UNANSWERED_CLOSE_MS).unref())
-        ])
-      }
+      // Callers hand the database on after close, so it waits for the thread to exit, as main does.
+      await attached.worker.terminate()
+      await attached.exited
       this.current = undefined
     }
     await this.retiring
@@ -284,13 +266,19 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.restartTimer = setTimeout(() => {
       void retiring.then(() => {
         this.restartTimer = undefined
-        if (!this.closed && !this.current) {
-          this.outages.restarts++
-          this.start()
-        }
+        this.restartDue = true
       })
     }, delay)
     this.restartTimer.unref()
+  }
+
+  /** The writer committed; a replacement whose backoff has passed starts now, so an idle store spawns none. */
+  wanted(): void {
+    if (this.restartDue && !this.closed && !this.current) {
+      this.restartDue = false
+      this.outages.restarts++
+      this.start()
+    }
   }
 
   private openOutage(error: unknown, cause: JournalCheckpointOutage['cause']): void {
