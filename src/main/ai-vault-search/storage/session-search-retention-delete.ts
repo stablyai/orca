@@ -5,6 +5,7 @@ import { deleteSearchMessages } from './session-search-message-rows'
 import { readIndexGeneration, recordIndexMaintenance } from './session-search-index-generation'
 import {
   compactSessionSearchIndex,
+  recordSessionSearchDeletedRows,
   sessionSearchIndexCompactionDue
 } from './session-search-index-compaction'
 
@@ -147,6 +148,7 @@ export async function drainOrphanedSessionMessages(
       deleted = traceSessionSearch('drain', () =>
         deleteSearchMessages(db, sessionRowId, RETENTION_DELETE_ROWS_PER_STEP)
       )
+      recordSessionSearchDeletedRows(db, deleted)
       recordIndexMaintenance(db, before)
       db.exec('COMMIT')
       onMessagesChanged(-deleted)
