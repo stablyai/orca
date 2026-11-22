@@ -282,6 +282,7 @@ export function RemoteBrowserPagePane({
     ...remotePageTarget,
     browserPageId: browserTab.id,
     runtimeEnvironmentId,
+    streaming: frameUrl !== null,
     onZoomed: resyncRemoteViewport,
     setPaneNotice
   })

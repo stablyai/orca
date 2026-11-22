@@ -13,12 +13,15 @@ export function useRemoteBrowserPageSiteDisplaySource({
   lifecycle,
   runtimeTarget,
   runtimeWorktree,
+  streaming,
   onZoomed
 }: {
   runtimeEnvironmentId: string
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   runtimeWorktree: string
+  /** The host has the page once frames arrive, so readers fetch its site settings then. */
+  streaming: boolean
   /** Frames carry the new zoom too, but a static page may not repaint before the next click. */
   onZoomed: () => void
 }): BrowserPageSiteDisplaySource | null {
@@ -27,7 +30,7 @@ export function useRemoteBrowserPageSiteDisplaySource({
     BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY
   )
   return useMemo(() => {
-    if (!supported) {
+    if (!supported || !streaming) {
       return null
     }
     const call = async (
@@ -37,7 +40,8 @@ export function useRemoteBrowserPageSiteDisplaySource({
       const target = runtimeTarget()
       const page = lifecycle.tokens.remotePage
       if (!target || !page) {
-        return null
+        // Rejecting, not null, keeps readers on the value they last had.
+        throw new Error('The remote page is not ready.')
       }
       return callRuntimeRpc<BrowserPageSiteDisplay | null>(
         target,
@@ -55,5 +59,5 @@ export function useRemoteBrowserPageSiteDisplaySource({
       },
       setColorScheme: (colorScheme) => call('browser.setSiteColorScheme', { colorScheme })
     }
-  }, [lifecycle, onZoomed, runtimeTarget, runtimeWorktree, supported])
+  }, [lifecycle, onZoomed, runtimeTarget, runtimeWorktree, streaming, supported])
 }

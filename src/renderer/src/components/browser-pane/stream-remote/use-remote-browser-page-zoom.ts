@@ -37,6 +37,7 @@ export function remoteBrowserWheelZoomDirection(
 export function useRemoteBrowserPageZoom({
   browserPageId,
   runtimeEnvironmentId,
+  streaming,
   onZoomed,
   lifecycle,
   runtimeTarget,
@@ -47,6 +48,7 @@ export function useRemoteBrowserPageZoom({
 }: {
   browserPageId: string
   runtimeEnvironmentId: string
+  streaming: boolean
   /** Frames carry the new zoom too, but a static page may not repaint before the next click. */
   onZoomed: () => void
   lifecycle: RemoteBrowserStreamLifecycle
@@ -153,6 +155,7 @@ export function useRemoteBrowserPageZoom({
     lifecycle,
     runtimeTarget,
     runtimeWorktree,
+    streaming,
     onZoomed
   })
   return { requestZoom: supported ? requestZoom : null, feedbackBadgeRef, siteDisplaySource }
