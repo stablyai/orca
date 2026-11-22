@@ -118,7 +118,11 @@ export async function inspectTerminalHostProcess(args: {
     )
     if (shell !== null) {
       args.onTier?.('cheap')
-      return { foregroundProcess: shell, hasChildProcesses: false, idleShellProven: true }
+      return {
+        foregroundProcess: shell.name,
+        hasChildProcesses: false,
+        ...(shell.idle ? { idleShellProven: true as const } : {})
+      }
     }
   }
   if (args.steadyState === true && incarnationMatches) {

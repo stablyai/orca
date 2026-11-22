@@ -21,7 +21,9 @@ import type { Session } from '../sessions/session'
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
 const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
 
-type IdleShellProof = { shellPid: number; provedAt: number; activity: number }
+/** childless: the shell also had no child process, so the pane may stop re-checking; otherwise the proof only
+ * lets re-checks stay cheap, as before. */
+type IdleShellProof = { shellPid: number; provedAt: number; activity: number; childless: boolean }
 
 // Keyed by Session so a new session or recycled PID cannot inherit an old proof.
 const proofs = new WeakMap<Session, IdleShellProof>()
@@ -53,8 +55,9 @@ function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
 }
 
-/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in its group with no child
- * process at all. activity is the pane's paneActivity read before the capture was requested, so later activity voids it. */
+/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in its foreground group, and
+ * return whether it is also idle: no child process at all. activity is the pane's paneActivity read before the capture
+ * was requested, so later activity voids the proof. */
 export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
@@ -76,16 +79,17 @@ export function rememberIdleShellProof(
     shell.tpgid === shell.pid &&
     isShellProcess(commandName(shell)) &&
     !groups.processGroupsIncomplete &&
-    groups.rowsByProcessGroup.get(shell.pid) === 1 &&
-    // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
-    (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
+    groups.rowsByProcessGroup.get(shell.pid) === 1
   ) {
+    // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
+    const childless = (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
     proofs.set(session, {
       shellPid: shell.pid,
       provedAt: monotonicNow() - capturedAgeMs,
-      activity
+      activity,
+      childless
     })
-    return true
+    return childless
   }
   proofs.delete(session)
   return false
@@ -111,11 +115,11 @@ function provenShellName(
 }
 
 /** The shell's name while a recent full capture proved it alone, its group still owns the terminal, and the group
- * still holds only the shell (job control off lets a silent command join it). */
+ * still holds only the shell (job control off lets a silent command join it); idle when that capture found no child. */
 export async function readProvenIdleShell(
   session: Session,
   isCurrent: () => boolean
-): Promise<string | null> {
+): Promise<{ name: string; idle: boolean } | null> {
   const proof = proofs.get(session)
   if (!proof || provenShellName(session, proof, isCurrent) === null) {
     return null
@@ -128,5 +132,6 @@ export async function readProvenIdleShell(
     return null
   }
   // Re-read after the await: output or a new foreground job may have arrived meanwhile.
-  return provenShellName(session, proof, isCurrent)
+  const name = provenShellName(session, proof, isCurrent)
+  return name === null ? null : { name, idle: proof.childless }
 }
