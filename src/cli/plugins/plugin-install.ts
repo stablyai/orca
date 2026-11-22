@@ -3,6 +3,12 @@ import { isAbsolute, join, resolve } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import {
+  failedUpdatesOf,
+  nextStepsOf,
+  perPluginFailureCommands,
+  type UpdateFailure
+} from './plugin-approval-rerun'
 import { isQualifiedPluginKey } from '../../shared/plugins/frames/plugin-tab-key'
 import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
@@ -125,6 +131,56 @@ function formatUpdate(result: UpdateResult): string {
     : `${result.pluginKey} ${result.version} is ${result.status}: ${result.reason}`
 }
 
+function formatFailedUpdates(failed: UpdateFailure[]): string[] {
+  return [
+    `${failed.length} plugin update(s) failed:`,
+    ...failed.map(
+      (failure) => `- ${failure.pluginKey}: ${failure.message.replaceAll('\n', '\n  ')}`
+    )
+  ]
+}
+
+/** Why here and not on the host: it reads the `failed` list every host version returns. */
+function withFailedUpdates(ctx: HandlerContext, error: unknown): unknown {
+  if (!(error instanceof RuntimeClientError) || error.code !== 'approval_required') {
+    return error
+  }
+  const failed = failedUpdatesOf(error.data)
+  if (failed.length === 0) {
+    return error
+  }
+  return new RuntimeClientError(
+    error.code,
+    [error.message, ...formatFailedUpdates(failed)].join('\n'),
+    {
+      ...(typeof error.data === 'object' ? error.data : {}),
+      nextSteps: [...perPluginFailureCommands(ctx, failed), ...nextStepsOf(error.data)]
+    }
+  )
+}
+
+async function updateAll(ctx: HandlerContext): Promise<void> {
+  const result = await callPlugins<{ updates: UpdateResult[]; failed: UpdateFailure[] }>(
+    ctx,
+    'plugins.update',
+    { all: true },
+    INSTALL_TIMEOUT
+  ).catch((error: unknown) => {
+    throw withFailedUpdates(ctx, error)
+  })
+  const rows = result.updates.map(formatUpdate)
+  const { failed } = result
+  if (failed.length > 0) {
+    // Why throw after the batch: updates that installed stay installed, but the run failed.
+    throw new RuntimeClientError(
+      'plugin_install_failed',
+      [...rows, ...formatFailedUpdates(failed)].join('\n'),
+      { ...result, nextSteps: perPluginFailureCommands(ctx, failed) }
+    )
+  }
+  printPluginResult(ctx, result, rows.length === 0 ? 'No installed plugins.' : rows.join('\n'))
+}
+
 function formatCatalog(entry: CatalogEntry): string {
   const tags = [entry.official ? 'official' : null, entry.stale ? 'stale' : null]
   return `${entry.id}  ${entry.name ?? '(not fetched)'}  ${entry.url} (${entry.ref})${tags.some(Boolean) ? `  ${tags.filter(Boolean).join(', ')}` : ''}${entry.error ? `\n  ${entry.error}` : ''}`
@@ -147,19 +203,7 @@ export const PLUGIN_INSTALL_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', 'Pass a plugin key or --all, not both.')
     }
     if (all) {
-      const result = await callPlugins<{ updates: UpdateResult[] }>(
-        ctx,
-        'plugins.update',
-        { all: true },
-        INSTALL_TIMEOUT
-      )
-      printPluginResult(
-        ctx,
-        result,
-        result.updates.length === 0
-          ? 'No installed plugins.'
-          : result.updates.map(formatUpdate).join('\n')
-      )
+      await updateAll(ctx)
       return
     }
     const result = await callPlugins<UpdateResult>(
