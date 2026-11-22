@@ -44,7 +44,8 @@ export function registerSleepingMailAvailability(
         event.senderFrame === window.webContents.mainFrame &&
         (paneKey === undefined || typeof paneKey === 'string')
       ) {
-        runtime.retrySleptMailboxWakes(paneKey)
+        // No pane key: a runtime environment became available, so only failed or tracked wakes retry.
+        runtime.retrySleptMailboxWakes(paneKey, paneKey === undefined)
       }
     }
   )

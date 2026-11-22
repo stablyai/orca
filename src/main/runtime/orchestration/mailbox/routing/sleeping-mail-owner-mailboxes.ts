@@ -82,11 +82,12 @@ function sleepingMailOwnerMailboxes(
 export function sleepingPaneInboxes(
   db: OrchestrationDb | null,
   pane: string,
-  record: SleptMailRecord | null
+  record: SleptMailRecord | null,
+  arriving = false
 ): string[] {
   return [
     ...(record?.terminalHandle ? [record.terminalHandle] : []),
-    ...(record?.mailWake && db ? sleepingMailOwnerMailboxes(db, pane) : [])
+    ...((record?.mailWake || arriving) && db ? sleepingMailOwnerMailboxes(db, pane) : [])
   ]
 }
 

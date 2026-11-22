@@ -47,10 +47,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (!handle || !record?.ptyId || this.ptysById.get(record.ptyId)?.connected === true) {
       return false
     }
-    for (const [leafKey, leaf] of nextLeaves) {
+    for (const [leafKey, leaf] of processlessLeavesById(nextLeaves).get(record.leafId) ?? []) {
       if (
-        leaf.leafId === record.leafId &&
-        leaf.ptyId === null &&
         leafKey !== oldLeafKey &&
         this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), record.ptyId)
       ) {
@@ -126,6 +124,15 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       (leafPtyId === null || this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), ptyId))
       ? ptyId
       : null
+  }
+
+  /** A slept pane's handle names its stopped process while the pane shows none: the pane's own, not stale. */
+  protected isSleptLeafBinding(handle: string, leaf: RuntimeLeafRecord): boolean {
+    return (
+      leaf.ptyId === null &&
+      this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)) === handle &&
+      this.sleptBoundPtyId(leaf, handle, null) !== null
+    )
   }
 
   /** The resume takes over the slept handle: the stopped process's aliases go, the name moves on. */
@@ -267,4 +274,26 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     }
     return { pty: (record.ptyId && this.ptysById.get(record.ptyId)) || null, leaf }
   }
+}
+
+const processlessLeafIndexes = new WeakMap<
+  ReadonlyMap<string, RuntimeLeafRecord>,
+  Map<string, [string, RuntimeLeafRecord][]>
+>()
+
+/** One pass per graph: each removed slept pane finds its moved leaf by id, not by scanning the graph. */
+function processlessLeavesById(
+  leaves: ReadonlyMap<string, RuntimeLeafRecord>
+): Map<string, [string, RuntimeLeafRecord][]> {
+  let index = processlessLeafIndexes.get(leaves)
+  if (!index) {
+    index = new Map()
+    for (const [leafKey, leaf] of leaves) {
+      if (leaf.ptyId === null) {
+        index.set(leaf.leafId, [...(index.get(leaf.leafId) ?? []), [leafKey, leaf]])
+      }
+    }
+    processlessLeafIndexes.set(leaves, index)
+  }
+  return index
 }

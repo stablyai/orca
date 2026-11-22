@@ -135,7 +135,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     }
 
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf || leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) {
+    if (
+      !leaf ||
+      ((leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) &&
+        !this.isSleptLeafBinding(handle, leaf))
+    ) {
       throw new Error('terminal_handle_stale')
     }
     return { record, leaf }

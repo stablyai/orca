@@ -192,7 +192,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   private readonly sleptPaneInboxes = (pane: string) =>
-    inboxes.sleepingPaneInboxes(this._orchestrationDb, pane, this.sleepingMailRecord(pane))
+    inboxes.sleepingPaneInboxes(
+      this._orchestrationDb,
+      pane,
+      this.sleepingMailRecord(pane),
+      this.sleepingRecordIndex.takeArrival(pane)
+    )
 
   protected sleepingMailRecord(paneKey: string): SleptMailRecord | null {
     return this.mailWakeAttempts.get(paneKey) ?? this.sleepingRecords.get(paneKey) ?? null
@@ -210,15 +215,18 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     }
   }
 
-  /** `resendHeld` re-announces the held set to a window that may have missed it. */
-  retrySleptMailboxWakes(paneKey?: string, resendHeld = paneKey === undefined): void {
+  /** A window (re)load re-announces the held set and re-checks every sleeper; a host coming back
+   *  can only unblock a wake that failed, so it re-checks just the tracked mailboxes. */
+  retrySleptMailboxWakes(paneKey?: string, hostEdge = false): void {
     this.watchSleepingMail()
     this.sleptMailboxWake.retryFailed()
-    if (resendHeld) {
+    if (paneKey === undefined) {
       this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
-    this.publishSleepingMail(paneKey === undefined ? undefined : { panes: [paneKey] }, true)
+    const tracked = { mailboxes: this.sleptMailboxWake.trackedMailboxes(), panes: [] }
+    const scope = paneKey !== undefined ? { panes: [paneKey] } : hostEdge ? tracked : undefined
+    this.publishSleepingMail(scope, true)
   }
 
   private sleepingMailPublicationQueued = false
@@ -267,11 +275,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     const run = () => {
       const full = pending.full
       pending.urgent = false
-      if (full) {
-        this.lastFullSleepingMailPass = Date.now()
-      }
-      const mailboxes = [...pending.mailboxes]
-      const panes = [...pending.panes]
+      this.lastFullSleepingMailPass = full ? Date.now() : this.lastFullSleepingMailPass
+      const [mailboxes, panes] = [[...pending.mailboxes], [...pending.panes]]
       pending.full = false
       pending.mailboxes.clear()
       pending.panes.clear()

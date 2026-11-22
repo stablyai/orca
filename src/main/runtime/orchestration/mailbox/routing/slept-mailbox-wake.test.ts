@@ -518,3 +518,50 @@ it('listens to crew changes only while an agent sleeps', async () => {
     db.close()
   }
 })
+
+it("wakes a Run coordinator whose sleep reached main only after its Run's mail arrived", async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  const db = new OrchestrationDb(':memory:')
+  let session: WorkspaceSessionState = getDefaultWorkspaceSession()
+  let sessionWritten: (hostId: ExecutionHostId | null) => void = () => {}
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      onWorkspaceSessionWritten: (listener) => {
+        sessionWritten = listener
+        return () => {}
+      }
+    })
+  )
+  const resume = vi.fn(async () => true)
+  try {
+    runtime.setOrchestrationDb(db)
+    runtime.setNotifier(mailNotifier(resume))
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.retrySleptMailboxWakes()
+    const run = db.createRun({
+      objective: 'Coordinate',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: paneKey
+    })
+    db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'done' })
+    // Every repoint of the arrival has passed before the sleep record is published.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(resume).not.toHaveBeenCalled()
+
+    session = { ...session, sleepingAgentSessionsByPaneKey: { [paneKey]: record } }
+    sessionWritten('local')
+    await vi.advanceTimersByTimeAsync(100)
+    await settled()
+
+    expect(resume.mock.calls.map((call) => call.slice(0, 2))).toContainEqual([
+      'folder:workspace',
+      paneKey
+    ])
+  } finally {
+    vi.useRealTimers()
+    runtime.setNotifier(null)
+    db.close()
+  }
+})

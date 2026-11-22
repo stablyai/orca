@@ -56,6 +56,13 @@ export class SleepingMailRecordIndex {
   /** Obligated panes per host, with the record each was indexed under. */
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
   private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
+  /** Panes whose sleep reached main after its first read: mail sent while they went to sleep found
+   *  no record, so their first re-check also reads the Runs and Dispatches they own. */
+  private readonly arrivals = new Set<string>()
+
+  takeArrival(pane: string): boolean {
+    return this.arrivals.delete(pane)
+  }
 
   /** The sleeping pane a recorded owner key names now: itself, or the pane its leaf moved to. */
   currentPane(paneKey: string): string {
@@ -90,6 +97,7 @@ export class SleepingMailRecordIndex {
     if (this.inputs.get(host) === records) {
       return new Set()
     }
+    const seenHost = this.inputs.has(host)
     this.inputs.set(host, records)
     const previous = this.hosts.get(host) ?? new Map<string, SleepingAgentSessionRecord>()
     const next = new Map<string, SleepingAgentSessionRecord>()
@@ -107,10 +115,14 @@ export class SleepingMailRecordIndex {
       if (!before || !sameWake(before, record)) {
         maintained.add(pane)
       }
+      if (!before && seenHost) {
+        this.arrivals.add(pane)
+      }
     }
     for (const pane of previous.keys()) {
       if (!next.has(pane)) {
         this.records.delete(pane)
+        this.arrivals.delete(pane)
         this.indexLeaf(pane, false)
         maintained.add(pane)
       }

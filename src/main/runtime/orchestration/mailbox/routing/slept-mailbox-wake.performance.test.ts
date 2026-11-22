@@ -237,3 +237,40 @@ it.each([100, 1_000])(
     }
   }
 )
+
+it.each([100, 1_000])(
+  'a runtime environment becoming available re-checks no inbox of %i sleepers owed nothing',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
+    for (let index = 0; index < count; index += 1) {
+      const record = { ...sleeper(index, `folder:${index}`), terminalHandle: `term_${index}` }
+      sleepingAgentSessionsByPaneKey[record.paneKey] = { ...record, restoreOnTabOpenOnly: false }
+    }
+    const session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const inboxChecks = vi.spyOn(SleptMailboxWake.prototype, 'refresh')
+
+      for (let edge = 0; edge < 10; edge += 1) {
+        runtime.retrySleptMailboxWakes(undefined, true)
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+
+      expect(inboxChecks).not.toHaveBeenCalled()
+    } finally {
+      db.close()
+    }
+  }
+)

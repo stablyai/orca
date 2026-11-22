@@ -76,6 +76,16 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
+  it('still answers pane operations on a slept pane under its handle', async () => {
+    const { db, runtime, handle } = await sleptPane()
+
+    await expect(runtime.renameTerminal(handle, 'Renamed')).resolves.toMatchObject({
+      handle,
+      tabId: TAB_ID
+    })
+    db.close()
+  })
+
   it("keeps naming the stopped process, so a finished worker's output and release still answer", async () => {
     const { db, runtime, handle } = await sleptPane()
 
