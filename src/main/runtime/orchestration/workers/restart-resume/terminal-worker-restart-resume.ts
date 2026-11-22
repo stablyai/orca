@@ -3,6 +3,7 @@
 // Only a failed resume reaches the coordinator, as today's lost-worker alert.
 
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   claimWorkerRestartResume,
@@ -34,8 +35,8 @@ export type TerminalWorkerRestartResumeDeps = {
     handle: string
   ) => { paneKey: string; processIncarnation: string; hostScope?: string } | null
   handleForPane: (paneKey: string) => string | null
-  /** Resolves once the resumed agent takes input; false when it never does. */
-  waitForAgentIdle: (handle: string) => Promise<boolean>
+  /** Resolves once the resumed agent's composer takes input; false when it never does. */
+  waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
   sendPrompt: (handle: string, prompt: string, operationId: string) => Promise<unknown>
   /** A terminal this resume opened for a Dispatch that settled meanwhile; nobody owns its agent. */
   closeTerminal: (handle: string) => Promise<unknown>
@@ -245,7 +246,7 @@ export class TerminalWorkerRestartResume {
       return
     }
     try {
-      await this.continueWhenReady(dispatchId, handle)
+      await this.continueWhenReady(dispatchId, handle, worker.claim.session.agent)
     } catch (error) {
       console.warn('[orchestration] continuing a resumed terminal worker failed', {
         dispatchId,
@@ -257,11 +258,15 @@ export class TerminalWorkerRestartResume {
   }
 
   /** A pane started again in place takes input only once its new process is attached and its agent up. */
-  private async continueWhenReady(dispatchId: string, handle: string): Promise<void> {
+  private async continueWhenReady(
+    dispatchId: string,
+    handle: string,
+    agent: TuiAgent
+  ): Promise<void> {
     const deadline = Date.now() + RESTART_CONTINUE_BUDGET_MS
     for (;;) {
       try {
-        if (!(await this.deps.waitForAgentIdle(handle))) {
+        if (!(await this.deps.waitForAgentReady(handle, agent))) {
           throw new Error('restart_resume_agent_not_ready')
         }
         await this.deps.sendPrompt(

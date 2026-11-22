@@ -2,6 +2,7 @@ import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestratio
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { sendAgentTurn } from '../orchestration/turn-delivery/send-agent-turn'
 import { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
+import { waitForWorkerAgentReady } from '../terminal/wait/launched-agent-composer-readiness'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 
@@ -13,6 +14,7 @@ type RestartResumeRuntime = Pick<
   | 'getTerminalProcessIncarnation'
   | 'getTerminalHandleForPaneKey'
   | 'waitForTerminal'
+  | 'waitForFreshWorkerComposer'
   | 'sendTerminalAgentPrompt'
   | 'getExistingOrchestrationDb'
   | 'subscribeAgentProviderSessionChangesFn'
@@ -53,17 +55,16 @@ function createTerminalWorkerRestartResume(
         : null
     },
     handleForPane: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey),
-    waitForAgentIdle: (handle) =>
-      runtime
-        .waitForTerminal(handle, {
-          condition: 'tui-idle',
-          timeoutMs: ORCHESTRATION_READINESS_TIMEOUT_MS,
-          acceptsMidTurnInput: true
-        })
-        .then(
-          (wait) => wait.satisfied,
-          () => false
-        ),
+    // A resumed agent is a fresh launch: its composer must be up, or it drops the prompt.
+    waitForAgentReady: (handle, agent) =>
+      waitForWorkerAgentReady(runtime, handle, {
+        agent,
+        reusesTerminal: false,
+        timeoutMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+      }).then(
+        (wait) => wait.satisfied,
+        () => false
+      ),
     sendPrompt: (handle, prompt, operationId) =>
       sendAgentTurn({
         kind: 'terminal',

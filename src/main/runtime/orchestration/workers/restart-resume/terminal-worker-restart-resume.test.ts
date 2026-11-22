@@ -64,7 +64,7 @@ function owner(
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
     }),
     handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
-    waitForAgentIdle: async () => true,
+    waitForAgentReady: async () => true,
     sendPrompt,
     setTimer: () => ({ cancel: () => {} })
   })
