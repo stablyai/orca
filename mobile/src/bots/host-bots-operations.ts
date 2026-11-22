@@ -14,6 +14,8 @@ import { CONNECTOR_CLOUD_STATUSES } from '../../../src/shared/bots/connector-clo
 export const phoneBotSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
+  // Its handle, in what people type to ask it: `@Orca <folder>`, `bot:<folder>`.
+  folder: z.string(),
   folderWorkspaceId: z.string().min(1),
   avatar: z.string().nullable(),
   avatarColor: BotSchema.shape.avatarColor,
@@ -193,6 +195,30 @@ export const botOwnChatsRead = bindDeferredRpcOperation(
       'bot-own-chats',
       z.looseObject({ chats: z.record(z.string(), salvagingArray(botOwnChatSchema)) })
     )
+  })
+)
+
+// A chat the list can't read is dropped, not the bot's others.
+const botChatRowSchema = z.looseObject({
+  id: z.string().min(1),
+  title: z.string().nullable(),
+  lastActivityAt: z.number(),
+  lastAsked: z.string().nullable(),
+  lastSaid: z.string().nullable(),
+  home: z.boolean(),
+  self: z.boolean(),
+  closed: z.boolean(),
+  reason: z.enum(['ended', 'other-host', 'unverifiable']).optional()
+})
+
+/** One bot's chats as `@` offers them, read as `callerSessionId` so that chat is marked. */
+export const botChatsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.chats-or-skip',
+    method: 'bots.chats',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-chats', z.looseObject({ chats: salvagingArray(botChatRowSchema) }))
   })
 )
 

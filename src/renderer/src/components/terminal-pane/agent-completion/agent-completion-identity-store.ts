@@ -20,6 +20,7 @@ const handledTurnCompletedAtsByPane = new Map<string, number[]>()
 const pendingStampedTailByPane = new Map<string, PendingStampedTail>()
 const workingBoundaryByPane = new Map<string, Map<string, number>>()
 const coordinatorCountByPane = new Map<string, number>()
+const panesWithTurnSinceLastCompletion = new Set<string>()
 const HANDLED_TURN_STAMP_LIMIT = 16
 let nextCoordinatorId = 1
 
@@ -41,7 +42,9 @@ export type AgentCompletionIdentityScope = {
   hasUnconsumedStampedTail: () => boolean
   hasConsumedIdentity: (identity: string) => boolean
   clearOriginStampedTail: () => void
-  clearProcessExitCompletion: () => void
+  /** A new turn started: drop an exit receipt; a hook receipt now dedupes only its own replays. */
+  retirePreviousTurnCompletion: () => void
+  previousTurnRetired: () => boolean
   clearStampedTail: () => void
   dispose: (isLive: boolean) => void
 }
@@ -136,8 +139,14 @@ export function createAgentCompletionIdentityScope(
   return {
     lane,
     getLast: () => lastCompletionByPane.get(paneKey),
-    setLast: (identity) => lastCompletionByPane.set(paneKey, identity),
-    deleteLast: () => lastCompletionByPane.delete(paneKey),
+    setLast: (identity) => {
+      lastCompletionByPane.set(paneKey, identity)
+      panesWithTurnSinceLastCompletion.delete(paneKey)
+    },
+    deleteLast: () => {
+      lastCompletionByPane.delete(paneKey)
+      panesWithTurnSinceLastCompletion.delete(paneKey)
+    },
     turnCompletedAtAlreadyHandled: (turnCompletedAt) =>
       handledTurnCompletedAtsByPane.get(paneKey)?.includes(turnCompletedAt) === true ||
       lastCompletionByPane.get(paneKey)?.lastTurnCompletedAtNotified === turnCompletedAt,
@@ -178,11 +187,14 @@ export function createAgentCompletionIdentityScope(
         }
       }
     },
-    clearProcessExitCompletion: () => {
+    retirePreviousTurnCompletion: () => {
       if (lastCompletionByPane.get(paneKey)?.source === 'process-exit') {
         lastCompletionByPane.delete(paneKey)
+      } else if (lastCompletionByPane.has(paneKey)) {
+        panesWithTurnSinceLastCompletion.add(paneKey)
       }
     },
+    previousTurnRetired: () => panesWithTurnSinceLastCompletion.has(paneKey),
     clearStampedTail: () => {
       pendingStampedTailByPane.delete(paneKey)
     },
@@ -195,6 +207,7 @@ export function createAgentCompletionIdentityScope(
       }
       if (remaining <= 0 && !isLive) {
         lastCompletionByPane.delete(paneKey)
+        panesWithTurnSinceLastCompletion.delete(paneKey)
         handledTurnCompletedAtsByPane.delete(paneKey)
         pendingStampedTailByPane.delete(paneKey)
         workingBoundaryByPane.delete(paneKey)
@@ -205,6 +218,7 @@ export function createAgentCompletionIdentityScope(
 
 export function resetAgentCompletionIdentityStoreForTest(): void {
   lastCompletionByPane.clear()
+  panesWithTurnSinceLastCompletion.clear()
   handledTurnCompletedAtsByPane.clear()
   pendingStampedTailByPane.clear()
   workingBoundaryByPane.clear()
@@ -215,6 +229,7 @@ export function resetAgentCompletionIdentityStoreForTest(): void {
 export function getAgentCompletionIdentityStoreSizeForTest(): number {
   return new Set([
     ...lastCompletionByPane.keys(),
+    ...panesWithTurnSinceLastCompletion,
     ...handledTurnCompletedAtsByPane.keys(),
     ...pendingStampedTailByPane.keys(),
     ...workingBoundaryByPane.keys()

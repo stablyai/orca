@@ -224,7 +224,9 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         }
       },
       "browser-pane": {
@@ -1619,6 +1621,15 @@
         "outside_other": "{{count}} more outside this group"
       },
       "mentionedCount": "{{count}} mentioned",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "remoteStopped": "Stopped here",
+      "remoteUnknown": "Delivery unknown",
       "unavailableBot": "Unavailable bot"
     },
     "hover": {
@@ -1630,6 +1641,10 @@
       "needsYouHeading_other": "{{count}} things need you"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet"
+      },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
         "moveCount_other": "Move {{count}} items to"
@@ -1708,6 +1723,11 @@
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"
+      },
+      "setup": {
+        "preview": {
+          "ask": "<mention/> summarize this thread"
+        }
       }
     },
     "upNext": {
@@ -1770,7 +1790,8 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -2361,7 +2382,9 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount": "{{count}} images",
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued"
       },
       "receipt": {
         "cancelled": "Cancelled",

@@ -248,9 +248,7 @@ export function BotAutomationEditor(props: {
       options: props.bots.map((entry) => ({
         value: entry.id,
         label: botLabel(entry.name),
-        renderIcon: () => (
-          <MobileBotAvatar avatar={mobileBotAvatarSource(entry, undefined)} size={24} />
-        )
+        renderIcon: () => <MobileBotAvatar avatar={mobileBotAvatarSource(entry)} size={24} />
       })),
       selected: target?.botId ?? '',
       onSelect: (botId) => {
@@ -298,9 +296,7 @@ export function BotAutomationEditor(props: {
           <ListRow
             title={bot ? botLabel(bot.name) : t('automations.botTarget.deletedBot', 'Deleted bot')}
             leading={
-              bot ? (
-                <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={24} />
-              ) : undefined
+              bot ? <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={24} /> : undefined
             }
             // A saved automation moves only to another agent, never to a project.
             navigates={bot !== null && props.bots.length > 1}

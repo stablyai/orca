@@ -1,8 +1,9 @@
 // One Linear workspace's page in Connectors: the desktop's BotLinearCard with the workspace's part of
 // LinearAccountSettings. How to ask, who the host is linked as and its default bot, Who can ask, Remove.
+import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, Plus } from 'lucide-react-native'
+import { Ellipsis, Plus, Unlink } from 'lucide-react-native'
 import {
   botLinearWorkspaces,
   botMemberSource,
@@ -22,7 +23,7 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
-import { linearSetDefaultBot } from './bot-connector-account-operations'
+import { linearSetDefaultBot, linearUnlink } from './bot-connector-account-operations'
 import { slackCall } from './bot-slack-operations'
 import { ConnectorDefaultBotPage, useConnectorPeople } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage, linearWorkspaceLabel } from './mobile-connector-account-copy'
@@ -138,28 +139,48 @@ export function MobileBotLinearPage(props: {
         onConfirm={() => {
           setConfirmRemove(false)
           setBusy(true)
-          void props
-            .save({
+          void saveRemovingMembers(
+            props.save,
+            bot.members.filter(
+              (member) =>
+                botMemberSource(member) === 'linear' && member.workspaceId === workspace.workspaceId
+            ),
+            {
               linearWorkspaces: botLinearWorkspaces(bot).filter(
                 (entry) => entry.workspaceId !== workspace.workspaceId
-              ),
-              members: bot.members.filter(
-                (member) =>
-                  botMemberSource(member) !== 'linear' ||
-                  member.workspaceId !== workspace.workspaceId
               )
-            })
-            .then((saved) => {
-              setBusy(false)
-              if (saved) {
-                props.onBack()
-              }
-            })
+            }
+          ).then((saved) => {
+            setBusy(false)
+            if (saved) {
+              props.onBack()
+            }
+          })
         }}
       />
     )
   }
 
+  const unlink = () => {
+    const client = props.client
+    if (!client) {
+      return
+    }
+    void slackCall(
+      () =>
+        linearUnlink.request(
+          client,
+          { workspaceId: workspace.workspaceId },
+          { failWhenDisconnected: true }
+        ),
+      linearUnlink.interpret
+    ).then((result) => {
+      if (!result.ok) {
+        props.showToast(connectorAccountErrorMessage('linear', result.error, hostName, t), 2400)
+      }
+      return linear.refresh()
+    })
+  }
   const fix =
     linear.view.status !== 'ready'
       ? null
@@ -249,7 +270,18 @@ export function MobileBotLinearPage(props: {
               icon: Plus,
               disabled: !props.online,
               onPress: () => props.onSetUp(undefined)
-            }
+            },
+            // As GitHub's page: the host's link to this workspace, for every bot on it.
+            ...(linked
+              ? [
+                  {
+                    label: t('bots.linear.account.unlink', 'Unlink Linear account'),
+                    icon: Unlink,
+                    disabled: !props.online,
+                    onPress: unlink
+                  }
+                ]
+              : [])
           ]
         ]}
       />

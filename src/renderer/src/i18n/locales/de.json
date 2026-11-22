@@ -500,7 +500,8 @@
         "safariFullDiskAccess": "macOS hat den Zugriff auf Safari-Cookies verweigert. Orca unter System Settings → Privacy & Security → Full Disk Access Festplattenvollzugriff gewähren.",
         "connectionEnded": "Die Verbindung zu diesem Server wurde während des Imports beendet. Erneut verbinden und noch einmal versuchen.",
         "serverRepaired": "Dieser Server wurde während des Imports erneut gekoppelt. Erneut versuchen.",
-        "macFullDiskAccess": "macOS hat den Zugriff auf Cookies von {{browser}} verweigert. Gewähre Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff Zugriff und starte Orca neu."
+        "macFullDiskAccess": "macOS hat den Zugriff auf Cookies von {{browser}} verweigert. Gewähre Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff Zugriff und starte Orca neu.",
+        "sshHostDisconnected": "Diese Seite ist nicht mehr über ihren SSH-Host verbunden. Verbinde dich erneut und versuche es noch einmal."
       },
       "notice": {
         "importedMore_one": "{{count}} Cookie für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
@@ -508,6 +509,13 @@
         "imported_one": "{{count}} Cookie für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browser auf diesem Gerät",
+        "destination": "Importiert in den Browser für {{host}}.",
+        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen.",
+        "stored": "Im Browser für {{host}} gespeichert.",
+        "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
       }
     },
     "passwords": {
@@ -17665,11 +17673,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Bisher gibt es keine Ausführungen.",
-          "13988187b3": "Tokens",
           "86a248187e": "Ausgaben",
           "149c0b49c7": "Arbeitsbereich",
           "8faaa00726": "Ausführung",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Der Ausführungsverlauf ist von diesem Host aus nicht verfügbar. Dies bedeutet nicht, dass die Automatisierung fehlgeschlagen ist oder keine Ausführungen hat."
         },
         "AutomationSchedulePicker": {
@@ -17739,7 +17745,6 @@
           "missingWorkspace": "Arbeitsbereich fehlt",
           "usageUnavailable": "Nutzungsdaten nicht verfügbar",
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
-          "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
           "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
           "retryFullOutput": "Erneut versuchen",
@@ -18008,7 +18013,6 @@
           "failed7d": "Fehlgeschlagen · 7 Tage",
           "automation": "Automatisierung",
           "triggered": "Ausgelöst",
-          "trigger": "Auslöser",
           "loading": "Ausführungen werden geladen…",
           "noRuns": "Noch keine Ausführungen",
           "emptyDescription": "Ausführungen erscheinen hier, sobald eine Automatisierung ausgelöst wurde.",
@@ -18083,7 +18087,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} ausgegeben",
+          "tokens_one": "{{tokens}} Token",
+          "tokens_other": "{{tokens}} Tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",
@@ -19832,7 +19839,17 @@
         "skip": "Überspringen",
         "sending": "Wird gesendet…",
         "terminalRequired": "Diese OMP-Frage im Terminal beantworten.",
-        "openTerminal": "Im Terminal antworten"
+        "openTerminal": "Im Terminal antworten",
+        "recommended": "Empfohlen",
+        "stepAnswered": "{{value0}}, beantwortet",
+        "stepOf": "{{value0}} von {{value1}}",
+        "answered": "Beantwortet",
+        "title": "Frage",
+        "previous": "Vorherige Frage",
+        "nextQuestion": "Nächste Frage",
+        "back": "Zurück",
+        "skipAndSubmit": "Überspringen und senden",
+        "stepLabel": "{{value0}}, {{value1}} von {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Warten auf Benutzereingabe:",
@@ -19975,7 +19992,6 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
-        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
@@ -19985,7 +20001,6 @@
         "listLabel": "Nachrichten in der Warteschlange",
         "alreadySent": "Diese Nachricht wurde bereits gesendet.",
         "withdrawnHold": "Vor dem Senden gestoppt",
-        "pausedSendFailed": "Senden fehlgeschlagen — zum Wiederholen auf „Senden“ drücken.",
         "paused": "Pausiert",
         "resume": "Fortsetzen",
         "fromSender": "Von",
@@ -20000,12 +20015,14 @@
         "editGonePrompt": "Diese Nachricht wurde bereits gesendet oder entfernt. Die bearbeitete Fassung steht nach der Antwort an den Agenten im Chat-Eingabefeld.",
         "imageCount_one": "{{count}} Bild",
         "imageCount_other": "{{count}} Bilder",
-        "collapse": "Einklappen",
-        "expand": "Ausklappen",
         "queued": "In der Warteschlange",
         "clearAll": "Warteschlange leeren",
         "editReturned": "Die bearbeitete Nachricht ist im Chat-Eingabefeld.",
-        "commandsUnsupported": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden."
+        "commandsUnsupported": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
+        "couldNotSend": "Senden fehlgeschlagen",
+        "retry": "Wiederholen",
+        "showLessRows": "Weniger anzeigen",
+        "moreRows": "+{{value0}} weitere"
       },
       "thought": "Gedanke",
       "thoughtForDuration": "{{duration}} nachgedacht",
@@ -20241,6 +20258,9 @@
       },
       "splitRight": "Rechts teilen",
       "splitDown": "Unten teilen",
+      "dock": {
+        "label": "Nachrichtenfeld und Abfragen"
+      },
       "automationSaved": {
         "openFullPage": "Seite öffnen"
       },
@@ -20336,9 +20356,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Alpha-Bereinigung prüfen"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -23851,19 +23868,20 @@
     "upcoming": {
       "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
       "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
-      "every2h": "alle 2 Stunden",
-      "every4h": "alle 4 Stunden",
       "lookFirst": "Nach deinem ersten Chat · danach {{every}}",
-      "mornings": "jeden Morgen",
       "tidyUp": "Gedächtnis aufräumen",
-      "twiceDaily": "zweimal täglich",
       "lastNeededSignIn": "Die letzte Ausführung wurde wegen einer Anmeldung gestoppt",
       "stopped": "Gestoppt",
       "lookAroundSettings": "Einstellungen zum Umsehen",
       "dueNow": "Jetzt fällig",
       "runsEvery": "Läuft {{every}}",
       "tidySettings": "Einstellungen zum Aufräumen des Gedächtnisses",
-      "needsSignIn": "Anmeldung erforderlich"
+      "needsSignIn": "Anmeldung erforderlich",
+      "every4hWindow": "{{from}} bis {{to}}, alle 4 Stunden",
+      "every2hWindow": "{{from}} bis {{to}}, alle 2 Stunden",
+      "twiceDailyAt": "zweimal täglich, {{first}} und {{second}}",
+      "morningsAt": "jeden Morgen um {{time}}",
+      "weekdays": "werktags, {{schedule}}"
     },
     "palette": {
       "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",

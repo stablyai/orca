@@ -39,7 +39,8 @@ import type { PhoneBot } from './host-bots-operations'
 
 /** People a search found; complete is false when the service has too many to read whole. */
 export type WhoCanAskFound = {
-  members: { id: string; name: string; handle?: string; avatarUrl?: string }[]
+  /** `app`: another Slack app's bot user, offered beside people. */
+  members: { id: string; name: string; handle?: string; avatarUrl?: string; app?: true }[]
   complete: boolean
 }
 

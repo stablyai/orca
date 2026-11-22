@@ -17713,7 +17713,6 @@
           "failed7d": "失敗 · 7日間",
           "automation": "自動化",
           "triggered": "トリガー済み",
-          "trigger": "トリガー",
           "loading": "実行を読み込み中…",
           "noRuns": "実行はまだありません",
           "emptyDescription": "自動化がトリガーされると、ここに実行が表示されます。",
@@ -17835,11 +17834,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
         },
         "AutomationSchedulePicker": {
@@ -17909,7 +17906,6 @@
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
           "noRunUsageYet": "まだ実行の使用量がありません",
-          "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
@@ -18222,7 +18218,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} 使用",
+          "tokens_other": "{{tokens}} トークン"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",
@@ -19979,7 +19977,17 @@
         "skip": "スキップ",
         "sending": "送信中…",
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
-        "openTerminal": "ターミナルで回答する"
+        "openTerminal": "ターミナルで回答する",
+        "recommended": "おすすめ",
+        "stepAnswered": "{{value0}}、回答済み",
+        "stepOf": "{{value0}} / {{value1}}",
+        "answered": "回答済み",
+        "title": "質問",
+        "previous": "前の質問",
+        "nextQuestion": "次の質問",
+        "back": "戻る",
+        "skipAndSubmit": "スキップして送信",
+        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",
@@ -20253,12 +20261,10 @@
         "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
-        "moreActions": "その他の操作",
         "editMessage": "メッセージを編集",
         "showFullMessage": "メッセージ全体を表示",
         "showLess": "折りたたむ",
         "withdrawnHold": "送信前に停止されました",
-        "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
         "paused": "一時停止中",
         "resume": "再開",
         "fromSender": "送信元:",
@@ -20273,8 +20279,6 @@
         "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
         "imageCount_one": "画像 {{count}} 枚",
         "imageCount_other": "画像 {{count}} 枚",
-        "collapse": "折りたたむ",
-        "expand": "展開",
         "queued": "キュー待ち",
         "clearAll": "すべてクリア",
         "editReturned": "編集内容をチャットの入力欄に戻しました。",
@@ -20282,7 +20286,11 @@
         "moveChanged": "移動の前にキューが変更されました。もう一度メッセージをドラッグしてください。",
         "reorderHint": "ドラッグするか、上下の矢印キーを使って並べ替えます。",
         "reorderMessage": "メッセージを並べ替え",
-        "imageCount": "画像 {{count}} 枚"
+        "imageCount": "画像 {{count}} 枚",
+        "couldNotSend": "送信できませんでした",
+        "retry": "再試行",
+        "showLessRows": "表示を減らす",
+        "moreRows": "+{{value0}} 件"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -20599,6 +20607,9 @@
       },
       "splitRight": "右に分割",
       "splitDown": "下に分割",
+      "dock": {
+        "label": "メッセージ欄とプロンプト"
+      },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
         "argumentHint": "<question>",
@@ -20701,9 +20712,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "アルファクリーンアップを確認する"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -22027,12 +22035,20 @@
         "safariFullDiskAccess": "macOS が Safari の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にフルディスクアクセスを許可してください。",
         "connectionEnded": "インポート中にこのサーバーへの接続が切れました。再接続して、もう一度お試しください。",
         "serverRepaired": "インポート中にこのサーバーが再ペアリングされました。もう一度お試しください。",
-        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。"
+        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。",
+        "sshHostDisconnected": "このページは SSH ホスト経由で接続されなくなりました。再接続してもう一度お試しください。"
       },
       "notice": {
         "importedMore_other": "{{domains}} と他 {{more}} 件のドメイン用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
+      },
+      "sshPage": {
+        "label": "このデバイスのブラウザ",
+        "destination": "{{host}} 用のブラウザにインポートします。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "stored": "{{host}} 用のブラウザに保存しました。",
+        "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
     },
     "passwords": {
@@ -25317,19 +25333,20 @@
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
       "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "every2h": "2 時間ごと",
-      "every4h": "4 時間ごと",
       "lookFirst": "最初のチャットの後 · 以降は {{every}}",
-      "mornings": "毎朝",
       "tidyUp": "メモリーを整理",
-      "twiceDaily": "1 日 2 回",
       "lastNeededSignIn": "前回の実行はサインインが必要なため停止しました",
       "stopped": "停止中",
       "lookAroundSettings": "見回りの設定",
       "dueNow": "実行時刻です",
       "runsEvery": "{{every}} に実行",
       "tidySettings": "メモリー整理の設定",
-      "needsSignIn": "サインインが必要です"
+      "needsSignIn": "サインインが必要です",
+      "every4hWindow": "{{from}}〜{{to}}、4時間ごと",
+      "every2hWindow": "{{from}}〜{{to}}、2時間ごと",
+      "twiceDailyAt": "1日2回、{{first}}と{{second}}",
+      "morningsAt": "毎朝{{time}}",
+      "weekdays": "平日、{{schedule}}"
     },
     "palette": {
       "placeholder": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",

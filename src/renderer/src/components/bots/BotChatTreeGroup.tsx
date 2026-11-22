@@ -44,7 +44,7 @@ function openChat(bot: Bot, chat: BotChatTreeChat): void {
     if (run.worktreeId && run.paneKey) {
       revealWorkerPane(run.worktreeId, run.paneKey, host?.kind === 'runtime' ? host.id : undefined)
     } else {
-      openBotAutomation(run.automationId, run.runId)
+      openBotAutomation(bot.hostId, run.automationId, run.runId)
     }
   } else if (chat.closed) {
     // A closed chat reads in Session History.

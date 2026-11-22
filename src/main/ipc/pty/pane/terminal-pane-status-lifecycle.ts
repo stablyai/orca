@@ -24,6 +24,8 @@ export function bindTerminalPaneStatusLifecycle(
   agentHookServer.setTerminalPaneLifecycle({
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
     agentExited: (paneKey) => runtime?.observeWorkerAgentExit(paneKey),
+    modelWaitElapsed: async (paneKey, wait) =>
+      (await runtime?.observeWorkerModelWait(paneKey, wait)) ?? false,
     confirmProcessExit: async (paneKey, agent) => {
       if (!runtime) {
         return false
@@ -36,9 +38,7 @@ export function bindTerminalPaneStatusLifecycle(
         // A typed agent holds no launch, and a shell without command marks (cmd.exe) says nothing
         // when it quits, so the proof stands on its own; a launch replaced meanwhile voids it.
         const launch = launchOf()
-        return (
-          (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) !== false
-        )
+        return await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)
       } catch {
         return false
       }

@@ -1397,7 +1397,8 @@
         "safariFullDiskAccess": "O macOS negou acesso aos cookies do Safari. Conceda ao Orca Acesso Total ao Disco em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco.",
         "connectionEnded": "A conexão com este servidor foi encerrada durante a importação. Reconecte-se e tente novamente.",
         "serverRepaired": "Este servidor foi pareado novamente durante a importação. Tente novamente.",
-        "macFullDiskAccess": "O macOS negou acesso aos cookies do {{browser}}. Conceda Acesso Total ao Disco ao Orca em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco e reinicie o Orca."
+        "macFullDiskAccess": "O macOS negou acesso aos cookies do {{browser}}. Conceda Acesso Total ao Disco ao Orca em Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco e reinicie o Orca.",
+        "sshHostDisconnected": "Esta página não está mais conectada pelo host SSH. Reconecte e tente novamente."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importado para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-lo.",
@@ -1407,6 +1408,13 @@
         "imported_other": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navegadores neste dispositivo",
+        "destination": "Importa para o navegador de {{host}}.",
+        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
+        "stored": "Salvo no navegador de {{host}}.",
+        "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
       }
     },
     "googleCookieClear": {
@@ -3932,11 +3940,11 @@
           "NativeChatResumeStatusSegment": {
             "tooltip": "Abrir agentes interrompidos disponíveis para retomar",
             "failedTooltip": "Agentes que o Orca não conseguiu retomar após reiniciar. Clique para ver detalhes.",
-            "checkTooltip": "Conversas que o Orca não conseguiu retomar, ou cuja retomada não conseguiu confirmar, após a reinicialização. Clique para ver os detalhes.",
+            "checkTooltip": "Agentes que o Orca não conseguiu retomar, ou cuja retomada não conseguiu confirmar, após a reinicialização. Clique para ver os detalhes.",
             "resumingTooltip": "Restaurando agentes interrompidos e pedindo que continuem…",
             "resumingProgressLabel": "Retomando agentes {{value0}}/{{value1}}",
             "resumingProgressAria": "Retomando agentes, {{value0}} de {{value1}} concluídos. Clique para abrir os detalhes.",
-            "resumedTooltip": "Conversas que o Orca retomou após a reinicialização. Clique para vê-las.",
+            "resumedTooltip": "Agentes que o Orca retomou após a reinicialização. Clique para vê-los.",
             "chatsFailedLabel_one": "Não foi possível retomar {{count}} agente",
             "chatsFailedLabel_other": "Não foi possível retomar {{count}} agentes",
             "chatsFailedLabel_many": "Não foi possível retomar {{count}} agentes",
@@ -14758,7 +14766,6 @@
           "missingWorkspace": "Espaço de trabalho faltando",
           "usageUnavailable": "Uso indisponível",
           "noRunUsageYet": "Ainda sem uso de execução",
-          "noWorkspace": "Nenhum espaço de trabalho",
           "latestSavedOutput": "Última saída salva",
           "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
           "retryFullOutput": "Tentar novamente",
@@ -14947,7 +14954,6 @@
           "failed7d": "Com falha · 7d",
           "automation": "Automação",
           "triggered": "Acionada",
-          "trigger": "Acionador",
           "loading": "Carregando execuções…",
           "noRuns": "Ainda sem execuções",
           "emptyDescription": "As execuções aparecem aqui depois que uma automação é acionada.",
@@ -15053,11 +15059,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Ainda sem execuções.",
-          "13988187b3": "Tokens",
           "86a248187e": "Gasto",
           "149c0b49c7": "Espaço de Trabalho",
           "8faaa00726": "Execução",
-          "a00e38d1a3": "—",
           "historyUnavailable": "O histórico de execução não está disponível a partir deste host. Isso não significa que a automação falhou ou não tem execuções."
         },
         "AutomationSchedulePicker": {
@@ -15256,7 +15260,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} gastos",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -21113,7 +21121,17 @@
         "skip": "Pular",
         "sending": "Enviando…",
         "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
-        "openTerminal": "Responder no terminal"
+        "openTerminal": "Responder no terminal",
+        "recommended": "Recomendado",
+        "stepAnswered": "{{value0}}, respondida",
+        "stepOf": "{{value0}} de {{value1}}",
+        "answered": "Respondida",
+        "title": "Pergunta",
+        "previous": "Pergunta anterior",
+        "nextQuestion": "Próxima pergunta",
+        "back": "Voltar",
+        "skipAndSubmit": "Pular e enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",
@@ -21500,14 +21518,12 @@
         "steerHint": "Enviar agora, enquanto o agente continua trabalhando",
         "sendHint": "Enviar esta mensagem agora",
         "delete": "Excluir",
-        "moreActions": "Mais ações",
         "editMessage": "Editar mensagem",
         "showFullMessage": "Mostrar mensagem completa",
         "showLess": "Mostrar menos",
         "listLabel": "Mensagens na fila",
         "alreadySent": "Esta mensagem já foi enviada.",
         "withdrawnHold": "Interrompida antes do envio",
-        "pausedSendFailed": "Não foi possível enviar — pressione Enviar para tentar novamente.",
         "paused": "Pausada",
         "resume": "Retomar",
         "fromSender": "De",
@@ -21523,15 +21539,17 @@
         "imageCount_one": "{{count}} imagem",
         "imageCount_other": "{{count}} imagens",
         "imageCount_many": "{{count}} imagens",
-        "collapse": "Recolher",
-        "expand": "Expandir",
         "queued": "Na fila",
         "clearAll": "Limpar tudo",
         "moveChanged": "A fila mudou antes desta movimentação. Tente arrastar a mensagem novamente.",
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem",
         "editReturned": "Sua edição está na caixa de bate-papo.",
-        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila."
+        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila.",
+        "couldNotSend": "Não foi possível enviar",
+        "retry": "Tentar novamente",
+        "showLessRows": "Mostrar menos",
+        "moreRows": "+{{value0}} mais"
       },
       "thought": "Raciocínio",
       "thoughtForDuration": "Pensou por {{duration}}",
@@ -21812,6 +21830,9 @@
           "alreadyRedeemed": "Esse crédito de redefinição já foi usado."
         }
       },
+      "dock": {
+        "label": "Caixa de mensagem e solicitações"
+      },
       "automationSaved": {
         "openFullPage": "Abrir página"
       },
@@ -21906,9 +21927,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Revisar limpeza alpha"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24958,18 +24976,19 @@
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
       "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
       "dueNow": "Previsto para agora",
-      "every2h": "a cada 2 horas",
-      "every4h": "a cada 4 horas",
       "lastNeededSignIn": "A última execução parou para você entrar",
       "lookAroundSettings": "Configurações das olhadas",
       "lookFirst": "Após seu primeiro chat · depois {{every}}",
-      "mornings": "todas as manhãs",
       "needsSignIn": "Precisa entrar",
       "runsEvery": "Executa {{every}}",
       "stopped": "Parado",
       "tidySettings": "Configurações de arrumação da memória",
       "tidyUp": "Arrumar memória",
-      "twiceDaily": "duas vezes ao dia"
+      "every4hWindow": "das {{from}} às {{to}}, a cada 4 horas",
+      "every2hWindow": "das {{from}} às {{to}}, a cada 2 horas",
+      "twiceDailyAt": "duas vezes por dia, {{first}} e {{second}}",
+      "morningsAt": "toda manhã às {{time}}",
+      "weekdays": "dias úteis, {{schedule}}"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",

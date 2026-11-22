@@ -1,4 +1,4 @@
-import { RuntimePtyExitWorkerObservation } from './pty-exit-worker-observation'
+import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -19,7 +19,7 @@ import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitWorkerObservation {
+export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
   protected abstract pruneDisconnectedPtyRecords(): void
