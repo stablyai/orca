@@ -241,13 +241,21 @@ function readSourcePage(
       statement.setReadBigInts(true)
       rows = statement.all(...(cursor.after === null ? [] : [BigInt(cursor.after)]))
     }
+    // The retired sender column is never decoded, so its bytes aren't read here.
+    const queued =
+      table === 'queued_messages'
+        ? db.prepare(
+            `SELECT ${db
+              .prepare('PRAGMA table_info(queued_messages)')
+              .all()
+              .map((column) => String(column.name))
+              .filter((name) => name !== 'source_json')
+              .map((name) => `"${name.replaceAll('"', '""')}"`)
+              .join(',')} FROM queued_messages WHERE rowid=?`
+          )
+        : undefined
     for (const row of rows) {
-      if (
-        table === 'queued_messages' &&
-        !readStoredQueuedMessageRow(
-          db.prepare('SELECT * FROM queued_messages WHERE rowid=?').get(row.rowid!)
-        )
-      ) {
+      if (queued && !readStoredQueuedMessageRow(queued.get(row.rowid!))) {
         throw new JournalLegacyRetentionError(
           'legacy source has unreadable queued text',
           'source-queue'
