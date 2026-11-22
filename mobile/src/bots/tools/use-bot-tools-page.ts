@@ -82,32 +82,41 @@ export function useBotToolsPage(
   )
 
   /** Reads the tools again; `recheck` also checks the servers again (a tool was added or edited). */
-  // Only the latest read lands; a recheck asked by one it replaced runs on the latest's answer.
-  const lists = useRef({ generation: 0, recheck: false })
+  // Only the latest read lands; a recheck asked by one it replaced runs on the latest's answer, and
+  // a replaced read settles with the latest, so a caller that navigates after it sees fresh tools.
+  const lists = useRef({ generation: 0, recheck: false, latest: Promise.resolve() })
   const reread = useCallback(
-    async (recheck = false) => {
+    (recheck = false): Promise<void> => {
       if (!client) {
-        return
+        return Promise.resolve()
       }
       const gen = (lists.current.generation += 1)
       lists.current.recheck ||= recheck
-      try {
-        const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
-        if (!mounted.current || gen !== lists.current.generation) {
-          return
-        }
-        const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
-        setTools(next)
-        setError(null)
-        if (lists.current.recheck) {
-          lists.current.recheck = false
-          runCheck(next.own)
-        }
-      } catch (caught) {
-        if (gen === lists.current.generation) {
+      const settled = (async (): Promise<void> => {
+        try {
+          const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
+          if (gen !== lists.current.generation) {
+            return await lists.current.latest
+          }
+          if (!mounted.current) {
+            return
+          }
+          const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
+          setTools(next)
+          setError(null)
+          if (lists.current.recheck) {
+            lists.current.recheck = false
+            runCheck(next.own)
+          }
+        } catch (caught) {
+          if (gen !== lists.current.generation) {
+            return lists.current.latest
+          }
           setError(caught instanceof Error ? caught.message : String(caught))
         }
-      }
+      })()
+      lists.current.latest = settled
+      return settled
     },
     [client, botId, runCheck]
   )
