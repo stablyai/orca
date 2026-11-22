@@ -182,7 +182,8 @@ export function NativeChatResolvedView({
     transcriptPath: transcriptPath ?? null,
     messages: sessionAfterCommandBoundaries.messages,
     transcriptSettled: session.readPhase === 'ready',
-    canSend
+    // An answer typed after the agent exited would run in the shell.
+    canSend: canSend && !agentPresence.exited
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard

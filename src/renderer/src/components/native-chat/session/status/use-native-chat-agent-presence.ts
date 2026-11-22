@@ -9,6 +9,7 @@ import {
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import { nativeChatAgentPresenceNotices } from './native-chat-agent-presence-notices'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** An exited agent pauses sending and working state; the notices say why and what changed. */
 export function useNativeChatAgentPresenceStatus(args: {
@@ -19,6 +20,7 @@ export function useNativeChatAgentPresenceStatus(args: {
 }): { exited: boolean; notices: readonly NativeChatComposerNotice[] } {
   const { paneKey, agent, sessionId, onShowTerminal } = args
   const { presence, dismissRestart } = useNativeChatAgentPresence(paneKey, sessionId)
+  const t = useTranslate()
   const notices = useMemo(
     () =>
       nativeChatAgentPresenceNotices({
@@ -26,9 +28,10 @@ export function useNativeChatAgentPresenceStatus(args: {
         agent,
         sessionId,
         onShowTerminal,
-        onDismissRestart: dismissRestart
+        onDismissRestart: dismissRestart,
+        t
       }),
-    [presence, agent, sessionId, onShowTerminal, dismissRestart]
+    [presence, agent, sessionId, onShowTerminal, dismissRestart, t]
   )
   return { exited: presence.exit !== null, notices }
 }

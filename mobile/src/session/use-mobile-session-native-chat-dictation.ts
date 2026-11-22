@@ -10,6 +10,7 @@ import { mobileNativeChatOverlayInputLockReason } from './native-chat/status/mob
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import { useMobileNativeChatAgentPresence } from './native-chat/status/use-mobile-native-chat-agent-presence'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
+import { withMobileNativeChatAgentPresence } from './native-chat/status/mobile-native-chat-agent-exit-controller'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(
@@ -78,7 +79,7 @@ export function useMobileSessionNativeChatDictation(
     sessionId: resolveMobileNativeChatSessionId(activeSessionTab)
   })
   const nativeChatController = useMemo(
-    () => ({ ...baseNativeChatController, nativeChatAgentPresence }),
+    () => withMobileNativeChatAgentPresence(baseNativeChatController, nativeChatAgentPresence),
     [baseNativeChatController, nativeChatAgentPresence]
   )
   nativeChatSendError.bannerMountedRef.current = showNativeChat
