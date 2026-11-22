@@ -70,7 +70,10 @@ export const BOT_MEMORY_METHODS = [
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()
       const { bot } = namedOrCallerBot(params, context)
-      await context.runtime.bots.memory.change(
+      if (params.fact === undefined && params.text.trim() === '') {
+        throw new InvalidArgumentError('Missing text')
+      }
+      const change = await context.runtime.bots.memory.change(
         bot.id,
         botHomeFolder(bot),
         { kind: 'owner' },
@@ -94,7 +97,7 @@ export const BOT_MEMORY_METHODS = [
           return botMemoryChange(file, editBotMemoryFact(file, fact, params.text))
         }
       )
-      return {}
+      return params.fact === undefined ? { alreadyInMemory: isEmptyBotMemoryChange(change) } : {}
     }
   }),
   defineMethod({

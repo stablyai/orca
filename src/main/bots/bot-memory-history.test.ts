@@ -138,6 +138,16 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(`${OLD}- 2026-11-02 deploys at noon\n`)
   })
 
+  it('restores a forgotten fact after the same occurrence of a repeated heading', async () => {
+    const memory = '## Deploy\n- staging\n## Deploy\n- canary\n## Deploy\n- production\n'
+    const { forget, read, rows, undo } = bot(memory)
+
+    expect(await forget('canary')).toBe(true)
+    expect(await undo((await rows())[0].id)).toBe(true)
+
+    expect(read()).toBe('## Deploy\n- staging\n## Deploy\n- canary\n## Deploy\n- production\n')
+  })
+
   it('keeps a secret-looking change redacted and refuses to undo it', async () => {
     const { record, rows, stored, turnEnded, undo, write } = bot(OLD)
     await record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>

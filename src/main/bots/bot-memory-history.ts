@@ -115,9 +115,10 @@ function redacted(
   by: BotMemoryAuthor,
   change: BotMemoryChange
 ): Pick<BotMemoryHistoryRow, 'by' | 'change' | 'undoable'> {
-  const clean = ({ line, after }: BotMemoryLine): BotMemoryLine => ({
-    line: redactSecretLike(line),
-    after: after === null ? null : redactSecretLike(after)
+  const clean = (entry: BotMemoryLine): BotMemoryLine => ({
+    ...entry,
+    line: redactSecretLike(entry.line),
+    after: entry.after === null ? null : redactSecretLike(entry.after)
   })
   const kept = { added: change.added.map(clean), removed: change.removed.map(clean) }
   return {

@@ -1,6 +1,7 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
+import { botMemoryInsertionIndex, type BotMemoryAnchor } from './bot-memory-anchors'
 import {
   BOT_MEMORY_FENCE,
   botMemoryFenceOpeners,
@@ -146,8 +147,7 @@ export function dropBotMemoryFact(text: string, fact: string): { text: string; d
   return { text: kept.join(eol), dropped: lines.length - kept.length }
 }
 
-/** A fact line, and the non-blank line it followed (null: the top of the file). */
-export type BotMemoryLine = { line: string; after: string | null }
+export type BotMemoryLine = BotMemoryAnchor & { line: string }
 
 /** What a write did to MEMORY.md's facts, by their words: dates, marks and spacing aside. */
 export type BotMemoryChange = { added: BotMemoryLine[]; removed: BotMemoryLine[] }
@@ -212,15 +212,25 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
   const only = (from: string, other: string): BotMemoryLine[] => {
     const keys = new Set(lineKeys(splitLines(other).lines))
     const lines: BotMemoryLine[] = []
+    const occurrences = new Map<string, number>()
     let previous: string | null = null
+    let previousOccurrence = 0
     const rows = splitLines(from).lines
     const rowKeys = lineKeys(rows)
     for (const [index, raw] of rows.entries()) {
       const key = rowKeys[index]
       if (key !== null && !keys.has(key)) {
-        lines.push({ line: raw, after: previous })
+        lines.push(
+          previous === null
+            ? { line: raw, after: null }
+            : { line: raw, after: previous, afterOccurrence: previousOccurrence }
+        )
       }
-      previous = raw.trim() === '' ? previous : raw
+      if (raw.trim() !== '') {
+        previous = raw
+        previousOccurrence = (occurrences.get(raw) ?? 0) + 1
+        occurrences.set(raw, previousOccurrence)
+      }
     }
     return lines
   }
@@ -241,15 +251,14 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
   const openers = botMemoryFenceOpeners(kept)
   // A fact line is no fence, so a file with none keeps none and needs no tracking.
   const fenced = openers.some((opener) => opener !== -1)
-  for (const { line, after } of change.added) {
+  for (const added of change.added) {
+    const { line } = added
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
       continue
     }
     present.add(key)
-    const anchor = after === null ? -1 : kept.lastIndexOf(after)
-    const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    const place = after === null || anchor !== -1 ? anchor + 1 : end
+    const place = botMemoryInsertionIndex(kept, added)
     const at = !fenced || openers[place] === -1 ? place : openers[place]
     kept.splice(at, 0, line)
     if (fenced) {

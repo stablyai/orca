@@ -43,6 +43,21 @@ export type MemoryActions = {
   showToast: (message: string) => void
 }
 
+function saveBotMemory(
+  actions: MemoryActions,
+  t: ReturnType<typeof useMobileTranslation>,
+  params: { botId: string; text: string; fact?: string }
+): Promise<boolean> {
+  return actions.run(async (client) => {
+    const { alreadyInMemory } = botMemoryEdit.interpret(
+      await botMemoryEdit.request(client, params, { failWhenDisconnected: true })
+    )
+    if (alreadyInMemory) {
+      actions.showToast(t('settings.bots.memoryAlreadySaved', 'That fact is already in memory.'))
+    }
+  })
+}
+
 function shortDate(date: string): string {
   const [year, month, day] = date.split('-').map(Number)
   return new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(
@@ -76,16 +91,12 @@ export function MobileBotMemoryEditPage(props: {
   const { actions, botId, fact } = props
   const [draft, setDraft] = useState(fact.text)
   const save = async () => {
-    const saved = await actions.run(async (client) => {
-      // A fact the bot removed meanwhile is saved as a new one, as on the desktop.
-      const now = findBotMemoryFact(props.text, fact)
-      botMemoryEdit.interpret(
-        await botMemoryEdit.request(
-          client,
-          now ? { botId, fact: now.text, text: draft } : { botId, text: draft },
-          { failWhenDisconnected: true }
-        )
-      )
+    // A fact the bot removed meanwhile is saved as a new one, as on the desktop.
+    const now = findBotMemoryFact(props.text, fact)
+    const saved = await saveBotMemory(actions, t, {
+      botId,
+      text: draft,
+      ...(now ? { fact: now.text } : {})
     })
     if (saved) {
       props.onClose()
@@ -190,11 +201,7 @@ function Facts(
     if (locked || text === '') {
       return
     }
-    const saved = await actions.run(async (client) => {
-      botMemoryEdit.interpret(
-        await botMemoryEdit.request(client, { botId, text }, { failWhenDisconnected: true })
-      )
-    })
+    const saved = await saveBotMemory(actions, t, { botId, text })
     if (saved) {
       setQuickAdd((current) => (current === submitted ? '' : current))
     }

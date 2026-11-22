@@ -239,8 +239,12 @@ export async function forgetBotMemory(bot: BotRef, fact: string): Promise<void> 
 }
 
 /** A new fact in the bot's MEMORY.md, or `fact` (its words as shown) reworded. */
-export async function editBotMemory(bot: BotRef, text: string, fact?: string): Promise<void> {
-  await callBotRpc(bot, 'bots.memory.edit', { botId: bot.id, text, ...(fact ? { fact } : {}) })
+export function editBotMemory(
+  bot: BotRef,
+  text: string,
+  fact?: string
+): Promise<{ alreadyInMemory?: boolean }> {
+  return callBotRpc(bot, 'bots.memory.edit', { botId: bot.id, text, ...(fact ? { fact } : {}) })
 }
 
 /** The changes to the bot's MEMORY.md, newest first. */

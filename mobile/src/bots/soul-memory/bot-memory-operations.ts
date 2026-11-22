@@ -10,7 +10,10 @@ export const botMemoryEdit = bindDeferredRpcOperation(
     method: 'bots.memory.edit',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('memory-edited', z.unknown())
+    read: rpcResultVariant(
+      'memory-edited',
+      z.looseObject({ alreadyInMemory: z.boolean().optional() })
+    )
   })
 )
 
