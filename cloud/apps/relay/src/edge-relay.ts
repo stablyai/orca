@@ -1046,7 +1046,7 @@ export class EdgeAssignments {
   // once rather than adding another row lock held on a slow edge.
   private async lockedAssign(body: EdgeAssignBody): Promise<EdgeAssignResult> {
     if (!this.admin) throw new Error('relay_edge_admin_missing')
-    if (this.lockedCalls >= this.lockedCallsMax) throw new EdgeMoveDeferredError('edge_busy')
+    if (this.lockedCalls >= this.lockedCallsMax) { throw new EdgeMoveDeferredError('edge_busy') }
     this.lockedCalls += 1
     try {
       return await this.admin.assign(body, { timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS })
