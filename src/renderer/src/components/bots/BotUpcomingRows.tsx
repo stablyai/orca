@@ -184,7 +184,7 @@ function AutomationRow({
       .finally(() => setStarting(false))
   }
   const open = (): void =>
-    openBotAutomation(automation.id, card.failed ? (row.latestRunId ?? null) : null)
+    openBotAutomation(automation.id, card.failed ? (row.latestRunId ?? null) : null, bot.hostId)
   const toggle = pauseResume(t, enabled, setEnabled, saving)
   const kind = hasAutomationSchedule(automation) ? (
     <CalendarClock className={ICON} />
@@ -228,7 +228,7 @@ function AutomationRow({
                 {
                   icon: <ArrowUpRight />,
                   label: t('bots.automations.openOnPage', 'Open on Automations page'),
-                  onSelect: () => openBotAutomation(automation.id, null)
+                  onSelect: () => openBotAutomation(automation.id, null, bot.hostId)
                 }
               ]
             ]}
