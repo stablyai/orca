@@ -27,7 +27,7 @@ import {
 } from './profile-storage-paths'
 import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
 import { supersedeCloudConnectAttempts } from './cloud-auth/profile-cloud-connect-attempts'
-import { invalidateTeamCapabilities } from './cloud-auth/team-capabilities-invalidation'
+import { observeActiveTeamProfile } from './cloud-auth/active-team-capabilities'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
@@ -128,7 +128,10 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
-  invalidateTeamCapabilities()
+  const active = index.profiles.find((profile) => profile.id === index.activeProfileId)
+  if (active) {
+    observeActiveTeamProfile(dirname(indexPath), active)
+  }
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 

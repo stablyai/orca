@@ -1,48 +1,89 @@
-import { hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
 import { ORCA_CLOUD_TEAM_SETTINGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import type { OrcaProfileSummary } from '../../../shared/orca-profiles/orca-profiles'
+import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { sessionBelongsToProfile } from '../cloud-session/profile-cloud-session-identity'
-import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'
-import { readProfileIndex } from '../profile-index-store'
-import { getOrcaProfileIndexPath, getProfileUserDataPath } from '../profile-storage-paths'
-import { teamCapabilitiesGeneration } from './team-capabilities-invalidation'
 
-let cached:
-  | { root: string; generation: number; capabilities: OrcaCloudCapabilities | undefined }
-  | undefined
-
-export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
-  if (!hasAppEnvironment()) {
-    return undefined
-  }
-  const userDataPath = getProfileUserDataPath()
-  const generation = teamCapabilitiesGeneration()
-  if (cached?.root === userDataPath && cached.generation === generation) {
-    return cached.capabilities
-  }
-  const capabilities = readActiveTeamCapabilities(userDataPath)
-  cached = { root: userDataPath, generation, capabilities }
-  return capabilities
+type ActiveTeamProfile = {
+  root: string
+  profile: OrcaProfileSummary
+  session: Pick<OrcaCloudSession, 'identity' | 'capabilities'> | undefined
+  sessionRevision: number
 }
 
-function readActiveTeamCapabilities(userDataPath: string): OrcaCloudCapabilities | undefined {
-  const index = readProfileIndex(getOrcaProfileIndexPath(userDataPath))
-  const profile = index?.profiles.find((entry) => entry.id === index.activeProfileId)
-  const cloud = profile?.cloud
-  if (!profile || !cloud?.activeOrgId) {
-    return undefined
-  }
+let active: ActiveTeamProfile | undefined
+let queued = false
+const listeners = new Set<() => void>()
 
-  const result = readCloudSession(profile.id, userDataPath)
-  if (result.status !== 'found' || !sessionBelongsToProfile(result.session, cloud)) {
+export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
+  const cloud = active?.profile.cloud
+  const session = active?.session
+  if (!cloud?.activeOrgId || !session || !sessionBelongsToProfile(session, cloud)) {
     return undefined
   }
-  const { capabilities } = result.session
-  if (
-    capabilities.flags[ORCA_CLOUD_TEAM_SETTINGS] === true &&
+  const { capabilities } = session
+  return capabilities.flags[ORCA_CLOUD_TEAM_SETTINGS] === true &&
     capabilities.teamPolicy?.orgId === cloud.activeOrgId
-  ) {
-    return capabilities
+    ? capabilities
+    : undefined
+}
+
+export function initializeActiveTeamProfile(
+  root: string,
+  profile: OrcaProfileSummary
+): (session: OrcaCloudSession | undefined) => void {
+  const candidate: ActiveTeamProfile = { root, profile, session: undefined, sessionRevision: 0 }
+  active = candidate
+  return (session) => {
+    if (active === candidate && candidate.sessionRevision === 0) {
+      observeActiveTeamSession(root, profile.id, session)
+    }
   }
-  return undefined
+}
+
+export function observeActiveTeamProfile(root: string, profile: OrcaProfileSummary): void {
+  if (active?.root !== root) {
+    return
+  }
+  if (active.profile.id !== profile.id) {
+    active = { root, profile, session: undefined, sessionRevision: 0 }
+  } else {
+    active.profile = profile
+  }
+  notify()
+}
+
+export function observeActiveTeamSession(
+  root: string,
+  profileId: string,
+  session: OrcaCloudSession | undefined
+): void {
+  if (active?.root !== root || active.profile.id !== profileId) {
+    return
+  }
+  active.session = session
+    ? { identity: session.identity, capabilities: session.capabilities }
+    : undefined
+  active.sessionRevision++
+  notify()
+}
+
+function notify(): void {
+  if (queued || listeners.size === 0) {
+    return
+  }
+  queued = true
+  queueMicrotask(() => {
+    queued = false
+    for (const listener of listeners) {
+      listener()
+    }
+  })
+}
+
+export function onTeamCapabilitiesInvalidated(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }

@@ -131,14 +131,12 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     bundledPluginRoot
   })
   const pluginService = core.pluginService
-  app.once(
-    'will-quit',
-    watchTeamPluginPolicy(
-      pluginService,
-      core.pluginMarketplaceService,
-      core.pluginMarketplaceInstaller,
-      PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS
-    )
+  core.stopTeamPluginPolicy?.()
+  core.stopTeamPluginPolicy = watchTeamPluginPolicy(
+    pluginService,
+    core.pluginMarketplaceService,
+    core.pluginMarketplaceInstaller,
+    PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS
   )
   const pluginAutoUpdater = new PluginAutoUpdater({
     pluginService,

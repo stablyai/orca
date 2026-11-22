@@ -1,5 +1,7 @@
-import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
-import { onTeamCapabilitiesInvalidated } from '../../orca-profiles/cloud-auth/team-capabilities-invalidation'
+import {
+  getActiveTeamCapabilities,
+  onTeamCapabilitiesInvalidated
+} from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-marketplace-installer'
 import type { PluginService } from '../../plugins/plugin-service'

@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import { botAccountSwitchBlocker } from '../bots/bot-account-switch-blocker'
 import { mainProcessConnectorCloud } from './cloud-startup/main-process-connector-startup'
@@ -33,6 +32,7 @@ export function createDesktopOrcaAccountService(
       }
     }
   })
-  app.once('will-quit', scheduleTeamPolicyRefresh(account))
+  state.core.stopTeamPolicyRefresh?.()
+  state.core.stopTeamPolicyRefresh = scheduleTeamPolicyRefresh(account)
   return account
 }
