@@ -87,11 +87,13 @@ export function WorkerDockRoster(props: {
       (row.ownerActionsAvailable === false || cached.get(row.id)?.ownerActionsAvailable === false)
   )
   const { failures } = workerDockSummary(props.identities, cached, t)
-  const { mixed, total, count, needsYou } = workerDockSummary(
-    props.countIdentities ?? props.identities,
-    cached,
-    t
-  )
+  const {
+    mixed,
+    total,
+    count,
+    needsYou,
+    failures: failed
+  } = workerDockSummary(props.countIdentities ?? props.identities, cached, t)
   const [height, setHeight] = useState(props.narrow ? 120 : 100)
   const [more, setMore] = useState(false)
   const items = useMemo(
@@ -298,6 +300,7 @@ export function WorkerDockRoster(props: {
         count={count}
         total={total}
         failures={failures}
+        failed={failed}
         needsYou={needsYou}
         clearUnavailable={clearUnavailable}
         clearing={clearing}
