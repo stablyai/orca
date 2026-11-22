@@ -103,14 +103,18 @@ type BotReplyResult = {
   reacted?: string
   reply?: ConnectorReply
   attached?: ActionResult & { files: number; posts: number; place?: string; unconfirmed?: true }
-  offered?: ActionResult & { choices: number; place?: string }
+  offered?: ActionResult & { choices: number; place?: string; unconfirmed?: true }
 }
 
 function formatOffered(offered: NonNullable<BotReplyResult['offered']>): string {
   const place = offered.place ?? offered.target?.label ?? 'the thread'
+  // Slack took the words without their buttons: the cloud's note says so, and no press will come.
+  if (offered.note) {
+    return [`Posted to ${place}.`, offered.note, ...(offered.notices ?? [])].join('\n')
+  }
   return [
     offered.queued
-      ? `Sent with ${offered.choices} buttons; Orca Cloud will post it to ${place}.`
+      ? `Sent with ${offered.choices} buttons; Orca Cloud will post it to ${place}.${offered.unconfirmed ? " Orca couldn't confirm it posted; read the thread before sending it again." : ''}`
       : `Posted to ${place} with ${offered.choices} buttons.`,
     // The agent waits on this, so it should know what a press looks like when it comes.
     "A press comes back to you as that person's next message in this thread, with the button's label as its text.",
@@ -172,9 +176,18 @@ async function replyWithFiles(
     staged.push(postId)
   }
   const args = { files: staged, ...withText(text), postId: newPostId() }
+  const posted = await settledReply(client, sessionId, args)
+  return { ...posted, result: { ...posted.result, posts: 1 } }
+}
+
+/** A queued reply asked again under the same postId: the cloud posts nothing more and says how its
+ *  posts went, so a share or buttons Slack refuses reach the bot rather than reading as queued. */
+async function settledReply(
+  client: HandlerContext['client'],
+  sessionId: string,
+  args: ConnectorActionArgs
+): Promise<RuntimeRpcSuccess<ActionResult & { place?: string; unconfirmed?: true }>> {
   let posted = await replyAct(client, sessionId, args)
-  // Asked again under the same postId, the cloud posts nothing more and says how its posts went,
-  // so a share Slack refuses reaches the bot rather than reading as queued.
   for (let check = 0; posted.result.queued && check < SETTLE_CHECKS; check++) {
     await new Promise((resolve) => setTimeout(resolve, SETTLE_CHECK_MS))
     try {
@@ -184,10 +197,10 @@ async function replyWithFiles(
         throw error
       }
       // The reply is queued either way; only how it went is unknown.
-      return { ...posted, result: { ...posted.result, posts: 1, unconfirmed: true } }
+      return { ...posted, result: { ...posted.result, unconfirmed: true } }
     }
   }
-  return { ...posted, result: { ...posted.result, posts: 1 } }
+  return posted
 }
 
 function refuseFlags(flags: HandlerContext['flags']): void {
@@ -249,7 +262,7 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
     // Buttons need the post's own id for a press to find, so they go as an act, not the reply outbox.
     const offered =
       choices && text && sessionId
-        ? await replyAct(client, sessionId, { text, choices, postId: newPostId() })
+        ? await settledReply(client, sessionId, { text, choices, postId: newPostId() })
         : undefined
     const replied =
       text && files.length === 0 && !offered
