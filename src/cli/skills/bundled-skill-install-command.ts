@@ -216,7 +216,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       ? ['', 'Rerun with --force to replace a copy that was skipped; Orca keeps a backup of it.']
       : []
 
-    if (flags.get('dry-run') === true) {
+    if (flags.has('dry-run')) {
       writeStdoutLine(
         json
           ? JSON.stringify(

@@ -136,12 +136,7 @@ export function WorkspaceHandToBotSheet({
                 title={bot.name}
                 subtitle={purposes.get(bot.id)}
                 subtitleLines={1}
-                leading={
-                  <MobileBotAvatar
-                    avatar={mobileBotAvatarSource(bot, listing.avatarUris.get(bot.id))}
-                    size={28}
-                  />
-                }
+                leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} />}
                 value={has ? t('bots.handToBot.hasIt', 'Has it now') : undefined}
                 selected={bot.id === pickedId}
                 accessibilityRole="radio"

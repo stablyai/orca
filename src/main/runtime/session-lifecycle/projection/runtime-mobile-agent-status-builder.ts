@@ -22,6 +22,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { restatedShownDone } from './restated-shown-done'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
@@ -264,17 +265,25 @@ export function buildRuntimeMobileAgentStatus(
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
   const agentType = ownerAgent ?? undefined
+  const state =
+    pty?.lastAgentStatus === 'working'
+      ? 'working'
+      : pty?.lastAgentStatus === 'permission'
+        ? 'blocked'
+        : 'done'
+  // Why: with no working title since the shown Done, this Done is the agent quitting or
+  // relaunching, not a new turn end (#46569); restate it so clients don't announce it again.
+  const restatedDone =
+    state === 'done'
+      ? restatedShownDone(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
+      : null
   return {
     agentStatus: {
-      state:
-        pty?.lastAgentStatus === 'working'
-          ? 'working'
-          : pty?.lastAgentStatus === 'permission'
-            ? 'blocked'
-            : 'done',
+      state,
       prompt: '',
       updatedAt: pty ? ptyStatusEvidenceAt(pty, evidenceAt) : evidenceAt,
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
+      ...restatedDone,
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(agentType ? { agentType } : {}),

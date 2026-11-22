@@ -196,14 +196,6 @@ export function registerCreatedWorktreeRoot(
   registeredWorktreeRootsDirty = true
 }
 
-export function __resetCreatedWorktreeRootsForTests(): void {
-  for (const owner of registeredOwners.values()) {
-    owner.recovered.clear()
-    advanceOwner(owner)
-  }
-  refreshRegisteredWorktreeRoots()
-}
-
 export function getRegisteredWorktreeRootsRevision(repoId: string): number {
   return registeredWorktreeRootsRevisionByRepo.get(repoId) ?? baseRevision
 }

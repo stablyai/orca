@@ -1,4 +1,4 @@
-import { botQuestionNotices } from './rpc/methods/orchestration/messaging/bot-question-notices'
+import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -140,13 +140,12 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
         hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        fetch: runtimeIconFetch,
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
+  // The phone's page shell loads no https image, so it draws repo icons from these.
+  readonly repoIconDataUrls = new RepoIconDataUrls({
+    repos: () => this.store?.getRepos() ?? [],
+    fetch: runtimeIconFetch,
+    encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+  })
   readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
@@ -167,7 +166,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
             workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
-            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            repoIcons: this.repoIconDataUrls,
             store: () => this.store,
             onClientEvent: (listener, options) => this.onClientEvent(listener, options)
           }),
@@ -299,7 +298,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
     botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
     this.startQuestionReconciler(db, (taker, ids, chat) =>
-      botQuestionNotices(this, taker, ids, chat)
+      agentQuestionNotices(this, taker, ids, chat)
     )
   }
 

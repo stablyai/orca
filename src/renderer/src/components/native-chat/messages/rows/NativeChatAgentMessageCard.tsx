@@ -36,6 +36,7 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
 import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
 import { agentMessageRowLead } from './agent-message-row-lead'
+import { NATIVE_CHAT_ROW_SHARE } from '../events/native-chat-inline-chip'
 
 type AgentMessageCardProps = {
   message: NativeChatMessage
@@ -137,7 +138,7 @@ export function NativeChatAgentMessageCard({
       <span className="flex min-w-0 items-center gap-x-1">
         <span className="shrink-0">{words}</span>
         {shown.length === 0 ? (
-          <span className="min-w-0 truncate">{unnamedSenderLabel(t)}</span>
+          <span className={NATIVE_CHAT_ROW_SHARE}>{unnamedSenderLabel(t)}</span>
         ) : (
           <NativeChatAgentMessageSenderNames
             from={from}
