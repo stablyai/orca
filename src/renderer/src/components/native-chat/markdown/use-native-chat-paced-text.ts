@@ -88,7 +88,7 @@ export function useNativeChatPacedText(
   // A remount keeps the save it was revealing; a save made while unmounted is taken in its effect.
   const saved = useRef({
     revision: drawsWhole ? initial.savedAt : savedRevision,
-    text: drawsWhole ? initial.source : text.slice(0, initial.shown)
+    text: drawsWhole ? initial.source : text
   })
   const [savedText, setSavedText] = useState(saved.current.text)
   const revealMs = reducedMotion && !drawsWhole ? PLAIN_REVEAL_MS : undefined
@@ -142,7 +142,9 @@ export function useNativeChatPacedText(
     heldDrawn.current = documentHeldDrawnCount(heldTextSession)
     if (!streaming || caughtUp || saved.current.revision !== savedRevision) {
       saved.current = { revision: savedRevision, text }
-      setSavedText(text)
+      if (drawsWhole) {
+        setSavedText(text)
+      }
     }
     const source = drawsWhole ? saved.current.text : text
     pace.current = receiveNativeChatText(
@@ -213,14 +215,20 @@ export function useNativeChatPacedText(
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
         if (savedRevision !== undefined && frames.redrawsWhole?.() && !pace.current.drawsWhole) {
-          // From here it shows what is on screen, then each save as main does.
+          // From here it shows each save as main does, finishing the reveal of the one it has.
           const onScreenText = pace.current.source.slice(0, next.shown)
-          saved.current = { revision: savedRevision, text: onScreenText }
-          setSavedText(onScreenText)
+          const save = saved.current.revision === savedRevision ? saved.current.text : ''
+          const source =
+            save.length > onScreenText.length && save.startsWith(onScreenText) ? save : onScreenText
+          saved.current = { revision: savedRevision, text: source }
+          setSavedText(source)
           pace.current = {
-            source: onScreenText,
+            source,
             shown: next.shown,
-            arrivals: [],
+            arrivals:
+              source.length > next.shown
+                ? [{ from: next.shown, to: source.length, at: performance.now() }]
+                : [],
             drawsWhole: true,
             savedAt: savedRevision
           }
