@@ -66,6 +66,11 @@ export function retainListedBotGroupHosts(): void {
 }
 
 /** Every listed host's groups. */
+/** Whether this machine's groups have been listed at least once in this window. */
+export function hasListedLocalBotGroups(): boolean {
+  return byHost.has(LOCAL_EXECUTION_HOST_ID)
+}
+
 export function readBotGroups(): readonly BotGroup[] {
   return groups
 }

@@ -95,6 +95,29 @@ describe('Resource Manager chat row reuse', () => {
     expect(changed.worktrees[1].memory).toBe(30)
   })
 
+  it("keeps a terminal workspace's chat list when a fresh sample renders it the same", () => {
+    const cache = createResourceMergeCache()
+    const mixed = (chatMemory: number): MemorySnapshot => {
+      const row = sample('/m', 10, true)
+      return localSnapshot([
+        {
+          ...row,
+          chats: [
+            { agentSessionId: 'chat-m', agent: 'claude', name: 'Chat', cpu: 1, memory: chatMemory }
+          ]
+        }
+      ])
+    }
+    const chatsOf = (memory: number) =>
+      mergeSnapshotAndSessions(mixed(memory), [], context([]), undefined, cache)[0].worktrees[0]
+        .chats
+    const first = chatsOf(5)
+    expect(chatsOf(5)).toBe(first)
+    const changed = chatsOf(6)
+    expect(changed).not.toBe(first)
+    expect(changed?.[0].memory).toBe(6)
+  })
+
   it('rebuilds only terminal rows of a mixed project when a tab title is stored', () => {
     const cache = createResourceMergeCache()
     const chats = [sample('/a', 10), sample('/b', 20)]

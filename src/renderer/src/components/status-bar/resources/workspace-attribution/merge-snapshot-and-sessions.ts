@@ -1,6 +1,7 @@
 /** Merge local/paired-host samples and daemon sessions by project/workspace; unsampled metrics are null and paired rows are read-only. */
 
 import type {
+  ChatAgentMemory,
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
@@ -33,6 +34,7 @@ import {
   buildChatRowGroups,
   chatRowGroupsFor,
   priorChatRowGroups,
+  sameChats,
   type ResourceMergeCache,
   type SampleChatRows
 } from './resource-chat-row-groups'
@@ -63,7 +65,11 @@ export function mergeSnapshotAndSessions(
   // Only the daemon inventory supplies ownership and incarnation evidence.
   const daemonSessionsById = new Map(daemonSessions.map((session) => [session.id, session]))
 
-  function ingestSampledWorktree(wt: WorktreeMemory, placement: SamplePlacement): void {
+  function ingestSampledWorktree(
+    wt: WorktreeMemory,
+    placement: SamplePlacement,
+    chats: readonly ChatAgentMemory[] | undefined = wt.chats
+  ): void {
     const { readOnly, ...rowPlacement } = placement
     const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
       seenSessionIds.add(s.sessionId)
@@ -91,7 +97,7 @@ export function mergeSnapshotAndSessions(
       history: wt.history,
       hasLocalSamples: true,
       sessions,
-      chats: wt.chats,
+      chats,
       browsers: []
     })
   }
@@ -105,6 +111,9 @@ export function mergeSnapshotAndSessions(
   // so a later merge of the same sample never visits its chat rows.
   const chatOnly: WorktreeMemory[] = []
   let terminalSamples: WorktreeMemory[] | undefined
+  // A terminal row's chats keep their earlier list while they render the same, so its chat rows don't redraw.
+  const priorMixedChats = cache?.bySample.get(LOCAL_SAMPLE)?.mixedChats
+  let mixedChats: Map<string, readonly ChatAgentMemory[]> | undefined
   const ingestSource = cached ? (cached.terminalSamples ?? source) : source
   for (let i = 0; i < ingestSource.length; i++) {
     const wt = ingestSource[i]
@@ -117,9 +126,18 @@ export function mergeSnapshotAndSessions(
       terminalSamples?.push(wt)
     }
     const placement = localSamplePlacement(ctx, wt)
-    if (placement) {
-      ingestSampledWorktree(wt, placement)
+    if (!placement) {
+      continue
     }
+    let chats: readonly ChatAgentMemory[] | undefined = wt.chats
+    if (chats) {
+      const prior = priorMixedChats?.get(wt.worktreeId)
+      if (prior && sameChats(prior, chats)) {
+        chats = prior
+      }
+      ;(mixedChats ??= new Map()).set(wt.worktreeId, chats)
+    }
+    ingestSampledWorktree(wt, placement, chats)
   }
   const localGroups =
     cached?.groups ??
@@ -131,7 +149,9 @@ export function mergeSnapshotAndSessions(
   if (snapshot) {
     nextSamples.set(
       LOCAL_SAMPLE,
-      cached ?? { source, inputs, groups: localGroups, terminalSamples }
+      cached
+        ? { ...cached, mixedChats }
+        : { source, inputs, groups: localGroups, terminalSamples, mixedChats }
     )
   }
   if (cache) {

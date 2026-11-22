@@ -1,17 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const open = vi.hoisted(() => vi.fn(async () => true))
+const groups = vi.hoisted(() => ({ listed: false, refresh: vi.fn(async () => {}) }))
 vi.mock('@/lib/agent-session/open/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: open
 }))
 vi.mock('@/lib/bot-group-catalog', () => ({ BotGroupRoomUnavailableError: class extends Error {} }))
+vi.mock('@/lib/bot-group-catalog-snapshot', () => ({
+  hasListedLocalBotGroups: () => groups.listed
+}))
+vi.mock('@/lib/bot-group-list', () => ({ refreshBotHostGroups: groups.refresh }))
 
 import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
 
 describe('opening a chat row', () => {
-  it('opens a local chat as a history click does, on this machine even if a paired twin is selected', () => {
-    void openResourceChat('repo::/w1', 'chat-1')
+  it('reads the group list first when it was never read, so a group member opens its room', async () => {
+    groups.refresh.mockImplementationOnce(async () => {
+      expect(open).not.toHaveBeenCalled()
+      groups.listed = true
+    })
+    await openResourceChat('repo::/w1', 'chat-1')
 
+    expect(groups.refresh).toHaveBeenCalledWith('local')
     expect(open).toHaveBeenCalledWith(
       { structuredSession: { workspaceId: 'repo::/w1', sessionId: 'chat-1' } },
       undefined,
@@ -19,9 +29,10 @@ describe('opening a chat row', () => {
     )
   })
 
-  it("opens a paired machine's chat on that machine", () => {
-    void openResourceChat('repo::/w1', 'chat-2', 'runtime:studio')
+  it("opens a paired machine's chat on that machine", async () => {
+    await openResourceChat('repo::/w1', 'chat-2', 'runtime:studio')
 
+    expect(groups.refresh).toHaveBeenCalledTimes(1)
     expect(open).toHaveBeenLastCalledWith(
       { structuredSession: { workspaceId: 'repo::/w1', sessionId: 'chat-2' } },
       undefined,

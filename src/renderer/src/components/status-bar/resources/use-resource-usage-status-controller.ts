@@ -82,6 +82,7 @@ export function useResourceUsageStatusController() {
     sessionInventory,
     observedAt: resourcesObservedAt,
     sessionsError,
+    rereading: sessionsRereading,
     refreshSessions,
     clearSessionsError,
     removeSession,
@@ -227,6 +228,7 @@ export function useResourceUsageStatusController() {
     workspaceSessionReady,
     sessionCount: resourcesObservedAt === null ? null : sessionInventory.count,
     sessionsError,
+    sessionsRereading,
     memorySnapshotError,
     snapshot,
     spaceScanReady

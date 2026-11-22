@@ -2,9 +2,14 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { toast } from 'sonner'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { BotGroupRoomUnavailableError } from '@/lib/bot-group-catalog'
+import { hasListedLocalBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { refreshBotHostGroups } from '@/lib/bot-group-list'
 
 type TabLookup = Record<string, { id: string }[]>
 
@@ -61,16 +66,24 @@ export function openResourceChat(
   runtimeHostId?: string
 ): Promise<unknown> {
   const host = parseExecutionHostId(runtimeHostId)
+  // A group member's chat opens its room, so the group list must be read before the open looks for it.
+  const groupsListed = hasListedLocalBotGroups()
+    ? Promise.resolve()
+    : refreshBotHostGroups(LOCAL_EXECUTION_HOST_ID).catch(console.error)
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
-  return activateAiVaultStructuredSession(
-    { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
-    undefined,
-    host?.kind === 'runtime'
-      ? { kind: 'environment', environmentId: host.environmentId }
-      : { kind: 'local' }
-  ).catch((error: unknown) => {
-    if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    }
-  })
+  return groupsListed
+    .then(() =>
+      activateAiVaultStructuredSession(
+        { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
+        undefined,
+        host?.kind === 'runtime'
+          ? { kind: 'environment', environmentId: host.environmentId }
+          : { kind: 'local' }
+      )
+    )
+    .catch((error: unknown) => {
+      if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
+        toast.error(error instanceof Error ? error.message : String(error))
+      }
+    })
 }

@@ -229,6 +229,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   // Terminal-only usage of workspaces that also have chats, as paired clients have always seen it.
   const terminalUsage = new Map<string, RowTotals>()
   let hasChatOnlyRows = false
+  let hasChats = false
   for (const { agentSessionId, rows } of agentTrees) {
     const usage = usageOf(sumRows(rows), hasPrivateMemory)
     addUsage(agents, usage)
@@ -241,6 +242,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         const { cpu, memory, privateMemory } = bucket
         terminalUsage.set(bucket.worktreeId, { cpu, memory, privateMemory })
       }
+      hasChats = true
       addUsage(bucket, usage)
       const { cpu, memory } = usage
       ;(bucket.chats ??= []).push({
@@ -261,7 +263,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   // Write before reading history to include this sample and refresh active-worktree retention.
   const now = Date.now()
   pushAppMemoryHistory(appBuckets.memory, now)
-  const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now)
+  const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now, hasChats)
 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,

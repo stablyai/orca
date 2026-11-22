@@ -52,6 +52,7 @@ export function useResourceUsageDerivedModel({
   workspaceSessionReady,
   sessionCount,
   sessionsError,
+  sessionsRereading,
   memorySnapshotError,
   snapshot,
   spaceScanReady
@@ -68,6 +69,8 @@ export function useResourceUsageDerivedModel({
   workspaceSessionReady: boolean
   sessionCount: number | null
   sessionsError: boolean
+  /** The terminal list is being read again because it was outdated; it can't back an end action. */
+  sessionsRereading: boolean
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null
   spaceScanReady: boolean
@@ -197,11 +200,11 @@ export function useResourceUsageDerivedModel({
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
-    if (!open || !workspaceSessionReady) {
+    if (!open || !workspaceSessionReady || sessionsRereading) {
       return 0
     }
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
-  }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
+  }, [open, sessions, resourceSessionBindings, workspaceSessionReady, sessionsRereading])
 
   // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
   const triggerSessionCount = sessionCount

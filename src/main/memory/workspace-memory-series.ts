@@ -26,10 +26,11 @@ let sweepCount = 0
 export function recordWorkspaceMemorySeries(
   buckets: readonly WorktreeMemoryBucket[],
   terminalUsage: ReadonlyMap<string, Usage>,
-  now: number
+  now: number,
+  hasChats: boolean
 ): { worktreeId: string; usage: Usage }[] {
   const terminalSeries: { worktreeId: string; usage: Usage }[] = []
-  if (terminalUsage.size === 0 && chatSeries.size === 0 && !buckets.some((b) => b.chats)) {
+  if (!hasChats && chatSeries.size === 0) {
     // No chats now or still drawn: every bucket has terminals alone, as it always did.
     for (const bucket of buckets) {
       pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
@@ -53,7 +54,8 @@ export function recordWorkspaceMemorySeries(
     if (bucket.sessions.length > 0) {
       const usage = (bucket.chats && terminalUsage.get(bucket.worktreeId)) || bucket
       pushMemoryHistorySample(bucket.worktreeId, usage.memory, now)
-      if (bucket.chats) {
+      // The row draws the chat-inclusive series, so paired replies take the terminal-only one.
+      if (chatKey) {
         terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
       }
     }

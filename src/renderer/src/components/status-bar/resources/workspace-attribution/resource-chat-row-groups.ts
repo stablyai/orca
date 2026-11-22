@@ -1,6 +1,9 @@
 /** Each sample's chat-only rows, grouped by project once per sample, so other updates reuse them untouched. */
 
-import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  ChatAgentMemory,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { SamplePlacement } from './resource-sample-placement'
 import type { UnifiedProjectGroup, UnifiedWorktreeRow } from './resource-usage-merge-types'
 
@@ -16,6 +19,8 @@ export type SampleChatRows = {
   groups: ChatRowGroup[]
   /** Set only when the sample has chat-only rows: its terminal rows, so a repeat merge skips the chats. */
   terminalSamples?: readonly WorktreeMemory[]
+  /** Chat lists of workspaces that also have terminals, kept while they render the same. */
+  mixedChats?: ReadonlyMap<string, readonly ChatAgentMemory[]>
 }
 
 /** Lives while the panel is open; samples are keyed by owner (this machine or a paired host). */
@@ -44,24 +49,33 @@ function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
   return true
 }
 
+/** Whether two chat lists render the same. */
+export function sameChats(
+  before: readonly ChatAgentMemory[],
+  after: readonly ChatAgentMemory[]
+): boolean {
+  return (
+    before === after ||
+    (before.length === after.length &&
+      before.every((chat, i) => {
+        const next = after[i]
+        return (
+          chat.agentSessionId === next.agentSessionId &&
+          chat.agent === next.agent &&
+          chat.name === next.name &&
+          chat.cpu === next.cpu &&
+          chat.memory === next.memory
+        )
+      }))
+  )
+}
+
 /** Whether a fresh sample of a workspace renders exactly as its earlier row did. */
 function rendersSame(row: UnifiedWorktreeRow, wt: WorktreeMemory): boolean {
-  const before = row.chats ?? []
-  const after = wt.chats ?? []
   return (
     row.cpu === wt.cpu &&
     row.memory === wt.memory &&
-    before.length === after.length &&
-    before.every((chat, i) => {
-      const next = after[i]
-      return (
-        chat.agentSessionId === next.agentSessionId &&
-        chat.agent === next.agent &&
-        chat.name === next.name &&
-        chat.cpu === next.cpu &&
-        chat.memory === next.memory
-      )
-    }) &&
+    sameChats(row.chats ?? [], wt.chats ?? []) &&
     sameNumbers(row.history, wt.history)
   )
 }

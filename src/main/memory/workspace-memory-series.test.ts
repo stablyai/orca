@@ -7,6 +7,9 @@ const ID = 'repo::/series'
 const chat = { agentSessionId: 'c', agent: 'claude', name: null, cpu: 0, memory: 600 }
 const terminal = { sessionId: 's', paneKey: null, pid: 1, cpu: 0, memory: 0 }
 
+// Workspaces whose paired reply takes the terminal-only series, from the latest sample.
+let lastTerminalSeries: string[] = []
+
 function sample(terminalMemory: number | null, withChat: boolean, now: number): void {
   const bucket: WorktreeMemoryBucket = {
     worktreeId: ID,
@@ -24,7 +27,9 @@ function sample(terminalMemory: number | null, withChat: boolean, now: number): 
       ? [[ID, { cpu: 0, memory: terminalMemory, privateMemory: 0 }]]
       : []
   )
-  recordWorkspaceMemorySeries([bucket], terminalUsage, now)
+  lastTerminalSeries = recordWorkspaceMemorySeries([bucket], terminalUsage, now, withChat).map(
+    (entry) => entry.worktreeId
+  )
 }
 
 describe('workspace memory series', () => {
@@ -39,9 +44,10 @@ describe('workspace memory series', () => {
     // The chat's peak stays in the row's graph after it ends, as a stopped process's always did.
     sample(130, false, 4)
     expect(readMemoryHistory(ID)).toEqual([100, 120, 130])
+    expect(lastTerminalSeries).toEqual([ID])
     expect(readWorkspaceHistory(ID)).toEqual([100, 600, 720, 130])
 
-    recordWorkspaceMemorySeries([], new Map(), 5)
+    recordWorkspaceMemorySeries([], new Map(), 5, false)
     expect(readMemoryHistory(chatInclusiveHistoryKey(ID))).toEqual([])
   })
 })
