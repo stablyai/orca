@@ -42,6 +42,8 @@ export type TerminalWorkerRestartResumeDeps = {
   sendPrompt: (handle: string, prompt: string, operationId: string) => Promise<boolean>
   /** A terminal this resume opened for a Dispatch that settled meanwhile; nobody owns its agent. */
   closeTerminal: (handle: string) => Promise<unknown>
+  /** Decides again a rest the worker's report was held back for; no wait outlives its lost terminal. */
+  decideHeldRest: (dispatchId: string) => void
   /** The resumed worker is up but could not be asked to continue: its coordinator hears it rests. */
   reportResting: (paneKey: string) => Promise<void>
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
@@ -261,6 +263,8 @@ export class TerminalWorkerRestartResume {
     this.resumed.add(dispatchId)
     // A worker at rest or at a prompt was waiting already; only a cut turn is asked to go on.
     if (worker.claim.presence !== 'working') {
+      // The restart's own pass skipped it while resuming: a report a wait held back goes out now.
+      this.deps.decideHeldRest(dispatchId)
       return
     }
     try {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { TerminalWorkerRestartResume } from './terminal-worker-restart-resume'
+import { observeWorker, reconsiderRestAfterWait } from '../turn-stops/worker-presence-report'
 
 let db: OrchestrationDb | undefined
 afterEach(() => db?.close())
@@ -54,6 +55,7 @@ function owner(
     reportResting?: () => Promise<void>
     waitForAgentReady?: () => Promise<boolean>
     closeTerminal?: () => Promise<undefined>
+    decideHeldRest?: (dispatchId: string) => void
   } = {}
 ) {
   const sendPrompt = vi.fn(overrides.sendPrompt ?? (async () => true))
@@ -63,6 +65,7 @@ function owner(
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
     closeTerminal: overrides.closeTerminal ?? (async () => undefined),
     reportResting: overrides.reportResting ?? (async () => undefined),
+    decideHeldRest: overrides.decideHeldRest ?? (() => {}),
     terminalAuthority: () => ({
       paneKey: 'tab_new:leaf_new',
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
@@ -124,6 +127,32 @@ describe('TerminalWorkerRestartResume', () => {
     stop()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(sendPrompt).not.toHaveBeenCalled()
+  })
+
+  it('tells the coordinator a resumed worker rests when a wait its lost terminal ran held the report back', async () => {
+    const dispatchId = lostWorker('working')
+    const reportDeps = { getDb: () => db!, isWaitingForMail: () => false, notify: vi.fn() }
+    // It rested while waiting for mail, so its report was held for that wait; the reboot ended it.
+    observeWorker(
+      db!,
+      { kind: 'local', dispatch: db!.getDispatchContextById(dispatchId)! },
+      {
+        presence: 'at-rest',
+        fence: 'turn:turn-1',
+        legacyStopKey: 'turn:turn-1',
+        rest: { from: 'term_lost', reason: 'needs-input', lastOutput: undefined }
+      },
+      { ...reportDeps, isWaitingForMail: () => true }
+    )
+    const escalations = () =>
+      db!.db.prepare("SELECT COUNT(*) AS n FROM messages WHERE type = 'escalation'").get()
+    expect(escalations()).toEqual({ n: 0 })
+    const { resume } = owner({
+      decideHeldRest: (id) => reconsiderRestAfterWait(`dispatch:${id}`, reportDeps)
+    })
+    resume.holdForReopen(dispatchId, vi.fn())
+    resume.settleStartup()
+    await vi.waitFor(() => expect(escalations()).toEqual({ n: 1 }))
   })
 
   it('reports the worker lost once when its conversation cannot reopen', async () => {

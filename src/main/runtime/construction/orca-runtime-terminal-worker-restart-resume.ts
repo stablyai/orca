@@ -2,6 +2,7 @@ import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestratio
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
 import { waitForWorkerAgentReady } from '../terminal/wait/launched-agent-composer-readiness'
+import { reconsiderRestAfterWait } from '../orchestration/workers/turn-stops/worker-presence-report'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 
@@ -33,12 +34,14 @@ export function unrefTimer(run: () => void, delayMs: number): { cancel: () => vo
 function createTerminalWorkerRestartResume(
   runtime: RestartResumeRuntime,
   resumeWorkOnRestart: () => boolean,
-  reportResting: (paneKey: string) => Promise<void>
+  reportResting: (paneKey: string) => Promise<void>,
+  decideHeldRest: (dispatchId: string) => void
 ): TerminalWorkerRestartResume {
   const resume = new TerminalWorkerRestartResume({
     getDb: () => runtime.getExistingOrchestrationDb(),
     resumeWorkOnRestart,
     reportResting,
+    decideHeldRest,
     closeTerminal: (handle) => runtime.closeTerminal(handle),
     setTimer: unrefTimer,
     reopen: (worktreeId, session, mutationId) =>
@@ -88,6 +91,7 @@ export abstract class OrcaRuntimeWithTerminalWorkerRestartResume extends OrcaRun
   protected readonly terminalWorkerRestartResume = createTerminalWorkerRestartResume(
     this,
     () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
-    (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey)
+    (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
+    (dispatchId) => reconsiderRestAfterWait(`dispatch:${dispatchId}`, this.workerTurnStopReportDeps)
   )
 }
