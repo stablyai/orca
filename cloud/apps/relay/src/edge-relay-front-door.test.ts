@@ -123,12 +123,42 @@ describe('edgeFrontDoorFor', () => {
   })
 
   it('the country ramp maps an excluded country host under it to the door, by country', () => {
-    const f = flags({ url: DOOR, countries: ['CN'], countryRolloutPermille: 100 }, { regionExcludeCountries: { 'asia-east2': ['CN'] } })
-    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', 99)).toEqual({ url: DOOR, byCountry: true })
-    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', 100)).toBeUndefined()
-    // No bucket given: no ramp, the exclusion wins.
+    const f = flags({ url: DOOR, countries: ['CN'] }, { regionExcludeCountries: { 'asia-east2': ['CN'] }, frontDoorCountryRolloutPermille: 100 })
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', { bucketPermille: 99, regionalPermille: 1000 })).toEqual({ url: DOOR, byCountry: true })
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', { bucketPermille: 100, regionalPermille: 1000 })).toBeUndefined()
+    // The region's rollout caps the ramp, as for admission.
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', { bucketPermille: 50, regionalPermille: 50 })).toBeUndefined()
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', { bucketPermille: 50, regionalPermille: undefined })).toBeUndefined()
+    // No position: no ramp, the exclusion wins.
     expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN')).toBeUndefined()
-    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', null, 0)).toBeUndefined()
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', null, { bucketPermille: 0, regionalPermille: 1000 })).toBeUndefined()
+  })
+
+  it('edgeRoute answers a ramped host the door and an unramped one nothing', () => {
+    const excludedRamp = (frontDoorCountryRolloutPermille: number): EdgeControlFlags =>
+      flags(
+        { url: DOOR, countries: ['CN'] },
+        {
+          regionRolloutPermille: { 'asia-east2': 1000 },
+          regionExcludeCountries: { 'asia-east2': ['CN'] },
+          frontDoorCountryRolloutPermille
+        }
+      )
+    const routeConfig = (f: EdgeControlFlags): EdgeRelayConfig => ({
+      cellUrl: EDGE_URL,
+      rolloutPercent: 0,
+      allowHosts: new Set(),
+      denyHosts: new Set(),
+      regions: new Set(['asia-east2']),
+      frontDoorUrls: urls,
+      control: () => f
+    })
+    const ask = { reconnect: true }
+    expect(edgeRoute(routeConfig(excludedRamp(1000)), OTHER, 'asia-east2', 'CN', ask)).toEqual({ frontDoor: DOOR, byCountry: true, switchable: true })
+    expect(edgeRoute(routeConfig(excludedRamp(0)), OTHER, 'asia-east2', 'CN', ask)).toEqual({ switchable: true })
+    // A regionless ask is routed as the default region, which excludes nothing here: mapped by
+    // country, as before the ramp (the cohort decides whether it is on the edge at all).
+    expect(edgeRoute(routeConfig(excludedRamp(0)), OTHER, undefined, 'CN', ask)).toEqual({ frontDoor: DOOR, byCountry: true, switchable: true })
   })
 
   it('the location hint is apac through a front door, else unchanged', () => {

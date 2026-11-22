@@ -53,12 +53,18 @@ export type EdgeControlFlags = {
   // without it answers a listed live host the edge's own URL (stayOnEdge). Absent: no host is newly mapped, and mapped hosts return to the
   // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
   // the rest of the object still applies.
-  // `countryRolloutPermille` ramps an excluded country onto the front door: a host whose ask comes
-  // from one of `countries`, in a region that excludes that country, joins the cohort (answered
-  // `url`) when its bucket is under both this value and the region's rollout (so the evacuation
-  // sweep, which sees no country, keeps it). Absent: the exclusion wins, as before. Lowering it
-  // moves a host above the new value off at its next ask, as an exclusion does.
   frontDoor?: EdgeFrontDoorFlag
+  // Ramps a country the region excludes onto the front door: a host whose ask comes from one of
+  // frontDoor.countries, in a region that excludes that country, joins the cohort and is answered
+  // frontDoor.url when its cohort bucket is under both this value and the region's rollout (so the
+  // evacuation sweep, which sees no country, keeps it). Absent (also when no front door applies):
+  // the exclusion wins, as before. Lowering it is not a fast rollback: a host above the new value
+  // leaves only at its next ask that is not kept live (stayOnEdge), up to a control's lifetime;
+  // the immediate levers stay mode and deny hosts. Its own key, so an older director drops only it
+  // (ignoredKeys) and keeps its frontDoor; set it once every serving director carries it, and
+  // remove it before rolling back to one that does not. A bad value drops only this key (reported
+  // in ignoredKeys) and keeps the last applied one.
+  frontDoorCountryRolloutPermille?: number
   // How a regionless ask is judged. 'ask' (also when absent): as RELAY_DEFAULT_REGION, so with
   // regional rollouts that differ, a host whose region-naming asks (the initial open, the drain
   // reconnect) name another region moves on and off the edge at every regionless one (the shipped
@@ -98,7 +104,7 @@ export type EdgeAlternates = 'off' | 'listed' | 'country'
 
 export type EdgeFrontDoorAuth = 'off' | 'on'
 
-export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[]; countryRolloutPermille?: number }
+export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
 
 export const EDGE_CONTROL_DEFAULTS: EdgeControlFlags = { mode: 'on' }
 export const EDGE_CONTROL_OBJECT_NAME = 'director/edge.json'
@@ -120,7 +126,8 @@ const EdgeControlFlagsSchema = z.object({
   frontDoor: z.unknown().optional(),
   cohortRegion: z.unknown().optional(),
   alternates: z.unknown().optional(),
-  frontDoorAuth: z.unknown().optional()
+  frontDoorAuth: z.unknown().optional(),
+  frontDoorCountryRolloutPermille: z.unknown().optional()
 })
 const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
 const EdgeAlternatesSchema = z.enum(['off', 'listed', 'country'])
@@ -130,8 +137,7 @@ const EdgeFrontDoorSchema = z
       // A bare https origin; that it is an allowed front door is checked against the boot list.
       url: z.string().refine((url) => URL.canParse(url) && new URL(url).protocol === 'https:' && new URL(url).origin === url),
       countries: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250).optional(),
-      hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional(),
-      countryRolloutPermille: permille.optional()
+      hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional()
     })
     .strict()
 // A trailing slash is the same origin, not a typo.
@@ -185,7 +191,8 @@ export function parseEdgeControlOver(
     frontDoor: rawFrontDoor,
     cohortRegion: rawCohortRegion,
     alternates: rawAlternates,
-    frontDoorAuth: rawFrontDoorAuth
+    frontDoorAuth: rawFrontDoorAuth,
+    frontDoorCountryRolloutPermille: rawCountryRollout
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
   if (frontDoor === null) { ignoredKeys.push('frontDoor') }
@@ -200,6 +207,14 @@ export function parseEdgeControlOver(
   if (frontDoorAuth?.success === false) { ignoredKeys.push('frontDoorAuth') }
   const keptFrontDoorAuth =
     frontDoorAuth === undefined ? undefined : frontDoorAuth.success ? frontDoorAuth.data : previous?.frontDoorAuth
+  const countryRollout = rawCountryRollout === undefined ? undefined : permille.safeParse(rawCountryRollout)
+  if (countryRollout?.success === false) { ignoredKeys.push('frontDoorCountryRolloutPermille') }
+  const keptCountryRollout =
+    countryRollout === undefined
+      ? undefined
+      : countryRollout.success
+        ? countryRollout.data
+        : previous?.frontDoorCountryRolloutPermille
   ignoredKeys.sort()
   return {
     flags: {
@@ -212,7 +227,8 @@ export function parseEdgeControlOver(
       ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor }),
       ...(keptCohortRegion === undefined ? {} : { cohortRegion: keptCohortRegion }),
       ...(keptAlternates === undefined ? {} : { alternates: keptAlternates }),
-      ...(keptFrontDoorAuth === undefined ? {} : { frontDoorAuth: keptFrontDoorAuth })
+      ...(keptFrontDoorAuth === undefined ? {} : { frontDoorAuth: keptFrontDoorAuth }),
+      ...(keptCountryRollout === undefined ? {} : { frontDoorCountryRolloutPermille: keptCountryRollout })
     },
     ignoredKeys
   }
@@ -321,22 +337,30 @@ export function edgeFrontDoorListsHost(
   return door !== undefined && frontDoorUrls?.has(door.url) === true && door.hosts?.includes(relayHostId) === true
 }
 
-// Whether the front door's country ramp (frontDoor.countryRolloutPermille) admits a host asking
-// from `country` despite its region's exclusion: the country is one of frontDoor.countries and the
-// host's cohort bucket is under the ramp. Never without the ramp, the boot allowlist or a country.
+// A host's place in the country ramp: its cohort bucket and its region's rollout (undefined: the
+// region is out of scope, so nothing is admitted).
+export type EdgeFrontDoorRampPosition = { bucketPermille: number; regionalPermille: number | undefined }
+
+// Whether the front door country ramp (frontDoorCountryRolloutPermille) admits a host asking from
+// `country` despite its region's exclusion: the country is one of frontDoor.countries, the door is
+// on the boot allowlist, and the host's bucket is under both the ramp and the region's rollout.
+// The one predicate for admission (inEdgeCohort) and routing (edgeFrontDoorFor).
 export function edgeFrontDoorRampAdmits(
   flags: EdgeControlFlags,
   frontDoorUrls: ReadonlySet<string> | undefined,
   country: string | null,
-  bucketPermille: number
+  position: EdgeFrontDoorRampPosition
 ): boolean {
   const door = flags.frontDoor
+  const ramp = flags.frontDoorCountryRolloutPermille
   return (
-    door?.countryRolloutPermille !== undefined &&
+    ramp !== undefined &&
+    door !== undefined &&
     frontDoorUrls?.has(door.url) === true &&
     country !== null &&
     door.countries?.includes(country) === true &&
-    bucketPermille < door.countryRolloutPermille
+    position.regionalPermille !== undefined &&
+    position.bucketPermille < Math.min(ramp, position.regionalPermille)
   )
 }
 
@@ -350,13 +374,13 @@ export function edgeFrontDoorFor(
   relayHostId: string,
   region: RelayRegion,
   country: string | null,
-  // The host's cohort bucket, for the country ramp; undefined: no ramp applies.
-  bucketPermille?: number
+  // The host's place in the country ramp; undefined: no ramp applies.
+  ramp?: EdgeFrontDoorRampPosition
 ): { url: string; byCountry: boolean } | undefined {
   const door = flags.frontDoor
   if (door === undefined || frontDoorUrls?.has(door.url) !== true) { return undefined }
   const listed = door.hosts?.includes(relayHostId) === true
-  const ramped = bucketPermille !== undefined && edgeFrontDoorRampAdmits(flags, frontDoorUrls, country, bucketPermille)
+  const ramped = ramp !== undefined && edgeFrontDoorRampAdmits(flags, frontDoorUrls, country, ramp)
   if (!listed && !ramped && edgeCountryExcluded(flags, region, country)) { return undefined }
   const byCountry = country !== null && door.countries?.includes(country) === true
   return byCountry || listed ? { url: door.url, byCountry } : undefined

@@ -24,7 +24,8 @@ import {
   edgeFrontDoorRampAdmits,
   edgeRegionRolloutPermille,
   edgeRolloutPermille,
-  type EdgeControlFlags
+  type EdgeControlFlags,
+  type EdgeFrontDoorRampPosition
 } from './edge-relay-control.js'
 import { EdgeRegionCountryTally } from './edge-region-country-log.js'
 import { hashCredential } from './credential-store.js'
@@ -87,6 +88,19 @@ export function edgeCohortBucketPermille(relayHostId: string): number {
   return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
 }
 
+// A host's place in the front door country ramp for asks naming (or judged as) `region`.
+export function edgeFrontDoorRampPosition(
+  config: EdgeRelayConfig,
+  flags: EdgeControlFlags,
+  relayHostId: string,
+  region: RelayRegion
+): EdgeFrontDoorRampPosition {
+  return {
+    bucketPermille: edgeCohortBucketPermille(relayHostId),
+    regionalPermille: edgeRegionRolloutPermille(config, flags, region)
+  }
+}
+
 // Mode off or down empties the cohort. Otherwise deny wins, then host allow or a host listed by id
 // on a front door (director/edge.json frontDoor.hosts), then region scope and the region's country
 // exclusion; within the region, account allow or the region's rollout.
@@ -115,10 +129,9 @@ export function inEdgeCohort(
       return false
     }
     if (country !== undefined && edgeCountryExcluded(flags, asked, country)) {
-      // The front door's country ramp admits part of an excluded country, never past the region's
-      // own rollout (frontDoor.countryRolloutPermille).
-      const bucket = edgeCohortBucketPermille(relayHostId)
-      return edgeFrontDoorRampAdmits(flags, config.frontDoorUrls, country, bucket) && bucket < regional
+      // The front door country ramp admits part of an excluded country, never past the region's own
+      // rollout (frontDoorCountryRolloutPermille).
+      return edgeFrontDoorRampAdmits(flags, config.frontDoorUrls, country, edgeFrontDoorRampPosition(config, flags, relayHostId, asked))
     }
     rollout = regional
   }

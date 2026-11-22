@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { edgeCohortBucketPermille, inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
-import { parseEdgeControl, type EdgeControlFlags } from './edge-relay-control.js'
+import { parseEdgeControl, parseEdgeControlOver, type EdgeControlFlags } from './edge-relay-control.js'
 
 function config(flags: EdgeControlFlags, overrides: Partial<EdgeRelayConfig> = {}): EdgeRelayConfig {
   return {
@@ -89,44 +89,50 @@ describe('a host listed by id on a front door (frontDoor.hosts)', () => {
   })
 })
 
-describe('the front door country ramp (frontDoor.countryRolloutPermille)', () => {
+describe('the front door country ramp (frontDoorCountryRolloutPermille)', () => {
   const DOOR = 'https://cn.relay.example.test'
   const urls = { frontDoorUrls: new Set([DOOR]), regions: new Set(['us-central1', 'asia-east2'] as const) }
-  const ramp = (countryRolloutPermille: number | undefined, regional = 1000): EdgeControlFlags => ({
+  const ramp = (frontDoorCountryRolloutPermille: number | undefined, regional = 1000): EdgeControlFlags => ({
     mode: 'on',
     leaveCeilingPermille: 1000,
     regionRolloutPermille: { 'us-central1': regional, 'asia-east2': regional },
     regionExcludeCountries: { 'us-central1': ['CN'], 'asia-east2': ['CN'] },
-    frontDoor: {
-      url: DOOR,
-      countries: ['CN'],
-      ...(countryRolloutPermille === undefined ? {} : { countryRolloutPermille })
-    }
+    frontDoor: { url: DOOR, countries: ['CN'] },
+    ...(frontDoorCountryRolloutPermille === undefined ? {} : { frontDoorCountryRolloutPermille })
   })
+  // Two hosts with a bucket boundary between them.
+  const mid = hosts.find((host) => edgeCohortBucketPermille(host) >= 10 && edgeCohortBucketPermille(host) < 20)!
 
   it('admits an excluded country host only under the ramp', () => {
     // No ramp: the exclusion wins, as before.
     expect(inEdgeCohort(config(ramp(undefined), urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
     expect(inEdgeCohort(config(ramp(10), urls), low, 'asia-east2', undefined, 'CN')).toBe(true)
-    expect(inEdgeCohort(config(ramp(10), urls), high, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config(ramp(10), urls), mid, 'asia-east2', undefined, 'CN')).toBe(false)
     expect(inEdgeCohort(config(ramp(0), urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
   })
 
-  it('never past the region rollout, so the sweep (no country) keeps every ramped host', () => {
-    expect(inEdgeCohort(config(ramp(1000, 5), urls), high, 'asia-east2', undefined, 'CN')).toBe(false)
-    expect(inEdgeCohort(config(ramp(1000, 1000), urls), high, 'asia-east2', undefined, 'CN')).toBe(true)
-    expect(inEdgeCohort(config(ramp(1000, 1000), urls), high, 'any')).toBe(true)
+  it('never past the region rollout, so the sweep (recorded region, no country) keeps every ramped host', () => {
+    // Ramp above the region: the region caps it.
+    expect(inEdgeCohort(config(ramp(1000, 10), urls), mid, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config(ramp(1000, 10), urls), low, 'asia-east2', undefined, 'CN')).toBe(true)
+    // The sweep judges by the recorded region without a country: every ramped host is under it.
+    for (const host of [low, mid]) {
+      for (const [rampValue, regional] of [[10, 20], [20, 10], [20, 20]] as const) {
+        if (inEdgeCohort(config(ramp(rampValue, regional), urls), host, 'asia-east2', undefined, 'CN')) {
+          expect(inEdgeCohort(config(ramp(rampValue, regional), urls), host, 'asia-east2')).toBe(true)
+        }
+      }
+    }
   })
 
   it('applies only to a listed country on a front door from the boot list', () => {
-    expect(inEdgeCohort(config(ramp(1000), urls), low, 'asia-east2', undefined, 'RU')).toBe(true)
-    const otherExcluded: EdgeControlFlags = {
-      ...ramp(1000),
-      regionExcludeCountries: { 'asia-east2': ['CN', 'RU'] }
-    }
+    // Not excluded: the ordinary rollout applies.
+    expect(inEdgeCohort(config(ramp(0), urls), low, 'asia-east2', undefined, 'RU')).toBe(true)
+    const otherExcluded: EdgeControlFlags = { ...ramp(1000), regionExcludeCountries: { 'asia-east2': ['CN', 'RU'] } }
     expect(inEdgeCohort(config(otherExcluded, urls), low, 'asia-east2', undefined, 'RU')).toBe(false)
-    expect(inEdgeCohort(config(ramp(1000), urls), low, 'asia-east2', undefined, null)).toBe(true)
     expect(inEdgeCohort(config(ramp(1000)), low, 'asia-east2', undefined, 'CN')).toBe(false)
+    const noCountries: EdgeControlFlags = { ...ramp(1000), frontDoor: { url: DOOR } }
+    expect(inEdgeCohort(config(noCountries, urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
   })
 
   it('deny and mode still win', () => {
@@ -134,11 +140,19 @@ describe('the front door country ramp (frontDoor.countryRolloutPermille)', () =>
     expect(inEdgeCohort(config({ ...ramp(1000), mode: 'off' }, urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
   })
 
-  it('parses the ramp as a permille and drops a bad frontDoor only', () => {
-    const body = (countryRolloutPermille: unknown) =>
-      parseEdgeControl({ v: 1, flags: { mode: 'on', frontDoor: { url: DOOR, countries: ['cn'], countryRolloutPermille } } })
-    expect(body(50)?.flags.frontDoor).toEqual({ url: DOOR, countries: ['CN'], countryRolloutPermille: 50 })
-    expect(body(1001)?.ignoredKeys).toEqual(['frontDoor'])
-    expect(body(1.5)?.ignoredKeys).toEqual(['frontDoor'])
+  it('a bad value drops only the ramp and keeps the last applied one; frontDoor is untouched', () => {
+    const body = (value: unknown) => ({
+      v: 1,
+      flags: { mode: 'on', frontDoor: { url: DOOR, countries: ['cn'] }, frontDoorCountryRolloutPermille: value }
+    })
+    expect(parseEdgeControl(body(50))?.flags).toMatchObject({ frontDoor: { url: DOOR, countries: ['CN'] }, frontDoorCountryRolloutPermille: 50 })
+    for (const bad of [1001, 1.5, '50']) {
+      const fresh = parseEdgeControl(body(bad))
+      expect(fresh?.ignoredKeys).toEqual(['frontDoorCountryRolloutPermille'])
+      expect(fresh?.flags.frontDoor).toEqual({ url: DOOR, countries: ['CN'] })
+      expect(fresh?.flags.frontDoorCountryRolloutPermille).toBeUndefined()
+      const kept = parseEdgeControlOver(body(bad), { mode: 'on', frontDoorCountryRolloutPermille: 30 })
+      expect(kept?.flags.frontDoorCountryRolloutPermille).toBe(30)
+    }
   })
 })
