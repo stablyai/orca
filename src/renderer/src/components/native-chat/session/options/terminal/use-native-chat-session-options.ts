@@ -29,9 +29,9 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
-// Kept across chat remounts, as on the phone: a repeated hook model is not fresh evidence, and
-// reapplying it would revert a newer pick.
-const appliedReportByPty = new Map<string, { agent: AgentType; model: string }>()
+// Kept across chat remounts, as on the phone: the same agent session repeating its model is not
+// fresh evidence, and reapplying it would revert a newer pick.
+const appliedReportByPty = new Map<string, string>()
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -48,6 +48,7 @@ export function useNativeChatSessionOptions(args: {
   const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, paneKey } = args
   const status = useAgentStatus(paneKey)
   const reportedModel = status?.model ?? null
+  const reportingSessionId = status?.providerSession?.id ?? null
   const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
   // Host discovery can resolve a reported id the seed families only matched by family.
   const [discoveredModelsRevision, setDiscoveredModelsRevision] = useState(0)
@@ -111,14 +112,22 @@ export function useNativeChatSessionOptions(args: {
         : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
             allowUnlisted: agent === 'codex'
           })
-    // Another agent in the same terminal starts over, and so does a later return to this one.
-    const applied = appliedReportByPty.get(targetPtyId)
-    if (!matched || (applied?.agent === agent && applied.model === matched)) {
+    // A new agent or session in the same terminal reports afresh, even the same model.
+    const report = JSON.stringify([agent, reportingSessionId, matched])
+    if (!matched || appliedReportByPty.get(targetPtyId) === report) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByPty, targetPtyId, { agent, model: matched })
+    setBoundedScopeCacheEntry(appliedReportByPty, targetPtyId, report)
     surface.reportSessionOptions({ model: matched })
-  }, [agent, discoveredModelsRevision, discoveryContext, reportedModel, surface, targetPtyId])
+  }, [
+    agent,
+    discoveredModelsRevision,
+    discoveryContext,
+    reportedModel,
+    reportingSessionId,
+    surface,
+    targetPtyId
+  ])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
