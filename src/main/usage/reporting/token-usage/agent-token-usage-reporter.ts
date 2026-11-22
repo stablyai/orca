@@ -116,11 +116,15 @@ export class AgentTokenUsageReporter {
       if (isZero(growth)) {
         continue
       }
-      if (!(await this.telemetry.capture({ ...growth, provider: this.provider, usage_day: day }))) {
-        break
-      }
+      // Save before sending: a crash can then drop this row but never send it twice.
       state.reported.set(day, combine(sent, counts, Math.max))
       this.unsaved = true
+      await this.saveIfUnsaved(state)
+      if (!(await this.telemetry.capture({ ...growth, provider: this.provider, usage_day: day }))) {
+        state.reported.set(day, sent)
+        this.unsaved = true
+        break
+      }
     }
     await this.saveIfUnsaved(state)
   }

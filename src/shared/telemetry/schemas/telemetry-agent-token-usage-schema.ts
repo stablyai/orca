@@ -13,7 +13,8 @@ export const agentTokenCountsSchema = z
 
 const agentTokenProviderSchema = z.enum(['claude', 'codex', 'opencode'])
 
-/** Tokens one provider used on one local calendar day; later rows for the same day add growth found afterwards. */
+/** Tokens one provider used on one local calendar day; later rows for the same day add growth found afterwards.
+ *  Replaces per-session agent_token_usage snapshots: per install, use those only before its first daily row. */
 export const agentTokenUsageDailySchema = agentTokenCountsSchema
   .extend({
     provider: agentTokenProviderSchema,
