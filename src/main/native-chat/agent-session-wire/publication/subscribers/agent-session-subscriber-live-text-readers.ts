@@ -39,12 +39,37 @@ export function liveTextFor(
  *  text; every other subscriber, older phones and desktops included, gets what main sent it. */
 export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveTextShown === true
 
+// Asked every streaming window, but its answer changes only when a subscriber joins, leaves, or
+// says it is shown or hidden; each reader's own state is read through it lazily.
+let readersGeneration = 0
+const sessionReaders = new WeakMap<
+  ReadonlyMap<string, Subscriber>,
+  { generation: number; readers: LiveTextReaders | null }
+>()
+
+/** A subscriber joined or left a session, or a viewer said it is shown or hidden. */
+export function noteLiveTextReadersChanged(): void {
+  readersGeneration++
+}
+
 /** Who would read a session's live text; null while it has no subscriber. */
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
+  if (!subscribers) {
+    return null
+  }
+  const cached = sessionReaders.get(subscribers)
+  if (cached?.generation === readersGeneration) {
+    return cached.readers
+  }
+  const readers = groupedLiveTextReaders([...subscribers.values()])
+  sessionReaders.set(subscribers, { generation: readersGeneration, readers })
+  return readers
+}
+
+function groupedLiveTextReaders(all: readonly Subscriber[]): LiveTextReaders | null {
   // Read as the fan-out reads: shown viewers apart from the rest, each with its own interest.
-  const all = [...(subscribers?.values() ?? [])]
   const groups = [true, false].flatMap((shown) => {
     const group = all.filter((subscriber) => shownViewer(subscriber) === shown)
     return group.length > 0 ? [liveTextReadersOf(group, shown)] : []
@@ -140,6 +165,7 @@ export class LiveTextViewerShows {
     }
     if (subscriber.liveTextShown !== shown) {
       subscriber.liveTextShown = shown
+      noteLiveTextReadersChanged()
       if (shown) {
         this.sendTail(subscriber, SHOWN_TAIL_ATTEMPTS)
       }

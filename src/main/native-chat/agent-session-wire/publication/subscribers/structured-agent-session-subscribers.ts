@@ -98,6 +98,7 @@ export class AgentSessionSubscribers {
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
+    liveText.noteLiveTextReadersChanged()
     this.viewerShows.watch(subscriber, input.onLiveTextShown)
 
     this.forkMarkers.add(subscriber)
@@ -331,6 +332,7 @@ export class AgentSessionSubscribers {
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
+    liveText.noteLiveTextReadersChanged()
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)

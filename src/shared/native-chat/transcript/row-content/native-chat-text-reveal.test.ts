@@ -103,6 +103,38 @@ it('waits out a slow step before the very next one', () => {
   expect(steps[1]! - steps[0]!).toBeGreaterThanOrEqual(800 - 1000 / 120 - 0.01)
 })
 
+it('counts its spacing from when its step ran, not from a frame that other work held up', () => {
+  const frames = nativeChatRevealStepFrames(60, 1 / 10)
+  const steps: number[] = []
+  const step = (): void => {
+    steps.push(clock)
+    frames.request(step)
+  }
+  frames.request(step)
+  const runFrame = (at: number, before = 0): void => {
+    vi.advanceTimersByTime(at - clock)
+    clock = at
+    const due = [...callbacks.values()]
+    callbacks.clear()
+    // Other callbacks in this frame ran first and took `before` ms.
+    clock += before
+    due.forEach((callback) => callback(at))
+  }
+  for (let at = 1000 / 60; at < 200; at += 1000 / 60) {
+    runFrame(at)
+  }
+  const held = steps.length
+  runFrame(clock + 1000 / 60, 150)
+  expect(steps.length).toBe(held + 1)
+  const ranAt = steps.at(-1)!
+  for (let frame = 0; frame < 3; frame++) {
+    runFrame(clock + 1000 / 60)
+  }
+  // It ran 150 ms into its frame, so the next step waits about 60 ms from then.
+  expect(steps.length).toBe(held + 1)
+  expect(ranAt).toBeGreaterThan(0)
+})
+
 describe('a reply redrawn whole each step', () => {
   it('switches once its steps are slow, and stays switched', () => {
     const frames = nativeChatRevealStepFrames(60, 1 / 10)

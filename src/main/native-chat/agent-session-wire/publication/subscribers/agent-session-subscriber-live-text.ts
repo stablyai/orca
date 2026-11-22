@@ -17,6 +17,7 @@ import {
 export {
   liveTextFor,
   LiveTextViewerShows,
+  noteLiveTextReadersChanged,
   shownViewer,
   subscriberAtHead,
   subscriberLiveTextReaders,

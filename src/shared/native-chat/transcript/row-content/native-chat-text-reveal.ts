@@ -125,7 +125,8 @@ export function nativeChatRevealStepFrames(
       const id = ++nextId
       const fire = (at: number): void => {
         cancel(id)
-        steppedAt = at
+        // Callbacks ahead of this one in the frame may have run long; spacing counts from now.
+        steppedAt = Math.max(at, performance.now())
         step()
       }
       // Frames between steps are only waited through: a long wait sleeps until a frame before the step.
