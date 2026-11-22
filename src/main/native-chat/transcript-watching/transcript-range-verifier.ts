@@ -1,8 +1,8 @@
 import { setImmediate } from 'node:timers/promises'
-import type { TranscriptByteRange } from '../../../shared/native-chat/transcript/transcript-byte-range'
 import {
   TRANSCRIPT_RANGES_UNSETTLED,
   transcriptDigestHex,
+  type TranscriptByteRange,
   type TranscriptRangeVerification
 } from '../../../shared/native-chat/transcript/transcript-byte-range'
 import {

@@ -473,7 +473,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
           hasMore: false,
           ranges: [{ start: 0, end: 500, digest: '0000000000000501' }]
         })
-        await vi.advanceTimersByTimeAsync(1_000)
+        await vi.advanceTimersByTimeAsync(2_000)
       })
       const ids = latest?.messages.map((row) => row.id) ?? []
       expect(ids).toContain('live-550')

@@ -8,7 +8,10 @@ import {
 } from './native-chat-held-history-reread'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 import type { NativeChatReadSessionResult } from '../../../../../../../preload/api/native-chat/native-chat-api'
-import type { TranscriptByteRange } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
+import type {
+  TranscriptByteRange,
+  TranscriptRangeVerification
+} from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 
 // PR #45168: retained history must not multiply filesystem work during replacement bursts.
 describe.each([
@@ -19,7 +22,10 @@ describe.each([
   afterEach(() => vi.useRealTimers())
 
   function history(
-    verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>,
+    verify?: (
+      ranges: TranscriptByteRange[],
+      signal: AbortSignal
+    ) => Promise<TranscriptRangeVerification | null>,
     readDelayMs = 0,
     onApplied: () => void = () => {}
   ) {
