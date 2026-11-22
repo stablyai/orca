@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   ClaudeUsageParseResumeState,
   ClaudeUsagePersistedFile,
@@ -15,6 +16,8 @@ export type ClaudeUsageTokenCorrection = {
 type ClaudeUsageTokenCheckpoint = {
   ownedDedupeKeys: string[]
   find: (key: string) => Readonly<ClaudeUsageTokenMaxima> | undefined
+  /** Null when any key lacks a maxima row. */
+  digest: (keys?: readonly string[]) => string | null
   increase: (key: string, turn: ClaudeUsageTokenTotals) => ClaudeUsageTokenCorrection | null
   append: (
     key: string,
@@ -62,6 +65,18 @@ export function createClaudeUsageTokenCheckpoint(
     find(key) {
       const index = indexByKey.get(key)
       return index === undefined ? undefined : ownedTokenMaxima[index]
+    },
+    digest(keys = ownedDedupeKeys) {
+      const hash = createHash('sha256')
+      for (const key of keys) {
+        const index = indexByKey.get(key)
+        const row = index === undefined ? undefined : ownedTokenMaxima[index]
+        if (!row) {
+          return null
+        }
+        hash.update(`${JSON.stringify([key, ...row.slice(0, 5)])}\n`)
+      }
+      return hash.digest('hex')
     },
     increase(key, turn) {
       const index = indexByKey.get(key)

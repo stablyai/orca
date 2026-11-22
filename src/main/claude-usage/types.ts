@@ -80,6 +80,10 @@ export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
   ownedDedupeKeys: string[]
   /** Contains turns claimed by another file; reparse if that owner disappears. */
   hasDeferredClaims: boolean
+  /** Owner maxima include fuller observations from another file. */
+  hasCrossFileCorrections?: boolean
+  /** Detect unchanged owned categories even when small files have no resume checkpoint. */
+  ownedTokenDigest?: string
   parseResumeState?: ClaudeUsageParseResumeState | null
   /** Reparse if this differs from CLAUDE_USAGE_PROJECTION_VERSION. */
   projectionVersion?: number
