@@ -1,7 +1,7 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
-import type { PersistedState } from '../persisted-state-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =
   /** Carried in the migration manifest; the path stage rewrites UNC to Linux. */
@@ -63,6 +63,9 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   },
   worktreeLineageById: moveDisposition(16),
   workspaceLineageByChildKey: moveDisposition(17),
+  crossStoreLineageByChildKey: moveDisposition(17, {
+    note: 'Moves with its child; the parent names another store and is never rewritten.'
+  }),
   settings: notApplicableDisposition(62, 'Desktop-global; see SETTINGS_KEYS_NAMING_A_PATH.'),
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),
@@ -76,6 +79,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     disposition: 'rederive',
     item: 47,
     note: "Rebuilt from the host's first tab stream; the seeded workspaceSessionsByHostId gives first paint."
+  },
+  hostRepoCatalogSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's next project list; it caches only that answer."
   },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
@@ -91,6 +99,16 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
+  bots: notApplicableDisposition(
+    62,
+    "A bot's hidden project group is never offered for a move; the bot stays with its host."
+  ),
+  botsNewerAgents: notApplicableDisposition(62, 'Bots on newer agents; same as bots.'),
+  botOrder: notApplicableDisposition(62, 'Bot order; same as bots.'),
+  botsPermissionDefaultMigrated: notApplicableDisposition(
+    62,
+    'A one-time migration marker for bots.'
+  ),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),
@@ -136,6 +154,8 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   terminalLayoutsByTabId: moveDisposition(23),
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayOwnerByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayAdoptionVersion: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28, {
     rewriteDesktopCopy: true,

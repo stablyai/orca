@@ -1,26 +1,35 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
-import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
+import { type BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../../persistence/loading-store/store'
+import type { Project, ProjectUpdateArgs } from '../../../shared/project/project-types'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
-import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { enrichRepoGitUsernames } from '../../workspaces/catalog/repo-git-username-enrichment'
+import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktree-base-directory-watcher'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
-import { visibleProjectHostSetups, visibleRepos } from '../../ssh/orcad-retained-source'
+import {
+  visibleProjectHostSetups,
+  visibleRepos
+} from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveReposWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/desktop-state/wsl-moved-projects'
+import {
+  forgetHostRepoCatalogRepo,
+  listHostRepoCatalogSnapshots
+} from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
@@ -40,6 +49,16 @@ export function registerRepoCatalogHandlers(
   // The local rows `repos:list` hides once their WSL host owns them; read-only, for their chats.
   ipcMain.handle('repos:listWslMoved', () =>
     listWslMovedProjects(store.getRepos(), store.getFolderWorkspaces())
+  )
+
+  // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
+  ipcMain.handle('repos:listHostCatalogSnapshots', async () =>
+    listHostRepoCatalogSnapshots(
+      store,
+      (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).filter(
+        (environment) => !isGatedOffWslHost(environment)
+      )
+    )
   )
 
   ipcMain.handle('projects:list', () => {
@@ -111,13 +130,17 @@ export function registerRepoCatalogHandlers(
       const row = store
         .getRepos()
         .find((repo) => repo.id === args.repoId && getRepoExecutionHostId(repo) === hostId)
+      const host = parseExecutionHostId(hostId)
       // Runtime sweeps stop local/SSH sessions absent from renderer listings; paired-server rows are residue.
-      if (row && parseExecutionHostId(hostId)?.kind !== 'runtime') {
+      if (row && host?.kind !== 'runtime') {
         await runtime.removeProject(row)
         scheduleCurrentWorktreeBaseDirectoryWatcherSync()
         return
       }
       store.removeProjectForHost({ id: args.repoId, executionHostId: hostId })
+      if (host?.kind === 'runtime') {
+        forgetHostRepoCatalogRepo(store, host.environmentId, args.repoId)
+      }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
     }

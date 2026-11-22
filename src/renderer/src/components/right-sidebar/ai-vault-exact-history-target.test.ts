@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { exactConversationHistorySessions } from './ai-vault-exact-history-target'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {

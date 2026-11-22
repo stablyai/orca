@@ -1,7 +1,8 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import { useEffect } from 'react'
 import type React from 'react'
-import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
-import type { WorktreeSidebarDragSession } from '../../worktree-sidebar-drag-autoscroll'
+import { getFullDropIndexForWorktreeDragUnit } from './worktree-drag-units'
+import type { WorktreeSidebarDragSession } from './worktree-sidebar-drag-autoscroll'
 import { getPointerDropStatusTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET } from './row-state'
@@ -24,26 +25,27 @@ export function useWorktreeDocumentDrop(args: {
         clearWorktreeDrag()
         return
       }
+      const container = ctx.scrollRef.current
+      const target = ctx.getEligibleLineageDropTarget(
+        container
+          ? getPointerDropStatusTarget({
+              container,
+              x: event.clientX,
+              y: event.clientY
+            })
+          : NO_WORKTREE_SIDEBAR_DROP_TARGET,
+        session.pickedCopies
+      )
+      // As in dragover: an eligible parent under the pointer wins over a reorder slot.
+      if (target.lineageParentIdentity) {
+        event.preventDefault()
+        event.stopPropagation()
+        ctx.commitWorktreeLineageParentDrop(session.pickedCopies, target.lineageParentIdentity)
+        clearWorktreeDrag()
+        return
+      }
       const drop = ctx.computeWorktreeDrop(event.clientY)
       if (!drop) {
-        const container = ctx.scrollRef.current
-        const target = ctx.getEligibleLineageDropTarget(
-          container
-            ? getPointerDropStatusTarget({
-                container,
-                x: event.clientX,
-                y: event.clientY
-              })
-            : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-          session.draggedIds
-        )
-        if (target.lineageParentId) {
-          event.preventDefault()
-          event.stopPropagation()
-          ctx.commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
-          clearWorktreeDrag()
-          return
-        }
         const statusDrop = target.status
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
@@ -69,6 +71,10 @@ export function useWorktreeDocumentDrop(args: {
       // Why: pointer still inside the source group means reorder, not status move; commit here and stop the capture handler.
       event.preventDefault()
       event.stopPropagation()
+      const rawDropPoint = getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
+      const dropPoint =
+        ctx.captureFolderRetention?.(rawDropPoint, session.pickedCopies, session.sourceGroupKey) ??
+        rawDropPoint
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: session.sourceGroupKey,
@@ -81,7 +87,9 @@ export function useWorktreeDocumentDrop(args: {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: session.draggedIds,
-        sourceGroupKey: session.sourceGroupKey
+        sourceGroupKey: session.sourceGroupKey,
+        pickedCopies: session.pickedCopies,
+        dropPoint
       })
       clearWorktreeDrag()
     }

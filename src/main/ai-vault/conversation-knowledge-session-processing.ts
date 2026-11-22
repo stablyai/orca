@@ -1,11 +1,11 @@
 import type { AiVaultHistoryReadResult } from '../../shared/ai-vault-history-types'
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   CONVERSATION_KNOWLEDGE_FORMAT_VERSION,
   normalizeConversationKnowledgeLanguage,
   type ConversationKnowledgeItem
 } from '../../shared/conversation-knowledge-items'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { enrichAiVaultSession } from './session-enrichment'
 import { readableConversationMessages } from './conversation-knowledge-empty-detection'
 import { conversationKnowledgeId } from './conversation-knowledge-source-session'

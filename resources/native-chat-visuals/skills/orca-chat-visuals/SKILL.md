@@ -22,10 +22,23 @@ clearer.
 - Inline your styles, scripts and data. Libraries and fonts may load only from cdn.jsdelivr.net,
   unpkg.com, cdnjs.cloudflare.com, esm.sh, fonts.googleapis.com and fonts.gstatic.com. The page
   can't make network requests; use inline SVG or `data:` URLs for images.
+- `<audio>` and `<video>` elements can't load media here, even from `data:` URLs. To share a
+  recording, save it as its own file in the `ORCA_CHAT_SCRATCH_DIR` folder (in the workspace only
+  if the user wants it in the project) and give its path in your reply instead.
 - Don't size anything to the viewport height (`100vh`); Orca fits the frame to your content.
 - Use Orca's theme variables for surfaces, text, and controls; pair hover `--accent` with
   `--accent-foreground`. Scope fixed-palette CSS to its mockup. Orca updates tokens and
   `color-scheme` live. Charts use `--chart-1` to `--chart-5`.
+- Make the saved HTML readable in an ordinary browser too: use paired fallback values such as
+  `background:var(--background,#fff);color:var(--foreground,#171717)` for every theme-token use.
+  Scripts reading chart colors need a fallback too: `getComputedStyle(document.documentElement)
+  .getPropertyValue('--chart-1').trim() || '#2563eb'`. Never redefine Orca's tokens on `:root`:
+  those declarations would override the viewer's live theme. Use separate names for local colors.
+- Exposed tokens: `--background`, `--foreground`, `--card`, `--card-foreground`, `--popover`,
+  `--popover-foreground`, `--primary`, `--primary-foreground`, `--secondary`,
+  `--secondary-foreground`, `--muted`, `--muted-foreground`, `--accent`, `--accent-foreground`,
+  `--destructive`, `--destructive-foreground`, `--border`, `--input`, `--ring`, `--radius`,
+  `--font-sans`, `--font-mono`, and `--chart-1` through `--chart-5`.
 
 ## Showing it
 

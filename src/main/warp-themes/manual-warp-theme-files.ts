@@ -2,7 +2,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from 'electron'
-import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
+import type { WarpThemeImportSkippedFile } from '../../shared/terminal-themes/terminal-custom-themes'
 import { isYamlFile, MAX_THEME_FILES, type ThemeFileCandidate } from './theme-file-scanner'
 
 export function createManualWarpThemeFileCandidates(filePaths: string[]): ThemeFileCandidate[] {

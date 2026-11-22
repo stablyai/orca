@@ -1,6 +1,6 @@
 import { Network } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslation } from 'react-i18next'
 

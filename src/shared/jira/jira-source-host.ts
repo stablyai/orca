@@ -4,7 +4,7 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export function resolveJiraSourceHostId(args: {
   workspaceHostId?: string | null

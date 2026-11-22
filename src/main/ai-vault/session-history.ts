@@ -1,13 +1,13 @@
-import type { NativeChatMessage } from '../../shared/native-chat-types'
-import { isNativeChatSupportedAgent } from '../../shared/native-chat-agent-support'
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
+import { isNativeChatSupportedAgent } from '../../shared/native-chat/native-chat-agent-support'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultHistoryMessage,
   AiVaultHistoryReadResult,
   AiVaultHistorySearchMatch,
   AiVaultHistorySearchResult
 } from '../../shared/ai-vault-history-types'
-import { listAiVaultSessions } from './cached-session-list'
+import { listAiVaultSessions } from './listing/cached-session-list'
 import { readNativeChatTranscript } from '../native-chat/transcript-reader'
 
 export const AI_VAULT_HISTORY_SEARCH_RESULT_LIMIT = 50

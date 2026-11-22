@@ -1,18 +1,19 @@
-import { agentPromptObservationSignal } from './agent-prompt-signals'
-import { assertTerminalInputAdmitted } from '../../terminal-input-admission'
-import type {
-  AgentPromptExpectedBinding,
-  RuntimeAgentPromptWriteOptions
-} from '../../runtime-terminal-contracts'
-import type {
-  RuntimeTerminalPromptDelivery,
-  RuntimeTerminalSend
-} from '../../../../shared/runtime-types'
 import {
+  agentPromptObservationSignal,
   assertAgentPromptRequestActive,
   waitForAgentPromptDelay,
   waitForAgentPromptPromise
-} from '../../orca-runtime-core'
+} from './agent-prompt-signals'
+import { assertTerminalInputAdmitted } from './terminal-input-admission'
+import type {
+  AgentPromptExpectedBinding,
+  RuntimeAgentPromptWriteOptions
+} from './agent-prompt-write-options'
+import type {
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalSend
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
   AGENT_PROMPT_SUBMIT,
@@ -21,24 +22,23 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-prompt-injection'
-import type {
-  AgentPromptActivity,
-  AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+
 import {
+  type AgentPromptActivity,
+  type AgentPromptWaitTextCache,
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
-} from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
 export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
   protected abstract createAgentPromptRenderGate(
-    ptyId: string,
-    pasteIngestMs: number
-  ): { arm: () => void; wait: () => Promise<void>; dispose: () => void } | null
+    ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
+  ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
 
   protected assertAgentPromptExpectedBinding(
     handle: string,
@@ -92,7 +92,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.
     const renderGate = options.composerReady
       ? null
-      : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+      : this.createAgentPromptRenderGate(ptyId, pasteIngestMs, options.promptForSchedule)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
@@ -162,6 +162,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             deliverySignal
           )
         } else {
+          // With no render gate (a flagged `claude --model opus`), a pending launch watch holds Enter until the composer mounts.
+          const launchWatch = this.launchComposerReadyByPtyId.get(ptyId) ?? Promise.resolve(true)
+          await waitForAgentPromptPromise(launchWatch, deliverySignal)
           const agent = this.getPtyAgent(ptyId)
           const submitDelayMs = options.promptForSchedule
             ? resolveAgentPromptSubmitDelayForAgent(
@@ -202,7 +205,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const submits = submitWithPaste
       ? 1
       : 1 +
-        (await this.resubmitHeldAgentPrompt(
+        (await this.resubmitHeldAgentPromptForSend(
           ptyId,
           generation,
           {

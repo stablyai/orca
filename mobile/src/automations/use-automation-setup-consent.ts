@@ -1,19 +1,26 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { SetupHookTrustDrawer, SetupTrustPrompt } from '../components/SetupHookTrustDrawer'
-import { persistSetupHookTrustApproval } from '../tasks/setup-hook-trust'
-import type { RpcClient } from '../transport/rpc-client'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
+import type {
+  OrcaHookTrustDrawer,
+  OrcaHookTrustPrompt
+} from '../components/hook-trust/OrcaHookTrustDrawer'
+import { persistSetupHookTrustApproval } from '../new-workspace/creation/setup-hook-trust'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { prepareAutomationSetup } from './automation-setup-preparation'
 import type { AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
 
 type Consent = {
-  prompt: SetupTrustPrompt
+  prompt: OrcaHookTrustPrompt
   client: RpcClient
   executionHost?: ExecutionHostId
   trust: PersistedTrustedOrcaHooks
+  repos: readonly { id: string }[]
   current: () => boolean
   resolve: (decision: 'run' | 'skip' | null) => void
   reject: (failure: unknown) => void
@@ -62,6 +69,7 @@ export function useAutomationSetupConsent(
         await persistSetupHookTrustApproval({
           client: consent.client,
           trust: consent.trust,
+          repos: consent.repos,
           repoId: consent.prompt.repoId,
           contentHash: consent.prompt.contentHash,
           alwaysTrust
@@ -81,10 +89,12 @@ export function useAutomationSetupConsent(
       setBusy(false)
     }
   }
-  const drawer: ComponentProps<typeof SetupHookTrustDrawer> = {
+  const drawer: ComponentProps<typeof OrcaHookTrustDrawer> = {
     prompt: confirmation?.prompt ?? null,
     visible: confirmation !== null,
     allowAlwaysTrust: parseExecutionHostId(confirmation?.executionHost)?.kind !== 'runtime',
+    // Unattended runs can't be asked again, so saving setup needs Always trust.
+    allowRunOnce: false,
     busy,
     onRunOnce: () => void approve(false),
     onAlwaysTrust: () => void approve(true),
@@ -119,7 +129,7 @@ export function useAutomationSetupConsent(
         original,
         targets,
         current: sameAuthority,
-        confirm: (prompt, trust) =>
+        confirm: (prompt, trust, repos) =>
           new Promise((resolve, reject) => {
             if (!sameAuthority()) {
               return resolve(null)
@@ -127,6 +137,7 @@ export function useAutomationSetupConsent(
             pending.current = {
               prompt,
               trust,
+              repos,
               client: port,
               executionHost,
               current: sameAuthority,

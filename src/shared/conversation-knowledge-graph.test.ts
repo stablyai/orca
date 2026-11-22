@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildConversationKnowledgeGraph } from './conversation-knowledge-graph'
 import type { ConversationKnowledgeItem } from './conversation-knowledge-items'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 describe('buildConversationKnowledgeGraph', () => {

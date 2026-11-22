@@ -12,9 +12,10 @@ import {
   selectConversationKnowledgeItem
 } from '@/lib/conversation-knowledge-selection'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useAllWorktrees } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { buildConversationKnowledgeGraph } from '../../../../shared/conversation-knowledge-graph'
-import { getCommitMessageAgentSpec } from '../../../../shared/commit-message-agent-spec'
+import { getCommitMessageAgentSpec } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import {
   conversationKnowledgeItemsInGraph,
@@ -244,7 +245,7 @@ export default function ConversationKnowledgePanel({
             <ConversationKnowledgeGraphModeSwitch value={graphMode} onChange={setGraphMode} />
             <ToggleGroup
               type="single"
-              variant="compact"
+              variant="segmented"
               size="xs"
               spacing={1}
               value={viewMode}

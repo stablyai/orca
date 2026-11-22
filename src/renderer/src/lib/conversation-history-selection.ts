@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../../shared/ai-vault-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export type ConversationHistoryTarget = {
   executionHostId: ExecutionHostId

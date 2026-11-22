@@ -1,10 +1,10 @@
 // Unreadable host records must not look absent: deploying over an unknown live install is unsafe.
 import { randomUUID } from 'node:crypto'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { removeRemoteFileCommand } from '../../ssh/ssh-remote-commands'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { removeRemoteFileCommand } from '../../ssh/remote-exec/ssh-remote-commands'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
-import { isWindowsRemoteHost } from '../../ssh/ssh-remote-platform'
+import { isWindowsRemoteHost } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadRemoteBaseDir,
   orcadWindowsHostOpCommand,

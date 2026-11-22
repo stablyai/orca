@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
-import type { StatsSummary } from '../../../shared/process-stats-types'
-import { createWebE2EApi } from './preload-api/web-e2e-api'
+import type { StatsSummary } from '../../../shared/diagnostics/process-stats-types'
+import { createWebE2EApi } from './preload-api/app/web-e2e-api'
 import {
   createClaudeAccountsApi,
   createCodexAccountsApi,
@@ -9,54 +9,57 @@ import {
   createZcodePlanCredentialsApi,
   createOpenCodeGoCredentialsApi,
   createMiniMaxCredentialsApi
-} from './preload-api/web-agent-accounts-api'
-import { createWebAgentStatusApi } from './preload-api/web-agent-status-api'
-import { createWebAiVaultApi } from './preload-api/web-ai-vault-api'
-import { createWebAppApi } from './preload-api/web-app-api'
-import { createBrowserApi, createEmulatorApi } from './preload-api/web-browser-api'
-import { createCliApi } from './preload-api/web-cli-api'
-import { createWebDiagnosticsApi } from './preload-api/web-diagnostics-api'
+} from './preload-api/agents/web-agent-accounts-api'
+import { createWebAgentStatusApi } from './preload-api/agents/web-agent-status-api'
+import { createWebAiVaultApi } from './preload-api/agents/web-ai-vault-api'
+import { createRuntimeUsageProviderApi } from '../runtime/usage-analytics/runtime-usage-provider-api'
+import { createWebAppApi } from './preload-api/app/web-app-api'
+import { createBrowserApi, createEmulatorApi } from './preload-api/browser/web-browser-api'
+import { createCliApi } from './preload-api/host-capabilities/web-cli-api'
+import { createWebDiagnosticsApi } from './preload-api/diagnostics/web-diagnostics-api'
 import { withFallback } from './preload-api/web-fallback-api'
-import { createFileApi } from './preload-api/web-filesystem-api'
-import { createGitApi } from './preload-api/web-git-api'
-import { createWebGithubCacheApi } from './preload-api/web-github-cache-api'
-import { createGitHubApi } from './preload-api/web-github-api'
-import { createGitLabApi } from './preload-api/web-gitlab-api'
+import { createFileApi } from './preload-api/filesystem/web-filesystem-api'
+import { createGitApi } from './preload-api/git/web-git-api'
+import { createWebGithubCacheApi } from './preload-api/github/web-github-cache-api'
+import { createGitHubApi } from './preload-api/github/web-github-api'
+import { createGitLabApi } from './preload-api/gitlab/web-gitlab-api'
 import {
   createComputerUsePermissionsApi,
   createDeveloperPermissionsApi,
   createPreflightApi,
   createSkillsApi
-} from './preload-api/web-host-capability-api'
-import { createWebKeybindingsApi } from './preload-api/web-keybindings-api'
-import { createMacosTccPromptsApi } from './preload-api/web-macos-tcc-api'
-import { createEmptyMemorySnapshot } from './preload-api/web-memory-api'
-import { createWebMobileApi } from './preload-api/web-mobile-api'
-import { createWebNativeChatApi } from './preload-api/web-native-chat-api'
-import { createNotificationsApi } from './preload-api/web-notifications-api'
-import { createWebOnboardingApi } from './preload-api/web-onboarding-api'
-import { createWebOrcaProfilesApi } from './preload-api/web-orca-profiles-api'
-import { createWebPlatformApi } from './preload-api/web-platform-api'
-import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
-import { createReposApi } from './preload-api/web-repositories-api'
+} from './preload-api/host-capabilities/web-host-capability-api'
+import { createWebKeybindingsApi } from './preload-api/keybindings/web-keybindings-api'
+import { createMacosTccPromptsApi } from './preload-api/host-capabilities/web-macos-tcc-api'
+import { createEmptyMemorySnapshot } from './preload-api/diagnostics/web-memory-api'
+import { createWebMobileApi } from './preload-api/host-capabilities/web-mobile-api'
+import { createWebNativeChatApi } from './preload-api/agents/web-native-chat-api'
+import { createNotificationsApi } from './preload-api/app/web-notifications-api'
+import { createWebOnboardingApi } from './preload-api/app/web-onboarding-api'
+import { createWebOrcaProfilesApi } from './preload-api/app/web-orca-profiles-api'
+import { createWebPlatformApi } from './preload-api/host-capabilities/web-platform-api'
+import { createWebPluginsApi } from './preload-api/host-capabilities/web-plugins-api'
+import { createRateLimitsApi } from './preload-api/agents/web-rate-limits-api'
+import { createReposApi } from './preload-api/workspaces/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
-import { createWebJiraApi } from './preload-api/web-jira-api'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
-import { createWebRuntimeApi } from './preload-api/web-runtime-api'
-import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
-import { webRuntimeState } from './preload-api/web-runtime-session'
-import { createWebSettingsApi } from './preload-api/web-settings-api'
-import { createShellApi } from './preload-api/web-shell-api'
-import { createWebStarNagApi } from './preload-api/web-star-nag-api'
-import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
-import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
-import { createWebUiApi } from './preload-api/web-ui-api'
-import { createUpdaterApi } from './preload-api/web-updater-api'
-import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-api'
-import { createWebLinkPreviewApi } from './preload-api/web-link-preview-api'
-import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
-import { createWorktreesApi } from './preload-api/web-worktrees-api'
-import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { createWebJiraApi } from './preload-api/jira/web-jira-api'
+import { callRuntimeResult } from './runtime/client/web-runtime-calls'
+import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
+import { createRuntimeEnvironmentsApi } from './preload-api/runtime/web-runtime-environments-api'
+import { webRuntimeState } from './runtime/client/web-runtime-session'
+import { createWebSettingsApi } from './preload-api/preferences/web-settings-api'
+import { createShellApi } from './preload-api/browser/web-shell-api'
+import { createWebSpeechApi } from './preload-api/agents/web-speech-api'
+import { createWebStarNagApi } from './preload-api/app/web-star-nag-api'
+import { createWebTelemetryApi } from './preload-api/diagnostics/web-telemetry-api'
+import { createPtyApi, createSshApi } from './preload-api/host-capabilities/web-terminal-api'
+import { createWebUiApi } from './preload-api/preferences/web-ui-api'
+import { createUpdaterApi } from './preload-api/app/web-updater-api'
+import { createWebWorkspacePortsApi } from './preload-api/host-capabilities/web-workspace-ports-api'
+import { createWebLinkPreviewApi } from './preload-api/browser/web-link-preview-api'
+import { createWebWorkspaceSessionApi } from './preload-api/workspaces/web-workspace-session-api'
+import { createWorktreesApi } from './preload-api/workspaces/web-worktrees-api'
+import { readStoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -65,8 +68,10 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings'> & {
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
   settings: Partial<PreloadApi['settings']>
+  plugins: Partial<PreloadApi['plugins']>
+  speech: Partial<PreloadApi['speech']>
 } {
   return {
     ...createWebAppApi(),
@@ -79,12 +84,14 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings'> & {
     ...createWebSettingsApi(),
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
+    plugins: createWebPluginsApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
+    speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -109,11 +116,18 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings'> & {
     },
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // The web client reads no local host, so it has nothing to warn about.
+      readPerfNoticeSignals: () => Promise.resolve(null),
+      countHiddenBrowserPages: () => Promise.resolve(0),
       // Browser pages have no native-window veto; document visibility owns admission.
       resourceWindowVisible: () => Promise.resolve(true),
       onResourceWindowVisibility: () => () => {}
     },
     aiVault: createWebAiVaultApi(),
+    claudeUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'claudeUsage'),
+    codexUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'codexUsage'),
+    openCodeUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'openCodeUsage'),
+    museUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'museUsage'),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -139,7 +153,9 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings'> & {
     ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
-      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => []),
+      // A web client picks no local Windows folders.
+      resolveMappedDrivePath: () => Promise.resolve(null)
     },
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {

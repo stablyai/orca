@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 
 export type ConversationKnowledgeIndexCheckpoint = {

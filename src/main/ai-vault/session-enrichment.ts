@@ -1,19 +1,19 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AiVaultSessionEnrichment } from '../../shared/ai-vault-history-types'
 import { CONVERSATION_KNOWLEDGE_GENERATION_PROMPT_PREFIX } from '../../shared/conversation-knowledge-items'
 import {
   normalizeConversationKnowledgeHandoff,
   retainSourceBackedHandoff
 } from './conversation-knowledge-handoff-output'
-import { getCommitMessageAgentSpec } from '../../shared/commit-message-agent-spec'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
+import { getCommitMessageAgentSpec } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
+import { spawnSourceControlAgent } from '../text-generation/execution/source-control-agent-launch'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from '../text-generation/commit-message-agent-environment'
-import { runLocalPlanForAgent } from '../text-generation/source-control-local-generation'
+} from '../text-generation/execution/commit-message-agent-environment'
+import { runLocalPlanForAgent } from '../text-generation/execution/source-control-local-generation'
 import { discoverCommitMessageModelsLocal } from '../text-generation/commit-message-text-generation'
 
 const MAX_SUMMARY_MESSAGES = 12

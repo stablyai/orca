@@ -137,7 +137,7 @@ function StatusBadge({
   destructive?: boolean
 }): React.JSX.Element {
   return (
-    <Badge variant={destructive ? 'destructive' : active ? 'default' : 'compact'}>
+    <Badge variant={destructive ? 'destructive' : active ? 'default' : 'secondary'}>
       <span className="tabular-nums">{value}</span>
       <span>{label}</span>
     </Badge>

@@ -7,7 +7,8 @@ import {
   type DeviceScreenSize
 } from './android-input-mapping'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { EmulatorError } from '../emulator-errors'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export function androidShellArgs(serial: string, command: readonly string[]): string[] {
   return ['-s', serial, 'shell', ...command]
@@ -69,7 +70,13 @@ export async function androidTypeText(
   serial: string,
   text: string
 ): Promise<void> {
-  // adb input text uses %s for spaces and cannot carry newlines.
+  // adb input text uses %s for spaces, cannot carry newlines, and crashes on non-ASCII.
+  if (!/^[\x20-\x7e]*$/.test(text)) {
+    throw new EmulatorError(
+      'emulator_unsupported',
+      'Without a live stream, Android typing is limited to US ASCII on one line. Run `orca emulator attach` first to type any text.'
+    )
+  }
   ensureAdbOk(
     await runner(
       sdk.adb,

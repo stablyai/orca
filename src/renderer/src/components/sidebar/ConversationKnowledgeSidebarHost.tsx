@@ -2,7 +2,10 @@ import { useEffect } from 'react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useAppStore } from '@/store'
 import ConversationKnowledgePanel from '@/components/right-sidebar/ConversationKnowledgePanel'
-import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
+import {
+  STATUS_BAR_RESERVE_HEIGHT,
+  WORKSPACE_TOP_CHROME_HEIGHT
+} from '../../app-shell/chrome/workspace-chrome-metrics'
 import { translate } from '@/i18n/i18n'
 import { useTranslation } from 'react-i18next'
 

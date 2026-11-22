@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,
@@ -27,6 +27,9 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { assertSimulatorInputNotShadowedByDeviceHub } from '../simulator-device-hub-input'
+import { SimulatorHardwareKeyboardSync } from '../simulator-hardware-keyboard-layout'
+import { typeSimulatorText } from '../simulator-text-input'
 import type {
   BackendAvailability,
   EmulatorBackend,
@@ -46,9 +49,14 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
+  private readonly hardwareKeyboardSync = new SimulatorHardwareKeyboardSync()
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
-  constructor(options: EmulatorBridgeOptions = {}) {
+  constructor(
+    options: EmulatorBridgeOptions = {},
+    // The bridge owns sessions; the backend only needs a device's helper socket for text input.
+    private readonly helperWsUrl: (udid: string) => string | null = () => null
+  ) {
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
   }
 
@@ -86,10 +94,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async listSimulators(): Promise<SimulatorDevice[]> {
     return listSimulatorDevices()
-  }
-
-  async listRunningHelpers(): Promise<unknown> {
-    return this.execServeSim(['--list', '-q'], { json: true })
   }
 
   async checkServeSimAvailable(): Promise<void> {
@@ -131,11 +135,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid])
   }
 
   async gesture(
-    _deviceId: string,
+    deviceId: string,
     points: EmulatorGesturePoint[],
     wsUrl: string | null
   ): Promise<void> {
@@ -145,12 +150,29 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!wsUrl) {
       throw new EmulatorError('emulator_no_active', 'No active emulator stream for gesture input')
     }
+    await assertSimulatorInputNotShadowedByDeviceHub(deviceId)
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['type', text, '-d', udid])
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
+    await typeSimulatorText({
+      udid,
+      text,
+      paste,
+      wsUrl: this.helperWsUrl(udid),
+      // `--` keeps text such as "--help" from being read as a serve-sim option.
+      usHardwareKeyboard: () => this.hardwareKeyboardSync.isUSHardwareKeyboard(udid),
+      typeKeys: () => this.execServeSim(['type', '-d', udid, '--', text]),
+      pasteKeyCode: () => this.hardwareKeyboardSync.pasteKeyCode(udid)
+    })
+  }
+
+  restoreHardwareKeyboardLayout = (deviceId: string): Promise<void> =>
+    this.hardwareKeyboardSync.restore(deviceId)
+  async syncHardwareKeyboardLayout(deviceId: string): Promise<boolean> {
+    return this.hardwareKeyboardSync.sync(await this.resolveDeviceId(deviceId))
   }
 
   async button(deviceId: string, name: string): Promise<void> {
@@ -253,9 +275,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
+    // The pane is detaching, so the simulator gets back the keyboard layout it had before Orca.
+    const restoreKeyboardLayout = this.hardwareKeyboardSync.restore(deviceId)
     await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
     // Stale helpers can outlive the state file that serve-sim --kill relies on.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})
+    await restoreKeyboardLayout
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {
@@ -270,11 +295,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {
-    const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
-      helperPid: info.helperPid,
-      includeOrphaned: true
-    }).catch(() => [])
-    return helpers.length > 0
+    try {
+      const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
+        helperPid: info.helperPid,
+        includeOrphaned: info.helperPid === undefined
+      })
+      return helpers.length > 0
+    } catch {
+      // Endpoint readiness already proves the helper is serving; never recycle it on a failed ps read.
+      return true
+    }
   }
 
   private async execServeSim(
@@ -300,8 +330,11 @@ function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {
     backend: 'ios',
     id: device.udid,
     name: device.name,
-    state: device.state === 'Booted' ? 'booted' : 'shutdown',
+    state:
+      device.state === 'Booted' ? 'booted' : device.state === 'Booting' ? 'booting' : 'shutdown',
     detail: device.runtime,
+    lastUsedAt: device.lastUsedAt,
+    availabilityError: device.availabilityError,
     isAvailable: device.isAvailable !== false
   }
 }

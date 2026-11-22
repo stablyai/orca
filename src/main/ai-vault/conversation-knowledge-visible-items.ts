@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { reconcileConversationKnowledgeConflicts } from '../../shared/conversation-knowledge-conflicts'
 import {
   isConversationKnowledgeGenerationTitle,

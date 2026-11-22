@@ -1,12 +1,12 @@
 import { app, ipcMain } from 'electron'
 import { readAiVaultHistorySession, searchAiVaultHistory } from '../ai-vault/session-history'
-import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { getConversationKnowledgeService } from '../ai-vault/conversation-knowledge-service-registry'
-import { getCommitMessageAgentSpec } from '../../shared/commit-message-agent-spec'
+import { getCommitMessageAgentSpec } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { searchConversationKnowledgeItems } from '../../shared/conversation-knowledge-items'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { ALL_TUI_AGENTS } from '../../shared/tui-agent-display-names'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { ALL_TUI_AGENTS } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
 export function registerAiVaultHistoryHandlers(
   environmentResolvers?: CommitMessageAgentEnvironmentResolvers

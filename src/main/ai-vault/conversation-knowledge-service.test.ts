@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ConversationKnowledgeService } from './conversation-knowledge-service'
 import { ConversationKnowledgeCleanupUnverifiedError } from './session-enrichment'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionEnrichment } from '../../shared/ai-vault-history-types'
 import {
   CONVERSATION_KNOWLEDGE_FORMAT_VERSION,

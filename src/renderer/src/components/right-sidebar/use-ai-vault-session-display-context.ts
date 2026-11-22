@@ -1,10 +1,8 @@
 import { useCallback, useMemo } from 'react'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { buildAiVaultSessionProjectById } from './ai-vault-session-projects'
-import {
-  useAiVaultSessionWorktreeMap,
-  withAiVaultCurrentWorktreeStatus
-} from './ai-vault-session-worktree'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { buildAiVaultSessionProjectById } from './ai-vault/scope/ai-vault-session-projects'
+import { useAiVaultSessionWorktreeMap } from './ai-vault/session-list/ai-vault-session-worktree'
+import { withAiVaultCurrentWorktreeStatus } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 type SessionProjectInput = Parameters<typeof buildAiVaultSessionProjectById>[0]
 type SessionWorktreeInput = Parameters<typeof useAiVaultSessionWorktreeMap>[0]

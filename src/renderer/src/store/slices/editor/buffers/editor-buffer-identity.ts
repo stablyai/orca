@@ -1,13 +1,13 @@
 import type { OpenFile } from '../types/open-file'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isCaseInsensitiveRuntimeRoot,
   normalizeRuntimePathSeparators
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 
 /** The physical file an edit tab shows. Renderer-local; the workspace is never part of it. */
 export type EditorBufferIdentity = {

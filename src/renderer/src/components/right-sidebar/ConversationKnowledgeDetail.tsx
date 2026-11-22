@@ -8,7 +8,7 @@ import {
   conversationKnowledgeEvidenceMessageIds,
   type ConversationKnowledgeItem
 } from '../../../../shared/conversation-knowledge-items'
-import { SessionTime } from './ai-vault-session-time'
+import { SessionTime } from './ai-vault/session-list/ai-vault-session-time'
 
 export function ConversationKnowledgeDetail({
   item,
@@ -39,11 +39,13 @@ export function ConversationKnowledgeDetail({
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             {translate('conversationKnowledge.detail.created', 'Created')}
-            <SessionTime value={item.source.createdAt} />
+            {item.source.createdAt ? <SessionTime value={item.source.createdAt} /> : null}
           </span>
           <span className="inline-flex items-center gap-1">
             {translate('conversationKnowledge.detail.modified', 'Last modified')}
-            <SessionTime value={item.source.updatedAt ?? item.source.modifiedAt} />
+            {(item.source.updatedAt ?? item.source.modifiedAt) ? (
+              <SessionTime value={item.source.updatedAt ?? item.source.modifiedAt ?? ''} />
+            ) : null}
           </span>
         </div>
       </div>

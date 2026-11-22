@@ -1,35 +1,37 @@
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+import { ensureDesktopNotificationChannel } from './foreground-delivery/desktop-notification-channel'
 import {
   createHostPushSupportCompletion,
   createHostPushState,
   type HostPushState,
   type HostPushSupportCompletion
-} from './host-push-registration-state'
+} from './push-registration/host-push-registration-state'
 import { AppState } from 'react-native'
-import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
+import { startMobilePushLeaseRenewal } from './push-registration/mobile-push-lease-renewal'
 import {
   loadNotificationDeliveryPreferences,
   notificationPreferencesFilter,
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
-} from './notification-delivery-preferences'
-import type {
-  MobilePushFilter,
-  MobilePushRegisterInput
-} from '../../../src/shared/mobile-push-contract'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import type { RpcOperationSender as PushClient } from '../transport/rpc-operation-sender'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
+} from './delivery-policy/notification-delivery-preferences'
+import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/mobile-runtime-capabilities'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
+import {
+  sendRegister,
+  sendUnregister
+} from './push-registration/mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations
 } from '../storage/preferences'
-import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
-
-export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
+import {
+  addPushTokenListener,
+  getDevicePushToken,
+  type MobilePushToken
+} from './push-registration/push-token'
+import { clearAppIconBadge } from './push-registration/app-icon-badge'
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
@@ -44,7 +46,7 @@ export function getHostPushSupported(hostId: string): boolean | null {
 }
 export function getHostPushSupportCompletion(
   hostId: string,
-  client: PushClient
+  client: UnvalidatedRpcRequestPort
 ): HostPushSupportCompletion | null {
   const connection = hostsById.get(hostId)?.connection
   return connection?.client === client ? connection.support : null
@@ -81,6 +83,14 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
     registeredHostIds: [...value.registered],
     pendingUnregisterHostIds: [...value.pending]
   })
+  clearBadgeWithoutHosts(value)
+}
+
+// Hosts set the icon's count through their pushes; with none registered, nothing would lower it.
+function clearBadgeWithoutHosts(records: RegistrationRecords): void {
+  if (records.registered.size === 0) {
+    clearAppIconBadge()
+  }
 }
 
 // A missing token is retried: APNs registration may still be in flight.
@@ -96,34 +106,6 @@ async function currentToken(): Promise<MobilePushToken | null> {
     tokenPromise = pending
   }
   return tokenPromise
-}
-
-async function sendRegister(
-  client: PushClient,
-  token: MobilePushToken,
-  filter: MobilePushFilter
-): Promise<boolean> {
-  const params: Omit<MobilePushRegisterInput, 'deviceId'> = {
-    platform: token.platform,
-    token: token.token,
-    ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
-    filter
-  }
-  const reply = await pushRouteRegister
-    .request(client, params, { timeoutMs: REQUEST_TIMEOUT_MS, failWhenDisconnected: true })
-    .catch(() => null)
-  const registration = reply && pushRouteRegister.interpret(reply)
-  if (!registration?.accepted) {
-    return false
-  }
-  return registration.value?.registered === true
-}
-
-async function sendUnregister(client: PushClient, timeoutMs: number): Promise<boolean> {
-  const reply = await pushRouteUnregister
-    .request(client, null, { timeoutMs, failWhenDisconnected: true })
-    .catch(() => null)
-  return reply !== null && pushRouteUnregister.interpret(reply).accepted
 }
 
 async function reconcileHost(hostId: string): Promise<void> {
@@ -222,7 +204,10 @@ async function reconcileAllHosts(): Promise<void> {
 }
 
 // Keep tracked host intent across disconnects; this disposer detaches only its current connected client.
-export function attachPushRegistration(hostId: string, client: PushClient): () => void {
+export function attachPushRegistration(
+  hostId: string,
+  client: UnvalidatedRpcRequestPort
+): () => void {
   const state = hostState(hostId)
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
@@ -309,6 +294,10 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 
 // Provider token rollover invalidates delivery, so refresh every connected host immediately.
 export function startPushTokenSync(): () => void {
+  // Also covers a badge an app version without this clear left behind.
+  void readRecords()
+    .then(clearBadgeWithoutHosts)
+    .catch(() => undefined)
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
   const stopToken = addPushTokenListener((token) => {
     tokenPromise = Promise.resolve(token)
@@ -318,14 +307,4 @@ export function startPushTokenSync(): () => void {
     stopLease()
     stopToken()
   }
-}
-
-export function resetPushRegistrationForTests(): void {
-  for (const state of hostsById.values()) {
-    state.connection.support?.retire()
-  }
-  hostsById.clear()
-  registrationRecords = null
-  tokenPromise = null
-  consentGeneration = 0
 }

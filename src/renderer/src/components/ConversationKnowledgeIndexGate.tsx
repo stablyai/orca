@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { getCommitMessageAgentSpec } from '../../../shared/commit-message-agent-spec'
+import { getCommitMessageAgentSpec } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { CONVERSATION_KNOWLEDGE_FORMAT_VERSION } from '../../../shared/conversation-knowledge-items'
 
 const AUTO_INDEX_INTERVAL_MS = 24 * 60 * 60 * 1_000

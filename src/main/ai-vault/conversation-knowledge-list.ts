@@ -3,7 +3,7 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultAgent,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ConversationKnowledgeItem } from '../../shared/conversation-knowledge-items'
 import { isConversationKnowledgeGenerationTitle } from '../../shared/conversation-knowledge-items'
 import { findVerifiedLegacyEmptyIds } from './conversation-knowledge-empty-detection'

@@ -1,12 +1,15 @@
+import { reconsiderCreatorRest } from '../../orchestration/workers/turn-stops/worker-presence-report'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
-import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
+} from '../records/runtime-terminal-state-records'
+
+import { botGroupOfRoomMailAddress } from '../../../../shared/bots/bot-group-room-mail'
+import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
+const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -58,13 +61,13 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
           })
         }
         if (pty) {
-          pty.connected = true
+          this.terminalIdentity.setPtyConnected(pty, true)
           pty.disconnectedAt = null
           this.markPtyLivenessLive(ptyId)
           this.refreshPtyForegroundAgent(ptyId)
         }
       } else if (pty && !this.leafExistsForPty(ptyId)) {
-        pty.connected = false
+        this.terminalIdentity.setPtyConnected(pty, false)
         pty.disconnectedAt ??= Date.now()
       }
     }
@@ -114,7 +117,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     }
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
-    this.ptysById.delete(ptyId)
+    this.terminalIdentity.removePty(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.launchComposerReadyByPtyId.delete(ptyId)
@@ -124,12 +127,12 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.reattachedProviderSequenceByPtyId.delete(ptyId)
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.liveProgramStatusFacetPtyIds.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
@@ -142,15 +145,16 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
+    this.orchestrationMailboxNotifications.forgetReleasedPointerPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
       // Pruning can bypass onPtyExit; release leader teams here too.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      this.handleByPtyId.delete(ptyId)
-      this.syntheticTerminalHandles.delete(handle)
+      this.terminalIdentity.unbindPty(ptyId)
+      this.terminalIdentity.removeSynthetic(handle)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
-        this.handles.delete(handle)
+        this.terminalIdentity.removeHandle(handle)
       }
     }
   }
@@ -175,9 +179,12 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.leavesByPtyId = next
   }
 
-  protected getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
+  protected getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[] {
     return this.leavesByPtyId.get(ptyId) ?? []
   }
+
+  /** Mail for a bot group's room arrived; the runtime copies it into the room. */
+  protected botGroupRoomMailArrived(_groupId: string): void {}
 
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
@@ -186,11 +193,19 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (messageType === 'heartbeat') {
       return
     }
+    // A bot on another computer answered a group's question: it goes to that room, never a mailbox.
+    const roomGroupId = botGroupOfRoomMailAddress(handle)
+    if (roomGroupId !== null) {
+      this.botGroupRoomMailArrived(roomGroupId)
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     } else {
       // A waiting ask rechecks its question, which a settled Dispatch has closed.
       this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
+      // A helper that settled may have been all that held back its creator's report.
+      reconsiderCreatorRest(handle, this.workerTurnStopReportDeps)
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

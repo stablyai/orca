@@ -1,6 +1,6 @@
-import type { NativeChatRole } from './native-chat-types'
-import type { AiVaultAgent } from './ai-vault-types'
-import type { TuiAgent } from './tui-agent'
+import type { NativeChatRole } from './native-chat/native-chat-types'
+import type { AiVaultAgent } from './ai-vault/contracts/ai-vault-types'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ConversationKnowledgeHandoffEntry } from './conversation-knowledge-items'
 
 export type AiVaultHistoryMessage = {

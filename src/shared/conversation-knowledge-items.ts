@@ -1,6 +1,6 @@
-import type { AiVaultAgent } from './ai-vault-types'
-import type { ExecutionHostId } from './execution-host'
-import type { TuiAgent } from './tui-agent'
+import type { AiVaultAgent } from './ai-vault/contracts/ai-vault-types'
+import type { ExecutionHostId } from './execution-host/execution-host'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { reconcileConversationKnowledgeConflicts } from './conversation-knowledge-conflicts'
 
 export const CONVERSATION_KNOWLEDGE_FORMAT_VERSION = 6

@@ -13,7 +13,7 @@ export function ConversationKnowledgeGraphModeSwitch({
   return (
     <ToggleGroup
       type="single"
-      variant="compact"
+      variant="segmented"
       size="xs"
       spacing={1}
       value={value}

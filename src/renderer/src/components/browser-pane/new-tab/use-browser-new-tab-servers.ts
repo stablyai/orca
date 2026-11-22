@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { workspacePortScanKeyForTarget } from '@/lib/workspace-port-actions'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
-import { probeWorkspacePortPageForTarget } from '@/lib/workspace-port-scan-client'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
+import { workspacePortScanKeyForTarget } from '@/lib/workspace-ports/workspace-port-actions'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
+import { probeWorkspacePortPageForTarget } from '@/lib/workspace-ports/workspace-port-scan-client'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspacePort,
   WorkspacePortPageProbeResult
-} from '../../../../../shared/workspace-ports'
+} from '../../../../../shared/workspace/ports/workspace-ports'
 
 export type BrowserNewTabServer = {
   port: WorkspacePort
@@ -27,10 +27,21 @@ function probeKey(target: RuntimeClientTarget, port: WorkspacePort): string {
   return `${workspacePortScanKeyForTarget(target)}|${port.connectHost}|${port.port}|${port.pid ?? ''}`
 }
 
+// Why: GET / wedges the Android emulator's modem simulator, a qemu listener on [::1], at 100% CPU
+// (#42748). qemu hostfwd binds IPv4 and stays probed. A prefix survives Linux's 15-char comm.
+const QEMU_PROCESS_NAME = /^qemu-system-/i
+
+function isAndroidEmulatorModemListener(port: WorkspacePort): boolean {
+  return port.bindHost === '::1' && QEMU_PROCESS_NAME.test(port.processName ?? '')
+}
+
 function probePortPage(
   target: RuntimeClientTarget,
   port: WorkspacePort
 ): Promise<WorkspacePortPageProbeResult | null> {
+  if (isAndroidEmulatorModemListener(port)) {
+    return Promise.resolve(null)
+  }
   const key = probeKey(target, port)
   const cached = probeCache.get(key)
   if (cached && Date.now() - cached.probedAt < PROBE_TTL_MS) {
@@ -107,7 +118,8 @@ export function useBrowserNewTabServers(
           return []
         }
         if (probe === null) {
-          // An older host cannot say; a URL its terminal printed is the best evidence of a page.
+          // An older host or an unprobed listener cannot say; a URL its terminal printed is the
+          // best evidence of a page.
           return port.kind === 'workspace' && port.advertisedUrl
             ? [{ port, title: null, faviconDataUrl: null }]
             : []

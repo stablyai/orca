@@ -28,6 +28,7 @@ const baseItem: ConversationKnowledgeItem = {
   generator: {
     agent: 'codex',
     model: 'gpt-5',
+    language: 'en',
     generatedAt: '2026-09-01T10:01:00.000Z',
     formatVersion: CONVERSATION_KNOWLEDGE_FORMAT_VERSION
   }

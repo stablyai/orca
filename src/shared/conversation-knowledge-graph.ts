@@ -2,7 +2,7 @@ import type {
   ConversationKnowledgeHandoffEntry,
   ConversationKnowledgeItem
 } from './conversation-knowledge-items'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 export type ConversationKnowledgeGraphNode = {

@@ -1,6 +1,6 @@
 import type { ConversationKnowledgeItem } from '../../shared/conversation-knowledge-items'
 import type { AiVaultHistoryReadResult } from '../../shared/ai-vault-history-types'
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { conversationKnowledgeId } from './conversation-knowledge-source-session'
 
 export function isPotentialLegacyEmptySummary(item: ConversationKnowledgeItem): boolean {

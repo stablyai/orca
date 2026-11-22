@@ -5,23 +5,26 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
-import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../shared/workspace-session/workspace-session-state-types'
+import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspace-layout-model'
-import { patchStoredSession } from '../../shared/workspace-layout/workspace-layout-record-patch'
-import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
+import {
+  patchStoredSession,
+  type TouchedSessionRecords
+} from '../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS
 
-function isLayoutField(field: string): boolean {
+export function isLayoutField(field: string): boolean {
   const owner = Object.hasOwn(FIELD_OWNERS, field) ? FIELD_OWNERS[field] : undefined
   return owner === 'layout' || owner === 'legacy'
 }
@@ -67,12 +70,18 @@ function joinWindowView(
 function storedWithWindowView(
   partition: ExecutionHostId,
   stored: WorkspaceSessionState,
-  window: WorkspaceSessionState
+  window: WorkspaceSessionState,
+  touched?: TouchedSessionRecords
 ): WorkspaceSessionState {
   const context = nameBasedLoadContext()
   const main = loadWorkspaceLayoutWithoutReport(partition, stored, context)
   const windows = loadWorkspaceLayoutWithoutReport(partition, window, context)
-  return patchStoredSession(stored, saveWorkspaceLayout(main), joinWindowView(main, windows))
+  return patchStoredSession(
+    stored,
+    saveWorkspaceLayout(main),
+    joinWindowView(main, windows),
+    touched
+  )
 }
 
 function withMainLayoutFields<T extends WorkspaceSessionPatch>(
@@ -136,24 +145,34 @@ function withReconnectFacts<T extends WorkspaceSessionPatch>(
   return next
 }
 
-/** Merge carried layout fields; scalar-only patches skip layout normalization. */
+/**
+ * Merge carried layout fields; scalar-only patches skip layout normalization. `touched`: per stored field, the
+ * keys the merge wrote (layout fields only; a field it left out is unchanged); null where the window's layout passes through.
+ */
 export function windowViewPatchForMain(
   stored: WorkspaceSessionState,
   patch: WorkspaceSessionPatch,
   hostId: string | null | undefined,
   reconnectFacts?: ReconnectFactsFor
-): WorkspaceSessionPatch {
+): { patch: WorkspaceSessionPatch; touched: TouchedSessionRecords | null } {
   const partition = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   if (parseExecutionHostId(partition)?.kind === 'runtime') {
-    return patch
+    return { patch, touched: null }
   }
   const fields = Object.keys(patch).filter(isLayoutField)
+  const touched: TouchedSessionRecords = new Map()
   const joined =
-    fields.length === 0 ? null : storedWithWindowView(partition, stored, { ...stored, ...patch })
+    fields.length === 0
+      ? null
+      : storedWithWindowView(partition, stored, { ...stored, ...patch }, touched)
   const result = joined ? withMainLayoutFields(patch, joined, fields) : patch
   // Replace only reconnect fields actually present in the patch.
   const carried = RECONNECT_FACT_FIELDS.filter((field) => Object.hasOwn(patch, field))
-  return reconnectFacts && carried.length > 0
-    ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
-    : result
+  return {
+    patch:
+      reconnectFacts && carried.length > 0
+        ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
+        : result,
+    touched
+  }
 }

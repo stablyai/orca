@@ -108,7 +108,7 @@ An unreadable process table prevents removal.
 To retain older bundles during a manual sweep, run the underlying command with an age limit:
 
 ```sh
-node config/scripts/reclaim-dev-electron-bundles.mjs --min-age-days 7 --apply
+node config/scripts/worktree-storage/reclaim-dev-electron-bundles.mjs --min-age-days 7 --apply
 ```
 
 That limit uses the bundle directory's modification time. The underlying command also accepts

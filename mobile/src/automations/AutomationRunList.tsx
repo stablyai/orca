@@ -1,10 +1,14 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import {
+  automationRunEventSourceKey,
+  sayAutomationRunEnglish
+} from '../../../src/shared/automations/automation-run-row-words'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import type { MobileAutomationRun } from './automation-reply-schema'
-import { AutomationButton } from './AutomationControls'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
+import { AutomationButton, AutomationChoice } from './AutomationControls'
 import type { AutomationRunObservation } from './use-automation-runs'
 import {
   automationDate,
@@ -66,7 +70,7 @@ export function AutomationRunList(props: {
             }
           )}
           onPress={() => props.onSelect(run)}
-          style={styles.card}
+          style={({ pressed }) => [styles.card, pressed && pressedStyle]}
         >
           <View style={styles.row}>
             <Text style={[styles.heading, styles.grow]}>{run.title}</Text>
@@ -77,7 +81,9 @@ export function AutomationRunList(props: {
             {automationDate(run.scheduledFor)} ·{' '}
             {run.trigger === 'manual'
               ? t('automations.mobile.runNow', 'Run now')
-              : t('automations.mobile.scheduled', 'Scheduled')}
+              : run.trigger === 'event'
+                ? sayAutomationRunEnglish(automationRunEventSourceKey(run))
+                : t('automations.mobile.scheduled', 'Scheduled')}
           </Text>
           {run.workspaceDisplayName ? (
             <Text style={styles.meta}>{run.workspaceDisplayName}</Text>
@@ -95,6 +101,58 @@ export function AutomationRunList(props: {
           disabled={history.loading || !props.connected}
         />
       ) : null}
+    </View>
+  )
+}
+
+/** The Runs tab: which automation and outcome to show, then the runs that match. */
+export function AutomationRunsView(props: {
+  rows: readonly MobileAutomationRow[]
+  automationId: string
+  onAutomation: (automationId: string) => void
+  outcome: string
+  onOutcome: (outcome: string) => void
+  history: AutomationRunObservation
+  connected: boolean
+  onSelect: (run: MobileAutomationRun) => void
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  return (
+    <View style={styles.stack}>
+      <AutomationChoice
+        label={t('automations.mobile.automation', 'Automation')}
+        value={props.automationId}
+        options={[
+          { value: '', label: t('automations.mobile.allAutomations', 'All automations') },
+          ...props.rows.map((entry) => ({
+            value: entry.automation.id,
+            label: entry.automation.name
+          }))
+        ]}
+        onSelect={props.onAutomation}
+      />
+      <AutomationChoice
+        label={t('automations.mobile.outcome', 'Outcome')}
+        value={props.outcome}
+        options={[
+          { value: 'all', label: t('automations.mobile.allOutcomes', 'All outcomes') },
+          { value: 'active', label: t('automations.mobile.inProgress', 'In progress') },
+          { value: 'completed', label: t('automations.mobile.completed', 'Completed') },
+          {
+            value: 'dispatch_failed',
+            label: t('automations.mobile.couldNotStart', 'Could not start')
+          },
+          { value: 'skipped', label: t('automations.mobile.skipped', 'Skipped') }
+        ]}
+        onSelect={props.onOutcome}
+      />
+      <AutomationRunList
+        connected={props.connected}
+        history={props.history}
+        outcome={props.outcome}
+        onSelect={props.onSelect}
+      />
     </View>
   )
 }

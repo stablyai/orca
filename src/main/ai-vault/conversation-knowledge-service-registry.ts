@@ -1,5 +1,5 @@
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import { listAiVaultSessions } from './cached-session-list'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
+import { listAiVaultSessions } from './listing/cached-session-list'
 import { ConversationKnowledgeService } from './conversation-knowledge-service'
 import { ConversationKnowledgeStore } from './conversation-knowledge-store'
 import { ConversationKnowledgeIndexCheckpointStore } from './conversation-knowledge-index-checkpoint-store'

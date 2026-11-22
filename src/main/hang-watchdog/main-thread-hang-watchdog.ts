@@ -1,19 +1,26 @@
-import { Worker } from 'node:worker_threads'
-import { app } from 'electron'
+import type { Worker } from 'node:worker_threads'
+import os from 'node:os'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+import { app, powerMonitor } from 'electron'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
-import { resolveObservabilityConsent } from '../observability'
+import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
+import { nativeHangCaptureDirectory } from './native-hang-capture-store'
+import { recordRecoveredMainThreadStall } from './recovered-stall-trace'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
+  HANG_WATCHDOG_STALL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
+  type HangWatchdogToMainMessage,
   type MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
 export type MainThreadHangWatchdogHandle = {
   stop: () => void
   worker: Worker
+  setMenuBarIconSetting: (enabled: boolean) => void
 }
 
 function positiveTiming(value: string | undefined, fallback: number): number {
@@ -38,7 +45,18 @@ export function installMainThreadHangWatchdog(options: {
   const workerData: HangWatchdogWorkerData = {
     parentPid: process.pid,
     markerPath: hangDetectionMarkerPath(options.userDataPath),
+    tracePath: getTraceFilePath(),
+    artifactDirectory: nativeHangCaptureDirectory(options.userDataPath),
+    processMetadata: {
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron ?? 'unknown',
+      chromeVersion: process.versions.chrome ?? 'unknown',
+      arch: os.arch(),
+      osRelease: os.release(),
+      osVersion: os.version()
+    },
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
+    stallMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_STALL_MS, HANG_WATCHDOG_STALL_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
@@ -46,7 +64,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let worker: Worker
   try {
-    worker = new Worker(workerPath, {
+    worker = spawnWorkerThread(workerPath, {
       name: 'orca-main-thread-hang-watchdog',
       workerData
     })
@@ -56,13 +74,36 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type === 'heartbeat') {
+    if (stopped && message.type !== 'shutdown') {
       return
     }
     try {
       worker.postMessage(message)
     } catch {
       // The worker already exited.
+    }
+  }
+  worker.on('message', (message: HangWatchdogToMainMessage) => {
+    if (
+      message?.type === 'stall-recovered' &&
+      Number.isFinite(message.unresponsiveMs) &&
+      Number.isFinite(message.endedAt)
+    ) {
+      recordRecoveredMainThreadStall(message)
+    }
+  })
+  const powerEvents: NodeJS.EventEmitter = powerMonitor
+  const powerListeners = (['suspend', 'resume', 'lock-screen', 'unlock-screen'] as const).map(
+    (event) => {
+      const listener = (): void =>
+        postMessage({ type: 'power-event', event, observedAt: Date.now() })
+      powerEvents.on(event, listener)
+      return { event, listener }
+    }
+  )
+  const removePowerListeners = (): void => {
+    for (const { event, listener } of powerListeners) {
+      powerEvents.off(event, listener)
     }
   }
   const heartbeatTimer = setInterval(() => {
@@ -75,6 +116,7 @@ export function installMainThreadHangWatchdog(options: {
     stopped = true
     // Drop the app listener immediately so retired workers are not retained by its closure.
     app.off('will-quit', stop)
+    removePowerListeners()
     clearInterval(heartbeatTimer)
     postMessage({ type: 'shutdown' })
   }
@@ -85,9 +127,14 @@ export function installMainThreadHangWatchdog(options: {
   worker.once('exit', () => {
     stopped = true
     app.off('will-quit', stop)
+    removePowerListeners()
     clearInterval(heartbeatTimer)
   })
   worker.unref()
   app.on('will-quit', stop)
-  return { stop, worker }
+  return {
+    stop,
+    worker,
+    setMenuBarIconSetting: (enabled) => postMessage({ type: 'menu-bar-setting', enabled })
+  }
 }

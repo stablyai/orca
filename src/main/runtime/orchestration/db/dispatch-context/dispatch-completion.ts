@@ -1,4 +1,4 @@
-import type { TaskStatus, DispatchContextRow } from '../../types'
+import type { TaskStatus, DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'

@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ConversationHistoryTarget } from '@/lib/conversation-history-selection'
 
 export function exactConversationHistorySessions(

@@ -15,11 +15,12 @@ import { registerStorageRelayNamespace } from './api/storage-relay'
 import { registerStorageSyncNamespace } from './api/storage-sync'
 import { registerWebRequestNamespace } from './api/web-request'
 import { registerRuntimeNamespace } from './api/runtime'
+import { registerSidePanelNamespace } from './api/side-panel'
 import { registerTabsNamespace } from './api/tabs'
 import { registerWebNavigationNamespace } from './api/web-navigation'
 import { registerWindowsNamespace } from './api/windows'
 
-/** Every main-side namespace; each must also appear in src/preload/browser-extension-api-surface.ts. */
+/** Every main-side namespace; each must also appear in src/preload/browser/extensions/api/browser-extension-api-surface.ts. */
 export function registerBrowserExtensionNamespaces(): void {
   registerWindowsNamespace()
   registerTabsNamespace()
@@ -41,4 +42,5 @@ export function registerBrowserExtensionNamespaces(): void {
   registerNativeMessagingNamespace()
   registerManagementNamespace()
   registerDeclarativeNetRequestNamespace()
+  registerSidePanelNamespace()
 }

@@ -1,10 +1,10 @@
-import { SIDEBAR_INPUTS_SEMANTICS_VERSION } from '../sidebar-list/sidebar-inputs-feed-contract'
-import type { InstalledSidebarInputs } from '../sidebar-list/sidebar-inputs-feed-installer'
+import { SIDEBAR_INPUTS_SEMANTICS_VERSION } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
+import type { InstalledSidebarInputs } from '../sidebar-list/feed/sidebar-inputs-feed-installer'
 import {
   readSidebarFeedDomains,
   type SidebarFeedDomains,
   type SidebarFeedRead
-} from '../sidebar-list/sidebar-feed-domains'
+} from '../sidebar-list/feed/sidebar-feed-domains'
 
 /** One host's installed feed and its typed domains; replaced whole on each install, never edited. */
 export type SidebarFeedSnapshot = Readonly<SidebarFeedRead>

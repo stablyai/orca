@@ -1,31 +1,41 @@
 import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
+import { release } from 'node:os'
 import { join } from 'node:path'
-import { getAppIconPath } from '../app-icon'
-import { browserManager } from '../browser/browser-manager'
-import { getBrowserClientHostId } from '../browser/browser-client-host-id'
-import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
-import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { pathToFileURL } from 'node:url'
+import { installRendererHangStackPolicy } from '../hang-watchdog/renderer-hang-stack-policy'
+import { getAppIconPath } from './desktop-integration/app-icon'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
+import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
+import {
+  formatWindowMaterialArgument,
+  resolveWindowMaterial
+} from '../../shared/app-lifecycle/windows/window-material'
+import { windowMaterialOptions } from './presentation/window-material-options'
+import { rememberWindowMaterial } from './presentation/window-material-suppression'
+import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
-import type { Store } from '../persistence'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
-import {
-  installMainWindowCloseLifecycle,
-  WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
-} from './main-window-close-lifecycle'
-import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { mainWindowLoadErrorCode } from './main-window-load-error-code'
-import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
-import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
-import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
-import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
+import type {
+  CreateMainWindowOptions,
+  MainWindowLoadObserver
+} from './main-window/main-window-contracts'
+import { mainWindowLoadErrorCode } from './renderer-recovery/main-window-load-error-code'
+import { installMainWindowFocusLifecycle } from './main-window/main-window-focus-lifecycle'
+import { installMainWindowShortcutRouting } from './main-window/main-window-shortcut-routing'
+import { installMainWindowStateLifecycle } from './main-window/main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window/main-window-activity'
+import { stopHiddenWindowFramePumpOnShow } from './visibility/hidden-window-frame-pump'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
-} from '../../shared/hidden-window-frame-pump'
+} from '../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,
@@ -34,15 +44,21 @@ import {
   TITLEBAR_CSS_CENTER,
   TRAFFIC_LIGHT_RADIUS,
   TRAFFIC_LIGHT_X
-} from './main-window-visual-lifecycle'
-import { installMainWindowWebviewSecurity } from './main-window-webview-security'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
-import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
-
-export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
+} from './main-window/main-window-visual-lifecycle'
+import { installMainWindowWebviewSecurity } from './security/main-window-webview-security'
+import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
+import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
+import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from './web-contents-listener-budget'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
+  installRendererHangStackPolicy(
+    mainWindow.webContents,
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL
+      : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  )
   const load =
     !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -64,10 +80,10 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
 }
 
 export function createMainWindow(
-  store: Store | null,
+  nativeSettings: NativeSettingsProjection | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const rawSavedBounds = store?.getUI().windowBounds
+  const rawSavedBounds = nativeSettings?.getUI().windowBounds
   // Reject tiny/off-screen saved bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -82,7 +98,8 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = store?.getUI().windowMaximized ?? false
+  const savedMaximized = nativeSettings?.getUI().windowMaximized ?? false
+  const savedFullScreen = nativeSettings?.getUI().windowFullScreen ?? false
   // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
@@ -93,15 +110,17 @@ export function createMainWindow(
     }
   })()
 
-  const settings = store?.getSettings()
+  const settings = nativeSettings?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Webview guests have no safe transcript target; yield the dictation shortcut to the page.
-    return false
+    const voice = nativeSettings?.getSettings().voice
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
+    return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
-  const blur = settings?.windowBackgroundBlur ?? false
-  // Only Windows acrylic is visible; macOS transparency adds WindowServer compositing behind opaque content (#8482). Creation-time only.
-  const platformBlurOptions =
-    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  const windowMaterial = resolveWindowMaterial(
+    settings,
+    { platform: process.platform, osRelease: release() },
+    nativeTheme.prefersReducedTransparency
+  )
 
   const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
   const mainWindow = new BrowserWindow({
@@ -116,7 +135,11 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    ...windowMaterialOptions(
+      windowMaterial,
+      process.platform,
+      nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
+    ),
     // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
     titleBarStyle:
       process.platform === 'darwin'
@@ -136,7 +159,6 @@ export function createMainWindow(
         }
       : {}),
     icon: getAppIconPath(settings?.appIcon),
-    ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -144,11 +166,15 @@ export function createMainWindow(
       // Pass host identity at birth so the renderer has it before first snapshot, without waiting for IPC registration.
       additionalArguments: [
         formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
         ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),
         ...wslHostsWindowArguments()
       ]
     }
   })
+  rememberWindowMaterial(mainWindow, windowMaterial)
+  mainWindow.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+  mainWindow.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.
@@ -190,10 +216,14 @@ export function createMainWindow(
   const state = installMainWindowStateLifecycle({
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
+    revealInBackground: opts?.revealInBackground,
     savedMaximized,
-    store
+    savedFullScreen,
+    nativeSettings
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
+  const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)
   }
@@ -206,14 +236,14 @@ export function createMainWindow(
   })
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
-  installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
+  installMainWindowShortcutRouting({ focus, mainWindow, opts, nativeSettings })
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,
     mainWindow,
     opts,
     rendererWebContentsId,
     state,
-    store
+    nativeSettings
   })
 
   mainWindow.on('closed', () => {
@@ -221,6 +251,7 @@ export function createMainWindow(
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    activity.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

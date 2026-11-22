@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ConversationKnowledgeIndexStatus } from '../../shared/conversation-knowledge-items'
 import type { ConversationKnowledgeIndexCheckpoint } from './conversation-knowledge-index-checkpoint-store'
 import type { ConversationKnowledgeServiceDependencies } from './conversation-knowledge-service-dependencies'

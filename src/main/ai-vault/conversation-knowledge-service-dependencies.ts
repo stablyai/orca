@@ -1,5 +1,5 @@
 import type { AiVaultHistoryReadResult } from '../../shared/ai-vault-history-types'
-import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ConversationKnowledgeItem } from '../../shared/conversation-knowledge-items'
 import type { ConversationKnowledgeIndexCheckpointStore } from './conversation-knowledge-index-checkpoint-store'
 import type { enrichAiVaultSession } from './session-enrichment'

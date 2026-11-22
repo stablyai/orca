@@ -2,7 +2,7 @@
 
 const { existsSync, readdirSync } = require('node:fs')
 const { join, relative } = require('node:path')
-const { readPeMachine } = require('./scripts/windows-pe-machine.cjs')
+const { readPeMachine } = require('./scripts/native-build/windows/windows-pe-machine.cjs')
 
 /** Files a runtime package publishes that no desktop package, or only Windows, loads. */
 const RUNTIME_PACKAGE_EXCLUDED_FILES = {

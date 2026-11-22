@@ -1,31 +1,28 @@
 import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalWaiter
-} from '../../runtime-terminal-contracts'
-import {
-  TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { withTimeout } from '../../runtime-async-boundaries'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalWaiter } from './terminal-waiter'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
   isKnownReadyPromptSettled
-} from '../../terminal-wait-detection'
+} from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import { restoreProjectedComposerDraft } from '../../orca-runtime-terminal-projection'
+import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
-} from '../../terminal-wait-results'
-import { outputClockOf } from '../../tui-idle-evidence-source'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from './terminal-wait-results'
+import { outputClockOf } from './tui-idle-evidence-source'
+import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint'
+import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
   /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */
@@ -73,16 +70,20 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
-        const ready = screenRule
-          ? isKnownReadyPromptBody(
-              snapshotText,
-              agent,
-              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
-              // Why read now: output since the probe started makes the pane clocked.
-              outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
-            )
-          : isKnownReadyPromptSettled(snapshotText)
+        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse,
+        // nor on a frame no current program painted (a reattach awaiting paint, or the shell back in front).
+        const ready =
+          !isShellInFront(pty) &&
+          hasTerminalAgentPainted(pty, agent) &&
+          (screenRule
+            ? isKnownReadyPromptBody(
+                snapshotText,
+                agent,
+                () => restoreProjectedComposerDraft(projection.tail, projection.draft),
+                // Why read now: output since the probe started makes the pane clocked.
+                outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
+              )
+            : isKnownReadyPromptSettled(snapshotText))
         if (!blockedReason && !ready) {
           return
         }

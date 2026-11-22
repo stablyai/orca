@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import type { AiVaultAgent, AiVaultScope } from '../../../../shared/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  AiVaultAgent,
+  AiVaultScope
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   consumeConversationHistoryTarget,
   type ConversationHistoryTarget
 } from '@/lib/conversation-history-selection'
-import type { AiVaultSessionLimit } from './ai-vault-session-limit'
+import type { AiVaultSessionLimit } from './ai-vault/session-list/ai-vault-session-limit'
 
 export function useAiVaultHistoryNavigation(input: {
   onScopeChange: (scope: AiVaultScope) => void

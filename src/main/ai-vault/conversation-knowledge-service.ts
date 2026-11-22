@@ -2,14 +2,14 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultAgent,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isConversationKnowledgeGenerationTitle,
   isConversationKnowledgeItemFresh,
   type ConversationKnowledgeIndexStatus,
   type ConversationKnowledgeItem
 } from '../../shared/conversation-knowledge-items'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   ConversationKnowledgeCleanupUnverifiedError,
   resolveConversationKnowledgeModel
@@ -19,7 +19,7 @@ import {
   conversationPathIsWithin,
   isKnowledgeGenerationSession
 } from './conversation-knowledge-source-session'
-import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
+import { cancelLocalGeneration } from '../text-generation/execution/source-control-generation-lanes'
 import type { ConversationKnowledgeIndexCheckpoint } from './conversation-knowledge-index-checkpoint-store'
 import {
   isCanceledConversationKnowledgeGeneration,

@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import {
+  ALL_TUI_AGENTS,
+  TUI_AGENT_DISPLAY_NAMES
+} from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import {
   getCommitMessageAgentSpec,
   type CommitMessageModelCapability
-} from '../../../../shared/commit-message-agent-spec'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { SettingsSwitch } from './SettingsFormControls'
-import { SearchableSetting } from './SearchableSetting'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getExperimentalSearchEntry } from './experimental-search'
+import { Switch as SettingsSwitch } from '../ui/switch'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getExperimentalSearchEntry } from './advanced/experimental-search'
 import { useTranslation } from 'react-i18next'
 
 type Props = {
@@ -121,11 +124,11 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
         </div>
         <SettingsSwitch
           checked={settings.conversationKnowledgeEnabled === true}
-          ariaLabel={translate(
+          aria-label={translate(
             'conversationKnowledge.settings.toggle',
             'Toggle Conversation Knowledge'
           )}
-          onChange={() =>
+          onCheckedChange={() =>
             updateSettings({
               conversationKnowledgeEnabled: settings.conversationKnowledgeEnabled !== true
             })
@@ -148,11 +151,11 @@ export function ConversationKnowledgeExperimentalSetting({ settings, updateSetti
             </div>
             <SettingsSwitch
               checked={settings.conversationKnowledgeEnrichmentEnabled === true}
-              ariaLabel={translate(
+              aria-label={translate(
                 'conversationKnowledge.enrichmentToggle',
                 'Toggle AI Knowledge Enrichment'
               )}
-              onChange={() =>
+              onCheckedChange={() =>
                 updateSettings({
                   conversationKnowledgeEnrichmentEnabled:
                     settings.conversationKnowledgeEnrichmentEnabled !== true

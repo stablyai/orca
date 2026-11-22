@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ConversationKnowledgeItem } from '../../shared/conversation-knowledge-items'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 
 type StoredConversationKnowledge = {

@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react'
 import { RefreshControl, SectionList, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { SectionHeader } from '../components/list/SectionHeader'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { SectionHeader } from '../components/list/ListGroup'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type {
   MobileAgentHistoryCard,
@@ -19,6 +19,8 @@ type Props = {
   showCurrentWorktreeBadges: boolean
   resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  primaryAction?: 'resume' | 'handoff'
+  onLongPress?: (session: AiVaultSession) => void
   onRefresh: () => void
   /** Clears the bottom search bar floating over the list. */
   bottomPadding?: number
@@ -31,6 +33,8 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
+  primaryAction,
+  onLongPress,
   onRefresh,
   bottomPadding = 0
 }: Props) {
@@ -50,11 +54,15 @@ export function MobileAgentSessionHistoryList({
         showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         resumeActionState={resumeActionStateBySessionId?.get(item.id)}
         onResume={onResume}
+        primaryAction={primaryAction}
         onPress={() => toggleExpanded(item.id)}
+        onLongPress={onLongPress}
       />
     ),
     [
       expandedId,
+      onLongPress,
+      primaryAction,
       onResume,
       resumeActionStateBySessionId,
       sessionsById,

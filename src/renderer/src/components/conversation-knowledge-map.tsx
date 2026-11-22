@@ -273,7 +273,7 @@ function ConceptMapNode({
         })}
       </span>
       {entry.verifiedEvidenceCount ? (
-        <Badge className="mt-1" variant="evidence">
+        <Badge className="mt-1" variant="outline">
           {translate('conversationKnowledge.map.verifiedCount', '{{count}} verified', {
             count: entry.verifiedEvidenceCount
           })}

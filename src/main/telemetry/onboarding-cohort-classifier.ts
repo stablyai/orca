@@ -1,8 +1,8 @@
 // Known limitation: live completion shares upgrade-backfill shape, so dashboards forward-fill cohort from _started (onboarding-telemetry-extensions.md §2). TODO: add a migration sentinel. Failed/uninitialized reads omit the optional cohort rather than break telemetry.
 
-import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding-defaults'
-import type { OnboardingCohort } from '../../shared/telemetry-events'
-import type { Store } from '../persistence'
+import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding/onboarding-defaults'
+import type { OnboardingCohort } from '../../shared/telemetry/telemetry-event-classification'
+import type { Store } from '../persistence/loading-store/store'
 
 let storeRef: Store | null = null
 
