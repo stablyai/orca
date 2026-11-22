@@ -52,6 +52,15 @@ export function sessionLiveTextReaders(
   return groups.length > 0 ? { ...liveTextReadersOf(all, all.some(shownViewer)), groups } : null
 }
 
+/** A reader waits on a row's save once it was shortened, or once it was sent but its append base
+ *  is gone; the save restores the base, so live text resumes. */
+function readerTakesRow(reader: Subscriber, itemId: string): boolean {
+  if (reader.liveShortened?.has(itemId)) {
+    return false
+  }
+  return !(reader.liveSent?.has(itemId) && reader.holdsTextBase?.(itemId) === false)
+}
+
 /** What one subscriber reads of the session's live text. */
 export const subscriberLiveTextReaders = (subscriber: Subscriber): LiveTextReaders =>
   liveTextReadersOf([subscriber], shownViewer(subscriber))
@@ -68,7 +77,7 @@ function liveTextReadersOf(subscribers: Iterable<Subscriber>, shown: boolean): L
     : {
         appends: true,
         shown,
-        takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId))
+        takes: (itemId) => appenders.some((reader) => readerTakesRow(reader, itemId))
       }
 }
 

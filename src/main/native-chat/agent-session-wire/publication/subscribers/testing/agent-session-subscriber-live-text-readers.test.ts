@@ -29,3 +29,20 @@ it('still reads a row an older reader takes, beside a shown phone that no longer
   const phoneOnly = sessionLiveTextReaders(new Map([['phone', phone]]))
   expect(phoneOnly?.takes?.('reply')).toBe(false)
 })
+
+it('skips a row a reader was sent but can no longer append to, until its save gives the base back', () => {
+  let holdsBase = false
+  const phone = subscriber({
+    id: 'phone',
+    liveTextViewer: 'phone',
+    liveTextShown: true,
+    holdsTextBase: () => holdsBase,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the key is read.
+    liveSent: new Map([['reply', {} as never]])
+  })
+  const readers = sessionLiveTextReaders(new Map([['phone', phone]]))
+  expect(readers?.takes?.('reply')).toBe(false)
+  expect(readers?.takes?.('other')).toBe(true)
+  holdsBase = true
+  expect(readers?.takes?.('reply')).toBe(true)
+})

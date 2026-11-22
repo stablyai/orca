@@ -1,20 +1,23 @@
 import type { StructuredAgentSessionViewerVisibility } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
 import type { StructuredAgentSessionLiveTextViewer } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-text-viewer'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
 
-const documentHidden = (): boolean =>
-  typeof document !== 'undefined' && document.visibilityState === 'hidden'
+// The window's recovered visibility: macOS can latch the document hidden after display sleep, and
+// real input then proves it shown.
+const documentHidden = (): boolean => typeof document !== 'undefined' && !getWindowParkVisible()
 
 function subscribeDocumentShown(shown: () => void): () => void {
   if (typeof document === 'undefined') {
     return () => {}
   }
-  const onChange = (): void => {
+  return subscribeWindowParkVisibility(() => {
     if (!documentHidden()) {
       shown()
     }
-  }
-  document.addEventListener('visibilitychange', onChange)
-  return () => document.removeEventListener('visibilitychange', onChange)
+  })
 }
 
 const heldDrawnBySession = new Map<string, number>()
@@ -57,13 +60,8 @@ export function documentLiveTextViewer(
   return {
     supported,
     shown: () => !documentHidden(),
-    subscribeShown: (changed) => {
-      if (typeof document === 'undefined') {
-        return () => {}
-      }
-      document.addEventListener('visibilitychange', changed)
-      return () => document.removeEventListener('visibilitychange', changed)
-    },
+    subscribeShown: (changed) =>
+      typeof document === 'undefined' ? () => {} : subscribeWindowParkVisibility(changed),
     setShown
   }
 }
