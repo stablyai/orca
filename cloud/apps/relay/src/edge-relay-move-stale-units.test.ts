@@ -126,6 +126,36 @@ describe('edge move past stale unleased counters on a reserve-mode cell', () => 
     expect(h.pushes).toHaveLength(0)
   })
 
+  it('moves the host past leases that have all expired', async () => {
+    const h = await setup()
+    await h.database.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id, request_units, expires_at, updated_at)
+       VALUES (?, ?, 'invite:c7:1', 'invite', ?, 1, 900, 0), (?, ?, 'invite:c7:2', 'invite', ?, 1, 1000, 0)`,
+      [IDENTITY.userId, IDENTITY.relayHostId, GCE_CELL.id, IDENTITY.userId, IDENTITY.relayHostId, GCE_CELL.id]
+    )
+    const moved = await h.edge.moveToEdge(IDENTITY, 0, undefined, undefined, { ownControl: true, staleOnReserveCells: RESERVE })
+    expect(moved.cellId).toBe(EDGE_CELL_ID)
+    expect(Number((await h.row()).reserved_invites)).toBe(0)
+    expect(h.logged('orca_relay_edge_moved')).toEqual([expect.objectContaining({ staleUnits: true })])
+  })
+
+  it('defers when one lease is live beside expired ones', async () => {
+    const h = await setup()
+    await h.database.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id, request_units, expires_at, updated_at)
+       VALUES (?, ?, 'invite:c7:1', 'invite', ?, 1, 900, 0), (?, ?, 'invite:c7:2', 'invite', ?, 1, 1001, 0)`,
+      [IDENTITY.userId, IDENTITY.relayHostId, GCE_CELL.id, IDENTITY.userId, IDENTITY.relayHostId, GCE_CELL.id]
+    )
+    const deferred = await h.edge
+      .moveToEdge(IDENTITY, 0, undefined, undefined, { ownControl: true, staleOnReserveCells: RESERVE })
+      .catch((error: unknown) => error)
+    expect(deferred).toMatchObject({ reason: 'units_held' })
+    expect((await h.row()).cell_id).toBe(GCE_CELL.id)
+    expect(h.pushes).toHaveLength(0)
+  })
+
   it('defers when the cell is not in reserve mode, or without the option', async () => {
     const h = await setup()
     for (const options of [{ ownControl: true, staleOnReserveCells: new Set<string>() }, { ownControl: true }]) {
