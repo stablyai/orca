@@ -72,6 +72,7 @@ export async function botSessionInstructions(
       neverLinked = bot.skillProjects === undefined
       context.launched(record.sessionId, bot.id, launchDirectory, files, startsFresh(record), {
         block: botRulesBlock(agent),
+        name: bot.name,
         delivered: rulesDelivered(record),
         recorded: record.instructionsKey ?? null,
         rebuilt: READS_INSTRUCTIONS_EACH_START.has(record.provider)

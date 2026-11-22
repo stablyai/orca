@@ -1,18 +1,20 @@
 // Settings › Connectors: the desktop's BotConnectorsSection as a page inside the bot's settings, in its order:
 // each Slack workspace, each Linear workspace, GitHub, Google, Webhooks, then each app signed in through Composio.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useState, type ReactNode } from 'react'
 import { Blocks, Plus } from 'lucide-react-native'
 import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
-import { composioAppName } from '../../../../src/shared/composio/composio-curated-apps'
+import {
+  COMPOSIO_CURATED_APPS,
+  composioAppName
+} from '../../../../src/shared/composio/composio-curated-apps'
+import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { hostReadClient } from '../../query/host-read-client'
-import { googleStatusRead } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
+import { openGitHubLink } from './connector-link'
 import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
@@ -25,6 +27,16 @@ import type { BotAccessRequests } from '../use-bot-access-requests'
 import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
 import { MobileBotAddConnector } from './MobileBotAddConnector'
+import type { ConnectorPage } from './connector-pages'
+import { MobileBotConnectorAccountPage } from './MobileBotConnectorAccountPages'
+import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
+import {
+  connectorNames,
+  connectorTitle,
+  githubOrgsOf,
+  linearGitHubRows
+} from './connector-account-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
 import { MobileBotSlackSetup } from './MobileBotSlackSetup'
 import { slackRowFace } from './mobile-slack-copy'
@@ -43,37 +55,13 @@ type ConnectorsContext = {
 /** What Slack's page needs from Settings: the bot shaped for the access confirm, and removing a person. */
 type ConnectorsActions = {
   accessBot: Parameters<typeof MobileBotSlackPage>[0]['accessBot']
-  /** Settings' own save, which Slack's page uses to stop one person asking. */
-  save: (updates: ReturnType<typeof memberRemoval>) => unknown
+  /** Settings' own save: a connector's page stops one person asking, turns it on or removes it. */
+  save: (updates: BotUpdateParams['updates']) => Promise<boolean>
 }
 
-type Page =
-  | { kind: 'list' }
-  | { kind: 'add' }
-  /** No team: a bot whose app was removed but whose Slack people remain. */
-  | { kind: 'slack'; teamId: string | undefined }
-  /** `from`: where Cancel returns. */
-  | { kind: 'slack-setup'; teamId: string | undefined; from: Page }
+type Page = ConnectorPage
 
 const ICON = 20
-
-function title(service: string, place: string | null | undefined, t: Translate): string {
-  return place ? `${service}${t('bots.connector.titleSeparator', ' · ')}${place}` : service
-}
-
-const linearAddress = (urlKey: string): string => `linear.app/${urlKey}`
-
-/** The services the bot's own record says it has, for the Settings row. */
-function connectorNames(bot: PhoneBot, hasHooks: boolean, t: Translate): string[] {
-  return [
-    (botSlackApps(bot).length > 0 || botMembersFrom(bot.members, 'slack').length > 0) &&
-      BOT_CONNECTOR_NAMES.slack,
-    botLinearWorkspaces(bot).length > 0 && BOT_CONNECTOR_NAMES.linear,
-    bot.github !== null && BOT_CONNECTOR_NAMES.github,
-    bot.google === true && BOT_CONNECTOR_NAMES.google,
-    hasHooks && t('bots.webhooks.name', 'Webhooks')
-  ].filter((name): name is string => typeof name === 'string')
-}
 
 /** The Settings row and, while open, the page that replaces Settings (or Webhooks, opened from it). */
 export function useMobileBotConnectorSettings(
@@ -111,30 +99,6 @@ export function useMobileBotConnectorSettings(
   }
 }
 
-/** The host's Google accounts' addresses, read while the page shows a bot that uses Google. */
-function useGoogleEmails(client: RpcClient | null, enabled: boolean, again: number): string[] {
-  const [emails, setEmails] = useState<string[]>([])
-  useEffect(() => {
-    if (!client || !enabled) {
-      return
-    }
-    let current = true
-    void googleStatusRead
-      .request(hostReadClient(client), {})
-      .then((reply) => {
-        if (current) {
-          setEmails((googleStatusRead.interpret(reply).accounts ?? []).map((a) => a.email))
-        }
-      })
-      // Unread, the row keeps what it showed.
-      .catch(() => {})
-    return () => {
-      current = false
-    }
-  }, [client, enabled, again])
-  return emails
-}
-
 function ConnectorsPage(
   props: ConnectorsContext &
     ConnectorsActions & { banner: ReactNode; webhooksRow: ReactNode; onBack: () => void }
@@ -160,9 +124,30 @@ function ConnectorsPage(
     reads,
     slackApps.length > 0 || page.kind === 'slack-setup'
   )
-  const googleEmails = useGoogleEmails(props.client, bot.google === true, reads)
+  const linearPages = page.kind === 'linear' || page.kind === 'linear-setup'
+  const linear = usePhoneLinearAccount(
+    props.client,
+    botLinearWorkspaces(bot).length > 0 || linearPages,
+    reads
+  )
+  const github = usePhoneGitHubAccount(
+    props.client,
+    bot.github !== null ||
+      page.kind === 'github' ||
+      page.kind === 'github-setup' ||
+      page.kind === 'add',
+    reads
+  )
+  const google = usePhoneGoogleStatus(
+    props.client,
+    bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
+    reads
+  )
   const composio = useMobileComposio(props.client, props.routeBot.hostKey, bot.id)
   const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
+  const githubState = github.view.status === 'ready' ? github.view.value : null
+  const githubInstallUrl = githubState?.installUrl ?? null
+  const githubOrgs = githubOrgsOf(bot, githubState)
   const { showToast } = props
   const onInstalled = useCallback(
     (teamId: string) => {
@@ -217,6 +202,31 @@ function ConnectorsPage(
       />
     )
   }
+  if (page.kind !== 'list' && page.kind !== 'add') {
+    return (
+      <MobileBotConnectorAccountPage
+        page={page}
+        setPage={setPage}
+        client={props.client}
+        bot={bot}
+        accessBot={props.accessBot}
+        hostKey={props.routeBot.hostKey}
+        hostBots={hostBots}
+        access={props.accessRequests}
+        hostName={props.hostName}
+        online={props.online}
+        banner={props.banner}
+        showToast={props.showToast}
+        save={props.save}
+        removeMember={(member) => void props.save(memberRemoval(member))}
+        onAskInChat={props.onAskInChat}
+        linear={linear}
+        github={github}
+        google={google}
+        composio={composio}
+      />
+    )
+  }
   if (page.kind === 'add') {
     const manage = list
     const setUpSlack = (teamId: string | undefined) =>
@@ -236,9 +246,27 @@ function ConnectorsPage(
             add: () => setUpSlack(undefined),
             manage
           },
-          { id: 'github', added: bot.github !== null, manage },
-          { id: 'linear', added: botLinearWorkspaces(bot).length > 0, manage },
-          { id: 'google', added: bot.google === true, manage },
+          {
+            id: 'github',
+            added: bot.github !== null,
+            // Another org: GitHub's install page, where the owner picks it, as the desktop does.
+            ...(githubInstallUrl ? { addAnother: () => openGitHubLink(githubInstallUrl) } : {}),
+            add: () => setPage({ kind: 'github-setup', from: page }),
+            manage
+          },
+          {
+            id: 'linear',
+            added: botLinearWorkspaces(bot).length > 0,
+            addAnother: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
+            add: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
+            manage
+          },
+          {
+            id: 'google',
+            added: bot.google === true,
+            add: () => setPage({ kind: 'google-connect', from: page }),
+            manage
+          },
           {
             id: 'webhooks',
             added: props.webhooksRow !== null,
@@ -249,10 +277,29 @@ function ConnectorsPage(
             manage
           }
         ]}
+        composio={{
+          curated: COMPOSIO_CURATED_APPS,
+          active: signIns
+            .filter((connection) => connection.status === 'active')
+            .map((connection) => connection.app),
+          catalog: composio.status?.key === 'ok' ? { client: props.client, botId: bot.id } : null,
+          onPick: (app) => {
+            // Signed in already: Manage opens the app's page, as the desktop does.
+            const active = signIns.find(
+              (connection) => connection.app === app.slug && connection.status === 'active'
+            )
+            setPage(
+              active
+                ? { kind: 'composio', app: active.app, label: active.label }
+                : { kind: 'composio-connect', app, from: page }
+            )
+          }
+        }}
       />
     )
   }
 
+  const googleEmails = (google.status?.accounts ?? []).map((account) => account.email)
   const mark = (source: 'slack' | 'linear' | 'github') => (
     <MobileConnectorSourceIcon source={source} size={ICON} />
   )
@@ -263,7 +310,7 @@ function ConnectorsPage(
       <ListRow
         key={`slack:${app.teamId}`}
         leading={mark('slack')}
-        title={title(BOT_CONNECTOR_NAMES.slack, face.workspace, t)}
+        title={connectorTitle(BOT_CONNECTOR_NAMES.slack, face.workspace, t)}
         subtitle={face.description}
         subtitleLines={1}
         value={face.status?.label}
@@ -284,20 +331,17 @@ function ConnectorsPage(
       />
     )
   }
-  for (const workspace of botLinearWorkspaces(bot)) {
-    rows.push(
-      <ListRow
-        key={`linear:${workspace.workspaceId}`}
-        leading={mark('linear')}
-        title={title(BOT_CONNECTOR_NAMES.linear, workspace.workspaceName, t)}
-        subtitle={workspace.urlKey ? linearAddress(workspace.urlKey) : undefined}
-        subtitleLines={1}
-      />
-    )
-  }
-  if (bot.github) {
-    rows.push(<ListRow key="github" leading={mark('github')} title={BOT_CONNECTOR_NAMES.github} />)
-  }
+  rows.push(
+    ...linearGitHubRows({
+      bot,
+      linear: linear.view,
+      githubOrgs,
+      githubState,
+      setPage,
+      save: props.online ? props.save : null,
+      t
+    })
+  )
   if (bot.google === true) {
     rows.push(
       <ListRow
@@ -306,6 +350,8 @@ function ConnectorsPage(
         title={BOT_CONNECTOR_NAMES.google}
         subtitle={googleEmails.length > 0 ? googleEmails.join(', ') : undefined}
         subtitleLines={1}
+        navigates
+        onPress={() => setPage({ kind: 'google' })}
       />
     )
   }
@@ -317,11 +363,19 @@ function ConnectorsPage(
       <ListRow
         key={`composio:${connection.app}:${connection.label ?? ''}`}
         leading={<Blocks size={ICON} color={colors.textSecondary} />}
-        title={composioAppName(connection.app)}
-        subtitle={[connection.label, t('bots.composio.viaComposio', 'via Composio')]
-          .filter(Boolean)
-          .join(' · ')}
+        title={composioAppName(connection.app, connection.name)}
+        subtitle={
+          connection.status === 'active'
+            ? [connection.label, t('bots.composio.viaComposio', 'via Composio')]
+                .filter(Boolean)
+                .join(' · ')
+            : t('bots.composio.signedOut', 'Signed out · {{via}}', {
+                via: t('bots.composio.viaComposio', 'via Composio')
+              })
+        }
         subtitleLines={1}
+        navigates
+        onPress={() => setPage({ kind: 'composio', app: connection.app, label: connection.label })}
       />
     )
   }

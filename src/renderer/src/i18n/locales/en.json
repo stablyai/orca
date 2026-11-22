@@ -1332,7 +1332,8 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "chat": "Deleting a chat"
       },
       "pages": {
         "folder": "Workspace folder",
@@ -1948,8 +1949,7 @@
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
-      "info": "About automatic updates",
-      "installingStatus": "is being installed."
+      "info": "About automatic updates"
     }
   },
   "menu": {
@@ -2470,7 +2470,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "Could not launch {{value0}} in a new terminal.",
-                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready.",
+                "agentExited": "The agent exited before your prompt was sent."
               }
             }
           },
@@ -7221,7 +7222,7 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree, local changes, and its branch if merged."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
@@ -8410,7 +8411,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "description": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
+          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -9318,21 +9320,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",
-          "d89806cc89": "is ready to install.",
-          "a6b37929dc": "Version",
-          "8311da27ba": "is available.",
           "02dc082e70": "Could not start the update download.",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
-          "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
           "f40d88390d": "You’re on the latest version.",
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
-          "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself.",
           "6d27bd46e3": "Check for updates",
-          "857ca887da": "Download update (",
-          "c0a8f827c7": "Restart to update ("
+          "downloadUpdate": "Download update",
+          "restartToUpdate": "Restart to update",
+          "versionAvailable": "Version {{version}} is available.",
+          "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.",
+          "versionReadyToInstall": "Version {{version}} is ready to install.",
+          "versionInstalling": "Version {{version}} is being installed.",
+          "downloadingVersion": "Downloading version {{version}} ({{percent}}%)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -13527,13 +13529,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
-          "title": "Release channel",
+          "title": "Update channel",
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
-          "channelAriaLabel": "Update channel",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
+          "adhocWarning": "Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",
@@ -13543,9 +13542,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "devChannelUnsupportedAria": "{{value0}} ({{value1}} only)",
-          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.",
+          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on {{stable}} or {{rc}}.",
           "downloadInstaller": "Download installer",
-          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here."
+          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to {{stable}}, works from here.",
+          "stableLabel": "Stable",
+          "stableDescription": "Stable releases for general use.",
+          "rcLabel": "RC",
+          "rcDescription": "Release candidates published before a stable release.",
+          "hourlyLabel": "Hourly",
+          "hourlyDescription": "Built every hour from main.",
+          "dailyLabel": "Daily",
+          "dailyDescription": "Built once a day from main.",
+          "adhocLabel": "Ad hoc",
+          "adhocDescription": "One-off builds from a branch for trying changes before they merge.",
+          "devChannelPlatforms": "macOS and Windows",
+          "scheduledWarning": "These builds ship with no test gate. Windows builds are unsigned. Keep a stable build handy."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "System default",
@@ -13854,7 +13865,8 @@
             "updateOrcaOnHost": "Update Orca on this host",
             "updateAnyway": "Update anyway",
             "notNow": "Not now",
-            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts."
+            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts.",
+            "forceUpdateUncounted": "Orca couldn’t count the terminals on this host. The update goes ahead only if no terminal daemon is running there, and any terminals Orca’s server runs itself will end."
           },
           "description": "Orca installs itself on an empty SSH host and keeps itself up to date.",
           "deploy": {
@@ -14105,7 +14117,15 @@
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "restartAsWslHost": {
+            "button": "Restart as WSL host",
+            "title": "Restart as WSL host?",
+            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "cancel": "Cancel",
+            "action": "End terminals and restart"
+          }
         },
         "restartServer": {
           "action": "Restart Orca’s server…",
@@ -21155,7 +21175,12 @@
         "placeholder": "Ask anything, @ to mention files, / for commands",
         "loadingFiles": "Loading files...",
         "noFiles": "No matching files",
-        "noMembers": "No matching bots",
+        "noBots": "No bots",
+        "noBotsMatch": "No bots match \"{{query}}\"",
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "filesLoadFailed": "Couldn't load files",
         "attach": "Attach file",
         "startDictation": "Start dictation",
@@ -21253,6 +21278,10 @@
         "permissionAuto": "Approve for me",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccess": "Full access",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionAgentSettingsUsedHint": "Uses your {{agent}} permission settings.",
+        "permissionAgentSettingsUnnamedHint": "Uses your {{agent}} permission settings. Orca can't show this mode.",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings",
         "permissionFullAccessDescription": "Never asks before edits or commands",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
         "permissionFullAccessSharedDescription": "Never asks before edits or commands",
@@ -21267,6 +21296,7 @@
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
         "agents": "Agents",
+        "recent": "Recent",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21282,7 +21312,7 @@
         "noMatchingChats": "No matching chats",
         "noOtherChats": "No other chats",
         "retryChats": "Retry",
-        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },
@@ -21697,6 +21727,7 @@
         "open": "Open {{name}}",
         "row": {
           "started": "Started",
+          "forItems": "for",
           "reopened": "Reopened",
           "followedUp": "Sent follow-up to",
           "handedOff": "Handed off to",
@@ -21762,7 +21793,6 @@
         "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
-        "moreActions": "More actions",
         "moveChanged": "The queue changed before this move. Try dragging the message again.",
         "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
         "reorderMessage": "Reorder message",
@@ -21787,13 +21817,13 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
-        "collapse": "Collapse",
-        "expand": "Expand",
         "queued": "Queued",
         "clearAll": "Clear all",
         "editReturned": "Your edit is in the chat box.",
         "commandsUnsupported": "Commands can't be saved in a queued message.",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -25781,6 +25811,8 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "hostLaunchUnproven": "The Orca server in {{distro}} runs this version of Orca but can't take these projects, so updating won't help. It may have been started outside WSL hosts, such as by an SSH host. Remove the {{distro}} host in Settings, then add it again.",
+      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
       "exportIncompletePreview": "Some saved state in these projects can't move yet:",
@@ -27183,7 +27215,14 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
@@ -28085,6 +28124,7 @@
       "peerAsked": "{{from}} asked {{to}}",
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
+      "peerReadItems": "{{bot}} read an update to its items",
       "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
@@ -29137,7 +29177,10 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "delete": "Delete chat",
+      "open": "Open",
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29305,12 +29348,13 @@
         "replyOrPick": "Reply in your own words, or pick an option",
         "replyingTo": "Replying to:",
         "hideReplyingTo": "Hide",
+        "replyingToShow": "Replying to: {{question}}. Show question",
+        "showQuestion": "Show question",
         "replyTo": "Reply to {{name}}…"
       },
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
-        "chatNeedsYou": "Nothing in {{chat}} needs you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
@@ -29324,7 +29368,6 @@
         "title": "title"
       },
       "filter": {
-        "all": "All chats",
         "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
@@ -29398,7 +29441,8 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links"
+        "moreLinks": "{{count}} more links",
+        "loading": "Loading item…"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",
@@ -29423,8 +29467,11 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet",
         "next": "Next question",
         "notSentYet": "not sent yet",
+        "sendHeld": "Send now",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
@@ -29821,5 +29868,18 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Update {{host}} to delete chats",
+      "failed": "Couldn't delete the chat",
+      "undone": "This can't be undone.",
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "groupRoom": "A group room's chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat",
+      "home": "A managed agent's Home Chat can't be deleted"
+    }
   }
 }

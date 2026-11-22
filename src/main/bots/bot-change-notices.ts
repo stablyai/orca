@@ -2,6 +2,7 @@ import { structuredAgentSessionIdOfTab } from '../../shared/agent-session/view/s
 import {
   addBotChange,
   botChangeNotice,
+  pendingBotChanges,
   type BotChangeKind,
   type PendingBotChanges,
   type BotChangeScope,
@@ -40,7 +41,7 @@ export class BotChangeNotices {
     if (!this.deps.hasBots()) {
       return
     }
-    this.pending ??= new Map()
+    this.pending ??= pendingBotChanges()
     addBotChange(this.pending, scope)
     if (!this.timer) {
       // The next tick, so one call's several writes go out as one notice.

@@ -21,6 +21,40 @@ vi.mock('../../native-chat/composer/pickers/use-native-chat-mention-files', () =
     return { files: query === null ? [] : ['src/review.txt'], loading: false, failed: false }
   }
 }))
+const OTHER_BOTS = vi.hoisted(() => [
+  { id: 'perf', hostId: 'local', name: 'Perf bot', paused: false }
+])
+vi.mock('@/lib/bot-catalog', () => ({
+  useBots: (enabled: boolean) => (enabled ? OTHER_BOTS : []),
+  useBotsEnabled: () => true
+}))
+vi.mock('../bot-workspace', () => ({ useBotForWorkspace: () => null }))
+vi.mock('../BotAvatar', () => ({ BotAvatar: () => null }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn().mockResolvedValue({ bots: [] })
+}))
+vi.mock('../../native-chat/composer/pickers/use-native-chat-skills', () => ({
+  useNativeChatSkills: () => ({
+    status: 'ready',
+    skills: [
+      {
+        id: 'release-notes',
+        name: 'release-notes',
+        description: 'Write the release notes',
+        providers: ['claude'],
+        sourceKind: 'repo',
+        sourceLabel: 'Repository',
+        rootPath: '/bots/b/.claude/skills',
+        directoryPath: '/bots/b/.claude/skills/release-notes',
+        skillFilePath: '/bots/b/.claude/skills/release-notes/SKILL.md',
+        installed: true,
+        updatedAt: null
+      }
+    ],
+    error: null,
+    retry: () => {}
+  })
+}))
 
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -60,11 +94,11 @@ afterEach(() => {
   sent.mockClear()
 })
 
-function renderBox(ref?: React.Ref<BotItemCommentBoxHandle>, uid = 6) {
+function renderBox(ref?: React.Ref<BotItemCommentBoxHandle>, uid = 6, bot = BOT) {
   render(
     <BotItemCommentBox
       ref={ref}
-      bot={BOT}
+      bot={bot}
       item={makeTestBotItem(uid)}
       attachTo={null}
       onSend={sent}
@@ -83,7 +117,7 @@ it('sends on Enter, adds a line on Shift+Enter, and leaves an IME composing Ente
   expect(sent).not.toHaveBeenCalled()
 
   fireEvent.keyDown(box, { key: 'Enter' })
-  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [], null)
+  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [], null, [])
 })
 
 it('types a redirected key into the box at its caret and focuses it', () => {
@@ -107,6 +141,28 @@ it("completes a workspace file at @ from the bot's folder, as chat does, instead
 
   expect(sent).not.toHaveBeenCalled()
   expect(promptValue(box)).toContain('src/review.txt')
+})
+
+it("offers chat's bots at @ and skills at /, and sends the same tokens chat does", () => {
+  const handle = createRef<BotItemCommentBoxHandle>()
+  const box = renderBox(handle, 68, { ...BOT, agent: 'claude' })
+  changePrompt(box, 'Ask @perf')
+  expect(screen.getByRole('option', { name: /Perf bot/ })).toBeTruthy()
+  fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
+  expect(promptValue(box)).toBe('Ask [Bot: Perf bot](bot:perf) ')
+
+  changePrompt(box, '/release')
+  expect(screen.getByRole('option', { name: /release-notes/ })).toBeTruthy()
+  fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
+  expect(sent).not.toHaveBeenCalled()
+  // Picked twice, it goes once, as chat sends it.
+  act(() => handle.current?.type('then /release'))
+  fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
+  fireEvent.keyDown(box, { key: 'Enter' })
+
+  expect(sent).toHaveBeenCalledWith('/release-notes then /release-notes', [], null, [
+    { name: 'release-notes', path: '/bots/b/.claude/skills/release-notes/SKILL.md' }
+  ])
 })
 
 it('leaves Escape to the item pane when empty, and keeps it with a draft', () => {
@@ -145,6 +201,7 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
   expect(sent).toHaveBeenCalledWith(
     'Before [Image #2] after [Image #1]',
     ['/store/a.png', '/store/b.png'],
-    null
+    null,
+    []
   )
 })

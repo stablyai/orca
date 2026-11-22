@@ -200,7 +200,7 @@ function createActionNamespace(): BrowserExtensionNamespace {
         isOnToolbar: isOnToolbar(caller)
       })),
       openPopup: defineBrowserExtensionMethod(
-        z.tuple([z.object({ windowId: z.number().int() }).loose().optional()]),
+        z.tuple([z.object({ windowId: z.number().int().optional() }).loose().optional()]),
         (caller) => {
           // Why: the popup opens focused on the user's own tab, and an agent's call never takes it over.
           if (findBrowserExtensionCallerAgentPage(caller)) {

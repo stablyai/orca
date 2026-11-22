@@ -1,4 +1,5 @@
 import {
+  chmod,
   lstat,
   mkdir,
   mkdtemp,
@@ -344,6 +345,31 @@ describe('ACP launch: standing instructions', () => {
           expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
         }
       } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32').each([
+    ['hermes', '.hermes.md'],
+    ['qwen-code', 'QWEN.md']
+  ] as const)(
+    "makes %s's %s readable only by this user when the folder already had a world-readable one",
+    async (agent, contextFile) => {
+      const home = await mkdtemp(join(tmpdir(), `acp-instructions-${agent}-`))
+      // A permissive umask, as a login shell often has, so a kept 0644 mode would show.
+      const previousUmask = process.umask(0o022)
+      try {
+        const contextPath = join(home, contextFile)
+        await writeFile(contextPath, 'My own rules.\n')
+        await chmod(contextPath, 0o644)
+        await launch(agent, { instructions: PREAMBLE, workspacePath: home })
+        const written = await readFile(contextPath, 'utf8')
+        expect(written.startsWith('My own rules.')).toBe(true)
+        expect(written).toContain(PREAMBLE)
+        expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+      } finally {
+        process.umask(previousUmask)
         await rm(home, { recursive: true, force: true })
       }
     }

@@ -212,18 +212,23 @@ export async function getWorkItemDetails(
       }
 
       // Nested client reads own their semaphore permits, so they stay outside these permits.
+      const detailContext = withWorkItemDetailsPermit(() =>
+        getPRDetailContext(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+      )
       const [{ viewedStates, participants }, metadata, files, comments] = await Promise.all([
-        withWorkItemDetailsPermit(() =>
-          getPRDetailContext(
-            repoPath,
-            item.number,
-            resolvedRepository,
-            connectionId,
-            localGitOptions
-          )
-        ),
-        withWorkItemDetailsPermit(() =>
-          getPRMetadata(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+        detailContext,
+        detailContext.then(
+          ({ metadata }) =>
+            metadata ??
+            withWorkItemDetailsPermit(() =>
+              getPRMetadata(
+                repoPath,
+                item.number,
+                resolvedRepository,
+                connectionId,
+                localGitOptions
+              )
+            )
         ),
         withWorkItemDetailsPermit(() =>
           getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)

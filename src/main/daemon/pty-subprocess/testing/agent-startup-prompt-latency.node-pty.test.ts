@@ -82,7 +82,8 @@ async function launch(
   }
 }
 
-describe('agent startup at the rendered shell prompt', () => {
+// Windows has no POSIX shell; an empty `.each` alone fails the file as "no test found".
+describe.skipIf(SHELLS.length === 0)('agent startup at the rendered shell prompt', () => {
   afterEach(() => vi.unstubAllEnvs())
   it.each(SHELLS)(
     '%s displays the command once after slow startup and prompt expansion',

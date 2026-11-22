@@ -60,7 +60,6 @@ const ask: PhoneAsk = {
   worker: null,
   number: null,
   tool: null,
-  chatId: 'chat-1',
   open: { chat }
 }
 
