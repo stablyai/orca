@@ -116,26 +116,6 @@ export function getPaneOccupancy(rows: readonly ProcessTableRow[]): PaneOccupanc
   return occupancy
 }
 
-/** The shell's group holds the terminal and only the shell, and no other group (background or stopped job) shares it. */
-export function shellOwnsEveryTtyProcessGroupIn(
-  occupancy: PaneOccupancy,
-  root: Pick<ProcessTableRow, 'pgid' | 'tpgid'>
-): boolean {
-  const ttyProcessGroups =
-    root.tpgid === undefined ? undefined : occupancy.processGroupsByTty.get(root.tpgid)
-  return (
-    root.pgid !== undefined &&
-    root.tpgid === root.pgid &&
-    ttyProcessGroups !== undefined &&
-    ttyProcessGroups.size === 1 &&
-    ttyProcessGroups.has(root.pgid) &&
-    !occupancy.stoppedTtys.has(root.tpgid) &&
-    !occupancy.processGroupsIncomplete &&
-    // The root counts itself; exactly one group member excludes all other killpg targets.
-    occupancy.rowsByProcessGroup.get(root.pgid) === 1
-  )
-}
-
 export async function resolveAgentForegroundProcessesBatch(
   requests: readonly BatchedForegroundProcessRequest[],
   options: BatchedForegroundProcessOptions = {}
@@ -220,7 +200,16 @@ export function resolveAgentForegroundProcessesFromIndex(
     // Sweep authorization needs both: no other tty group (background/stopped jobs), and no other shell-group member
     // anywhere (job control off, detached/reparented children). Missing evidence never proves idle.
     // Capture age bounds races with new work; ps permission/namespace omissions remain unobservable despite killpg reach.
-    const shellOwnsEveryTtyProcessGroup = shellOwnsEveryTtyProcessGroupIn(occupancy, root)
+    const ttyProcessGroups = occupancy.processGroupsByTty.get(root.tpgid)
+    const shellOwnsEveryTtyProcessGroup =
+      root.tpgid === root.pgid &&
+      ttyProcessGroups !== undefined &&
+      ttyProcessGroups.size === 1 &&
+      ttyProcessGroups.has(root.pgid) &&
+      !occupancy.stoppedTtys.has(root.tpgid) &&
+      !occupancy.processGroupsIncomplete &&
+      // The root counts itself; exactly one group member excludes all other killpg targets.
+      occupancy.rowsByProcessGroup.get(root.pgid) === 1
     const allCandidates = rowsByOwner.get(root.pid) ?? []
     const foregroundCandidates = allCandidates.filter((row) => row.pgid === root.tpgid)
     // A foreground process whose argv ps withheld could be the agent: absence of a name proves nothing.

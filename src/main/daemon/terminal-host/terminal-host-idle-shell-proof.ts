@@ -15,16 +15,13 @@ import {
   ProcessTableCaptureError,
   type ProcessTableRow
 } from '../../../shared/process-observation/tables/process-table-snapshot'
-import {
-  getPaneOccupancy,
-  shellOwnsEveryTtyProcessGroupIn
-} from '../../providers/foreground/agent-process-batch'
+import { getPaneOccupancy } from '../../providers/foreground/agent-process-batch'
 import type { Session } from '../sessions/session'
 
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
 const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
 
-type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
+type IdleShellProof = { shellPid: number; provedAt: number; activity: number }
 
 // Keyed by Session so a new session or recycled PID cannot inherit an old proof.
 const proofs = new WeakMap<Session, IdleShellProof>()
@@ -47,17 +44,22 @@ const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, nu
   now: () => Date.now()
 })
 
+/** Output and input the pane has seen; either one after a proof may have started work the proof cannot vouch for. */
+export function paneActivity(session: Pick<Session, 'outputChunks' | 'inputWrites'>): number {
+  return session.outputChunks + session.inputWrites
+}
+
 function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
 }
 
-/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone on its terminal.
- * outputChunks is the pane's count read before the capture was requested, so later output voids the proof. */
+/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in its group with no child
+ * process at all. activity is the pane's paneActivity read before the capture was requested, so later activity voids it. */
 export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
   capturedAgeMs: number,
-  outputChunks: number
+  activity: number
 ): boolean {
   const name = session.getForegroundProcess({ rawFallback: true })
   if (!name || !isShellProcess(name)) {
@@ -68,17 +70,20 @@ export function rememberIdleShellProof(
   const shell = session.shellIsRootChild
     ? index.childrenByPpid.get(session.pid)?.find((row) => row.pid === row.pgid)
     : index.byPid.get(session.pid)
-  // A background job (`sleep 30 & wait; agent`) is work the shell may follow with an agent, so it is not idle.
+  const groups = getPaneOccupancy(rows)
   if (
     shell !== undefined &&
-    shell.pgid === shell.pid &&
+    shell.tpgid === shell.pid &&
     isShellProcess(commandName(shell)) &&
-    shellOwnsEveryTtyProcessGroupIn(getPaneOccupancy(rows), shell)
+    !groups.processGroupsIncomplete &&
+    groups.rowsByProcessGroup.get(shell.pid) === 1 &&
+    // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
+    (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
   ) {
     proofs.set(session, {
       shellPid: shell.pid,
       provedAt: monotonicNow() - capturedAgeMs,
-      outputChunks
+      activity
     })
     return true
   }
@@ -95,7 +100,7 @@ function provenShellName(
     !session.isAlive ||
     !isCurrent() ||
     monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
-    session.outputChunks !== proof.outputChunks
+    paneActivity(session) !== proof.activity
   ) {
     return null
   }

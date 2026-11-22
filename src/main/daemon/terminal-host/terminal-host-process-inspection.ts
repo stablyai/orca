@@ -16,7 +16,11 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
+import {
+  paneActivity,
+  readProvenIdleShell,
+  rememberIdleShellProof
+} from './terminal-host-idle-shell-proof'
 import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-inspection'
 
 const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
@@ -162,11 +166,11 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
-      const outputChunks = session.outputChunks
+      const activity = paneActivity(session)
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       idleShellProven =
         !session.processNameIsSpawnFile &&
-        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, activity)
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -192,8 +196,8 @@ export async function inspectTerminalHostProcess(args: {
         snapshot.rows
       )
       await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
-      // Output after the capture may be a command the capture predates.
-      idleShellProven &&= session.outputChunks === outputChunks
+      // Output or input after the capture may be a command the capture predates.
+      idleShellProven &&= paneActivity(session) === activity
     } catch {
       idleShellProven = false
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')

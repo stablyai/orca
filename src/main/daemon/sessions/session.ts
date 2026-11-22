@@ -141,7 +141,7 @@ export class Session extends SessionProcessInspection {
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
-      this.subprocess.write(data)
+      this.writeInput(data)
     }
   }
 
@@ -159,7 +159,7 @@ export class Session extends SessionProcessInspection {
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
     if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
-      this.subprocess.write(data)
+      this.writeInput(data)
     }
   }
 

@@ -18,6 +18,8 @@ export abstract class SessionProcessInspection {
   protected readonly repaintNudge = new SessionRepaintNudge()
   /** PTY output chunks seen, so idle-shell proofs can tell whether the pane printed since. */
   protected _outputChunks = 0
+  /** Input writes accepted, so a proof taken before a keystroke cannot vouch for what it started. */
+  protected _inputWrites = 0
 
   abstract get isAlive(): boolean
   abstract getAppliedSize(): { cols: number; rows: number } | null
@@ -52,6 +54,15 @@ export abstract class SessionProcessInspection {
 
   get outputChunks(): number {
     return this._outputChunks
+  }
+
+  get inputWrites(): number {
+    return this._inputWrites
+  }
+
+  protected writeInput(data: string): void {
+    this._inputWrites += 1
+    this.subprocess.write(data)
   }
 
   /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */
