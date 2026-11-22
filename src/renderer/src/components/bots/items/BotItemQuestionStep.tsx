@@ -6,6 +6,7 @@
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -240,9 +241,11 @@ export function BotItemQuestionStep({
             )}
             components={{
               send: (
-                <button
+                <Button
                   type="button"
-                  className="whitespace-nowrap rounded-sm text-foreground underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  variant="link"
+                  size="inlineText"
+                  className="text-[13px] leading-[19px] font-normal text-foreground underline underline-offset-2 focus-visible:ring-2"
                   onClick={steps.sendHeld}
                 />
               )
