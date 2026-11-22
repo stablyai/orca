@@ -79,6 +79,10 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     }
     const session = event.providerSession?.id
     const now = Date.now()
+    // A subagent's or background task's hook after the turn ended opens no model time.
+    if (!lead && !this.modelWaits.has(paneKey)) {
+      return
+    }
     const wait = this.startModelWait(paneKey, now)
     wait.since = now
     wait.session = session ?? wait.session
@@ -196,7 +200,9 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
       return
     }
     // Waiting on a person, or at rest: the next hook starts the stopwatch again.
-    if (this.state.lastStatusByPaneKey.get(paneKey)?.payload.state !== 'working') {
+    // A background task keeps the row working (monitoring) after the lead's turn is done.
+    const status = this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    if (status?.state !== 'working' || status.workingMode === 'monitoring') {
       this.modelWaits.delete(paneKey)
       return
     }
