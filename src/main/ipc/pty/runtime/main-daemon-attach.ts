@@ -48,7 +48,8 @@ export async function attachPtyFromRuntimeController(
     }
     if (attachResult) {
       seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
-      deps.runtime?.restoreAttachedLaunch(ptyId, {
+      // Awaited so a foreground check waiting on this attach sees the restored agent.
+      await deps.runtime?.restoreAttachedLaunch(ptyId, {
         incarnationId: attachResult.incarnationId,
         identity: admitProviderReattachLaunchIdentity({ ...attachResult, isReattach: true }),
         reattach: reattachLaunchBinding({ ...attachResult, isReattach: true }).reattach

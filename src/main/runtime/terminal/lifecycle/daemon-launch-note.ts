@@ -97,7 +97,7 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       identity: ReattachedLaunchIdentity | null
       reattach: { launchNote?: DaemonLaunchNote | null } | undefined
     }
-  ): void {
+  ): Promise<void> | undefined {
     const pty = this.ptysById.get(ptyId)
     if (
       !pty ||
@@ -105,9 +105,9 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       pty.launchToken ||
       (pty.launchEvidence && pty.launchEvidence.kind !== 'unknown')
     ) {
-      return
+      return undefined
     }
-    this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, attach.reattach)
+    return this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, attach.reattach)
   }
 
   /** Daemon metadata names the agent launched in a surviving process, fenced to its incarnation; the
@@ -118,7 +118,7 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     incarnationId: PtyIncarnationId | undefined,
     identity: ReattachedLaunchIdentity | null,
     reattach: { launchNote?: DaemonLaunchNote | null } | undefined
-  ): void {
+  ): Promise<void> | undefined {
     const fenced =
       identity && pty.incarnationId === identity.incarnationId && isTuiAgent(identity.launchAgent)
         ? identity
@@ -128,10 +128,11 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
       pending = recordReattachedLaunch(pty, incarnationId, reattach.launchNote)
     }
-    if (fenced && !pty.launchToken) {
-      const note = pending ? (reattach?.launchNote ?? null) : null
-      void this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note)
+    if (!fenced || pty.launchToken) {
+      return undefined
     }
+    const note = pending ? (reattach?.launchNote ?? null) : null
+    return this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note)
   }
 
   /** Only the launched agent's own process in front restores it (and re-holds a noted launch). With

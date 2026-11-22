@@ -175,7 +175,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
     const identity = binding?.providerReattachLaunchIdentity
-    this.restoreReattachedLaunch(
+    void this.restoreReattachedLaunch(
       pty,
       binding?.incarnationId,
       identity &&
