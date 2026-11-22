@@ -3,13 +3,23 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Ctx = { toolIds: string[]; setToolIds: (ids: string[]) => void }
-const seen = vi.hoisted(() => ({
-  review: vi.fn(),
-  paste: null as null | ((shareId: string) => void),
-  overview: null as null | { ctx: Ctx; onCreate: () => void },
-  create: null as null | { toolIds: string[]; onMoved: (why: 'expired') => void },
+type Seen = {
+  review: ReturnType<typeof vi.fn>
+  paste: null | ((shareId: string) => void)
+  overview: null | { ctx: Ctx; onCreate: () => void }
+  create: null | { toolIds: string[]; onMoved: (why: 'expired') => void }
   none: () => null
-}))
+}
+const seen = vi.hoisted(() => {
+  const state: Seen = {
+    review: vi.fn(),
+    paste: null,
+    overview: null,
+    create: null,
+    none: () => null
+  }
+  return state
+})
 vi.mock('react-native', () => ({ Text: 'Text', View: 'View' }))
 vi.mock('../../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
