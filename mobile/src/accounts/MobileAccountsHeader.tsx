@@ -28,10 +28,10 @@ export function MobileAccountsHeader({
   const t = useMobileTranslation()
   const title = t('accounts.screen.title', 'Accounts')
   const refreshLabel = t('accounts.screen.refreshAccounts', 'Refresh accounts')
-  // The host name subtitle is the drawn bar's alone; the native bar keeps the title.
   const native = usePageHeaderClaim({
     title,
     onBack,
+    subtitle: hostName ? { text: hostName } : undefined,
     actions: [
       {
         id: 'refresh',
