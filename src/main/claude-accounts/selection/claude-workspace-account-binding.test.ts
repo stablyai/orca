@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sanitizeClaudeAccountUpdate } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import {
   claudeAccountBindingForWorkspace,
   type ClaudeWorkspaceBindingLookup
@@ -47,5 +48,20 @@ describe('claudeAccountBindingForWorkspace', () => {
       ]
     })
     expect(claudeAccountBindingForWorkspace('worktree:repo-grouped::C:/r', cyclic)).toBeNull()
+  })
+})
+
+describe('sanitizeClaudeAccountUpdate', () => {
+  it('clears only on null, never on a malformed or stripped value', () => {
+    const cleared: Parameters<typeof sanitizeClaudeAccountUpdate>[0] = { claudeAccount: null }
+    sanitizeClaudeAccountUpdate(cleared)
+    expect(cleared).toEqual({ claudeAccount: null })
+    // A value a transport stripped arrives as undefined; keeping the key would unbind the project.
+    const stripped: Parameters<typeof sanitizeClaudeAccountUpdate>[0] = { claudeAccount: undefined }
+    sanitizeClaudeAccountUpdate(stripped)
+    expect('claudeAccount' in stripped).toBe(false)
+    const malformed = JSON.parse('{"claudeAccount":{"kind":"managed","accountId":"../x"}}')
+    sanitizeClaudeAccountUpdate(malformed)
+    expect('claudeAccount' in malformed).toBe(false)
   })
 })

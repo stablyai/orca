@@ -1,3 +1,4 @@
+import { ClaudeAccountBindingUpdate } from '../../../shared/rpc-contract/projects/claude-account-binding-update'
 import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
@@ -29,7 +30,8 @@ export const ProjectGroupUpdateArgs = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: z.string().nullable().optional()
+    color: z.string().nullable().optional(),
+    claudeAccount: ClaudeAccountBindingUpdate
   })
 })
 

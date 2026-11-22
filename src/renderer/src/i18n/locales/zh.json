@@ -19937,6 +19937,7 @@
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中，请切换回该账户以继续此聊天",
         "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在，请重新登录该账户或选择其他账户",
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户，请重试或选择其他账户",
+        "claudeAccountBindingUnavailable": "此项目的 Claude 账户不可用，请重新登录，或在项目设置中更换 Claude 账户",
         "agentCommandNotRunnable": "设置 → 智能体中{{agent}}的“命令”必须以 Orca 能找到的程序开头。不支持变量、管道或其他 shell 语法；请在“环境”设置中配置变量。请修改或重置命令",
         "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}，请在最新版本的 Orca 中从聊天里安装",

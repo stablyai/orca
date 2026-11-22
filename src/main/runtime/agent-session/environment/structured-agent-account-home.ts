@@ -6,7 +6,7 @@ import {
   claudeBoundHomeAsync,
   claudeRoutedHomeAsync
 } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
-import { claudeProfileMissing } from '../../../claude-accounts/profiles/routing/claude-profile-launch-errors'
+import { claudeAccountBindingUnavailable } from '../../../claude-accounts/profiles/routing/claude-profile-launch-errors'
 import { installedClaudeAccountBinding } from '../../../claude-accounts/selection/claude-workspace-account-binding'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import {
@@ -39,7 +39,7 @@ export async function resolveStructuredClaudeAccountHomePath(
     const bound = deps.wslDistro ? undefined : getClaudeProfileRouter()
     // Why throw: bindings name host folders, and following the selection would run another account.
     if (!bound) {
-      throw claudeProfileMissing()
+      throw claudeAccountBindingUnavailable()
     }
     return claudeBoundHomeAsync(
       bound,

@@ -118,6 +118,10 @@ const REASON_WORDS = {
     historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
     claudeAccountFolderMissing: { fact: 'claudeAccountFolderMissing', action: 'actFirst' },
     claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
+    claudeAccountBindingUnavailable: {
+      fact: 'claudeAccountBindingUnavailable',
+      action: 'actFirst'
+    },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },

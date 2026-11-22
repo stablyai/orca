@@ -19,6 +19,7 @@ const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCateg
   agentCommandNotRunnable: 'not_set_up',
   claudeAccountFolderMissing: 'not_set_up',
   claudeAccountSetupFailed: 'not_set_up',
+  claudeAccountBindingUnavailable: 'not_set_up',
   launchFolderMissing: 'folder_missing'
 }
 

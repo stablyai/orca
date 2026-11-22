@@ -19373,6 +19373,7 @@
         "historyInOtherAccount": "Bu sohbetin geçmişi başka bir Claude hesabında. Devam etmek için o hesaba geri dönün.",
         "claudeAccountFolderMissing": "Seçilen Claude hesabının klasörü bulunamıyor. O hesapta yeniden oturum açın veya başka bir hesap seçin.",
         "claudeAccountSetupFailed": "Seçilen Claude hesabı ayarlanamadı. Yeniden deneyin veya başka bir hesap seçin.",
+        "claudeAccountBindingUnavailable": "Bu projenin Claude hesabı kullanılamıyor. Yeniden oturum açın veya proje ayarlarından Claude hesabını değiştirin.",
         "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
         "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
         "runtimeNotInstalled": "Bu sohbetin çalıştığı bilgisayarda {{agent}} yüklü değil. Orca'nın güncel bir sürümünde sohbet içinden yükleyin.",

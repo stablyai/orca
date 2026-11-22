@@ -3,7 +3,7 @@ import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/rout
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
-  claudeProfileMissing,
+  claudeAccountBindingUnavailable,
   claudeProfileSetupFailed
 } from '../../../claude-accounts/profiles/routing/claude-profile-launch-errors'
 import { claudeBoundHomeAsync } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
@@ -23,7 +23,7 @@ export async function prepareClaudeLaunchAccount(
   const binding = installedClaudeAccountBinding(workspaceId)
   if (!router) {
     if (binding) {
-      throw claudeProfileMissing()
+      throw claudeAccountBindingUnavailable()
     }
     return { route: 'system', home: recordHome, configDir: env.CLAUDE_CONFIG_DIR ?? null }
   }
@@ -73,7 +73,7 @@ async function prepareBoundClaudeLaunch(
 ): Promise<ClaudeAccountRecipe> {
   if (binding.kind === 'managed') {
     if (!router.savedAccount(binding.accountId)) {
-      throw claudeProfileMissing()
+      throw claudeAccountBindingUnavailable()
     }
     await router.prepareAccount(binding.accountId).catch(() => {
       throw claudeProfileSetupFailed()

@@ -33,11 +33,12 @@ export function normalizeClaudeAccountBinding(value: unknown): ClaudeAccountBind
   return null
 }
 
-/** Keeps `null` (clears the binding) and drops a malformed value so an update never unbinds by accident. */
+/** Keeps `null` (clears the binding) and drops a malformed or undefined value, so an update
+ *  never unbinds by accident. */
 export function sanitizeClaudeAccountUpdate(updates: {
   claudeAccount?: ClaudeAccountBinding | null
 }): void {
-  if (updates.claudeAccount == null) {
+  if (!('claudeAccount' in updates) || updates.claudeAccount === null) {
     return
   }
   const normalized = normalizeClaudeAccountBinding(updates.claudeAccount)

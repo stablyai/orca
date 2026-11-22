@@ -1,4 +1,5 @@
 import {
+  CLAUDE_ACCOUNT_BINDING_UNAVAILABLE_MESSAGE,
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../agent-accounts/claude/claude-profile-routing'
@@ -92,6 +93,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "This chat's history is in another Claude account. Switch back to that account to continue it.",
   claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
+  claudeAccountBindingUnavailable: CLAUDE_ACCOUNT_BINDING_UNAVAILABLE_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
   agentCommandFailed:

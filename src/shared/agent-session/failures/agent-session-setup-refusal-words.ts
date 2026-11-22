@@ -14,6 +14,7 @@ export const SETUP_REFUSAL_SENTENCES = {
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
+  claudeAccountBindingUnavailable: namingAgent('claudeAccountBindingUnavailable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   botToolsNeedStatusHooks: namingAgent('botToolsNeedStatusHooks'),
