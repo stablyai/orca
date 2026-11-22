@@ -1673,7 +1673,13 @@
       "composer": {
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode",
-        "pastedTextLabel": "Pasted text"
+        "pastedTextLabel": "Pasted text",
+        "botChats": "Chats",
+        "backToBots": "Back to bots",
+        "loadingBotChats": "Loading {{name}}'s chats…",
+        "noOtherChats": "No other chats",
+        "noMatchingChats": "No matching chats",
+        "retryChats": "Retry"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -6050,7 +6056,11 @@
       "access": "{{person}} asked for access"
     },
     "chat": {
-      "nothingToReport": "Nothing to report"
+      "nothingToReport": "Nothing to report",
+      "mentionOwnChats": "Your other chats",
+      "mentionPaused": "Paused",
+      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands",
+      "mentionChatsLoadFailed": "Couldn't load chats"
     },
     "waits": {
       "cancel": "Cancel",
