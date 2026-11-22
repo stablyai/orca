@@ -19,6 +19,7 @@ import type { ChatApproval } from '../../../../../shared/native-chat/input/nativ
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
+import { approvalCardFrameClasses } from './native-chat-approval-card-frame'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
@@ -123,34 +124,13 @@ export function NativeChatApprovalCard({
     approval.detail
   ])
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
+  const frame = approvalCardFrameClasses({ stacked, joined, quiet })
 
   return (
     <SecuritySurface>
-      <div
-        className={
-          joined ? '' : stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'
-        }
-      >
-        <div
-          className={cn(
-            'flex w-full',
-            joined
-              ? null
-              : // Quiet: the transcript scroller's gutters too, which narrow panes show.
-                quiet
-                ? 'px-3 pt-2 pb-1 sm:px-4 scrollbar-sleek overflow-hidden [scrollbar-gutter:stable_both-edges]'
-                : 'mx-auto max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
-            !stacked && 'h-full min-h-0 max-h-full'
-          )}
-        >
-          {/* Quiet: laid out as the transcript column is, so the card's edges meet its rows' icon and time. */}
-          <div
-            className={cn(
-              'flex w-full',
-              quiet && !joined && 'mx-auto max-w-(--chat-content-max-width) px-[5px]',
-              !stacked && 'h-full min-h-0 max-h-full'
-            )}
-          >
+      <div className={frame.outer}>
+        <div className={frame.gutter}>
+          <div className={frame.column}>
             <div
               ref={cardRef}
               data-native-chat-prompt-card-focus={shouldFocus || undefined}
@@ -167,14 +147,7 @@ export function NativeChatApprovalCard({
               }}
               // The chat's own approval keeps its title and choices visible as the dock fits a short pane.
               data-native-chat-dock-clip={stacked ? undefined : ''}
-              className={cn(
-                'flex min-h-0 w-full flex-1 flex-col overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                joined
-                  ? 'gap-2 px-4 py-3 focus-visible:ring-inset'
-                  : quiet
-                    ? 'gap-1.5 rounded-lg border border-border bg-card px-2.5 pt-1.5 pb-2'
-                    : 'gap-2 rounded-lg border border-input bg-card px-4 py-3 shadow-xs'
-              )}
+              className={frame.card}
             >
               <div
                 data-native-chat-dock-pinned={stacked ? undefined : ''}
