@@ -19,6 +19,9 @@ function pathIconComponent(icon: ResolvedPluginPanelPathIcon): PluginPanelIcon {
   const key = `${icon.mode}|${icon.viewBox}|${icon.path}`
   const cached = pathIconComponents.get(key)
   if (cached) {
+    // Why re-insert: Map keeps insertion order, so this makes the icon the most recently used.
+    pathIconComponents.delete(key)
+    pathIconComponents.set(key, cached)
     return cached
   }
   const stroke = icon.mode === 'stroke'
@@ -44,8 +47,12 @@ function pathIconComponent(icon: ResolvedPluginPanelPathIcon): PluginPanelIcon {
       },
       createElement('path', { d: icon.path })
     )
+  // Why LRU, not clear-all: icons still on screen keep their component when old ones go.
   if (pathIconComponents.size >= PATH_ICON_CACHE_LIMIT) {
-    pathIconComponents.clear()
+    const oldest = pathIconComponents.keys().next()
+    if (!oldest.done) {
+      pathIconComponents.delete(oldest.value)
+    }
   }
   pathIconComponents.set(key, Icon)
   return Icon
@@ -61,6 +68,23 @@ export function resolvePluginPanelIcon(
   return path ? pathIconComponent(path) : resolvePluginIconGlyph(iconName, Puzzle)
 }
 
+// Why a separator: "Git" must not swallow "GitHub", so only the name plus `:`, `-`, `|` and
+// the like counts as already naming the plugin.
+const NAME_SEPARATOR = /^\s*[:\-\u2013\u2014|\u00b7/]/
+
+/** The panel's tooltip and accessible name: its title, prefixed with the plugin name unless the
+ *  title already is that name or starts with it and a separator. */
+export function pluginPanelAccessibleTitle(pluginName: string, title: string): string {
+  const name = pluginName.trim().toLocaleLowerCase()
+  const lower = title.trim().toLocaleLowerCase()
+  if (!name || lower === name) {
+    return title
+  }
+  return lower.startsWith(name) && NAME_SEPARATOR.test(lower.slice(name.length))
+    ? title
+    : `${pluginName}: ${title}`
+}
+
 export function getPluginPanelActivityItems(
   panels: ActivePluginPanel[],
   panelErrors: Readonly<Record<string, true>> = {}
@@ -71,9 +95,7 @@ export function getPluginPanelActivityItems(
     icon: resolvePluginPanelIcon(panel.icon, panel.iconPath),
     // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
-    accessibleTitle: panel.title.toLowerCase().includes(panel.pluginName.toLowerCase())
-      ? panel.title
-      : `${panel.pluginName}: ${panel.title}`,
+    accessibleTitle: pluginPanelAccessibleTitle(panel.pluginName, panel.title),
     shortcut: '',
     // Plugin panels are app-wide, so a bot's page offers them beside its own tabs.
     onBotPage: true,

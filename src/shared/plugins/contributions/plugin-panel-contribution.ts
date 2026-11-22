@@ -13,6 +13,7 @@ import {
 import {
   PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX,
   PLUGIN_PANEL_PATH_ICON_MAX_LENGTH,
+  PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX,
   pluginPanelPathIconSchema
 } from './plugin-panel-path-icon'
 
@@ -125,7 +126,8 @@ export const pluginPanelContributionSchema = z
     ),
     icon: pluginPanelIconSchema.optional().meta({
       ...pluginFieldDoc(
-        `Icon shown in the right-sidebar activity bar. Defaults to \`puzzle\`. Either a built-in name, or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_PATH_ICON_SINCE}\`) an object with inline SVG path data that Orca draws in the theme color: \`path\` (required; up to ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters of path commands and numbers, starting with \`M\`), \`viewBox\` (\`"0 0 W H"\`, W and H from 1 to 1024; default \`"${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}"\`) and \`mode\` (\`stroke\`, the default, draws a 2-unit outline with round caps and joins like Lucide; \`fill\` fills the shape). Unknown keys are refused. SVG files are not supported. An invalid path icon shows \`puzzle\` and a warning. For a Lucide icon made of several elements, convert each \`<circle>\`, \`<rect>\` or \`<line>\` to path commands and join all of them into one \`path\`. Example: \`{ "path": "M4 4h16v16H4z", "mode": "stroke" }\`.`,
+        `Icon shown in the right-sidebar activity bar. Defaults to \`puzzle\`. Either a built-in name, or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_PATH_ICON_SINCE}\`) an object with inline SVG path data that Orca draws in the theme color: \`path\` (required; up to ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters of SVG path data starting with \`M\`, separated only by spaces, tabs, line breaks and commas), \`viewBox\` (\`"0 0 W H"\`, W and H from 1 to 1024; default \`"${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}"\`) and \`mode\` (\`stroke\`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above ${PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX}; \`fill\` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in \`.svg\`, shows \`puzzle\` with a warning; any other value (a misspelled name, \`null\`, an array, a number or a boolean) is a manifest error. Format 1 shows \`puzzle\` with a warning for any icon that isn't a built-in name. Orca draws a single \`<path>\`: for an icon made of several \`<path>\` elements or other shapes (\`<circle>\`, \`<rect>\`, \`<line>\`), convert each shape to path commands and join every \`d\` into one \`path\`. Example: \`{ "path": "M4 4h16v16H4z", "mode": "stroke" }\`.`,
+
         PLUGIN_SCHEMA_SINCE_V1,
         ['database']
       ),

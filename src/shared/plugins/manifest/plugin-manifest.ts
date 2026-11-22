@@ -21,7 +21,10 @@ import {
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
-import { withDrawablePluginPanelIcons } from './plugin-panel-icon-fallback'
+import {
+  pluginPanelIconEngineFloorError,
+  withDrawablePluginPanelIcons
+} from './plugin-panel-icon-fallback'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
@@ -277,14 +280,19 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
 /** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
 export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
   const parsed = parseWith(pluginManifestSchema, raw)
+  if (!parsed.ok) {
+    return parsed
+  }
   // Why only here: hosts strip these characters so installed plugins keep loading.
-  const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
-  return unsafe.length > 0
-    ? {
-        ok: false,
-        error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
-      }
-    : parsed
+  const unsafe = unsafePluginDisplayTextPaths(raw)
+  if (unsafe.length > 0) {
+    return {
+      ok: false,
+      error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
+    }
+  }
+  const iconFloor = pluginPanelIconEngineFloorError(raw)
+  return iconFloor ? { ok: false, error: iconFloor } : parsed
 }
 
 /** Runtime read for install, discovery and update. Callers must still check engines.orca

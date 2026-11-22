@@ -1,6 +1,3 @@
-import { z } from 'zod'
-import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
-import { pluginPanelIconWarning } from '../../../shared/plugins/manifest/plugin-panel-icon-fallback'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -98,32 +95,6 @@ async function contentErrors(root: string, manifest: PluginManifest): Promise<st
   return errors
 }
 
-const legacyPanelsSchema = z.object({
-  manifestVersion: z.literal(1),
-  contributes: z
-    .object({
-      panels: z.array(z.object({ title: z.unknown(), icon: z.unknown() }).partial()).optional()
-    })
-    .optional()
-})
-
-/** Format 1 silently drops icons it cannot draw; say so, since the panel shows `puzzle`. */
-function legacyPanelIconWarnings(raw: unknown): string[] {
-  const panels = legacyPanelsSchema.safeParse(raw).data?.contributes?.panels ?? []
-  return panels.flatMap(({ title, icon }) => {
-    if (icon === undefined || (typeof icon === 'string' && canonicalPluginPanelIcon(icon))) {
-      return []
-    }
-    const reason =
-      typeof icon === 'object' && icon !== null
-        ? 'path icons require manifest format 2'
-        : typeof icon === 'string' && /\.svg$/i.test(icon)
-          ? 'file icons are not supported; use icon.path with manifest format 2'
-          : "isn't a built-in icon name"
-    return [pluginPanelIconWarning(title, reason)]
-  })
-}
-
 /** The checks `pnpm validate:plugin` runs, plus every file Orca reads at load. Offline; never runs plugin code. */
 export async function validatePluginTarget(target: string): Promise<PluginValidationReport> {
   const file = resolveTargetFile(target)
@@ -148,8 +119,7 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
   const warnings = [
     ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
     ...hostCalls.warnings,
-    ...(parsed.warnings ?? []),
-    ...legacyPanelIconWarnings(raw)
+    ...(parsed.warnings ?? [])
   ]
   return {
     path: root,

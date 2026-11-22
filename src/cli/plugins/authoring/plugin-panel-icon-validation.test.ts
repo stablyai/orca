@@ -1,12 +1,13 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   discoverPlugins,
   isInvalidDiscoveredPlugin
 } from '../../../main/plugins/discovery/plugin-discovery'
+import { pluginManifestWarnings } from '../../../shared/plugins/installation/plugin-file-validation'
 import { PLUGIN_PANEL_PATH_ICON_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
@@ -59,7 +60,8 @@ it('keeps built-in names and valid path icons without warnings', async () => {
     'database',
     { path: 'M4 4h16v16H4z' },
     { path: 'M2 2h20v20H2z', viewBox: '0 0 24 24', mode: 'fill' },
-    { path: 'M0 0L1024 1024', viewBox: '0 0 1024 1024', mode: 'stroke' }
+    { path: 'M0 0l1-1 .5.5A1 1 0 00 2 2', viewBox: '0 0 48 48' },
+    { path: 'M0 0L1024 1024', viewBox: '0 0 1024 1024', mode: 'fill' }
   ]) {
     await writeManifest(icon)
     const report = await validatePluginTarget(dir)
@@ -67,19 +69,25 @@ it('keeps built-in names and valid path icons without warnings', async () => {
     expect(report.warnings, JSON.stringify(icon)).toBeUndefined()
     expect(await discoveredIcon()).toEqual(icon)
   }
-})
+}, 60_000)
 
 it('falls back to puzzle with a warning for icons Orca cannot draw', async () => {
   for (const [icon, reason] of [
     [{ path: 'M0 0<script>' }, 'icon.path must be SVG path data'],
     [{ path: 'L0 0' }, 'icon.path must be SVG path data'],
+    [{ path: 'M0 0L1' }, 'icon.path command "L" at position 5 needs 2 numbers per segment'],
+    [{ path: 'M0 0A1 1 0 2 1 2 2' }, 'icon.path has an arc flag at position 12 that is not 0 or 1'],
+    [{ path: 'M0\u00a00' }, 'icon.path must be SVG path data'],
+    [{ path: 'M0 0,' }, 'icon.path has a comma'],
     [{ path: '' }, 'icon.path must not be empty'],
     [{ path: `M${' 1'.repeat(2048)}` }, 'icon.path must be at most 4096 characters'],
     [{ path: 'M0 0', viewBox: '0 0 0 24' }, 'icon.viewBox must be "0 0 W H"'],
     [{ path: 'M0 0', viewBox: '0 0 2048 24' }, 'icon.viewBox must be "0 0 W H"'],
+    [{ path: 'M0 0', viewBox: '0 0 1025 24' }, 'icon.viewBox must be "0 0 W H"'],
     [{ path: 'M0 0', viewBox: '1 1 24 24' }, 'icon.viewBox must be "0 0 W H"'],
     [{ path: 'M0 0', mode: 'outline' }, 'icon.mode'],
     [{ path: 'M0 0', color: 'red' }, 'unknown key "color"'],
+    [{}, 'icon.path must be a string'],
     [{ viewBox: '0 0 24 24' }, 'icon.path must be a string'],
     ['icons/panel.svg', 'file icons are not supported; use icon.path']
   ] as const) {
@@ -90,12 +98,43 @@ it('falls back to puzzle with a warning for icons Orca cannot draw', async () =>
     expect(report.warnings?.[0]).toContain('Showing the puzzle icon instead')
     expect(await discoveredIcon()).toBeUndefined()
   }
+}, 60_000)
+
+it('keeps other non-name icon values as manifest errors', async () => {
+  for (const icon of ['databse', null, [], ['M0 0'], 42, true]) {
+    await writeManifest(icon)
+    const report = await validatePluginTarget(dir)
+    expect(report.valid, JSON.stringify(icon)).toBe(false)
+    expect(report.errors.join('\n'), JSON.stringify(icon)).toContain('contributes.panels[0].icon')
+  }
+}, 60_000)
+
+it('warns that a 2-unit stroke is thin in a viewBox larger than 48', async () => {
+  await writeManifest({ path: 'M0 0L96 96', viewBox: '0 0 96 96' })
+  const report = await validatePluginTarget(dir)
+  expect(report.valid).toBe(true)
+  expect(report.warnings).toEqual([expect.stringContaining('sized for a viewBox of about 24')])
+  expect(await discoveredIcon()).toEqual({ path: 'M0 0L96 96', viewBox: '0 0 96 96' })
+  await writeManifest({ path: 'M0 0L96 96', viewBox: '0 0 96 96', mode: 'fill' })
+  expect((await validatePluginTarget(dir)).warnings).toBeUndefined()
 })
 
-it('still refuses a misspelled built-in name', async () => {
-  await writeManifest('databse')
-  const report = await validatePluginTarget(dir)
-  expect(report.valid).toBe(false)
+it('keeps manifest text in icon warnings on one line', async () => {
+  const { panels } = templateSchema.parse(manifest).contributes
+  await writeFile(
+    join(dir, 'orca-plugin.json'),
+    JSON.stringify({
+      ...manifest,
+      engines: { orca: `>=${PLUGIN_PANEL_PATH_ICON_SINCE}` },
+      contributes: {
+        panels: [{ ...panels[0], icon: { path: 'M0 0', 'x\nINFO forged\u001b[2K': 1 } }]
+      }
+    })
+  )
+  const warnings = (await validatePluginTarget(dir)).warnings ?? []
+  expect(warnings).toHaveLength(1)
+  expect(warnings[0]).not.toMatch(/\p{Cc}/u)
+  expect(warnings[0]).toContain('x INFO forged')
 })
 
 it('requires the path icon release in engines.orca', async () => {
@@ -109,6 +148,31 @@ it('requires the path icon release in engines.orca', async () => {
   expect((await validatePluginTarget(dir)).valid).toBe(true)
 })
 
+it('requires the path icon release for icons it drops as well', async () => {
+  // Why: an older Orca refuses these outright, so the plugin would not load there at all.
+  for (const icon of [{ path: 'nope' }, { color: 'red' }, 'icons/panel.svg']) {
+    await writeManifest(icon, { engines: { orca: '>=1.4.246' } })
+    const report = await validatePluginTarget(dir)
+    expect(report.valid, JSON.stringify(icon)).toBe(false)
+    expect(report.errors.join('\n'), JSON.stringify(icon)).toContain(
+      `must be at least >=${PLUGIN_PANEL_PATH_ICON_SINCE}, because contributes.panels[0].icon needs Orca ${PLUGIN_PANEL_PATH_ICON_SINCE}`
+    )
+  }
+}, 60_000)
+
+it('reports icon warnings through validate:plugin', async () => {
+  await writeManifest({ path: 'M0 0L1' })
+  const raw = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+  expect(pluginManifestWarnings(raw)).toContainEqual(
+    expect.stringContaining('Showing the puzzle icon instead')
+  )
+  await writeManifest('x.svg', { manifestVersion: 1, engines: { orca: '>=1.4.160' } })
+  const legacy = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+  expect(pluginManifestWarnings(legacy)).toEqual([
+    expect.stringContaining('file icons are not supported')
+  ])
+})
+
 it('warns that format 1 cannot use path or file icons', async () => {
   for (const [icon, reason] of [
     [{ path: 'M0 0' }, 'path icons require manifest format 2'],
@@ -119,5 +183,12 @@ it('warns that format 1 cannot use path or file icons', async () => {
     const report = await validatePluginTarget(dir)
     expect(report.valid, JSON.stringify(icon)).toBe(true)
     expect(report.warnings?.[0], JSON.stringify(icon)).toContain(reason)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await discoveredIcon()).toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(reason))
+    } finally {
+      warn.mockRestore()
+    }
   }
-})
+}, 60_000)

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PLUGIN_PANEL_PATH_ICON_SINCE } from '../manifest/plugin-schema-field-docs'
+import { svgPathDataIssue } from './plugin-panel-path-data'
 
 export const PLUGIN_PANEL_PATH_ICON_MODES = ['stroke', 'fill'] as const
 export type PluginPanelPathIconMode = (typeof PLUGIN_PANEL_PATH_ICON_MODES)[number]
@@ -7,14 +8,14 @@ export type PluginPanelPathIconMode = (typeof PLUGIN_PANEL_PATH_ICON_MODES)[numb
 export const PLUGIN_PANEL_PATH_ICON_MAX_LENGTH = 4096
 export const PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX = '0 0 24 24'
 
-// Why a closed grammar: only path commands, numbers and separators, so `d` can never carry markup.
-const PATH_DATA = /^[Mm][MmLlHhVvCcSsQqTtAaZz0-9\s,.+\-eE]*$/
-const VIEW_BOX = /^0 0 ([1-9]\d{0,3}) ([1-9]\d{0,3})$/
-
-function isPanelIconViewBox(value: string): boolean {
-  const match = VIEW_BOX.exec(value)
-  return !!match && Number(match[1]) <= 1024 && Number(match[2]) <= 1024
-}
+// Why both: the pattern publishes the character set to editors; svgPathDataIssue checks the
+// grammar (arity, arc flags, separators), so `d` can never carry markup or draw half a path.
+const PATH_CHARACTERS = /^[Mm][MmLlHhVvCcSsQqTtAaZz0-9 \t\r\n\f,.+\-eE]*$/
+// Why a pattern, not a refine: the published JSON Schema then carries the 1 to 1024 bounds.
+const VIEW_BOX_SIDE = '(?:[1-9]\\d{0,2}|10[01]\\d|102[0-4])'
+const VIEW_BOX = new RegExp(`^0 0 ${VIEW_BOX_SIDE} ${VIEW_BOX_SIDE}$`)
+/** Above this, Lucide's 2-unit stroke is too thin to read at activity-bar size. */
+export const PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX = 48
 
 export const pluginPanelPathIconSchema = z
   .strictObject({
@@ -25,19 +26,30 @@ export const pluginPanelPathIconSchema = z
         PLUGIN_PANEL_PATH_ICON_MAX_LENGTH,
         `must be at most ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters`
       )
-      .regex(PATH_DATA, 'must be SVG path data that starts with M and uses only path commands')
+      .regex(
+        PATH_CHARACTERS,
+        'must be SVG path data that starts with M and uses only path commands, numbers, commas and spaces'
+      )
+      .superRefine((data, ctx) => {
+        const issue = svgPathDataIssue(data)
+        if (issue) {
+          ctx.addIssue({ code: 'custom', message: issue })
+        }
+      })
       .meta({ description: 'SVG path data (the `d` attribute of one `<path>`).' }),
     viewBox: z
       .string({ error: 'must be a string' })
-      .refine(isPanelIconViewBox, 'must be "0 0 W H" with W and H from 1 to 1024')
+      .regex(VIEW_BOX, 'must be "0 0 W H" with W and H from 1 to 1024')
       .optional()
       .meta({
         description: `Coordinate box of \`path\`. Defaults to \`${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}\`.`
       }),
-    mode: z.enum(PLUGIN_PANEL_PATH_ICON_MODES).optional().meta({
-      description:
-        '`stroke` (default) draws the outline 2 units wide with round caps and joins, like Lucide; `fill` fills the shape.'
-    })
+    mode: z
+      .enum(PLUGIN_PANEL_PATH_ICON_MODES)
+      .optional()
+      .meta({
+        description: `\`stroke\` (default) draws the outline 2 units wide with round caps and joins, like Lucide, which suits a viewBox of about 24; validation warns above ${PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX}. \`fill\` fills the shape.`
+      })
   })
   .meta({ 'x-orca-since': PLUGIN_PANEL_PATH_ICON_SINCE })
 
