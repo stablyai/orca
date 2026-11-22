@@ -4,15 +4,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import type { TelemetrySettings } from '../../shared/telemetry/telemetry-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 import type * as PostHogTransport from './posthog-transport'
-import {
-  BASE_COMMON,
-  makeFakeSettings,
-  makeFakeStore,
-  makeMockPostHog,
-  type MockPostHog,
-  restoreConsentEnv,
-  stashAndClearConsentEnv
-} from './client-test-harness'
+import type { CommonProps } from '../../shared/telemetry/telemetry-event-classification'
 
 const { createPostHogClient } = vi.hoisted(() => {
   // Official-build identity is read at import; set it before client.ts loads.
@@ -30,6 +22,116 @@ vi.mock('./posthog-transport', async (importOriginal) => ({
   ...(await importOriginal<typeof PostHogTransport>()),
   createPostHogClient
 }))
+type MockPostHog = {
+  capture: ReturnType<typeof vi.fn>
+  optIn: ReturnType<typeof vi.fn>
+  optOut: ReturnType<typeof vi.fn>
+  shutdown: ReturnType<typeof vi.fn>
+  on: ReturnType<typeof vi.fn>
+  emitForTests: (event: string, payload: unknown) => void
+}
+
+const BASE_COMMON: CommonProps = {
+  app_version: '1.3.33',
+  platform: 'darwin',
+  arch: 'arm64',
+  os_release: '25.3.0',
+  install_id: '00000000-0000-4000-8000-000000000000',
+  session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  orca_channel: 'stable'
+}
+
+function makeMockPostHog(): MockPostHog {
+  const listeners = new Map<string, Set<(payload: unknown) => void>>()
+  const emitForTests = (event: string, payload: unknown): void => {
+    for (const listener of listeners.get(event) ?? []) {
+      listener(payload)
+    }
+  }
+
+  return {
+    capture: vi.fn((message: { event?: string; uuid?: string }) => {
+      queueMicrotask(() => {
+        emitForTests('capture', {
+          event: message.event,
+          uuid: message.uuid
+        })
+      })
+    }),
+    optIn: vi.fn(async () => {}),
+    optOut: vi.fn(async () => {}),
+    shutdown: vi.fn(async () => {}),
+    on: vi.fn((event: string, listener: (payload: unknown) => void) => {
+      let eventListeners = listeners.get(event)
+      if (!eventListeners) {
+        eventListeners = new Set()
+        listeners.set(event, eventListeners)
+      }
+      eventListeners.add(listener)
+      return () => {
+        eventListeners?.delete(listener)
+      }
+    }),
+    emitForTests
+  }
+}
+
+function makeFakeSettings(telemetry: GlobalSettings['telemetry']): GlobalSettings {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: telemetry reads only the telemetry settings.
+  return { telemetry } as unknown as GlobalSettings
+}
+
+function makeFakeStore(settings: GlobalSettings): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fakes every Store method telemetry reads or writes; other methods are never called.
+  return {
+    getSettings: vi.fn(() => settings),
+    getUI: vi.fn(() => ({ featureTipsSeenIds: [] })),
+    getChatUiLaunchTipVariant: vi.fn(() => 'none'),
+    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
+      if (updates.telemetry) {
+        settings.telemetry = {
+          ...settings.telemetry,
+          ...updates.telemetry
+        }
+      }
+      return settings
+    })
+  } as unknown as Store
+}
+
+const CONSENT_ENV_VARS = [
+  'DO_NOT_TRACK',
+  'ORCA_TELEMETRY_DISABLED',
+  'CI',
+  'GITHUB_ACTIONS',
+  'GITLAB_CI',
+  'CIRCLECI',
+  'TRAVIS',
+  'BUILDKITE',
+  'JENKINS_URL',
+  'TEAMCITY_VERSION'
+] as const
+
+function stashAndClearConsentEnv(): Record<string, string | undefined> {
+  const stash: Record<string, string | undefined> = {}
+  for (const name of CONSENT_ENV_VARS) {
+    stash[name] = process.env[name]
+    delete process.env[name]
+  }
+  return stash
+}
+
+function restoreConsentEnv(stash: Record<string, string | undefined>): void {
+  for (const name of CONSENT_ENV_VARS) {
+    const prior = stash[name]
+    if (prior === undefined) {
+      delete process.env[name]
+    } else {
+      process.env[name] = prior
+    }
+  }
+}
+
 const { initTelemetry, shutdownTelemetry, track } = await import('./client')
 const { reportFirstLaunchLayout } = await import('./first-launch-layout-report')
 
