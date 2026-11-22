@@ -19,16 +19,28 @@ const HISTORY_STALE_MS = 10 * 60 * 1000
 type HistoryRing = {
   samples: number[]
   matchedSamples?: number
+  // Samples taken since the last one that included chats; the ring holds chat samples while this is below its length.
+  samplesSinceChat?: number
   touchedAt: number
 }
 
 const historyByKey = new Map<string, HistoryRing>()
 
-export function pushMemoryHistorySample(key: string, memoryBytes: number, now: number): void {
+export function pushMemoryHistorySample(
+  key: string,
+  memoryBytes: number,
+  now: number,
+  includesChats = false
+): void {
   let ring = historyByKey.get(key)
   if (!ring) {
     ring = { samples: [], touchedAt: now }
     historyByKey.set(key, ring)
+  }
+  if (includesChats) {
+    ring.samplesSinceChat = 0
+  } else if (ring.samplesSinceChat !== undefined) {
+    ring.samplesSinceChat += 1
   }
   ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
@@ -46,10 +58,13 @@ export function hasMemoryHistory(key: string): boolean {
   return historyByKey.has(key)
 }
 
-/** Starts `key` as a copy of `fromKey`'s series, so a new series continues the old one. */
+/** Starts `key` as a copy of `fromKey`'s series while that holds no chat samples, so it continues it; otherwise empty. */
 export function seedMemoryHistory(key: string, fromKey: string, now: number): void {
+  const from = historyByKey.get(fromKey)
+  const holdsChats =
+    from?.samplesSinceChat !== undefined && from.samplesSinceChat < from.samples.length
   historyByKey.set(key, {
-    samples: [...(historyByKey.get(fromKey)?.samples ?? [])],
+    samples: from && !holdsChats ? [...from.samples] : [],
     touchedAt: now
   })
 }
@@ -66,14 +81,6 @@ export function retireConvergedMemoryHistory(key: string, matched: boolean): boo
   }
   historyByKey.delete(key)
   return true
-}
-
-/** Keeps a series that took no sample this sweep from being swept as stale. */
-export function touchMemoryHistory(key: string, now: number): void {
-  const ring = historyByKey.get(key)
-  if (ring) {
-    ring.touchedAt = now
-  }
 }
 
 export function readMemoryHistory(key: string): number[] {

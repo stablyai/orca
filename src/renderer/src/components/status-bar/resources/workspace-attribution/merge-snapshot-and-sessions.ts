@@ -61,8 +61,7 @@ function terminalPartOf(wt: WorktreeMemory): WorktreeMemory {
     ...rest,
     cpu: wt.sessions.reduce((sum, session) => sum + session.cpu, 0),
     memory: wt.sessions.reduce((sum, session) => sum + session.memory, 0),
-    // The sampled history includes the chats, so it would not match this row.
-    history: []
+    history: wt.terminalHistory ?? []
   }
 }
 const LOCAL_SAMPLE = 'local'
@@ -144,14 +143,18 @@ export function mergeSnapshotAndSessions(
       terminalSamples?.push(wt)
     }
     const placement = localSamplePlacement(ctx, wt, false)
-    // Under a paired-stamped id, this machine's chats get their own host-qualified row.
-    const chatsApart =
-      Boolean(wt.chats?.length) && (!placement || stampedRuntimeHostId(ctx, wt.worktreeId) !== null)
+    const hasChats = Boolean(wt.chats?.length)
+    // Under a paired-stamped id, this machine's chats get their own host-qualified row, and its
+    // terminal row graphs terminal samples alone while chats share the sampled history.
+    const stamped = placement !== null && stampedRuntimeHostId(ctx, wt.worktreeId) !== null
     if (placement) {
       shownLocally.add(placement.worktreeId)
-      ingestSampledWorktree(chatsApart ? terminalPartOf(wt) : wt, placement)
+      ingestSampledWorktree(
+        stamped && (hasChats || wt.terminalHistory) ? terminalPartOf(wt) : wt,
+        placement
+      )
     }
-    if (chatsApart) {
+    if (hasChats && (!placement || stamped)) {
       const chats = chatPartOf(wt)
       const chatPlacement = localSamplePlacement(ctx, chats, true)
       if (chatPlacement) {

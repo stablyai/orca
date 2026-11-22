@@ -15,6 +15,7 @@ const snapshot = {
       cpu: 3,
       memory: 600,
       history: [600],
+      terminalHistory: [100],
       sessions: [{ sessionId: 's1', paneKey: 'tab:1', pid: 7, cpu: 1, memory: 100 }],
       chats: [chat]
     },
@@ -44,7 +45,6 @@ describe('the memory snapshot a paired machine receives', () => {
         { worktreeId: 'repo::/mixed', usage: { cpu: 1, memory: 100, privateMemory: 0 } }
       ],
       hasPrivateMemory: false,
-      readTerminalHistory: () => [100],
       restoredSessionIds: new Set(['s1']),
       totals: { totalCpu: 2, totalMemory: 1_100 }
     })

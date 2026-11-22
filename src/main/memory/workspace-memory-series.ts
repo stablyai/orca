@@ -5,7 +5,6 @@ import {
   seedMemoryHistory,
   sweepStaleMemoryHistory,
   terminalOnlyHistoryKey,
-  touchMemoryHistory,
   type WorktreeMemoryBucket
 } from './memory-snapshot-buckets'
 
@@ -24,26 +23,23 @@ export function recordWorkspaceMemorySeries(
   const terminalSeries: { worktreeId: string; usage: Usage }[] = []
   for (const bucket of buckets) {
     const terminalKey = terminalOnlyHistoryKey(bucket.worktreeId)
+    const hasTerminals = bucket.sessions.length > 0
     let separate = hasMemoryHistory(terminalKey)
-    if (bucket.chats && !separate) {
-      // Until its first chat, the plain series held terminals alone, so it seeds the terminal-only one.
+    if (hasTerminals && bucket.chats && !separate) {
+      // The plain series held terminals alone until its first chat, so it seeds the terminal-only one.
       seedMemoryHistory(terminalKey, bucket.worktreeId, now)
       separate = true
     }
-    if (separate) {
-      if (bucket.sessions.length > 0) {
-        const usage = terminalUsage.get(bucket.worktreeId) ?? bucket
-        pushMemoryHistorySample(terminalKey, usage.memory, now)
-        // With no chats both series take the same sample, so after a full series they are equal.
-        if (!retireConvergedMemoryHistory(terminalKey, !bucket.chats)) {
-          terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
-        }
-      } else {
-        touchMemoryHistory(terminalKey, now)
-        retireConvergedMemoryHistory(terminalKey, false)
+    // A chat-only sample takes no terminal sample, so the terminal series expires as it would without chats.
+    if (separate && hasTerminals) {
+      const usage = terminalUsage.get(bucket.worktreeId) ?? bucket
+      pushMemoryHistorySample(terminalKey, usage.memory, now)
+      // With no chats both series take the same sample, so after a full series they are equal.
+      if (!retireConvergedMemoryHistory(terminalKey, !bucket.chats)) {
+        terminalSeries.push({ worktreeId: bucket.worktreeId, usage })
       }
     }
-    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
+    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now, Boolean(bucket.chats))
   }
   sweepStaleMemoryHistory(now)
   return terminalSeries

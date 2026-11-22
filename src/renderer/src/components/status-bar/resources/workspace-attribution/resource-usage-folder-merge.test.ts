@@ -217,6 +217,7 @@ describe('folder Resource Manager rows', () => {
       repoId: 'repo-1',
       cpu: 3,
       memory: 2048 + 128,
+      terminalHistory: [512, 1024],
       chats: [chat]
     }
     const merge = (wt: WorktreeMemory) =>
@@ -234,11 +235,17 @@ describe('folder Resource Manager rows', () => {
     })
 
     expect(merge(sample)).toEqual([
-      expect.objectContaining({ worktreeId: 'repo-1::/shared', memory: 2048, history: [] }),
+      expect.objectContaining({
+        worktreeId: 'repo-1::/shared',
+        memory: 2048,
+        history: [512, 1024]
+      }),
       chatRow
     ])
     expect(merge(sample)[0].chats).toBeUndefined()
-    expect(merge({ ...sample, sessions: [], cpu: 1, memory: 128 })).toEqual([chatRow])
+    expect(
+      merge({ ...sample, sessions: [], terminalHistory: undefined, cpu: 1, memory: 128 })
+    ).toEqual([chatRow])
   })
 
   it("keeps a duplicated worktree id's chats read-only even when its repo is on the paired machine", () => {

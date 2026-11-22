@@ -5,10 +5,9 @@ import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values
 export type PairedReplyParts = {
   /** False when every row is already what paired clients receive, so the reply sends them as they are. */
   rowsDiffer: boolean
-  /** Terminal-only usage of workspaces that have had chats; their history is read only when asked. */
+  /** Terminal-only usage of the rows that carry `terminalHistory`. */
   terminalSeries: readonly { worktreeId: string; usage: RowUsage }[]
   hasPrivateMemory: boolean
-  readTerminalHistory: (worktreeId: string) => number[]
   /** Sessions whose pane key came from startup restore; paired replies send them without one. */
   restoredSessionIds: ReadonlySet<string>
   totals: Pick<
@@ -38,7 +37,7 @@ function pairedRow(
   if (!terminal && !restored) {
     return wt
   }
-  const { chats: _chats, ...row } = wt
+  const { chats: _chats, terminalHistory, ...row } = wt
   return {
     ...row,
     ...(terminal
@@ -46,7 +45,7 @@ function pairedRow(
           cpu: clampMemoryMetric(terminal.cpu),
           memory: clampMemoryMetric(terminal.memory),
           ...optionalCommitField(parts.hasPrivateMemory, terminal.privateMemory),
-          history: parts.readTerminalHistory(wt.worktreeId)
+          history: terminalHistory ?? []
         }
       : {}),
     sessions: restored

@@ -58,6 +58,8 @@ export type WorktreeMemory = UsageValues & {
   chats?: ChatAgentMemory[]
   /** Oldest-first memory samples (bytes) for this worktree's tracked subtrees. */
   history: number[]
+  /** This machine only: terminal-only samples while chats share `history`. */
+  terminalHistory?: number[]
 }
 
 export type HostMemory = {
