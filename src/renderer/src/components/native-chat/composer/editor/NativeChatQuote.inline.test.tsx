@@ -8,6 +8,7 @@ vi.mock('@/store/index', async (importOriginal) => importOriginal())
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { nativeChatPromptPillKey } from './native-chat-prompt-pill-keys'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
@@ -254,6 +255,16 @@ it('keeps ArrowRight at the end, after a chip, from the browser: the caret stays
   })
   expect(browserHandles).toBe(false)
   expect(editor.state.selection.from).toBe(2)
+})
+
+// Left is forward in right-to-left text: the arrows on a line of a Hebrew quote stay with ProseMirror.
+it('leaves the arrows on a line with only a right-to-left quote to ProseMirror', () => {
+  const { editor } = mount('> שלום עולם\n\n')
+  act(() => {
+    editor.commands.setTextSelection(1)
+  })
+  expect(nativeChatPromptPillKey(editor.view, 'ArrowRight')).toBe(false)
+  expect(editor.state.selection.from).toBe(1)
 })
 
 it('moves the caret across a chip as across an image: one press steps over it', () => {

@@ -21384,6 +21384,7 @@
         "skillPillLabel": "Skill: {{name}}",
         "filePillLabel": "File: {{name}}",
         "agentPillLabel": "Agent: {{name}}",
+        "quotePillLabel": "Quote: {{text}}",
         "backToBots": "Back to bots",
         "botChats": "Chats",
         "botChatsCount": "{{name}}'s chats, {{chatCount}}",
@@ -21877,7 +21878,6 @@
       "dismissDeliveryNotice": "Dismiss",
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
-      "quoteChip": "Quote",
       "messageNotSent": "Message not sent",
       "messageSending": "Sending…",
       "userMessage": {

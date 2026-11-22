@@ -66,7 +66,7 @@ type NativeChatMarkdownProps = Omit<
   streaming?: boolean
   /** The transcript row's identity, so reader choices inside the text outlive the row's mount. */
   rowKey?: string
-  /** Show each blockquote as a quote chip that jumps to the quoted source on click. */
+  /** Show each blockquote as a quote chip. */
   quoteChips?: boolean
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
   slackMentions?: boolean

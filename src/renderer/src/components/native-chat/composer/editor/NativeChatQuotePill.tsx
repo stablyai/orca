@@ -7,12 +7,15 @@ import { quotedText } from '../../../../../../shared/native-chat/input/quotes/na
 export function NativeChatQuotePill({ node, selected }: NodeViewProps): React.JSX.Element {
   const t = useTranslate()
   const text = quotedText(String(node.attrs.token))
+  const label = text.replace(/\s+/g, ' ')
   return (
     <NodeViewWrapper as="span" className="inline" contentEditable={false}>
-      <span className="sr-only">{t('components.native-chat.quoteChip', 'Quote')}: </span>
       <NativeChatPromptPill
         icon={Quote}
-        label={text.replace(/\s+/g, ' ')}
+        label={label}
+        spokenLabel={t('components.native-chat.composer.quotePillLabel', 'Quote: {{text}}', {
+          text: label
+        })}
         selected={selected}
         title={text}
         // As wide as the quote, to a fixed limit; a long quote ends in an ellipsis. The margin

@@ -71,8 +71,13 @@ describe('quote chips in the composer', () => {
     expect(input.value).toBe(next)
     expect(chips(editor)).toBe(1)
     // The chip reads "Quote: …" to a screen reader.
-    await waitFor(() => expect(container.querySelector('.sr-only')?.textContent).toBe('Quote: '))
-    expect(container.textContent).toContain('Quote: quoted words')
+    await waitFor(() =>
+      expect(container.querySelector('.sr-only')?.textContent).toBe('Quote: quoted words')
+    )
+    // One spoken phrase: the shown text is not read a second time.
+    expect(
+      container.querySelector('[data-slot="badge"] .truncate')?.getAttribute('aria-hidden')
+    ).toBe('true')
     expect(container.textContent).not.toContain('>')
   })
 
@@ -246,6 +251,21 @@ describe('quote chips in the composer', () => {
     // The caret is right after the chip, where the comment goes.
     const after = added.indexOf('> q\n\n') + '> q\n\n'.length
     expect([input.selectionStart, input.selectionEnd]).toEqual([after, after])
+  })
+
+  // A paste keeps its text: quoted lines that the user pastes stay lines of text.
+  it('keeps pasted quote lines as text, with no chip', () => {
+    const { input, editor } = setup('')
+    act(() => {
+      editor.commands.setTextSelection(1)
+      fireEvent.paste(screen.getByRole('textbox'), {
+        clipboardData: {
+          getData: (format: string) => (format === 'text/plain' ? '> x\n\nc' : '')
+        }
+      })
+    })
+    expect(input.value).toBe('> x\n\nc')
+    expect(chips(editor)).toBe(0)
   })
 
   // Other text, such as a saved automation's note, still goes after the draft.

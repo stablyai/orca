@@ -25,7 +25,9 @@ function sent(content: string) {
 it('shows a sent quote as a chip named by its text, with no action', () => {
   sent(`my words\n\n${formatNativeChatQuote('the quoted words')}reply`)
   const chip = document.querySelector('[data-native-chat-sent-quote]')!
-  expect(chip).toHaveTextContent('Quote: the quoted words')
+  // One spoken phrase: the shown text is not read a second time.
+  expect(chip.querySelector('.sr-only')).toHaveTextContent(/^Quote: the quoted words$/)
+  expect(chip.querySelector('.truncate')).toHaveAttribute('aria-hidden', 'true')
   expect(chip.tagName).not.toBe('BUTTON')
   expect(screen.queryByRole('button')).toBeNull()
 })
