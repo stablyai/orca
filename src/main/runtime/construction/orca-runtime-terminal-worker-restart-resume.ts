@@ -16,9 +16,10 @@ type RestartResumeRuntime = Pick<
   | 'sendTerminalAgentPrompt'
   | 'getExistingOrchestrationDb'
   | 'subscribeAgentProviderSessionChangesFn'
+  | 'closeTerminal'
 >
 
-function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
+export function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
   timer.unref?.()
   return { cancel: () => clearTimeout(timer) }
@@ -27,11 +28,14 @@ function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
 /** A resumed worker comes back the way a follow-up reopens a closed one, in its own conversation. */
 function createTerminalWorkerRestartResume(
   runtime: RestartResumeRuntime,
-  resumeWorkOnRestart: () => boolean
+  resumeWorkOnRestart: () => boolean,
+  reportResting: (paneKey: string) => Promise<void>
 ): TerminalWorkerRestartResume {
   const resume = new TerminalWorkerRestartResume({
     getDb: () => runtime.getExistingOrchestrationDb(),
     resumeWorkOnRestart,
+    reportResting,
+    closeTerminal: (handle) => runtime.closeTerminal(handle),
     setTimer: unrefTimer,
     reopen: (worktreeId, session, mutationId) =>
       reopenWorkerTerminal(runtime, worktreeId, session, mutationId),
@@ -77,6 +81,7 @@ function createTerminalWorkerRestartResume(
 export abstract class OrcaRuntimeWithTerminalWorkerRestartResume extends OrcaRuntimeWithWindowlessTerminalActivity {
   protected readonly terminalWorkerRestartResume = createTerminalWorkerRestartResume(
     this,
-    () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true
+    () => this.store?.getSettings?.()?.nativeChatResumeWorkOnRestart === true,
+    (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey)
   )
 }

@@ -41,7 +41,11 @@ export async function runLegacyWorkerTerminalRecovery(
     }
   >()
   for (const candidate of plan.candidates) {
-    if (retryDispatchIds && !retryDispatchIds.has(candidate.dispatchId)) {
+    // A worker already resuming after a restart has its own terminal coming; this pass leaves it be.
+    if (
+      (retryDispatchIds && !retryDispatchIds.has(candidate.dispatchId)) ||
+      ports.isResuming?.(candidate.dispatchId)
+    ) {
       continue
     }
     const sshPty = parseAppSshPtyId(candidate.ptyId)

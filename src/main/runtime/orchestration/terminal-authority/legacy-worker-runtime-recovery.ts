@@ -118,7 +118,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         reportDeps: this.workerTurnStopReportDeps,
         reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
         reportUnconfirmedStart: (dispatchId) => this.reportUnconfirmedWorkerStart(dispatchId),
-        resuming: (dispatchId) => this.terminalWorkerRestartResume.isHeld(dispatchId),
+        resuming: (dispatchId) => this.terminalWorkerRestartResume.isResumingThisStart(dispatchId),
         chats: host
           ? {
               cutByLastRun,

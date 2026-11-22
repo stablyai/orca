@@ -68,6 +68,7 @@ export type LegacyWorkerRecoveryPorts = {
   reconcileMissing: (candidate: LegacyWorkerRecoveryCandidate) => boolean
   /** Keeps a lost worker's Dispatch for its one restart resume; false leaves today's outcome. */
   holdForRestartResume?: (candidate: LegacyWorkerRecoveryCandidate) => boolean
+  isResuming?: (dispatchId: string) => boolean
   notifyResolution: (
     candidate: LegacyWorkerRecoveryCandidate,
     resolution: 'adopted' | 'exited'

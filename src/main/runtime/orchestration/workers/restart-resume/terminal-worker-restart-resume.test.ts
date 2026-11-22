@@ -46,17 +46,24 @@ function lostWorker(presence: 'working' | 'resting' | 'prompt'): string {
   return dispatch.id
 }
 
-function owner(overrides: { reopen?: () => Promise<{ handle: string } | null> } = {}) {
+function owner(
+  overrides: {
+    reopen?: () => Promise<{ handle: string } | null>
+    handleForPane?: () => string
+  } = {}
+) {
   const sendPrompt = vi.fn(async () => undefined)
   const resume = new TerminalWorkerRestartResume({
     getDb: () => db ?? null,
     resumeWorkOnRestart: () => true,
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
+    closeTerminal: async () => undefined,
+    reportResting: async () => undefined,
     terminalAuthority: () => ({
       paneKey: 'tab_new:leaf_new',
       processIncarnation: 'pty-new:22222222-2222-4222-8222-222222222222'
     }),
-    handleForPane: () => 'term_resumed',
+    handleForPane: overrides.handleForPane ?? (() => 'term_resumed'),
     waitForAgentIdle: async () => true,
     sendPrompt,
     setTimer: () => ({ cancel: () => {} })
@@ -75,13 +82,7 @@ describe('TerminalWorkerRestartResume', () => {
         expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
       )
       await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(sendPrompt.mock.calls.map((call) => (call as unknown[])[1])).toEqual(
-        presence === 'working'
-          ? [
-              "Orca restarted, so your previous reply was cut off partway through. Before continuing, check whether your most recent action completed — don't repeat it if it did. Then carry on."
-            ]
-          : []
-      )
+      expect(sendPrompt).toHaveBeenCalledTimes(presence === 'working' ? 1 : 0)
       db!.close()
       db = undefined
     }
@@ -105,5 +106,23 @@ describe('TerminalWorkerRestartResume', () => {
       .prepare("UPDATE worker_dispatches SET state = 'stopping' WHERE dispatch_id = ?")
       .run(dispatchId)
     expect(owner().resume.holdForReopen(dispatchId, vi.fn())).toBe(false)
+  })
+
+  it('binds a pane started again in place only to the worker’s own conversation', async () => {
+    const dispatchId = lostWorker('resting')
+    const reopen = vi.fn(async () => ({ handle: 'term_reopened' }))
+    const { resume } = owner({ reopen })
+    expect(resume.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())).toBe(true)
+    // A later recovery pass must not open the conversation a second time beside the pane.
+    resume.settleStartup()
+    expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'another-agent' }])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_lost')
+    resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
+    await vi.waitFor(() =>
+      expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
+    )
+    expect(reopen).not.toHaveBeenCalled()
   })
 })

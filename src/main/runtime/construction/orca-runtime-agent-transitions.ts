@@ -24,7 +24,10 @@ import {
   parseWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithTerminalWorkerRestartResume } from './orca-runtime-terminal-worker-restart-resume'
+import {
+  OrcaRuntimeWithTerminalWorkerRestartResume,
+  unrefTimer
+} from './orca-runtime-terminal-worker-restart-resume'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
@@ -47,12 +50,6 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
-
-function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
-  const timer = setTimeout(run, delayMs)
-  timer.unref?.()
-  return { cancel: () => clearTimeout(timer) }
-}
 
 /** All hosts/builds own transition detection and windowless phone pushes. */
 export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTerminalWorkerRestartResume {
