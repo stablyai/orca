@@ -1,4 +1,13 @@
-import { ChevronDown, Cloud, KeyRound, LogIn, Settings2, SquareTerminal } from 'lucide-react'
+import { useContext } from 'react'
+import {
+  ChevronDown,
+  Cloud,
+  KeyRound,
+  LogIn,
+  Server,
+  Settings2,
+  SquareTerminal
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,7 +23,10 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/AntigravityChatAuthMethodItems'
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
+import {
+  NativeChatPinnedAntigravityServerContext,
+  useNativeChatAntigravityAuth
+} from './native-chat-antigravity-auth'
 import { antigravityChatAuthMenuItems } from './antigravity-chat-auth-choices'
 import { antigravityProgramLabel } from './antigravity-auth-words'
 
@@ -37,6 +49,17 @@ export function NativeChatAntigravityAuthChip({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const auth = useNativeChatAntigravityAuth()
+  const pinnedServer = useContext(NativeChatPinnedAntigravityServerContext)
+  if (!auth && pinnedServer) {
+    return (
+      <span className="flex h-5.5 shrink items-center gap-1.5 px-2" data-antigravity-server-chip="">
+        <Server className="size-3 shrink-0" aria-hidden />
+        <span className={textClassName}>
+          {t('components.native-chat.antigravityAuth.server', 'Antigravity server')}
+        </span>
+      </span>
+    )
+  }
   const method = auth?.detection?.method
   const onAgy = auth?.backend === 'agy'
   if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {

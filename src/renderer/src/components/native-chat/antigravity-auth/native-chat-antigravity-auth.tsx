@@ -46,7 +46,7 @@ export type AntigravitySwitchableMethod = Exclude<Method, 'oauth-business'>
 
 /** Where an Antigravity chat runs: Orca's managed server, or the host's own `agy acp`, which
  *  keeps agy's login whatever method Orca saves. */
-export type NativeChatAntigravityAuthTarget = {
+type NativeChatAntigravityAccountTarget = {
   host: RuntimeClientTarget
   backend: 'managed' | 'agy'
   /** The version of Orca's installed copy, when the host has reported one. */
@@ -57,10 +57,14 @@ export type NativeChatAntigravityAuthTarget = {
   programPending?: boolean
 }
 
+export type NativeChatAntigravityAuthTarget =
+  | NativeChatAntigravityAccountTarget
+  | { backend: 'pinned-server' }
+
 /** How an Antigravity chat signs in, and one-click ways to change it. */
 export type NativeChatAntigravityAuth = {
   host: RuntimeClientTarget
-  backend: NativeChatAntigravityAuthTarget['backend']
+  backend: NativeChatAntigravityAccountTarget['backend']
   managedVersion: string | null
   orcasAgy: boolean
   programPending: boolean
@@ -79,6 +83,8 @@ export type NativeChatAntigravityAuth = {
 export const NativeChatAntigravityAuthContext = createContext<NativeChatAntigravityAuth | null>(
   null
 )
+
+export const NativeChatPinnedAntigravityServerContext = createContext(false)
 
 /** Null outside an Antigravity chat. */
 export function useNativeChatAntigravityAuth(): NativeChatAntigravityAuth | null {
@@ -142,11 +148,13 @@ export function NativeChatAntigravityAuthProvider({
   target: NativeChatAntigravityAuthTarget | null
   children: React.ReactNode
 }): React.JSX.Element {
-  const hostProp = target?.host ?? null
-  const backend = target?.backend ?? 'managed'
-  const managedVersion = target?.managedVersion ?? null
-  const orcasAgy = target?.orcasAgy === true
-  const programPending = target?.programPending === true
+  const pinnedServer = target?.backend === 'pinned-server'
+  const accountTarget = pinnedServer ? null : target
+  const hostProp = accountTarget?.host ?? null
+  const backend = accountTarget?.backend ?? 'managed'
+  const managedVersion = accountTarget?.managedVersion ?? null
+  const orcasAgy = accountTarget?.orcasAgy === true
+  const programPending = accountTarget?.programPending === true
   const t = useTranslate()
   // Callers rebuild the target each render; one per host keeps the context value steady.
   const shown = hostProp !== null
@@ -266,7 +274,9 @@ export function NativeChatAntigravityAuthProvider({
         })
   return (
     <NativeChatAntigravityAuthContext value={value}>
-      {children}
+      <NativeChatPinnedAntigravityServerContext value={pinnedServer}>
+        {children}
+      </NativeChatPinnedAntigravityServerContext>
       {host && (
         <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
           <DialogContent className="sm:max-w-[420px]">

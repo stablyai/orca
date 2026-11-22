@@ -22587,6 +22587,7 @@
         "thenSlashCommand": "Sign in, then type {{slashCommand}}."
       },
       "antigravityAuth": {
+        "server": "Antigravity server",
         "chipLabel": "Antigravity signs in with {{method}}. Change",
         "chipTitle": "Antigravity signs in with {{method}}",
         "menuTitle": "Antigravity signs in with",

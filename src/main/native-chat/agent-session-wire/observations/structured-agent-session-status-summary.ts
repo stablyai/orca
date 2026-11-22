@@ -25,6 +25,8 @@ import type {
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
+import { isLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { ANTIGRAVITY_CHAT_HOME_FOLDER } from '../../../antigravity/antigravity-chat-home'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -121,15 +123,22 @@ export function structuredAgentSessionStatusSummary({
   }
 }
 
-/** Marks chats whose pinned account runs a host program, which need no managed install. */
+/** Marks the program identified by the chat's pinned account, not the host's present default. */
 export function structuredSummaryHostProgram(
   record: Pick<AgentSessionConversationView, 'provider' | 'accountHome'> | null
 ): Pick<AgentSessionStatusSummary, 'hostProgram'> {
-  return record &&
-    structuredAgentRuntimeMetadata(record.provider)?.definition.runsHostProgram?.(
-      record.accountHome
-    )
-    ? { hostProgram: true }
+  if (!record) {
+    return {}
+  }
+  const home = record.accountHome
+  if (structuredAgentRuntimeMetadata(record.provider)?.definition.runsHostProgram?.(home)) {
+    return { hostProgram: true }
+  }
+  return record.provider === 'antigravity' &&
+    isLegacyAgentSessionAccountHome(home) &&
+    home.variable === 'GEMINI_HOME' &&
+    home.path.split(/[\\/]+/).findLast(Boolean) === ANTIGRAVITY_CHAT_HOME_FOLDER
+    ? { hostProgram: false }
     : {}
 }
 
