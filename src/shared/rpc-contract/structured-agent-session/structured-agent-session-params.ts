@@ -107,6 +107,14 @@ export const SendParams = z
     'Choose options or selection'
   )
 
+export const StructuredAgentSessionFirstMessageParams = z
+  .object({
+    clientMessageId: Identifier('Invalid client message id'),
+    body: SendBody,
+    selection: AgentSessionSelectionSchema.optional()
+  })
+  .strict()
+
 export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
@@ -115,20 +123,22 @@ export const CreateIntentParams = z
     ...SOURCE_FIELDS,
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
-    firstMessage: z
-      .object({
-        clientMessageId: Identifier('Invalid client message id'),
-        body: SendBody,
-        selection: AgentSessionSelectionSchema.optional()
-      })
-      .strict()
-      .optional(),
+    firstMessage: StructuredAgentSessionFirstMessageParams.optional(),
     options: AgentSessionOptions.optional(),
     optionsMode: z.literal('replace-model-selection').optional()
   })
   .strict()
 
 export const CreateParams = z.union([AttachParams, CreateIntentParams])
+
+/** A hidden child derives its provider context from the named parent; the client never names files, accounts or workspaces. */
+export const CreateAuxiliaryParams = z
+  .object({
+    parentSessionId: SessionId,
+    envelope: MutationEnvelope,
+    firstMessage: StructuredAgentSessionFirstMessageParams.optional()
+  })
+  .strict()
 
 export const CancelParams = z
   .object({

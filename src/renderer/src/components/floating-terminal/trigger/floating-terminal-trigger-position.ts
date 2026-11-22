@@ -87,10 +87,14 @@ export function getDefaultFloatingTerminalTriggerPosition(): FloatingTerminalTri
 }
 
 export function clampFloatingTerminalTriggerPosition(
-  position: FloatingTerminalTriggerPosition
+  position: FloatingTerminalTriggerPosition,
+  rightBoundary?: number
 ): FloatingTerminalTriggerPosition {
   const viewport = getViewport()
-  const maxLeft = Math.max(DRAG_MARGIN, viewport.width - TRIGGER_SIZE - DRAG_MARGIN)
+  const maxLeft = Math.max(
+    DRAG_MARGIN,
+    Math.min(rightBoundary ?? viewport.width, viewport.width) - TRIGGER_SIZE - DRAG_MARGIN
+  )
   const maxTop = Math.max(TITLEBAR_SAFE_TOP, viewport.height - TRIGGER_SIZE - DRAG_MARGIN)
   return {
     left: Math.min(Math.max(DRAG_MARGIN, position.left), maxLeft),

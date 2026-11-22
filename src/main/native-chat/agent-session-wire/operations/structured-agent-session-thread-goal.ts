@@ -40,8 +40,12 @@ const goalsUnsupported = () =>
 export function refuseThreadGoalUnsupported(
   adapter: Pick<StructuredAgentSessionAdapter, 'changeThreadGoal'>,
   agents: Pick<StructuredAgentRegistry, 'capabilities'>,
-  agent: string | undefined
+  agent: string | undefined,
+  auxiliary?: unknown
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
+  if (auxiliary) {
+    return refused('goalsUnsupported', 'Auxiliary chats have no goal.')
+  }
   return adapter.changeThreadGoal && agent && agents.capabilities(agent)?.threadGoal
     ? null
     : goalsUnsupported()

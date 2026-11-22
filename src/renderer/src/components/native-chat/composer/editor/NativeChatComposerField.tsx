@@ -8,7 +8,7 @@ import { NativeChatComposerMenus } from '../pickers/NativeChatComposerMenus'
 import { NativeChatComposerActions } from '../controls/NativeChatComposerActions'
 import { NativeChatComposerNotices } from '../controls/NativeChatComposerNotices'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
-
+import { NativeChatAuxiliaryReferenceChips } from '../../selection-quotes/NativeChatAuxiliaryReferenceChips'
 import { useNativeChatComposerDraftUnsaved } from '../../drafts/use-native-chat-draft-unsaved'
 import { useNativeChatComposerGlow } from '../../native-chat-composer-glow'
 import { nativeChatComposerPlaceholder } from '../controls/native-chat-composer-placeholder'
@@ -245,6 +245,7 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
+            <NativeChatAuxiliaryReferenceChips scopeKey={draftScopeKey} />
             <NativeChatPromptEditor
               key={draftScopeKey}
               scopeKey={draftScopeKey}

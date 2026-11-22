@@ -9,6 +9,19 @@ import type { StructuredAgentSessionCommandOutcome } from '../../../../../../sha
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
+import {
+  withNativeChatAuxiliaryReferences,
+  type NativeChatAuxiliaryReference
+} from '../../selection-quotes/native-chat-auxiliary-references'
+
+export type NativeChatStructuredComposerDispatch = Omit<
+  StructuredAgentSessionCommandOutcome,
+  'handled'
+> & {
+  revealsTranscript: boolean
+  /** The accepted message carried selections; only then does the composer forget them. */
+  auxiliaryReferencesApplied: boolean
+}
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,
@@ -19,8 +32,9 @@ export async function dispatchNativeChatStructuredComposerText(
     StructuredAgentSessionSendRequest,
     'alternate' | 'prepareAttachments' | 'onSettled'
   > = {},
-  onPending?: () => void
-): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
+  onPending?: () => void,
+  auxiliaryReferences: readonly NativeChatAuxiliaryReference[] = []
+): Promise<NativeChatStructuredComposerDispatch> {
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
     draftText,
@@ -35,28 +49,39 @@ export async function dispatchNativeChatStructuredComposerText(
     : await transport.dispatchCommand(prompt, onPending)
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
-    return { ...command, revealsTranscript: false }
+    return { ...command, revealsTranscript: false, auxiliaryReferencesApplied: false }
   }
   // The composer still owns its draft until admission, so refusal must precede the handoff.
-  const body = structuredAgentSessionSendBody(
-    prompt,
-    attachments.map(({ path }) => ({ path, previewUri: '' }))
-  )
-  if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
+  const promptWithReferences = withNativeChatAuxiliaryReferences(prompt, auxiliaryReferences)
+  if (
+    auxiliaryReferences.length > 0 &&
+    structuredAgentSessionBlocksTooLarge(
+      structuredAgentSessionSendBody(
+        promptWithReferences,
+        attachments.map(({ path }) => ({ path, previewUri: '' }))
+      ).blocks
+    )
+  ) {
     return {
       accepted: false,
       error: agentSessionWriteNoticeText([...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS]),
-      revealsTranscript: false
+      revealsTranscript: false,
+      auxiliaryReferencesApplied: false
     }
   }
   const request = { ...(skills.length > 0 ? { skills } : {}), ...intent }
   const admission =
     Object.keys(request).length > 0
-      ? transport.send(prompt, attachments, request)
-      : transport.send(prompt, attachments)
+      ? transport.send(promptWithReferences, attachments, request)
+      : transport.send(promptWithReferences, attachments)
   if (admission instanceof Promise) {
     onPending?.()
   }
   const accepted = await admission
-  return { accepted: accepted !== false, error: null, revealsTranscript: accepted === true }
+  return {
+    accepted: accepted !== false,
+    error: null,
+    revealsTranscript: accepted === true,
+    auxiliaryReferencesApplied: auxiliaryReferences.length > 0
+  }
 }

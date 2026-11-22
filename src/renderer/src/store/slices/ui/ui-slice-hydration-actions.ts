@@ -300,6 +300,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ;(hydrated as Record<string, unknown>)[field] = s[field]
           }
         }
+        // Keep the window's transient auxiliary route out of the shared profile.
+        if (source === 'sync' && s.rightSidebarTab === 'side-chat') {
+          hydrated.rightSidebarTab = 'side-chat'
+        }
         // Identical hydration preserves root identity; advance only baseline keys on baseline movement so acks cannot erase remote edits or spur redundant resends.
         const writeBaselineMoved =
           !previousBaseline ||
@@ -307,14 +311,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
-          if (!writeBaselineMoved) {
-            return s
-          }
-          return {
-            persistedUIWriteBaseline: nextWriteBaseline,
-            persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
-          }
+        if (!writeBaselineMoved && hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
+          return s
         }
         return {
           ...hydrated,

@@ -1,4 +1,4 @@
-import { memo, Suspense, useCallback, useRef } from 'react'
+import { memo, Suspense, useCallback, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -7,6 +7,7 @@ import { useBotShareReceiveRequest } from '@/components/bots/sharing/bot-share-r
 import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-open'
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { useMeasuredWidth } from '@/components/right-sidebar/layout/right-sidebar-measured-width'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
@@ -179,6 +180,12 @@ export function AppWorkspaceShell(props: {
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
   const { setOpenWithFocus } = floatingWorkspace
+  const [workspaceWidth, setWorkspaceWidth] = useState<number | null>(null)
+  const workspaceWidthRef = useMeasuredWidth(setWorkspaceWidth)
+  const sideChatOpen =
+    layout.showRightSidebarControls &&
+    layout.rightSidebarOpen &&
+    layout.rightSidebarTab === 'side-chat'
   // `orca plugin shot` captures the right sidebar, which the parked launcher floats over.
   const capturingPluginShot = usePluginViewCaptureStore((s) => s.capturing)
   const toggleFloatingWorkspace = useCallback(
@@ -200,7 +207,10 @@ export function AppWorkspaceShell(props: {
     >
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
         {/* Keep the non-workspace titlebar from spanning the right sidebar. */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div
+          ref={sideChatOpen && floatingWorkspace.showToggleButton ? workspaceWidthRef : undefined}
+          className="flex flex-col flex-1 min-w-0 min-h-0"
+        >
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
             <div className="titlebar">
@@ -281,6 +291,7 @@ export function AppWorkspaceShell(props: {
                   <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}
                     onToggle={toggleFloatingWorkspace}
+                    rightBoundary={sideChatOpen ? workspaceWidth : null}
                   />
                 ) : null}
               </div>

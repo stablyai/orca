@@ -125,7 +125,7 @@ export function usePersistedUIWriter(): void {
       sidebarWidth: s.sidebarWidth,
       sidebarOpen: s.sidebarOpen,
       rightSidebarOpen: s.rightSidebarOpen,
-      rightSidebarTab: s.rightSidebarTab,
+      rightSidebarTab: s.rightSidebarTab === 'side-chat' ? 'explorer' : s.rightSidebarTab,
       rightSidebarExplorerView: s.rightSidebarExplorerView,
       rightSidebarWidth: s.rightSidebarWidth,
       activityBarPosition: s.activityBarPosition,

@@ -44,6 +44,7 @@ import {
   admitNativeChatPastedText,
   projectNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
+import { captureNativeChatAuxiliaryReferenceSubmission } from '../../selection-quotes/native-chat-auxiliary-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
@@ -202,6 +203,10 @@ export function useNativeChatStructuredComposerSend({
       }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
+      // A command keeps selections pending; an ordinary message attaches the ones present at the press.
+      const auxiliary = hostCommand
+        ? null
+        : captureNativeChatAuxiliaryReferenceSubmission(draftScopeKey)
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -213,25 +218,31 @@ export function useNativeChatStructuredComposerSend({
             ? { prepareAttachments, onSettled: () => stagedInput?.release() }
             : {})
         },
-        consume
+        consume,
+        auxiliary?.references
       )
-        .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
-          if (!hostCommand || isCurrent()) {
-            structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+        .then(
+          ({ accepted, error, refusedWhile, revealsTranscript, auxiliaryReferencesApplied }) => {
+            if (!hostCommand || isCurrent()) {
+              structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+            }
+            if (!accepted) {
+              finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
+              return false
+            }
+            transferred = true
+            if (auxiliaryReferencesApplied) {
+              auxiliary?.consume()
+            }
+            completeNativeChatStructuredUserAction(
+              agent,
+              structuredTransport,
+              revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
+            )
+            consume()
+            return true
           }
-          if (!accepted) {
-            finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
-            return false
-          }
-          transferred = true
-          completeNativeChatStructuredUserAction(
-            agent,
-            structuredTransport,
-            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
-          )
-          consume()
-          return true
-        })
+        )
         .catch((error) => {
           finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
           if (hostCommand && !isCurrent()) {

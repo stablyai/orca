@@ -5,6 +5,7 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import {
   isNativeChatSideChatCommand,
+  nativeChatProviderOwnsSideCommand,
   parseNativeChatSideChatDraft,
   withNativeChatSideChatCommands
 } from '../../../../../../shared/native-chat/input/commands/native-chat-side-chat-command'
@@ -18,102 +19,130 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../../drafts/native-chat-draft-scope'
 import { promptHasAttachmentReferences } from '../editor/native-chat-prompt-document'
+import { nativeChatAuxiliaryReferenceSnapshot } from '../../selection-quotes/native-chat-auxiliary-references'
+import type { NativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-storage'
 
 export function withNativeChatSideChatRows(
   commands: readonly SlashCommandSuggestion[],
-  notReadyReason: string | null
+  notReadyReason: string | null,
+  providerOwns?: (name: string) => boolean
 ): SlashCommandSuggestion[] {
   const side = translate(
     'components.native-chat.sideChat.description',
-    'Ask a side question in a fork beside this chat'
+    'Ask a question in a separate chat'
   )
-  return withNativeChatSideChatCommands(commands, {
-    side,
-    btw: side,
-    argumentHint: translate('components.native-chat.sideChat.argumentHint', '<question>'),
-    unavailableReason: notReadyReason
-  })
+  return withNativeChatSideChatCommands(
+    commands,
+    {
+      side,
+      btw: side,
+      argumentHint: translate('components.native-chat.sideChat.argumentHint', '<question>'),
+      unavailableReason: notReadyReason
+    },
+    providerOwns
+  )
 }
 
 export type NativeChatSideChatCommand = {
   matchesDraft: (draft: string) => boolean
   /** Starts a side chat for a `/side` or `/btw` draft; false means the draft is not Orca's. */
   consume: (draft: string) => boolean
-  /** Choosing the row completes `/btw ` for the question; only Send runs it. */
+  /** A bare auxiliary command opens immediately; the legacy fork action completes the token. */
   interceptPick: <TItem extends NativeChatPickerItem>(
     pick: (item: TItem) => void
   ) => (item: TItem) => void
 }
 
-/** In a structured chat that can fork, `/btw question` asks it in a fork beside the chat and never
- *  reaches the agent. The draft stays until the question went out. */
+function supportsSideChatDraft(scope: string, draft: NativeChatComposerDraft): boolean {
+  return (
+    draft.images.length === 0 &&
+    nativeChatPendingAttachmentSnapshot(scope).length === 0 &&
+    nativeChatAuxiliaryReferenceSnapshot(scope).length === 0 &&
+    !promptHasAttachmentReferences(draft.document) &&
+    !NATIVE_CHAT_PASTED_TEXT_TOKEN.test(draft.text) &&
+    !mayHoldAgentReferences(draft.text)
+  )
+}
+
+/** A side question leaves the parent draft only after the child accepted it. */
 export function useNativeChatSideChatCommand(args: {
   structuredTransport:
     | Pick<
         NativeChatStructuredComposerTransport,
-        'sessionId' | 'onError' | 'capturePresentation' | 'sideChat'
+        'sessionId' | 'onError' | 'capturePresentation' | 'sideChat' | 'sessionCommands'
       >
     | undefined
   picker: Pick<NativeChatPickerState, 'isPickedSkill' | 'completeItem'> & {
     autocomplete: { mode: string; dispatchable?: boolean }
   }
   editor: { setCaret: Dispatch<SetStateAction<number>> }
+  disabled: boolean
 }): NativeChatSideChatCommand {
   const { structuredTransport } = args
   const { autocomplete, isPickedSkill, completeItem } = args.picker
   const { setCaret } = args.editor
   const sideChat = structuredTransport?.sideChat
+  const scope =
+    structuredTransport && structuredAgentSessionDraftScopeKey(structuredTransport.sessionId)
   const matchesDraft = useCallback(
-    (draft: string) =>
-      sideChat !== undefined &&
-      !isPickedSkill(draft) &&
-      parseNativeChatSideChatDraft(draft) !== null,
-    [isPickedSkill, sideChat]
-  )
-  const consume = useCallback(
-    (draft: string): boolean => {
+    (draft: string) => {
       const command = parseNativeChatSideChatDraft(draft)
-      if (!structuredTransport || !sideChat || !command || isPickedSkill(draft)) {
+      if (!sideChat || !scope || isPickedSkill(draft) || !command) {
         return false
       }
-      const { onError, sessionId } = structuredTransport
-      const draftScopeKey = structuredAgentSessionDraftScopeKey(sessionId)
-      const submitted = readNativeChatComposerDraft(draftScopeKey)
-      if (
-        submitted.images.length > 0 ||
-        nativeChatPendingAttachmentSnapshot(draftScopeKey).length > 0 ||
-        promptHasAttachmentReferences(submitted.document) ||
-        NATIVE_CHAT_PASTED_TEXT_TOKEN.test(draft) ||
-        mayHoldAgentReferences(draft)
-      ) {
-        onError(
-          translate(
-            'components.native-chat.sideChat.textOnly',
-            'Side chats take text only. Remove attachments, then send it again.'
-          )
-        )
-        return true
+      return (
+        !sideChat.auxiliary ||
+        (!nativeChatProviderOwnsSideCommand(structuredTransport?.sessionCommands, command.name) &&
+          supportsSideChatDraft(scope, readNativeChatComposerDraft(scope)))
+      )
+    },
+    [isPickedSkill, scope, sideChat, structuredTransport?.sessionCommands]
+  )
+  const open = useCallback(
+    (question: string, submitted: NativeChatComposerDraft) => {
+      if (!structuredTransport || !sideChat || !scope) {
+        return
       }
+      const { onError } = structuredTransport
       const isCurrent = structuredTransport.capturePresentation()
-      void sideChat.open(command.question).then((result) => {
+      void sideChat.open(question).then((result) => {
         if ('refused' in result) {
           if (isCurrent()) {
             onError(result.refused)
           }
           return
         }
-        if (result.started && clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
+        if (result.started && clearNativeChatComposerDraftIfUnchanged(scope, submitted)) {
           if (isCurrent()) {
             onError(null)
             setCaret(0)
           }
         }
       })
+    },
+    [scope, setCaret, sideChat, structuredTransport]
+  )
+  const consume = useCallback(
+    (draft: string): boolean => {
+      const command = parseNativeChatSideChatDraft(draft)
+      if (!scope || !command || !matchesDraft(draft)) {
+        return false
+      }
+      const submitted = readNativeChatComposerDraft(scope)
+      if (supportsSideChatDraft(scope, submitted)) {
+        open(command.question, submitted)
+      } else {
+        structuredTransport?.onError(
+          translate(
+            'components.native-chat.sideChat.textOnly',
+            'Side chats take text only. Remove attachments, then send it again.'
+          )
+        )
+      }
       return true
     },
-    [isPickedSkill, setCaret, sideChat, structuredTransport]
+    [matchesDraft, open, scope, structuredTransport]
   )
-  // Completing the row keeps the rest of the draft and ends a same-named skill's claim on it.
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
@@ -122,13 +151,22 @@ export function useNativeChatSideChatCommand(args: {
         if (leading && sideChat && isNativeChatSideChatCommand(name)) {
           // An unavailable row says why; picking it does nothing.
           if (sideChat.notReadyReason === null) {
-            completeItem(item)
+            const draft = scope ? readNativeChatComposerDraft(scope) : null
+            if (sideChat.auxiliary && scope && draft && /^\/\S*$/.test(draft.text.trim())) {
+              if (!args.disabled && supportsSideChatDraft(scope, draft)) {
+                open('', draft)
+              } else {
+                completeItem(item)
+              }
+            } else {
+              completeItem(item)
+            }
           }
         } else {
           pick(item)
         }
       },
-    [autocomplete, completeItem, sideChat]
+    [args.disabled, autocomplete, completeItem, open, scope, sideChat]
   )
   return { matchesDraft, consume, interceptPick }
 }

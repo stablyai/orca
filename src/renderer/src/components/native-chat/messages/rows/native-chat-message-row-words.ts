@@ -3,7 +3,7 @@ import type {
   NativeChatMessage
 } from '../../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { nativeChatVisibleMessageBlocks } from '../../../../../../shared/native-chat/transcript/messages/native-chat-sent-prompt-references'
 import { nativeChatBlocksInOwnWords } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
 import type { Translate } from '../../../../i18n/use-translate'
@@ -14,7 +14,7 @@ export function nativeChatMessageRowBlocks(
   t?: Translate
 ): NativeChatBlock[] {
   return nativeChatBlocksInOwnWords(
-    withoutSentImagePromptMarkers(message),
+    nativeChatVisibleMessageBlocks(message),
     nativeChatStoppedBeforeStartLabel(t)
   )
 }

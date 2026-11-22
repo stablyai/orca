@@ -94,7 +94,10 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const { children: _children, backgroundTasks: _backgroundTasks, ...rest } = previous
-    const retained = { ...rest, ...this.childWorkFields(sessionId, previous.agent) }
+    const retained = {
+      ...rest,
+      ...structuredStatusChildWorkFields(this.readChildWork(sessionId), previous.agent)
+    }
     this.published.set(sessionId, {
       summary: retained,
       firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
@@ -199,6 +202,8 @@ export class StructuredAgentSessionStatusFeed {
     options?: { replay?: boolean }
   ): void {
     const record = this.deps.getConversation(sessionId)
+    const hidden = record?.auxiliaryChat
+    const { location, provider } = session.params
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
       sessionId,
@@ -210,7 +215,8 @@ export class StructuredAgentSessionStatusFeed {
       stopping: projection.stopping,
       usageLimitContinue: this.deps.readUsageLimitContinue?.(sessionId, projection.usageLimitCut),
       runningPermissionMode: this.deps.runningPermissionMode?.(sessionId),
-      childWork: this.childWorkFields(sessionId, session.params.provider),
+      // Exclude per-tick usage from global broadcasts; chat background channels retain it.
+      childWork: structuredStatusChildWorkFields(this.readChildWork(sessionId), provider),
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now
     })
@@ -224,8 +230,8 @@ export class StructuredAgentSessionStatusFeed {
       if (publication && projection.work) {
         this.published.set(sessionId, { ...publication, work: projection.work })
       }
-      if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
+      if (!hidden && !this.ownership.matchesLocation(sessionId, location)) {
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : location)
       }
       return
     }
@@ -235,10 +241,14 @@ export class StructuredAgentSessionStatusFeed {
       ...(projection.work ? { work: projection.work } : {})
     })
     if (summaryChanged) {
-      if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
+      if (!hidden && (!reportOnly || !this.ownership.matchesLocation(sessionId, location))) {
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : location)
       }
+      // Targeted status subscribers include the child's own pane, even for an unlisted auxiliary chat.
       this.broadcast({ type: 'status', session: summary })
+    }
+    if (hidden) {
+      return
     }
     notifyStructuredStatusObservers(this.deps, summary, previous, {
       reportOnly,
@@ -262,13 +272,6 @@ export class StructuredAgentSessionStatusFeed {
       ])
     }
   }
-
-  /** Exclude per-tick usage from global broadcasts; chat background channels retain it. */
-  private childWorkFields = (
-    sessionId: string,
-    provider: StatusFeedSession['params']['provider']
-  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> =>
-    structuredStatusChildWorkFields(this.readChildWork(sessionId), provider)
 
   publishChildWork(
     sessionId: string,

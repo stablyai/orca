@@ -2,6 +2,7 @@
 
 import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { stripNativeChatSentPromptReferences } from '../../../../../shared/native-chat/transcript/messages/native-chat-sent-prompt-references'
 import { projectNativeChatTranscriptMessages } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatCommandMarker } from '../session/terminal/delivery/native-chat-command-marker'
@@ -76,7 +77,9 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
       const command = commands[nextCommand++]
       push(`command:${command.id}`, command.command)
     }
-    const text = deriveNativeChatRowContent(message.blocks).markdown
+    const text = stripNativeChatSentPromptReferences(
+      deriveNativeChatRowContent(message.blocks).markdown
+    )
     push(
       message.id,
       source.withoutImageMarkers
