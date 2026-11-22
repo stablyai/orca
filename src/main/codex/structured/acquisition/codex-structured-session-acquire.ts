@@ -17,7 +17,8 @@ import {
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from '../session-lifecycle/codex-structured-session-journal'
-import { codexConnectionOpener } from './codex-structured-connection-opener'
+import { codexConnectionOpener, opensSharedCodexServer } from './codex-structured-connection-opener'
+import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
@@ -91,7 +92,11 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
+  let sharedServer = false
+  // Without a start time the owner is never proven alive, so recovery never signals it.
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, async (pid) =>
+    sharedServer ? null : (deps.readProcessStartTime ?? readProcessStartTimeMs)(pid)
+  )
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -131,6 +136,7 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
     const open = codexConnectionOpener(deps, sessionId, launch)
+    sharedServer = opensSharedCodexServer(open)
     const connection = await open(
       {
         command: launch.command,

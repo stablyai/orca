@@ -19,28 +19,45 @@ type RequestOptions = { timeoutMs?: number | null; onReply?: (result?: unknown) 
 /** What a lease's requests need from the lease itself. */
 export type CodexLeaseRequestOwner = {
   readonly id: string
+  readonly chatEnv: Readonly<Record<string, string>>
   readonly open: boolean
   readonly host: CodexSharedLeaseHost
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
   readonly pendingOpens: Set<Promise<unknown>>
   /** Rejects every caller still waiting when the lease ends. */
   readonly outstanding: Set<(error: Error) => void>
-  claim: (threadId: string) => void
+  /** Threads this chat holds now. */
+  readonly threads: ReadonlySet<string>
+  /** Threads a resume of this chat's has reopened; a failed resume never undoes one of these. */
+  readonly resumedThreads: Set<string>
+  /** `opened`: by the reply to a thread open, which may find the thread's early frames dropped. */
+  claim: (threadId: string, opened?: boolean, history?: boolean) => void
   heldByOther: (threadId: string) => boolean
+  /** Drops this chat's own claim on a thread it failed to open. */
+  unclaim: (threadId: string) => void
+  /** Re-checks the server's backlog now that this chat waits on a reply. */
+  noteWaiting: () => void
   abandon: (threadId: string) => void
 }
 
 function withLeaseTag(
   params: Record<string, unknown> | undefined,
-  leaseId: string
+  leaseId: string,
+  chatEnv: Readonly<Record<string, string>>
 ): Record<string, unknown> {
+  const policy = Object.fromEntries(
+    Object.entries({ ...chatEnv, [CODEX_SHARED_LEASE_ENV]: leaseId }).map(([key, value]) => [
+      `shell_environment_policy.set.${key}`,
+      value
+    ])
+  )
   const config =
     typeof params?.config === 'object' && params.config !== null && !Array.isArray(params.config)
       ? params.config
       : {}
   return {
     ...params,
-    config: { ...config, [`shell_environment_policy.set.${CODEX_SHARED_LEASE_ENV}`]: leaseId }
+    config: { ...config, ...policy }
   }
 }
 
@@ -56,6 +73,7 @@ export async function sendCodexLeaseRequest(
   const opensThread = OPENS_THREAD.has(method)
   const resumed =
     method === 'thread/resume' && typeof params?.threadId === 'string' ? params.threadId : null
+  let resumedNewly = false
   if (resumed) {
     // A chat leaving this thread finishes its cleanup first, so it can't stop this one's work.
     await host.threadReleased(resumed)
@@ -72,6 +90,7 @@ export async function sendCodexLeaseRequest(
         detail
       )
     }
+    resumedNewly = !owner.threads.has(resumed)
     owner.claim(resumed)
   }
   const turnThreadId =
@@ -79,7 +98,7 @@ export async function sendCodexLeaseRequest(
   let callerGone = false
   const sent = host.connection.request(
     method,
-    opensThread ? withLeaseTag(params, owner.id) : params,
+    opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,
     {
       // An open is timed here, not by the transport, so a late answer still reaches onReply.
       timeoutMs: opensThread
@@ -92,14 +111,20 @@ export async function sendCodexLeaseRequest(
         const threadId = opensThread ? codexOpenedThreadId(result) : null
         if (threadId) {
           if (owner.open && !callerGone) {
-            owner.claim(threadId)
+            owner.claim(threadId, true)
+            if (method === 'thread/resume') {
+              owner.resumedThreads.add(threadId)
+            }
           } else {
             owner.abandon(threadId)
           }
         }
         if (CARRIES_HISTORY.has(method) && owner.open && !callerGone) {
+          // A helper another chat already holds stays with it, with its liveness and cleanup.
           for (const child of codexChildThreadIdsInHistory(result)) {
-            owner.claim(child)
+            if (!owner.heldByOther(child)) {
+              owner.claim(child, false, true)
+            }
           }
         }
         const turnId = turnThreadId ? codexTurnId(result) : null
@@ -117,6 +142,8 @@ export async function sendCodexLeaseRequest(
     owner.pendingOpens.add(sent)
     const settle = (): void => {
       owner.pendingOpens.delete(sent)
+      host.turnsChanged()
+      host.router.openSettled()
     }
     sent.then(settle, settle)
   }
@@ -134,6 +161,7 @@ export async function sendCodexLeaseRequest(
       reject(error)
     }
     owner.outstanding.add(giveUp)
+    owner.noteWaiting()
     if (openTimeoutMs !== null) {
       timer = setTimeout(
         () =>
@@ -147,11 +175,20 @@ export async function sendCodexLeaseRequest(
       (result) => {
         clearTimeout(timer)
         owner.outstanding.delete(giveUp)
+        // A thread that opened after the chat began closing was let go in onReply, not handed over.
+        if (opensThread && !owner.open) {
+          reject(new Error(`codex app-server connection is closed (${method})`))
+          return
+        }
         resolve(result)
       },
       (error: unknown) => {
         clearTimeout(timer)
         owner.outstanding.delete(giveUp)
+        // Codex opened nothing, so another chat may still open this thread here.
+        if (resumed && resumedNewly && !owner.resumedThreads.has(resumed)) {
+          owner.unclaim(resumed)
+        }
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     )

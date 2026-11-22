@@ -10,6 +10,15 @@ import type {
   CodexStructuredSessionAdapterDeps
 } from '../session-lifecycle/codex-structured-session-state'
 
+type CodexConnectionOpen = NonNullable<CodexStructuredSessionAdapterDeps['openConnection']>
+
+const sharedOpeners = new WeakSet<CodexConnectionOpen>()
+
+/** A shared server is many chats' process, so no one chat's recovery may ever signal it. */
+export function opensSharedCodexServer(open: CodexConnectionOpen): boolean {
+  return sharedOpeners.has(open)
+}
+
 /** Off, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
  *  thread on a shared one. Windows shares only while each shared server's tree can be held in a
  *  job; otherwise it, too, keeps one server per chat. */
@@ -22,7 +31,7 @@ export function codexConnectionOpener(
   >,
   platform: NodeJS.Platform = process.platform,
   windowsSharing: () => boolean = windowsSharedServersAvailable
-): NonNullable<CodexStructuredSessionAdapterDeps['openConnection']> {
+): CodexConnectionOpen {
   if (deps.openConnection) {
     return deps.openConnection
   }
@@ -36,7 +45,7 @@ export function codexConnectionOpener(
     ...(launch.visuals ? { visualsSkillsRoot: launch.visuals.skill.skillsRoot } : {}),
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
-  return (connectionLaunch, handlers) =>
+  const open: CodexConnectionOpen = (connectionLaunch, handlers) =>
     sharedCodexServerPool()
       .open(connectionLaunch, handlers ?? {}, {
         sessionId,
@@ -49,4 +58,6 @@ export function codexConnectionOpener(
         }
         throw error
       })
+  sharedOpeners.add(open)
+  return open
 }

@@ -7,20 +7,14 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import { codexSharedServerSpec } from './codex-shared-server-key'
-import {
-  CODEX_SHARED_STOP_RETRY_DELAYS_MS,
-  CodexSharedServerLease
-} from './codex-shared-server-lease'
+import { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import {
   CodexSharedServerUncontainedError,
   CodexSharedServerWindowsJob
 } from './codex-shared-server-windows-job'
-import {
-  CodexSharedServerMemoryCeiling,
-  type CodexSharedServerToolUsage
-} from './codex-shared-server-memory-ceiling'
+import { CodexSharedServerMemoryCeiling } from './codex-shared-server-memory-ceiling'
 
 /** Bounds how many chats one crash or hang can reach. */
 export const CODEX_SHARED_SERVER_MAX_CHATS = 20
@@ -36,20 +30,14 @@ export type CodexSharedServerOpenOptions = {
   codexVersion?: string | null
 }
 
-export type CodexSharedServerSummary = {
-  pid: number | undefined
-  draining: boolean
-  memoryBytes: number | null
-  sessionIds: string[]
-  toolUsage: CodexSharedServerToolUsage[]
-}
-
 /** Servers grouped by launch key; a chat joins the first with room, else a new one starts. */
 export class CodexSharedServerPool {
   private readonly servers = new Map<string, CodexSharedServer[]>()
   private readonly idleTimers = new Map<CodexSharedServer, ReturnType<typeof setTimeout>>()
   /** Out of selection, kept until their exit is proven so none is orphaned. */
   private readonly stopping = new Set<CodexSharedServer>()
+  /** Stops that couldn't prove an exit, retried when the next chat opens. */
+  private readonly unproven = new Set<CodexSharedServer>()
   private readonly ceiling = new CodexSharedServerMemoryCeiling(
     () => this.allServers(),
     (server) => this.onServerFreed(server)
@@ -74,10 +62,13 @@ export class CodexSharedServerPool {
       options.codexVersion ?? null
     )
     this.ceiling.sampleIfStale()
+    for (const stale of this.unproven) {
+      this.stop(stale)
+    }
     const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
     // Reserved before the server is ready, so concurrent opens respect the cap.
-    const lease = new CodexSharedServerLease(server, handlers, options.sessionId)
+    const lease = new CodexSharedServerLease(server, handlers, options.sessionId, spec.chatEnv)
     server.leases.add(lease)
     try {
       await server.ready
@@ -85,21 +76,15 @@ export class CodexSharedServerPool {
         throw new Error('codex shared app-server exited before the chat joined it')
       }
       await lease.announce()
+      // The server can exit while onSpawned runs; that ends the reserved lease.
+      if (lease.closed) {
+        throw new Error('codex shared app-server exited before the chat joined it')
+      }
     } catch (error) {
       await server.release(lease).catch(() => {})
       throw error
     }
     return lease
-  }
-
-  summaries(): CodexSharedServerSummary[] {
-    return this.allServers().map((server) => ({
-      pid: server.pid,
-      draining: server.draining,
-      memoryBytes: server.memoryBytes,
-      sessionIds: [...server.leases].flatMap((lease) => (lease.sessionId ? [lease.sessionId] : [])),
-      toolUsage: server.toolUsage
-    }))
   }
 
   private allServers(): CodexSharedServer[] {
@@ -138,6 +123,7 @@ export class CodexSharedServerPool {
     if (server.exited) {
       this.remove(server)
       this.stopping.delete(server)
+      this.unproven.delete(server)
       return
     }
     if (server.leases.size > 0) {
@@ -167,24 +153,18 @@ export class CodexSharedServerPool {
     }
   }
 
-  private stop(server: CodexSharedServer, attempt = 0): void {
+  private stop(server: CodexSharedServer): void {
     this.remove(server)
     this.stopping.add(server)
+    this.unproven.delete(server)
     void server.stop().then((proven) => {
       if (proven || server.exited || server.leases.size > 0) {
         this.stopping.delete(server)
         return
       }
-      // Retried until proven, at the slowest pace once the backoff runs out.
-      const delay =
-        CODEX_SHARED_STOP_RETRY_DELAYS_MS[
-          Math.min(attempt, CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1)
-        ]!
-      if (attempt === CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1) {
-        console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
-      }
-      const timer = setTimeout(() => this.stop(server, attempt + 1), delay)
-      timer.unref?.()
+      // No timer: its exit clears it, and the next chat to open retries the stop.
+      console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
+      this.unproven.add(server)
     })
   }
 
@@ -209,9 +189,4 @@ let pool: CodexSharedServerPool | null = null
 export function sharedCodexServerPool(): CodexSharedServerPool {
   pool ??= new CodexSharedServerPool()
   return pool
-}
-
-/** Shared servers now running, for diagnostics; empty when the pool was never used. */
-export function sharedCodexServerSummaries(): CodexSharedServerSummary[] {
-  return pool?.summaries() ?? []
 }

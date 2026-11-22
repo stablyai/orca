@@ -1,160 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CodexAppServerUnsupportedError } from '../codex-app-server-request-error'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers
-} from '../codex-app-server-connection-types'
-import { CodexSharedServerPool } from './codex-shared-server-pool'
 import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-lease'
-import { codexOpenedThreadId } from './codex-shared-server-frames'
-import { codexConnectionOpener } from '../../structured/acquisition/codex-structured-connection-opener'
+import {
+  codexConnectionOpener,
+  opensSharedCodexServer
+} from '../../structured/acquisition/codex-structured-connection-opener'
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
+import { chat, fakeCodex, launch, startThread } from './codex-shared-server-pool-fixture'
+import { field } from './codex-shared-server-frames'
 import {
   CodexSharedServerUncontainedError,
   CodexSharedServerWindowsJob
 } from './codex-shared-server-windows-job'
-
-type FakeServer = {
-  pid: number
-  handlers: CodexAppServerConnectionHandlers
-  requests: { method: string; params?: Record<string, unknown> }[]
-  /** Background terminals per thread, as Codex lists them. */
-  terminals: Map<string, Set<string>>
-  /** Answers the thread/start held by `holdOpen`. */
-  releaseOpen: () => void
-  crash: () => void
-  /** The server goes unusable without its exit being proven yet. */
-  closeTransport: () => void
-}
-
-/** interrupt: 'ends' completes the turn at once, 'later' after 3 s, 'ignored' never. */
-function fakeCodex(
-  interrupt: 'ends' | 'later' | 'ignored' = 'ends',
-  /** What closing the process proves about its commands. */
-  closeTree: 'exited' | 'unverifiable' = 'exited',
-  /** Whether thread/backgroundTerminals/terminate actually stops the command. */
-  terminateWorks = true,
-  codex: {
-    listUnsupported?: boolean
-    unsubscribeFails?: boolean
-    windowsJob?: () => CodexSharedServerWindowsJob
-  } = {}
-) {
-  const servers: FakeServer[] = []
-  let nextThread = 1
-  const connect = async (
-    _launch: unknown,
-    handlers: CodexAppServerConnectionHandlers = {}
-  ): Promise<CodexAppServerConnection> => {
-    let closed = false
-    let closeResult: CodexAppServerConnection['closeResult'] = null
-    const server: FakeServer = {
-      pid: 5000 + servers.length,
-      handlers,
-      requests: [],
-      terminals: new Map(),
-      releaseOpen: () => {},
-      crash: () => {
-        closed = true
-        handlers.onClose?.(new Error('codex crashed'))
-        handlers.onExit?.(new Error('codex crashed'), { expected: false })
-      },
-      closeTransport: () => {
-        closed = true
-        handlers.onClose?.(new Error('broken pipe'))
-      }
-    }
-    servers.push(server)
-    return {
-      pid: server.pid,
-      get closed() {
-        return closed
-      },
-      get closeResult() {
-        return closeResult
-      },
-      request: async (method, params, options) => {
-        server.requests.push({ method, ...(params ? { params } : {}) })
-        if (method === 'turn/start' && params?.hang === true) {
-          // A send Codex has not answered yet.
-          return new Promise(() => {})
-        }
-        if (
-          (method === 'thread/start' || method === 'thread/resume') &&
-          params?.holdOpen === true
-        ) {
-          const id =
-            typeof params.threadId === 'string' ? params.threadId : `thread-${nextThread++}`
-          return new Promise((resolve) => {
-            server.releaseOpen = () => {
-              const result = { thread: { id } }
-              options?.onReply?.(result)
-              resolve(result)
-            }
-          })
-        }
-        const threadId = typeof params?.threadId === 'string' ? params.threadId : ''
-        if (method === 'thread/backgroundTerminals/list' && codex.listUnsupported) {
-          throw new CodexAppServerUnsupportedError('codex app-server does not support list')
-        }
-        if (method === 'thread/unsubscribe' && codex.unsubscribeFails) {
-          throw new Error('codex app-server thread/unsubscribe failed')
-        }
-        if (method === 'thread/backgroundTerminals/list') {
-          const running = [...(server.terminals.get(threadId) ?? [])]
-          const result = { data: running.map((processId) => ({ processId })), nextCursor: null }
-          options?.onReply?.(result)
-          return result
-        }
-        if (method === 'thread/backgroundTerminals/terminate' && terminateWorks) {
-          server.terminals.get(threadId)?.delete(String(params?.processId))
-        }
-        let result: unknown = {}
-        if (method === 'thread/start') {
-          const id = `thread-${nextThread++}`
-          // Codex announces the thread before it answers the start.
-          handlers.onNotification?.('thread/started', { thread: { id } })
-          result = { thread: { id } }
-        } else if (method === 'thread/resume') {
-          result = { thread: { id: params?.threadId } }
-        } else if (method === 'turn/interrupt' && interrupt !== 'ignored') {
-          const end = () =>
-            handlers.onNotification?.('turn/completed', {
-              threadId: params?.threadId,
-              turn: { id: params?.turnId, status: 'interrupted' }
-            })
-          if (interrupt === 'ends') {
-            end()
-          } else {
-            setTimeout(end, 3_000)
-          }
-        }
-        options?.onReply?.(result)
-        return result
-      },
-      notify: () => {},
-      respond: () => {},
-      respondWithError: () => {},
-      close: async () => {
-        closed = true
-        closeResult = { root: 'exited', tree: closeTree }
-        handlers.onExit?.(new Error('closed'), { expected: true })
-        return true
-      }
-    }
-  }
-  // The host sweep finds nothing left of a chat unless a test leaves something running.
-  const sweep = { leftovers: false }
-  return {
-    servers,
-    sweep,
-    pool: new CodexSharedServerPool(
-      connect,
-      async () => !sweep.leftovers,
-      codex.windowsJob ?? (() => undefined)
-    )
-  }
-}
 
 /** A Windows job over the fake server's tree: cmd.exe (the fake's pid) -> node -> codex.exe. */
 function fakeWindowsJob(holdsCodex = true) {
@@ -173,29 +29,6 @@ function fakeWindowsJob(holdsCodex = true) {
     ]
   )!
   return { job, terminated }
-}
-
-function chat() {
-  const notifications: { method: string; params: unknown }[] = []
-  const exits: { message: string; expected: boolean | undefined }[] = []
-  const handlers: CodexAppServerConnectionHandlers = {
-    onNotification: (method, params) => notifications.push({ method, params }),
-    onExit: (error, exit) => exits.push({ message: error.message, expected: exit?.expected })
-  }
-  return { handlers, notifications, exits }
-}
-
-const launch = (home = '/home/a/.codex') => ({
-  command: '/usr/local/bin/codex',
-  args: ['app-server'],
-  cwd: '/work',
-  env: { CODEX_HOME: home, ORCA_AGENT_SESSION_ID: `chat-${Math.random()}` }
-})
-
-async function startThread(connection: CodexAppServerConnection): Promise<string> {
-  const threadId = codexOpenedThreadId(await connection.request('thread/start', { cwd: '/work' }))
-  expect(threadId).not.toBeNull()
-  return threadId ?? ''
 }
 
 afterEach(() => {
@@ -227,6 +60,77 @@ describe('shared Codex app-servers', () => {
     // One initialize for the server; the chats' own handshakes never reach Codex.
     await connA.request('initialize', {})
     expect(servers[0]!.requests.filter((r) => r.method === 'initialize')).toHaveLength(1)
+  })
+
+  it("gives a thread's unreadable or unknown frames only to its chat, and other chats none", async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const b = chat()
+    const unreadA: string[] = []
+    const unreadB: string[] = []
+    const connA = await pool.open(
+      launch(),
+      { ...a.handlers, onUnhandledFrame: (kind) => unreadA.push(kind) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(
+      launch(),
+      { ...b.handlers, onUnhandledFrame: (kind) => unreadB.push(kind) },
+      { sessionId: 'b', skillRoots: [] }
+    )
+    const threadA = await startThread(connA)
+    const { handlers } = servers[0]!
+    handlers.onUnhandledFrame?.('frame:unclassified', { id: 'x', params: { threadId: threadA } })
+    handlers.onUnhandledFrame?.('frame:invalid-json', '{"text":"words from chat A')
+    handlers.onNotification?.('item/newKind/delta', { thread_id: threadA, text: 'mine' })
+    handlers.onNotification?.('item/otherKind/delta', { text: 'private' })
+
+    expect(unreadA).toEqual(['frame:unclassified'])
+    expect(unreadB).toEqual([])
+    expect(a.notifications.map((n) => n.method)).toContain('item/newKind/delta')
+    expect(b.notifications.map((n) => n.method)).not.toContain('item/newKind/delta')
+    expect(b.notifications.map((n) => n.method)).not.toContain('item/otherKind/delta')
+  })
+
+  it('gives an account request to a chat that is reading, not one that is paused', async () => {
+    const { servers, pool } = fakeCodex()
+    const askedA: string[] = []
+    const askedB: string[] = []
+    const connA = await pool.open(
+      launch(),
+      { ...chat().handlers, onServerRequest: (request) => askedA.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(
+      launch(),
+      { ...chat().handlers, onServerRequest: (request) => askedB.push(request.method) },
+      { sessionId: 'b', skillRoots: [] }
+    )
+    connA.pauseReading?.()
+    servers[0]!.handlers.onServerRequest?.({
+      id: 7,
+      method: 'account/chatgptAuthTokens/refresh',
+      params: {}
+    })
+    expect(askedA).toEqual([])
+    expect(askedB).toEqual(['account/chatgptAuthTokens/refresh'])
+  })
+
+  it("gives each chat's threads that chat's own Orca identity, not the server's", async () => {
+    const { servers, pool } = fakeCodex()
+    const launchA = launch()
+    const launchB = launch()
+    const connA = await pool.open(launchA, chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launchB, chat().handlers, { sessionId: 'b', skillRoots: [] })
+    await startThread(connA)
+    await startThread(connB)
+    const sessionIds = servers[0]!.requests
+      .filter((r) => r.method === 'thread/start')
+      .map((r) => field(r.params, 'config', 'shell_environment_policy.set.ORCA_AGENT_SESSION_ID'))
+    expect(sessionIds).toEqual([
+      launchA.env.ORCA_AGENT_SESSION_ID,
+      launchB.env.ORCA_AGENT_SESSION_ID
+    ])
   })
 
   it('starts a second server at 20 chats and never shares across account homes', async () => {
@@ -325,6 +229,30 @@ describe('shared Codex app-servers', () => {
     expect(b.notifications.at(-1)?.method).toBe('item/started')
   })
 
+  it('retries a dropped chat whose turn ignores Stop only when that turn ends, never on a clock', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    connA.pauseReading?.()
+    for (let i = 0; i <= CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    }
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000)
+    const interrupts = servers[0]!.requests.filter((r) => r.method === 'turn/interrupt')
+    expect(interrupts).toHaveLength(1)
+    expect(a.exits).toEqual([])
+    servers[0]!.handlers.onNotification?.('turn/completed', {
+      threadId: threadA,
+      turn: { id: 't', status: 'interrupted' }
+    })
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    expect(connB.closed).toBe(false)
+  })
+
   it('interrupts a turn whose start is still queued behind a paused chat', async () => {
     const { servers, pool } = fakeCodex()
     const a = chat()
@@ -421,6 +349,56 @@ describe('shared Codex app-servers', () => {
     expect(a.notifications.map((n) => n.method)).toContain('item/agentMessage/delta')
   })
 
+  it("keeps a new thread's early frames while its start reply is slow", async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const started = connA.request(
+      'thread/start',
+      { cwd: '/work', holdOpen: true },
+      { timeoutMs: null }
+    )
+    servers[0]!.handlers.onNotification?.('thread/started', { thread: { id: 'thread-1' } })
+    await vi.advanceTimersByTimeAsync(60_000)
+    servers[0]!.releaseOpen()
+    await started
+    expect(a.notifications.map((n) => n.method)).toContain('thread/started')
+  })
+
+  it('ends a chat whose new thread lost its early frames to the hold cap, so it reopens it whole', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const started = connA.request(
+      'thread/start',
+      { cwd: '/work', holdOpen: true },
+      { timeoutMs: null }
+    )
+    servers[0]!.handlers.onNotification?.('thread/started', { thread: { id: 'thread-1' } })
+    // Other unclaimed threads push the held frames past the cap, and enough of them that the
+    // record of which threads lost frames overflows too.
+    for (let i = 0; i < 8_000; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/started', { threadId: `stray-${i}` })
+    }
+    servers[0]!.releaseOpen()
+    await expect(started).rejects.toThrow('closed')
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    expect(a.exits[0]?.expected).toBe(false)
+  })
+
+  it('lets another chat open a thread this chat failed to resume', async () => {
+    const { pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    await expect(
+      connA.request('thread/resume', { threadId: 'thread-gone', gone: true })
+    ).rejects.toThrow('no rollout found')
+    await expect(connB.request('thread/resume', { threadId: 'thread-gone' })).resolves.toEqual({
+      thread: { id: 'thread-gone' }
+    })
+  })
+
   it('starts a fresh server once the current one can no longer take requests', async () => {
     const { servers, pool } = fakeCodex()
     await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
@@ -504,6 +482,17 @@ describe('shared Codex app-servers', () => {
     ).toBe(spawnCodexAppServerConnection)
   })
 
+  it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {
+    expect(
+      opensSharedCodexServer(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'linux'))
+    ).toBe(true)
+    expect(
+      opensSharedCodexServer(
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')
+      )
+    ).toBe(false)
+  })
+
   it('does not count a server exit during Stop as the turn ending', async () => {
     vi.useFakeTimers()
     const { servers, pool } = fakeCodex('ignored', 'unverifiable')
@@ -552,6 +541,27 @@ describe('shared Codex app-servers', () => {
     expect(requests).toEqual(['item/commandExecution/requestApproval'])
   })
 
+  it('refuses a server request with no thread rather than hand it to some chat, except account requests', async () => {
+    const { servers, pool } = fakeCodex()
+    const requests: string[] = []
+    const a = chat()
+    await pool.open(
+      launch(),
+      { ...a.handlers, onServerRequest: (request) => requests.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const { handlers } = servers[0]!
+    handlers.onServerRequest?.({
+      id: 8,
+      method: 'item/fileChange/requestApproval',
+      params: { itemId: 'i1' }
+    })
+    handlers.onServerRequest?.({ id: 9, method: 'account/chatgptAuthTokens/refresh', params: {} })
+    expect(servers[0]!.refused).toEqual([8])
+    expect(requests).toEqual(['account/chatgptAuthTokens/refresh'])
+  })
+
   it("stops the chat's own background commands on close, and reports Stop unproven when one survives", async () => {
     const { servers, pool } = fakeCodex()
     const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
@@ -594,7 +604,7 @@ describe('shared Codex app-servers', () => {
     const opening = connA.request('thread/start', { cwd: '/work', holdOpen: true })
     const closing = connA.close()
     servers[0]!.releaseOpen()
-    await opening
+    await expect(opening).rejects.toThrow('closed')
     await closing
     const opened = servers[0]!.requests.filter((r) => r.method === 'thread/unsubscribe')
     expect(opened).toEqual([{ method: 'thread/unsubscribe', params: { threadId: 'thread-1' } }])
@@ -668,6 +678,52 @@ describe('shared Codex app-servers', () => {
       turn: { id: 'late' }
     })
     expect(a.notifications.map((n) => n.method)).not.toContain('turn/started')
+  })
+
+  it('does not interrupt the turn of a chat that reopened a thread another chat let go of', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const resuming = connA.request(
+      'thread/resume',
+      { threadId: 'shared-thread', holdOpen: true },
+      { timeoutMs: 1_000 }
+    )
+    const failed = expect(resuming).rejects.toThrow('exceeded 1000ms')
+    await vi.advanceTimersByTimeAsync(1_500)
+    await failed
+    servers[0]!.releaseOpen()
+    await connB.request('thread/resume', { threadId: 'shared-thread' })
+    servers[0]!.handlers.onNotification?.('turn/started', {
+      threadId: 'shared-thread',
+      turn: { id: 'b-turn' }
+    })
+    await connA.close()
+    expect(servers[0]!.requests.filter((r) => r.method === 'turn/interrupt')).toEqual([])
+  })
+
+  it('refuses an approval for a chat that is leaving instead of leaving Codex waiting', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const requests: string[] = []
+    const a = chat()
+    const connA = await pool.open(
+      launch(),
+      { ...a.handlers, onServerRequest: (request) => requests.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    void connA.close()
+    servers[0]!.handlers.onServerRequest?.({
+      id: 11,
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: threadA }
+    })
+    expect(servers[0]!.refused).toEqual([11])
+    expect(requests).toEqual([])
   })
 
   describe('on Windows', () => {

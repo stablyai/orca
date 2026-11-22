@@ -86,7 +86,6 @@ export function collectWslDriveUncScope(
       scope.repoIds.push(repo.id)
     }
   }
-  refuseOverlaps(scope, state.repos, distro)
   const hostState = { repos: [...state.repos], projectGroups: [...state.projectGroups] }
   // This row alone: another host may hold a folder workspace with the same id.
   const isLocal = (workspace: FolderWorkspace): boolean =>
@@ -118,30 +117,62 @@ export function collectWslDriveUncScope(
       scope.folderWorkspaceIds.push(workspace.id)
     }
   }
+  refuseOverlaps(scope, state, distro)
   return scope
 }
 
-/** A bare path is re-keyed by the folder it lies in, so nested projects must convert together. */
-function refuseOverlaps(scope: WslDriveUncScope, repos: readonly Repo[], distro: string): void {
-  // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncDuplicatesSplitBy.
-  const refusedIds = new Set(
-    scope.refused
+/**
+ * A bare path is re-keyed by the folder it lies in, so a project nesting with a refused one, repo
+ * or folder workspace either way round, would rewrite its paths; it is refused too, transitively.
+ */
+function refuseOverlaps(
+  scope: WslDriveUncScope,
+  state: Pick<WslDriveUncScopeState, 'repos' | 'folderWorkspaces'>,
+  distro: string
+): void {
+  const projects = [
+    ...state.repos.map((repo) => ({
+      kind: 'repo' as const,
+      id: repo.id,
+      roots: driveRoots(wslMoveRepoPaths(repo), distro)
+    })),
+    ...state.folderWorkspaces.map((workspace) => ({
+      kind: 'folder-workspace' as const,
+      id: workspace.id,
+      roots: driveRoots([workspace.folderPath], distro)
+    }))
+  ]
+  const accepted = (kind: 'repo' | 'folder-workspace'): string[] =>
+    kind === 'repo' ? scope.repoIds : scope.folderWorkspaceIds
+  for (let added = true; added;) {
+    added = false
+    // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncRefusedSplitBy.
+    const refusedRoots = scope.refused
       .filter((entry) => entry.reason !== 'duplicate-windows-project')
-      .map((entry) => entry.id)
-  )
-  const comparable = (repo: Repo): string[] => driveRoots(wslMoveRepoPaths(repo), distro)
-  const refusedRoots = repos.filter((repo) => refusedIds.has(repo.id)).flatMap(comparable)
-  const overlapping = new Set(
-    repos
-      .filter((repo) => scope.repoIds.includes(repo.id))
-      .filter((repo) =>
-        comparable(repo).some((root) => refusedRoots.some((refused) => nests(root, refused)))
+      // An accepted id is another host's row refused under the same folder workspace id.
+      .filter((entry) => !accepted(entry.kind).includes(entry.id))
+      .flatMap((entry) =>
+        projects.filter((project) => project.kind === entry.kind && project.id === entry.id)
       )
-      .map((repo) => repo.id)
-  )
-  scope.repoIds = scope.repoIds.filter((id) => !overlapping.has(id))
-  for (const id of overlapping) {
-    scope.refused.push({ kind: 'repo', id, reason: 'overlaps-refused-project' })
+      .flatMap((project) => project.roots)
+    for (const project of projects) {
+      if (
+        accepted(project.kind).includes(project.id) &&
+        project.roots.some((root) => refusedRoots.some((refused) => nests(root, refused)))
+      ) {
+        if (project.kind === 'repo') {
+          scope.repoIds = scope.repoIds.filter((id) => id !== project.id)
+        } else {
+          scope.folderWorkspaceIds = scope.folderWorkspaceIds.filter((id) => id !== project.id)
+        }
+        scope.refused.push({
+          kind: project.kind,
+          id: project.id,
+          reason: 'overlaps-refused-project'
+        })
+        added = true
+      }
+    }
   }
 }
 
@@ -186,18 +217,18 @@ export function withNestedWslDriveUncProjects(
 }
 
 /**
- * Refused duplicates a conversion rewriting these folders would split: their paths inside them
- * would move while their ids stay. A second spelling of a converting project is that project.
+ * Refused projects a conversion rewriting these folders would split: their paths inside them would
+ * move while their ids stay. The folders include saved worktrees outside a repo's own paths, which
+ * the scope check cannot see. A second spelling of a converting project is that project.
  */
-export function wslDriveUncDuplicatesSplitBy(
+export function wslDriveUncRefusedSplitBy(
   state: WslDriveUncScopeState,
   scope: WslDriveUncScope,
   distro: string,
   converting: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] },
   rewriteRoots: () => readonly string[]
 ): string[] {
-  const duplicates = scope.refused.filter((entry) => entry.reason === 'duplicate-windows-project')
-  if (duplicates.length === 0) {
+  if (scope.refused.length === 0) {
     return []
   }
   const convertingFolders = new Set(
@@ -212,17 +243,21 @@ export function wslDriveUncDuplicatesSplitBy(
     )
   )
   const roots = driveRoots(rewriteRoots(), distro)
+  // The rewrite maps a path at a root as well as under it.
   const splits = (folder: string, paths: readonly string[]): boolean =>
     !driveRoots([folder], distro).some((path) => convertingFolders.has(path)) &&
-    driveRoots(paths, distro).some((path) => roots.some((root) => isInside(path, root)))
-  return duplicates.flatMap(({ kind, id }) => {
-    if (kind === 'repo') {
-      const repo = state.repos.find((entry) => entry.id === id)
-      return repo && splits(repo.path, wslMoveRepoPaths(repo)) ? [id] : []
-    }
-    const folder = state.folderWorkspaces.find((entry) => entry.id === id)
-    return folder && splits(folder.folderPath, [folder.folderPath]) ? [id] : []
-  })
+    driveRoots(paths, distro).some((path) =>
+      roots.some((root) => path === root || isInside(path, root))
+    )
+  const split = scope.refused.filter(({ kind, id }) =>
+    kind === 'repo'
+      ? state.repos.some((repo) => repo.id === id && splits(repo.path, wslMoveRepoPaths(repo)))
+      : // Every row: another host may hold a folder workspace with the same id.
+        state.folderWorkspaces.some(
+          (folder) => folder.id === id && splits(folder.folderPath, [folder.folderPath])
+        )
+  )
+  return [...new Set(split.map(({ id }) => id))]
 }
 
 function driveRoots(paths: readonly string[], distro: string): string[] {

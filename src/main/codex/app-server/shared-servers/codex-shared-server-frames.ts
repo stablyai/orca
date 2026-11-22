@@ -5,6 +5,8 @@ import { readCodexSubagentAnnouncements } from '../../structured/background-work
 export type CodexSharedServerFrame =
   | { kind: 'notification'; method: string; params: unknown }
   | { kind: 'request'; request: CodexAppServerServerRequest }
+  /** A frame Codex sent that no handler could read; journaled by the chat it reaches. */
+  | { kind: 'unhandled'; frameKind: string; payload: unknown }
 
 export function field(value: unknown, ...path: readonly string[]): unknown {
   let current = value
@@ -22,12 +24,19 @@ function stringOrNull(value: unknown): string | null {
 }
 
 export function codexSharedFrameParams(frame: CodexSharedServerFrame): unknown {
+  if (frame.kind === 'unhandled') {
+    return field(frame.payload, 'params') ?? frame.payload
+  }
   return frame.kind === 'notification' ? frame.params : frame.request.params
 }
 
 /** The thread a frame belongs to; null for account- or server-wide frames. */
 export function codexFrameThreadId(params: unknown): string | null {
-  return stringOrNull(field(params, 'threadId')) ?? stringOrNull(field(params, 'thread', 'id'))
+  return (
+    stringOrNull(field(params, 'threadId')) ??
+    stringOrNull(field(params, 'thread_id')) ??
+    stringOrNull(field(params, 'thread', 'id'))
+  )
 }
 
 /** A subagent's thread belongs to the chat that owns its parent. */

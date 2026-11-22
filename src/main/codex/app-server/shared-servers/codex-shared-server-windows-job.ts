@@ -1,9 +1,8 @@
 import { spawnProcess } from '@orca/process-host'
 import type { ProviderProcessSpawner } from '../../../provider-process/provider-process-spawn'
-import { buildProcessIndex } from '../../../memory/process-index'
 import { readWindowsProcessIdentityTableFresh } from '../../../windows/windows-process-table'
 import { windowsJobObjectApi, type WindowsJobObjectApi } from '../../../windows/windows-job-object'
-import { serverChain } from './codex-shared-lease-process-scan'
+import { childrenByParent, serverChain } from './codex-shared-host-process-reading'
 
 /** Set once a shared server's tree could not be held in its job; Windows chats then keep their
  *  own server for the rest of the session, as with the setting off. */
@@ -73,12 +72,9 @@ export class CodexSharedServerWindowsJob {
       return false
     }
     const rows = await this.readTable().catch(() => [])
-    const index = buildProcessIndex(
-      rows.map((row) => ({ pid: row.pid, ppid: row.ppid, cpu: 0, memory: 0, name: row.name })),
-      null,
-      'working-set'
-    )
-    const chain = serverChain(index, rootPid)
+    const processes = new Map(rows.map((row) => [row.pid, row] as const))
+    const children = childrenByParent(rows.map((row) => [row.pid, row.ppid] as const))
+    const chain = serverChain(processes, children, rootPid)
     return (
       chain !== null && [...chain].every((pid) => this.api.isProcessInJob(this.job, pid) === true)
     )

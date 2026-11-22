@@ -10,7 +10,17 @@ import {
   createWslDistroHolder
 } from './wsl-distro-holder'
 import type { WslDistroHolderChild, WslDistroHolderDependencies } from './wsl-distro-holder-types'
-import { wslDistroHolderDirectory, type WslDistroHolderRecord } from './wsl-distro-holder-record'
+import type * as holderRecord from './wsl-distro-holder-record'
+import {
+  wslDistroHolderDirectory,
+  writeWslDistroHolderRecord,
+  type WslDistroHolderRecord
+} from './wsl-distro-holder-record'
+
+vi.mock('./wsl-distro-holder-record', async (importOriginal) => {
+  const actual = await importOriginal<typeof holderRecord>()
+  return { ...actual, writeWslDistroHolderRecord: vi.fn(actual.writeWslDistroHolderRecord) }
+})
 
 const HOLDER_COMMAND = (distro: string): string =>
   `C:\\Windows\\System32\\wsl.exe -d ${distro} --exec /bin/sh -c "while :; do sleep 3600; done" ${WSL_DISTRO_HOLDER_MARKER}`
@@ -24,7 +34,7 @@ class FakeHost {
   nextPid = 4000
   spawned: string[] = []
   killed: number[] = []
-  children: (EventEmitter & { pid?: number; unref: () => void })[] = []
+  children: WslDistroHolderChild[] = []
 
   query = async (pid: number): Promise<WindowsProcessEvidence> => {
     if (this.tableFails) {
@@ -37,7 +47,22 @@ class FakeHost {
   spawn = (distro: string): WslDistroHolderChild => {
     const pid = this.nextPid++
     this.spawned.push(distro)
-    const child = Object.assign(new EventEmitter(), { pid, unref: vi.fn() })
+    let exited = false
+    const child = Object.assign(new EventEmitter(), {
+      pid,
+      unref: vi.fn(),
+      // Like process-host's handle: refuses once the child has exited.
+      kill: (): boolean => {
+        if (exited) {
+          return false
+        }
+        this.kill(pid)
+        return true
+      }
+    })
+    child.once('exit', () => {
+      exited = true
+    })
     this.children.push(child)
     this.processes.set(pid, { commandLine: HOLDER_COMMAND(distro), startedAtMs: 1_000 + pid })
     this.running.add(distro.toLowerCase())
@@ -184,6 +209,75 @@ describe('createWslDistroHolder', () => {
     })
     await expect(holder.ensureHeld('Missing')).rejects.toThrow(/exited before the distro started/)
     expect(await recordFiles()).toEqual([])
+  })
+
+  it.each(['ENOSPC', 'EACCES'])(
+    'stops each holder whose record write fails with %s, so retries never pile up',
+    async (code) => {
+      const failure = Object.assign(new Error(`${code}: record write failed`), { code })
+      vi.mocked(writeWslDistroHolderRecord).mockRejectedValueOnce(failure)
+      vi.mocked(writeWslDistroHolderRecord).mockRejectedValueOnce(failure)
+      const holder = makeHolder()
+      await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+      await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+      expect(host.killed).toEqual([4000, 4001])
+      expect([...host.processes.keys()]).toEqual([])
+      expect(await recordFiles()).toEqual([])
+      // Once the disk recovers, one holder is spawned and recorded.
+      expect((await holder.ensureHeld('Alpine')).outcome).toBe('spawned')
+      expect([...host.processes.keys()]).toEqual([4002])
+      expect(await recordFiles()).toEqual(['alpine.json'])
+    }
+  )
+
+  it('stops a failed-publish holder through its own handle when the process table is unreadable', async () => {
+    host.tableFails = true
+    const failure = Object.assign(new Error('ENOSPC: record write failed'), { code: 'ENOSPC' })
+    vi.mocked(writeWslDistroHolderRecord).mockRejectedValue(failure)
+    try {
+      const holder = makeHolder()
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+      }
+    } finally {
+      vi.mocked(writeWslDistroHolderRecord).mockReset()
+    }
+    expect(host.killed).toEqual([4000, 4001, 4002])
+    expect([...host.processes.keys()]).toEqual([])
+  })
+
+  it('a failed publish keeps the record of the holder it was replacing', async () => {
+    // The old holder's command line is unreadable, so after the grace it is replaced.
+    host.processes.set(77, { commandLine: null, startedAtMs: 5_000 })
+    await writeRecord(record())
+    host.running.add('alpine')
+    let clock = 0
+    const holder = makeHolder({ monotonicNow: () => clock })
+    expect((await holder.ensureHeld('Alpine')).outcome).toBe('unverifiable')
+    clock = WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS + 1
+    const failure = Object.assign(new Error('EACCES: record write failed'), { code: 'EACCES' })
+    vi.mocked(writeWslDistroHolderRecord).mockRejectedValueOnce(failure)
+    await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+    expect(host.killed).toEqual([4000])
+    expect(await recordFiles()).toEqual(['alpine.json'])
+    expect(await holder.holderState('Alpine')).toBe('unverifiable')
+  })
+
+  it('reports the boot failure, not a cleanup failure', async () => {
+    let clock = 0
+    let queries = 0
+    const holder = makeHolder({
+      listRunningDistros: async () => [],
+      monotonicNow: () => (clock += 1_000),
+      bootTimeoutMs: 3_000,
+      queryProcess: async (pid) => {
+        if (++queries > 1) {
+          throw new Error('process table crashed')
+        }
+        return host.query(pid)
+      }
+    })
+    await expect(holder.ensureHeld('Alpine')).rejects.toThrow(/did not start/)
   })
 
   it('stops the holder when the distro never starts', async () => {

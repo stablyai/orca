@@ -209,12 +209,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
-  /** On by default: when a chat stops on a usage limit with a known reset time, send it "Continue
-   *  where you left off." once the limit resets, unless that chat was told not to. */
-  nativeChatAutoContinueAfterUsageLimit?: boolean
-  /** One-shot guard for the default-on rollout: a saved false from the old default turns on once;
-   *  a later explicit false sticks. */
-  nativeChatAutoContinueAfterUsageLimitDefaultedOn?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -391,10 +385,13 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Workspace cleanup also deletes agent chat history whose Orca workspace folder is gone. Absent means off. */
   deleteChatHistoryWithWorkspace?: boolean
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
-   *  History-only: does not change which account/config/hooks Orca uses.
-   *  `host`: absolute host path; empty/undefined falls back to ~/.codex.
-   *  `wsl`: per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
-  codexSessionSourceHome?: { host?: string; wsl?: Record<string, string> }
+   *  History-only: does not change which account/config/hooks Orca uses. */
+  codexSessionSourceHome?: {
+    /** Absolute host path; empty/undefined falls back to ~/.codex. */
+    host?: string
+    /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
+    wsl?: Record<string, string>
+  }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   agentLaunchChoices?: AgentLaunchChoices

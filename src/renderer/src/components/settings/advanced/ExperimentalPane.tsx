@@ -5,7 +5,10 @@ import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getExperimentalSearchEntry } from './experimental-search'
+import {
+  getExperimentalSearchEntry,
+  sharedCodexServersSettingAvailable
+} from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
@@ -48,9 +51,9 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
-  const showSharedCodexServers = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().sharedCodexServers
-  ])
+  const showSharedCodexServers =
+    sharedCodexServersSettingAvailable() &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().sharedCodexServers])
   const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
@@ -220,7 +223,7 @@ export function ExperimentalPane({
             )}
             description={t(
               'auto.components.settings.ExperimentalPane.sharedCodexServers.description',
-              'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.'
+              'Codex chats share a few background processes, up to 20 chats each, instead of starting one per chat.'
             )}
             keywords={getExperimentalSearchEntry().sharedCodexServers.keywords}
             className="space-y-3 py-3"
@@ -237,7 +240,7 @@ export function ExperimentalPane({
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'auto.components.settings.ExperimentalPane.sharedCodexServers.copy',
-                    'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat. Uses less memory and starts new chats faster. If a shared server crashes, all of its chats reconnect. Applies to chats started after you change it.'
+                    'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.'
                   )}
                 </p>
                 {isWindowsUserAgent() ? (

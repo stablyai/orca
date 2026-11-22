@@ -140,6 +140,44 @@ describe('how a bot request ends', () => {
     ])
   })
 
+  it('records an unanswered outcome only with its notice', async () => {
+    const id = request('question')
+    acting.requestIds = [id]
+    vi.spyOn(db, 'insertMessage').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    await expect(settleBotRequestTurn(runtime, 'docs-session')).rejects.toThrow('disk full')
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    expect(mailToRanger()).toHaveLength(1)
+  })
+
+  it("leaves a request open while its sender's /clear successor can't be read yet", async () => {
+    const id = request('question')
+    acting.requestIds = [id]
+    runtime.ensureStructuredAgentSessionHost = async () =>
+      installSenderHost(['11111111-1111-4111-8111-111111111111'], undefined, {
+        '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333'
+      })
+
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+
+    // Once the successor's record is readable, the sender is told there.
+    runtime.ensureStructuredAgentSessionHost = async () =>
+      installSenderHost(
+        ['11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333'],
+        undefined,
+        { '11111111-1111-4111-8111-111111111111': '33333333-3333-4333-8333-333333333333' }
+      )
+    await settleBotRequestTurn(runtime, 'docs-session')
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    expect(notified).toHaveLength(1)
+  })
+
   it("says a failed turn failed and why, not that the bot read the owner's handoff", async () => {
     const id = request('handoff', 'root', [{ kind: 'owner' }])
     acting.requestIds = [id]

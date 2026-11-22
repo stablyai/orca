@@ -11,6 +11,36 @@ import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
 
 const MAX_RETIRED_THREADS = 4_096
+/** The only server requests Codex sends without a thread; both are per account, and a server
+ *  never serves two accounts, so any chat on it may answer. */
+const SERVER_WIDE_REQUESTS: ReadonlySet<string> = new Set([
+  'account/chatgptAuthTokens/refresh',
+  'attestation/generate'
+])
+
+/** Notifications Codex sends without a thread that are about the account or the server itself,
+ *  so every chat would have had its own copy. Any other threadless notification may carry one
+ *  chat's content in a shape the router can't read, so it reaches no chat. */
+const SERVER_WIDE_NOTIFICATIONS: ReadonlySet<string> = new Set([
+  'skills/changed',
+  'mcpServer/oauthLogin/completed',
+  'mcpServer/startupStatus/updated',
+  'account/updated',
+  'account/gatewayOAuth/changed',
+  'account/rateLimits/updated',
+  'account/login/completed',
+  'app/list/updated',
+  'remoteControl/status/changed',
+  'externalAgentConfig/import/progress',
+  'externalAgentConfig/import/completed',
+  'modelProvider/authRecoveryStarted',
+  'modelProvider/authRecoveryCompleted',
+  'deprecationNotice',
+  'configWarning',
+  'warning',
+  'windows/worldWritableWarning',
+  'windowsSandbox/setupCompleted'
+])
 
 /** Which chat owns each thread on one server, and where each frame goes. */
 export class CodexSharedServerRouter {
@@ -23,7 +53,13 @@ export class CodexSharedServerRouter {
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
     private readonly refuse: (frame: CodexSharedServerFrame) => void
   ) {
-    this.unrouted = new CodexSharedServerUnrouted(refuse)
+    this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
+      [...leases()].some((lease) => lease.pendingOpens.size > 0)
+    )
+  }
+
+  openSettled(): void {
+    this.unrouted.openSettled()
   }
 
   isClaimed(threadId: string): boolean {
@@ -35,20 +71,41 @@ export class CodexSharedServerRouter {
     return owner !== undefined && owner !== lease
   }
 
-  claim(threadId: string, lease: CodexSharedServerLease): void {
+  /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
+   *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
+  claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {
       previous.threads.delete(threadId)
     }
     this.owners.set(threadId, lease)
     lease.threads.add(threadId)
+    if (!history) {
+      lease.liveThreads.add(threadId)
+    }
+    // A chat that let this thread go no longer stops its turns: they are the new owner's now.
+    for (const other of this.leases()) {
+      if (other !== lease) {
+        other.abandonedThreads.delete(threadId)
+      }
+    }
     this.retired.delete(threadId)
     for (const frame of this.unrouted.take(threadId)) {
+      lease.liveThreads.add(threadId)
       // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.
       if (frame.kind === 'notification') {
         this.discover(frame.method, frame.params)
       }
       lease.deliver(frame)
+    }
+    // Its early frames were dropped to bound memory: the chat reopens it from Codex's history
+    // rather than run on with events missing.
+    const lost = this.unrouted.takeLost(threadId)
+    if (lost) {
+      lease.liveThreads.add(threadId)
+    }
+    if (lost && opened) {
+      lease.shed()
     }
   }
 
@@ -135,6 +192,7 @@ export class CodexSharedServerRouter {
     }
     const owner = this.owners.get(threadId)
     if (owner) {
+      owner.liveThreads.add(threadId)
       owner.deliver(frame)
       return
     }
@@ -145,10 +203,26 @@ export class CodexSharedServerRouter {
     this.unrouted.hold(threadId, frame)
   }
 
+  /** A frame no handler could read goes only to the chat that owns the thread it names, in order
+   *  behind that chat's queue: raw content never reaches another chat. False when no chat took it. */
+  onUnhandledFrame(frameKind: string, payload: unknown): boolean {
+    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload }
+    const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
+    const owner = threadId === null ? undefined : this.owners.get(threadId)
+    owner?.liveThreads.add(threadId!)
+    owner?.deliver(frame)
+    return owner !== undefined
+  }
+
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
   private routeServerWide(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request') {
-      const first = [...this.leases()].find((lease) => lease.open)
+      // Any other request without a thread can't be tied to a chat; none may answer another's. A
+      // reading chat answers first, so one paused chat can't hold the account's request.
+      const open = SERVER_WIDE_REQUESTS.has(frame.request.method)
+        ? [...this.leases()].filter((lease) => lease.open)
+        : []
+      const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
         first.deliver(frame)
       } else {
@@ -156,8 +230,20 @@ export class CodexSharedServerRouter {
       }
       return
     }
+    if (frame.kind !== 'notification' || !SERVER_WIDE_NOTIFICATIONS.has(frame.method)) {
+      console.warn('[codex-shared-server] threadless frame reached no chat', frameMethod(frame))
+      return
+    }
     for (const lease of this.leases()) {
       lease.deliver(frame)
     }
   }
+}
+
+function frameMethod(frame: CodexSharedServerFrame): string {
+  return frame.kind === 'notification'
+    ? frame.method
+    : frame.kind === 'request'
+      ? frame.request.method
+      : frame.frameKind
 }

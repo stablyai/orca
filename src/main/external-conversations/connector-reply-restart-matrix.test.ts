@@ -691,20 +691,67 @@ describe('a bot’s answer to its owner’s DM across a pause or a restart', () 
   })
 })
 
-describe('no positional "answered together"', () => {
-  it('tells an unconfirmed end for a delivered send no turn proves it took, never unattributed', async () => {
+describe('no positional "answered together" across a restart', () => {
+  const unrelated: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'unrelated' }]
+  }
+
+  it('tells an unconfirmed end for a send an earlier process accepted that no turn proves it took', async () => {
+    vi.setSystemTime(NOW)
+    const before = start()
+    admit(before.db, 'm1', asked('d1'))
+    before.db.close()
+    vi.setSystemTime(NOW + 60_000)
     const p = start({ continuationsSettled: Promise.resolve() })
-    admit(p.db, 'm1', asked('d1'))
-    admit(p.db, 'other', {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'unrelated' }]
-    })
-    p.show([p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')])
+    admit(p.db, 'other', unrelated)
+    p.show(
+      [p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')],
+      [submissionOf('m1', { submittedAt: NOW })]
+    )
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({
       d1: { outcome: 'interrupted', head: 'd1', category: 'unconfirmed' }
     })
+  })
+
+  it('answers together a follow-up sent into a running turn once a later turn ends', async () => {
+    vi.setSystemTime(NOW - 60_000)
+    const p = start()
+    admit(p.db, 'm0', asked('d0'))
+    admit(p.db, 'm1', asked('d1'))
+    p.recovery.admitted('chat-1')
+    const first = [p.message('m0'), ...p.turn('item:t1', 'm0', 'completed', 'First answer.')]
+    const sends = [
+      submissionOf('m0', { submittedAt: NOW }),
+      submissionOf('m1', { submittedAt: NOW })
+    ]
+    p.show([...first, p.message('m1')], sends)
+    p.recovery.turnEnded('chat-1')
+    await p.publish()
+    // Orchestration mail wakes a later turn after the follow-up, and it ends.
+    admit(p.db, 'mail', unrelated)
+    p.show(
+      [...p.items(), p.message('mail'), ...p.turn('item:t2', 'mail', 'completed', 'Mail.')],
+      [...sends, submissionOf('mail', { submittedAt: NOW })]
+    )
+    p.recovery.turnEnded('chat-1')
+    await p.publish()
+    expect(p.outcomes().d1).toEqual({ outcome: 'unattributed', head: 'd1' })
+  })
+
+  it('leaves a send still queued for handover owed when an unrelated turn ends', async () => {
+    vi.setSystemTime(NOW - 60_000)
+    const p = start({ continuationsSettled: Promise.resolve() })
+    admit(p.db, 'm1', asked('d1'))
+    admit(p.db, 'other', unrelated)
+    p.show(
+      [p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')],
+      [submissionOf('m1', { dispatchState: 'pending', submittedAt: NOW, handoverRecorded: true })]
+    )
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: null } })
   })
 })
 
