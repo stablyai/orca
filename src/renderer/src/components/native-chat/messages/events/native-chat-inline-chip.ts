@@ -3,7 +3,7 @@
 export const NATIVE_CHAT_ROW_SHARE = 'min-w-0 max-w-fit flex-1 basis-0 truncate'
 
 /** A floor for a part that cuts short: a few letters, or its whole width when that is less. */
-export const NATIVE_CHAT_READABLE_MIN = 'min-w-[calc-size(max-content,min(size,5rem))]'
+export const NATIVE_CHAT_READABLE_MIN = 'min-w-[calc-size(max-content,min(size,6rem))]'
 
 /** A share that keeps a few letters: it gives way first, but stops before it reads as a stray letter. */
 export const NATIVE_CHAT_READABLE_SHARE = `${NATIVE_CHAT_READABLE_MIN} max-w-fit flex-1 basis-0 truncate`
