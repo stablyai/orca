@@ -73,6 +73,7 @@ export function handleAgentCompletionInspectionResult(args: {
     return false
   }
   if (remote) {
+    state.unwatchedForeground = false
     const evidence = result.foregroundProcessEvidence
     // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
@@ -143,14 +144,18 @@ export function handleAgentCompletionInspectionResult(args: {
   }
   state.consecutiveInspectionErrors = 0
   const recognized = recognizeAgentProcess(result.foregroundProcess)
+  const exitNoticed =
+    result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
+  state.unwatchedForeground =
+    !recognized &&
+    !exitNoticed &&
+    result.foregroundProcess !== null &&
+    !isShellProcess(result.foregroundProcess)
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
     // A watched pid also settles a cached name the child census contradicts: its exit is the notice.
-    if (
-      result.foregroundExitWatched !== true ||
-      options.receivesForegroundExitNotices?.() === false
-    ) {
+    if (!exitNoticed) {
       requestFollowUp('unresolved')
     }
     return true
@@ -207,14 +212,19 @@ export function handleAgentCompletionInspectionResult(args: {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
     options.onForegroundAgentExited?.(exited)
+    if (state.unwatchedForeground) {
+      requestFollowUp('unresolved')
+    }
   } else {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
-    // A shell with children may be starting an agent the host has not named yet (Windows resolves it later).
+    // A shell with children may be starting an agent the host has not named yet (Windows resolves it later);
+    // a command the host cannot watch can hand off to a silent agent.
     if (
-      result.childProcessEvidence === 'children' &&
-      result.foregroundProcess !== null &&
-      isShellProcess(result.foregroundProcess)
+      state.unwatchedForeground ||
+      (result.childProcessEvidence === 'children' &&
+        result.foregroundProcess !== null &&
+        isShellProcess(result.foregroundProcess))
     ) {
       requestFollowUp('unresolved')
     }

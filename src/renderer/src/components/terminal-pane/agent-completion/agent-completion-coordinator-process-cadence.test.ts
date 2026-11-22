@@ -208,6 +208,40 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
+  it('finds an agent that starts silently after a command the host cannot watch', async () => {
+    // `sleep 60; codex exec … >run.log`: an old daemon, or Windows, cannot report the sleep's exit.
+    for (const watched of [false, true]) {
+      const result: RuntimeTerminalProcessInspection = {
+        foregroundProcess: 'sleep',
+        hasChildProcesses: true,
+        ...(watched ? { foregroundExitWatched: true as const } : {})
+      }
+      const inspectProcess = vi.fn(async () => result)
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        inspectProcess,
+        dispatchCompletion: vi.fn(),
+        isLive: () => true
+      })
+      coordinator.startProcessTracking()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const reads = inspectProcess.mock.calls.length
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      if (watched) {
+        // The host's notice for the sleep's exit is the read; no timer stands in for it.
+        expect(inspectProcess).toHaveBeenCalledTimes(reads)
+        expect(vi.getTimerCount()).toBe(0)
+      } else {
+        // A slow re-check, not the 2 s event pace, until the command is gone.
+        expect(inspectProcess.mock.calls.length - reads).toBeGreaterThanOrEqual(3)
+        expect(inspectProcess.mock.calls.length - reads).toBeLessThanOrEqual(5)
+      }
+      coordinator.dispose()
+    }
+  })
+
   it('arms no timer for a watched agent whose host child census reads empty', async () => {
     // A Store-packaged shell hides the agent from the child census; the host watches its pid instead.
     const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({

@@ -54,6 +54,7 @@ export function createAgentCompletionCoordinator(
     lastPaneActivityAt: null,
     readDueSince: null,
     unresolvedFollowUps: 0,
+    unwatchedForeground: false,
     hasAgentRunEvidence: false,
     pendingProcessExit: null,
     lastForegroundAgent: null,

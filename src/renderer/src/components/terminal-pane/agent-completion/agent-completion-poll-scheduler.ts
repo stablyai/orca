@@ -66,7 +66,7 @@ export function createAgentCompletionPollScheduler(args: {
     const now = Date.now()
     // A quiet pane reads only to retry an inconclusive read; a pending exit still confirms fast.
     if (
-      (state.lastForegroundAgent || state.hasAgentRunEvidence) &&
+      (state.lastForegroundAgent || state.hasAgentRunEvidence || state.unwatchedForeground) &&
       state.pendingProcessExit === null &&
       isPaneQuiet(now)
     ) {
@@ -166,8 +166,12 @@ export function createAgentCompletionPollScheduler(args: {
 
   /** A read left a question open: an exit to confirm, a hook done in flight, a failed or inconclusive read. */
   function requestFollowUp(kind: CadenceFollowUp): void {
-    // A tracked agent's open question persists until a read settles it; the quiet tier paces it.
-    if (kind === 'unresolved' && !(state.lastForegroundAgent && state.hasAgentRunEvidence)) {
+    // A tracked agent's or unwatched command's open question persists until a read settles it; the quiet tier paces it.
+    if (
+      kind === 'unresolved' &&
+      !(state.lastForegroundAgent && state.hasAgentRunEvidence) &&
+      !state.unwatchedForeground
+    ) {
       if (state.unresolvedFollowUps >= MAX_UNRESOLVED_FOLLOW_UPS) {
         return
       }

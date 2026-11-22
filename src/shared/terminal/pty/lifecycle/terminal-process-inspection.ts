@@ -37,7 +37,7 @@ export type HostProcessInspection = {
   foregroundProcessEvidence?: RemoteForegroundEvidence
   /** Absent on hosts that predate the member, and on answers the host did not pay to observe. */
   childProcessEvidence?: PtyChildProcessVerdict
-  /** The host will report this foreground agent's exit as an event; absent where it cannot (older hosts too). */
+  /** The host will report this foreground process's exit as an event; absent where it cannot (older hosts too). */
   foregroundExitWatched?: true
   verdict?: never
   reason?: never

@@ -24,7 +24,7 @@ export class ForegroundExitWatches {
 
   constructor(private readonly onForegroundChange?: (ptyId: string) => void) {}
 
-  /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it.
+  /** True when the PTY's foreground exit will arrive as a notice; false means only events or reads can show it.
    * identifiedPid is the foreground process a full read proved; a group leader alone may be a wrapper that outlives it. */
   noteInspection(
     ptyId: string,
@@ -56,15 +56,12 @@ export class ForegroundExitWatches {
     // A command (`sleep 30; codex …`) can hand off to a silent agent; its exit prompts the read that finds it.
     const pid = agent ? (identifiedPid ?? source.foregroundAgentPid()) : (identifiedPid ?? null)
     if (pid === null) {
-      return agent && this.isWatching(ptyId, true)
+      return this.isWatching(ptyId, agent)
     }
     if (this.reportedPids.get(ptyId) === pid) {
       return false
     }
-    if (!this.arm(ptyId, pid, agent)) {
-      return false
-    }
-    return agent
+    return this.arm(ptyId, pid, agent)
   }
 
   private arm(ptyId: string, pid: number, agent: boolean): boolean {
@@ -76,7 +73,10 @@ export class ForegroundExitWatches {
     }
     const watch = watchProcessExit(pid, () => this.report(ptyId, pid))
     if (watch === 'gone') {
-      this.report(ptyId, pid)
+      // A command's group leader can leave while the named command runs on (`a | sleep 60`); the pane re-reads it.
+      if (agent) {
+        this.report(ptyId, pid)
+      }
       return false
     }
     if (watch === null) {
