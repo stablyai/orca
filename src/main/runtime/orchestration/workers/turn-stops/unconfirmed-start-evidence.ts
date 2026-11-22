@@ -40,9 +40,7 @@ export function describeWithheldContinue(
   hold: RuntimeTerminalPromptSubmitHold
 ): UnconfirmedStartEvidence {
   return {
-    lines: [
-      `After the restart Orca typed its continue prompt but did not press Enter: ${describeHold(hold)}.`
-    ],
+    lines: [`Orca held the Enter: ${describeHold(hold)}.`],
     withheld: true,
     continuePrompt: true
   }
