@@ -9,6 +9,8 @@ vi.mock('electron', () => ({ webContents: { fromId } }))
 vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { getGuestWebContentsId }
 }))
+const { pinnedFetch } = vi.hoisted(() => ({ pinnedFetch: vi.fn() }))
+vi.mock('./pinned-address-fetch', () => ({ fetchWithPinnedAddresses: pinnedFetch }))
 vi.mock('./electron-manual-redirect-fetch', () => ({
   fetchWithElectronManualRedirects: manualFetch
 }))
@@ -32,6 +34,7 @@ function mountGuest(session: ReturnType<typeof guestSession>): void {
 beforeEach(() => {
   fromId.mockReset()
   getGuestWebContentsId.mockReset()
+  pinnedFetch.mockReset().mockResolvedValue(new Response(null, { status: 204 }))
   manualFetch.mockReset().mockResolvedValue(new Response(null, { status: 204 }))
 })
 
@@ -80,6 +83,9 @@ describe('electronBrowserTabFaviconFetch', () => {
 
     await electronBrowserTabFaviconFetch('page-1')?.('https://site.test/favicon.png', {})
 
-    expect(manualFetch).toHaveBeenCalledTimes(1)
+    expect(manualFetch).not.toHaveBeenCalled()
+    expect(pinnedFetch).toHaveBeenCalledWith('https://site.test/favicon.png', {}, [
+      { address: '93.184.216.34' }
+    ])
   })
 })
