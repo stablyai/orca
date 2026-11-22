@@ -65,15 +65,13 @@ export function registerClientHostCookieImportHandlers(): void {
       if (!route) {
         return null
       }
-      const { sources } = await openClientRouteCookieImportSources(
-        args.environmentId,
-        route.authorityConnectionIdentity
-      )
+      const { sources } = await openClientRouteCookieImportSources(route)
       const current = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
       if (!current) {
         return null
       }
-      return current.authorityConnectionIdentity === route.authorityConnectionIdentity
+      return current.storageScope === route.storageScope &&
+        current.authorityConnectionIdentity === route.authorityConnectionIdentity
         ? sources
         : {}
     }

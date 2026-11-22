@@ -58,10 +58,7 @@ async function importIntoClientRoutePartition(
   if (!profile) {
     return browserCookieImportFailure('profileNotFound')
   }
-  const sourceStore = await openClientRouteCookieImportSources(
-    target.environmentId,
-    routeIdentity.authorityConnectionIdentity
-  )
+  const sourceStore = await openClientRouteCookieImportSources(routeIdentity)
   const imported = await importIntoRoutePartition(
     {
       // Bound to the pairing the request saw; a re-pair while picking must not redirect it.
