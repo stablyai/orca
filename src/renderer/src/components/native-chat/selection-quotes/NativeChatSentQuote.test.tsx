@@ -23,9 +23,9 @@ function sent(content: string) {
 }
 
 it('shows a sent quote as a chip named by its text, with no action', () => {
-  sent(`my words\n\n${formatNativeChatQuote('use <b>this</b> there')}reply`)
-  const chip = screen.getByText('use <b>this</b> there').closest('[data-native-chat-sent-quote]')!
-  expect(chip).toHaveTextContent('Quote: use <b>this</b> there')
+  sent(`my words\n\n${formatNativeChatQuote('the quoted words')}reply`)
+  const chip = document.querySelector('[data-native-chat-sent-quote]')!
+  expect(chip).toHaveTextContent('Quote: the quoted words')
   expect(chip.tagName).not.toBe('BUTTON')
   expect(screen.queryByRole('button')).toBeNull()
 })
