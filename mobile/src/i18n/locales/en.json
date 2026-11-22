@@ -6499,7 +6499,10 @@
         "coding": "Coding",
         "chat": "Chat",
         "docs": "Docs and projects",
-        "mail": "Mail and meetings"
+        "mail": "Mail and meetings",
+        "monitoring": "Monitoring",
+        "sales": "Sales and support",
+        "design": "Design"
       },
       "search": "Search apps",
       "allShort": "All",
@@ -6519,7 +6522,9 @@
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
       "signingIn": "Signing in",
       "openPageAgain": "Open page again",
-      "closeKeepsSigningIn": "Sign-in continues in your browser if you close this."
+      "closeKeepsSigningIn": "Sign-in continues in your browser if you close this.",
+      "appsCaption": "Apps",
+      "addByUrl": "Add by URL"
     },
     "connectors": {
       "back": "Back to Connectors",
@@ -6568,7 +6573,12 @@
       "added": "{{bot}} can now use {{app}}",
       "signedOut": "Signed out · {{via}}",
       "unreadShort": "Couldn’t load Composio’s apps.",
-      "reading": "Reading Composio…"
+      "reading": "Reading Composio…",
+      "keyRejected": "Key not accepted",
+      "fixKey": "Fix key",
+      "signInsUnreadShort": "Couldn’t read sign-ins",
+      "checkAgain": "Check again",
+      "toolName": "Composio apps"
     },
     "setup": {
       "for": "for {{name}}"
@@ -6844,7 +6854,10 @@
         "pick": "Choose a Linear workspace.",
         "turnOn": "Turn on {{name}}"
       },
-      "address": "linear.app/{{urlKey}}"
+      "address": "linear.app/{{urlKey}}",
+      "account": {
+        "unlink": "Unlink Linear account"
+      }
     },
     "github": {
       "whoCanAsk": {
