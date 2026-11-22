@@ -5,6 +5,7 @@ import { phoneBotSchema } from './host-bots-operations'
 const BOT = {
   id: 'b1',
   name: 'Perf',
+  folder: 'perf',
   folderWorkspaceId: 'fw-1',
   avatar: 'mascot:D1',
   paused: false,
