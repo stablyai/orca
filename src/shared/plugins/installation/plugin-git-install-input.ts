@@ -99,7 +99,7 @@ function parseUrlInput(
     return { url: value, ref: '' }
   }
   const segments = url.pathname.split('/').filter(Boolean)
-  const page = pageRef(segments)
+  const page = pageRef(segments, url.hostname)
   if (page === null) {
     return { reason: 'invalid-git-url' }
   }
@@ -108,7 +108,10 @@ function parseUrlInput(
 }
 
 /** Repository path length and ref of a hosted page URL; null when no repository path remains. */
-function pageRef(segments: string[]): { repositoryLength: number; ref: string } | null {
+function pageRef(
+  segments: string[],
+  hostname: string
+): { repositoryLength: number; ref: string } | null {
   const decode = (parts: string[]): string => {
     try {
       return parts.map(decodeURIComponent).join('/')
@@ -135,9 +138,11 @@ function pageRef(segments: string[]): { repositoryLength: number; ref: string } 
     }
     if (
       kind === 'src' &&
+      hostname !== 'bitbucket.org' &&
       rest.length >= 2 &&
       (rest[0] === 'branch' || rest[0] === 'tag' || rest[0] === 'commit')
     ) {
+      // Why exclude Bitbucket: its /src/<ref>/<path> layout belongs on the fallback path.
       // Why one segment for commit: a sha has no slash, so the rest is a file path.
       return {
         repositoryLength: 2,

@@ -17,4 +17,12 @@ describe('parsePluginGitInstallInput', () => {
       ref: sha
     })
   })
+
+  it('preserves Bitbucket source paths as repository URLs', () => {
+    expect(parsePluginGitInstallInput('https://bitbucket.org/o/r/src/branch/README.md')).toEqual({
+      ok: true,
+      url: 'https://bitbucket.org/o/r/src/branch/README.md',
+      ref: ''
+    })
+  })
 })
