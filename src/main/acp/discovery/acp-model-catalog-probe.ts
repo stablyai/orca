@@ -45,6 +45,7 @@ import {
 import { AcpAgentExitedError } from '../transport/acp-errors'
 import { signedOutAsUnavailable } from './acp-listing-signed-out'
 import { discardAcpListingSessions } from './acp-listing-session-discard'
+import { sealSharedToolProcessChild } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 type AcpListingConnect<C> = (
@@ -139,8 +140,10 @@ export function createAcpModelCatalogProbe(
             command,
             args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],
             cwd,
-            env,
-            envToDelete
+            // A shared tool process started by this listing keeps its environment for later chats.
+            ...(spec.sharedToolProcess
+              ? sealSharedToolProcessChild(env, envToDelete)
+              : { env, envToDelete })
           }
           // Chats send this identity, and some servers list models only to clients they allowlist.
           const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
