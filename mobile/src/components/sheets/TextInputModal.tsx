@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
+import { useShellDialog } from '../../platform/page-dialogs/use-shell-dialog'
 import { TextInputSheetContent, type TextInputModalProps } from './TextInputSheetContent'
 
 export { TextInputSheetContent }
@@ -24,6 +25,34 @@ export function TextInputModal({
       setPreviousDefaultValue(defaultValue)
       setValue(defaultValue)
     }
+  }
+
+  const native = useShellDialog({
+    visible,
+    request: {
+      action: 'prompt',
+      title: sheetProps.title,
+      message: sheetProps.message,
+      defaultValue,
+      placeholder: sheetProps.placeholder,
+      submitLabel: sheetProps.submitLabel,
+      cancelLabel: sheetProps.cancelLabel,
+      selectTextOnFocus: sheetProps.selectTextOnFocus === true,
+      allowEmpty: sheetProps.allowEmpty === true,
+      keyboardType: sheetProps.keyboardType
+    },
+    onAnswer: ({ outcome, value }) => {
+      if (outcome === 'confirm' && value !== null) {
+        sheetProps.onSubmit(value)
+      } else {
+        onCancel()
+      }
+      onAfterClose?.()
+    },
+    onWithdrawn: onAfterClose
+  })
+  if (native) {
+    return null
   }
 
   return (

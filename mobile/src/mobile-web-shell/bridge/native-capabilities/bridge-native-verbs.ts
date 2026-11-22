@@ -20,6 +20,7 @@ import {
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
+import { BRIDGE_DIALOG_VERB, dialogParamsSchema, dialogResultSchema } from './bridge-dialog-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../../page-storage/page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../../files/media/mobile-file-media'
 
@@ -42,7 +43,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.image.act',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
-  'native.a11y.announce'
+  'native.a11y.announce',
+  BRIDGE_DIALOG_VERB
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -160,6 +162,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.a11y.announce': {
     params: a11yAnnounceParamsSchema,
     result: a11yAnnounceResultSchema
+  },
+  [BRIDGE_DIALOG_VERB]: {
+    params: dialogParamsSchema,
+    result: dialogResultSchema
   }
 }
 
