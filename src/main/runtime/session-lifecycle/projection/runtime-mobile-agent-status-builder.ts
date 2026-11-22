@@ -310,8 +310,9 @@ function shownDoneSegment(
   if (!segment || payload?.state !== 'done') {
     return null
   }
-  const endedAt = payload.turnCompletedAt ?? segment.turnEndedAt ?? segment.stateStartedAt
-  if (titleWorkingStartedAt !== null && titleWorkingStartedAt > endedAt) {
+  // Host receive time shares the title's clock, unlike relay turn stamps, and follows a stamped tail.
+  const receivedAt = 'payload' in segment ? segment.updatedAt : segment.receivedAt
+  if (titleWorkingStartedAt !== null && titleWorkingStartedAt > receivedAt) {
     return null
   }
   return {
