@@ -1,5 +1,6 @@
 // One installed Slack workspace's body, the same in the connector panel and the after-install dialog:
-// how to ask, Who can ask, and who messages typed in Orca show as.
+// how to ask, Who can ask, who messages typed in Orca show as, and whether their replies carry the
+// link back to the thread in Orca.
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -9,6 +10,7 @@ import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
 import { useBotConnectorPaged } from '../bot-connector-page'
 import { BotConnectorSection } from '../bot-connector-people'
 import { BotSlackPostAs } from './BotSlackPostAs'
+import { BotSlackThreadLink } from './BotSlackThreadLink'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
 
 export function BotSlackSection({
@@ -48,6 +50,11 @@ export function BotSlackSection({
           slack={slack}
           setupState={setupState}
           className={paged ? undefined : 'mt-3 px-3'}
+        />
+        <BotSlackThreadLink
+          bot={bot}
+          slack={slack}
+          className={paged ? 'mt-3' : 'mt-2 px-3'}
         />
       </BotConnectorSection>
     </div>

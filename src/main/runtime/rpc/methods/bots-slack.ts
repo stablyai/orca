@@ -10,7 +10,8 @@ import {
   BotSlackMembers,
   BotSlackPostAs,
   BotSlackSetUp,
-  BotSlackTeam
+  BotSlackTeam,
+  BotSlackThreadLink
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import {
   withBotsCloudClient,
@@ -160,6 +161,16 @@ export const BOT_SLACK_METHODS = [
     params: BotSlackPostAs,
     handler: async ({ botId, ...request }, context) =>
       withHostCloudClient(context, (client) => client.setSlackPostAs(botId, { v: 1, ...request }))
+  }),
+  // Whether this workspace's new replies end with the link to their thread in Orca.
+  defineMethod({
+    name: 'bots.slack.setThreadLink',
+    permission: 'accounts-admin',
+    params: BotSlackThreadLink,
+    handler: async ({ botId, ...request }, context) =>
+      withHostCloudClient(context, (client) =>
+        client.setSlackThreadLink(botId, { v: 1, ...request })
+      )
   }),
   defineMethod({
     name: 'bots.slack.members',

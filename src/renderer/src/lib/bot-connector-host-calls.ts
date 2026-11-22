@@ -72,7 +72,10 @@ export function botSlackCalls(hostId: ExecutionHostId) {
       args:
         | { botId: string; teamId: string; postAs: SlackPostAs; setupState?: string }
         | { botId: string; teamId: string; cancel: true }
-    ) => call<ConnectorBotSlackPostAsResponse | undefined>(hostId, 'bots.slack.setPostAs', args)
+    ) => call<ConnectorBotSlackPostAsResponse | undefined>(hostId, 'bots.slack.setPostAs', args),
+    /** Whether this workspace's new replies end with the "Open this thread in Orca" link. */
+    setThreadLink: (args: { botId: string; teamId: string; threadLink: boolean }) =>
+      call<undefined>(hostId, 'bots.slack.setThreadLink', args)
   }
 }
 
