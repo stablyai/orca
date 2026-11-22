@@ -19,7 +19,10 @@ export const OrcadTerminalCensusSchema = z.object({
   admissionClosedUntil: z.number().finite().nonnegative().optional()
 })
 
-export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
+export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema> & {
+  /** Client-side stamp, never on the wire: the desktop's census client parsed a server reply. */
+  answered?: true
+}
 
 /** A daemon that could not answer: unknown, never zero. */
 export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> = Object.freeze({
@@ -27,6 +30,11 @@ export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> =
   startedSinceActivation: null,
   daemonProtocolVersion: null
 })
+
+/** Whether a server answered this census; anything else, however it was built, reads as unanswered. */
+export function isAnsweredOrcadTerminalCensus(census: OrcadTerminalCensus): boolean {
+  return census.answered === true
+}
 
 /** The longest a census may close terminal admission; the stop that follows takes seconds. */
 export const ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS = 5 * 60_000

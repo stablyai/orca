@@ -264,8 +264,3 @@ export function resolveLoginShellEnvironment(
 ): Promise<NodeJS.ProcessEnv> {
   return captureLoginShellEnvironment(options).then((capture) => capture.env)
 }
-
-export function resetLoginShellEnvironmentCacheForTests(): void {
-  environmentCache.clear()
-  cacheRevision++
-}

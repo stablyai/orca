@@ -172,6 +172,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
       this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
+      // A restored working title's next idle ends that turn, not an agent starting at rest.
+      if (status === 'working') {
+        pty.lastAgentStatusEndedTurn = true
+      }
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Seed even non-agent titles so worktree.ps can reclassify instead of treating the pane as agentless.

@@ -237,10 +237,13 @@ export function rowVerdict(
     endedCuts: ReadonlySet<string>
     idle: boolean
     lastEnded: number
+    /** When this host process started: a send accepted before it was cut off by a restart. */
+    startedAt: number
     rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
   }
 ): ReplyRecoveryVerdict | null {
-  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, rejectionOf } = facts
+  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, startedAt, rejectionOf } =
+    facts
   if (row.claimMessageId !== undefined) {
     return settled ? view.claimVerdict(row.claimMessageId) : null
   }
@@ -272,10 +275,15 @@ export function rowVerdict(
       return { outcome: 'interrupted' }
     }
   }
-  // Delivered, no turn proves it took it, and a turn after it ended with the chat idle: the
-  // machine lost track of it. Never "answered together" on position alone.
+  // Delivered, no turn proves it took it, and a turn after it ended with the chat idle. Accepted
+  // before a restart: the machine lost track of it. Accepted in this process: a send handed into
+  // a running turn (Claude records no steer), answered together with it. Still queued: owed.
   const at = view.messageOf(row)?.sequence ?? 0
-  return settled && idle && at > 0 && at < lastEnded
+  const queued = submission?.handoverRecorded === true && submission.handedOverAt === undefined
+  if (queued || !(settled && idle && at > 0 && at < lastEnded)) {
+    return null
+  }
+  return (submission?.submittedAt ?? 0) < startedAt
     ? { outcome: 'interrupted', failure: UNCONFIRMED }
-    : null
+    : { outcome: 'unattributed' }
 }

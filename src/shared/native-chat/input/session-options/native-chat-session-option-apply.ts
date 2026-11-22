@@ -203,6 +203,8 @@ async function applySetOption(
 
   // Capture record identity so dispatch cannot overwrite newer model or option state.
   const trackedModelBeforeDispatch = trackedModelId(ctx.getRecord())
+  const destinationBeforeDispatch =
+    id === 'model' && typeof value === 'string' ? ctx.getRecord().valuesByModel[value] : undefined
   const trackedBeforeDispatch =
     ctx.mode === 'live' && id !== 'model'
       ? getTrackedOption(ctx.getRecord(), previousModelId, id)
@@ -229,8 +231,10 @@ async function applySetOption(
   if (id === 'model' && previousModelId !== value) {
     record.model = undefined
     if (ctx.mode === 'live' && typeof value === 'string') {
-      // Model switches can reset destination effort and toggles.
-      delete record.valuesByModel[value]
+      // Model switches can reset destination effort and toggles; a report during dispatch is newer.
+      if (record.valuesByModel[value] === destinationBeforeDispatch) {
+        delete record.valuesByModel[value]
+      }
     }
   }
 

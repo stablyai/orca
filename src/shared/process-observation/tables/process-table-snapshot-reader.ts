@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
 import { PS_TIMEOUT_MS, assertWholeCapture, captureProcessTable } from './process-table-ps-capture'
-import {
-  captureDarwinProcessTable,
-  resetDarwinProcessTableCaptureForTests
-} from '../darwin/darwin-process-table-capture'
+import { captureDarwinProcessTable } from '../darwin/darwin-process-table-capture'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
@@ -328,10 +325,4 @@ export async function getStrictProcessTableSnapshotWithAge(): Promise<{
 }> {
   const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge())
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
-}
-
-export function resetProcessTableSnapshotForTests(): void {
-  processTableReader.reset()
-  shellForegroundReader.reset()
-  resetDarwinProcessTableCaptureForTests()
 }

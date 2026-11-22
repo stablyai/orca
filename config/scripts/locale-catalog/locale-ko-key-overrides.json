@@ -3968,9 +3968,6 @@
   "auto.components.taskSourceContextSummary.sourceUnavailable": {
     "ko": "{{value0}} 소스를 사용할 수 없음: {{value1}}"
   },
-  "auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title": {
-    "ko": "이 agent를 중지할까요?"
-  },
   "auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d": {
     "ko": "삽입"
   },
@@ -3999,7 +3996,7 @@
     "ko": "Hex"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
-    "ko": "워크스페이스 안전성 확인 중"
+    "ko": "워크스페이스 스캔 중"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
@@ -4460,15 +4457,6 @@
   "auto.components.settings.GeneralEditorSettingsSection.collapseUnchangedTitle": {
     "ko": "변경되지 않은 영역 접기"
   },
-  "auto.components.settings.GeneralUpdateSettingsSection.8311da27ba": {
-    "ko": "업데이트가 준비되었습니다. \"업데이트 다운로드\"를 클릭하여 다운로드하세요."
-  },
-  "auto.components.settings.GeneralUpdateSettingsSection.42717918f4": {
-    "ko": "업데이트 다운로드 ("
-  },
-  "auto.components.settings.GeneralUpdateSettingsSection.e3b9d21c07": {
-    "ko": "업데이트가 준비되었습니다. 시스템 패키지 관리자를 통해 Orca를 업데이트하세요. Orca 자체적으로는 이번 릴리스를 설치할 수 없습니다."
-  },
   "auto.components.settings.GeneralWorkspaceSettingsSection.bf46474e33": {
     "ko": "공유 아티팩트를 삭제하기 전에 확인창을 표시합니다. 삭제하면 공개 링크가 있는 사람도 더 이상 접근할 수 없습니다."
   },
@@ -4558,18 +4546,6 @@
   },
   "auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp": {
     "ko": "서버 호스트에서 Orca를 업데이트하세요. .deb 또는 .rpm으로 설치했다면 시스템 패키지 관리자를, 그 외에는 Orca를 시작하는 서비스 관리자를 사용하세요."
-  },
-  "auto.components.settings.ReleaseChannelSection.channelAriaLabel": {
-    "ko": "업데이트 채널"
-  },
-  "auto.components.settings.ReleaseChannelSection.hourlyWarning": {
-    "ko": "Hourly 빌드는 테스트 게이트 없이 main 브랜치에서 바로 배포되며, Windows 빌드는 서명되지 않습니다. 안정적인 빌드를 준비해 두세요."
-  },
-  "auto.components.settings.ReleaseChannelSection.dailyWarning": {
-    "ko": "Daily 빌드는 테스트 게이트 없이 main 브랜치에서 바로 배포되며, Windows 빌드는 서명되지 않습니다. 안정적인 빌드를 준비해 두세요."
-  },
-  "auto.components.settings.ReleaseChannelSection.adhocWarning": {
-    "ko": "Adhoc 빌드는 아직 병합되지 않은 브랜치에서 만들어지며, Windows 빌드는 서명되지 않습니다. 빌드를 만든 사람이 관리를 중단할 수 있으니 안정적인 빌드를 준비해 두세요."
   },
   "auto.components.settings.AccountsPane.codexConfigSyncMissingSource": {
     "ko": "{{value0}} 파일이 없어 Codex가 마지막으로 동기화된 설정을 계속 사용합니다. 동기화를 재개하려면 해당 파일을 복원하세요."

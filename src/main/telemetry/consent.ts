@@ -45,10 +45,6 @@ function isEnvVarTruthy(name: string): boolean {
   return false
 }
 
-export function _resetMisconfigWarnCacheForTests(): void {
-  warnedMisconfigured.clear()
-}
-
 function resolveEnvOverride(): ConsentState | null {
   if (isEnvVarTruthy('DO_NOT_TRACK')) {
     return { effective: 'disabled', reason: 'do_not_track' }
