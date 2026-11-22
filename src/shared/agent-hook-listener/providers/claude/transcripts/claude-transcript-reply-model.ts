@@ -3,6 +3,7 @@ import {
   normalizeOptionalField
 } from '../../../../agent-status/contracts/agent-status-field-normalization'
 import { baseModelId } from '../../../../agent-session/options/model-catalog/model-id-label'
+import { isRecord } from '../../../../agent-status/child-work/agent-status-child-work-value-guards'
 import { parseHookBodyPayloadRecord } from '../../../grok-result-discovery'
 import type { AgentHookEventPayload } from '../../../listener-event'
 import { parseTranscriptRecord } from '../../../transcript-entry-text'
@@ -84,29 +85,23 @@ function findReplyModel(region: Buffer): ReplyModelFind | undefined {
 
 function replyModelOfLine(line: string): ReplyModelFind | undefined {
   const record = parseTranscriptRecord(line.trim())
-  if (!record || record.isSidechain === true) {
-    return undefined
-  }
-  const message = record.message
-  if (typeof message !== 'object' || message === null) {
+  const message = record?.message
+  if (!record || record.isSidechain === true || !isRecord(message)) {
     return undefined
   }
   if (record.type === 'user') {
     // Tool results belong to the turn; any other user record (a prompt, /model output) starts a newer one.
-    const content = (message as Record<string, unknown>).content
+    const content = message.content
     const toolResultsOnly =
       Array.isArray(content) &&
       content.length > 0 &&
-      content.every((part) => (part as { type?: unknown } | null)?.type === 'tool_result')
+      content.every((part) => isRecord(part) && part.type === 'tool_result')
     return toolResultsOnly ? undefined : { model: null }
   }
   if (record.type !== 'assistant') {
     return undefined
   }
-  const model = normalizeOptionalField(
-    (message as Record<string, unknown>).model,
-    AGENT_MODEL_MAX_LENGTH
-  )
+  const model = normalizeOptionalField(message.model, AGENT_MODEL_MAX_LENGTH)
   // `<synthetic>` marks Claude Code's own error and repair text, not a model.
   return model && model !== '<synthetic>' ? { model } : undefined
 }

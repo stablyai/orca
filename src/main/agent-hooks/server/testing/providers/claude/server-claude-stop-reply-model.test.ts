@@ -8,10 +8,10 @@ import type * as ReplyModel from '../../../../../../shared/agent-hook-listener/p
 
 vi.mock('../../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-const held = vi.hoisted(() => ({
-  active: false,
-  pending: [] as ((model: string | null | undefined) => void)[]
-}))
+const held = vi.hoisted(() => {
+  const pending: ((model: string | null | undefined) => void)[] = []
+  return { active: false, pending }
+})
 vi.mock(
   '../../../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model',
   async (original) => {
