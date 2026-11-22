@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Installs a server-only tarball the documented way, starts `orca serve --recipe-json`, then pairs a
-// second CLI profile with the printed code. Uses only node: builtins so the archive's own Node can run it
-// on an image that has nothing else.
+// Installs a server-only tarball the documented way, starts `orca serve --recipe-json`, checks it
+// serves the browser client, then pairs a second CLI profile with the printed code. Uses only node:
+// builtins so the archive's own Node can run it on an image that has nothing else.
 //   node smoke-orcad-server-artifact.mjs --archive out/orca-server/orca-server-linux-x64.tar.gz
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -62,6 +62,10 @@ try {
   )
   console.log(`PASS serve --recipe-json printed a pairing code in ${Date.now() - started} ms`)
 
+  const webClient = await fetch(new URL('/web-index.html', serverHttpUrl(pairingCode)))
+  assert(webClient.ok, `the server did not serve the browser client: HTTP ${webClient.status}`)
+  console.log('PASS the server serves the bundled browser client')
+
   const status = run([orca, '--pairing-code', pairingCode, 'status', '--json'], clientProfile, {
     timeout: 60_000
   })
@@ -88,6 +92,16 @@ function verifyChecksum() {
   const actual = createHash('sha256').update(readFileSync(archive)).digest('hex')
   assert(name === basename(archive) && actual === expected, `${archive} does not match ${sums}`)
   console.log('PASS checksum')
+}
+
+// The pairing code carries the server's ws:// endpoint; it serves the browser client over HTTP on
+// the same port.
+function serverHttpUrl(pairingCode) {
+  const code = new URL(pairingCode).searchParams.get('code')
+  const { endpoint } = JSON.parse(Buffer.from(code, 'base64url').toString('utf8'))
+  const url = new URL(endpoint)
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  return url
 }
 
 // stderr goes to a file: the detached server keeps it open, and a pipe would hold spawnSync until timeout.

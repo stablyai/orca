@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Packs one target's qualified template slot, its pinned Node and a launcher into the server-only
-// tarball `orca serve` runs from on hosts without the desktop app.
-//   node pack-orcad-server-artifact.mjs --template out/orcad-template --target linux-x64-glibc [--out-dir out/orca-server]
+// Packs one target's qualified template slot, its pinned Node, the browser client and a launcher
+// into the server-only tarball `orca serve` runs from on hosts without the desktop app.
+//   node pack-orcad-server-artifact.mjs --template out/orcad-template --target linux-x64-glibc \
+//     [--web out/web] [--out-dir out/orca-server]
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -175,6 +178,18 @@ async function copyNodeLicense(target, destination) {
   copyFileSync(join(extractDir, topLevel, 'LICENSE'), destination)
 }
 
+// `orca serve` looks for the browser client at <app root>/out/web (findBundledWebClientRoot) and
+// prints a browser pairing URL only when it finds one.
+function stageWebClient(webDir, staging) {
+  if (!existsSync(join(webDir, 'web-index.html'))) {
+    throw new Error(`${webDir} has no web-index.html; run pnpm build:web first`)
+  }
+  cpSync(webDir, join(staging, 'out', 'web'), {
+    recursive: true,
+    filter: (source) => !source.endsWith('.map')
+  })
+}
+
 function listEntries(dir, base = dir) {
   const entries = []
   for (const name of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
@@ -189,7 +204,7 @@ function listEntries(dir, base = dir) {
   return entries
 }
 
-export async function packOrcaServerArtifact({ templateDir, target, outDir }) {
+export async function packOrcaServerArtifact({ templateDir, target, webDir, outDir }) {
   // A dark build's template must never ship as a server either.
   assertNotDarkBuild([templateDir])
   const name = orcaServerArtifactName(target)
@@ -220,6 +235,7 @@ export async function packOrcaServerArtifact({ templateDir, target, outDir }) {
   const selectionEntry = join(staging, 'out', 'main', `${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`)
   mkdirSync(dirname(selectionEntry), { recursive: true })
   writeFileSync(selectionEntry, selectionEntryScript())
+  stageWebClient(webDir, staging)
   writeFileSync(
     join(staging, 'VERSION'),
     `orca ${appVersion}\norcad ${orcadVersion}\nnode ${NODE_RUNTIME_PIN.version}\ntarget ${target}\n`
@@ -258,12 +274,13 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
   const target = argument(process.argv, '--target')
   if (!templateDir || !target) {
     throw new Error(
-      'Usage: pack-orcad-server-artifact.mjs --template <dir> --target <target> [--out-dir <dir>]'
+      'Usage: pack-orcad-server-artifact.mjs --template <dir> --target <target> [--web <dir>] [--out-dir <dir>]'
     )
   }
   const result = await packOrcaServerArtifact({
     templateDir: resolve(templateDir),
     target,
+    webDir: resolve(argument(process.argv, '--web') ?? join(root, 'out', 'web')),
     outDir: resolve(argument(process.argv, '--out-dir') ?? join(root, 'out', 'orca-server'))
   })
   process.stdout.write(`${JSON.stringify(result)}\n`)

@@ -12,6 +12,7 @@ on:
       - 'src/cli/runtime/serve/startup/serve-orcad-launch.ts'
       - 'src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection.ts'
       - 'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+      - 'src/shared/web-client/bundled-web-client-root.ts'
   # Catch serve regressions on main between releases.
   schedule:
     - cron: '45 11 * * *'
@@ -90,11 +91,14 @@ jobs:
       - name: Build this runner's template slot
         if: steps.supported.outputs.supported == 'true' && inputs.template_artifact == ''
         run: pnpm build:orcad-template --targets "$TARGET"
+      # The tarball ships the browser client so `orca serve` prints a browser pairing URL.
+      - name: Build the browser client
+        if: steps.supported.outputs.supported == 'true'
+        run: pnpm build:web
       - name: Pack the tarball
         if: steps.supported.outputs.supported == 'true'
         run: |
-          pnpm build:packages
-          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" node config/scripts/orcad-distribution/server-artifact/pack-orcad-server-artifact.mjs --template out/orcad-template --target "$TARGET" --out-dir out/orca-server
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" node config/scripts/orcad-distribution/server-artifact/pack-orcad-server-artifact.mjs --template out/orcad-template --target "$TARGET" --web out/web --out-dir out/orca-server
           {
             echo "### orca-server-linux-${{ matrix.arch }}"
             echo '```'
