@@ -45,7 +45,7 @@ describe('a process tree on Windows after PID reuse', () => {
       childrenOf: new Map([[100, [200, 300]]])
     }
 
-    expect(collectSubtree(index, 100).sort()).toEqual([100, 300])
+    expect(collectSubtree(index, 100, undefined, true).sort()).toEqual([100, 300])
   })
 
   it('orders typeperf processes by elapsed time when CIM is unavailable', () => {
@@ -59,8 +59,8 @@ describe('a process tree on Windows after PID reuse', () => {
       ].join('\n')
     )
 
-    expect(collectSubtree(buildProcessIndex(rows, null, 'working-set'), 100).sort()).toEqual([
-      100, 300
-    ])
+    expect(
+      collectSubtree(buildProcessIndex(rows, null, 'working-set'), 100, undefined, true).sort()
+    ).toEqual([100, 300])
   })
 })

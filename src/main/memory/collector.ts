@@ -14,6 +14,7 @@ import { enumerateHostProcesses } from './host-process-index'
 import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
 import {
   agentRegistrationMark,
+  hasAgentProcessRegistrations,
   listAgentProcessRoots,
   readAgentProcessChat
 } from './agent-process-registry'
@@ -158,14 +159,18 @@ function addUsage(target: RowTotals, usage: UsageValues): void {
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
   const agentMark = agentRegistrationMark()
-  const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
+  const [processIndex, host] = await Promise.all([
+    enumerateHostProcesses({ withStartTimes: hasAgentProcessRegistrations() }),
+    collectHostMemory()
+  ])
   const { hasPrivateMemory } = processIndex
   const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
   const agentTrees = listAgentProcessRoots(agentMark).map((root) => ({
     ...root,
-    rows: claimProcessTree(processIndex, root.pid, claimed)
+    // An agent's tree outlives its starting process, so a reused parent PID is ruled out by start order.
+    rows: claimProcessTree(processIndex, root.pid, claimed, true)
   }))
 
   const orphan = createEmptyWorktreeMemoryBucket(
@@ -196,7 +201,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const restoredSessionIds = new Map<string, Set<string>>()
   for (const { pty, rows } of ptyTrees) {
     // This machine's panel names a restored terminal by its pane before the pane mounts; paired replies don't carry it.
-    const restoredPaneKey = pty.paneKey ? null : (pty.restoredPaneKey ?? null)
+    const paneKey = pty.paneKey
+    const restoredPaneKey = paneKey ? null : (pty.restoredPaneKey ?? null)
     let sessionCpu = 0
     let sessionMemory = 0
     let sessionPrivateMemory = 0
@@ -207,7 +213,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     }
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
-      paneKey: pty.paneKey ?? restoredPaneKey,
+      paneKey: paneKey ?? restoredPaneKey,
       pid: pty.pid ?? 0,
       cpu: clampMemoryMetric(sessionCpu),
       memory: clampMemoryMetric(sessionMemory),
@@ -282,14 +288,11 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     history: historyOf(b.worktreeId)
   }))
   // Rows holding restored pane keys, so a paired reply replaces only them.
-  const restoredRows: number[] = []
-  if (restoredSessionIds.size > 0) {
-    bucketList.forEach((bucket, index) => {
-      if (restoredSessionIds.has(bucket.worktreeId)) {
-        restoredRows.push(index)
-      }
-    })
-  }
+  const restoredRows = restoredSessionIds.size
+    ? bucketList.flatMap((bucket, index) =>
+        restoredSessionIds.has(bucket.worktreeId) ? [index] : []
+      )
+    : []
   // With no agent process, restored pane key or chat series, this is the snapshot paired clients have always received.
   const asPaired =
     agentTrees.length === 0 && restoredSessionIds.size === 0 && terminalSeries.length === 0

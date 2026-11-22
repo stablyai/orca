@@ -5,7 +5,6 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type {
-  ChatAgentMemory,
   SessionMemory,
   WorktreeMemory
 } from '../../../../../shared/diagnostics/process-stats-types'
@@ -169,11 +168,6 @@ function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
       cpu,
       memory,
       sessions: Array.isArray(row.sessions) ? row.sessions.flatMap(parseSessionMemory) : [],
-      // Absent rather than empty, so terminal-only replies allocate nothing for chats.
-      chats:
-        Array.isArray(row.chats) && row.chats.length > 0
-          ? row.chats.flatMap(parseChatMemory)
-          : undefined,
       history: Array.isArray(row.history)
         ? row.history.flatMap((sample) => finiteNumber(sample) ?? [])
         : []
@@ -196,30 +190,6 @@ function parseSessionMemory(value: unknown): SessionMemory[] {
       sessionId: value.sessionId,
       paneKey: typeof value.paneKey === 'string' ? value.paneKey : null,
       pid: finiteNumber(value.pid) ?? 0,
-      cpu,
-      memory
-    }
-  ]
-}
-
-function parseChatMemory(value: unknown): ChatAgentMemory[] {
-  if (
-    !isRecord(value) ||
-    typeof value.agentSessionId !== 'string' ||
-    typeof value.agent !== 'string'
-  ) {
-    return []
-  }
-  const cpu = finiteNumber(value.cpu)
-  const memory = finiteNumber(value.memory)
-  if (cpu === null || memory === null) {
-    return []
-  }
-  return [
-    {
-      agentSessionId: value.agentSessionId,
-      agent: value.agent,
-      name: typeof value.name === 'string' ? value.name : null,
       cpu,
       memory
     }

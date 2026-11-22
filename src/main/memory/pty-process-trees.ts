@@ -5,10 +5,11 @@ import type { PtyRegistration } from './pty-registry'
 export function claimProcessTree(
   index: ProcIndex,
   rootPid: number,
-  claimed: Set<number>
+  claimed: Set<number>,
+  checkStartOrder = false
 ): ProcRow[] {
   const rows: ProcRow[] = []
-  for (const pid of collectSubtree(index, rootPid, claimed)) {
+  for (const pid of collectSubtree(index, rootPid, claimed, checkStartOrder)) {
     const row = index.byPid.get(pid)
     if (!row || claimed.has(pid)) {
       continue

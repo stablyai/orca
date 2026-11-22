@@ -8,16 +8,17 @@ export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\ID Process',
   '\\Process(*)\\Creating Process ID',
   '\\Process(*)\\Working Set',
-  '\\Process(*)\\Private Bytes',
-  '\\Process(*)\\Elapsed Time'
+  '\\Process(*)\\Private Bytes'
 ] as const
+/** Requested only while agent trees are sampled, which need start order. */
+export const TYPEPERF_START_COUNTER = '\\Process(*)\\Elapsed Time'
 // Elapsed seconds become start order within one sample, so a reused parent PID is detectable.
 const TYPEPERF_START_ORIGIN_TICKS = 10n ** 17n
 
 const TYPEPERF_MAX_INSTANCES = 4_096
 // Derive both caps from counter count so adding counters cannot silently reduce supported processes.
-const TYPEPERF_MAX_FIELDS = 1 + TYPEPERF_COUNTERS.length * TYPEPERF_MAX_INSTANCES
-const TYPEPERF_MAX_LINE_CHARS = TYPEPERF_COUNTERS.length * 256 * 1024
+const TYPEPERF_MAX_FIELDS = 1 + (TYPEPERF_COUNTERS.length + 1) * TYPEPERF_MAX_INSTANCES
+const TYPEPERF_MAX_LINE_CHARS = (TYPEPERF_COUNTERS.length + 1) * 256 * 1024
 
 export type WindowsProcessResourceRow = {
   pid: number

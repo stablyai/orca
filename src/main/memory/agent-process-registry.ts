@@ -11,6 +11,11 @@ const registrationByRoot = new Map<number, AgentRegistration>()
 // The CLI's own pid, which chats record, to the registration whose root tree is counted.
 const registrationByAgentPid = new Map<number, AgentRegistration>()
 
+/** Whether any agent process is registered, so a sample needs to walk agent trees. */
+export function hasAgentProcessRegistrations(): boolean {
+  return registrationByRoot.size > 0
+}
+
 /** Counts this root's process tree as agent memory until the returned release runs, while `isLive` holds. */
 export function registerAgentProcess(
   rootPid: number,

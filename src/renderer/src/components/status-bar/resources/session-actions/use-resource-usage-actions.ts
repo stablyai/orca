@@ -193,7 +193,11 @@ export function useResourceUsageActions({
       if (session.readOnly) {
         return
       }
-      if (!sessionsRereadingRef.current && !requiresKillConfirmation(session)) {
+      // A list being read again can't name which terminal holds this id, so it ends nothing.
+      if (sessionsRereadingRef.current) {
+        return
+      }
+      if (!requiresKillConfirmation(session)) {
         setActionError(null)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
