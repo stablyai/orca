@@ -80,6 +80,7 @@ export type PluginMarketplaceHostSourceState = {
   } | null
   stale: boolean
   official: boolean
+  managed?: boolean
   error?: string
 }
 

@@ -29,10 +29,6 @@ import {
   normalizePluginIdList
 } from '../../../shared/plugins/approval/plugin-consent-state'
 import { projectPluginAgentStatusChangedPayload } from '../../plugins/events/plugin-agent-status-event'
-import { setMainPluginLanguagePacks, setMainUiLanguage } from '../../i18n/main-i18n'
-import { isUsablePluginLanguagePack } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
-import { rebuildAppMenu } from '../../menu/register-app-menu'
-import { rebuildSystemTrayMenu } from '../../tray/system-tray'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
@@ -47,7 +43,11 @@ import type { Store } from '../../persistence/loading-store/store'
 import { PluginStatusBarState } from '../../plugins/status-bar/plugin-status-bar-state'
 import { createDesktopPluginAppearance } from '../../plugins/appearance/desktop-plugin-appearance'
 import { bindPluginEditorTypography } from '../../plugins/appearance/plugin-editor-typography'
+import { bindDesktopPluginNotices } from './desktop-plugin-notices'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
+import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
 // Why: the official catalog fetch must not compete with first paint; opening the marketplace seeds sooner.
@@ -84,7 +84,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     imageCache: pluginImageCache,
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     getKillListEntry: (pluginKey) => core.pluginKillListService?.find(pluginKey) ?? null,
-    hostVersion: pluginHostVersion(app.getVersion())
+    hostVersion: pluginHostVersion(app.getVersion()),
+    getTeamCapabilities: getActiveTeamCapabilities
   })
   const requestOfficialMarketplaceSeed = (): void => {
     if (store.getSettings().pluginSystemEnabled !== true) {
@@ -114,7 +115,9 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     hostVersion: pluginHostVersion(app.getVersion()),
     // Feature flag: with the setting off, discovery returns nothing and no
     // plugin code path runs at all.
-    isPluginSystemEnabled: () => store.getSettings().pluginSystemEnabled === true,
+    isPluginSystemEnabled: () =>
+      store.getSettings().pluginSystemEnabled === true &&
+      getActiveTeamCapabilities()?.flags[ORCA_CLOUD_TEAM_POLICY_FLAGS.plugins] !== false,
     getDisabledPlugins: () => normalizePluginIdList(store.getSettings().disabledPlugins),
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
@@ -128,6 +131,15 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     bundledPluginRoot
   })
   const pluginService = core.pluginService
+  app.once(
+    'will-quit',
+    watchTeamPluginPolicy(
+      pluginService,
+      core.pluginMarketplaceService,
+      core.pluginMarketplaceInstaller,
+      PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS
+    )
+  )
   const pluginAutoUpdater = new PluginAutoUpdater({
     pluginService,
     installer: core.pluginMarketplaceInstaller,
@@ -269,26 +281,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       )
     core.pluginKillListService.syncPeriodicRefresh(true)
   }
-  core.pluginService.onChanged((event) => {
-    if (
-      event.contentPacksChanged &&
-      setMainPluginLanguagePacks(
-        (core.pluginService?.contentPacks.languagePacks.list() ?? []).filter(
-          isUsablePluginLanguagePack
-        )
-      )
-    ) {
-      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => {
-        rebuildAppMenu()
-        rebuildSystemTrayMenu()
-      })
-    }
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('plugins:changed', event)
-      }
-    }
-  })
+  bindDesktopPluginNotices(pluginService, store)
   requestBundledPluginBootstrap()
   setTimeout(() => {
     if (net.isOnline()) {

@@ -2,6 +2,7 @@ import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from '../releases/updater-release-build-cache'
+import type { TeamUpdatePolicy } from '../releases/updater-release-policy'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
@@ -34,6 +35,7 @@ export type UpdaterSetupOptions = {
   setPendingUpdateNudgeId?: (id: string | null) => void
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
+  getTeamUpdatePolicy?: () => TeamUpdatePolicy | undefined
   getUpdateDelayDays?: () => number
   getAutomaticUpdates?: () => boolean
   installMode?: UpdateInstallMode
@@ -135,6 +137,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
+    this.getTeamUpdatePolicy = opts?.getTeamUpdatePolicy ?? null
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
     this.getAutomaticUpdates = opts?.getAutomaticUpdates ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'

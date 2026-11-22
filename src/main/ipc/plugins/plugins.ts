@@ -8,6 +8,7 @@ import {
   installPluginFromLocalPath
 } from '../../plugins/installation/plugin-install'
 import { uninstallInstalledPlugin } from '../../plugins/installation/plugin-uninstall'
+import { assertTeamAllowsUncatalogedPlugin } from '../../plugins/installation/plugin-team-install-policy'
 import {
   applyPluginConsent,
   applyPluginEnablement
@@ -210,6 +211,7 @@ export function registerPluginHandlers(
   )
 
   ipcMain.handle('plugins:install', async (_event, args: unknown) => {
+    assertTeamAllowsUncatalogedPlugin()
     await pluginService.whenReady()
     const parsed = parsePluginInstallArgs(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)

@@ -6,7 +6,8 @@ import {
 import { getReleaseDownloadUrl } from './updater-release-readiness'
 import { toDelayedUpdate } from './updater-release-delay'
 import { updateDelayDaysToMs } from '../../../shared/updater/update-delay'
-import { isMissingUpdateManifestFailure, isPrereleaseVersion } from './updater-fallback'
+import { isMissingUpdateManifestFailure } from './updater-fallback'
+import { releaseSelectionPolicy } from './updater-release-policy'
 import type { CheckFailureSource } from '../lifecycle/updater-state'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'
 import { ReleaseFeedPreflightError } from '../lifecycle/updater-state'
@@ -120,11 +121,18 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     const autoUpdater = this.getAutoUpdater()
     // Pin the concrete tag because latest/download can move between check and download; stable checks exclude prereleases.
     const currentVersion = app.getVersion()
-    const isPerfCheck = variant === 'perf'
-    const includePrerelease =
-      isPerfCheck || this.includePrereleaseActive || isPrereleaseVersion(currentVersion)
-    // Perf builds are explicit one-off opt-ins; "install now" consumes its bypass on this pin.
-    const delayDays = isPerfCheck || this.ignoreUpdateDelayOnce ? 0 : this.readUpdateDelayDays()
+    const team = this.getTeamUpdatePolicy?.()
+    const { isPerfCheck, includePrerelease, delayDays } = releaseSelectionPolicy({
+      team,
+      variant,
+      version: currentVersion,
+      includePrerelease: this.includePrereleaseActive,
+      ignoreDelay: this.ignoreUpdateDelayOnce,
+      getUpdateDelayDays: this.getUpdateDelayDays
+    })
+    if (team?.updateChannel !== undefined) {
+      autoUpdater.allowPrerelease = includePrerelease
+    }
     this.ignoreUpdateDelayOnce = false
     const now = Date.now()
     const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
@@ -245,15 +253,6 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     console.info(`[updater] stable fallback feed pinned: current=${currentVersion} → ${url}`)
     autoUpdater.setFeedURL({ provider: 'generic', url })
     return 'ready'
-  }
-
-  private readUpdateDelayDays(): number {
-    try {
-      return this.getUpdateDelayDays?.() ?? 0
-    } catch {
-      // A settings read failure must not block updates entirely.
-      return 0
-    }
   }
 
   protected retryPrereleaseFallbackAfterMissingManifest(

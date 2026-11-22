@@ -13,6 +13,7 @@ import type {
 } from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaProfileDirectory } from '../profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from '../cloud-auth/profile-cloud-auth-config'
+import { invalidateTeamCapabilities } from '../cloud-auth/team-capabilities-invalidation'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -198,6 +199,7 @@ export function saveOrcaCloudSession(
       options.requireSealed
     )
     unsavedRotations.delete(key)
+    invalidateTeamCapabilities()
     return persistence
   } catch (error) {
     if (!options.spentOnFailure) {
@@ -205,6 +207,7 @@ export function saveOrcaCloudSession(
     }
     // Losing rotated tokens would replay spent disk tokens and risk revoking the family.
     unsavedRotations.set(key, { profileId, userDataPath, session })
+    invalidateTeamCapabilities()
     try {
       rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
     } catch {
@@ -321,5 +324,6 @@ export function clearOrcaCloudSession(profileId: string, userDataPath: string): 
   const key = orcaCloudSessionKey(profileId, userDataPath)
   unsavedRotations.delete(key)
   memorySessions.delete(key)
+  invalidateTeamCapabilities()
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }

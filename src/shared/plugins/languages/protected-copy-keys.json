@@ -1365,6 +1365,7 @@
     "plugins.actionConfirmation.deleteAutomationDetail",
     "plugins.actionConfirmation.newPrompt",
     "plugins.actionConfirmation.unknownProject",
+    "plugins.catalog.managedByTeam",
     "plugins.frameOpenExternal.alwaysAllow",
     "plugins.frameOpenExternal.cancel",
     "plugins.frameOpenExternal.message",

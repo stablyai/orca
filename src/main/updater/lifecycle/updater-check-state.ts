@@ -26,6 +26,10 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
   }
 
   protected getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant {
+    const teamChannel = this.getTeamUpdatePolicy?.()?.updateChannel
+    if (teamChannel) {
+      return teamChannel === 'rc' ? 'prerelease' : 'default'
+    }
     if (options?.includePerfPrerelease) {
       return 'perf'
     }

@@ -12,6 +12,7 @@ import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-ses
 import { updaterErrorMessage } from './updater-coded-error'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
+import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -82,6 +83,7 @@ function buildUpdaterSetupOptions(
       void nativeSettings.requestCoreWrite({ kind: 'ui', updates: { dismissedUpdateNudgeId: id } })
     },
     getReleaseChannelOverride: () => nativeSettings.getUI().releaseChannelOverride ?? null,
+    getTeamUpdatePolicy: () => getActiveTeamCapabilities()?.teamPolicy,
     getUpdateDelayDays: () =>
       normalizeUpdateDelayDays(nativeSettings.getSettings().updateDelayDays),
     getAutomaticUpdates: () => nativeSettings.getSettings().automaticUpdates === true,

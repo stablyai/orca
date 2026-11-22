@@ -1,9 +1,14 @@
 import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
 } from '../../../shared/orca-profiles/orca-profiles'
+import {
+  ORCA_CLOUD_TEAM_SETTINGS,
+  orcaCloudTeamPolicySchema
+} from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
@@ -90,13 +95,18 @@ function normalizeCapabilities(value: unknown): OrcaCloudCapabilities {
     typeof record.consoleOrigin === 'string'
       ? cleanCloudServiceOrigin(record.consoleOrigin, false)
       : null
+  const teamPolicy =
+    flags[ORCA_CLOUD_TEAM_SETTINGS] === true
+      ? orcaCloudTeamPolicySchema.safeParse(record.teamPolicy)
+      : undefined
   return {
     flags,
     refreshedAt:
       typeof record.refreshedAt === 'number' && Number.isFinite(record.refreshedAt)
         ? record.refreshedAt
         : Date.now(),
-    ...(consoleOrigin ? { consoleOrigin } : {})
+    ...(consoleOrigin ? { consoleOrigin } : {}),
+    ...(teamPolicy?.success ? { teamPolicy: teamPolicy.data } : {})
   }
 }
 
@@ -169,6 +179,7 @@ const CLOUD_REFRESH_TIMEOUT_MS = 20_000
 type PostJsonOptions = {
   accessToken?: string
   timeoutMs?: number
+  reportVersion?: boolean
 }
 
 // Without an explicit rejection, a rotating credential may already be spent.
@@ -197,7 +208,10 @@ async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
+      ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {}),
+      ...(options?.reportVersion === true && hasAppEnvironment()
+        ? { 'x-orca-app-version': getAppEnvironment().getVersion() }
+        : {})
     },
     body: JSON.stringify(body),
     // Redirects could leak rotating credentials; timeout bounds renderer IPC waits.
@@ -234,7 +248,7 @@ export async function refreshOrcaCloudCapabilities(
     cloud?: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.capabilitiesEndpoint, {}, { accessToken: session.accessToken })
+  }>(config.capabilitiesEndpoint, {}, { accessToken: session.accessToken, reportVersion: true })
   return {
     cloud: response.cloud === undefined ? undefined : normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -250,7 +264,7 @@ export async function refreshOrcaCloudSession(
     await postJson(
       config.refreshEndpoint,
       { refreshToken: session.refreshToken },
-      { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS }
+      { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS, reportVersion: true }
     )
   )
 }

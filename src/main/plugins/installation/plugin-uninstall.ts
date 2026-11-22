@@ -5,6 +5,7 @@ import { getPluginsDataDir, getUserPluginsDir } from '../discovery/plugin-discov
 import { clearRemovedPluginSettings } from './plugin-removal-settings'
 import type { PluginService } from '../plugin-service'
 import { readPluginLockfile, removeInstalledPlugin } from './plugin-install'
+import { assertPluginIsNotRequired } from './plugin-team-install-policy'
 
 type UninstallingPluginService = Pick<
   PluginService,
@@ -36,6 +37,7 @@ export async function uninstallInstalledPlugin(input: {
   afterRemove?: (pluginKey: string) => Promise<void>
 }): Promise<boolean> {
   const { pluginService, pluginKey, store } = input
+  assertPluginIsNotRequired(pluginKey)
   const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
   if (!canRemoveInstalledPlugin(pluginService, pluginKey, lock)) {

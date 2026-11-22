@@ -36,6 +36,7 @@ import {
   type PluginCliApprovalService
 } from './plugin-cli-approval'
 import { assertPluginSystemEnabled } from '../development/plugin-dev-folders'
+import { assertTeamAllowsUncatalogedPlugin } from '../installation/plugin-team-install-policy'
 
 export type PluginCliInstallService = PluginCliApprovalService & {
   readonly options: PluginCliApprovalService['options'] &
@@ -104,6 +105,9 @@ async function candidateFor(
   spec: PluginCliInstallSpec
 ): Promise<PluginCliInstallCandidate> {
   const host = candidateHost(deps)
+  if (spec.kind !== 'catalog') {
+    assertTeamAllowsUncatalogedPlugin()
+  }
   switch (spec.kind) {
     case 'catalog':
       return catalogInstallCandidate(host, deps.catalogs, spec.pluginKey, spec.catalog)

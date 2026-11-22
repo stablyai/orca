@@ -229,6 +229,10 @@ export function PluginMarketplaceSourceDialog({
                               'Official'
                             )}
                           </Badge>
+                        ) : source.managed ? (
+                          <Badge variant="outline" className="ml-2 align-middle">
+                            {t('plugins.catalog.managedByTeam', 'Managed by your team')}
+                          </Badge>
                         ) : null}
                       </p>
                       {source.marketplace ? (
@@ -277,7 +281,7 @@ export function PluginMarketplaceSourceDialog({
                     >
                       <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
                     </Button>
-                    {!source.official ? (
+                    {!source.official && !source.managed ? (
                       <Button
                         variant="ghost"
                         size="icon-xs"

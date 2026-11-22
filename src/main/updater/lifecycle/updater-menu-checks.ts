@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { isMacInstallRequested } from '../mac-install/updater-mac-install'
 import type { UpdateCheckOptions } from '../../../shared/updater/update-status-types'
 import type { ReleaseChannel } from '../../../shared/updater/release-channel'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { UpdaterScheduling } from './updater-scheduling'
 
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
@@ -17,6 +18,18 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     }
     if (!app.isPackaged) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
+      return
+    }
+    const team = this.getTeamUpdatePolicy?.()
+    if (
+      (team?.updateChannel !== undefined || team?.updateDelayDays !== undefined) &&
+      (options?.localBuild || options?.targetTag || options?.includePerfPrerelease)
+    ) {
+      this.sendStatus({
+        state: 'error',
+        ...updaterCodedMessage('teamUpdatePolicy'),
+        userInitiated: true
+      })
       return
     }
     if (options?.localBuild) {

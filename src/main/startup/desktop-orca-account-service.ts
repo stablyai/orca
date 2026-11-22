@@ -1,13 +1,15 @@
+import { app } from 'electron'
 import { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import { botAccountSwitchBlocker } from '../bots/bot-account-switch-blocker'
 import { mainProcessConnectorCloud } from './cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { redeclarePairedDesktopAccounts } from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
+import { scheduleTeamPolicyRefresh } from '../orca-profiles/cloud-auth/team-policy-refresh'
 
 export function createDesktopOrcaAccountService(
   openBrowser: (url: string) => Promise<void>
 ): OrcaAccountService {
-  return new OrcaAccountService({
+  const account = new OrcaAccountService({
     openBrowser,
     accountBoundLinks: botAccountSwitchBlocker({
       bots: () => state.core.runtime?.bots ?? null,
@@ -31,4 +33,6 @@ export function createDesktopOrcaAccountService(
       }
     }
   })
+  app.once('will-quit', scheduleTeamPolicyRefresh(account))
+  return account
 }

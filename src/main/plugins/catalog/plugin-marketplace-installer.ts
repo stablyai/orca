@@ -2,15 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-fields'
-import {
-  pluginShaImageUrl,
-  type PluginHostImages
-} from '../../../shared/plugins/images/plugin-image-url'
-import { readContainedPluginArtifactBytes } from '../artifacts/plugin-contained-artifact'
-import { declaredPluginImages } from '../media/plugin-image-artifact-validation'
+import type { PluginHostImages } from '../../../shared/plugins/images/plugin-image-url'
 import type { PluginImageCache } from '../media/plugin-image-cache'
-import { pluginManifestHostImages } from '../media/plugin-manifest-images'
+import { cachePluginPreviewImages } from './plugin-marketplace-preview-images'
 import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
 import type { PluginVmRecipeIdentities } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
@@ -126,7 +120,11 @@ export class PluginMarketplaceInstaller {
       if (!inspection.ok) {
         throw new Error(inspection.error)
       }
-      const images = await this.cachePreviewImages(stagingDirectory, inspection.manifest)
+      const images = await cachePluginPreviewImages(
+        this.imageCache,
+        stagingDirectory,
+        inspection.manifest
+      )
       const vmRecipeIdentities =
         inspection.manifest.contributes.vmRecipes.length > 0
           ? await readPluginVmRecipeIdentities(stagingDirectory, inspection.manifest)
@@ -158,7 +156,12 @@ export class PluginMarketplaceInstaller {
 
   async install(
     preview: PluginMarketplacePreviewIdentity,
-    options: { requireInstalled?: boolean; trigger?: PluginInstallTrigger } = {}
+    options: {
+      requireInstalled?: boolean
+      requireMissing?: boolean
+      trigger?: PluginInstallTrigger
+      stillAllowed?: () => boolean
+    } = {}
   ): Promise<PluginMarketplaceInstallResult> {
     const listing = await this.requireListing(preview.marketplaceSourceId, preview.pluginKey)
     const blockedReason =
@@ -200,8 +203,17 @@ export class PluginMarketplaceInstaller {
         ...(listing.source.path ? { path: listing.source.path } : {})
       },
       ...(listing.release ? { release: listing.release } : {}),
-      blockedPluginReason: this.blockedPluginReason,
-      ...(options.requireInstalled ? { requireInstalled: true } : {})
+      blockedPluginReason: (key) => {
+        if (
+          options.stillAllowed?.() === false ||
+          !this.marketplace.allowsSource(sourceState.source)
+        ) {
+          return 'The team plugin policy changed during installation.'
+        }
+        return this.blockedPluginReason(key)
+      },
+      ...(options.requireInstalled ? { requireInstalled: true } : {}),
+      ...(options.requireMissing ? { requireMissing: true } : {})
     })
     if (result.ok) {
       trackPluginInstalled({
@@ -276,40 +288,6 @@ export class PluginMarketplaceInstaller {
       pluginKey,
       hostVersion: this.hostVersion,
       blockedPluginReason: this.blockedPluginReason
-    })
-  }
-
-  /** Why cache now: the staging tree is deleted after preview, and images were already checked by
-   *  the install inspection, so their hashes are the only stable names. */
-  private async cachePreviewImages(
-    rootDir: string,
-    manifest: PluginManifest
-  ): Promise<PluginHostImages | undefined> {
-    const cache = this.imageCache
-    if (!cache) {
-      return undefined
-    }
-    const hashes = new Map<string, string>()
-    for (const image of declaredPluginImages(manifest)) {
-      const bytes = await readContainedPluginArtifactBytes(
-        rootDir,
-        image.path,
-        PLUGIN_IMAGE_RULES[image.kind].maxBytes
-      ).catch(() => null)
-      // A cache failure only costs the image; it must never fail the preview or update.
-      const sha256 = bytes
-        ? await cache.put(bytes).catch((error: unknown) => {
-            console.warn(`[plugins] could not cache image ${image.path}:`, error)
-            return null
-          })
-        : null
-      if (sha256) {
-        hashes.set(image.path, sha256)
-      }
-    }
-    return pluginManifestHostImages(manifest, (_slot, path) => {
-      const sha256 = hashes.get(path)
-      return sha256 ? pluginShaImageUrl(sha256) : null
     })
   }
 

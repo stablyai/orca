@@ -27,6 +27,7 @@ import {
 } from './profile-storage-paths'
 import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
 import { supersedeCloudConnectAttempts } from './cloud-auth/profile-cloud-connect-attempts'
+import { invalidateTeamCapabilities } from './cloud-auth/team-capabilities-invalidation'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
@@ -127,6 +128,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
+  invalidateTeamCapabilities()
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
