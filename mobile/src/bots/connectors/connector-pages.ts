@@ -15,6 +15,12 @@ export type ConnectorPage =
   | { kind: 'google-connect'; from: ConnectorPage }
   | { kind: 'composio'; app: string; label: string | null }
   | { kind: 'composio-connect'; app: { slug: string; name: string }; from: ConnectorPage }
+  /** The desktop's Fix key: a new key for the one Composio refuses. */
+  | { kind: 'composio-key' }
+  /** An app the bot has as a tool; `signIn` opens on its sign-in. */
+  | { kind: 'tool'; name: string; signIn: boolean }
+  /** Add by URL; `preset`: a listed app's address and name, to add as they are or change first. */
+  | { kind: 'add-tool'; preset?: { source: string; name: string }; from: ConnectorPage }
 
 export type AccountConnectorPage = Extract<
   ConnectorPage,
@@ -28,5 +34,6 @@ export type AccountConnectorPage = Extract<
       | 'google-connect'
       | 'composio'
       | 'composio-connect'
+      | 'composio-key'
   }
 >

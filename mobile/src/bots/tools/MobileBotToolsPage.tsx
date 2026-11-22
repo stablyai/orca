@@ -216,7 +216,10 @@ export function MobileBotToolsPage(props: {
   )
 }
 
-function ToolRow(props: {
+/** One tool as a row; Connectors draws an app with its connector title and, for a listed app, its line. */
+export function ToolRow(props: {
+  title?: string
+  line?: string
   tool: PhoneOwnTool
   problem: BotToolProblem | undefined
   hostName: string
@@ -234,11 +237,11 @@ function ToolRow(props: {
       : problem?.kind === 'unconfirmed'
         ? t('bots.tools.unconfirmed', 'Not confirmed')
         : null
-  const name = botToolAppName(tool.name)
+  const name = props.title ?? botToolAppName(tool.name)
   return (
     <ListRow
       title={name}
-      subtitle={signInLine ?? trouble ?? botToolSubtitle(tool)}
+      subtitle={signInLine ?? trouble ?? props.line ?? botToolSubtitle(tool)}
       subtitleColor={signInLine ? colors.agentQuestion : trouble ? colors.statusAmber : undefined}
       subtitleLines={1}
       leading={<Wrench size={17} color={colors.textMuted} />}
