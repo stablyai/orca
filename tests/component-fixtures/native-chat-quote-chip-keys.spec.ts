@@ -90,3 +90,16 @@ test('ArrowRight at the end, after a chip, leaves the caret where it is', async 
   const offsets = await page.evaluate(() => document.documentElement.dataset.caretOffsets ?? '')
   expect(offsets.split(' ').filter(Boolean)).not.toContain('2')
 })
+
+// An open picker takes Up and Down for its rows: the line keys leave them alone.
+test('ArrowDown from before a chip leaves the key to an open picker', async ({ page }) => {
+  await open(page, 'chipLinePicker', 4)
+  await page.evaluate(() => {
+    const { dataset } = document.documentElement
+    window.addEventListener('keydown', (event) => {
+      dataset.keyHandled = String(event.defaultPrevented)
+    })
+  })
+  await page.keyboard.press('ArrowDown')
+  expect(await page.evaluate(() => document.documentElement.dataset.keyHandled)).toBe('false')
+})

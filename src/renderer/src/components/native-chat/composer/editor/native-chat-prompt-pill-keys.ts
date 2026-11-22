@@ -21,10 +21,10 @@ function pillBeside(state: EditorState, side: 'before' | 'after'): ProseMirrorNo
 const RIGHT_TO_LEFT = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/u
 
 function isRightToLeft(view: EditorView): boolean {
-  return (
-    RIGHT_TO_LEFT.test(view.state.selection.$from.parent.textContent) ||
-    getComputedStyle(view.dom).direction === 'rtl'
-  )
+  const line = view.state.selection.$from.parent
+  // A quote chip's text is in its token, not in the line's text nodes.
+  const text = line.textBetween(0, line.content.size, '', (leaf) => String(leaf.attrs.token ?? ''))
+  return RIGHT_TO_LEFT.test(text) || getComputedStyle(view.dom).direction === 'rtl'
 }
 
 /** Backspace or Delete takes a pill beside the caret in one press, and a plain arrow steps over it
@@ -115,7 +115,8 @@ export function nativeChatPromptLineKey(
   extend: boolean
 ): boolean {
   const { state } = view
-  if (view.composing || isRightToLeft(view)) {
+  // An open picker (a mention or a command list) takes Up and Down for its rows.
+  if (view.composing || isRightToLeft(view) || view.dom.getAttribute('aria-expanded') === 'true') {
     return false
   }
   const { $head, anchor } = state.selection
