@@ -1,20 +1,24 @@
-// Why: owns the desktop half of background push — the gateway session, the
-// registration each paired phone asked for, and the durable delete queue. Built
-// alongside DesktopRelayService but deliberately not gated on cloud sign-in: the
-// gateway authenticates with the host keypair, so accountless hosts push too.
+// Push authenticates with host keys, independent of cloud sign-in; retain gateway registrations and durable cleanup for accountless hosts too.
 import { randomUUID } from 'node:crypto'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
-} from '../../../shared/mobile-push-contract'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import type { DeviceRegistry } from '../device-registry'
+} from '../../../shared/notifications/mobile-push-contract'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
+import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
-import { PushDispatcher } from './push-dispatcher'
+import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
+import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
+import type { ExecutionHostPushCoverage } from './push-burst-slots'
+import { mobilePushTokenDigest } from './push-token-digest'
+import { pushTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
+import {
+  readMobilePushDeliveryMode,
+  type MobilePushDeliveryMode
+} from './mobile-push-delivery-policy'
 import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
 const OUTBOX_RETRY_BASE_MS = 30_000
@@ -26,12 +30,14 @@ type DesktopPushServiceOptions = {
   runtime: OrcaRuntimeService
   runtimeRpc: OrcaRuntimeRpcServer
   gatewayUrl: string
-  /** Test seam: lets a suite drive the service without a live gateway. */
+  /** Inject a gateway client for tests. */
   client?: PushGatewayClient
-  /** Test seam: lets a suite drive the outbox backoff without real timers. */
+  /** Inject outbox backoff scheduling for tests. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
-  /** Test seam: lets a suite drive the per-device register bucket on its own clock. */
+  /** Inject the per-device registration bucket for tests. */
   registerThrottle?: PushRegisterThrottle
+  /** Asks a mirrored session's execution host which of this host's phones it pushes itself. */
+  coverage?: ExecutionHostPushCoverage
 }
 
 export class DesktopPushService {
@@ -41,6 +47,7 @@ export class DesktopPushService {
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
   private readonly dispatcher: PushDispatcher
+  private readonly deliveryMode: MobilePushDeliveryMode
   private readonly registerThrottle: PushRegisterThrottle
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
   private unsubscribe: (() => void) | null = null
@@ -61,7 +68,13 @@ export class DesktopPushService {
     this.registry = registry
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
-    this.dispatcher = new PushDispatcher({ client, registry })
+    this.deliveryMode = readMobilePushDeliveryMode()
+    this.dispatcher = new PushDispatcher({
+      client,
+      registry,
+      deliveryMode: this.deliveryMode,
+      coverage: options.coverage
+    })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??
@@ -113,7 +126,7 @@ export class DesktopPushService {
     if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
       return { accepted: false, reason: 'not_registered' }
     }
-    if (this.stopped) {
+    if (this.stopped || this.deliveryMode === 'disabled') {
       return { accepted: false, reason: 'unavailable' }
     }
     // Explicit tests target only the caller and bypass automatic activity filters.
@@ -131,35 +144,17 @@ export class DesktopPushService {
         sound: registration.filter.sound !== false
       }
     })
-    if (!result.ok) {
-      return {
-        accepted: false,
-        reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
-      }
-    }
-    const status = result.results.find(
-      (entry) => entry.registrationId === registration.registrationId
-    )?.status
-    if (status === 'queued') {
-      return { accepted: true }
-    }
-    return {
-      accepted: false,
-      reason:
-        status === 'rate_limited'
-          ? 'rate_limited'
-          : status === 'dead'
-            ? 'not_registered'
-            : 'rejected'
-    }
+    return pushTestResult(result, registration.registrationId)
   }
 
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {
+    if (this.deliveryMode === 'disabled') {
+      return { registered: false, reason: 'gateway_rejected' }
+    }
     if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
     }
-    // Unregister needs no bucket: with nothing registered it is a lookup, and
-    // with something registered it can only run once per successful register.
+    // Only registration needs a bucket; unregister is a lookup or one delete per successful register.
     if (!this.registerThrottle.allow(input.deviceId)) {
       return { registered: false, reason: 'throttled' }
     }
@@ -196,14 +191,17 @@ export class DesktopPushService {
     }
     const failure = this.storeRegistration(input, result.registrationId)
     if (failure) {
-      // Why: the gateway now holds a token this host will never push to. Queue its
-      // delete instead of leaking it until the phone happens to register again.
+      // Gateway accepted an unstorable token; durably queue deletion rather than leak it.
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
     }
     void this.flushUnregisterOutbox()
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }
+  }
+
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
+    return this.dispatcher.coveredTokenDigests(request)
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
@@ -263,7 +261,8 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+        tokenDigest: mobilePushTokenDigest(input)
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.

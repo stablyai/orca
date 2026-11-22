@@ -1,19 +1,20 @@
-// Main-process telemetry transport: one posthog-node client, one `track()` entry that every
-// event (main + IPC) funnels through. The ordering inside `track()` — shutdown gate, burst cap,
-// consent, validator, capture — MUST be preserved: burst cap runs before consent so a compromised
-// opted-out renderer can't force a settings read per event.
-// `$process_person_profile: false` is attached per capture because posthog-node has no init-time
-// equivalent of posthog-js's `person_profiles: 'identified_only'` (no PostHog person per install_id).
+// All main/IPC telemetry shares shutdown → sampling → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
 
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
-import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
-import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
-import type { Store } from '../persistence'
+import type * as events from '../../shared/telemetry/telemetry-event-classification'
+import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { AgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
+import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { telemetryEventSampleRate } from './event-sampling'
+import * as protectedMilestones from './protected-milestones'
+import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
-import { resolveConsent } from './consent'
-import { buildCommonProps, createPostHogClient, waitForCaptureEnqueue } from './posthog-transport'
+import { isConsentEnvOverridden, resolveConsent } from './consent'
+import * as postHogStart from './posthog-client-start'
+import { buildCommonProps, createPostHogClient } from './posthog-transport'
+import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
 import { commonPropsSchema, validate } from './validator'
 
 export { shouldOptOutSdkAtInit } from './posthog-transport'
@@ -22,8 +23,7 @@ export { shouldOptOutSdkAtInit } from './posthog-transport'
 // NOTE: config/scripts/verify-telemetry-constants.mjs greps `const TELEMETRY_ENABLED = true|false`; keep that shape or update its regex.
 const TELEMETRY_ENABLED = true
 
-// Eligible to transmit only if CI injected BOTH build-identity and write key; either alone fails closed, with no runtime env-var override (dev/contributor builds get `null`).
-// The `globalThis` reads are for vitest, which skips electron-vite's `define` pass — resolving to `IS_OFFICIAL_BUILD === false` there.
+// Require both CI-injected official build identity and write key; contributor builds fail closed. Vitest bypasses defines and uses globalThis fallbacks.
 const BUILD_IDENTITY: 'stable' | 'rc' | null =
   typeof ORCA_BUILD_IDENTITY !== 'undefined'
     ? ORCA_BUILD_IDENTITY
@@ -37,28 +37,30 @@ const IS_OFFICIAL_BUILD: boolean =
   typeof WRITE_KEY === 'string' &&
   WRITE_KEY.length > 0
 
-// Module-level singletons — one Store / process / telemetry session; threading `store` everywhere buys nothing.
 let posthog: PostHog | null = null
 let sessionId: string | null = null
-let commonProps: CommonProps | null = null
+let commonProps: events.CommonProps | null = null
 let shuttingDown = false
 let storeRef: Store | null = null
 
-// Test-only transport-gate override (`_enableTransportForTests`) so tests exercise the full pipeline without a real CI build.
 let testTransportEnabled = false
 
-// First-launch `app_opened` gate: no events transmit until the banner resolves; keep mark+emit atomic.
+type CaptureProperties = Readonly<Record<string, unknown>>
+
+// Banner resolution gates first app_opened; mark and emit atomically.
 let appOpenedTrackedThisSession = false
 const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
 
-export function initTelemetry(store: Store): void {
-  // Set unconditionally so `setOptIn` can persist opt-out to disk even on contributor / non-official builds.
+export function initTelemetry(store: Store, scheduleStart: postHogStart.StartScheduler): void {
+  // Retain Store even for contributor builds so opt-out persists.
   storeRef = store
   resetBurstCapsForSession()
   shuttingDown = false
-  // Reset per session: the "no app_opened until banner resolution" invariant is per-launch, not per-install.
+  // Reset banner/app-open gating each launch, not once per install.
   appOpenedTrackedThisSession = false
   trackedDashboardActiveDays.clear()
+  protectedMilestones.bindSession(store, enqueueCapture, isTelemetryEnabled)
+  postHogStart.resetStart()
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
     return
@@ -67,7 +69,7 @@ export function initTelemetry(store: Store): void {
   const settings = store.getSettings()
   const installId = settings.telemetry?.installId
   if (!installId) {
-    // Migration guarantees installId; if missing, don't transmit with an absent distinct_id.
+    // Missing migrated install identity must not transmit an absent distinct_id.
     console.warn('[telemetry] installId missing after migration; skipping transport init')
     return
   }
@@ -75,13 +77,10 @@ export function initTelemetry(store: Store): void {
   sessionId = randomUUID()
   commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
 
-  const languageCohort = settings.telemetry?.onboardingLanguageCohort
-  if (languageCohort === 'control' || languageCohort === 'treatment') {
-    commonProps.onboarding_language_v1 = languageCohort
-  }
+  // Official builds only; contributor builds retain the original announcement behavior.
+  Object.assign(commonProps, experimentCohortProps(store))
 
-  // Fail-closed: a bad `install_id` (e.g. empty from a migration bug) would collapse all events into one distinct_id.
-  // Validated once here (not per `track()`): `commonProps` is a session-lifetime singleton that can't drift.
+  // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)
   if (!parsedCommon.success) {
     console.warn('[telemetry] common props failed schema validation; skipping transport init')
@@ -89,15 +88,34 @@ export function initTelemetry(store: Store): void {
     return
   }
 
-  posthog = createPostHogClient(WRITE_KEY, resolveConsent(settings))
+  posthog = null
+  postHogStart.deferStart(WRITE_KEY, store, scheduleStart, ensurePostHogClient)
 }
+
+function ensurePostHogClient(): PostHog | null {
+  const start = posthog ? null : postHogStart.takeStart()
+  if (!start || !storeRef) {
+    return posthog
+  }
+  try {
+    // Apply consent as it stands now; the live per-event check already gated each held capture.
+    posthog = createPostHogClient(start.writeKey, resolveConsent(storeRef.getSettings()))
+    postHogStart.replayHeld(posthog, start.held)
+  } catch (err) {
+    // Callers include opt-out and quit, which must still complete without a client.
+    console.warn('[telemetry] PostHog client failed to start or replay held events:', err)
+  }
+  return posthog
+}
+
+export const isTelemetryInitialized = (): boolean => storeRef !== null
 
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
   return (
     (testTransportEnabled || (IS_OFFICIAL_BUILD && TELEMETRY_ENABLED)) &&
     !shuttingDown &&
-    posthog !== null &&
+    (posthog !== null || postHogStart.isStartDeferred()) &&
     commonProps !== null &&
     storeRef !== null &&
     resolveConsent(storeRef.getSettings()).effective === 'enabled'
@@ -115,17 +133,26 @@ export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
   )
 }
 
-// No-op in contributor / non-official builds; only official stable/rc builds (CI-injected `ORCA_BUILD_IDENTITY` + `ORCA_POSTHOG_WRITE_KEY`) transmit.
-export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
+export function track<N extends events.EventName>(name: N, props: events.EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
     return false
   }
 
-  // (1) Shutdown gate: late IPC arrivals must not enqueue against a flushing client.
-  if (shuttingDown) {
+  const sampleRate = telemetryEventSampleRate(name)
+  // Reject late IPC while the client flushes.
+  if (
+    shuttingDown ||
+    (!posthog && !postHogStart.isStartDeferred()) ||
+    !commonProps ||
+    !storeRef ||
+    posthog?.optedOut
+  ) {
     return false
   }
-  if (!posthog || !commonProps || !storeRef || posthog.optedOut) {
+  const sampledOut = sampleRate < 1 && Math.random() >= sampleRate
+  // Milestones derive from every observation, so sampling and budgets cannot hide them.
+  const milestoneDay = protectedMilestones.observationDay(name)
+  if (sampledOut && milestoneDay === null) {
     return false
   }
 
@@ -146,21 +173,28 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     return false
   }
 
-  // (2) Burst cap before consent: the O(1) cap drops floods before the costly settings read, so a compromised opted-out renderer can't burn CPU.
-  if (!consumeBurstToken(name)) {
+  // Cap floods before expensive live consent reads, including opted-out renderers.
+  const withinBudget = !sampledOut && consumeBurstToken(name)
+  if (!withinBudget && milestoneDay === null) {
     return false
   }
 
-  // (3) Consent resolve — reads live settings every call so it can't drift from persisted state / env-var precedence.
+  // Read persisted consent live to respect current preferences/env precedence.
   const settings = storeRef.getSettings()
   const consent = resolveConsent(settings)
   if (consent.effective !== 'enabled') {
     return false
   }
 
-  // (4) Validator — single enforcement point for schema, enum, key set, and length caps.
+  // Validate schemas, exact keys, enums and bounded strings at one entry point.
   const result = validate(name, props)
   if (!result.ok) {
+    return false
+  }
+  if (milestoneDay !== null) {
+    protectedMilestones.record(name, result.props, settings, milestoneDay)
+  }
+  if (!withinBudget) {
     return false
   }
   if (dashboardActiveSurface) {
@@ -178,19 +212,11 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
       ? {
           agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true
         }
-      : {}
+      : sampleRate < 1
+        ? { sample_rate: sampleRate }
+        : {}
 
-  // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
-  posthog.capture({
-    distinctId: commonProps.install_id,
-    event: name,
-    properties: {
-      ...commonProps,
-      ...result.props,
-      ...mainOwnedProps,
-      $process_person_profile: false
-    }
-  })
+  enqueueCapture(name, { ...result.props, ...mainOwnedProps })
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
     try {
@@ -210,12 +236,31 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   return true
 }
 
+function enqueueCapture(name: events.EventName, props: CaptureProperties): void {
+  if (!commonProps) {
+    throw new Error('telemetry common props missing')
+  }
+  // Node SDK requires per-capture person-profile suppression.
+  const message = {
+    distinctId: commonProps.install_id,
+    event: name,
+    properties: { ...commonProps, ...props, $process_person_profile: false }
+  }
+  if (posthog) {
+    posthog.capture(message)
+  } else {
+    postHogStart.holdCapture(message, ensurePostHogClient)
+  }
+}
+
 export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   if (!storeRef) {
     return
   }
+  // Start before consent changes: opt-out must flush held events and enqueue its own event first.
+  ensurePostHogClient()
   const settings = storeRef.getSettings()
-  // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
+  // Deep-merge opt-in without clobbering installation identity or cohort.
   storeRef.updateSettings(
     {
       telemetry: {
@@ -228,38 +273,19 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
 
   const client = posthog
   if (optedIn) {
-    if (client) {
+    if (client && !isConsentEnvOverridden()) {
       await client.optIn()
     }
     // Settings opt-in also starts an observable session that needs an adoption denominator.
     trackAppOpenedOnce()
     track('telemetry_opted_in', { via })
   } else {
-    if (!client) {
+    if (!client || isConsentEnvOverridden()) {
       return
     }
-    // Fire before disabling the SDK — the one event that must transmit against the new preference. Capture directly (not
-    // `track()`, which would drop it on `user_opt_out`); await enqueue since posthog-node captures async and must confirm before optOut().
     try {
-      if (!shuttingDown && commonProps && consumeBurstToken('telemetry_opted_out')) {
-        const validated = validate('telemetry_opted_out', { via })
-        if (validated.ok) {
-          const uuid = randomUUID()
-          const enqueued = waitForCaptureEnqueue(client, 'telemetry_opted_out', uuid)
-          client.capture({
-            distinctId: commonProps.install_id,
-            event: 'telemetry_opted_out',
-            uuid,
-            properties: {
-              ...commonProps,
-              ...validated.props,
-              $process_person_profile: false
-            }
-          })
-          if (!(await enqueued)) {
-            console.warn('[telemetry] telemetry_opted_out did not enqueue before SDK opt-out')
-          }
-        }
+      if (!shuttingDown && commonProps) {
+        await captureOptOutBeforeSdkOptOut(client, commonProps, via)
       }
     } catch (err) {
       console.warn('[telemetry] telemetry_opted_out capture failed before SDK opt-out:', err)
@@ -269,15 +295,13 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   }
 }
 
-// Banner ✕: silent persisted opt-in. Separate from `setOptIn` because that always emits a
-// `telemetry_opted_in/out` event; here `app_opened` fires but no opt-in event does. Don't add a
-// `via`/emit param — give a new silent-opt-in surface its own named function.
+// Banner dismissal persists silent opt-in: emit app_opened but no consent-change event. Keep distinct surfaces named explicitly.
 export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
   if (!storeRef) {
     return
   }
   const settings = storeRef.getSettings()
-  // Fallback only used if the `telemetry` block is absent (migration invariant broken); updateSettings deep-merges it (persistence.ts:560).
+  // Only broken migration can omit telemetry; updateSettings deep-merges fallback state.
   storeRef.updateSettings(
     {
       telemetry: {
@@ -287,10 +311,10 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
     },
     { notifyListeners: true }
   )
-  if (posthog) {
+  if (posthog && !isConsentEnvOverridden()) {
     await posthog.optIn()
   }
-  // Why: banner resolution is the first eligible moment for app_opened; SDK re-enabled above so capture sees the new consent.
+  // Banner resolution is first app_opened eligibility; re-enable SDK before capture.
   trackAppOpenedOnce()
 }
 
@@ -298,33 +322,32 @@ export function trackAppOpenedOnce(): void {
   if (appOpenedTrackedThisSession) {
     return
   }
-  // Why: `nth_repo_added: 0` marks the session-zero / pre-repo cohort. See docs/onboarding-funnel-cohort-addendum.md.
+  // Repo count zero identifies the pre-repo cohort (onboarding-funnel-cohort-addendum.md).
   appOpenedTrackedThisSession = track('app_opened', { ...getCohortAtEmit() })
 }
 
 export async function shutdownTelemetry(): Promise<void> {
-  // Set the gate before flush so late IPC-arrived tracks drop instead of enqueuing mid-flush.
+  // Fence before flushing so late IPC cannot enqueue.
   shuttingDown = true
-  const instance = posthog
+  const instance = postHogStart.hasSendableHeldCaptures() ? ensurePostHogClient() : posthog
+  postHogStart.resetStart()
   if (!instance) {
     return
   }
   try {
-    // Bounded flush caps at 2s, so quit delay rises by at most that.
+    // Bound quit delay to two seconds.
     await instance.shutdown(2_000)
   } catch (err) {
-    // Telemetry must never crash the app on quit. Swallow.
+    // Telemetry failure must never prevent quit.
     console.warn('[telemetry] shutdown error (ignored):', err)
   }
 }
-
-// Test-only introspection: `_`-prefixed helpers inject a fake PostHog and observe captures; not a runtime API.
 
 export function _setPostHogClientForTests(client: PostHog | null): void {
   posthog = client
 }
 
-export function _setCommonPropsForTests(props: CommonProps | null): void {
+export function _setCommonPropsForTests(props: events.CommonProps | null): void {
   commonProps = props
 }
 

@@ -1,12 +1,17 @@
 //! Orca's native Windows agent hook, registered as `orca-agent-hook.exe <agent>`: answers
-//! `{}`, then posts the hook payload to Orca's loopback listener and waits for the reply,
-//! so status events arrive in the order the agent emitted them.
+//! the agent's reply, then posts the hook payload to Orca's loopback listener and waits for
+//! the reply, so status events arrive in the order the agent emitted them.
 //!
 //! Why native: the `.cmd` form costs a cmd.exe start (plus the user's AutoRun) and
 //! a curl.exe start on every event, and only an executable runs the same way under
 //! Git Bash, PowerShell, and a direct CreateProcess (#20913). The `claude` contract
-//! mirrors the managed Windows script in src/main/claude/hook-script.ts.
+//! mirrors the managed Windows script in src/main/claude/hook-script.ts. The `antigravity`
+//! contract replaces the Electron-as-Node reader that src/main/antigravity/hook-script.ts
+//! falls back to; that script prints agy's reply and discards this program's stdout.
 
+mod bounded_stdin;
+
+use bounded_stdin::{read_json_payload, Limits};
 use std::env;
 use std::fs::File;
 use std::io::{self, Read, Write};
@@ -17,40 +22,78 @@ use std::time::{Duration, Instant};
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 const TOTAL_TIMEOUT: Duration = Duration::from_millis(1500);
 const ENDPOINT_FILE_BYTE_LIMIT: u64 = 64 * 1024;
+// Same cap as src/shared/agent-hook-listener/request-body.ts HOOK_REQUEST_MAX_BYTES.
+const REQUEST_BYTE_LIMIT: usize = 1_000_000;
+// agy writes its payload at spawn and kills the hook at 10 s, so stdin plus the post must
+// stay far below that even when a loaded host delays this process (#41298).
+const ANTIGRAVITY_STDIN_LIMITS: Limits = Limits {
+    first_byte: Duration::from_millis(2000),
+    idle: Duration::from_millis(1000),
+    total: Duration::from_millis(3000),
+    max_bytes: REQUEST_BYTE_LIMIT,
+};
+
+// Tells the antigravity core script this build owned stdin; older builds exit 0 for any agent,
+// so the script falls back to its Node reader. Matches src/main/antigravity/hook-script.ts.
+const ANTIGRAVITY_HANDLED_EXIT_CODE: i32 = 17;
 
 /// What one agent's hooks report under, and which of its env vars veto reporting.
 struct Agent {
     source: &'static str,
+    /// Printed before any other work; empty when the calling script answers the agent.
+    reply: &'static [u8],
     /// Set means the event is not this pane's to report: exit without owning stdin.
     exit_vars: &'static [&'static str],
-    /// Set means another agent imported these hooks: drain stdin and stay silent.
-    drain_vars: &'static [&'static str],
+    /// Some when the caller may hold stdin open after writing one JSON value.
+    stdin_limits: Option<&'static Limits>,
+    /// The env var naming the event, posted as `hook_event_name`.
+    event_var: Option<&'static str>,
+    /// Seen only by the calling script; agent hosts that run the exe directly get 0.
+    exit_code: i32,
 }
+
+// Why first: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+const CLAUDE_REPLY: &[u8] = b"{}\r\n";
 
 fn agent(name: &str) -> Option<Agent> {
     match name {
         "claude" => Some(Agent {
             source: "claude",
-            // A backgrounded session inherited the dispatching pane's env (#9236).
-            exit_vars: &["CLAUDE_JOB_DIR"],
-            // Grok and Devin import .claude hooks; only their own hooks report those events.
-            drain_vars: &["GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR"],
+            // Background sessions inherit pane env (#9236); Grok/Devin replay Claude hooks.
+            // Exit before draining: callers may hold stdin open indefinitely (#24907).
+            exit_vars: &["CLAUDE_JOB_DIR", "GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR"],
+            reply: CLAUDE_REPLY,
+            stdin_limits: None,
+            event_var: None,
+            exit_code: 0,
+        }),
+        "antigravity" => Some(Agent {
+            source: "antigravity",
+            reply: b"",
+            exit_vars: &[],
+            stdin_limits: Some(&ANTIGRAVITY_STDIN_LIMITS),
+            event_var: Some("ORCA_ANTIGRAVITY_EVENT"),
+            exit_code: ANTIGRAVITY_HANDLED_EXIT_CODE,
         }),
         _ => None,
     }
 }
 
 fn main() {
-    let mut stdout = io::stdout();
-    // Why first: Claude-compatible permission hooks fail closed on empty stdout (#14818).
-    let _ = stdout.write_all(b"{}\r\n");
-    let _ = stdout.flush();
+    let agent = env::args_os().nth(1).and_then(|arg| agent(arg.to_str()?));
+    let reply = agent.as_ref().map_or(CLAUDE_REPLY, |agent| agent.reply);
+    if !reply.is_empty() {
+        let mut stdout = io::stdout();
+        let _ = stdout.write_all(reply);
+        let _ = stdout.flush();
+    }
     // Why no stdin for an unknown agent: a newer Orca may register one this copy predates.
-    if let Some(agent) = env::args_os().nth(1).and_then(|arg| agent(arg.to_str()?)) {
+    let exit_code = agent.as_ref().map_or(0, |agent| agent.exit_code);
+    if let Some(agent) = agent {
         run(&agent);
     }
-    // Why always 0: a hook failure must never block or fail the agent's tool call.
-    std::process::exit(0);
+    // Why never a failure code: a hook failure must never block or fail the agent's tool call.
+    std::process::exit(exit_code);
 }
 
 fn run(agent: &Agent) {
@@ -68,14 +111,20 @@ fn run(agent: &Agent) {
     if agent.exit_vars.iter().any(is_set) {
         return;
     }
-    let mut stdin = io::stdin().lock();
-    if agent.drain_vars.iter().any(is_set) {
-        let _ = io::copy(&mut stdin, &mut io::sink());
-        return;
-    }
-    let mut payload = Vec::new();
-    let _ = stdin.read_to_end(&mut payload);
-    let form = [
+    let payload = match agent.stdin_limits {
+        Some(limits) => match read_json_payload(limits) {
+            // Events without stdin still report their status.
+            Some(payload) if payload.iter().all(u8::is_ascii_whitespace) => b"{}".to_vec(),
+            Some(payload) => payload,
+            None => return,
+        },
+        None => {
+            let mut payload = Vec::new();
+            let _ = io::stdin().lock().read_to_end(&mut payload);
+            payload
+        }
+    };
+    let mut form = vec![
         ("paneKey", var("ORCA_PANE_KEY")),
         ("tabId", var("ORCA_TAB_ID")),
         ("launchToken", var("ORCA_AGENT_LAUNCH_TOKEN")),
@@ -83,6 +132,9 @@ fn run(agent: &Agent) {
         ("env", coordinate("ORCA_AGENT_HOOK_ENV")),
         ("version", coordinate("ORCA_AGENT_HOOK_VERSION")),
     ];
+    if let Some(event_var) = agent.event_var {
+        form.push(("hook_event_name", var(event_var)));
+    }
     post(agent.source, &port, &token, &form, &payload);
 }
 
@@ -131,6 +183,10 @@ fn post(source: &str, port: &str, token: &str, form: &[(&str, String)], payload:
         body.push(b'&');
     }
     append_form_field(&mut body, "payload", payload);
+    // The listener rejects a larger body, so skip the connection and the wait.
+    if body.len() > REQUEST_BYTE_LIMIT {
+        return;
+    }
     let mut request = format!(
         "POST /hook/{source} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
          Content-Type: application/x-www-form-urlencoded\r\n\

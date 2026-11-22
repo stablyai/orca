@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   useCallback,
   useEffect,
@@ -11,18 +11,13 @@ import {
   type SetStateAction
 } from 'react'
 import { translate } from '@/i18n/i18n'
-import {
-  getWorkspaceFileBrowserOpenTarget,
-  REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
-} from '@/lib/workspace-file-browser-open-target'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import {
-  getWorkspaceFileDragRejectionMessage,
-  readWorkspaceFileDragPaths,
-  readWorkspaceFileDragSource,
-  WORKSPACE_FILE_PATH_MIME
-} from '@/lib/workspace-file-drag'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+  acceptBrowserPageWorkspaceFileDragOver,
+  resolveBrowserPageWorkspaceFileDrop
+} from './browser-page-workspace-file-drop'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 import { navigateBrowserPageToUrl } from './navigate-browser-page-url'
 import type { BrowserDownloadState } from './browser-download-progress'
@@ -138,7 +133,9 @@ export function useBrowserPageNavigationDownloads({
     if (consumedAsWorkspaceDoc) {
       return
     }
-    const submission = resolveBrowserAddressBarSubmission(addressBarValue)
+    const submission = resolveBrowserAddressBarSubmission(addressBarValue, {
+      allowExtensionPages: true
+    })
     if (submission.status === 'invalid') {
       onUpdatePageStateRef.current(browserTabId, { loadError: submission.loadError })
       return
@@ -147,72 +144,26 @@ export function useBrowserPageNavigationDownloads({
   }
 
   const handleInternalFileDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-    event.dataTransfer.dropEffect = 'copy'
+    acceptBrowserPageWorkspaceFileDragOver(event)
   }, [])
 
   const handleInternalFileDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
-        return
+      const drop = resolveBrowserPageWorkspaceFileDrop(event, {
+        worktreeId,
+        // The container stays laid out when a load failure hides the guest.
+        pageRect: webviewRef.current?.parentElement?.getBoundingClientRect() ?? null,
+        allowFileUrl: true
+      })
+      if (drop?.kind === 'notice') {
+        setResourceNotice(drop.message)
+      } else if (drop?.kind === 'navigate') {
+        navigateToUrl(drop.url)
+      } else if (drop?.kind === 'workspace-doc') {
+        convertBrowserPageToWorkspaceDoc(browserTabId, drop.docLocation)
       }
-      event.preventDefault()
-      event.stopPropagation()
-
-      // Why: a browser opens one URL, so reject multi-path drags rather than silently opening the lead file.
-      const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
-      if (dragPaths.status === 'rejected') {
-        setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
-        return
-      }
-      const filePath = dragPaths.paths[0]
-      if (!filePath) {
-        return
-      }
-
-      // A file URL reads this machine, regardless of which workspace owns the browser.
-      const source = readWorkspaceFileDragSource(event.dataTransfer)
-      if (source?.executionHostId !== 'local') {
-        setResourceNotice(REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE)
-        return
-      }
-
-      const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
-      if (target.status === 'unsupported') {
-        setResourceNotice(target.message)
-        return
-      }
-
-      const webview = webviewRef.current
-      const rect = webview?.getBoundingClientRect()
-      if (!webview || !rect) {
-        setResourceNotice(
-          translate(
-            'auto.components.browser.pane.navigate.use.browser.page.navigation.downloads.8683b84b9e',
-            'Browser page is not ready for file drops.'
-          )
-        )
-        return
-      }
-      const pageX = event.clientX - rect.left
-      const pageY = event.clientY - rect.top
-      if (pageX < 0 || pageY < 0 || pageX > rect.width || pageY > rect.height) {
-        setResourceNotice(
-          translate(
-            'auto.components.browser.pane.navigate.use.browser.page.navigation.downloads.22272f2784',
-            'Drop files over the browser page, not the toolbar.'
-          )
-        )
-        return
-      }
-
-      navigateToUrl(target.url)
     },
-    [navigateToUrl, setResourceNotice, webviewRef, worktreeId]
+    [browserTabId, navigateToUrl, setResourceNotice, webviewRef, worktreeId]
   )
 
   useLayoutEffect(() => {

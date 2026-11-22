@@ -1,44 +1,41 @@
-/**
- * Lightweight side-table that lets the memory collector attribute PTY
- * processes back to the worktree that spawned them.
- *
- * Why a separate module rather than folding it into pty.ts: the PTY
- * subsystem has no other reason to know about worktree memory. Keeping
- * the registry here means the collector can evolve (e.g. start tracking
- * extra per-session metadata) without touching the critical-path spawn
- * handler. The write-side is just two calls — `register` on spawn,
- * `unregister` on teardown.
- *
- * Scope: local PTYs only. SSH-backed PTYs execute on a remote host, so
- * their memory does not contribute to Orca's process footprint and
- * cannot be queried with our local `ps` tree.
- */
+// Only local PTYs belong here; remote PIDs cannot be sampled by this host.
 
 export type PtyRegistration = {
   ptyId: string
   worktreeId: string | null
   sessionId: string | null
   paneKey: string | null
-  // Why number | null: captured at spawn time so the collector does not have
-  // to reach back into the IPC module on every snapshot to resolve it. It is
-  // nullable because node-pty can return a process whose pid is briefly
-  // unavailable (spawn succeeded but the OS hasn't published the pid yet);
-  // storing null lets the collector render a zero-attribution row for that
-  // PTY instead of throwing and dropping the whole snapshot.
+  // Capture at spawn to avoid IPC lookups; unavailable PIDs retain zero-attribution rows.
   pid: number | null
 }
 
 const registry = new Map<string, PtyRegistration>()
+// Kept on mutation so a per-tick "anything to sample?" check stays O(1).
+let registeredWithPid = 0
 
 export function registerPty(entry: PtyRegistration): void {
+  // Re-registering keeps the entry's place: attribution of overlapping trees follows that order.
+  const previous = registry.get(entry.ptyId)
+  registeredWithPid += (entry.pid != null ? 1 : 0) - (previous?.pid != null ? 1 : 0)
   registry.set(entry.ptyId, entry)
 }
 
 export function unregisterPty(ptyId: string): void {
-  registry.delete(ptyId)
+  const existing = registry.get(ptyId)
+  if (existing && registry.delete(ptyId) && existing.pid != null) {
+    registeredWithPid -= 1
+  }
 }
 
-/** Snapshot of currently-registered local PTYs for the collector to walk. */
+/** The shell PID a PTY published at spawn or adoption; null when its host published none. */
+export function getRegisteredPtyPid(ptyId: string): number | null {
+  return registry.get(ptyId)?.pid ?? null
+}
+
+export function hasRegisteredPtyWithPid(): boolean {
+  return registeredWithPid > 0
+}
+
 export function listRegisteredPtys(): PtyRegistration[] {
   return [...registry.values()]
 }

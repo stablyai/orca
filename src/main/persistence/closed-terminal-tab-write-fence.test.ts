@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { Store } from './loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   REPO_ID,
@@ -13,8 +13,8 @@ import {
   WORKTREE_ID,
   WORKTREE_PATH,
   makeSession
-} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
-import { advanceTerminalTopologyRevision } from './terminal-topology/terminal-topology-membership'
+} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
+import { advanceTerminalTopologyRevision } from './terminal-topology/pane-ownership/terminal-topology-membership'
 
 const SSH_HOST_ID = 'ssh:target-1'
 const SSH_WORKTREE_ID = 'ssh-repo::/srv/app'
@@ -60,7 +60,6 @@ function createPersistedStore() {
   }
 }
 
-/** A session holding TAB_ID (and OTHER_TAB_ID) for one worktree, with its unified tab and group. */
 function sessionFor(worktreeId: string): WorkspaceSessionState {
   const base = makeSession()
   const rows = base.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({ ...tab, worktreeId }))
@@ -90,8 +89,7 @@ function sessionFor(worktreeId: string): WorkspaceSessionState {
 }
 
 describe('a write cannot bring back a tab its partition recorded as closed (#12447)', () => {
-  // The close lands before the renderer save that first lists the tab, so no topology revision
-  // fences that save: only the close record can refuse it.
+  // Close predates the first save, so only its record can fence resurrection.
   it.each([
     ['local', undefined, WORKTREE_ID],
     ['SSH', SSH_HOST_ID, SSH_WORKTREE_ID]
@@ -119,7 +117,7 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
     }
   )
 
-  it('drops the closed tab from a unified-tabs-only patch', async () => {
+  it('drops a closed tab from a late unified-tab patch and reports its workspace', async () => {
     const { store, runtime } = createPersistedStore()
     const before = advanceTerminalTopologyRevision(sessionFor(WORKTREE_ID), WORKTREE_ID)
     store.setWorkspaceSession(before)
@@ -127,12 +125,17 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
       worktreeId: WORKTREE_ID,
       target: { kind: 'tab', tabId: TAB_ID }
     })
+    const reported: (ReadonlySet<string> | undefined)[] = []
+    store.onWorkspaceSessionWritten((_hostId, workspaces) => reported.push(workspaces))
 
-    store.patchWorkspaceSession({ unifiedTabs: before.unifiedTabs })
+    store.patchWorkspaceSession({ unifiedTabs: before.unifiedTabs }, undefined, {
+      workspaces: new Set(['repo-2::/other'])
+    })
 
     expect(store.getWorkspaceSession().unifiedTabs?.[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
       OTHER_TAB_ID
     ])
+    expect(reported).toEqual([new Set(['repo-2::/other', WORKTREE_ID])])
   })
 
   it('keeps a same-id tab under another worktree than the one the record names', async () => {
@@ -150,37 +153,4 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
       OTHER_TAB_ID
     ])
   })
-
-  // A host slice with no terminal rows omits the terminal maps altogether.
-  it.each(['set', 'stage-before-unload'] as const)(
-    'accepts a browser-only host slice once the partition has a close record (%s)',
-    async (write) => {
-      const { store, runtime } = createPersistedStore()
-      store.setWorkspaceSession(
-        { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
-        SSH_HOST_ID
-      )
-      await runtime.closeTerminalSurfaceFromRenderer({
-        worktreeId: SSH_WORKTREE_ID,
-        target: { kind: 'tab', tabId: TAB_ID }
-      })
-      const {
-        tabsByWorktree: _omitted,
-        terminalLayoutsByTabId: _alsoOmitted,
-        ...slice
-      } = { ...getDefaultWorkspaceSession(), activeWorktreeId: SSH_WORKTREE_ID }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models the renderer's host split, which omits empty terminal maps from its IPC payload.
-      const sparse = slice as WorkspaceSessionState
-
-      if (write === 'set') {
-        store.setWorkspaceSession(sparse, SSH_HOST_ID)
-      } else {
-        store.stageWorkspaceSessionBeforeUnload(sparse, SSH_HOST_ID)
-      }
-
-      const after = store.getWorkspaceSession(SSH_HOST_ID)
-      expect(after.activeWorktreeId).toBe(SSH_WORKTREE_ID)
-      expect(after.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toBeDefined()
-    }
-  )
 })

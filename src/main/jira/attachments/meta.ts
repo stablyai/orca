@@ -1,4 +1,4 @@
-// Why: image inlined as data URLs over IPC — keep per-image and selection caps modest.
+// Images cross IPC as data URLs; bound per-image and aggregate size.
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 export const MAX_TOTAL_IMAGE_BYTES = 5 * 1024 * 1024
 export const MAX_IMAGES = 12
@@ -22,7 +22,7 @@ function asString(value: unknown): string {
 export function isImageMimeType(mimeType: string): boolean {
   const normalized = mimeType.toLowerCase()
   return (
-    normalized.startsWith('image/') && !normalized.includes('svg') // Why: SVG can carry script; stick to raster screenshots.
+    normalized.startsWith('image/') && !normalized.includes('svg') // Exclude SVG because it can contain script.
   )
 }
 

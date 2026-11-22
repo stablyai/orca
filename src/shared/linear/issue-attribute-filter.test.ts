@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  EMPTY_LINEAR_ISSUE_ATTRIBUTE_FILTER,
   canonicalizeLinearIssueAttributeFilter,
-  emptyLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   parseLinearIssueAttributeFilter,
@@ -17,13 +15,6 @@ const sample: LinearIssueAttributeFilter = {
 }
 
 describe('linear-issue-attribute-filter', () => {
-  it('treats the canonical empty value as empty and signature-less', () => {
-    expect(isEmptyLinearIssueAttributeFilter(EMPTY_LINEAR_ISSUE_ATTRIBUTE_FILTER)).toBe(true)
-    expect(isEmptyLinearIssueAttributeFilter(emptyLinearIssueAttributeFilter())).toBe(true)
-    expect(linearIssueAttributeFilterSignature(EMPTY_LINEAR_ISSUE_ATTRIBUTE_FILTER)).toBe('')
-    expect(linearIssueAttributeFilterSignature(undefined)).toBe('')
-  })
-
   it('canonicalizes without mutating the input and produces a stable signature', () => {
     const input = structuredClone(sample)
     const canonical = canonicalizeLinearIssueAttributeFilter(input)

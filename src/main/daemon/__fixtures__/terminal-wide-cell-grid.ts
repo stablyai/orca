@@ -1,21 +1,7 @@
-/**
- * A cell-level model of a terminal grid in which one glyph can occupy two cells,
- * plus readers for the same view out of a real xterm buffer.
- *
- * Why a model rather than hand-written expectations (#15192): the cases that
- * matter are repaints whose cursor lands on a wide glyph's TRAILING cell, and
- * the correct outcome there — blank the orphaned leading half — is too fiddly to
- * spell out for every width and column by hand.
- *
- * What agreement does and does not prove: the model shares no code with xterm - its
- * own width oracle, cursor and erase semantics - so agreement is not a code-reuse
- * tautology. But its rules were chosen to match observed behaviour, so it is a
- * regression detector that locks in today's semantics, not a first-principles oracle.
- * If both were wrong in the same way it would not notice.
- */
+/** Independent wide-cell regression model based on observed xterm behavior; agreement is not a correctness proof. */
 import type { Terminal } from '@xterm/headless'
 
-/** Code points that occupy two console cells: Hangul, CJK ideographs, kana, fullwidth forms. */
+/** Approximate two-cell width for the fixture’s supported scripts; jamo mismatches are pinned separately. */
 const WIDE = /[ᄀ-ᅟ⺀-鿿가-힣豈-﫿︰-﹏！-｠￠-￦]/
 
 export function isWideGlyph(ch: string): boolean {
@@ -39,7 +25,7 @@ export class WideCellGrid {
     return this.rows[row]!
   }
 
-  /** Clears whichever half-pair covers `col`, so no orphaned half is ever left behind. */
+  /** Erasing either half must clear the full wide glyph. */
   private clearPair(row: number, col: number): void {
     if (col < 0 || col >= this.cols) {
       return
@@ -134,7 +120,6 @@ export class WideCellGrid {
   }
 }
 
-/** Physical rows, right-trimmed. A wide glyph's trailing cell contributes nothing, as in the model. */
 export function readGridRows(terminal: Terminal, rowCount = terminal.rows): string[] {
   const buffer = terminal.buffer.active
   const out: string[] = []
@@ -144,16 +129,7 @@ export function readGridRows(terminal: Terminal, rowCount = terminal.rows): stri
   return out
 }
 
-/**
- * Rows joined across xterm's wrap continuations, with whitespace removed.
- *
- * Why whitespace-free: when a wide glyph cannot fit, xterm blanks the last cell
- * and wraps the glyph whole. That blank is indistinguishable in the buffer from
- * a space the program wrote, so a joined line gains one space per seam at some
- * widths and not others. Dropping spaces removes an ambiguity the buffer really
- * does not carry, and keeps what this is for: a doubled or missing glyph still
- * shows. (Same normalization as headless-emulator-wide-char-snapshot.test.ts.)
- */
+/** Ignore ambiguous wide-glyph wrap padding when checking for doubled or missing glyphs. */
 export function readWrappedLineGlyphs(terminal: Terminal): string[] {
   const buffer = terminal.buffer.active
   const lines: string[] = []

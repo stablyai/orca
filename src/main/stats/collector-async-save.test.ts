@@ -1,14 +1,10 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: the debounced stats save must be async (off the main thread), while flush()
-// stays synchronous for callers that cannot await. These tests pin both behaviors,
-// prove the async path leaves no stray temp files, and — critically — prove an
-// in-flight async write can never clobber the more-complete flush, at either of the
-// two points it can park: before its temp write, and after, on the rename itself.
+// Keep debounce writes asynchronous and flush synchronous; parked writes before temp creation or at rename must never overwrite the newer flush or leak temp files.
 
 let userDataDir: string
 const statsPath = (): string => join(userDataDir, 'orca-stats.json')
@@ -17,8 +13,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => userDataDir }
 }))
 
-// A controllable gate over node:fs/promises writeFile so a test can hold a
-// debounced async write "in flight" while it drives a synchronous shutdown flush.
+// Hold async temp writes while exercising synchronous shutdown flush.
 const gate = vi.hoisted(() => ({
   blocked: false,
   blockRename: false,
@@ -93,10 +88,7 @@ describe('StatsCollector async debounced save', () => {
       expect(readdirSync(userDataDir)).toContain('orca-stats.json')
     })
 
-    // Proves the debounced path went through async fs/promises writeFile (a
-    // revert to writeFileSync would leave this at 0).
     expect(gate.writeFileCalls).toBeGreaterThan(0)
-    // No stray *.tmp files — the rename completed.
     expect(readdirSync(userDataDir).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
 
     const parsed = JSON.parse(readFileSync(statsPath(), 'utf-8'))
@@ -131,43 +123,49 @@ describe('StatsCollector async debounced save', () => {
     expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentsSpawned).toBe(5)
   })
 
-  it('bounds retained events while a stalled write prevents serialization', async () => {
+  it('persists aggregates without raw events and compacts a legacy event log', async () => {
     vi.useFakeTimers()
+    const legacyEvents = Array.from({ length: 10_000 }, (_, index) => ({
+      type: 'agent_start',
+      at: index,
+      worktreeId: 'repo::/Users/someone/workspaces/feature',
+      meta: { sessionKey: 'tab:leaf' }
+    }))
+    writeFileSync(
+      statsPath(),
+      JSON.stringify({
+        schemaVersion: 1,
+        events: legacyEvents,
+        aggregates: {
+          totalAgentsSpawned: 7,
+          totalPRsCreated: 0,
+          totalAgentTimeMs: 0,
+          countedPRs: [],
+          firstEventAt: 0
+        }
+      })
+    )
     const { StatsCollector, initStatsPath } = await importCollector()
     initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
-    gate.blocked = true
-    collector.record({ type: 'agent_start', at: 0 })
     await vi.advanceTimersByTimeAsync(5_000)
-    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(1))
+    await vi.waitFor(() =>
+      expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).events).toEqual([])
+    )
 
-    const expectedEvents = Array.from({ length: 10_000 }, (_, index) => ({
-      type: 'agent_start',
-      at: index + 10_001
-    }))
-    try {
-      for (let at = 1; at <= 20_000; at += 1) {
-        collector.record({ type: 'agent_start', at })
-        if (at % 5_000 === 0) {
-          await vi.advanceTimersByTimeAsync(5_000)
-          expect(collector['events'].length).toBeLessThanOrEqual(10_000)
-        }
-      }
-      expect(gate.writeFileCalls).toBe(1)
-      expect(collector['events']).toEqual(expectedEvents)
-    } finally {
-      const flushed = collector.flushAsync()
-      gate.blocked = false
-      gate.waiters.splice(0).forEach((resolve) => resolve())
-      await flushed
+    for (let at = 1; at <= 100; at += 1) {
+      collector.onAgentStart(`pane-${at}`, at, undefined, 'repo::/Users/someone/workspaces/feature')
+      collector.onAgentStop(`pane-${at}`, at + 10)
     }
+    await collector.flushAsync()
 
-    const persisted = JSON.parse(readFileSync(statsPath(), 'utf-8'))
-    expect(persisted.events).toEqual(expectedEvents)
-    expect(persisted.aggregates).toMatchObject({
-      totalAgentsSpawned: 20_001,
-      firstEventAt: 0
+    const raw = readFileSync(statsPath(), 'utf-8')
+    expect(raw.length).toBeLessThan(1_000)
+    expect(JSON.parse(raw)).toMatchObject({
+      schemaVersion: 1,
+      events: [],
+      aggregates: { totalAgentsSpawned: 107, totalAgentTimeMs: 1_000, firstEventAt: 0 }
     })
   })
 
@@ -216,7 +214,6 @@ describe('StatsCollector async debounced save', () => {
     collector.onAgentStart('pty-2', Date.now())
     collector.flush()
 
-    // Synchronous: the file exists immediately with no awaiting.
     const parsed = JSON.parse(readFileSync(statsPath(), 'utf-8'))
     expect(parsed.aggregates.totalAgentsSpawned).toBe(1)
   })
@@ -225,28 +222,24 @@ describe('StatsCollector async debounced save', () => {
     const { StatsCollector, initStatsPath } = await importCollector()
     initStatsPath(userDataDir)
     const collector = new StatsCollector()
-    // White-box: drive the two writers directly so the race is deterministic
+    // Drive writers directly to make this race deterministic.
     const internals = collector as unknown as { enqueueWrite: () => Promise<void> }
 
     collector.onAgentStart('pty-a', 1_000)
     collector.onAgentStart('pty-b', 1_000)
 
-    // Start the async write; it parks inside the blocked writeFile, before rename.
-    // Why waitFor and not one tick: the writer awaits mkdir first, so the number of
-    // microtask turns before writeFile is reached is an implementation detail.
+    // Park at writeFile; await observation rather than fixed ticks because mkdir precedes it.
     gate.blocked = true
     const inflight = internals.enqueueWrite()
     await vi.waitFor(() => expect(gate.writeFileCalls).toBeGreaterThan(0))
 
-    // App quits: close out both agents and flush the COMPLETE state synchronously
-    // (newer generation) while the async write is still parked.
+    // Flush the newer completed-session generation while async write remains parked.
     collector.onAgentStop('pty-a', 5_000)
     collector.onAgentStop('pty-b', 5_000)
     collector.flush()
     expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentTimeMs).toBe(8_000)
 
-    // Release the parked write; its older generation must be vetoed — the
-    // flushed data must survive and no temp file may leak.
+    // Release the old write; its generation must be vetoed without leaked temp files.
     gate.blocked = false
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await inflight
@@ -256,9 +249,7 @@ describe('StatsCollector async debounced save', () => {
   })
 
   it('an async write already parked on its rename cannot clobber a shutdown flush', async () => {
-    // The generation guard alone stopped covering this once the swap became async: a writer
-    // parked on `await rename` has already cleared the guard, so only removing the temp file
-    // it would rename keeps the flush's fuller state from being overwritten.
+    // A writer parked at async rename has passed the generation guard; removing its temp file prevents it overwriting the newer flush.
     const { StatsCollector, initStatsPath } = await importCollector()
     initStatsPath(userDataDir)
     const collector = new StatsCollector()

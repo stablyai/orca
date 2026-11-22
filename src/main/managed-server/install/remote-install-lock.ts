@@ -12,20 +12,26 @@ import {
 } from './remote-install-lock-commands'
 import type { InstallLockExitedOwner } from './remote-install-lock-exited-owner'
 import {
+  tryTakeOverExitedHolder,
+  type HolderTakeoverState
+} from './remote-install-lock-holder-takeover'
+import {
   getRemoteHostPlatform,
+  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
-import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
+import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/remote-runtime/relay/relay-install-lock-name'
 
 const INSTALL_LOCK_POLL_MS = 1_000
-// Why: a fresh lock can cross the stale threshold during our bounded wait.
-// Recheck infrequently so it becomes recoverable without adding an exec per poll.
+// Fresh locks may become stale during our wait; infrequent rechecks permit recovery without an exec per poll.
 const INSTALL_LOCK_STALE_RECHECK_MS = 60_000
-// Why: a waiter gives the holder at least one full install step's bound before giving up.
+// Give holders at least one full install step before the waiter gives up.
 const INSTALL_LOCK_TIMEOUT_MS = REMOTE_INSTALL_TIMEOUT_MS
-// Why longer: a holder's step can outlive the bound that raced it, so takeover leaves it room.
+// A gone holder must read gone twice this far apart before takeover.
+const INSTALL_LOCK_HOLDER_PROBE_MS = 5_000
+// A holder's step may outlive its timeout; leave room before takeover.
 export const INSTALL_LOCK_STALE_MS = 20 * 60_000
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
@@ -33,14 +39,13 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 export class RemoteInstallLockBusyError extends Error {
   constructor(lockDir: string, timeoutMs: number) {
     super(
-      `Could not acquire the install lock at ${lockDir} after ${timeoutMs / 1000}s; ` +
+      `Could not acquire the install lock at ${lockDir} after ${Math.round(timeoutMs / 1000)}s; ` +
         'another install is still in progress.'
     )
     this.name = 'RemoteInstallLockBusyError'
   }
 }
 
-// Why: an unconfirmed termination may have run remotely, so it never becomes a fallback.
 async function unlessUnconfirmed<T>(work: Promise<T>, fallback: T): Promise<T> {
   try {
     return await work
@@ -52,26 +57,40 @@ async function unlessUnconfirmed<T>(work: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+/** Null when the host did not answer with an age. */
+async function readInstallLockAgeMs(
+  conn: RemoteInstallTransport,
+  lockDir: string,
+  host: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<number | null> {
+  // Measure remotely to avoid client clock skew making live locks look stale.
+  const out = await unlessUnconfirmed(
+    execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir), { signal }),
+    ''
+  )
+  const ageSec = Number.parseInt(out.trim(), 10)
+  return Number.isFinite(ageSec) && ageSec >= 0 ? ageSec * 1000 : null
+}
+
 export async function isRelayInstallLockStale(
   conn: RemoteInstallTransport,
   lockDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
-  // Why: remote time avoids clock skew between Orca clients making a live
-  // repair lock look old enough for GC or another installer to recover.
-  const out = await unlessUnconfirmed(
-    execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir)),
-    ''
-  )
-  const ageSec = Number.parseInt(out.trim(), 10)
-  return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
+  const ageMs = await readInstallLockAgeMs(conn, lockDir, host)
+  return ageMs !== null && ageMs > INSTALL_LOCK_STALE_MS
 }
 
-/**
- * Acquire the per-version install lock via a host-native exclusive create.
- * Why: POSIX mkdir and a Windows directory plus atomic owner file each give
- * one winner while keeping the marker visible to older Windows Orca clients.
- */
+/** A held lock's wait; `takeoverInMs` is null when no takeover is due before this attempt gives up.
+ * `holderGone`: a flock-backed lock whose holder exited, taken over within seconds. */
+export type InstallLockWait = {
+  takeoverInMs: number | null
+  givesUpInMs: number
+  holderGone?: boolean
+}
+
+/** Exclusive host-native creation preserves lock markers older Windows clients recognize. */
 export async function acquireInstallLock(
   conn: RemoteInstallTransport,
   remoteRelayDir: string,
@@ -84,10 +103,16 @@ export async function acquireInstallLock(
     /** False when a held lock is a fence whose age cannot prove its owner's work is finished. */
     allowStaleTakeover?: boolean
     waitTimeoutMs?: number
-    /** Written in the command that creates the lock, so a holder can prove the lock its own. */
+    /** Atomic owner writes let holders prove continued ownership. */
     owner?: InstallLockOwnerFile
-    /** Names a held lock's owner token this caller proved exited, so the steal may take it early. */
+    /** Proven-exited owner token permits early takeover. */
     exitedOwner?: InstallLockExitedOwnerProof
+    /** Keep waiting until the held lock turns stale rather than timing out just before takeover. */
+    waitThroughStaleTakeover?: boolean
+    /** Reported at each stale recheck while another holder keeps the lock. */
+    onWait?: (wait: InstallLockWait) => void
+    /** POSIX: take over a flock-backed lock whose holder and fenced commands are all gone. */
+    probeExitedHolder?: boolean
   }
 ): Promise<void> {
   const lockDir = joinRemotePath(host, remoteRelayDir, options?.lockName ?? RELAY_INSTALL_LOCK_NAME)
@@ -100,8 +125,7 @@ export async function acquireInstallLock(
     relayGcClaim
       ? isRelayGcClaimed(conn, remoteRelayDir, host, options?.signal)
       : Promise.resolve(false)
-  // Why: GC may claim the sibling path between our probe and taking the lock.
-  // Recheck while holding the in-tree lock; one side backs off.
+  // GC can claim between our probe and lock acquisition; recheck under the lock so one side backs off.
   const keptAfterGcRecheck = async (): Promise<boolean> => {
     if (!(await unlessUnconfirmed(isClaimed(), true)) && !options?.signal?.aborted) {
       return true
@@ -112,14 +136,47 @@ export async function acquireInstallLock(
   }
 
   const start = Date.now()
+  let deadline = start + waitTimeoutMs
   // Busy means a holder answered; a lock command that only ever failed reports its own error.
   let sawHolder = false
   let lastCommandError: unknown
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   let lastWaitLogAt = Number.NEGATIVE_INFINITY
+  let lastHolderProbeAt = Number.NEGATIVE_INFINITY
+  const holderTakeover: HolderTakeoverState = { gone: null }
+  const probedOwner =
+    options?.probeExitedHolder && !isWindowsRemoteHost(host) ? options.owner : undefined
+  let reportedHolderGone = false
+  // Age as last read, so a probe-driven report can still count down to the stale takeover.
+  let lastAge: { ms: number; at: number } | null = null
+  // A holder read gone means takeover in seconds, not at the lock's stale age.
+  const reportWait = (): void => {
+    reportedHolderGone = holderTakeover.gone !== null
+    const ageMs = lastAge === null ? null : lastAge.ms + (Date.now() - lastAge.at)
+    const takeoverInMs = reportedHolderGone
+      ? INSTALL_LOCK_HOLDER_PROBE_MS
+      : ageMs === null
+        ? null
+        : Math.max(0, INSTALL_LOCK_STALE_MS - ageMs)
+    // Capped so a holder that keeps refreshing the lock cannot extend the wait forever.
+    const cap = start + INSTALL_LOCK_STALE_MS + 2 * INSTALL_LOCK_STALE_RECHECK_MS
+    if (options?.waitThroughStaleTakeover && takeoverInMs !== null) {
+      // Lock age, not this attempt, sets the takeover time; a relaunch waits only the rest.
+      deadline = Math.max(
+        deadline,
+        Math.min(Date.now() + takeoverInMs + INSTALL_LOCK_STALE_RECHECK_MS, cap)
+      )
+    }
+    const now = Date.now()
+    // Promise a takeover only if this attempt is still waiting when it comes due.
+    options?.onWait?.({
+      takeoverInMs: takeoverInMs !== null && now + takeoverInMs < deadline ? takeoverInMs : null,
+      givesUpInMs: Math.max(0, deadline - now),
+      ...(reportedHolderGone ? { holderGone: true } : {})
+    })
+  }
   while (true) {
-    // Why: a crashed GC can leave the stable sibling claim behind. The shared
-    // waiter recovers stale claims instead of polling that orphan forever.
+    // Recover crashed GC claims rather than polling them forever.
     if (relayGcClaim) {
       await waitForRelayGcClaimRelease(conn, remoteRelayDir, host, options?.signal)
     }
@@ -144,14 +201,39 @@ export async function acquireInstallLock(
       // Retried until the bounded wait expires: one refused channel is not a verdict.
       lastCommandError = err
     }
+    if (probedOwner && Date.now() - lastHolderProbeAt >= INSTALL_LOCK_HOLDER_PROBE_MS) {
+      lastHolderProbeAt = Date.now()
+      const steal = await tryTakeOverExitedHolder(
+        conn,
+        host,
+        lockDir,
+        probedOwner,
+        holderTakeover,
+        INSTALL_LOCK_STALE_SECONDS,
+        options?.signal
+      )
+      if (steal) {
+        console.warn(`[ssh] Stealing ${stealReason(steal)} install lock at ${lockDir}`)
+        if (await keptAfterGcRecheck()) {
+          return
+        }
+      }
+      // After the first age report, every probe that flips the holder's state is reported at once.
+      if (
+        (holderTakeover.gone !== null) !== reportedHolderGone &&
+        Number.isFinite(lastStaleCheckAt) &&
+        (options?.onWait || options?.waitThroughStaleTakeover)
+      ) {
+        reportWait()
+      }
+    }
     if (
       options?.allowStaleTakeover !== false &&
       Date.now() - lastStaleCheckAt >= INSTALL_LOCK_STALE_RECHECK_MS
     ) {
       lastStaleCheckAt = Date.now()
       const exitedOwner = await exitedOwnerFor(lockDir, options)
-      // Why: recover an already-stale lock immediately, then keep checking in
-      // case a fresh holder crosses the stale threshold while we are waiting.
+      // Recover stale locks immediately, then recheck as fresh locks age.
       const steal = await unlessUnconfirmed(
         execHostCommand(
           conn,
@@ -169,11 +251,7 @@ export async function acquireInstallLock(
       )
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
-        const reason = steal.trim().endsWith('REBOOT_OK')
-          ? 'previous-boot'
-          : steal.trim().endsWith('EXITED_OWNER_OK')
-            ? 'exited-owner'
-            : 'stale'
+        const reason = stealReason(steal)
         if (exitedOwner && reason === 'exited-owner') {
           options?.exitedOwner?.reclaimed(exitedOwner.token)
         }
@@ -181,20 +259,35 @@ export async function acquireInstallLock(
         if (await keptAfterGcRecheck()) {
           return
         }
+      } else if (options?.onWait || options?.waitThroughStaleTakeover) {
+        const ageMs = await readInstallLockAgeMs(conn, lockDir, host, options.signal)
+        lastAge = ageMs === null ? null : { ms: ageMs, at: Date.now() }
+        reportWait()
       }
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastWaitLogAt = Date.now()
       console.info(`[ssh] Waiting for install lock at ${lockDir}`)
     }
-    if (Date.now() - start >= waitTimeoutMs) {
+    if (Date.now() >= deadline) {
       if (!sawHolder && lastCommandError !== undefined) {
         throw lastCommandError
       }
-      throw new RemoteInstallLockBusyError(lockDir, waitTimeoutMs)
+      throw new RemoteInstallLockBusyError(lockDir, deadline - start)
     }
     await waitForInstallLockPoll(options?.signal)
   }
+}
+
+function stealReason(steal: string): string {
+  const result = steal.trim()
+  if (result.endsWith('REBOOT_OK')) {
+    return 'previous-boot'
+  }
+  if (result.endsWith('EXITED_OWNER_OK')) {
+    return 'exited-owner'
+  }
+  return result.endsWith('HOLDER_EXITED_OK') ? 'exited-holder' : 'stale'
 }
 
 export type InstallLockExitedOwnerProof = {

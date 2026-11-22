@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
@@ -11,11 +12,13 @@ const TAP_BEFORE_PUSH_MS = 240
 type Phase = 'normal' | 'reset'
 
 export function PhoneCarousel(): React.JSX.Element {
+  const t = useTranslate()
   const [activeIdx, setActiveIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('normal')
   const [tappingSlide, setTappingSlide] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Cleanup clears all four timers the schedule chain re-arms.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -36,7 +39,6 @@ export function PhoneCarousel(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        // Pulse the tap target on the current slide, then advance.
         if (idx < 2) {
           setTappingSlide(idx)
           tapTimer = setTimeout(() => {
@@ -54,7 +56,6 @@ export function PhoneCarousel(): React.JSX.Element {
             schedule(next)
           }, TAP_BEFORE_PUSH_MS)
         } else {
-          // Hard cut back to home — snap with no transition, then re-enable.
           setPhase('reset')
           setActiveIdx(0)
           resetTimer = setTimeout(() => {
@@ -68,7 +69,6 @@ export function PhoneCarousel(): React.JSX.Element {
       }, DWELL_MS)
     }
 
-    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: the first tap pulse is intentionally delayed until after the initial dwell.
     schedule(0)
 
     return () => {
@@ -88,17 +88,13 @@ export function PhoneCarousel(): React.JSX.Element {
     }
   }, [])
 
-  // Why: while the slide reset is in progress we want all slides to snap
-  // back to their off-stage positions with no transition; the next render
-  // tick removes is-reset so the subsequent push animates again.
+  // Flush the no-transition reset before re-enabling transitions for the next slide.
   useEffect(() => {
     if (phase !== 'reset') {
       return
     }
     const id = requestAnimationFrame(() => {
-      // force layout so the no-transition state takes effect before
-      // transitions are re-enabled
-      void containerRef.current?.offsetHeight
+      forceLayoutReflow(containerRef.current)
     })
     return () => cancelAnimationFrame(id)
   }, [phase])
@@ -117,7 +113,7 @@ export function PhoneCarousel(): React.JSX.Element {
         <div
           className={slideClass(0)}
           role="img"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.mobile.PhoneCarousel.89c7713645',
             'Orca Mobile home screen'
           )}
@@ -127,17 +123,14 @@ export function PhoneCarousel(): React.JSX.Element {
         <div
           className={slideClass(1)}
           role="img"
-          aria-label={translate('auto.components.mobile.PhoneCarousel.93217b41c1', 'Worktree list')}
+          aria-label={t('auto.components.mobile.PhoneCarousel.93217b41c1', 'Worktree list')}
         >
           <WorktreeListSlide tapping={tappingSlide === 1} />
         </div>
         <div
           className={slideClass(2)}
           role="img"
-          aria-label={translate(
-            'auto.components.mobile.PhoneCarousel.96d651cb87',
-            'Terminal session'
-          )}
+          aria-label={t('auto.components.mobile.PhoneCarousel.96d651cb87', 'Terminal session')}
         >
           <TerminalSlide />
         </div>

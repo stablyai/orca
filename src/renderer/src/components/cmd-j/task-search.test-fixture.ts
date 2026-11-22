@@ -1,5 +1,5 @@
-import type { JiraIssue } from '../../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { makeCmdJTaskSearchResult } from './task-search-results'
 
 export const jiraTaskIssue: JiraIssue = {

@@ -15,9 +15,7 @@ export const IdleRegionalRehomeRequestSchema = z
   })
   .strict()
 
-// Deferrals no other candidate in the same poll can get past: the source
-// re-reads the same durable row for every request, so the next POST takes the
-// same branch. The director stops walking its list on one of these.
+// Global deferrals repeat the same durable row verdict for every candidate; stop this poll’s POST walk.
 export const GLOBAL_IDLE_REGIONAL_REHOME_DEFER_REASONS = [
   'control-closed',
   'budget-closed',
@@ -37,13 +35,10 @@ export const IdleRegionalRehomeResponseSchema = z
   .object({
     v: z.literal(1),
     outcome: z.enum(['busy', 'committed', 'deferred', 'stale']),
-    // Optional both ways: a source cell on an older image omits it and the
-    // director keeps its walk-the-whole-list behaviour, and a reason a newer
-    // cell adds later reads as absent instead of failing the whole response.
+    // Older cells omit reasons; newer unknown reasons decode absent so mixed versions retain the full walk.
     reason: z.enum(IDLE_REGIONAL_REHOME_DEFER_REASONS).optional().catch(undefined)
   })
-  // Unknown keys are dropped rather than rejected, so the next optional field
-  // on this response does not have to wait for every director to redeploy.
+  // Strip unknown fields so optional additions need no synchronized director rollout.
   .strip()
 
 export type IdleRegionalRehomeRequest = z.infer<typeof IdleRegionalRehomeRequestSchema>

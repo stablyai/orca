@@ -5,10 +5,7 @@ import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-rev
 import { useSourceControlCreatePrIntentRun } from './use-create-pr-intent-run'
 import type { SourceControlReviewFlows } from './use-review-flows'
 
-/**
- * The one-click intent: commit, push and open a review in a single run. Reads its own git state
- * through dedicated probes rather than the panel's, so a stale render cannot mis-sequence the run.
- */
+/** Probe Git between intent steps so stale panel renders cannot mis-sequence commit/push/review. */
 export function useSourceControlCreatePrIntentFlows(
   foundation: SourceControlPanelFoundation,
   commitFlows: SourceControlCommitFlows,
@@ -16,27 +13,16 @@ export function useSourceControlCreatePrIntentFlows(
 ) {
   const {
     activeRepo,
-    activeRepoTarget,
     activeWorktreeId,
     beginGitBranchCompareRequest,
     branchName,
-    commitDraftsRef,
-    commitErrorsRef,
     createHostedReview,
-    createPrInFlightRef,
-    createPrIntentActiveTargetConflicts,
-    createPrIntentCurrentTargetRef,
-    createPrIntentInFlightRef,
-    createPrIntentRunStillOwnsWorktree,
-    createPrIntentRunTokenRef,
     effectiveBaseRef,
     entries,
     fallbackGitHubPRNumber,
     getCreatePrIntentOperationTarget,
     getHostedReviewCreationEligibility,
     hostedReviewCreateCopy,
-    isCommitting,
-    isCreatingPr,
     isExecutingBulk,
     isFolder,
     isRemoteOperationActive,
@@ -45,19 +31,15 @@ export function useSourceControlCreatePrIntentFlows(
     linkedGitHubPR,
     linkedGitLabMR,
     linkedGiteaPR,
+    operationStore,
     provisionalHostedReviewProvider,
     remoteStatus,
-    resolvedPrCreationDefaults,
-    setCreatePrInFlightByWorktree,
-    setCreatePrIntentInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
     setGitBranchCompareResult,
     setGitStatus,
     setHostedReviewCreationState,
     setIsExecutingBulk,
     setUpstreamStatus,
-    settings,
-    updateCommitDrafts,
+    updateCommitDraft,
     updateWorktreeGitIdentity,
     worktreePath
   } = foundation
@@ -68,23 +50,16 @@ export function useSourceControlCreatePrIntentFlows(
   const createPrIntentReview = useSourceControlCreatePrIntentReview({
     activeRepo,
     createHostedReview,
-    createPrInFlightRef,
-    createPrIntentActiveTargetConflicts,
-    createPrIntentCurrentTargetRef,
-    createPrIntentRunStillOwnsWorktree,
     getCreatePrIntentOperationTarget,
     handlePullRequestCreated,
     hostedReviewCreateCopy,
+    operationStore,
     prBase,
-    prBody,
-    resolvedPrCreationDefaults,
-    setCreatePrInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
-    settings
+    prImageUploadPendingRef: reviewFlows.prImageUploadPendingRef,
+    prBody
   })
   const createPrIntentProbes = useSourceControlCreatePrIntentProbes({
     activeRepo,
-    activeRepoTarget,
     beginGitBranchCompareRequest,
     fallbackGitHubPRNumber,
     getCreatePrIntentOperationTarget,
@@ -105,23 +80,16 @@ export function useSourceControlCreatePrIntentFlows(
     activeRepo,
     activeWorktreeId,
     branchName,
-    commitDraftsRef,
-    commitErrorsRef,
     createHostedReviewForCreatePrIntent: createPrIntentReview.createHostedReviewForCreatePrIntent,
-    createPrIntentActiveTargetConflicts,
-    createPrIntentInFlightRef,
-    createPrIntentRunStillOwnsWorktree,
-    createPrIntentRunTokenRef,
     effectiveBaseRef,
     entries,
     generateCommitMessageForCreatePrIntent,
     getCreatePrIntentOperationTarget,
     handleCommit,
-    isCommitting,
-    isCreatingPr,
     isExecutingBulk,
     isGenerating,
     isRemoteOperationActive,
+    operationStore,
     prGenerating,
     provisionalHostedReviewProvider,
     readHostedReviewCreationEligibilityForIntent:
@@ -131,10 +99,8 @@ export function useSourceControlCreatePrIntentFlows(
     refreshGitStatusForCreatePrIntent: createPrIntentProbes.refreshGitStatusForCreatePrIntent,
     remoteStatus,
     runRemoteAction,
-    setCreatePrIntentInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
     setIsExecutingBulk,
-    updateCommitDrafts,
+    updateCommitDraft,
     worktreePath
   })
 

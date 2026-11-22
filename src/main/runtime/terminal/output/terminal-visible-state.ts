@@ -1,22 +1,23 @@
 import { OrcaRuntimeWithCaptureProviderTerminalBuffer } from './provider-buffer-capture'
-import {
-  TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
-  type RuntimeTerminalProjection
-} from '../../orca-runtime-core'
-import { buildPreview } from '../../terminal-tail-state'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
+import type { RuntimeTerminalProjection } from './terminal-projection'
+import { buildPreview } from './tail/terminal-tail-state'
 import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { projectTerminalVisibleLines } from '../../orca-runtime-terminal-projection'
-import { visibleNonBlankTerminalLines } from '../../terminal-tail-read'
-import type { RuledScreen } from '../../screen-input-veto'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
-import { withTimeout } from '../../runtime-async-boundaries'
+} from './provider-snapshot-budget'
+import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
+import type { RuledScreen } from '../wait/screen-input-veto'
+import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear'
+import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -65,15 +66,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
 
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const outputSequence = this.getPtyOutputSequence(ptyId)
-    const cached = this.providerVisibleStateByPtyId.get(ptyId)
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (
-      cached?.generation === generation &&
-      outputSequence <= cached.sequence &&
-      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
-    ) {
+    const cached = this.readCurrentProviderVisibleState(ptyId)
+    if (cached) {
       return cached
     }
+    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
     if (trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
       return headlessState
@@ -85,15 +82,55 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
             generation
           }
     }
+    return this.captureProviderVisibleState(ptyId)
+  }
+
+  /** The provider's last frame while no later output or mode switch has outdated it. */
+  protected readCurrentProviderVisibleState(ptyId: string): RuntimeVisibleTerminalState | null {
+    const cached = this.providerVisibleStateByPtyId.get(ptyId)
+    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
+    return cached?.generation === this.getPtyLifecycleGeneration(ptyId) &&
+      this.getPtyOutputSequence(ptyId) <= cached.sequence &&
+      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
+      ? cached
+      : null
+  }
+
+  /** Asks the provider for its current frame and caches it; null while it cannot give one now. */
+  protected async captureProviderVisibleState(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
 
-    const snapshot = await this.serializeProviderTerminalBuffer(
+    const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
+    if (late && this.ptyLifecycleGenerationById.get(ptyId) === generation) {
+      // Why: later reads must not re-await a slow capture; its frame lands in the cache instead.
+      this.providerVisibleRetryAtByPtyId.set(ptyId, Number.POSITIVE_INFINITY)
+      void late
+        .then((landed) => {
+          if (this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+            return
+          }
+          return this.adoptProviderVisibleSnapshot(ptyId, generation, landed)
+        })
+        .catch(() => {})
+      return null
+    }
+    return this.adoptProviderVisibleSnapshot(ptyId, generation, snapshot)
+  }
+
+  private async adoptProviderVisibleSnapshot(
+    ptyId: string,
+    generation: number,
+    snapshot: PtyProviderBufferSnapshot | null
+  ): Promise<RuntimeVisibleTerminalState | null> {
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
@@ -174,6 +211,24 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return state ? projectTerminalVisibleLines(state.emulator).lines : null
   }
 
+  /** The ruled grid only once it has applied every PTY chunk; a lagging grid could miss a new dialog. */
+  protected readCaughtUpRuledScreen(ptyId: string): RuledScreen | null {
+    return this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId)
+      ? this.readRuledScreen(ptyId)
+      : null
+  }
+
+  /** The settled screen when it proves the tail's blocked text a dialog erased in place (#24187). */
+  protected readScreenClearingBlockedTailForPty(ptyId: string): string | null {
+    return readScreenClearingBlockedTail({
+      lastOutputAt: this.readOutputClockAt(ptyId),
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+      agent: () => this.getPaneAgentForTuiIdle(ptyId),
+      readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+      clearStamp: () => this.clearWaitBlockedStamp(ptyId)
+    })
+  }
+
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
   protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
     const state = this.readWholeScreenModel(ptyId)
@@ -241,9 +296,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return { lines: [] }
     }
     try {
-      // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
-      // visibly nonblank in renderer xterm. Ask the renderer for the active
-      // screen instead of reusing the headless transcript path.
+      // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
       const snapshot = await withTimeout(
         controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -252,7 +305,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return this.parseVisibleSnapshot(snapshot)
+      return await this.parseVisibleSnapshot(snapshot)
     } catch {
       return { lines: [] }
     }

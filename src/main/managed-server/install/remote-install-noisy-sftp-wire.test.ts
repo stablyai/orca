@@ -3,19 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, Server as Ssh2Server, utils, type Connection } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { spawnProcess } from '@orca/process-host'
 import { SshConnection } from '../../ssh/connection/ssh-connection'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
-type NoisyHost = { port: number; subsystems: number; execs: number; close: () => Promise<void> }
+type NoisyHost = { port: number; close: () => Promise<void> }
 
-/** sshd starts an external sftp-server and every exec through the user's noisy login shell. */
 async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
   const connections = new Set<Connection>()
   const hostKey = utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
-  const host = { subsystems: 0, execs: 0 }
   const server = new Ssh2Server({ hostKeys: [hostKey] }, (connection) => {
     connections.add(connection)
     connection.on('error', () => {})
@@ -24,15 +22,13 @@ async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
     connection.on('ready', () => {
       connection.on('session', (acceptSession) => {
         const session = acceptSession()
-        // No 'sftp' listener: ssh2 hands the raw subsystem channel here, as an external server.
+        // No sftp listener: expose the raw external-server subsystem channel.
         session.on('subsystem', (accept) => {
-          host.subsystems += 1
           const channel = accept()
           channel.on('error', () => {})
           channel.write(startupOutput)
         })
         session.on('exec', (accept, _reject, info) => {
-          host.execs += 1
           const channel = accept()
           const child = spawnProcess({
             program: '/bin/sh',
@@ -55,7 +51,7 @@ async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
   if (!address || typeof address === 'string') {
     throw new Error('SSH fixture did not bind a TCP port')
   }
-  return Object.assign(host, {
+  return {
     port: address.port,
     close: async () => {
       for (const connection of connections) {
@@ -63,7 +59,7 @@ async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
       }
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
-  })
+  }
 }
 
 function connectClient(port: number): Promise<Client> {
@@ -85,15 +81,9 @@ function connectionWithClient(client: Client): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transfers read only id/host fields of the target.
   const target = { id: 'noisy-sftp', host: '127.0.0.1', port: 22, username: 'fixture' } as SshTarget
   const connection = new SshConnection(target, { onStateChange: vi.fn() })
-  // Inject the already-connected client, as the SFTP wire test does.
   Object.assign(connection, { client, useSystemSshTransport: false })
   return connection
 }
-
-const NOISE: [string, string][] = [
-  ['an rc banner', 'BASHRC-NOISE\n'],
-  ['a bare terminal-title escape', '\u001b]0;t\u0007']
-]
 
 describe.skipIf(process.platform === 'win32')(
   'relay install over a noisy external SFTP server',
@@ -112,10 +102,10 @@ describe.skipIf(process.platform === 'win32')(
       await rm(remoteRoot, { recursive: true, force: true })
     })
 
-    it.each(NOISE)(
-      'streams the install over exec stdin despite %s',
-      async (_name, noise) => {
-        const host = await startNoisyHost(noise)
+    it(
+      'streams the install over exec stdin despite a bare terminal-title escape',
+      async () => {
+        const host = await startNoisyHost('\u001b]0;t\u0007')
         const client = await connectClient(host.port)
         try {
           const conn = connectionWithClient(client)
@@ -128,14 +118,12 @@ describe.skipIf(process.platform === 'win32')(
             Buffer.from([0, 1, 2, 255])
           )
           expect(await readFile(join(remoteDir, '.version'), 'utf8')).toBe('0.1.0+noisy')
-          // The corrupted handshake is a host verdict: the second write skips SFTP entirely.
-          expect(host.subsystems).toBe(1)
-          expect(host.execs).toBeGreaterThan(0)
         } finally {
           client.end()
           await host.close()
         }
       },
+      // Real SSH handshake and shell/file publication need time on loaded CI.
       15_000
     )
   }

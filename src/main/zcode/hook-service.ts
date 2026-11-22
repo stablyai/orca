@@ -1,23 +1,18 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  buildWindowsAgentHookCurlPostCommand,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import {
-  readTextFileRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
+import { readTextFileRemote } from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeHooksJsonRemote } from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+  buildWindowsHookEnvironmentGuardLines
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   applyZCodeManagedHooks,
   getZCodeConfigPath,
@@ -44,12 +39,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
+      // Refresh port/token from the endpoint file so retained PTYs reach the restarted server.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('zcode'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -58,8 +52,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('zcode'),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race can't leak shell parse errors into agent transcripts (fail-open).
+    // Refresh retained PTY endpoints at invocation; silence source races/parse errors so hooks fail open without polluting transcripts.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -87,8 +80,7 @@ function buildStatus(
   const base = { agent: 'zcode' as const, configPath }
   const present = readManagedZCodeHookEvents(config, scriptFileName)
   const missing = ZCODE_HOOK_EVENTS.filter((event) => !present.has(event))
-  // Why: ZCode ships `hooks.enabled: false` by default, so registered events alone prove
-  // nothing — an install that left the flag off would never deliver a single event.
+  // ZCode defaults hooks off; require enabled as well as registered events.
   const hooksEnabled = isZCodeHooksEnabled(config)
 
   if (missing.length === 0 && hooksEnabled) {
@@ -129,7 +121,7 @@ export class ZCodeHookService {
     const scriptFileName = getZCodeManagedScriptFileName()
     const command = getZCodeManagedCommand(scriptPath)
     const nextConfig = applyZCodeManagedHooks(source.config, command, scriptFileName)
-    // Why: write the script first so config.json never points at a missing file.
+    // Write script before publishing config references so no event points at a missing file.
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig, {
       serialized: serializeZCodeConfig(source.text, nextConfig)
@@ -137,10 +129,10 @@ export class ZCodeHookService {
     return this.getStatus()
   }
 
-  // Install the ZCode hook on an SSH execution host, where the shell contract is POSIX.
+  // SSH hook installation uses the remote POSIX contract.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getZCodeRemoteConfigPath(remoteHome)
-    // Why: remote-Windows is out of scope; process.platform describes the local box, not the host.
+    // Remote Windows is unsupported here; local process.platform cannot describe an SSH host.
     const remoteScriptFileName = getZCodePosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     try {

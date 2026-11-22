@@ -1,31 +1,40 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
+import { DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { BrowserError } from '../browser-error'
 
 const SCOPE_REPLY_TIMEOUT_MS = 5_000
 
-/**
- * Asks the renderer, which owns the workspace-to-host map and every page record (mounted or not),
- * which workspace of `environmentId`'s own machine a command may use. No window, a timeout or a
- * malformed reply all answer null.
- */
+// The renderer owns host/workspace mappings and unmounted page records; null denies access, and
+// no answer rejects so the host hears "try again" instead of a scope refusal.
 export function rendererResolveRemoteCliWorkspace(
   getWindow: () => BrowserWindow | null,
   query: { environmentId: string; workspaceId?: string; pageId?: string }
 ): Promise<string | null> {
   const win = getWindow()
   if (!win || win.isDestroyed()) {
-    return Promise.resolve(null)
+    return Promise.reject(
+      new BrowserError(
+        DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
+        'The Orca desktop has no open window to check which workspaces this host may use. Open Orca on the desktop and try again.'
+      )
+    )
   }
+  const rendererWebContents = win.webContents
   const requestId = randomUUID()
-  return new Promise<string | null>((resolve) => {
-    const finish = (workspaceId: string | null): void => {
+  return new Promise<string | null>((resolve, reject) => {
+    const finish = (outcome: { workspaceId: string | null } | { error: BrowserError }): void => {
       clearTimeout(timer)
       ipcMain.removeListener('browser:remoteCliScopeReply', handler)
-      resolve(workspaceId)
+      if ('error' in outcome) {
+        reject(outcome.error)
+      } else {
+        resolve(outcome.workspaceId)
+      }
     }
     const handler = (event: Electron.IpcMainEvent, reply: unknown): void => {
       if (
-        event.sender !== win.webContents ||
+        event.sender !== rendererWebContents ||
         !reply ||
         typeof reply !== 'object' ||
         !('requestId' in reply) ||
@@ -33,14 +42,24 @@ export function rendererResolveRemoteCliWorkspace(
       ) {
         return
       }
-      finish(
-        'workspaceId' in reply && typeof reply.workspaceId === 'string' && reply.workspaceId
-          ? reply.workspaceId
-          : null
-      )
+      finish({
+        workspaceId:
+          'workspaceId' in reply && typeof reply.workspaceId === 'string' && reply.workspaceId
+            ? reply.workspaceId
+            : null
+      })
     }
-    const timer = setTimeout(() => finish(null), SCOPE_REPLY_TIMEOUT_MS)
+    const timer = setTimeout(
+      () =>
+        finish({
+          error: new BrowserError(
+            'browser_timeout',
+            `The Orca desktop window did not answer within ${SCOPE_REPLY_TIMEOUT_MS / 1000} seconds, so nothing ran. Try again.`
+          )
+        }),
+      SCOPE_REPLY_TIMEOUT_MS
+    )
     ipcMain.on('browser:remoteCliScopeReply', handler)
-    win.webContents.send('browser:requestRemoteCliScope', { requestId, ...query })
+    rendererWebContents.send('browser:requestRemoteCliScope', { requestId, ...query })
   })
 }

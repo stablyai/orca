@@ -1,8 +1,9 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import TabDragPreview from '../tab-bar/TabDragPreview'
-import { TabDragProvider } from './tab-drag-context'
-import TabPaneColumnSplitDragOverlay from './TabPaneColumnSplitDragOverlay'
-import { useTabDragSplit, type HoveredTabInsertion } from './useTabDragSplit'
+import TabDragPreview from './drag/TabDragPreview'
+import { TabDragProvider } from './drag/tab-drag-context'
+import TabPaneColumnSplitDragOverlay from './drag/TabPaneColumnSplitDragOverlay'
+import { useTabDragSplit } from './drag/useTabDragSplit'
+import type { HoveredTabInsertion } from './drag/tab-insertion'
 
 export type WorkspaceTabDragState = {
   isTabDragActive: boolean
@@ -10,14 +11,7 @@ export type WorkspaceTabDragState = {
   setDragRootNode: (node: HTMLDivElement | null) => void
 }
 
-/**
- * The one dnd-kit scope for a workspace's tab strips and split tree. Every strip and pane-body
- * droppable of the workspace must render inside it — two live DndContexts over the same tabs is
- * the drag-ownership bug this layer exists to prevent.
- *
- * Chrome-agnostic: children decide where strips and the tree render (per-group strips for the
- * main surface, a shell-owned titlebar strip for the floating panel).
- */
+/** Share one drag scope across workspace strips and pane bodies so duplicate DndContexts cannot compete for the same tabs. */
 export function WorkspaceTabDragLayer({
   worktreeId,
   enabled,
@@ -34,6 +28,7 @@ export function WorkspaceTabDragLayer({
     <TabDragProvider
       isTabDragActive={dragSplit.activeDrag !== null}
       isTabDragActiveRef={dragSplit.isTabDragActiveRef}
+      activeDragVisibleTabId={dragSplit.activeDrag?.visibleTabId ?? null}
     >
       <DndContext
         sensors={dragSplit.sensors}
@@ -43,11 +38,7 @@ export function WorkspaceTabDragLayer({
         onDragOver={dragSplit.onDragOver}
         onDragEnd={dragSplit.onDragEnd}
         onDragCancel={dragSplit.onDragCancel}
-        // Why: dnd-kit auto-scrolls the tab strip when the cursor approaches its
-        // edge, which in a multi-group layout creates a feedback loop — scroll
-        // shifts tabs under the cursor, `over` re-resolves, scroll runs again.
-        // We don't need autoscroll for tab-bar drags (strip fits the viewport),
-        // so disabling it is the simplest fix.
+        // Disable edge autoscroll because moving tabs re-resolve hover targets and create a multi-group feedback loop.
         autoScroll={false}
       >
         {children({
@@ -55,12 +46,7 @@ export function WorkspaceTabDragLayer({
           hoveredTabInsertion: dragSplit.hoveredTabInsertion,
           setDragRootNode: dragSplit.setDragRootNode
         })}
-        {/* Why: the sortable tab is anchored inside its source tab strip (no
-          transform while dragging), and that strip uses overflow-hidden so
-          the tab is invisible once the cursor leaves it. DragOverlay
-          renders a ghost in a document-level portal that tracks the cursor
-          across the whole window — the source tab keeps its spot, the
-          ghost follows the cursor. */}
+        {/* Keep the source tab anchored while a portal ghost follows the cursor beyond the clipped strip. */}
         <DragOverlay dropAnimation={null}>
           {dragSplit.activeDrag ? <TabDragPreview drag={dragSplit.activeDrag} /> : null}
         </DragOverlay>

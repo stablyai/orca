@@ -1,14 +1,16 @@
 import { parentPort } from 'node:worker_threads'
-import { handleOpenCodeSqliteRequest } from '../ai-vault/session-scanner-opencode-sqlite-dispatch'
-import type { OpenCodeSqliteWorkerRequest } from '../ai-vault/session-scanner-opencode-sqlite-worker-protocol'
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
+import type { OpenCodeSqliteWorkerRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-protocol'
 import { handleForeignSqliteReaderRequest } from './foreign-sqlite-reader-dispatch'
 import type {
   ForeignSqliteReaderRequest,
   ForeignSqliteReaderResponse
 } from './foreign-sqlite-reader-protocol'
+import { installWorkerSendLedger } from '../worker-threads/worker-send-ledger'
 
-// Why two dispatches: the OpenCode one is also bundled into the SSH/WSL relay
-// reader, so the other readers stay out of it and ship only in this entry.
+installWorkerSendLedger('orca-foreign-sqlite-reader')
+
+// Keep OpenCode dispatch separate because SSH/WSL relays bundle it without the other readers.
 
 if (!parentPort) {
   throw new Error('Foreign SQLite reader worker must run with a parent port.')
@@ -23,7 +25,10 @@ function isOpenCodeRequest(request: ReaderRequest): request is OpenCodeSqliteWor
     request.kind === 'parse' ||
     request.kind === 'capture' ||
     request.kind === 'native-page' ||
-    request.kind === 'native-signal'
+    request.kind === 'native-signal' ||
+    request.kind === 'hermes-history' ||
+    request.kind === 'hermes-exists' ||
+    request.kind === 'fork-coverage'
   )
 }
 
@@ -38,8 +43,7 @@ port.on('message', (request: ReaderRequest) => {
     try {
       port.postMessage(response)
     } catch {
-      // A non-cloneable result would otherwise post nothing and leave the client
-      // waiting out its timeout; fail that request fast instead.
+      // Reply with a serialization failure instead of leaving the client waiting for its timeout.
       port.postMessage({
         id: request.id,
         ok: false,

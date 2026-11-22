@@ -1,9 +1,9 @@
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
-// Why: every creation-state shape is keyed by repo+worktree+branch so a late response can be discarded after navigation.
+// Key every state by repo/worktree/branch to discard late responses after navigation.
 export type HostedReviewCreationState = {
   repoId: string
   worktreeId: string

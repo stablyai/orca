@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-10-27T21:25:16.000Z",
+  "platform": "darwin",
+  "command": ["muse", "--provider", "echo", "--trust-workspace"],
+  "env": { "MUSE_EXPERIMENTAL_VOICE": "0" },
+  "cols": 120,
+  "rows": 32,
+  "note": "Muse 1.4.0 ready with voice unavailable, so the composer's top rule has no voice-input label (as on Linux, #25005)",
+  "exitCode": null
+}

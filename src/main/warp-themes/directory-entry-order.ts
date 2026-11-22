@@ -1,7 +1,4 @@
-// Warp theme discovery walks user home and app-data trees, so callers filter to
-// the entries they want *before* sorting: same resulting order (the comparator is
-// a total order over a stable sort), without collating the hundreds of unrelated
-// names a home directory holds.
+// Filter discovery entries before collation; stable total ordering stays the same without sorting unrelated home-directory names.
 export function sortDirectoryEntriesByName<T extends { name: string }>(entries: T[]): T[] {
   if (entries.length < 2) {
     return entries

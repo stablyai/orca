@@ -2,19 +2,22 @@ import * as React from 'react'
 import * as TooltipPrimitive from 'radix-ui/tooltip'
 
 import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { isKeyboardOrVirtualFocus } from '@/lib/keyboard/keyboard-input-modality'
+import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 600,
+  skipDelayDuration = 0,
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  // Why: app tooltips are non-interactive labels. Letting the floating
-  // content keep itself open can block the controls it is describing.
+  // Labels must not stay open through pointer hover and block the controls they describe.
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
       disableHoverableContent={disableHoverableContent}
       {...props}
     />
@@ -25,8 +28,24 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+function TooltipTrigger({
+  onFocus,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        onFocus?.(event)
+        // Why: focus restored to the trigger after a mouse-closed dialog/menu/panel must not pop the
+        // label; preventDefault skips Radix's open-on-focus unless keyboard or assistive tech moved focus.
+        if (!isKeyboardOrVirtualFocus()) {
+          event.preventDefault()
+        }
+      }}
+      {...props}
+    />
+  )
 }
 
 const TAB_PREVIEW_CLASSES =
@@ -49,27 +68,34 @@ function TooltipContent({
   className,
   sideOffset = 0,
   showArrow = true,
+  portalContainer,
   variant,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> &
-  VariantProps<typeof tooltipContentVariants> & { showArrow?: boolean; onPlaced?: () => void }) {
+  VariantProps<typeof tooltipContentVariants> & {
+    showArrow?: boolean
+    onPlaced?: () => void
+    portalContainer?: HTMLElement | null
+  }) {
+  const container = usePortalContainer(portalContainer)
   return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        data-slot="tooltip-content"
-        sideOffset={sideOffset}
-        // Why: tooltip portals can be triggered from inside menus/popovers.
-        // Keep labels above those floating surfaces instead of hidden behind them.
-        className={cn(tooltipContentVariants({ variant }), className)}
-        {...props}
-      >
-        {children}
-        {showArrow ? (
-          <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-        ) : null}
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+    <PortalContainerContext value={container}>
+      <TooltipPrimitive.Portal container={container ?? undefined}>
+        <TooltipPrimitive.Content
+          data-slot="tooltip-content"
+          sideOffset={sideOffset}
+          // Tooltip portals must layer above the menus/popovers that trigger them.
+          className={cn(tooltipContentVariants({ variant }), className)}
+          {...props}
+        >
+          {children}
+          {showArrow ? (
+            <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+          ) : null}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </PortalContainerContext>
   )
 }
 

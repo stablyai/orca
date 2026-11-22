@@ -1,13 +1,9 @@
+import { readAndroidDeviceSystemMetadata } from './android-device-system-metadata'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { adbDevicesArgs, parseAdbDevices, type AndroidAdbDevice } from './adb-devices'
 import { listAvdsArgs, parseAvdList } from './avd-manager'
 import type { EmulatorDevice } from '../backends/emulator-backend'
-
-// Android device discovery: turns raw `adb`/`emulator` output into the
-// cross-backend EmulatorDevice list and resolves AVD names to running serials.
-// Kept separate from the backend so the inventory is testable in isolation and
-// the backend file stays focused on lifecycle + input.
 
 export async function listRunningAdbDevices(
   runner: AndroidCommandRunner,
@@ -15,6 +11,23 @@ export async function listRunningAdbDevices(
 ): Promise<AndroidAdbDevice[]> {
   const result = await runner(sdk.adb, adbDevicesArgs)
   return parseAdbDevices(result.stdout).filter((device) => device.state === 'device')
+}
+
+/** Every adb state, including emulators still booting ("offline"). Null when adb fails, so a
+ * failed census never reads as every device gone. */
+export async function listConfirmedAdbDevices(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<AndroidAdbDevice[] | null> {
+  const result = await runner(sdk.adb, adbDevicesArgs)
+  return result.code === 0 ? parseAdbDevices(result.stdout) : null
+}
+
+export async function listConfirmedAdbSerials(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<string[] | null> {
+  return (await listConfirmedAdbDevices(runner, sdk))?.map((device) => device.serial) ?? null
 }
 
 export async function resolveRunningAvdNames(
@@ -41,9 +54,9 @@ export async function findRunningAvdSerial(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
   avdName: string,
-  running: AndroidAdbDevice[]
+  devices: AndroidAdbDevice[]
 ): Promise<string | null> {
-  const names = await resolveRunningAvdNames(runner, sdk, running)
+  const names = await resolveRunningAvdNames(runner, sdk, devices)
   for (const [serial, name] of names) {
     if (name === avdName) {
       return serial
@@ -54,18 +67,34 @@ export async function findRunningAvdSerial(
 
 export async function listAndroidDevices(
   runner: AndroidCommandRunner,
-  sdk: AndroidSdkPaths
+  sdk: AndroidSdkPaths,
+  options: { includeSystemMetadata?: boolean } = {}
 ): Promise<EmulatorDevice[]> {
-  const [running, avdsResult] = await Promise.all([
+  const [running, avds] = await Promise.all([
     listRunningAdbDevices(runner, sdk),
-    runner(sdk.emulator, listAvdsArgs)
+    listAvdNames(runner, sdk)
   ])
-  const avds = parseAvdList(avdsResult.stdout)
   const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
-  return mergeAndroidDevices(running, avds, runningAvdBySerial)
+  const devices = mergeAndroidDevices(running, avds, runningAvdBySerial)
+  if (options.includeSystemMetadata === false) {
+    return devices
+  }
+  return Promise.all(
+    devices.map(async (device) => ({
+      ...device,
+      ...(await readAndroidDeviceSystemMetadata(device, runner, sdk).catch(() => ({})))
+    }))
+  )
 }
 
-// `adb -s <serial> emu avd name` prints the AVD name then a trailing "OK" line.
+export async function listAvdNames(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths
+): Promise<string[]> {
+  return sdk.emulator ? parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout) : []
+}
+
+// adb appends an OK status after the AVD name.
 function firstNonStatusLine(stdout: string): string | null {
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()

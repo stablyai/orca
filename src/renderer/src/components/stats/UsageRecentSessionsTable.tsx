@@ -1,4 +1,5 @@
-import { formatSessionTime, formatTokens } from './usage-formatters'
+import { formatSessionTime, formatTokens, formatUsageProjectLabel } from './usage-formatters'
+import { useIntlLocale } from '../../i18n/use-translate'
 
 type UsageRecentSession = {
   sessionId: string
@@ -40,6 +41,7 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
   getTrailingTokens,
   getModelSuffix
 }: UsageRecentSessionsTableProps<Row>): React.JSX.Element {
+  const intlLocale = useIntlLocale()
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
@@ -61,20 +63,24 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
             {rows.map((row) => (
               <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
                 <td className="px-2 py-2 text-muted-foreground">
-                  {formatSessionTime(row.lastActiveAt)}
+                  {formatSessionTime(row.lastActiveAt, intlLocale)}
                 </td>
-                <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
+                <td className="px-2 py-2 text-foreground">
+                  {formatUsageProjectLabel(row.projectLabel)}
+                </td>
                 <td className="px-2 py-2 text-muted-foreground">
                   {row.model ?? unknownModel}
                   {getModelSuffix?.(row)}
                 </td>
                 <td className="px-2 py-2 text-muted-foreground">{getActivity(row)}</td>
-                <td className="px-2 py-2 text-muted-foreground">{formatTokens(row.inputTokens)}</td>
                 <td className="px-2 py-2 text-muted-foreground">
-                  {formatTokens(row.outputTokens)}
+                  {formatTokens(row.inputTokens, intlLocale)}
                 </td>
                 <td className="px-2 py-2 text-muted-foreground">
-                  {formatTokens(getTrailingTokens(row))}
+                  {formatTokens(row.outputTokens, intlLocale)}
+                </td>
+                <td className="px-2 py-2 text-muted-foreground">
+                  {formatTokens(getTrailingTokens(row), intlLocale)}
                 </td>
               </tr>
             ))}

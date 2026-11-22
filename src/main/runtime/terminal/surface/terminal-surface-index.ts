@@ -1,36 +1,39 @@
-// Layout-owner builds: the terminal tabs and panes of every workspace main owns, read from main's
-// one layout projection (the layout stream's) rather than from the window's graph. A paired server's
-// workspaces (`runtime:<env>` partitions) are not here: the window still mirrors those. A local
-// workspace's tabs an older build left in such a partition are (#18202): their terminals are local.
+// Project main-owned panes from layout, including older builds' spilled local tabs; paired-server workspaces remain window-mirrored (#18202).
 
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../../shared/runtime-types'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type {
   LayoutTab,
   WorkspaceLayout
 } from '../../../../shared/workspace-layout/workspace-layout-model'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { bindingOf } from '../../pane-live-facts'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { bindingOf } from './pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   projectSessionTabs,
   type ProjectedSessionTabs
 } from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
-import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import { projectRuntimeSurfaces } from '../records/runtime-leaf-record-projection'
+import type { WorkspaceLayoutReads } from './workspace-layout-stream'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { loadChatTabLayout } from '../../session-tabs/chat/agent-session-tab-layout'
+import {
+  projectedWorkspacesByWorktree,
+  type ProjectedWorkspace
+} from './projected-workspaces-by-worktree'
 
-type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
+type LoadedPartition = LoadedWorkspaceLayoutRead
 
 export type MainPaneFacts = { binding: string; sleeping: boolean; incarnationId?: string }
 
@@ -54,12 +57,13 @@ export class TerminalSurfaceIndex {
   private current: MainTerminalSurfaces | null = null
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
-  private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
-  private projectedHostIds: readonly ExecutionHostId[] = []
+  private projectedFrom: (LoadedWorkspaceLayoutRead | null)[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
   private routes = new Map<string, ExecutionHostId | null>()
+  /** Worktree id → the first workspace its home partition holds for it in the last projection. */
+  private projectedWorkspaces = new Map<string, ProjectedWorkspace>()
   private routesStale = true
 
   constructor(
@@ -70,6 +74,7 @@ export class TerminalSurfaceIndex {
       hostIds: () => readonly ExecutionHostId[]
       /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
+      savedSession?: (hostId: ExecutionHostId) => WorkspaceSessionState | null
       generatedTitlesEnabled: () => boolean
       /** A layout operation ended, so main's surfaces may have changed. */
       onChanged: () => void
@@ -129,8 +134,8 @@ export class TerminalSurfaceIndex {
     }
     this.projectedTitles = titles
     this.projectedFrom = loaded
-    this.projectedHostIds = hostIds
     this.projectedHomes = homes
+    this.projectedWorkspaces = projectedWorkspacesByWorktree(loaded, hostIds, this.routes)
     const next = this.project(hostIds, loaded)
     const json = JSON.stringify({
       tabs: next.tabs,
@@ -147,7 +152,7 @@ export class TerminalSurfaceIndex {
 
   private project(
     hostIds: readonly ExecutionHostId[],
-    loaded: readonly (LoadedWorkspaceLayout | null)[]
+    loaded: readonly (LoadedWorkspaceLayoutRead | null)[]
   ): MainTerminalSurfaces {
     const partitions: LoadedPartition[] = []
     const worktreeIds = new Set<string>()
@@ -225,32 +230,32 @@ export class TerminalSurfaceIndex {
     }
   }
 
-  /** A workspace main owns as today's `session.tabs` rows, from its owning partition's layout. */
+  /** Saved rows from their owning partition, with or without a window or main surface graph. */
   sessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
-    this.surfaces()
-    return this.lastSessionTabsOf(worktreeId)
-  }
-
-  /** As sessionTabsOf, from the partitions last projected: reads no session. */
-  lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
-    if (!this.current?.worktreeIds.has(worktreeId)) {
+    const hostId = this.homeOf(worktreeId)
+    const session = hostId ? this.deps.savedSession?.(hostId) : null
+    if (!hostId || !session) {
       return null
     }
-    for (const [index, partition] of this.projectedFrom.entries()) {
-      const hostId = this.projectedHostIds[index]
-      for (const [key, workspace] of Object.entries(partition?.layout.workspaces ?? {})) {
-        if (partition && workspace.worktreeId === worktreeId && this.routes.get(key) === hostId) {
-          return projectSessionTabs(
-            key,
-            workspace,
-            partition.desktopView,
-            partition.facts,
-            this.deps.generatedTitlesEnabled()
-          )
-        }
-      }
-    }
-    return null
+    const { layout, desktopView, facts } = loadChatTabLayout(hostId, session, worktreeId).loaded
+    const workspace = layout.workspaces[worktreeId]
+    return workspace ? projectSessionTabs(worktreeId, workspace, desktopView, facts, false) : null
+  }
+
+  /** Main-owned rows from the partitions last projected: reads no session. */
+  lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
+    const found = this.current?.worktreeIds.has(worktreeId)
+      ? this.projectedWorkspaces.get(worktreeId)
+      : undefined
+    return found
+      ? projectSessionTabs(
+          found.key,
+          found.workspace,
+          found.desktopView,
+          found.facts,
+          this.deps.generatedTitlesEnabled()
+        )
+      : null
   }
 
   private homeOf(key: string): ExecutionHostId | null {
@@ -263,12 +268,7 @@ export class TerminalSurfaceIndex {
   }
 }
 
-/**
- * The window's graph with main's panes in place of the window's own list for every workspace main
- * owns. A pane the window shows takes its renderer pane id and title; any other is parked, as a
- * live pane the window does not mount is today. A pane lists its terminal once that terminal has
- * registered, as the window lists one once its transport attaches.
- */
+/** Replace window panes for main-owned workspaces; reuse mounted renderer ids/titles, park others, and expose bound terminals only after registration. */
 export function composeMainTerminalSurfaces(
   graph: RuntimeSyncWindowGraph,
   main: MainTerminalSurfaces,
@@ -330,19 +330,12 @@ function spilledTerminalTab(
   )
 }
 
-/**
- * The paired server a pane's binding runs on, named by its terminal id alone; null for a terminal
- * of this host. Such a terminal never registers here, so its binding stands without a record.
- */
+/** Paired-runtime ids name a foreign host whose terminals never register here; their saved binding stands without a local record. */
 export function pairedRuntimeHostOfBinding(ptyId: string): ExecutionHostId | 'foreign' | null {
   return isRemoteRuntimePtyId(ptyId) ? getPtyExecutionHost(ptyId) : null
 }
 
-/**
- * Whether a registered terminal is the one a pane's binding names. Ids alone can collide (a local
- * id reused after a restart, or a record made before its adoption registers), so the workspace
- * must match, and the incarnation too when the binding was stamped with one.
- */
+/** Bindings require matching workspace and stamped incarnation; PTY ids alone can collide across restart or adoption. */
 export function terminalHoldsPane(
   terminal: BoundTerminal | null,
   pane: { worktreeId: string },

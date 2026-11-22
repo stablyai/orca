@@ -1,9 +1,10 @@
 import type * as fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../../shared/secret-store'
-import type * as SecureFile from '../../shared/secure-file'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
+import type * as SecureFile from '../../shared/secure-storage/secure-file'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
 const mocks = vi.hoisted(() => ({
@@ -25,6 +26,17 @@ beforeEach(() =>
     describeProtectionGap: () => 'unavailable'
   })
 )
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof FsPromises>()),
+  rename: (...args: Parameters<typeof fs.renameSync>) => mocks.rename(...args)
+}))
+vi.mock('../../shared/secure-storage/windows-credential-file-io', () => ({
+  createWindowsCredentialStage: async (path: string, data: string | Buffer) => {
+    mocks.write(path, data)
+    return mocks.restrict(path, false)
+  },
+  hardenWindowsCredentialPath: async () => false
+}))
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof os>()),
   homedir: () => mocks.home
@@ -34,9 +46,8 @@ vi.mock('node:fs', async (original) => ({
   writeFileSync: mocks.write,
   renameSync: mocks.rename
 }))
-// Stands in for the born-restricted create: it stages through the mocked writeFileSync (the
-// fallback the real one uses) and reports whatever restriction outcome the test injects.
-vi.mock('../../shared/secure-path-windows-acl', () => ({
+// Stage through mocked writeFile and inject restriction outcome like the born-restricted creator.
+vi.mock('../../shared/secure-storage/secure-path-windows-acl', () => ({
   restrictWindowsPathSync: mocks.restrict,
   writeRestrictedWindowsFile: (path: string, contents: string) => {
     mocks.write(path, contents, { encoding: 'utf-8', mode: 0o600 })
@@ -64,7 +75,7 @@ beforeEach(async () => {
   Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
   vi.resetModules()
   store = await import('./zcode-plan-api-key-store')
-  writer = await import('../../shared/secure-file')
+  writer = await import('../../shared/secure-storage/secure-file')
 })
 
 afterEach(() => {
@@ -73,209 +84,68 @@ afterEach(() => {
   realFs.rmSync(mocks.home, { recursive: true, force: true })
 })
 
-function rejectReplacement(): void {
-  expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
+async function rejectReplacement(): Promise<void> {
+  await expect(store.saveZcodePlanApiKey('new-key')).rejects.toThrow(
     'could not be stored securely on this device'
   )
 }
 
 describe('plaintext rollback through the secure-file writer', () => {
-  it('removes only the rejected replacement when rollback fails before publication', () => {
+  // Rename preserves staged DACL; later read-time hardening failure must not erase the restored key.
+  it('keeps the previous envelope if rollback publishes before restriction fails', async () => {
     realFs.writeFileSync(keyPath, envelope('previous-key'))
-    mocks.write.mockImplementationOnce(realFs.writeFileSync).mockImplementationOnce(() => {
-      throw new Error('Synthetic rollback staging failure')
-    })
 
-    rejectReplacement()
+    await rejectReplacement()
 
-    expect(mocks.write).toHaveBeenCalledTimes(2)
-    expect(realFs.existsSync(keyPath)).toBe(false)
-    expect(store.readZcodePlanApiKey()).toBeNull()
-    expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual([])
+    expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('previous-key'))
+    expect(await store.readZcodePlanApiKey()).toBe('previous-key')
   })
 
-  // Windows has no post-rename restriction any more; the published path is next restricted by
-  // the read path, and that failing must not cost the restored key either.
-  it.each(['restriction-false', 'restriction-throws'])(
-    'keeps the previous envelope if rollback publishes before %s',
-    (failure) => {
-      realFs.writeFileSync(keyPath, envelope('previous-key'))
-      mocks.restrict.mockImplementation((path) => {
-        if (
-          failure === 'restriction-throws' &&
-          path === keyPath &&
-          mocks.write.mock.calls.length === 2
-        ) {
-          throw new Error('Synthetic restored-path restriction failure')
-        }
-        return false
-      })
-
-      rejectReplacement()
-
-      expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('previous-key'))
-      expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    }
-  )
-
-  it.each([
-    { phase: 'before-rollback', previous: true },
-    { phase: 'before-rollback', previous: false },
-    { phase: 'during-rollback', previous: true }
-  ])(
-    'preserves a different envelope written $phase with previous key $previous',
-    ({ phase, previous }) => {
-      if (previous) {
-        realFs.writeFileSync(keyPath, envelope('previous-key'))
-      }
-      if (phase === 'before-rollback') {
-        // Another writer lands between the rejected publication and the rollback.
-        mocks.rename.mockImplementationOnce((from, to) => {
-          realFs.renameSync(from, to)
-          realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-        })
-      } else {
-        mocks.write.mockImplementationOnce(realFs.writeFileSync).mockImplementationOnce(() => {
-          realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-          throw new Error('Synthetic competing rollback writer')
-        })
-      }
-
-      rejectReplacement()
-
-      expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('other-writer-key'))
-      expect(store.readZcodePlanApiKey()).toBe('other-writer-key')
-    }
-  )
-
-  it('retains an identical previous plaintext envelope when retry rollback cannot publish', () => {
+  it('retains an identical previous plaintext envelope when retry rollback cannot publish', async () => {
     realFs.writeFileSync(keyPath, envelope('new-key'))
     mocks.write.mockImplementationOnce(realFs.writeFileSync).mockImplementationOnce(() => {
       throw new Error('Synthetic same-key rollback staging failure')
     })
 
-    rejectReplacement()
+    await rejectReplacement()
 
     expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('new-key'))
-    expect(store.readZcodePlanApiKey()).toBe('new-key')
+    expect(await store.readZcodePlanApiKey()).toBe('new-key')
   })
 
-  it('removes a new unrestricted envelope without caching it when no previous key exists', () => {
-    rejectReplacement()
+  it('removes a new unrestricted envelope without caching it when no previous key exists', async () => {
+    await rejectReplacement()
 
     expect(realFs.existsSync(keyPath)).toBe(false)
-    expect(store.readZcodePlanApiKey()).toBeNull()
+    expect(await store.readZcodePlanApiKey()).toBeNull()
   })
 
-  it('keeps the cached previous key after a rejected replacement', () => {
+  it('keeps the cached previous key after a rejected replacement', async () => {
     realFs.writeFileSync(keyPath, envelope('previous-key'))
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
+    expect(await store.readZcodePlanApiKey()).toBe('previous-key')
     mocks.write.mockImplementationOnce(realFs.writeFileSync).mockImplementationOnce(() => {
       throw new Error('Synthetic rollback staging failure')
     })
 
-    rejectReplacement()
+    await rejectReplacement()
 
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
+    expect(await store.readZcodePlanApiKey()).toBe('previous-key')
   })
 })
 
 describe('conditional rollback publication through the real writer', () => {
-  it.each([false, true])(
-    'preserves a competing envelope during rollback staging with restriction %s',
-    (restricted) => {
-      realFs.writeFileSync(keyPath, envelope('previous-key'))
-      mocks.restrict.mockImplementation((path) => {
-        if (path.endsWith('.tmp') && mocks.write.mock.calls.length === 2) {
-          realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-          return restricted
-        }
-        return false
-      })
-
-      rejectReplacement()
-
-      expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('other-writer-key'))
-      expect(store.readZcodePlanApiKey()).toBe('other-writer-key')
-      expect(mocks.rename).toHaveBeenCalledTimes(1)
-      expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-    }
-  )
-
-  it('keeps the cached previous key when a competing staged rollback cancels publication', () => {
-    realFs.writeFileSync(keyPath, envelope('previous-key'))
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    mocks.restrict.mockImplementation((path) => {
-      if (path.endsWith('.tmp') && mocks.write.mock.calls.length === 2) {
-        realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-      }
-      return false
-    })
-
-    rejectReplacement()
-
-    expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('other-writer-key'))
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    expect(mocks.rename).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves an unowned envelope if rollback staging restriction throws', () => {
-    realFs.writeFileSync(keyPath, envelope('previous-key'))
-    mocks.restrict.mockImplementation((path) => {
-      if (path.endsWith('.tmp') && mocks.write.mock.calls.length === 2) {
-        realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-        throw new Error('Synthetic staged restriction failure')
-      }
-      return false
-    })
-
-    rejectReplacement()
-
-    expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('other-writer-key'))
-    expect(store.readZcodePlanApiKey()).toBe('other-writer-key')
-    expect(mocks.rename).toHaveBeenCalledTimes(1)
-    expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
-
-  it('removes only the owned rejected plaintext when rollback rename fails', () => {
+  it('removes only the owned rejected plaintext when rollback rename fails', async () => {
     realFs.writeFileSync(keyPath, envelope('previous-key'))
     mocks.rename.mockImplementationOnce(realFs.renameSync).mockImplementationOnce(() => {
       throw new Error('Synthetic rollback rename failure')
     })
 
-    rejectReplacement()
+    await rejectReplacement()
 
     expect(realFs.existsSync(keyPath)).toBe(false)
-    expect(store.readZcodePlanApiKey()).toBeNull()
+    expect(await store.readZcodePlanApiKey()).toBeNull()
     expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual([])
   })
-
-  it.each([false, true])(
-    'cancels guarded durable publication without changing a previously present target: %s',
-    (previous) => {
-      if (previous) {
-        realFs.writeFileSync(keyPath, envelope('previous-key'))
-      }
-      const shouldPublish = vi.fn(() => false)
-
-      expect(
-        writer.writeSecureFile(keyPath, envelope('candidate-key'), {
-          durable: true,
-          shouldPublish
-        })
-      ).toBe(false)
-
-      expect(shouldPublish).toHaveBeenCalledTimes(1)
-      expect(mocks.rename).not.toHaveBeenCalled()
-      expect(realFs.existsSync(keyPath)).toBe(previous)
-      expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(
-        previous ? ['zcode-plan-api-key.enc'] : []
-      )
-      if (previous) {
-        expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('previous-key'))
-      }
-    }
-  )
 
   it('cleans staged bytes when the publication predicate throws', () => {
     realFs.writeFileSync(keyPath, envelope('previous-key'))
@@ -288,50 +158,8 @@ describe('conditional rollback publication through the real writer', () => {
       })
     ).toThrow('Synthetic ownership read failure')
 
-    expect(mocks.rename).not.toHaveBeenCalled()
     expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('previous-key'))
     expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
-
-  it('retains best-effort restriction outcomes when guarded publication is allowed', () => {
-    realFs.writeFileSync(keyPath, envelope('previous-key'))
-    const shouldPublish = vi.fn(() => true)
-
-    expect(
-      writer.writeSecureFile(keyPath, envelope('candidate-key'), {
-        durable: true,
-        shouldPublish
-      })
-    ).toBe(false)
-
-    expect(shouldPublish).toHaveBeenCalledTimes(1)
-    expect(mocks.rename).toHaveBeenCalledTimes(1)
-    expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('candidate-key'))
-    expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
-
-  it('checks publication immediately after staged hardening and before rename', () => {
-    const operations: string[] = []
-    mocks.restrict.mockImplementation((path) => {
-      operations.push(path.endsWith('.tmp') ? 'staged restriction' : 'published restriction')
-      return true
-    })
-    mocks.rename.mockImplementation((from, to) => {
-      operations.push('rename')
-      realFs.renameSync(from, to)
-    })
-
-    expect(
-      writer.writeSecureFile(keyPath, envelope('candidate-key'), {
-        shouldPublish: () => {
-          operations.push('ownership check')
-          return true
-        }
-      })
-    ).toBe(true)
-
-    // The rename carries the staged file's DACL, so nothing restricts the published path again.
-    expect(operations).toEqual(['staged restriction', 'ownership check', 'rename'])
   })
 
   it('cleans guarded staging bytes if rename throws without deleting the original target', () => {

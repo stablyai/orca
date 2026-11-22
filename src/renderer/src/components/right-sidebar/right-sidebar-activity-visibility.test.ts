@@ -1,81 +1,97 @@
 import { describe, expect, it } from 'vitest'
-import { Files } from 'lucide-react'
-import type { ActivityBarItem } from './activity-bar-buttons'
-import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import type { ActivityBarItem } from './activity-bar/activity-bar-buttons'
+import { getVisibleRightSidebarActivityItems } from './activity-bar/right-sidebar-activity-visibility'
+import { getPluginPanelActivityItems } from './plugin-panels/plugin-panel-activity-items'
 
-const items: ActivityBarItem[] = [
-  { id: 'explorer', icon: Files, title: 'Explorer', shortcut: '' },
-  {
-    id: 'workspaces',
-    icon: Files,
-    title: 'Workspaces',
-    shortcut: '',
-    folderOnly: true
-  },
-  {
-    id: 'pr-checks',
-    icon: Files,
-    title: 'PR Checks',
-    shortcut: '',
-    folderOnly: true
-  },
-  {
-    id: 'source-control',
-    icon: Files,
-    title: 'Source Control',
-    shortcut: '',
-    gitOnly: true
-  },
-  { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true },
-  // Plugin panels carry no visibility flags, so they show in every context.
-  {
-    id: 'plugin:orca-samples.my-plugin/dashboard',
-    icon: Files,
-    title: 'Dashboard',
-    shortcut: ''
-  }
+function item(id: ActivityBarItem['id'], flags: Partial<ActivityBarItem> = {}): ActivityBarItem {
+  return { id, icon: () => null, title: id, shortcut: '', ...flags }
+}
+
+const items = [
+  item('explorer', { onBotPage: true }),
+  item('bot-activity', { botOnly: true }),
+  item('bot-connectors', { botPageOnly: true }),
+  item('vault'),
+  item('workspaces', { folderOnly: true }),
+  item('pr-checks', { folderOnly: true }),
+  item('source-control', { gitOnly: true }),
+  item('ports', { sshOnly: true })
 ]
 
-describe('getVisibleRightSidebarActivityItems', () => {
-  it('shows ports only for workspaces on an SSH host', () => {
-    expect(
-      getVisibleRightSidebarActivityItems(items, {
-        isFolder: false,
-        isFolderWorkspace: false,
-        hasSshHost: false
-      }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'plugin:orca-samples.my-plugin/dashboard'])
+const ids = (visible: ActivityBarItem[]): string[] => visible.map((entry) => entry.id)
 
+describe('getVisibleRightSidebarActivityItems', () => {
+  const pluginItems = getPluginPanelActivityItems([
+    {
+      id: 'panel',
+      title: 'Notes',
+      tabKey: 'plugin:acme.notes/panel',
+      pluginKey: 'acme.notes',
+      pluginName: 'Notes'
+    }
+  ])
+
+  it("keeps bot panels and Files before installed plugin panels on a bot's page", () => {
     expect(
-      getVisibleRightSidebarActivityItems(items, {
-        isFolder: false,
-        isFolderWorkspace: false,
-        hasSshHost: true
-      }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+      ids(
+        getVisibleRightSidebarActivityItems([...items, ...pluginItems], {
+          isFolder: true,
+          isFolderWorkspace: true,
+          hasSshHost: true,
+          isBot: true
+        })
+      )
+    ).toEqual(['bot-activity', 'bot-connectors', 'explorer', 'plugin:acme.notes/panel'])
   })
 
-  it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
+  it('hides Activity everywhere a chat has started no workers', () => {
     expect(
-      getVisibleRightSidebarActivityItems(items, {
-        isFolder: true,
-        isFolderWorkspace: true,
-        hasSshHost: true
-      }).map((item) => item.id)
-    ).toEqual([
-      'explorer',
-      'workspaces',
-      'pr-checks',
-      'ports',
-      'plugin:orca-samples.my-plugin/dashboard'
-    ])
+      ids(
+        getVisibleRightSidebarActivityItems(items, {
+          isFolder: true,
+          isFolderWorkspace: true,
+          hasSshHost: false,
+          isBot: false
+        })
+      )
+    ).toEqual(['explorer', 'vault', 'workspaces', 'pr-checks', 'source-control'])
+    expect(
+      ids(
+        getVisibleRightSidebarActivityItems(items, {
+          isFolder: false,
+          isFolderWorkspace: false,
+          hasSshHost: true,
+          isBot: false
+        })
+      )
+    ).toEqual(['explorer', 'vault', 'source-control', 'ports'])
+  })
 
+  it('shows Activity, not Automations, beside the usual tabs when the focused chat started workers', () => {
     expect(
-      getVisibleRightSidebarActivityItems(items, {
-        isFolder: true,
-        isFolderWorkspace: false,
-        hasSshHost: true
-      }).map((item) => item.id)
-    ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+      ids(
+        getVisibleRightSidebarActivityItems(items, {
+          isFolder: false,
+          isFolderWorkspace: false,
+          hasSshHost: false,
+          isBot: false,
+          hasChatWorkers: true
+        })
+      )
+    ).toEqual(['explorer', 'bot-activity', 'vault', 'source-control'])
+  })
+
+  it("keeps only Items on a bot group's home", () => {
+    expect(
+      ids(
+        getVisibleRightSidebarActivityItems(items, {
+          isFolder: true,
+          isFolderWorkspace: true,
+          hasSshHost: false,
+          isBot: false,
+          isGroupHome: true
+        })
+      )
+    ).toEqual(['bot-activity'])
   })
 })

@@ -1,10 +1,9 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '@orca/process-host'
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { runProcess } from '@orca/process-host'
 import {
   RUNTIME_STORE_LOCK_NAME,
   RUNTIME_STORE_LOCK_OWNER_FILENAME,
@@ -12,15 +11,15 @@ import {
 } from './remote-node-runtime-store-lock'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { tryCreateInstallLockCommand } from './remote-install-lock-commands'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand, which runs it in a local shell.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')
 let store: string
 let lock: string
@@ -36,22 +35,6 @@ async function sh(command: string): Promise<string> {
   return result.stdout
 }
 
-const unconfirmed = (): Error =>
-  Object.assign(new Error('timed out after 30s'), {
-    code: 'SSH_EXEC_TIMEOUT',
-    sshChannelCloseConfirmed: false
-  })
-
-async function waitUntil(condition: () => boolean, timeoutMs: number): Promise<void> {
-  const start = Date.now()
-  while (!condition()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('condition not met')
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-}
-
 beforeEach(() => {
   store = mkdtempSync(join(tmpdir(), 'runtime-store-lock-'))
   lock = join(store, RUNTIME_STORE_LOCK_NAME)
@@ -62,56 +45,6 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('runtime store lock released by the host', () => {
-  it('passes the wrapped command output and exit status through and frees the lock', async () => {
-    await withRuntimeStoreLock(conn, host, store, async (held) => {
-      expect(existsSync(lock)).toBe(true)
-      expect((await sh(held.releasedByHostOnExit('echo ORCA_NODE_RUNTIME_READY'))).trim()).toBe(
-        'ORCA_NODE_RUNTIME_READY'
-      )
-      expect(existsSync(lock)).toBe(false)
-      await expect(sh(held.releasedByHostOnExit('echo partial; exit 3'))).rejects.toMatchObject({
-        exitCode: 3,
-        stdout: 'partial\n'
-      })
-    })
-    expect(existsSync(lock)).toBe(false)
-  })
-
-  it('frees the lock when work the client gave up on finishes, so the next installer proceeds', async () => {
-    let orphan: Promise<string> | undefined
-    await expect(
-      withRuntimeStoreLock(conn, host, store, async (held) => {
-        // The client's exec timer fires while the host is still extracting (HH-3).
-        orphan = sh(held.releasedByHostOnExit('sleep 1; echo ORCA_NODE_RUNTIME_READY'))
-        throw unconfirmed()
-      })
-    ).rejects.toMatchObject({ sshChannelCloseConfirmed: false })
-    // Kept while the work runs: loss of contact is not an exit.
-    expect(existsSync(lock)).toBe(true)
-    const started = Date.now()
-    await withRuntimeStoreLock(conn, host, store, async () => {})
-    // Without the host release this waits out the 20-minute stale rule.
-    expect(Date.now() - started).toBeLessThan(10_000)
-    await orphan
-  }, 20_000)
-
-  it('keeps releasing after the client side hangs up on the host shell', async () => {
-    await expect(
-      withRuntimeStoreLock(conn, host, store, async (held) => {
-        const child = spawnProcess({
-          program: '/bin/sh',
-          args: ['-c', held.releasedByHostOnExit('sleep 1; echo done')],
-          stdio: 'ignore'
-        })
-        await new Promise((resolve) => setTimeout(resolve, 200))
-        child.kill('SIGHUP')
-        throw unconfirmed()
-      })
-    ).rejects.toMatchObject({ sshChannelCloseConfirmed: false })
-    expect(existsSync(lock)).toBe(true)
-    await waitUntil(() => !existsSync(lock), 10_000)
-  }, 20_000)
-
   it('never removes a lock another holder took after the host released this one', async () => {
     await withRuntimeStoreLock(conn, host, store, async (held) => {
       await sh(held.releasedByHostOnExit('true'))

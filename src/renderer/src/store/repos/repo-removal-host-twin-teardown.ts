@@ -1,11 +1,12 @@
 import type { AppState } from '../types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { buildTerminalTabRetirementPlans } from '../slices/terminal-tab-retirement'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { buildTerminalTabRetirementPlans } from '../terminals/retirement/terminal-tab-retirement'
 import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
-import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-purge-scopes'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
 import {
   collectRemovedHostTwinState,
   isRuntimeHost,
@@ -47,12 +48,7 @@ export function collectRemovedHostTwins(
   }
 }
 
-/**
- * Closes the surfaces attributed to the removed copy through their close actions, so chats,
- * previews and shells retire as on any close. Anything unattributed (mixed tabs, reopen history,
- * tabless sleeping records) stays: a stale entry, never the survivor's data lost. Each file close
- * carries `keepEditorBuffer`, so a dirty record it closes outlives the tab.
- */
+/** Close attributed surfaces through normal actions; retain unknown/mixed state rather than lose survivor data. File closes keepEditorBuffer so dirty records survive tab removal. */
 export function closeRemovedHostTwinState(
   get: () => AppState,
   set: (patch: (state: AppState) => Partial<AppState>) => void,
@@ -98,8 +94,7 @@ export function closeRemovedHostTwinState(
       ]) {
         retiredPtyIds.add(ptyId)
       }
-      // Why killed here: the shared id resolves to no single host, so the planner marks this
-      // host's PTYs unroutable; attribution already proved they are the removed host's.
+      // Planner cannot route shared raw IDs; attribution already proves these unroutable PTYs belong to the removed host.
       const candidates = remoteCloseOwnedByHost
         ? []
         : [...plan.localOrSshPtyIds, ...plan.unroutablePtyIds, ...plan.cleanupOnlyPtyIds]
@@ -125,6 +120,17 @@ export function closeRemovedHostTwinState(
     }
     // Why: a parked or restored pane has no exit callback left to clear these; shared PTYs are not in the plans' lists.
     set((state) => ({
+      ...removeWorkspaceUnreadState(
+        state,
+        [
+          ...new Set([
+            ...hostTwinIds.keys(),
+            ...preCall.byHost
+              .filter((entry) => entry.hostId === hostId)
+              .flatMap((entry) => [...entry.twinHostIds.keys()])
+          ])
+        ].map((id) => ({ id, hostId }))
+      ),
       suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
       pendingPaneAccountRestarts: omitRecordKeys(state.pendingPaneAccountRestarts, retiredPtyIds),
       codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)

@@ -1,4 +1,4 @@
-import type { JiraProject, JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraProject, JiraSiteSelection } from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -37,7 +37,7 @@ export async function listProjects(
   siteId?: JiraSiteSelection | null,
   strict = false
 ): Promise<JiraProject[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   if (entries.length === 0) {
     return []
@@ -49,7 +49,7 @@ export async function listProjects(
         return await readProjectsForClient(entry)
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.site.id)
+          await clearToken(entry)
           if (shouldSurfaceSiteFailure(siteId, entries.length)) {
             throw error
           }

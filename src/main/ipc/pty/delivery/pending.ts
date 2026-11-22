@@ -1,18 +1,19 @@
-import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal-reply-query-extraction'
+import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
   scanMode2031ReplyDecision,
   type Mode2031ReplyScanState
-} from '../../../../shared/terminal-color-scheme-protocol'
+} from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE,
   advanceDroppedSynchronizedOutputLatch
-} from '../../../../shared/terminal-synchronized-output-scan'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
-import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
-import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
-import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
+} from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import { recordCrashBreadcrumb } from '../../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { terminalOutputBacklogCapChars } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
+import type { PtyEscapeBoundary } from './pty-escape-boundary'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 
@@ -51,9 +52,22 @@ export function getDroppedMode2031RendererData(pending: PendingPtyData): string 
   return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
 }
 
-/** Releases xterm's DEC 2026 render hold when the dropped span left a frame open.
- *  Without it the pane freezes on its last painted frame until xterm's 1000ms
- *  forced flush. */
+/** The drop sentinel's renderer bytes: salvaged queries, then the DEC 2026 release before a partial mode-2031 CSI so a later ESC cannot abort it. */
+export function makeDroppedOutputPayload(
+  id: string,
+  pending: PendingPtyData
+): { id: string; data: string; droppedOutput: true } {
+  return {
+    id,
+    data:
+      pending.data +
+      getDroppedSynchronizedOutputRendererData(pending) +
+      getDroppedMode2031RendererData(pending),
+    droppedOutput: true
+  }
+}
+
+/** Release DEC 2026 left open by dropped bytes so xterm need not wait for its forced-flush timeout. */
 export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData): string {
   return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
 }
@@ -72,7 +86,7 @@ export function dropOversizedPendingPtyData(
     console.error(
       `[pty] dropped ${pending.data.length} buffered chars for ${redactPtyIdForDiagnostics(id)}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
     )
-    // Why: field visibility for cap tuning (issue #2836 / #7017); no pty id since session ids can embed workspace paths.
+    // Report cap pressure without session IDs, which can contain workspace paths (#2836, #7017).
     recordCrashBreadcrumb('terminal_pending_output_dropped', {
       droppedChars: pending.data.length,
       capChars
@@ -85,12 +99,17 @@ export function dropOversizedPendingPtyData(
     session.pendingOverflowMarkedPtys.add(id)
   }
   session.pendingDroppedChars += pending.data.length
+  // A trimmed tail would retain a corrupting gap; restore from snapshot and salvage only bounded query bytes.
+  return toDroppedOutputSentinel(pending)
+}
+
+/** Replace queued output with the drop sentinel: bounded query bytes plus the mode state they leave. */
+export function toDroppedOutputSentinel(pending: PendingPtyData): PendingPtyData {
   const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
   const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
     pending.data,
     INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   )
-  // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
   return {
     data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
     droppedOutput: true,
@@ -109,9 +128,10 @@ export function appendPendingPtyData(
   preservesSeq: boolean,
   containsBackgroundOutput: boolean,
   rawLength = data.length,
-  transformed = false
+  transformed = false,
+  startEscapeBoundary: PtyEscapeBoundary = ''
 ): PendingPtyData {
-  // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
+  // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
     const mode2031 = scanDroppedMode2031Data(
       data,
@@ -142,7 +162,8 @@ export function appendPendingPtyData(
       ...(typeof startSeq === 'number' ? { startSeq } : {}),
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
-      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+      ...(startEscapeBoundary !== '' ? { startEscapeBoundary } : {})
     }
     return dropOversizedPendingPtyData(session, id, pending)
   }
@@ -152,7 +173,11 @@ export function appendPendingPtyData(
     ...(!preservesSeq || existing.transformed || transformed
       ? { rawLength: existingRawLength + rawLength, transformed: true as const }
       : {}),
-    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+    // Describes the batch start; gaps discard the batch, so appended bytes continue it.
+    ...(existing.startEscapeBoundary !== undefined
+      ? { startEscapeBoundary: existing.startEscapeBoundary }
+      : {})
   }
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq

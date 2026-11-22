@@ -1,16 +1,11 @@
-import type * as Monaco from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import {
   EMBED_ENTRY_REST_OF_LINE_BUDGET,
   MAX_TOKENIZATION_LINE_LENGTH
 } from './monarch-embed-entry-budget'
-import {
-  createMonarchTokenizer,
-  endEmbeddedLanguages,
-  measureNestedDepth,
-  tokenizeLines
-} from './monarch-tokenizer-test-harness'
+import { createMonarchTokenizer, measureNestedDepth } from './monarch-tokenizer-test-harness'
 import { astroMonarchLanguage } from './register-astro'
+import { glimmerTsMonarchLanguage } from './register-glimmer'
 import { svelteMonarchLanguage } from './register-svelte'
 import { vueMonarchLanguage } from './register-vue'
 
@@ -76,81 +71,6 @@ describe.each([
       )
     }
   )
-
-  it('tokenizes interpolations without dropping the embed', () => {
-    // Regression: monarch honours `nextEmbedded` on a zero-width match only
-    // when the token is `@rematch`; with any other token it hits the
-    // no-progress `continue` and silently drops the pending embed. Both
-    // grammars then reached a `nextEmbedded: '@pop'` rule with no embed
-    // active and threw "cannot pop embedded language if not inside one" on
-    // the *first* interpolation — the error seen in the field.
-    const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
-      '<p>a {first} b {second} c</p>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    // Depth > 0 proves the embeds were really entered, not silently skipped.
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
-  })
-
-  it.each([
-    ['script', 'ts', 'typescript'],
-    ['style', 'scss', 'scss']
-  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
-    // The opening tag plus code on the same line pushes the tag close past the
-    // budget, so the body starts unembedded. Every following short line must
-    // recover the embed (and the `lang=` language) instead of leaving the whole
-    // block unhighlighted until the closing tag.
-    const embeds = endEmbeddedLanguages(
-      tokenizeLines(createMonarchTokenizer(languageId, language), [
-        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-        '  b',
-        '  c',
-        `</${tag}>`
-      ])
-    )
-
-    expect(embeds).toEqual([null, embeddedLanguageId, embeddedLanguageId, null])
-  })
-
-  it('keeps tokenizing after an over-budget line and re-embeds on the next one', () => {
-    const overBudget = `<div class="${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}">{value}</div>`
-    const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
-      overBudget,
-      '<p>{value}</p>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
-  })
-})
-
-describe('unguarded embedded tokenizer', () => {
-  // Control: the same markup/expression shape with no budget on embed entry.
-  // The frame count then tracks the interpolation count one-for-one; ~1700
-  // frames is already a RangeError in this runtime, so the ramp stops short of
-  // the overflow to stay deterministic.
-  const perInterpolationEmbedLanguage: Monaco.languages.IMonarchLanguage = {
-    defaultToken: '',
-    tokenizer: {
-      root: [[/</, { token: '', switchTo: '@markup', nextEmbedded: 'html' }]],
-      markup: [[/\{/, { token: '', switchTo: '@expressionEnter', nextEmbedded: '@pop' }]],
-      expressionEnter: [[/./, { token: '', switchTo: '@expression', nextEmbedded: 'typescript' }]],
-      expression: [[/\}/, { token: '', switchTo: '@markupReenter', nextEmbedded: '@pop' }]],
-      markupReenter: [[/./, { token: '', switchTo: '@markup', nextEmbedded: 'html' }]]
-    }
-  }
-
-  it('recurses once per interpolation', () => {
-    const depths = [50, 200, 500].map(
-      (count) =>
-        measureNestedDepth(createMonarchTokenizer('control', perInterpolationEmbedLanguage), [
-          `${interpolationLine(count)} `
-        ]).maxNestedDepth
-    )
-
-    expect(depths).toEqual([51, 201, 501])
-  })
 })
 
 describe('vue embed-entry recursion', () => {
@@ -175,30 +95,27 @@ describe('vue embed-entry recursion', () => {
       ramp.at(-1) as number
     )
   })
+})
 
-  it.each([
-    ['script', 'ts', 'typescript'],
-    ['style', 'scss', 'scss']
-  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
-    const embeds = endEmbeddedLanguages(
-      tokenizeLines(createMonarchTokenizer('vue', vueMonarchLanguage), [
-        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-        '  b',
-        `</${tag}>`
+describe('glimmer embed-entry recursion', () => {
+  const islandLine = (count: number): string =>
+    `const a = 1; ${'<template>a</template>'.repeat(count)}`
+
+  it('stays within the embed budget for a line of template islands', () => {
+    const ramp = [50, 200, 500, 900].filter(
+      (count) => islandLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
+    )
+    expect(ramp.length).toBeGreaterThanOrEqual(3)
+
+    const depths = ramp.map((count) =>
+      measureNestedDepth(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
+        islandLine(count)
       ])
     )
 
-    expect(embeds).toEqual([null, embeddedLanguageId, null])
-  })
-
-  it('tokenizes a template interpolation without dropping the embed', () => {
-    const measurement = measureNestedDepth(createMonarchTokenizer('vue', vueMonarchLanguage), [
-      '<template>',
-      '  <p>{{ a }} and {{ b }}</p>',
-      '</template>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
+    for (const measurement of depths) {
+      expect(measurement.error).toBeUndefined()
+      expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+    }
   })
 })

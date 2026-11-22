@@ -1,0 +1,131 @@
+import {
+  closeTestStores,
+  createStore,
+  readPersistedState,
+  testState,
+  writeDataFile
+} from '../persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
+  loadUserSshConfigMock: vi.fn(),
+  sshConfigHostsToTargetsMock: vi.fn()
+}))
+
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: loadUserSshConfigMock,
+  sshConfigHostsToTargets: sshConfigHostsToTargetsMock
+}))
+const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
+  trackMock: vi.fn(),
+  getCohortAtEmitMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => testState.dir
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => {
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('encrypted:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('encrypted:'.length)
+    }
+  }
+}))
+
+vi.mock('../../telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
+}))
+
+describe('Store', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    trackMock.mockReset()
+    getCohortAtEmitMock.mockReset()
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it.each([
+    [{}, false],
+    [{ linuxTilingWindowMode: 'true' }, false],
+    [{ linuxTilingWindowMode: true }, true]
+  ])('loads tiling window mode from a saved profile with settings %j', (settings, expected) => {
+    writeDataFile({ settings })
+    expect(createStore().getSettings().linuxTilingWindowMode).toBe(expected)
+  })
+
+  it('persists tiling window mode as a strict boolean and preserves it on unrelated updates', () => {
+    const store = createStore()
+    store.updateSettings({ linuxTilingWindowMode: true })
+    store.updateSettings({ theme: 'dark' })
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(true)
+
+    store.updateSettings({
+      // @ts-expect-error -- Settings updates can contain malformed values at runtime.
+      linuxTilingWindowMode: 'true'
+    })
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(false)
+  })
+
+  it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
+    const store = await createStore()
+    store.updateSettings({ workspaceDir: '/Users/me/dev' })
+    const historyBefore = store.getSettings().workspaceDirHistory
+
+    // Padding before an absolute path would otherwise resolve inside every repo.
+    expect(store.updateSettings({ workspaceDir: '  /Users/me/dev' }).workspaceDir).toBe(
+      '/Users/me/dev'
+    )
+    expect(store.getSettings().workspaceDirHistory).toEqual(historyBefore)
+    // Trailing characters and relative paths can be real folder names.
+    expect(store.updateSettings({ workspaceDir: '/tmp/workspaces ' }).workspaceDir).toBe(
+      '/tmp/workspaces '
+    )
+    expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
+    if (process.platform === 'win32') {
+      expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
+    } else {
+      // ~\ and a leading \ are relative off Windows, so the value stays exact.
+      expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+      expect(store.updateSettings({ workspaceDir: ' \\work' }).workspaceDir).toBe(' \\work')
+    }
+  })
+
+  it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
+    const store = await createStore()
+    store.updateSettings({
+      notifications: {
+        ...store.getSettings().notifications,
+        enabled: false,
+        customSoundPath: '/sounds/custom.wav'
+      }
+    })
+    const updated = store.updateSettings({
+      // @ts-expect-error -- Partial notification patches can arrive from older clients.
+      notifications: { customSoundVolume: -20 }
+    })
+
+    expect(updated.notifications.customSoundVolume).toBe(0)
+    expect(updated.notifications.enabled).toBe(false)
+    expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
+  })
+})

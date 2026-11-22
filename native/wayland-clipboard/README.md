@@ -58,8 +58,8 @@ running `pnpm dev` on native Wayland, build the helper with `pnpm run build:nati
 macOS and Windows builds do not invoke it. To select a slice directly:
 
 ```sh
-node config/scripts/build-wayland-clipboard.mjs --arch x64
-node config/scripts/build-wayland-clipboard.mjs --arch arm64
+node config/scripts/native-build/linux/build-wayland-clipboard.mjs --arch x64
+node config/scripts/native-build/linux/build-wayland-clipboard.mjs --arch arm64
 ```
 
 Builds use Ubuntu 20.04, preserve the glibc 2.31 floor, validate ELF architecture

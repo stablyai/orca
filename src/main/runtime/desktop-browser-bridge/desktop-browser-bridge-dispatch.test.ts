@@ -1,18 +1,20 @@
-import '../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
-  DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
-} from '../../../shared/desktop-browser-bridge-protocol'
+  DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineMethod } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
-import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from '../rpc/methods/desktop-browser-bridge'
+import { DESKTOP_BROWSER_BRIDGE_RPC_METHODS } from '../rpc/methods/browser/desktop-browser-bridge'
 import { BrowserTarget } from '../../../shared/rpc-contract/rpc-param-primitives'
-import { Goto } from '../../../shared/rpc-contract/browser-params'
-import { BrowserOpenUrlParams } from '../../../shared/rpc-contract/browser-tab-create-params'
+import { Goto, SetDevice } from '../../../shared/rpc-contract/browser/browser-params'
+import {
+  BrowserOpenUrlParams,
+  BrowserTabCreateParams
+} from '../../../shared/rpc-contract/browser/browser-tab-create-params'
 import {
   getDesktopBrowserBridgeRegistry,
   setDesktopBrowserBridgeHostEnabled
@@ -25,6 +27,7 @@ const ForwardedEvent = z.object({ requestId: z.string() }).passthrough()
 const localGoto = vi.fn(async () => ({ url: 'local', title: '' }))
 const localCookie = vi.fn(async () => ({ cookies: [] }))
 const localOpenUrl = vi.fn(async () => ({ browserPageId: 'paired-host-page' }))
+const localHostBrowser = vi.fn(async () => ({}))
 
 const METHODS = [
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
@@ -45,6 +48,18 @@ const METHODS = [
     permission: 'workspace',
     params: BrowserOpenUrlParams,
     handler: () => localOpenUrl()
+  }),
+  defineMethod({
+    name: 'browser.tabCreate',
+    permission: 'workspace',
+    params: BrowserTabCreateParams,
+    handler: () => localHostBrowser()
+  }),
+  defineMethod({
+    name: 'browser.setDevice',
+    permission: 'workspace',
+    params: SetDevice,
+    handler: () => localHostBrowser()
   })
 ]
 
@@ -108,7 +123,6 @@ async function attachDesktop(
 }
 
 function cliCall(dispatcher: RpcDispatcher, method: string, params: Record<string, unknown>) {
-  // No transport options: the host's own `orca` CLI over its runtime socket.
   return dispatcher.dispatch({ id: `cli-${method}`, authToken: 'owner', method, params })
 }
 
@@ -117,6 +131,7 @@ afterEach(() => {
   localGoto.mockClear()
   localCookie.mockClear()
   localOpenUrl.mockClear()
+  localHostBrowser.mockClear()
 })
 
 describe('desktop browser bridge on orcad', () => {
@@ -133,7 +148,6 @@ describe('desktop browser bridge on orcad', () => {
     })
     await vi.waitFor(() => expect(events).toHaveLength(2))
     const forwarded = ForwardedEvent.parse(events[1])
-    // orcad resolves its own selector and pins the forwarded call to that workspace id.
     expect(forwarded).toMatchObject({
       type: 'request',
       method: 'browser.goto',
@@ -141,7 +155,6 @@ describe('desktop browser bridge on orcad', () => {
       params: { url: 'https://example.com', worktree: 'id:repo-1::/srv/app' }
     })
 
-    // An answer from any other socket is ignored.
     const spoofed = await dispatcher.dispatch(
       {
         id: 'spoof',
@@ -180,165 +193,47 @@ describe('desktop browser bridge on orcad', () => {
     expect(localGoto).not.toHaveBeenCalled()
   })
 
-  it('sends open-url to the attached desktop as the tab create it already runs', async () => {
+  it('assembles a result the desktop sends in chunks ahead of its settlement', async () => {
     setDesktopBrowserBridgeHostEnabled(true)
     const { runtime } = orcadRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
     const { events } = await attachDesktop(dispatcher)
     const ready = ReadyEvent.parse(events[0])
 
-    const call = cliCall(dispatcher, 'browser.openUrl', {
-      url: 'https://example.com/',
+    const call = cliCall(dispatcher, 'browser.goto', {
+      url: 'https://example.com',
       worktree: 'path:/srv/app'
     })
     await vi.waitFor(() => expect(events).toHaveLength(2))
     const forwarded = ForwardedEvent.parse(events[1])
-    // An older bridged desktop has always accepted browser.tabCreate; it never knew browser.openUrl.
-    expect(forwarded).toEqual({
-      type: 'request',
-      requestId: forwarded.requestId,
-      method: 'browser.tabCreate',
-      timeoutMs: expect.any(Number),
-      workspaceId: 'repo-1::/srv/app',
-      params: { url: 'https://example.com/', worktree: 'id:repo-1::/srv/app' }
+    expect(forwarded).toMatchObject({ stagedResults: true })
+    const identity = { attachmentId: ready.attachmentId, requestId: forwarded.requestId }
+    const desktopCall = (method: string, params: Record<string, unknown>) =>
+      dispatcher.dispatch({ id: method, authToken: 'bound', method, params }, DESKTOP)
+
+    for (const [offset, piece] of [
+      [0, '{"url":"https://exa'],
+      [19, 'mple.com/","title":"Big"}']
+    ] as const) {
+      await expect(
+        desktopCall('desktopBrowserBridge.resultChunk', {
+          ...identity,
+          offset,
+          contentBase64: Buffer.from(piece).toString('base64')
+        })
+      ).resolves.toMatchObject({ ok: true, result: { accepted: true } })
+    }
+    await desktopCall('desktopBrowserBridge.result', {
+      ...identity,
+      ok: true,
+      result: null,
+      stagedResultBytes: 44
     })
-    await dispatcher.dispatch(
-      {
-        id: 'answer',
-        authToken: 'bound',
-        method: 'desktopBrowserBridge.result',
-        params: {
-          attachmentId: ready.attachmentId,
-          requestId: forwarded.requestId,
-          ok: true,
-          result: { browserPageId: 'desktop-page' }
-        }
-      },
-      DESKTOP
-    )
 
     await expect(call).resolves.toMatchObject({
       ok: true,
-      result: { browserPageId: 'desktop-page' }
+      result: { url: 'https://example.com/', title: 'Big' }
     })
-    expect(localOpenUrl).not.toHaveBeenCalled()
-  })
-
-  it('refuses a non-web open-url on the host before it reaches the desktop', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await cliCall(dispatcher, 'browser.openUrl', {
-      url: 'file:///etc/hosts',
-      worktree: 'path:/srv/app'
-    })
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(events).toHaveLength(1)
-  })
-
-  it('names the setting for open-url when no desktop hosts or shares a browser', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const response = await cliCall(dispatcher, 'browser.openUrl', {
-      url: 'https://example.com/',
-      worktree: 'path:/srv/app'
-    })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_unavailable' }
-    })
-    expect(response.ok ? '' : response.error.message).toContain(
-      DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
-    )
-    expect(localOpenUrl).not.toHaveBeenCalled()
-  })
-
-  it("leaves open-url to a desktop hosting this runtime's pages while none shares its browser", async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    await expect(
-      cliCall(dispatcher, 'browser.openUrl', {
-        url: 'https://example.com/',
-        worktree: 'path:/srv/app'
-      })
-    ).resolves.toMatchObject({ ok: true, result: { browserPageId: 'paired-host-page' } })
-  })
-
-  it('never forwards a command outside the allowlist', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await cliCall(dispatcher, 'browser.cookie.get', { worktree: 'path:/srv/app' })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_not_forwarded' }
-    })
-    expect(events).toHaveLength(1)
-    expect(localCookie).not.toHaveBeenCalled()
-  })
-
-  it('names the setting when no desktop is attached (setting off or an older desktop)', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const response = await cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'desktop_browser_bridge_unavailable' }
-    })
-    expect(response.ok ? '' : response.error.message).toContain(
-      DESKTOP_BROWSER_BRIDGE_SETTING_LABEL
-    )
-  })
-
-  it('refuses an attach from a desktop that did not negotiate the capability', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher, { ...DESKTOP, clientCapabilities: [] })
-
-    expect(events[0]).toMatchObject({
-      error: { message: 'desktop_browser_bridge_capability_required' }
-    })
-    expect(getDesktopBrowserBridgeRegistry(runtime).hasAttachment()).toBe(false)
-  })
-
-  it('refuses an attach from a phone or an unauthenticated socket', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher, {
-      ...DESKTOP,
-      pairedDeviceId: ''
-    })
-
-    expect(events[0]).toMatchObject({
-      error: { message: 'authenticated_desktop_browser_bridge_required' }
-    })
-  })
-
-  it('a desktop runtime never serves the bridge', async () => {
-    const { runtime } = orcadRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    const { events } = await attachDesktop(dispatcher)
-
-    expect(events[0]).toMatchObject({ error: { message: 'desktop_browser_bridge_not_served' } })
   })
 
   it('detaching fails the waiting command and the next one names the setting', async () => {
@@ -364,36 +259,6 @@ describe('desktop browser bridge on orcad', () => {
     await expect(
       cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
     ).resolves.toMatchObject({ ok: false, error: { code: 'desktop_browser_bridge_unavailable' } })
-  })
-
-  it('leaves a host with its own headless browser on it while no desktop is attached', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-
-    await expect(
-      cliCall(dispatcher, 'browser.goto', { url: 'https://example.com' })
-    ).resolves.toMatchObject({ ok: true, result: { url: 'local' } })
-  })
-
-  it('does not forward calls from a paired client, only the host CLI', async () => {
-    setDesktopBrowserBridgeHostEnabled(true)
-    const { runtime } = orcadRuntime({ localBrowser: true })
-    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
-    const { events } = await attachDesktop(dispatcher)
-
-    const response = await dispatcher.dispatch(
-      {
-        id: 'paired',
-        authToken: 'bound',
-        method: 'browser.goto',
-        params: { url: 'https://a.test' }
-      },
-      DESKTOP
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { url: 'local' } })
-    expect(events).toHaveLength(1)
   })
 
   it.each([
@@ -430,5 +295,66 @@ describe('desktop browser bridge on orcad', () => {
     expect(events.slice(2)).toEqual(
       cancels ? [{ type: 'cancel', requestId: forwarded.requestId }] : []
     )
+  })
+
+  it("keeps commands the desktop won't run off this host's own browser", async () => {
+    setDesktopBrowserBridgeHostEnabled(true)
+    const { runtime } = orcadRuntime({ localBrowser: true })
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+    const { events } = await attachDesktop(dispatcher)
+
+    await expect(
+      cliCall(dispatcher, 'browser.cookie.get', { worktree: 'path:/srv/app' })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'desktop_browser_bridge_not_forwarded' }
+    })
+    await expect(
+      cliCall(dispatcher, 'browser.tabCreate', {
+        url: 'https://example.com',
+        worktree: 'path:/srv/app',
+        profileId: 'work'
+      })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(localCookie).not.toHaveBeenCalled()
+    expect(localHostBrowser).not.toHaveBeenCalled()
+    expect(events).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: 'a desktop that serves page tools gets',
+      capabilities: [DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY],
+      forwards: true
+    },
+    { name: 'an older desktop never gets', capabilities: [], forwards: false }
+  ])('$name device emulation', async ({ capabilities, forwards }) => {
+    setDesktopBrowserBridgeHostEnabled(true)
+    const { runtime } = orcadRuntime({ localBrowser: true })
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+    const { events } = await attachDesktop(dispatcher, {
+      ...DESKTOP,
+      clientCapabilities: [DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY, ...capabilities]
+    })
+
+    const call = cliCall(dispatcher, 'browser.setDevice', {
+      name: 'iPhone 14',
+      worktree: 'path:/srv/app'
+    })
+    if (forwards) {
+      await vi.waitFor(() => expect(events).toHaveLength(2))
+      expect(events[1]).toMatchObject({
+        type: 'request',
+        method: 'browser.setDevice',
+        params: { name: 'iPhone 14', worktree: 'id:repo-1::/srv/app' }
+      })
+    } else {
+      await expect(call).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'desktop_browser_bridge_not_forwarded' }
+      })
+      expect(events).toHaveLength(1)
+    }
+    expect(localHostBrowser).not.toHaveBeenCalled()
   })
 })

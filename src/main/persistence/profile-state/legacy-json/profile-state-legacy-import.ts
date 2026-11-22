@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { Store } from '../../loading-store/store'
-import type { ProfileStateStartupPaneAlias } from '../../loading-store/profile-state-authority'
-import { ProfileStateAuthorityBootstrapError } from '../profile-state-recovery-required'
+import type { ProfileStateStartupPaneAlias } from '../../loading-store/profile-writing/profile-state-authority'
+import { ProfileStateAuthorityBootstrapError } from '../recovery/profile-state-recovery-required'
 import {
   PROFILE_STATE_LEGACY_BACKUP_COUNT,
   profileStateLegacyBackupPath
@@ -11,7 +11,7 @@ export function prepareLegacyProfileState(dataFile: string, rawJson: string) {
   try {
     return prepareLegacySnapshot(dataFile, rawJson)
   } catch (error) {
-    // Import the first usable legacy backup without overwriting the damaged source.
+    // Preserve the damaged source while trying the backup ring.
     for (let index = 0; index < PROFILE_STATE_LEGACY_BACKUP_COUNT; index += 1) {
       const path = profileStateLegacyBackupPath(dataFile, index)
       if (!existsSync(path)) {
@@ -22,7 +22,7 @@ export function prepareLegacyProfileState(dataFile: string, rawJson: string) {
         console.warn(`[profile-state] Recovered legacy state from ${path}`)
         return prepared
       } catch {
-        // A corrupt backup must not prevent trying the remaining legacy ring.
+        // Keep trying later backups after corruption.
       }
     }
     throw new ProfileStateAuthorityBootstrapError(

@@ -37,16 +37,14 @@ const nacl = require('tweetnacl')
 const CAPABILITY_METHOD = 'runtime.clientCapabilities.update'
 const DIAL_TIMEOUT_MS = 30_000
 const RPC_TIMEOUT_MS = 15_000
-// Without this a director that accepts the connection and never answers blocks the benchmark
-// before any dial or RPC deadline has started.
+// Bound director requests before later dial/RPC deadlines exist.
 const RESOLVE_TIMEOUT_MS = 10_000
 const DEFAULT_HOLD_MS = 45_000
 const DEFAULT_STATE_PATH = '/tmp/relay-bench/state.json'
 const MAX_RUNS = 1000
 const MAX_DELAY_MS = 3_600_000
 
-// ---------- one relay dial, phone-shaped ----------
-// Resolves once e2ee_authenticated lands, with timings and an rpc() bound to the live socket.
+// Resolve on e2ee_authenticated with phase timings and socket-bound rpc.
 export function dialRelay({
   cellUrl,
   relayHostId,
@@ -70,8 +68,7 @@ export function dialRelay({
     let settled = false
     // Cleared on both outcomes: an uncleared 30 s timer keeps Node alive long after the last dial.
     const dialTimer = setTimeout(() => fail(new Error('dial timeout 30s')), DIAL_TIMEOUT_MS)
-    // Settle, not just clear: an in-flight rpc() whose timer is dropped without a resolution
-    // would await forever, which is exactly the hang the rpc timeout exists to prevent.
+    // Settle pending RPCs before dropping timers or callers await forever.
     const settlePending = (code) => {
       for (const waiter of pending.values()) {
         clearTimeout(waiter.timer)
@@ -95,8 +92,7 @@ export function dialRelay({
     }
     handle.rpc = (method, params, timeoutMs = RPC_TIMEOUT_MS) =>
       new Promise((res, rej) => {
-        // Without this the send would only surface as a 15 s rpc timeout, which would be
-        // indistinguishable from a slow desktop in the foreground-hold measurement.
+        // Surface send failure directly so foreground hold cannot misreport it as a slow-desktop timeout.
         if (ws.readyState !== WebSocket.OPEN) {
           rej(new Error(`socket not open (readyState ${ws.readyState})`))
           return
@@ -248,7 +244,6 @@ async function resolveCell(relay, resumeToken) {
   }
 }
 
-// ---------- shared phases ----------
 async function timedRpc(dial, method, params, timeoutMs = RPC_TIMEOUT_MS) {
   const started = performance.now()
   const res = await dial
@@ -261,9 +256,7 @@ async function timedRpc(dial, method, params, timeoutMs = RPC_TIMEOUT_MS) {
   return { entry, res }
 }
 
-// What the shipped phone does before publishing 'connected': confirm resume, then a capability
-// advisory, serialized. Then the UI gate's status.get, then the session's tabs.list +
-// terminal.list for the first worktree, serialized.
+// Mirror phone’s serialized pre-connected confirm/capability advisory, then status.get and first-worktree tabs.list/terminal.list.
 async function runConnectedSequence(dial) {
   const rpc = {}
   const confirmReqId = `confirm-${b64url(nacl.randomBytes(16))}`
@@ -315,9 +308,7 @@ async function refreshCell(state, row) {
   if (resolved.status !== 200) {
     return
   }
-  // The director names the next destination, so vet it the same way a probe origin is vetted:
-  // the literal check first, then DNS, so a public-looking name that resolves into the operator's
-  // network is refused before the resume credential is sent anywhere.
+  // Vet director-supplied cell by literal then DNS checks before sending resume credentials to a public-looking private address.
   const verdict = await vetCellUrl(resolved.body?.cellUrl)
   if (!verdict.ok) {
     row.resolve = { ...resolved, error: `director named an unusable cell: ${verdict.reason}` }
@@ -358,7 +349,6 @@ function loadState(statePath) {
   return state
 }
 
-// ---------- commands ----------
 async function pair(pairingUrl, statePath) {
   const offer = decodeOffer(pairingUrl)
   if (!offer.relay) {
@@ -407,8 +397,7 @@ async function pair(pairingUrl, statePath) {
     resumeCredentialVersion: provision.result.currentVersion,
     resumeExpiresAt: provision.result.resumeExpiresAt
   }
-  // The desktop has already burned the provision request, so a failed write loses the credential.
-  // writeSecretFile creates the parent directory and forces 0600 even on an existing file.
+  // Provision is already consumed; create parents and enforce 0600 even for existing files to retain the credential safely.
   writeSecretFile(statePath, JSON.stringify(state, null, 2))
   console.log(`saved ${statePath} (secret: never commit or share this file)`)
 }
@@ -469,9 +458,7 @@ async function run(statePath, runs, opts) {
   )
 }
 
-// Simulates a backgrounded phone: connect, go silent for --hold, then find out whether the
-// retained socket is still usable and what the fallback resume redial costs. The relay's client
-// silence watchdog is ~105 s, so --hold=120000 is the interesting "crossed the watchdog" case.
+// Idle like a backgrounded phone, then measure retained socket and fallback redial; --hold=120000 crosses the ~105s silence watchdog.
 async function foreground(statePath, opts) {
   const state = loadState(statePath)
   const row = { mode: 'foreground', holdMs: opts.holdMs }
@@ -515,7 +502,6 @@ async function foreground(statePath, opts) {
   console.log(JSON.stringify(row))
 }
 
-// ---------- cli ----------
 const USAGE = [
   `every command dials a real desktop over the production relay, so prefix it with ${LIVE_ENV_VAR}=1:`,
   '  pair [state.json] [--pairing-url-file=<path>]',
@@ -616,8 +602,7 @@ async function main(argv) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // A bad state file or a refused destination is operator input, not a crash; say what is wrong
-  // without spilling the credential-bearing stack.
+  // Report malformed state/refused destinations as usage errors without credential-bearing stacks.
   await main(process.argv.slice(2)).catch((err) => {
     console.error(err.message)
     process.exitCode = 1

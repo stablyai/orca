@@ -2,13 +2,7 @@ import { safeStorage } from 'electron'
 
 let withheldReason: string | null = null
 
-/**
- * Stop every in-process keychain call for the rest of this run.
- *
- * Why: `safeStorage` is synchronous, and against a keychain that needs a prompt nobody can
- * answer (headless serve with no GUI session) it blocks the main thread indefinitely. Once
- * an out-of-process probe has shown that, callers get "unavailable" instead of a frozen host.
- */
+/** Withhold synchronous safeStorage calls after a probe finds an unreachable keychain, avoiding headless prompt hangs. */
 export function withholdSafeStorage(reason: string): void {
   withheldReason ??= reason
 }
@@ -43,7 +37,6 @@ export const guardedSafeStorage = {
   }
 }
 
-/** Test seam: restore the unwithheld state. */
 export function resetSafeStorageWithholdForTests(): void {
   withheldReason = null
 }

@@ -1,0 +1,204 @@
+export type HostTerminalDataMeta = {
+  seq?: number
+  rawLength?: number
+  cwd?: string
+}
+
+// Record process input and snapshot serialization so frame traffic alone cannot satisfy the journey oracle.
+export type HostTerminalRuntimeStub = {
+  runtime: unknown
+  ptyId: string
+  terminalHandle: string
+  writtenInput: string[]
+  buffer: string
+  serializeCount: number
+  emitOutput: (data: string, meta?: HostTerminalDataMeta) => void
+  /** Names of runtime methods the host called that the stub does not implement. */
+  missingRuntimeMethods: string[]
+  /** Run the host's registered teardown for one connection, as a socket close does. */
+  closeConnection: (connectionId: string) => void
+}
+
+export function createHostTerminalRuntimeStub(
+  options: {
+    terminalHandle?: string
+    ptyId?: string
+    cols?: number
+    rows?: number
+    initialBuffer?: string
+    overflowInitialSnapshots?: boolean
+    /** Replaces the default always-accepting PTY write, to script refusals and lost settlements. */
+    writeInput?: (text: string) => Promise<unknown>
+  } = {}
+): HostTerminalRuntimeStub {
+  const terminalHandle = options.terminalHandle ?? 'terminal-journey'
+  const ptyId = options.ptyId ?? 'pty-journey'
+  const cols = options.cols ?? 120
+  const rows = options.rows ?? 40
+  const dataListeners = new Set<(data: string, meta?: HostTerminalDataMeta) => void>()
+  const cleanups = new Map<string, { connectionId: string | undefined; run: () => void }>()
+  const stub: HostTerminalRuntimeStub = {
+    runtime: null,
+    ptyId,
+    terminalHandle,
+    writtenInput: [],
+    buffer: options.initialBuffer ?? '',
+    serializeCount: 0,
+    emitOutput: () => {},
+    missingRuntimeMethods: [],
+    closeConnection: () => {}
+  }
+
+  stub.closeConnection = (connectionId) => {
+    const pending: (() => void)[] = []
+    for (const [id, entry] of cleanups) {
+      if (entry.connectionId === connectionId) {
+        cleanups.delete(id)
+        pending.push(entry.run)
+      }
+    }
+    for (const run of pending) {
+      run()
+    }
+  }
+
+  let outputSequence = 0
+  stub.emitOutput = (data, meta) => {
+    stub.buffer += data
+    outputSequence += data.length
+    const resolved: HostTerminalDataMeta = {
+      seq: outputSequence,
+      rawLength: data.length,
+      ...meta
+    }
+    // Snapshot: a listener may unsubscribe while the host fans this out.
+    for (const listener of Array.from(dataListeners)) {
+      listener(data, resolved)
+    }
+  }
+
+  const serialize = async (): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq: number
+    source: 'headless'
+    alternateScreen: false
+    terminalOwner: 'shell'
+  }> => {
+    stub.serializeCount++
+    const snapshot = {
+      data: stub.buffer,
+      cols,
+      rows,
+      seq: outputSequence,
+      source: 'headless' as const,
+      alternateScreen: false as const,
+      terminalOwner: 'shell' as const
+    }
+    if (options.overflowInitialSnapshots && stub.serializeCount <= 2) {
+      const data = 'x'.repeat(300 * 1024)
+      outputSequence += data.length
+      for (const listener of Array.from(dataListeners)) {
+        listener(data, { seq: outputSequence, rawLength: data.length })
+      }
+    }
+    return snapshot
+  }
+
+  const runtime: Record<string, unknown> = {
+    getRuntimeId: () => 'cross-version-host',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
+    resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
+    resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
+    registerRemoteTerminalViewSubscriber: () => () => {},
+    isSoleRemoteTerminalQueryOwner: () => false,
+    answerYieldedTerminalQueries: () => {},
+    requestRendererTerminalTabMount: () => true,
+    updateRemoteDesktopViewer: async () => true,
+    unregisterRemoteDesktopViewer: async () => true,
+    unregisterRemoteDesktopViewers: async () => true,
+    isPtyResizeDrivenRemotely: () => false,
+    getRemoteDesktopFitHold: () => ({ mode: 'desktop-fit', cols, rows }),
+    isRemoteDesktopViewerOwner: () => false,
+    getPtyOutputSequence: () => outputSequence,
+    serializeTerminalBuffer: serialize,
+    serializeAuthoritativeTerminalBuffer: serialize,
+    serializeRendererTerminalBuffer: serialize,
+    readTerminal: async () => ({ tail: [], truncated: false }),
+    getTerminalSize: () => ({ cols, rows }),
+    getMobileDisplayMode: () => 'auto',
+    getLayout: () => ({ seq: 1 }),
+    getTerminalFitOverride: () => null,
+    getDriver: () => ({ kind: 'idle' }),
+    subscribeToTerminalData: (
+      _ptyId: string,
+      listener: (d: string, m?: HostTerminalDataMeta) => void
+    ) => {
+      dataListeners.add(listener)
+      return () => dataListeners.delete(listener)
+    },
+    subscribeToTerminalResize: () => () => {},
+    subscribeToFitOverrideChanges: () => () => {},
+    subscribeToDriverChanges: () => () => {},
+    registerSubscriptionCleanup: (id: string, cleanup: () => void, connectionId?: string) => {
+      cleanups.set(id, { connectionId, run: cleanup })
+    },
+    cleanupSubscription: (id: string) => {
+      const entry = cleanups.get(id)
+      cleanups.delete(id)
+      entry?.run()
+    },
+    waitForTerminal: () => new Promise(() => {}),
+    sendTerminal: async (_handle: string, action: { text?: string }) => {
+      if (options.writeInput) {
+        return options.writeInput(action?.text ?? '')
+      }
+      if (typeof action?.text === 'string') {
+        stub.writtenInput.push(action.text)
+      }
+      return { accepted: true }
+    },
+    beginMobileInputFloor: () => ({ commit: () => {}, rollback: () => {} }),
+    isTerminalInputLocked: () => false,
+    getTerminalInputLock: () => null,
+    // Source-range accounting is a host-internal ledger, not part of the wire; decline it.
+    attachRemoteTerminalSourceRangeConsumer: () => false,
+    cancelRemoteTerminalSourceRanges: () => {},
+    settleRemoteTerminalSourceRanges: () => {},
+    reserveRemoteTerminalSourceRangeReplacement: () => null,
+    commitRemoteTerminalSourceRangeReplacement: () => {},
+    rollbackRemoteTerminalSourceRangeReplacement: () => {},
+    getRendererTerminalSerializerGeneration: () => 0,
+    getRendererTerminalSerializerGenerationForHandle: () => 0,
+    hasHeadlessTerminalState: () => true,
+    isTerminalAlternateScreen: () => false,
+    isTerminalRunningAgent: () => false,
+    getTerminalAgentStatus: () => null,
+    isMobileTerminalQueryReplyAuthority: () => false,
+    markMobileActor: () => {},
+    refreshRemoteDesktopViewer: async () => true,
+    resizeForClient: async () => ({ cols, rows }),
+    waitForLeafPtyId: async () => ptyId,
+    recoverTerminalPane: async () => null,
+    getMobileAutoRestoreFitMs: () => null,
+    isMobileSubscriberActive: () => false
+  }
+
+  // Report missing runtime methods by name so harness gaps do not masquerade as wire failures.
+  stub.runtime = new Proxy(runtime, {
+    get(target, property, receiver) {
+      if (typeof property === 'string' && !(property in target)) {
+        if (!stub.missingRuntimeMethods.includes(property)) {
+          stub.missingRuntimeMethods.push(property)
+        }
+        return () => undefined
+      }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
+      return Reflect.get(target, property, receiver)
+    }
+  })
+
+  return stub
+}

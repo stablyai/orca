@@ -1,7 +1,4 @@
-/**
- * The GLM Coding Plan key on this host, shared by the desktop's IPC and the runtime RPC so a
- * paired client saves it where the usage poller runs. Nothing here may import Electron.
- */
+/** Share host-local key ownership across IPC/RPC so paired clients save where usage polling runs; remain Electron-free. */
 import {
   clearZcodePlanApiKey,
   getZcodePlanApiKeyProtection,
@@ -14,33 +11,33 @@ import {
   refuseCredentialSealedElsewhere,
   savedCredentialUnreadable
 } from '../credentials/saved-credential-readability'
-import { hasZcodeCliPlanCredentials } from '../rate-limits/zcode-usage-fetcher'
-import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
-import type { RateLimitService } from '../rate-limits/service'
-import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
+import { hasZcodeCliPlanCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
+import { refreshAfterCredentialChange } from '../ipc/accounts/credential-change-rate-limit-refresh'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
+import type { ZcodePlanCredentialsStatus } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>
 
-export function getZcodePlanCredentialsStatus(): ZcodePlanCredentialsStatus {
-  const apiKeyConfigured = hasZcodePlanApiKey()
+export async function getZcodePlanCredentialsStatus(): Promise<ZcodePlanCredentialsStatus> {
+  const apiKeyConfigured = await hasZcodePlanApiKey()
   return {
     apiKeyConfigured,
     zcodeCliConfigured: hasZcodeCliPlanCredentials(),
-    apiKeyProtection: getZcodePlanApiKeyProtection(),
-    apiKeyUnreadable: apiKeyConfigured ? apiKeyUnreadable() : undefined
+    apiKeyProtection: await getZcodePlanApiKeyProtection(),
+    apiKeyUnreadable: apiKeyConfigured ? await apiKeyUnreadable() : undefined
   }
 }
 
-function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
+async function apiKeyUnreadable(): Promise<ReturnType<typeof savedCredentialUnreadable>> {
   return savedCredentialUnreadable({
     path: getZcodePlanApiKeyPath(),
     envelopePrefix: API_KEY_ENVELOPE_PREFIX
   })
 }
 
-/** For a paired client's save; forgetting is always allowed, since nobody here can read the file. */
-export function assertZcodePlanApiKeyOpensHere(): void {
-  if (apiKeyUnreadable() === 'sealed-elsewhere') {
+/** Reject save when this host cannot open the existing seal; forgetting remains allowed. */
+export async function assertZcodePlanApiKeyOpensHere(): Promise<void> {
+  if ((await apiKeyUnreadable()) === 'sealed-elsewhere') {
     refuseCredentialSealedElsewhere('GLM Coding Plan API key')
   }
 }
@@ -53,23 +50,23 @@ function refreshAfterChange(rateLimits: UsageRefresher | null, action: 'save' | 
   )
 }
 
-export function saveZcodePlanApiKeyCredential(
+export async function saveZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null,
   key: unknown
-): ZcodePlanCredentialsStatus {
-  // Why: the value arrives as unknown over IPC/RPC; the declared type is compile-time only.
+): Promise<ZcodePlanCredentialsStatus> {
+  // Runtime-check IPC/RPC input; compile-time types do not constrain the wire.
   if (typeof key !== 'string') {
     throw new Error('GLM Coding Plan API key must be a string')
   }
-  saveZcodePlanApiKey(key)
+  await saveZcodePlanApiKey(key)
   refreshAfterChange(rateLimits, 'save')
   return getZcodePlanCredentialsStatus()
 }
 
-export function clearZcodePlanApiKeyCredential(
+export async function clearZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null
-): ZcodePlanCredentialsStatus {
-  clearZcodePlanApiKey()
+): Promise<ZcodePlanCredentialsStatus> {
+  await clearZcodePlanApiKey()
   refreshAfterChange(rateLimits, 'clear')
   return getZcodePlanCredentialsStatus()
 }

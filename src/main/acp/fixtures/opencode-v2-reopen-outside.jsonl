@@ -1,0 +1,6 @@
+{"direction":"out","process":"A","message":{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"Reply with exactly the word ONE."}]}}}
+{"direction":"in","process":"A","message":{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Internal error: Rate limit exceeded. Please try again later.","data":{"service":"session","errorName":"provider.quota"}}}}
+{"direction":"out","process":"C","message":{"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"session-1","cwd":"/workspace","mcpServers":[]}}}
+{"direction":"in","process":"C","message":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"session-1","update":{"sessionUpdate":"user_message_chunk","messageId":"msg_15fad6c9f001d4ix8WtRMUSWtI","content":{"type":"text","text":"Reply with exactly the word ONE."}}}}}
+{"direction":"in","process":"C","message":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"session-1","update":{"sessionUpdate":"user_message_chunk","messageId":"msg_15fad7241001viLg4AlvQLn3N6","content":{"type":"text","text":"Run the shell command: echo TWO-TOOL. Then reply with exactly the word TWO."}}}}}
+{"direction":"in","process":"C","message":{"jsonrpc":"2.0","id":2,"result":{}}}

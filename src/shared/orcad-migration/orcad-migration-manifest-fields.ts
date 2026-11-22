@@ -1,10 +1,7 @@
-// Field checks shared by the manifest and receipt parsers; each throws a labeled error.
-
 /** Catalog bounds, shared by the manifest parser and the WSL source's scope lists. */
 export const MAX_ORCAD_MIGRATION_REPOSITORIES = 1_024
 export const MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES = 16_384
 
-/** The one bounded-array check; `errorPrefix` names the manifest or dormant error family. */
 export function boundedList<T>(
   value: unknown,
   maximum: number,
@@ -29,7 +26,6 @@ export function boundedArray<T>(
   return boundedList(value, maximum, parse, `orcad_migration_manifest_${label}`)
 }
 
-/** The one uniqueness check; callers pass their own error code. */
 export function assertUniqueKeys<T>(values: T[], key: (value: T) => string, error: string): void {
   const keys = values.map(key)
   if (new Set(keys).size !== keys.length) {
@@ -41,7 +37,6 @@ export function assertUniqueIds(values: { id: string }[], label: string): void {
   assertUniqueKeys(values, (value) => value.id, `orcad_migration_manifest_${label}_duplicate_id`)
 }
 
-/** The one bounded, non-empty, duplicate-free string list check; callers pass their error codes. */
 export function boundedStringArray(
   value: unknown,
   maximum: number,

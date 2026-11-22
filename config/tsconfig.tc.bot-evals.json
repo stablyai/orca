@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.cli.json",
+  // The vitest-only bot evals share the cloud connector's Linear code, so they reach past src/;
+  // the CLI projects exclude them and keep rootDir ../src.
+  "include": [
+    "../src/cli/bot-automation-eval/**/*",
+    "../src/cli/bot-orchestration-eval/**/*",
+    "../src/shared/**/*"
+  ],
+  "exclude": [
+    "../src/shared/**/*.test.ts",
+    "../src/shared/**/*.test.tsx",
+    "../src/shared/**/*.spec.ts",
+    "../src/shared/**/*.spec.tsx"
+  ],
+  "compilerOptions": {
+    "rootDir": ".."
+  }
+}

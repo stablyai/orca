@@ -39,6 +39,8 @@ orca open --json
 orca status --json
 ```
 
+`orca open` starts Orca without taking keyboard focus from the app you're using. If an Orca window is already open, it does nothing.
+
 Use `--json` when another tool will parse the result. Human-readable output is for quick terminal checks.
 
 ## Selectors
@@ -67,27 +69,43 @@ The result includes this machine, its registered [SSH targets](/docs/ssh), and p
 
 `--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
 
+Remove a saved SSH target with the id `orca host list` prints:
+
+```bash
+orca host rm --host ssh:<target-id> --json
+```
+
+It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
+
 ## Runtime commands
 
 ```bash
 orca open --json
 orca status --json
-orca serve --port 6768 --pairing-address 100.64.1.20 --json
+orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20 --json
 ```
 
-`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
+`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`. It accepts clients from localhost, LAN and Tailscale addresses; add `--allow-public` to accept public internet addresses too.
+Use `--bind <literal-ip>` to choose the listening interface; `--pairing-address` changes the address advertised to clients.
 
 ## Repos
 
 ```bash
 orca repo list --json
 orca repo add --path /abs/path/to/repo --json
+orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+orca repo hide --repo id:<repoId> --json
+orca repo unhide --repo id:<repoId> --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
+
+`repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
 ## Worktrees
 
@@ -104,6 +122,8 @@ orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
+
+Pass `--branch DAT-111-fix-login` to name the Git branch yourself instead of applying the configured branch prefix. `--name` still sets the workspace name and `--base-branch` the starting ref. If that branch already exists and cannot be reused, or the workspace path is already taken, Orca appends a numeric suffix to both, as it does in the new-workspace composer, so `--name task --branch exact` can produce branch `exact-2` even when `exact` is free.
 
 `worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
 
@@ -133,6 +153,26 @@ Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only 
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
 
+### Workspace cleanup
+
+```bash
+orca workspace cleanup preview --json
+orca workspace cleanup run --json
+orca workspace cleanup report --json
+```
+
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete agent history when a workspace is deleted** (Settings > Agents) on, `run` also deletes Orca, Claude Code and Codex chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
+
+## Ports
+
+```bash
+orca ports --json
+orca ports --worktree branch:feature/login --json
+orca ports --all
+```
+
+`ports` lists the listening ports Orca tied to a workspace, from the host the workspace runs on. It defaults to the workspace that contains the current directory. Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, how Orca matched it (`owner.confidence`: `cwd` or `command`), and `advertisedUrl` when the dev server printed one in an Orca terminal. `--all` lists every listener on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. If `unavailableReason` is set, the scan could not run on that host; SSH workspaces opened directly from the desktop report this for now, while a workspace on a managed Orca server is scanned on that server.
+
 ## References
 
 A workspace can link multiple reviews and issues, including sources outside its repository.
@@ -155,8 +195,8 @@ orca reference find STA-1234 --json
 Choose an agent from `find`, then use its exact address:
 
 ```bash
-orca terminal send --terminal '<terminal-from-find>' --text 'Status?' --enter
-orca orchestration send --to '<mailbox-from-find>' --subject 'Status?' --type question
+orca orchestration send --to '<terminal-from-find>' --subject 'Status' --body 'Status?' --type question
+orca orchestration send --to '<mailbox-from-find>' --subject 'Status' --body 'Status?' --type question
 ```
 
 Mailboxes are `dispatch:<id>` or `orca_session_id:<id>`; a `run:<id>` addresses a coordinator. Find never sends messages or assigns ownership. Adding references from a shell does not associate that shell with an agent.
@@ -169,7 +209,7 @@ orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --screen --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
-orca terminal send --terminal <handle> --text "continue" --enter --json
+orca terminal send --terminal <handle> --text "npm test" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
@@ -200,6 +240,37 @@ By default, `terminal read` returns the accumulated output stream with terminal 
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
+## Installed agents
+
+```bash
+orca agent installed --json
+orca agent installed --worktree active
+```
+
+Lists the agent CLIs Orca detects on the host that can start: agents turned off in Settings → Agents are left out, and ones set up there with a custom command are included. Each `id` is what `--agent` takes in `orca agent launch` and `orca worktree create`, and `default` marks the default agent. For running agents, use `agent list`. `--worktree` checks where that workspace runs agents, such as its SSH host or WSL distro; a stopped WSL distro is not started to check.
+
+## Agents by ID
+
+```bash
+orca agent list --json
+orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+```
+
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<id>`), what Copy Orca Session ID copies. `agent list` lists agents in this host's workspaces with their IDs; a terminal agent shows none until it first reports to Orca. A chat keeps its ID across `/clear`; a terminal agent gets a new one. IDs belong to the host that runs the agent: agents on other hosts are not listed, and the output names those hosts with the `--environment` that lists them. A finished terminal agent stays listed as `done` while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `agent read` still reads it in all these cases. `agent show` shows a listed sleeping agent's last state and where it wakes when its workspace is reopened.
+
+`agent read` reads the conversation, not a screen: a chat's history, or a terminal agent's own transcript. The agent need not be running and reading never starts it. A terminal agent can be read while Orca knows where its transcript is (it is open, or asleep in a workspace; on Windows, a sleeping WSL agent only once its tab is reopened). The read can start with a state (`state` in `--json`) for the latest turn its own history records: `working` means that history shows an unfinished turn, so its reply may not be there yet, and `done` means the turn ended with its reply in the read. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `agent list` and `agent show` report the last state known to Orca, which may differ. To message an agent, use `orca orchestration send` with its terminal handle (a terminal agent) or `orca_session_id:<id>` (a chat), not `orca terminal send`; a sleeping terminal agent can't be messaged, so reopen its workspace first.
+
+## Chats
+
+```bash
+orca chat rename --session <sessionId> --name "Release notes" --json
+orca chat rename --name "Migrate auth"
+```
+
+Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
+
 ## Files
 
 ```bash
@@ -227,6 +298,8 @@ orca screenshot --worktree active --json
 ```
 
 Refs such as `@e3` come from `snapshot`. Re-snapshot after navigation, tab switches, clicks that change the page, and any stale-ref error.
+
+`snapshot --interactive` lists only controls and links, `--delta` returns only what changed since the last `--delta` snapshot, and `--selector <css>` or `--depth <n>` narrow the tree. `screenshot` and `full-screenshot` save the image where the CLI runs and print its path; `screenshot` is in CSS pixels in Orca's desktop browser.
 
 Tab and capture commands:
 
@@ -257,6 +330,7 @@ Use `orca computer` for native desktop apps outside the built-in browser:
 ```bash
 orca computer permissions --json
 orca computer list-apps --json
+orca computer launch-app Safari --json
 orca computer get-app-state --app com.apple.Safari --json
 orca computer click --app com.apple.Safari --element-index 12 --json
 orca computer paste-text --app com.apple.Safari --text "hello" --json
@@ -286,6 +360,17 @@ Coordinates are normalized from `0` to `1`. Prefer `tap` for single taps, and us
 ## Linear
 
 The `orca linear` surface is what agents use via the `orca-linear` skill (legacy install name `linear-tickets` still works). Prefer `--json`. Linked worktrees resolve with `--current`.
+
+### Connect
+
+Each Orca host keeps its own Linear connection. Connect a headless server or recipe VM from a shell, with the API key on stdin:
+
+```bash
+printf %s "$LINEAR_API_KEY" | orca linear connect
+printf %s "$LINEAR_API_KEY" | orca linear connect --environment build-vm --json
+# PowerShell
+$env:LINEAR_API_KEY | orca linear connect
+```
 
 ### Read
 
@@ -363,9 +448,21 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+Switch which saved account new agents launch with, for any provider with saved accounts (Claude, Codex, OpenCode, Devin, Antigravity):
+
+```bash
+orca account list                                               # ids, emails/labels, and the active one
+orca account select --agent claude --account you@example.com    # id, email or label
+orca worktree create --name task --agent claude --prompt "..."
+orca account select --agent claude --account system             # back to your own sign-in
+orca account rm --agent codex --account old@example.com         # forget a saved account
+```
+
+A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
+
 ## Artifacts
 
-Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
 
 ```bash
 orca artifacts share ./report.html --json
@@ -382,6 +479,7 @@ orca artifacts delete <id> --json
 - `list` is paged (`nextCursor` → `--cursor`). `delete` takes the artifact id from `list` and does not need the original file.
 - Relative HTML assets are not uploaded — share self-contained HTML or absolute asset URLs.
 - Denied publish/update fails with `artifact_sharing_disabled`; fix Settings instead of retrying.
+- Headless Orca servers have no Orca cloud sign-in, so artifact and skill-sharing commands there fail with `sharing_unavailable_on_host`; share from the desktop app.
 - Desktop: open a local HTML or Markdown file and use **Share as artifact**, or manage links from the sidebar **Artifacts** page.
 
 ## Automations, environments, and hooks

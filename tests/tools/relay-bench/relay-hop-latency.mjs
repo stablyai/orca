@@ -1,6 +1,4 @@
-// Measures the infrastructure floor of a phone→relay connect with throwaway credentials:
-// director /v1/resolve (DB lookup path) and cell WebSocket open → relay-hello. Needs no pairing,
-// because a cell answers a bogus credential without ever reaching a desktop.
+// Measure director resolve plus cell WebSocket→relay-hello using throwaway credentials; rejection stops at the cell without pairing/desktop access.
 import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
@@ -61,8 +59,7 @@ function timeCellHello(cell, relayHostId) {
     const ws = new WebSocket(url.toString(), { perMessageDeflate: false })
     let settled = false
     const done = (extra) => {
-      // One-shot: a socket normally emits close after error, and an uncleared timer keeps Node
-      // alive for the full CELL_TIMEOUT_MS after the last run.
+      // Settle once and clear timer on error/close so Node cannot linger for CELL_TIMEOUT_MS.
       if (settled) {
         return
       }
@@ -70,8 +67,7 @@ function timeCellHello(cell, relayHostId) {
       clearTimeout(timer)
       ws.terminate()
       resolve({
-        // openedAt stays 0 when error or close beat open; reporting the difference would be a
-        // large negative number, not a measurement.
+        // Ignore duration when error/close precedes open; zero openedAt otherwise yields a huge negative value.
         openMs: openedAt === 0 ? null : Math.round(openedAt - started),
         totalMs: Math.round(performance.now() - started),
         ...extra

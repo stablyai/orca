@@ -1,41 +1,35 @@
-// A window's session save in a layout-owner build: every tab and pane change reaches main as a
-// layout command, so main keeps its own layout and takes from the save only what the window owns:
-// its view (selection, focus, drafts), the facts its views report (titles, scrollback, page
-// state) and the fields passed through untouched. A paired server's partition is the server's
-// layout, mirrored by the window, and passes through as it is.
+// Preserve main-owned layout while merging renderer views/facts; paired-server mirrors pass through.
 
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
-import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../shared/workspace-session/workspace-session-state-types'
+import { SESSION_FIELD_OWNERS } from '../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspace-layout-model'
-import { patchStoredSession } from '../../shared/workspace-layout/workspace-layout-record-patch'
-import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
+import {
+  patchStoredSession,
+  type TouchedSessionRecords
+} from '../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS
 
-/** Fields main writes from its own layout; the Loader's one-time legacy field goes with them. */
-function isLayoutField(field: string): boolean {
+export function isLayoutField(field: string): boolean {
   const owner = Object.hasOwn(FIELD_OWNERS, field) ? FIELD_OWNERS[field] : undefined
   return owner === 'layout' || owner === 'legacy'
 }
 
-/**
- * A workspace main holds that the window visited keeps its terminal row, as the window's save
- * did: a relaunch then leaves a workspace emptied by a recorded close empty
- * (isTerminalWorkspaceEmptiedOnPurpose, admitsInitialSurface).
- */
+/** Visited empty workspaces retain owner rows so recorded closes survive relaunch. */
 function withVisitedRowOwners(
   layout: WorkspaceLayoutModel,
   visited: Readonly<Record<string, number>> | undefined
@@ -53,7 +47,6 @@ function withVisitedRowOwners(
   return { ...layout, legacy: { ...layout.legacy, terminalRowOwners: owners } }
 }
 
-/** Main's layout with the window's view, facts and carried fields, written as a session. */
 function joinWindowView(
   main: LoadedWorkspaceLayout,
   windows: LoadedWorkspaceLayout
@@ -62,7 +55,7 @@ function joinWindowView(
     layout: withVisitedRowOwners(main.layout, windows.desktopView.lastVisitedAtByWorktreeId),
     desktopView: windows.desktopView,
     facts: windows.facts,
-    // What names no tab or workspace main holds is main's too.
+    // Unowned layout/resume fragments remain main-authored too.
     carried: {
       ...windows.carried,
       unownedTerminalLayouts: main.carried.unownedTerminalLayouts,
@@ -73,22 +66,24 @@ function joinWindowView(
   })
 }
 
-/**
- * The stored partition with the window's view and facts written into main's records. Only records
- * the join changes are rewritten, as a layout command writes, so untouched records stay as stored.
- */
+/** Patch only records changed by the view merge; preserve untouched stored representation. */
 function storedWithWindowView(
   partition: ExecutionHostId,
   stored: WorkspaceSessionState,
-  window: WorkspaceSessionState
+  window: WorkspaceSessionState,
+  touched?: TouchedSessionRecords
 ): WorkspaceSessionState {
   const context = nameBasedLoadContext()
   const main = loadWorkspaceLayoutWithoutReport(partition, stored, context)
   const windows = loadWorkspaceLayoutWithoutReport(partition, window, context)
-  return patchStoredSession(stored, saveWorkspaceLayout(main), joinWindowView(main, windows))
+  return patchStoredSession(
+    stored,
+    saveWorkspaceLayout(main),
+    joinWindowView(main, windows),
+    touched
+  )
 }
 
-/** The window's save with each named layout field taken from main's stored partition. */
 function withMainLayoutFields<T extends WorkspaceSessionPatch>(
   save: T,
   joined: WorkspaceSessionState,
@@ -103,10 +98,7 @@ function withMainLayoutFields<T extends WorkspaceSessionPatch>(
   return result as T
 }
 
-/**
- * A full save main applies in a layout-owner build (`session:set`, the shutdown stage): the
- * window's own fields as sent, and main's layout fields with the window's view and facts in them.
- */
+/** Merge full renderer saves/shutdown staging into main-owned layout. */
 export function windowViewSaveForMain(
   stored: WorkspaceSessionState,
   save: WorkspaceSessionState,
@@ -120,13 +112,12 @@ export function windowViewSaveForMain(
   const joined = storedWithWindowView(partition, stored, save)
   const fields = [...new Set([...Object.keys(save), ...Object.keys(joined)])]
   const result = withMainLayoutFields(save, joined, fields.filter(isLayoutField))
-  // Main's own reconnect facts replace the window's (C1a; B2 folds this into its view merge).
+  // Recompute reconnect evidence in main rather than trusting renderer snapshots.
   return reconnectFacts
     ? withReconnectFacts(result, reconnectFacts(result, partition), RECONNECT_FACT_FIELDS)
     : result
 }
 
-/** Main's reconnect facts for the session it is about to store. */
 export type ReconnectFactsFor = (
   session: WorkspaceSessionState,
   partition: ExecutionHostId
@@ -155,27 +146,33 @@ function withReconnectFacts<T extends WorkspaceSessionPatch>(
 }
 
 /**
- * A `session:patch` in a layout-owner build: its own fields as sent, and each layout field it
- * carries comes back as main's with the window's view and facts in it. A patch carrying none
- * skips the layout entirely, as today's scalar patch skips terminal normalization.
+ * Merge carried layout fields; scalar-only patches skip layout normalization. `touched`: per stored field, the
+ * keys the merge wrote (layout fields only; a field it left out is unchanged); null where the window's layout passes through.
  */
 export function windowViewPatchForMain(
   stored: WorkspaceSessionState,
   patch: WorkspaceSessionPatch,
   hostId: string | null | undefined,
   reconnectFacts?: ReconnectFactsFor
-): WorkspaceSessionPatch {
+): { patch: WorkspaceSessionPatch; touched: TouchedSessionRecords | null } {
   const partition = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   if (parseExecutionHostId(partition)?.kind === 'runtime') {
-    return patch
+    return { patch, touched: null }
   }
   const fields = Object.keys(patch).filter(isLayoutField)
+  const touched: TouchedSessionRecords = new Map()
   const joined =
-    fields.length === 0 ? null : storedWithWindowView(partition, stored, { ...stored, ...patch })
+    fields.length === 0
+      ? null
+      : storedWithWindowView(partition, stored, { ...stored, ...patch }, touched)
   const result = joined ? withMainLayoutFields(patch, joined, fields) : patch
-  // Only the reconnect facts the patch itself carries are replaced with main's.
+  // Replace only reconnect fields actually present in the patch.
   const carried = RECONNECT_FACT_FIELDS.filter((field) => Object.hasOwn(patch, field))
-  return reconnectFacts && carried.length > 0
-    ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
-    : result
+  return {
+    patch:
+      reconnectFacts && carried.length > 0
+        ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
+        : result,
+    touched
+  }
 }

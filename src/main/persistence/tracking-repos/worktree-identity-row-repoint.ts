@@ -1,10 +1,6 @@
 type WorktreeNamingRow = { worktreeId: string }
 
-/**
- * A session map keyed by pane, tab or environment whose VALUE names the worktree it belongs to.
- * Returns the repointed record, or null when no row named the old id — so the caller assigns to
- * the concrete field and the row type is never widened.
- */
+/** Null means unchanged; callers assign concrete fields without widening their row types. */
 export function repointRowRecord<Row extends WorktreeNamingRow>(
   record: Record<string, Row> | undefined,
   oldWorktreeId: string,
@@ -25,7 +21,6 @@ export function repointRowRecord<Row extends WorktreeNamingRow>(
   return changed ? next : null
 }
 
-/** Same, but each value is an array of such rows. */
 export function repointRowArrays<Row extends WorktreeNamingRow>(
   record: Record<string, Row[]> | undefined,
   oldWorktreeId: string,

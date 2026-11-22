@@ -1,14 +1,12 @@
-import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/renderer-session-terminal-rescue'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/restoration/renderer-session-terminal-rescue'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/chat/structured-session-tab-close'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as SessionGraphAuthority } from '../../session-graph/session-graph-authority'
 import type { OrcaRuntimeWithWaitForMobileTerminalSurface as MobileTerminalSurface } from '../../terminal/view/mobile-terminal-surface'
-import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/headless-terminal-tab-close'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/terminal-retirement/headless-terminal-tab-close'
 import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from '../projection/reconcile-headless-mobile-session-browser-tabs'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { terminalIsOfTab } from './closed-tab-terminal'
 
 export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs {
@@ -27,6 +25,14 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
   protected abstract assertStableReadyGraph(
     ...args: Parameters<SessionGraphAuthority['assertStableReadyGraph']>
   ): ReturnType<SessionGraphAuthority['assertStableReadyGraph']>
+
+  protected abstract captureRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['captureRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['captureRendererGraphFence']>
+
+  protected abstract assertRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['assertRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['assertRendererGraphFence']>
 
   protected abstract resolvePtyTabCloseSurfaceAuthority(
     ...args: Parameters<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>
@@ -52,11 +58,7 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
     ...args: Parameters<StructuredSessionClose['closeStructuredAgentSessionTab']>
   ): ReturnType<StructuredSessionClose['closeStructuredAgentSessionTab']>
 
-  // Why: a snapshot tab can keep a serve/SSH-owned ptyId after the runtime
-  // terminal died and was de-persisted, so id shape alone must not preserve it
-  // against a renderer publication. Require the binding to be backed by a live
-  // PTY or by the persisted workspace session (a dormant persisted serve/SSH
-  // binding is still re-hydratable, so it stays preserved).
+  // Preserve serve/SSH bindings only with live or persisted evidence; id shape alone can retain dead, de-persisted snapshot rows.
   protected hasLiveOrPersistedServeOrSshOwnedPtyBinding(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
@@ -69,9 +71,7 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
     if (boundPtyIds.length === 0) {
       return this.hasRecentExpiredSshLeasePane(worktreeId, tab)
     }
-    // Why: exited PTY records are archived in ptysById, so require a connected
-    // record — a dead serve shell whose persisted binding is also gone must
-    // stop being preserved.
+    // Exited PTY records remain archived; only connected records prove a live binding.
     if (boundPtyIds.some((ptyId) => this.ptysById.get(ptyId)?.connected === true)) {
       return true
     }
@@ -88,7 +88,7 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
         )
       })
     ) {
-      // Why: an abnormal SSH transport exit can beat paired-viewer recovery; retain its pane briefly so the HUB remains addressable.
+      // Retain panes briefly when SSH transport exit beats paired-viewer recovery so HUB remains addressable.
       return true
     }
     if (
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
         return !pty || (!pty.connected && pty.lastExitCode === null)
       })
     ) {
-      // Why: after a HUB restart, failed SSH reattach can remove persistence before the fresh runtime records an exit; keep the pane reachable for ensure.
+      // After HUB restart, failed reattach may remove persistence before any exit record; keep the pane available for ensure.
       return true
     }
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
@@ -153,13 +153,8 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
     }
   }
 
-  // Why: a tab needs authoritative runtime teardown (kill + de-persist + prune)
-  // only when the renderer can't durably tear it down: either it's serve/SSH
-  // (preserved + re-hydrated, would resurrect) or the renderer graph never
-  // published it (a leaked/unadopted shell — incl. daemon-session `@@` tabs the
-  // host materialized but the renderer never showed). A tab the renderer graph
-  // DOES list — including an ordinary daemon-backed local terminal or a pending
-  // tab whose PTY hasn't bound — is renderer-owned: delegate, do not de-persist.
+  // Runtime tears down serve/SSH or unadopted headless tabs that would otherwise resurrect.
+  // Renderer-listed parents, including local daemon/pending tabs, retain renderer-owned durable close.
   protected isRuntimeOwnedHeadlessMobileTab(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab

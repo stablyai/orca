@@ -1,6 +1,9 @@
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import {
+  worktreePtyBelongsToHost,
+  type WorktreePtyHostFence
+} from '../../workspaces/removal/worktree-pty-host-fence'
 
 /** The terminals a worktree stop targets: every pane's terminal plus every connected PTY record. */
 export function collectWorktreePtyIds(
@@ -23,6 +26,7 @@ export function collectWorktreePtyIds(
   for (const pty of ptysById.values()) {
     if (
       worktreeIdsEqual(pty.worktreeId, worktreeId) &&
+      !pty.worktreeInferredFromCwd &&
       (includeDisconnected || pty.connected) &&
       worktreePtyBelongsToHost(pty.ptyId, pty.connectionId, hostFence)
     ) {
@@ -30,4 +34,12 @@ export function collectWorktreePtyIds(
     }
   }
   return ptyIds
+}
+
+/** Drops PTYs whose workspace only a cwd guess named; worktree-scoped stops never act on one (#36716). */
+export function withoutCwdGuesses(
+  ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>,
+  ptyIds: ReadonlySet<string>
+): Set<string> {
+  return new Set([...ptyIds].filter((ptyId) => !ptysById.get(ptyId)?.worktreeInferredFromCwd))
 }

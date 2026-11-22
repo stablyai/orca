@@ -1,30 +1,6 @@
-// Throwaway repro harness for issue #7547 — Windows main-process crash in
-// @parcel/watcher (watcher.node, 0xc0000409 fail-fast).
-//
-// Runs ONE scenario in THIS process (the parent runner spawns us in a loop and
-// watches our exit code). Each scenario mimics a real Orca usage pattern:
-//
-//   delete-root  — subscribe to worktree-like dirs, churn files, delete the
-//                  watched root mid-churn (worktree deletion during agent
-//                  writes). Exercises the WindowsBackend error path
-//                  (handleWatcherError -> Watcher::notifyError on the backend
-//                  thread).
-//   unsub-churn  — rapid subscribe/unsubscribe cycles on dirs with live churn
-//                  (worktree switching + 30s-grace teardown compressed).
-//                  Exercises pending-ReadDirectoryChangesW teardown.
-//   worker-mix   — worker_threads subscribe to the SAME dirs as the main env
-//                  (desktop explorer watch + runtime file-watcher worker on one
-//                  worktree). Workers exit cleanly, exit without unsubscribing,
-//                  or are terminate()d — then new workers subscribe again so
-//                  std::thread::id values recycle against the process-global
-//                  shared native Watcher.
-//   overflow     — one watched dir, massive delete/rename bursts with long
-//                  file names to force ERROR_NOTIFY_ENUM_DIR ("Buffer
-//                  overflow") on the backend thread.
-//   mixed        — all of the above concurrently.
-//
-// Exit code 0 = survived the scenario. A native crash surfaces as the child's
-// exit code (0xC0000409 = 3221226505) in the parent.
+// #7547 watcher.node 0xc0000409 repro; parent repeats one child scenario and reports native exit codes.
+// delete-root races watched-root deletion/error callbacks; unsub-churn overlaps watch teardown; worker-mix recycles threads sharing native Watcher;
+// overflow forces ReadDirectoryChangesW buffer pressure with long-name churn; mixed combines them. Exit 0 means this scenario survived.
 'use strict'
 
 const fs = require('node:fs')
@@ -36,8 +12,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
 // The exact bundled native module (@parcel/watcher 2.5.6 + watcher-win32-x64).
 const watcherPath = path.join(REPO_ROOT, 'node_modules', '@parcel', 'watcher')
 
-// Mirrors buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS) on win32 —
-// identical ignore set => identical native Watcher key => cross-env sharing.
+// Match production win32 ignore options so main/worker subscriptions share the same native Watcher key.
 const IGNORE_DIRS = [
   '.git',
   'node_modules',
@@ -104,11 +79,8 @@ function rmrf(dir) {
   }
 }
 
-// ── Churn worker (same file, worker_threads entry) ───────────────────
-
 if (!isMainThread && workerData && workerData.role === 'churn') {
-  // Tight synchronous churn: create/write/rename/delete inside dir until told
-  // to stop (dir disappearing is fine — keep going, that's the scenario).
+  // Churn synchronously until stop, tolerating root deletion as part of the scenario.
   const { dir, durationMs } = workerData
   const end = Date.now() + durationMs
   let i = 0
@@ -133,8 +105,7 @@ if (!isMainThread && workerData && workerData.role === 'churn') {
 }
 
 if (!isMainThread && workerData && workerData.role === 'subscriber') {
-  // Mimics file-watcher-worker.ts: subscribe in a worker env to the SAME dir
-  // the main env watches, then tear down per `mode`.
+  // Watch the main env’s same directory from a worker, then tear down per mode.
   const { dir, mode, holdMs } = workerData
   const watcher = require(watcherPath)
   ;(async () => {
@@ -152,17 +123,13 @@ if (!isMainThread && workerData && workerData.role === 'subscriber') {
       process.exit(0)
     }
     if (mode === 'dirty-exit') {
-      // Exit the worker env WITHOUT unsubscribing — leaves the callback ref
-      // registered in the process-global shared native Watcher.
+      // Exit without unsubscribe, retaining the callback in process-global native Watcher.
       process.exit(0)
     }
-    // mode === 'wait-terminate': linger; the main thread terminate()s us,
-    // possibly while the subscription (or its unsubscribe) is in flight.
+    // Linger for terminate() to race subscription/unsubscribe.
     await sleep(60_000)
   })()
 }
-
-// ── Scenarios (main thread) ──────────────────────────────────────────
 
 async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
   const end = Date.now() + durationMs
@@ -180,8 +147,7 @@ async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
           if (err) {
             recordError(err)
             errored = true
-            // Orca's createWatcher error path: unsubscribe from inside the
-            // error callback.
+            // Mirror createWatcher’s unsubscribe inside its error callback.
             if (sub) {
               stats.unsubscribes++
               sub.unsubscribe().catch(() => {})
@@ -245,8 +211,7 @@ async function scenarioUnsubChurn(watcher, baseDir, durationMs, lane) {
     }
     await sleep(rand(50))
     stats.unsubscribes++
-    // Half the time don't await — overlapping unsubscribe with the next
-    // subscribe on the same dir, like racing grace-teardown vs re-watch.
+    // Skip half the unsubscribe awaits to race grace teardown against re-watch.
     if (rand(2) === 0) {
       await sub.unsubscribe().catch(() => {})
     } else {
@@ -338,8 +303,7 @@ async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
       round++
       continue
     }
-    // Parallel delete storm: multiple churn workers + recursive delete produce
-    // a dense event burst while the backend thread stats each event.
+    // Combine recursive delete and churn workers into dense backend stat/event load.
     const churners = Array.from(
       { length: 3 },
       () => new Worker(__filename, { workerData: { role: 'churn', dir, durationMs: 500 } })
@@ -355,10 +319,7 @@ async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
   }
 }
 
-// Minimisation variants of delete-root, to isolate which ingredient crashes:
-//   del-nounsub  — subscribe, churn, delete root; NEVER call unsubscribe.
-//   del-nochurn  — subscribe, delete root; no churn worker at all.
-//   del-1lane    — the full delete-root pattern but a single sequential lane.
+// Minimize delete-root: del-nounsub omits unsubscribe, del-nochurn omits churn, del-1lane serializes the full pattern.
 async function scenarioDeleteMinimal(watcher, baseDir, durationMs, lane, { churn, unsub }) {
   const end = Date.now() + durationMs
   let round = 0
@@ -429,8 +390,7 @@ const SCENARIOS = {
 async function main() {
   const scenarioName = process.argv[2] || 'mixed'
   const durationMs = Number(process.argv[3] || 15000)
-  // Outside the repo worktree: a live Orca instance may be watching the repo,
-  // and this churn must not feed the production watcher.
+  // Keep churn outside the worktree so a live Orca watcher cannot observe it.
   const baseDir = path.join(os.tmpdir(), 'orca-7547-harness', `run-${process.pid}`)
   fs.mkdirSync(baseDir, { recursive: true })
 

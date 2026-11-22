@@ -1,55 +1,48 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AppState, type View } from 'react-native'
-import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import { AppState, type HostInstance } from 'react-native'
+import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { BrowserScreencastFrameMetadata } from './screencast/browser-screencast-protocol'
+import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
+import type { BrowserPointerModifier } from './pane-view/MobileBrowserPointerModifiers'
 import {
   getInitialMobileBrowserViewMode,
   saveMobileBrowserViewMode
-} from './mobile-browser-view-mode-state'
-import type { BrowserTouchLayout, BrowserZoomState } from './browser-touch-geometry'
+} from './pane-view/mobile-browser-view-mode-state'
+import type {
+  BrowserTouchLayout,
+  BrowserZoomState
+} from './page-interaction/browser-touch-geometry'
 import {
   clearCachedBrowserFramesForWorktree,
   makeBrowserFrameCacheKey,
   peekCachedBrowserFrame,
   type PinchGesture
-} from './mobile-browser-frame-state'
-import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
-import type { BrowserDialogState } from './mobile-browser-stream-events'
+} from './screencast/mobile-browser-frame-state'
+import { displayBrowserUrl, normalizeBrowserUrl } from './pane-view/browser-url'
+import { useMobileBrowserCertificateProceed } from './certificate/mobile-browser-certificate-proceed'
+import type { BrowserDialogState } from './screencast/mobile-browser-stream-events'
 import {
   browserGoBack,
   browserGoForward,
   browserNavigate,
   browserReload
-} from './mobile-browser-command-operations'
-import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
-import { MobileBrowserPaneView } from './MobileBrowserPaneView'
-import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
-import { useMobileBrowserStream } from './use-mobile-browser-stream'
-import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
-
-export type MobileBrowserTab = {
-  type: 'browser'
-  id: string
-  title: string
-  browserWorkspaceId: string
-  browserPageId: string | null
-  url: string
-  loading: boolean
-  loadError?: BrowserLoadError | null
-  canGoBack: boolean
-  canGoForward: boolean
-  isActive: boolean
-}
+} from './page-interaction/mobile-browser-command-operations'
+import { resolveMobileBrowserAddressSync } from './pane-view/mobile-browser-address-sync'
+import { MobileBrowserPaneView } from './pane-view/MobileBrowserPaneView'
+import { useMobileBrowserInteractions } from './page-interaction/use-mobile-browser-interactions'
+import { useMobileBrowserStream } from './screencast/use-mobile-browser-stream'
+import { useBrowserBinaryScreencastGrant } from './screencast/use-browser-binary-screencast-grant'
 
 type MobileBrowserPaneProps = {
   client: RpcClient | null
   worktreeId: string
   tab: MobileBrowserTab
   screencastSupported: boolean | null
+  certificateTrustSupported: boolean
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
@@ -69,10 +62,12 @@ export function MobileBrowserPane({
   worktreeId,
   tab,
   screencastSupported,
+  certificateTrustSupported,
   keyboardLift,
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
+  useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
@@ -123,9 +118,8 @@ export function MobileBrowserPane({
   }, [])
 
   const setRootViewRef = useCallback(
-    (node: View | null) => {
-      // Why: long-press right-click timers belong to this responder surface;
-      // clearing from ref cleanup preserves the same unmount boundary.
+    (node: HostInstance | null) => {
+      // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()
       }
@@ -165,15 +159,13 @@ export function MobileBrowserPane({
   if (addressSync.nextState !== addressSyncState) {
     setAddressSyncState(addressSync.nextState)
     if (addressSync.shouldSyncValue) {
-      // Why: keep browser stream/goto address updates intact, but avoid a
-      // stale post-blur paint when the tab URL is the source of truth.
+      // Preserve stream/goto updates without stale post-blur paint when tab URL is authoritative.
       setAddressValue(displayBrowserUrl(tab.url))
     }
   }
 
   useLayoutEffect(() => {
-    // Why: gesture and stream handlers need committed values before passive
-    // Effects flush, without leaking refs from an uncommitted render.
+    // Publish committed gesture/stream refs before passive effects without leaking uncommitted render values.
     frameMetadataRef.current = frameMetadata
     layoutRef.current = layout
     dialogRef.current = dialog
@@ -219,23 +211,30 @@ export function MobileBrowserPane({
       zoomRef
     })
 
+  const navigateTo = useCallback(
+    async (url: string) => {
+      const settled = await sendBrowserRequest(
+        async (rpc, page, options) =>
+          browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
+        { showBusy: true, timeoutMs: 30_000 }
+      )
+      if (settled?.url !== undefined) {
+        setAddressValue(displayBrowserUrl(settled.url))
+        lastZoomResetUrlRef.current = settled.url
+        resetBrowserZoomState()
+      }
+    },
+    [resetBrowserZoomState, sendBrowserRequest]
+  )
+
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
-      setError('Enter a valid URL.')
+      setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
-    const settled = await sendBrowserRequest(
-      async (rpc, page, options) =>
-        browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
-      { showBusy: true, timeoutMs: 30_000 }
-    )
-    if (settled?.url !== undefined) {
-      setAddressValue(displayBrowserUrl(settled.url))
-      lastZoomResetUrlRef.current = settled.url
-      resetBrowserZoomState()
-    }
-  }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
+    await navigateTo(url)
+  }, [addressValue, navigateTo])
 
   const { panResponder, sendDialogCommand, sendKeyboardText, sendKeypress, togglePointerModifier } =
     useMobileBrowserInteractions({
@@ -295,6 +294,20 @@ export function MobileBrowserPane({
     )
   }, [controlsDisabled, sendBrowserRequest])
 
+  // As on desktop's streamed pane: reloading the host's error page only refreshes it, so re-attempt the URL that failed.
+  const retryFailedLoad = useCallback(() => {
+    if (controlsDisabled) {
+      return
+    }
+    void navigateTo(tab.loadError?.validatedUrl || tab.url)
+  }, [controlsDisabled, navigateTo, tab.loadError?.validatedUrl, tab.url])
+
+  const proceedCertificate = useMobileBrowserCertificateProceed(
+    client,
+    worktreeId,
+    tab.browserPageId
+  )
+
   const selectBrowserViewMode = useCallback(
     (mode: MobileBrowserViewMode) => {
       if (browserViewMode === mode) {
@@ -315,6 +328,7 @@ export function MobileBrowserPane({
       bottomInset={bottomInset}
       browserViewMode={browserViewMode}
       busy={busy}
+      certificateTrustSupported={certificateTrustSupported}
       controlsDisabled={controlsDisabled}
       dialog={dialog}
       error={error}
@@ -328,7 +342,9 @@ export function MobileBrowserPane({
       navigateToAddress={navigateToAddress}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
+      proceedCertificate={proceedCertificate}
       reloadPage={reloadPage}
+      retryFailedLoad={retryFailedLoad}
       renderedFrameSource={renderedFrameSource}
       selectBrowserViewMode={selectBrowserViewMode}
       sendDialogCommand={sendDialogCommand}

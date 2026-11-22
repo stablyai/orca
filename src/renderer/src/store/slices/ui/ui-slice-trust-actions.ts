@@ -1,36 +1,27 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import { getSetupScriptPromptDismissalKey } from '../../../runtime/repo-hooks/setup-script-prompt'
+import {
+  withOrcaHookRepoAlwaysTrusted,
+  withOrcaHookScriptConfirmed
+} from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 
 export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
     trustedOrcaHooks: {},
     markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        const currentEntry = existing?.[kind]
-        if (currentEntry?.contentHash === contentHash) {
+        const next = withOrcaHookScriptConfirmed(s.trustedOrcaHooks, repoId, kind, contentHash)
+        if (next === s.trustedOrcaHooks) {
           return s
         }
-        const nextRepo = {
-          ...existing,
-          [kind]: { contentHash, approvedAt: Date.now() }
-        }
-        const next = { ...s.trustedOrcaHooks, [repoId]: nextRepo }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
       }),
     markOrcaHookRepoAlwaysTrusted: (repoId) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        if (existing?.all) {
+        const next = withOrcaHookRepoAlwaysTrusted(s.trustedOrcaHooks, repoId)
+        if (next === s.trustedOrcaHooks) {
           return s
-        }
-        const next = {
-          ...s.trustedOrcaHooks,
-          [repoId]: {
-            ...existing,
-            all: { approvedAt: Date.now() }
-          }
         }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
@@ -139,6 +130,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ statusBarCompactChangeNoticeDismissed: true }).catch(console.error)
         return { statusBarCompactChangeNoticeDismissed: true }
       }),
+    pluginsAlphaNoticeDismissed: false,
+    dismissPluginsAlphaNotice: () =>
+      set((s) => {
+        if (s.pluginsAlphaNoticeDismissed) {
+          return s
+        }
+        window.api.ui.set({ pluginsAlphaNoticeDismissed: true }).catch(console.error)
+        return { pluginsAlphaNoticeDismissed: true }
+      }),
     usageEmptyStateDismissed: false,
     dismissUsageEmptyState: () =>
       set((s) => {
@@ -167,6 +167,28 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
       }),
+    worktreeCardsUpdateNoticeSeen: true,
+    markWorktreeCardsUpdateNoticeSeen: () =>
+      set((s) => {
+        if (s.worktreeCardsUpdateNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ worktreeCardsUpdateNoticeSeen: true }).catch(console.error)
+        return { worktreeCardsUpdateNoticeSeen: true }
+      }),
+    worktreeCardsIntroNoticeSeen: true,
+    markWorktreeCardsIntroNoticeSeen: () =>
+      set((s) => {
+        if (s.worktreeCardsIntroNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ worktreeCardsIntroNoticeSeen: true }).catch(console.error)
+        return { worktreeCardsIntroNoticeSeen: true }
+      }),
+    worktreeCardsIntroChoice: null,
+    setWorktreeCardsIntroChoice: (choice) => set({ worktreeCardsIntroChoice: choice }),
+    worktreeCardsIntroKeptHintOpen: false,
+    setWorktreeCardsIntroKeptHintOpen: (open) => set({ worktreeCardsIntroKeptHintOpen: open }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence-session-fixtures'
+import { fixture } from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence/persistence-session-fixtures'
 import { swapReplacedPaneBinding } from './pane-owner-replacement'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
@@ -46,7 +46,7 @@ async function expectSwapAfterRendererClear(
   ).toBe(newId)
 }
 
-it('swaps a local split pane whose renderer layout patch already dropped the stopped binding', async () => {
+it('swaps a cleared split pane once and refuses a stale replacement after rebinding', async () => {
   const { store } = await fixture()
   const pane = { worktreeId, tabId }
   await store.persistPtyBinding({
@@ -64,16 +64,12 @@ it('swaps a local split pane whose renderer layout patch already dropped the sto
   expect(
     store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_2]
   ).toBe('sibling')
-})
 
-it('refuses the swap when another owner holds the leaf', async () => {
-  const { store } = await fixture()
-  await store.persistPtyBinding({ worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: 'successor' })
-  const binding = { worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: 'new' }
+  const binding = { worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: 'late' }
   expect(
     await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced('old')))
   ).toBe(false)
   expect(
     store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
-  ).toBe('successor')
+  ).toBe('new')
 })

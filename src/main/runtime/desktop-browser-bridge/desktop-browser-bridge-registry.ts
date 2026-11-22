@@ -1,29 +1,31 @@
-/**
- * orcad's side of the desktop browser bridge: the desktops attached to it and the forwarded
- * requests waiting on their answers. The newest attachment serves; an older one takes over only
- * when the newer one detaches.
- */
+/** orcad forwards through its newest desktop attachment; older ones resume only after it detaches. */
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../browser/browser-error'
 import {
+  DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   type DesktopBrowserBridgeEvent,
+  type DesktopBrowserBridgeResultChunkParams,
   type DesktopBrowserBridgeResultParams
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { StagedResultChunks } from '../browser-host/commands/staged-result-chunks'
 
-// Why below 32: the desktop answers over one subscription that holds at most 32 unacknowledged
-// requests (remote-runtime-subscription-request-channel), so more would strand finished results.
+// Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16
 const DESKTOP_DEADLINE_MARGIN_MS = 10_000
 const MIN_DESKTOP_DEADLINE_MS = 1_000
+// Several commands can stage large results at once; bound their total, as page leases do.
+const MAX_STAGED_RESULT_BYTES = 2 * BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
 
 type Attachment = {
   attachmentId: string
   connectionId: string
   pairedDeviceId: string
-  /** True when the desktop declared it understands `cancel`; older desktops never receive one. */
   acceptsCancel?: boolean
+  enforcesExpectUrl?: boolean
+  capabilities?: readonly string[]
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -43,6 +45,7 @@ export type DesktopBrowserBridgeForward = {
 export class DesktopBrowserBridgeRegistry {
   private readonly attachments: Attachment[] = []
   private readonly pending = new Map<string, PendingRequest>()
+  private readonly stagedResults = new StagedResultChunks<string>(MAX_STAGED_RESULT_BYTES)
 
   attach(input: Omit<Attachment, 'attachmentId'>): { attachmentId: string; detach(): void } {
     const attachment: Attachment = { ...input, attachmentId: randomUUID() }
@@ -55,6 +58,16 @@ export class DesktopBrowserBridgeRegistry {
 
   hasAttachment(): boolean {
     return this.attachments.length > 0
+  }
+
+  /** Commands go to the newest attachment only, so an older one behind it can't help. */
+  newestAttachmentEnforcesExpectUrl(): boolean {
+    return this.attachments.at(-1)?.enforcesExpectUrl === true
+  }
+
+  newestAttachmentServes(method: string): boolean {
+    const required = DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES.get(method)
+    return !required || (this.attachments.at(-1)?.capabilities?.includes(required) ?? false)
   }
 
   forward(
@@ -75,10 +88,11 @@ export class DesktopBrowserBridgeRegistry {
       const settle = (): void => {
         clearTimeout(timer)
         this.pending.delete(requestId)
+        this.stagedResults.release(requestId)
         options.signal?.removeEventListener('abort', onAbort)
       }
       let emitted = false
-      // Why: without this a command still queued on the desktop runs after the CLI gave up on it.
+      // Revoke queued desktop work when the CLI gives up.
       const cancelOnDesktop = (): void => {
         if (!emitted || !attachment.acceptsCancel || !this.attachments.includes(attachment)) {
           return
@@ -124,12 +138,13 @@ export class DesktopBrowserBridgeRegistry {
           requestId,
           method: request.method,
           params: request.params,
-          // Why shorter: the desktop must stop starting this before orcad gives up, transit included.
+          // Leave transit margin for desktop refusal before orcad's deadline.
           timeoutMs: Math.max(
             MIN_DESKTOP_DEADLINE_MS,
             options.timeoutMs - DESKTOP_DEADLINE_MARGIN_MS
           ),
-          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {})
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+          stagedResults: true
         })
         emitted = true
       } catch {
@@ -138,28 +153,61 @@ export class DesktopBrowserBridgeRegistry {
     })
   }
 
-  /** Accepts an answer only from the socket and device the request was sent to. */
+  /** False when the chunk is not for a command this caller's attachment is still answering. */
+  appendResultChunk(
+    caller: { connectionId: string; pairedDeviceId: string },
+    chunk: DesktopBrowserBridgeResultChunkParams
+  ): boolean {
+    if (!this.pendingFor(caller, chunk)) {
+      return false
+    }
+    this.stagedResults.append(chunk.requestId, chunk.offset, chunk.contentBase64)
+    return true
+  }
+
   settle(
     caller: { connectionId: string; pairedDeviceId: string },
     result: DesktopBrowserBridgeResultParams
   ): boolean {
-    const pending = this.pending.get(result.requestId)
-    const attachment = this.attachments.find((entry) => entry.attachmentId === result.attachmentId)
-    if (
-      !pending ||
-      !attachment ||
-      pending.attachmentId !== attachment.attachmentId ||
-      attachment.connectionId !== caller.connectionId ||
-      attachment.pairedDeviceId !== caller.pairedDeviceId
-    ) {
+    const pending = this.pendingFor(caller, result)
+    if (!pending) {
       return false
     }
-    if (result.ok) {
+    if (result.ok && result.stagedResultBytes !== undefined) {
+      const staged = this.stagedResults.take(result.requestId, result.stagedResultBytes)
+      if (staged.ok) {
+        pending.resolve(staged.value)
+      } else {
+        pending.reject(
+          new BrowserError(
+            staged.errorCode,
+            'The desktop ran the command, but its large result did not arrive complete. Try again.'
+          )
+        )
+      }
+    } else if (result.ok) {
       pending.resolve(result.result)
     } else {
-      pending.reject(new BrowserError(result.error.code, result.error.message))
+      pending.reject(new BrowserError(result.error.code, result.error.message, result.error.data))
     }
     return true
+  }
+
+  private pendingFor(
+    caller: { connectionId: string; pairedDeviceId: string },
+    identity: { attachmentId: string; requestId: string }
+  ): PendingRequest | null {
+    const pending = this.pending.get(identity.requestId)
+    const attachment = this.attachments.find(
+      (entry) => entry.attachmentId === identity.attachmentId
+    )
+    return pending &&
+      attachment &&
+      pending.attachmentId === attachment.attachmentId &&
+      attachment.connectionId === caller.connectionId &&
+      attachment.pairedDeviceId === caller.pairedDeviceId
+      ? pending
+      : null
   }
 
   private detach(attachmentId: string): void {
@@ -201,7 +249,6 @@ function unavailableError(): BrowserError {
 const registries = new WeakMap<object, DesktopBrowserBridgeRegistry>()
 let hostEnabled = false
 
-/** Only orcad serves the bridge; a desktop runtime never accepts an attach or forwards a call. */
 export function setDesktopBrowserBridgeHostEnabled(enabled: boolean): void {
   hostEnabled = enabled
 }

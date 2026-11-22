@@ -1,4 +1,4 @@
-import type { OwnerRepo } from '../../gh-utils'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './repository-merge-metadata'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
@@ -12,7 +12,7 @@ export async function hydrateWorkItemRepositoryMergeMetadata(
   if (!ownerRepo || !hasPullRequest) {
     return items
   }
-  // Why: merge settings are repo-level, so one cached probe keeps Tasks rows accurate without per-PR GraphQL fan-out.
+  // Repository-scoped settings share one probe instead of per-PR GraphQL fan-out.
   const mergeMetadata = await detectRepositoryMergeMetadata(
     ownerRepo,
     undefined,

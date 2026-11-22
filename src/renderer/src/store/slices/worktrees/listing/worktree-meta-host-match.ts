@@ -1,12 +1,9 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
-/**
- * Mirror findKnownWorktreeById: an unstamped row belongs to the local host. A stricter test
- * silently no-ops the optimistic write, so a rename appears to do nothing until the next refetch.
- */
+/** Match unstamped rows as local like findKnownWorktreeById or optimistic renames silently wait for refetch. */
 export function worktreeRowMatchesMetaHost(
   worktree: { hostId?: ExecutionHostId },
   executionHostId: ExecutionHostId | undefined

@@ -1,21 +1,13 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
-  getWorktreeIdFromHostIdentity,
-  isWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
+  type WorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
+import { migrateWorkspaceSessionWorktreeIdentity } from './worktree-identity-session-migration'
+import { replaceWorkspaceSessionPartitions } from '../restoring-sessions/workspace-session-partition-replacement'
 
-/**
- * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
- * returns whether anything changed so the caller can gate its save. No-op when the ids match.
- * See `Store.migrateWorktreeIdentity` for why the rename happens.
- */
+/** Mutate worktree references in place (sessions are replaced); return whether anything changed so callers can gate persistence. */
 export function migrateWorktreeIdentity(
   state: PersistedState,
   oldWorktreeId: string,
@@ -37,215 +29,8 @@ export function migrateWorktreeIdentity(
     delete record[oldWorktreeId]
     return true
   }
-  const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
-    value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
-  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
-  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
-    const renamedValue = withNewWorktreeId(value)
-    return value.docLocation?.worktreeId === oldWorktreeId
-      ? {
-          ...renamedValue,
-          docLocation: remapBrowserPageDocLocation(
-            value.docLocation,
-            oldWorktreeId,
-            newWorktreeId,
-            oldWorktreePath,
-            newWorktreePath
-          )
-        }
-      : renamedValue
-  }
-  const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
-    if (!session) {
-      return false
-    }
-    let sessionChanged = false
-    /** Known and deliberately unresolved: when the target key ALREADY exists, the source wins and
-     *  the target's row is lost. `lastVisitedAtByWorktreeId` below is the one map that settles it
-     *  (`Math.max`), and its comment names the case — a partial migration leaves both identities
-     *  behind. There is no safe blanket rule here: "keep the target" is right when the target holds
-     *  a real closed-last-terminal tombstone (`tabsByWorktree[target] === []` is user intent, see
-     *  runtime/workspace-session-worktree-id.ts), and "keep the source" is right when the target row
-     *  is a stub, and nothing records which is newer. Reachable only by a repeated or partial
-     *  migration: on a normal rename this store holds rows under the old id alone. */
-    const moveSessionKey = <T>(
-      record: Record<string, T> | undefined,
-      mapValue: (value: T) => T = (value) => value
-    ): boolean => {
-      if (!record) {
-        return false
-      }
-      let moved = false
-      const pairs: [string, string][] = [
-        [oldWorktreeId, newWorktreeId],
-        [oldWorkspaceKey, newWorkspaceKey]
-      ]
-      for (const [oldKey, newKey] of pairs) {
-        if (!(oldKey in record)) {
-          continue
-        }
-        record[newKey] = mapValue(record[oldKey])
-        delete record[oldKey]
-        moved = true
-      }
-      return moved
-    }
-
-    sessionChanged =
-      moveSessionKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) ||
-      sessionChanged
-    sessionChanged =
-      moveSessionKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
-      sessionChanged
-    sessionChanged = moveSessionKey(session.activeFileIdByWorktree) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
-        workspaces.map(withNewBrowserWorktreeId)
-      ) || sessionChanged
-    if (session.browserPagesByWorkspace) {
-      let pagesChanged = false
-      const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
-      for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
-        if (
-          !pages.some(
-            (page) =>
-              page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
-          )
-        ) {
-          continue
-        }
-        nextPagesByWorkspace[workspaceId] = pages.map(withNewBrowserWorktreeId)
-        pagesChanged = true
-      }
-      if (pagesChanged) {
-        session.browserPagesByWorkspace = nextPagesByWorkspace
-        sessionChanged = true
-      }
-    }
-    // Why the row too: rehydration only republishes a row whose `workspaceId` still equals the key
-    // it is filed under, so re-keying the map alone would strand every page under the new id.
-    sessionChanged =
-      moveSessionKey(session.clientHostedBrowserPagesByWorktree, (rows) =>
-        rows.map((row) =>
-          row.workspaceId === oldWorktreeId ? { ...row, workspaceId: newWorktreeId } : row
-        )
-      ) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
-    sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
-    if (session.lastVisitedAtByWorktreeId) {
-      const nextRecency = { ...session.lastVisitedAtByWorktreeId }
-      let recencyChanged = false
-      for (const [key, value] of Object.entries(session.lastVisitedAtByWorktreeId)) {
-        const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
-        if (rawId !== oldWorktreeId) {
-          continue
-        }
-        const nextKey = isWorktreeHostIdentity(key)
-          ? `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
-          : newWorktreeId
-        // Why max: a partial migration leaves both identities behind; taking the older one would
-        // regress Cmd+J recency after restart.
-        const existing = nextRecency[nextKey]
-        nextRecency[nextKey] = existing === undefined ? value : Math.max(existing, value)
-        delete nextRecency[key]
-        recencyChanged = true
-      }
-      if (recencyChanged) {
-        session.lastVisitedAtByWorktreeId = nextRecency
-        sessionChanged = true
-      }
-    }
-    sessionChanged =
-      moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
-    if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
-      session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
-        id === oldWorktreeId ? newWorktreeId : id
-      )
-      sessionChanged = true
-    }
-    if (session.activeWorktreeId === oldWorktreeId) {
-      session.activeWorktreeId = newWorktreeId
-      sessionChanged = true
-    }
-    if (session.activeWorkspaceKey === oldWorkspaceKey) {
-      session.activeWorkspaceKey = newWorkspaceKey
-      sessionChanged = true
-    }
-    // Why every row-valued map and not just the two that used to be here: a record keyed by pane or
-    // tab id still names its worktree in the value, and a stale one silently stops matching. A
-    // `closedTerminalTabTombstonesByTabId` row left on the old id never suppresses the tab it was
-    // minted for and never gets acknowledged, so the remote merge re-adds a tab the user closed.
-    // Spelled out per field rather than driven by a name list: indexing the session by a
-    // computed key cannot be written back without widening the row type, and the census test
-    // (`worktree-identity-migration-field-coverage.test.ts`) is what keeps a fourth field of this
-    // class from joining silently.
-    const nextSleeping = repointRowRecord(
-      session.sleepingAgentSessionsByPaneKey,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextSleeping) {
-      session.sleepingAgentSessionsByPaneKey = nextSleeping
-      sessionChanged = true
-    }
-    const nextSurfaceTombstones = repointRowRecord(
-      session.terminalSurfaceTombstonesByPaneKey,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextSurfaceTombstones) {
-      session.terminalSurfaceTombstonesByPaneKey = nextSurfaceTombstones
-      sessionChanged = true
-    }
-    const nextClosedTombstones = repointRowRecord(
-      session.closedTerminalTabTombstonesByTabId,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextClosedTombstones) {
-      session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
-      sessionChanged = true
-    }
-    const nextClosedPanes = repointRowRecord(
-      session.closedTerminalPanesByPaneKey,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextClosedPanes) {
-      session.closedTerminalPanesByPaneKey = nextClosedPanes
-      sessionChanged = true
-    }
-    const nextCloseIntents = repointRowArrays(
-      session.clientHostedBrowserCloseIntentsByEnvironment,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextCloseIntents) {
-      session.clientHostedBrowserCloseIntentsByEnvironment = nextCloseIntents
-      sessionChanged = true
-    }
-    const nextPairedTabCloseIntents = repointRowArrays(
-      session.pairedTerminalTabCloseIntentsByEnvironment,
-      oldWorktreeId,
-      newWorktreeId
-    )
-    if (nextPairedTabCloseIntents) {
-      session.pairedTerminalTabCloseIntentsByEnvironment = nextPairedTabCloseIntents
-      sessionChanged = true
-    }
-    return sessionChanged
-  }
-
   let changed = moveKey(state.worktreeMeta)
-  // Record the prior id so a session minted under it isn't reaped as an orphan.
+  // Retain the prior ID so existing terminal sessions do not become orphans.
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {
     const prior = newMeta.priorWorktreeIds ?? []
@@ -259,11 +44,10 @@ export function migrateWorktreeIdentity(
   const movedLineage = state.worktreeLineageById[newWorktreeId]
   if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
     movedLineage.worktreeId = newWorktreeId
-    // Why: moveKey reports nothing when the record already sat under the new key, so flag the repair
-    // ourselves or the caller skips the save and the stale id comes back on reload.
+    // Repairing an already-rekeyed row still needs a save.
     changed = true
   }
-  // Why: children carry this as parentWorktreeId; keep the denormalized path-derived id consistent (parentWorktreeInstanceId is stable).
+  // Keep children's path-derived parent IDs consistent; parent instance identity stays stable.
   for (const lineage of Object.values(state.worktreeLineageById)) {
     if (lineage.parentWorktreeId === oldWorktreeId) {
       lineage.parentWorktreeId = newWorktreeId
@@ -280,6 +64,15 @@ export function migrateWorktreeIdentity(
     delete state.workspaceLineageByChildKey[oldWorkspaceKey]
     changed = true
   }
+  // Only the child moves; a cross-store parent names another store's workspace, never this one.
+  if (state.crossStoreLineageByChildKey && oldWorkspaceKey in state.crossStoreLineageByChildKey) {
+    state.crossStoreLineageByChildKey[newWorkspaceKey] = withCrossStoreChildKey(
+      state.crossStoreLineageByChildKey[oldWorkspaceKey],
+      newWorkspaceKey
+    )
+    delete state.crossStoreLineageByChildKey[oldWorkspaceKey]
+    changed = true
+  }
   for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
     if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
       state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {
@@ -290,9 +83,20 @@ export function migrateWorktreeIdentity(
     }
   }
 
-  changed = migrateSession(state.workspaceSession) || changed
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    changed = migrateSession(session) || changed
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  const localSession =
+    state.workspaceSession &&
+    migrateWorkspaceSessionWorktreeIdentity(state.workspaceSession, oldWorktreeId, newWorktreeId)
+  if (localSession) {
+    state.workspaceSession = localSession
+    changed = true
+  }
+  const partitions = replaceWorkspaceSessionPartitions(state.workspaceSessionsByHostId, (session) =>
+    migrateWorkspaceSessionWorktreeIdentity(session, oldWorktreeId, newWorktreeId)
+  )
+  if (partitions !== state.workspaceSessionsByHostId) {
+    state.workspaceSessionsByHostId = partitions
+    changed = true
   }
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}
@@ -302,9 +106,16 @@ export function migrateWorktreeIdentity(
   if (state.ui?.explorerDisplayRootByWorktree) {
     changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
   }
+  if (state.ui?.gitGraphFiltersByWorktree) {
+    changed = moveKey(state.ui.gitGraphFiltersByWorktree) || changed
+  }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed
+  }
+  const notificationsMuted = state.ui?.notificationsMutedByWorktree
+  if (notificationsMuted) {
+    changed = moveKey(notificationsMuted) || changed
   }
 
   return changed

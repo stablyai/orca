@@ -1,14 +1,28 @@
-import { MessageSquarePlus, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
-import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
-import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
-import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
-import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import { useTranslate } from '@/i18n/use-translate'
+import { BrowserNavigationControlRow } from '../assemble-chrome/toolbar/browser-navigation-control-row'
+import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
+import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
+import { BrowserReloadControl } from '../assemble-chrome/toolbar/browser-reload-control'
+import { useBrowserReloadControlLabels } from '../navigate/use-browser-reload-control-labels'
+import {
+  type BrowserReloadTrigger,
+  resolveBrowserReloadIntent
+} from '../navigate/browser-reload-action'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BrowserAnnotateToolButton,
+  type BrowserChromeElementTools,
+  type BrowserChromeMarkupTool,
+  type BrowserChromeNoteActions
+} from '../assemble-chrome/toolbar/browser-annotate-tool-button'
 
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
@@ -21,13 +35,14 @@ export function RemoteBrowserPageToolbar({
   addressBarEditSession,
   busy,
   loading,
-  loadFailed,
-  markup,
-  frameUrl,
-  isActive,
+  loadErrorCode,
+  history,
+  pickerAvailable,
+  annotateTools,
   onBack,
   onForward,
-  onReload
+  onReload,
+  onStop
 }: {
   runtimeEnvironmentId: string
   addressBarValue: string
@@ -40,24 +55,45 @@ export function RemoteBrowserPageToolbar({
   addressBarEditSession: BrowserAddressBarEditSessionBinding
   busy: boolean
   loading: boolean
-  loadFailed: boolean
-  markup: MarkupModeController
-  frameUrl: string | null
-  isActive: boolean
+  loadErrorCode: number | null
+  history: { canGoBack: boolean; canGoForward: boolean }
+  pickerAvailable: boolean
+  annotateTools: {
+    tools: BrowserChromeElementTools
+    markup: BrowserChromeMarkupTool
+    notes: BrowserChromeNoteActions
+  }
   onBack: () => void
   onForward: () => void
-  onReload: () => void
+  onReload: (ignoreCache: boolean) => void
+  onStop: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  // Older hosts have no stop and reload normally either way, so they keep the plain button.
+  const stopHardReloadSupported = useRuntimeEnvironmentCapability(
+    runtimeEnvironmentId,
+    BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+  )
+  const reloadState = { loading, loadErrorCode }
+  const reloadLabels = useBrowserReloadControlLabels(reloadState)
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
+  const runReloadTrigger = (trigger: BrowserReloadTrigger): void => {
+    const intent = resolveBrowserReloadIntent(trigger, reloadState)
+    // A failed host page has no local guest to recover, so Retry is a plain reload.
+    if (intent === 'stop') {
+      onStop()
+    } else {
+      onReload(intent === 'hard-reload')
+    }
+  }
   return (
     <BrowserNavigationControlRow
       controls={{
-        // Why: remote pages report no history depth, so the arrows stay live and a
-        // dead-end back/forward RPC is simply a no-op on the host.
-        canGoBack: true,
-        canGoForward: true,
+        canGoBack: history.canGoBack,
+        canGoForward: history.canGoForward,
         goBack: onBack,
         goForward: onForward,
-        reload: onReload,
+        reload: () => onReload(false),
         navigate: onNavigateToUrl
       }}
       addressSlot={
@@ -77,65 +113,57 @@ export function RemoteBrowserPageToolbar({
             />
           }
           loading={busy || loading}
-          loadFailed={loadFailed}
+          loadFailed={loadErrorCode !== null}
         />
       }
       reloadControl={
-        // Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
-        // nothing truthful to put in a menu or a shortcut hint here — tooltip only.
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              aria-label={translate(
-                'auto.components.browser.pane.BrowserPane.0e080d820e',
-                'Reload'
-              )}
-              onClick={onReload}
-            >
-              <RefreshCw className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-          </TooltipContent>
-        </Tooltip>
+        stopHardReloadSupported ? (
+          <BrowserReloadControl
+            menuOpen={reloadMenuOpen}
+            onMenuOpenChange={setReloadMenuOpen}
+            label={reloadLabels.reloadButtonLabel}
+            showStop={reloadLabels.reloadButtonLabelKind === 'stop'}
+            showShortcutHint={reloadLabels.reloadButtonLabelKind === 'reload'}
+            reloadShortcut={reloadLabels.reloadShortcut}
+            hardReloadShortcut={reloadLabels.hardReloadShortcut}
+            onPrimary={() => runReloadTrigger('button')}
+            onReload={() => runReloadTrigger('reload')}
+            onHardReload={() => runReloadTrigger('hard-reload')}
+          />
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon-xs"
+                variant="muted-field-icon"
+                aria-label={t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                onClick={() => onReload(false)}
+              >
+                <RefreshCw className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+            </TooltipContent>
+          </Tooltip>
+        )
       }
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 opacity-50"
-            aria-disabled="true"
-            aria-label={translate(
-              'auto.components.browser.pane.BrowserPane.deb5293610',
-              'Browser annotations unavailable in remote runtime'
-            )}
-            onClick={(event) => {
-              event.preventDefault()
-            }}
-          >
-            <MessageSquarePlus className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {translate(
-            'auto.components.browser.pane.BrowserPane.8b7e6d1f5a',
-            'Browser annotations are only available in local browser tabs.'
-          )}
-        </TooltipContent>
-      </Tooltip>
-      <MarkupDrawButton
-        onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
-        disabled={!frameUrl}
-        active={markup.isActive}
-        surfaceActive={isActive}
-        className="h-7 w-7"
-      />
+      {pickerAvailable ? (
+        <BrowserAnnotateToolButton
+          tools={annotateTools.tools}
+          markup={annotateTools.markup}
+          notes={annotateTools.notes}
+          showTourAnchors={false}
+        />
+      ) : (
+        <MarkupDrawButton
+          onClick={annotateTools.markup.onToggle}
+          disabled={annotateTools.markup.disabled}
+          active={annotateTools.markup.active}
+          surfaceActive={annotateTools.markup.canShowDiscoveryHint}
+        />
+      )}
     </BrowserNavigationControlRow>
   )
 }

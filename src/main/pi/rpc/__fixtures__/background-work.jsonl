@@ -1,0 +1,4 @@
+{"dir":"out","raw":"{\"type\":\"extension_ui_request\",\"id\":\"f89c7484-5f13-4612-8433-21915655c668\",\"method\":\"setStatus\",\"statusKey\":\"orca-background-work\",\"statusText\":\"ready:471a1b34-9bd4-4b2d-9416-2989de25c600\"}"}
+{"dir":"out","raw":"{\"type\":\"extension_ui_request\",\"id\":\"8fca672e-27ea-4082-86c0-ff6809bba7e3\",\"method\":\"setStatus\",\"statusKey\":\"orca-background-work\",\"statusText\":\"answer:471a1b34-9bd4-4b2d-9416-2989de25c600:probe-while-running:active\"}"}
+{"dir":"out","raw":"{\"type\":\"extension_ui_request\",\"id\":\"5de8f31d-5359-457b-98ef-507e748e6803\",\"method\":\"setStatus\",\"statusKey\":\"orca-background-work\",\"statusText\":\"answer:471a1b34-9bd4-4b2d-9416-2989de25c600:probe-after-wake:idle\"}"}
+{"dir":"out","raw":"{\"type\":\"extension_ui_request\",\"id\":\"8980826c-9109-44b4-8b79-4b0064e04364\",\"method\":\"setStatus\",\"statusKey\":\"orca-background-work\",\"statusText\":\"gone\"}"}

@@ -1,12 +1,6 @@
 import * as esbuild from 'esbuild'
 
-/**
- * Imports a TypeScript module from a build script, by bundling it to a data URL.
- *
- * Node cannot import TypeScript and these scripts run outside the app's bundler, so the values the
- * document is built from — the theme, the URL limits, the caret options — would otherwise have to be
- * restated here. Restating them is what the generator exists to avoid.
- */
+// Bundle TS to a data URL for standalone build scripts so generators reuse app constants rather than restating theme, URL limits and caret options.
 export async function importTypeScriptModule(entryPoint) {
   const result = await esbuild.build({
     entryPoints: [entryPoint],

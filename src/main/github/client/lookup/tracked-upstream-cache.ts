@@ -1,7 +1,8 @@
-import { splitRemoteBranchName } from '../../../../shared/git-effective-upstream'
-import type { OwnerRepo } from '../../gh-utils'
-import { readLocalGitConfigSignature } from '../../local-git-config-signature'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
+import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote-branch-name'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 export type TrackedUpstreamBranch = {
   remoteName: string
   branchName: string
@@ -15,6 +16,7 @@ export type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
   gitConfigSignature?: string
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  reviewSources?: Map<string, GitReviewBranchSource | Error>
 }
 
 export type TrackedUpstreamSnapshotProbeResult = {
@@ -22,6 +24,7 @@ export type TrackedUpstreamSnapshotProbeResult = {
   gitConfigSignature?: string
   probeFailed: boolean
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  reviewSources?: Map<string, GitReviewBranchSource | Error>
 }
 
 export const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
@@ -40,7 +43,7 @@ export function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
 }
 
 export function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
-  // Why: generations only guard an active probe; retaining completed keys leaks worktree/runtime identities past the snapshot TTL.
+  // Generation guards matter only for active probes; completed keys must not leak identities.
   if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
     trackedUpstreamSnapshotGenerations.delete(cacheKey)
   }
@@ -52,7 +55,7 @@ export function pruneTrackedUpstreamSnapshotCache(now: number): void {
       trackedUpstreamSnapshotCache.delete(cacheKey)
     }
   }
-  // Why: workspace/runtime churn can create unbounded unique keys within one TTL window, so expiry sweeping alone isn't a memory bound.
+  // Workspace/runtime churn can exceed a memory budget before any TTL expires.
   while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
     if (oldestKey === undefined) {
@@ -106,7 +109,7 @@ export function shouldRetryTrackedUpstreamBranch(
 export function getCacheableTrackedUpstreamSnapshot(
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 ): Map<string, TrackedUpstreamBranch | null> {
-  // Why: SSH/WSL can't cheaply inspect remote .git/config here; the short TTL bounds stale positives while refreshes share one scan.
+  // Remote config cannot be inspected cheaply here; short TTL bounds stale results.
   return upstreamsByBranchName
 }
 

@@ -2,7 +2,10 @@ import { runProcess } from '@orca/process-host'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { HostAvailableMemorySource, HostMemory } from '../../shared/process-stats-types'
+import type {
+  HostAvailableMemorySource,
+  HostMemory
+} from '../../shared/diagnostics/process-stats-types'
 
 const MEMORY_PRESSURE_TIMEOUT_MS = 1_000
 const MEMORY_PRESSURE_MAX_BUFFER = 64 * 1024
@@ -99,7 +102,7 @@ async function readDarwinAvailableMemory(total: number): Promise<number | null> 
       }
     }
   } catch {
-    // The built-in command is unavailable on older or restricted hosts.
+    // Older/restricted hosts may lack this command; fall back to Node.
   }
   darwinAvailabilitySupported = false
   return null
@@ -113,7 +116,7 @@ async function readLinuxAvailableMemory(): Promise<number | null> {
       return available
     }
   } catch {
-    // Non-procfs Linux environments fall back to Node's host value.
+    // Non-procfs Linux hosts use Node's memory value.
   }
   linuxAvailabilitySupported = false
   return null

@@ -1,6 +1,12 @@
-import type { ClaudeUsageRange, ClaudeUsageScope } from '../../shared/claude-usage-types'
+import type {
+  ClaudeUsageRange,
+  ClaudeUsageScope
+} from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { ClaudeUsagePersistedState } from './types'
-import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import {
+  getLocalUsageDay,
+  getUsageRangeCutoff
+} from '../usage/reporting/range-query/usage-calendar-range'
 
 export function getFilteredDaily(
   state: ClaudeUsagePersistedState,
@@ -26,9 +32,7 @@ export function getFilteredSessions(
 ) {
   const cutoff = getUsageRangeCutoff(range)
   return state.sessions.filter((session) => {
-    // Why: daily aggregates use local calendar days, so session filtering has
-    // to use the same conversion or the sessions table/counts can disagree
-    // with the chart around UTC day boundaries.
+    // Match daily aggregates using local calendar days to avoid UTC boundary mismatches.
     const day = getLocalUsageDay(session.lastTimestamp)
     if (!day) {
       return false

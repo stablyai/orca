@@ -1,25 +1,14 @@
-import { ipcMain, type BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/connection/ssh-connection-timing'
 import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
-import { recordSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
+import { recordSshCredentialDeclined } from '../../ssh/authentication/ssh-credential-decline'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 const pendingRequests = new Map<
   string,
   { targetId: string; resolve: (value: string | null) => void; close: () => void }
 >()
 
-function notifyCredentialResolved(
-  getMainWindow: () => BrowserWindow | null,
-  requestId: string
-): void {
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:credential-resolved', { requestId })
-  }
-}
-
 export function requestCredential(
-  getMainWindow: () => BrowserWindow | null,
   targetId: string,
   kind: SshCredentialKind,
   detail: string,
@@ -35,18 +24,18 @@ export function requestCredential(
     }
     clearTimeout(timer)
     signal?.removeEventListener('abort', onAbort)
-    notifyCredentialResolved(getMainWindow, requestId)
+    sshDesktopHost().publish('ssh:credential-resolved', { requestId })
     resolve(value)
   }
   const onAbort = (): void => finish(null)
-  // Why: an abort is the connection's own teardown; only the user's Cancel (or silence) declines.
+  // Teardown abort is not a credential decline; only user cancellation or timeout declines.
   const decline = (): void => {
     if (!pendingRequests.has(requestId)) {
       return
     }
     recordSshCredentialDeclined(targetId, signal)
     finish(null)
-    // Why: one Cancel answers the host; a queued prompt for it would otherwise open next.
+    // One Cancel declines the host, including queued prompts that would otherwise open next.
     for (const [otherId, other] of pendingRequests) {
       if (otherId !== requestId && other.targetId === targetId) {
         other.close()
@@ -65,21 +54,14 @@ export function requestCredential(
   }
   signal?.addEventListener('abort', onAbort, { once: true })
 
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:credential-request', { requestId, targetId, kind, detail, echo })
-  } else {
+  if (
+    !sshDesktopHost().publish('ssh:credential-request', { requestId, targetId, kind, detail, echo })
+  ) {
     finish(null)
   }
   return promise
 }
 
-export function registerCredentialHandler(): void {
-  ipcMain.removeHandler('ssh:submitCredential')
-  ipcMain.handle(
-    'ssh:submitCredential',
-    (_event, args: { requestId: string; value: string | null }) => {
-      pendingRequests.get(args.requestId)?.resolve(args.value)
-    }
-  )
+export function submitCredential(args: { requestId: string; value: string | null }): void {
+  pendingRequests.get(args.requestId)?.resolve(args.value)
 }

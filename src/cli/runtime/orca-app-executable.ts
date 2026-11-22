@@ -1,11 +1,13 @@
-import { resolve } from 'node:path'
-import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
-import { needsElectronNoSandbox } from './electron-sandbox-switch'
-import { serverOnlyServeMessage } from './serve-app-launcher'
-import { SERVE_SUPERVISOR_APP_ROOT_ENV } from './serve-supervisor-relocation'
-import { RuntimeClientError } from './types'
-
-/** Which Orca app `orca` runs, from where, and with what environment. */
+import { mkdirSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
+import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/app-lifecycle/launch/electron-no-sandbox-request'
+import { needsElectronNoSandbox } from './app-launch/electron-sandbox-switch'
+import { serverOnlyServeMessage } from './app-launch/serve-app-launcher'
+import {
+  PACKAGED_APP_ROOT_NAME,
+  SERVE_SUPERVISOR_APP_ROOT_ENV
+} from './serve/supervision/serve-supervisor-relocation'
+import { RuntimeClientError } from './connection/types'
 
 export function getExecutableAppArgs(executable: string): string[] {
   const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
@@ -16,11 +18,24 @@ export function getExecutableAppArgs(executable: string): string[] {
 }
 
 export function resolveAppRoot(): string {
-  // Why: dev-mode resource resolution in the Electron child may consult
-  // process.cwd(). Pin it to the app root so `orca serve` behaves the same
-  // regardless of the shell directory it was launched from. A supervisor re-run from its copy
-  // outside the app must still start the app's own files.
+  // Relocated supervisors run from a copy, so the env var names the installed app's root.
   return process.env[SERVE_SUPERVISOR_APP_ROOT_ENV] || resolve(__dirname, '../../..')
+}
+
+/** Packaged apps run from the profile: reinstalling deletes the bundle cwd, and Node workers then fail with uv_cwd. */
+export function resolveAppChildCwd(userDataPath: string): string {
+  const appRoot = resolveAppRoot()
+  // Dev keeps the app root because its resource resolution may consult process.cwd().
+  if (basename(appRoot) !== PACKAGED_APP_ROOT_NAME) {
+    return appRoot
+  }
+  try {
+    // A first serve on a fresh host can precede Electron creating the profile.
+    mkdirSync(userDataPath, { recursive: true, mode: 0o700 })
+    return userDataPath
+  } catch {
+    return appRoot
+  }
 }
 
 export function resolveForegroundOrcaExecutable(): string {
@@ -37,9 +52,9 @@ export function resolveForegroundOrcaExecutable(): string {
 export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next = { ...env }
   delete next.ELECTRON_RUN_AS_NODE
-  // Why: the request is applied as a switch; the server's terminals must not inherit it.
+  // The switch applies only to app launch; terminals must not inherit the request.
   delete next[ELECTRON_NO_SANDBOX_REQUEST_ENV]
-  // Why: only the relocated supervisor itself may resolve its app root this way.
+  // Only the relocated supervisor may override its app root.
   delete next[SERVE_SUPERVISOR_APP_ROOT_ENV]
   return next
 }

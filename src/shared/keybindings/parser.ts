@@ -142,7 +142,7 @@ export function emptyParsedKeybinding(): ParsedKeybinding {
   return { mod: false, meta: false, control: false, alt: false, shift: false, key: '' }
 }
 
-// Why: a double-tap is a bare modifier with no key, so it can't use the normal parse path; modifier validation is deferred to normalize.
+// Double-tap has no key, so use a separate parse path and defer modifier validation to normalize.
 export function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding | null {
   const modifiers: ModifierToken[] = []
   let sawDoubleTap = false
@@ -167,7 +167,7 @@ export function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding |
   for (const modifier of modifiers) {
     applyModifierToken(parsed, modifier)
   }
-  // Keep both flags when Mod is combined with a platform modifier, so normalize emits the shared "Mod or platform-specific, not both" error.
+  // Retain conflicting flags so normalize can report the shared Mod/platform-specific error.
   if (parsed.mod && (parsed.meta || parsed.control)) {
     parsed.doubleTapModifier = 'Mod'
     return parsed
@@ -179,7 +179,7 @@ export function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding |
   return parsed
 }
 
-// Binding strings come from a fixed definition set plus user overrides, so the live set is tiny; the cap only guards a caller feeding arbitrary strings.
+// Definitions/user overrides form a small live set; cap retention for arbitrary caller-fed strings.
 const PARSE_CACHE_LIMIT = 512
 const parseCache = new Map<string, ParsedKeybinding | null>()
 
@@ -191,7 +191,7 @@ export function parseKeybinding(binding: string): ParsedKeybinding | null {
   if (parseCache.size >= PARSE_CACHE_LIMIT) {
     parseCache.clear()
   }
-  // Frozen so a caller can never corrupt the shared entry; every current caller spread-copies before changing a field.
+  // Freeze shared entries against caller mutation; callers copy before edits.
   parseCache.set(binding, parsed ? Object.freeze(parsed) : null)
   return parsed
 }

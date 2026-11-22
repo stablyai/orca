@@ -1,10 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
-import type { GhExecOptions } from '../../../git/command-runner/gh-exec-file'
+import type { GhExecOptions } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
 
 const { spawnMock, resolverMock, signalMock, forceMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -12,20 +15,27 @@ const { spawnMock, resolverMock, signalMock, forceMock } = vi.hoisted(() => ({
   signalMock: vi.fn(),
   forceMock: vi.fn()
 }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
-vi.mock('../../github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../../repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: resolverMock
+}))
 import { getPRCheckDetails } from './get-pr-check-details'
-import {
-  createCheckDetailsAdmissionLifetime,
-  runCheckDetailsCall
-} from './check-details-admission-lifetime'
 import { prCheckLogTailCache } from './check-job-log-tails'
-import { clearGhCapabilityStateForTests } from '../../gh-capability-state'
-import { clearGhAccountTokenCacheForTests } from '../../gh-account-token'
+import { clearGhCapabilityStateForTests } from '../../accounts/gh-capability-state'
+import { clearGhAccountTokenCacheForTests } from '../../accounts/gh-account-token'
 
 const repo = { owner: 'acme', repo: 'widgets' }
 const children: ChildProcess[] = []
@@ -38,6 +48,7 @@ function spawn(): ChildProcess {
 
 describe('check details existing admission ownership', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     spawnMock.mockReset().mockImplementation(spawn)
@@ -53,6 +64,7 @@ describe('check details existing admission ownership', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -82,6 +94,7 @@ describe('check details existing admission ownership', () => {
     }
     await vi.advanceTimersByTimeAsync(12_000)
     expect(children).toHaveLength(4)
+    groupExists.mockReturnValue(false)
     children[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(5)
@@ -141,93 +154,38 @@ describe('check details existing admission ownership', () => {
     await vi.advanceTimersByTimeAsync(12_000)
     expect(logChildren).toHaveLength(4)
     expect(prCheckLogTailCache.size).toBe(0)
+    groupExists.mockReturnValue(false)
     logChildren[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     await expect(fifth).resolves.toMatchObject({ jobs: [{ logTail: 'Error: fifth' }] })
     expect(logChildren).toHaveLength(5)
   })
 
-  it('seals logical continuation separately from actual child and releases exactly once', async () => {
-    const release = vi.fn()
-    const gate = createCheckDetailsAdmissionLifetime(release)
-    const controller = new AbortController()
-    let finishResult = (): void => {}
-    let finishChild = (): void => {}
-    const physical = new Promise<void>((resolve) => {
-      finishChild = resolve
-    })
-    const call = runCheckDetailsCall(
-      (hooks) => {
-        hooks.onTerminationPending(physical)
-        return new Promise<void>((resolve) => {
-          finishResult = resolve
-        })
-      },
-      controller.signal,
-      gate.retainUntil
-    )
-    await vi.advanceTimersByTimeAsync(0)
-    const rejected = expect(call.result).rejects.toMatchObject({ name: 'AbortError' })
-    controller.abort()
-    gate.finish()
-    gate.finish()
-    await rejected
-    finishChild()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(release).not.toHaveBeenCalled()
-    finishResult()
-    await call.terminated
-    await vi.advanceTimersByTimeAsync(0)
-    expect(release).toHaveBeenCalledOnce()
-  })
-
-  it('prevents the jobs stage after a swallowed annotation PID error until close', async () => {
-    const controller = new AbortController()
-    const result = getPRCheckDetails(
-      '/folder',
-      { checkRunId: 1, workflowRunId: 2 },
-      undefined,
-      {},
-      controller.signal
-    )
-    const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' })
-    await vi.advanceTimersByTimeAsync(0)
-    completeFakeSpawn(children[0], { stdout: '{"name":"loaded"}' })
-    await vi.advanceTimersByTimeAsync(0)
-    children[1].emit('error', new Error('private-output'))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(2)
-    controller.abort()
-    await rejected
-    expect(children).toHaveLength(2)
-    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private-output')
-  })
-
-  it('preserves metadata after an ordinary closed annotation failure and continues jobs', async () => {
-    const result = getPRCheckDetails('/folder', { checkRunId: 1, workflowRunId: 2 })
-    await vi.advanceTimersByTimeAsync(0)
-    completeFakeSpawn(children[0], { stdout: '{"name":"loaded","output":{"summary":"retained"}}' })
-    await vi.advanceTimersByTimeAsync(0)
-    completeFakeSpawn(children[1], { code: 1, stderr: 'private-output' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(3)
-    completeFakeSpawn(children[2], { stdout: '{"jobs":[]}' })
-    await expect(result).resolves.toMatchObject({
-      name: 'loaded',
-      summary: 'retained',
-      annotations: [],
-      jobs: []
-    })
-    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private-output')
-  })
-
-  it('retains all four creator permits through joined help and later token continuations after departure', async () => {
+  it('keeps queued check details waiting until abandoned credential lookup exits', async () => {
     const options: GhExecOptions = {
       cwd: '/folder',
       ghAccount: { host: 'github.com', user: 'Alice' },
       env: {}
     }
     resolverMock.mockResolvedValue({ ownerRepo: repo, ghOptions: options })
+    const help = Promise.withResolvers<ChildProcess>()
+    const token = Promise.withResolvers<ChildProcess>()
+    spawnMock.mockImplementation((_program: string, argv: string[]) => {
+      const child = spawn()
+      if (argv[0] === 'auth') {
+        if (argv.includes('--help')) {
+          help.resolve(child)
+        } else {
+          token.resolve(child)
+        }
+      } else {
+        const stdout = argv.some((arg) => arg.includes('/annotations?'))
+          ? '[]'
+          : '{"name":"queued check"}'
+        queueMicrotask(() => completeFakeSpawn(child, { stdout }))
+      }
+      return child
+    })
     const controllers = Array.from({ length: 4 }, () => new AbortController())
     const results = controllers.map((controller) =>
       getPRCheckDetails('/folder', { checkRunId: 1 }, undefined, {}, controller.signal).catch(
@@ -235,34 +193,26 @@ describe('check details existing admission ownership', () => {
       )
     )
     await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(1)
-    expect(spawnMock.mock.calls[0][1]).toEqual(['auth', 'token', '--help'])
     for (const controller of controllers) {
       controller.abort()
     }
     await Promise.all(results)
     resolverMock.mockResolvedValue({ ownerRepo: repo, ghOptions: { cwd: '/folder', env: {} } })
-    const fifth = getPRCheckDetails('/folder', { checkRunId: 5 })
+    let queuedSettled = false
+    const queued = getPRCheckDetails('/folder', { checkRunId: 5 }).finally(() => {
+      queuedSettled = true
+    })
     await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(1)
-    completeFakeSpawn(children[0], { stdout: '--user' })
+    expect(queuedSettled).toBe(false)
+    completeFakeSpawn(await help.promise, { stdout: '--user' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(5)
-    for (const call of spawnMock.mock.calls.slice(1)) {
-      expect(call[1]).toContain('Alice')
-    }
-    for (const tokenChild of children.slice(1)) {
-      tokenChild.emit('error', new Error('token delivery failed'))
-    }
+    const tokenChild = await token.promise
+    tokenChild.emit('error', new Error('token delivery failed'))
     await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(5)
-    children[1].emit('close', 1, null)
+    expect(queuedSettled).toBe(false)
+    groupExists.mockReturnValue(false)
+    tokenChild.emit('close', 1, null)
     await vi.advanceTimersByTimeAsync(0)
-    expect(children).toHaveLength(6)
-    completeFakeSpawn(children[5], { stdout: '{"name":"fifth"}' })
-    await vi.advanceTimersByTimeAsync(0)
-    completeFakeSpawn(children[6], { stdout: '[]' })
-    await expect(fifth).resolves.toMatchObject({ name: 'fifth' })
-    expect(spawnMock.mock.calls.filter((call) => call[1][0] === 'api')).toHaveLength(2)
+    await expect(queued).resolves.toMatchObject({ name: 'queued check' })
   })
 })

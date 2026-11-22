@@ -126,10 +126,10 @@ describe('planning fields in Jira searches', () => {
                     : { key: 'DEMO-1', fields: { summary: 'Still available' } }
                 )
           )
-        const read = () =>
+        const read = async () =>
           kind === 'search'
-            ? searchIssues('project = DEMO', 30, entry.site.id)
-            : getIssue('DEMO-1', entry.site.id)
+            ? await searchIssues('project = DEMO', 30, entry.site.id)
+            : await getIssue('DEMO-1', entry.site.id)
         const first = read()
         await vi.advanceTimersByTimeAsync(500)
         expect(await first).toMatchObject(

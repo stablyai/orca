@@ -1,38 +1,43 @@
-/**
- * An agent session named as a recipient: `orca_session_id:<id>`, or a bare Orca session id. Any session on
- * this host can be addressed, not only one that coordinates a Run: an agent's id is its public
- * address, and a user telling one agent to message another's id is a supported workflow.
- *
- * Mail that no Run or Dispatch owns is stored at the conversation's `orca_session_id:<root id>` and pointed
- * at its live session as a turn, so any session of a `/clear` lineage is a valid spelling. A
- * released lease is not a refusal (the pointer's send starts its agent); a closed chat, another host,
- * and an unknown id are, before anything is stored.
- */
+/** Address any host-local chat by Orca session id, including /clear ancestors.
+ * Unbound mail belongs to the root mailbox and points at the live session. Released leases may restart; closed/foreign/unknown chats refuse before storage. */
 
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress,
   type OrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../../shared/orca-session-address'
+} from '../../../../../../shared/agent-session/identity/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
-  structuredSessionMailReach
-} from '../../../../orchestration/structured-session-mail-address'
-import type { AgentSessionRecordReader } from '../../../../orchestration/structured-session-lineage'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
+  structuredSessionMailReach,
+  structuredSessionMailReachWith,
+  type StructuredSessionMailReach,
+  type StructuredSessionReachContext
+} from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
+import {
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
+} from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { AgentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
 
+/** Why a known chat takes no mail, as a picker words it: closed, run elsewhere, or not checkable. */
+export type SessionRecipientUnreachable = 'ended' | 'other-host' | 'unverifiable'
+
 export type SessionRecipientRefusal = {
   code: (typeof CODES)[keyof typeof CODES]
   message: string
+  /** Set by the reach check alone, so a chat list can say why without parsing the message. */
+  unreachable?: SessionRecipientUnreachable
 }
 
 /** Whether a recipient may name a session, so the caller can install the session host first. */
@@ -40,13 +45,54 @@ export function mayNameSession(recipient: string): boolean {
   return recipient.startsWith(ORCA_SESSION_ADDRESS_PREFIX) || isOrcaSessionId(recipient)
 }
 
-/**
- * The session a recipient names. A bare string names a session only when it is an Orca session id
- * this host has a record for; anything else stays a terminal handle, exactly as before.
- */
+/** A recipient that names one of this host's terminal agents, and where it runs now. */
+export type TerminalAgentRecipient = {
+  sessionId: string
+  places: { paneKey: string; worktreeId?: string }[]
+} | null
+
+/** Resolved before routing: a dormant terminal id is known only to the identity store, which
+ *  answers asynchronously. A known chat (or its provider id) is decided by the chat store alone,
+ *  so chat mail never waits on the identity worker. Callers reread the facts they act on after
+ *  awaiting this. */
+export async function resolveTerminalAgentRecipient(
+  recipient: string
+): Promise<TerminalAgentRecipient> {
+  const sessionId = recipient.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+    ? parseOrcaSessionAddress(recipient)
+    : isOrcaSessionId(recipient)
+      ? recipient
+      : null
+  const store = sessionId ? readAgentSessionRecordStore() : null
+  if (!sessionId || (store && lookupOrcaAgentSession(store, sessionId).kind !== 'unknown')) {
+    return null
+  }
+  const places = await agentHookServer.terminalAgentPlaces(sessionId)
+  return places ? { sessionId, places } : null
+}
+
+/** Before routing a session-shaped recipient: opens the chat store, resolves a terminal agent,
+ *  then checks the caller's authority again, since the waits may have outlived it. */
+export async function prepareSessionRecipient(
+  runtime: { ensureStructuredAgentSessionHost(): Promise<unknown> },
+  recipient: string,
+  revalidateCaller?: () => unknown
+): Promise<TerminalAgentRecipient> {
+  if (!mayNameSession(recipient)) {
+    return null
+  }
+  // Recipient routing reads the session record store, which the host opens lazily.
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const terminal = await resolveTerminalAgentRecipient(recipient)
+  revalidateCaller?.()
+  return terminal
+}
+
+/** Recognize bare ids as sessions only when a local record exists; preserve terminal-handle interpretation otherwise. */
 export function readSessionRecipient(
   recipient: string,
-  store: AgentSessionRecordReader | null
+  store: AgentSessionRecordReader | null,
+  terminalRecipient: TerminalAgentRecipient
 ): SessionRecipient | SessionRecipientRefusal | null {
   if (recipient.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
     const sessionId = parseOrcaSessionAddress(recipient)
@@ -62,26 +108,68 @@ export function readSessionRecipient(
   if (found?.kind === 'provider-id') {
     return providerIdRefusal(recipient, found.orcaSessionId, store)
   }
+  if (sessionId && found?.kind !== 'found') {
+    const terminal = terminalAgentRefusal(sessionId, terminalRecipient)
+    if (terminal) {
+      return terminal
+    }
+  }
   return sessionId && found?.kind === 'found'
     ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
     : null
 }
 
-/**
- * Null when mail to this session can be stored and delivered here; otherwise why not. A Dispatch
- * to a chat asks the same question, since its task and its mail reach the chat the same way.
- */
+/** Share mail/task reachability: null admits storage/delivery here, otherwise return the refusal. */
 export function refuseUndeliverableSessionRecipient(
   recipient: SessionRecipient,
   store: AgentSessionRecordReader | null,
   db: OrchestrationDb,
+  terminalRecipient: TerminalAgentRecipient,
   noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  // Before the host check: terminal-only users have no agent-session host to blame.
+  const terminal = terminalAgentRefusal(recipient.sessionId, terminalRecipient, noEffect)
+  if (terminal) {
+    return terminal
+  }
+  return refuseUnreachableSessionRecipient(
+    recipient,
+    store,
+    (records, found) => structuredSessionMailReach(records, found, db),
+    noEffect
+  )
+}
+
+/** The same refusal, with lineage walks and party resolutions shared across one pass over many chats. */
+export function refuseUndeliverableSessionRecipientWith(
+  context: StructuredSessionReachContext,
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
+  noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  return refuseUnreachableSessionRecipient(
+    recipient,
+    store,
+    (records, found) => structuredSessionMailReachWith(context, records, found),
+    noEffect
+  )
+}
+
+function refuseUnreachableSessionRecipient(
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
+  reach: (
+    records: AgentSessionRecordReader,
+    found: AgentSessionConversationView
+  ) => StructuredSessionMailReach,
+  noEffect: string
 ): SessionRecipientRefusal | null {
   const { sessionId } = recipient
   if (!store) {
     return {
       code: CODES.unknown,
-      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. ${noEffect}`
+      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
   const found = lookupOrcaAgentSession(store, sessionId)
@@ -91,29 +179,33 @@ export function refuseUndeliverableSessionRecipient(
   if (found.kind === 'unknown') {
     return {
       code: CODES.unknown,
-      message: `No Orca agent session ${sessionId} exists on this host. ${noEffect}`
+      message: `No Orca agent session ${sessionId} exists on this host. ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
-  const reach = structuredSessionMailReach(store, found.record, db)
-  if (reach.kind === 'other-host') {
+  const reached = reach(store, found.record)
+  if (reached.kind === 'other-host') {
     return {
       code: CODES.hostBoundary,
-      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host. ${noEffect}`
+      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host. ${noEffect}`,
+      unreachable: 'other-host'
     }
   }
-  if (reach.kind === 'unverifiable') {
+  if (reached.kind === 'unverifiable') {
     return {
       code: CODES.notLive,
-      message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reach.reason} ${noEffect}`
+      message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reached.reason} ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
-  if (reach.kind === 'ended') {
+  if (reached.kind === 'ended') {
     return {
       code: CODES.notLive,
       message:
-        reach.reason === 'worker-identity-lost'
+        reached.reason === 'worker-identity-lost'
           ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. ${noEffect}`
-          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`
+          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`,
+      unreachable: reached.reason === 'worker-identity-lost' ? 'unverifiable' : 'ended'
     }
   }
   return null
@@ -133,5 +225,26 @@ function providerIdRefusal(
   return {
     code: CODES.providerId,
     message: `${id} is the provider's own session id, which changes on /clear. This session's Orca session ID is ${address}; address it by that instead. ${noEffect}`
+  }
+}
+
+/** Terminal agents have Orca ids, but mail reaches them only through their terminal for now. */
+function terminalAgentRefusal(
+  sessionId: OrcaSessionId,
+  terminalRecipient: TerminalAgentRecipient,
+  noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  if (terminalRecipient?.sessionId !== sessionId) {
+    return null
+  }
+  const places = terminalRecipient.places.map((place) =>
+    place.worktreeId
+      ? `pane ${place.paneKey} in workspace ${place.worktreeId}`
+      : `pane ${place.paneKey}`
+  )
+  const where = places.length > 0 ? `, running in ${places.join('; ')}` : ''
+  return {
+    code: CODES.terminalAgent,
+    message: `Agent ${sessionId} is a terminal agent${where}. Messaging terminal agents by ID isn't supported yet; address its terminal instead. ${noEffect}`
   }
 }

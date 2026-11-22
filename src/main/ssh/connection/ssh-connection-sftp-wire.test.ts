@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { Client, Server as Ssh2Server, utils, type Connection, type SFTPWrapper } from 'ssh2'
 import { expect, it, vi } from 'vitest'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { SshConnection } from './ssh-connection'
-import type { SftpNamespacePathMapping } from '../sftp-namespace-resolution'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import type { SftpNamespacePathMapping } from '../file-transfer/sftp/sftp-namespace-resolution'
+import { getRemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'
@@ -303,7 +303,7 @@ async function withSplitNamespaceFixture(
   }
 }
 
-it('uploads through a verified split namespace over a real ssh2 SFTP session', async () => {
+it('uploads a directory and writes a file through a verified split namespace', async () => {
   const localDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-sftp-wire-local-')))
   await mkdir(join(localDir, 'nested'))
   await writeFile(join(localDir, 'nested', 'payload.bin'), Buffer.from([0, 1, 2, 255]))
@@ -330,34 +330,24 @@ it('uploads through a verified split namespace over a real ssh2 SFTP session', a
       expect(fixture.operations).toContain(`MKDIR:${SFTP_RELAY_DIR}/nested`)
       expect(fixture.operations).toContain(`OPEN:${SFTP_RELAY_DIR}/nested/payload.bin`)
       expect(fixture.operations).toEqual(expect.arrayContaining(['WRITE', 'CLOSE']))
+
+      fixture.operations.length = 0
+      const shellFilePath = `${SHELL_RELAY_DIR}/package.json`
+      const contents = '{"name":"orca-relay"}\n'
+      await boundedTransfer(
+        connection.writeFile(shellFilePath, contents, {
+          hostPlatform: getRemoteHostPlatform('linux-x64'),
+          sftpNamespace: splitNamespaceMapping(`${RELAY_DIR}/package.json`)
+        }),
+        fixture.operations,
+        'writeFile'
+      )
+
+      expect(await readFile(join(backingRelayDir, 'package.json'), 'utf8')).toBe(contents)
+      expect(fixture.operations).toContain(`OPEN:${SFTP_RELAY_DIR}/package.json`)
+      expect(fixture.operations).not.toContain(`OPEN:${shellFilePath}`)
     })
   } finally {
     await rm(localDir, { recursive: true, force: true })
   }
-}, 15_000)
-
-it('writes a mapped file through a verified split namespace over a real ssh2 SFTP session', async () => {
-  await withSplitNamespaceFixture(async ({ connection, fixture, backingRelayDir }) => {
-    const mapping = splitNamespaceMapping(`${RELAY_DIR}/package.json`)
-    const shellFilePath = `${SHELL_RELAY_DIR}/package.json`
-    const contents = '{"name":"orca-relay"}\n'
-
-    await boundedTransfer(
-      connection.writeFile(shellFilePath, contents, {
-        hostPlatform: getRemoteHostPlatform('linux-x64'),
-        sftpNamespace: mapping
-      }),
-      fixture.operations,
-      'writeFile'
-    )
-
-    expect(await readFile(join(backingRelayDir, 'package.json'), 'utf8')).toBe(contents)
-    expect(fixture.operations).toContain(`REALPATH:.`)
-    expect(fixture.operations).toContain(`LSTAT:${mapping.shellProbePath}`)
-    expect(fixture.operations).toContain(`LSTAT:${SFTP_RELAY_DIR}/${MARKER_PATH}`)
-    expect(fixture.operations).toContain(`OPEN:${SFTP_RELAY_DIR}/package.json`)
-    expect(fixture.operations).toEqual(expect.arrayContaining(['WRITE', 'CLOSE']))
-    // Shell-namespace path must never be opened for a confirmed split write.
-    expect(fixture.operations).not.toContain(`OPEN:${shellFilePath}`)
-  })
 }, 15_000)

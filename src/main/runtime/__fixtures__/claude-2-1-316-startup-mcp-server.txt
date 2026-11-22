@@ -1,0 +1,13 @@
+7[r8[?25h[?25l[?2004h[?2031h[?1004h
+[38;2;255;193;7m────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[3G[38;2;255;193;7m[1mNew[7GMCP[11Gserver[18Gfound[24Gin[27Gthis[32Gproject:[41Gscratch-echo[22m[39m
+
+[3GMCP[7Gservers[15Gmay[19Gexecute[27Gcode[32Gor[35Gaccess[42Gsystem[49Gresources.[60GAll[64Gtool[69Gcalls[75Grequire[83Gapproval.[93GLearn
+[3Gmore[8Gin[11Gthe[15G]8;id=c415zw;https://code.claude.com/docs/en/mcpMCP documentation]8;;.
+
+[5GUse[9Gthis[14GMCP[18Gserver
+[5GUse[9Gthis[14Gand[18Gall[22Gfuture[29GMCP[33Gservers[41Gin[44Gthis[49Gproject
+[3G[38;2;177;185;249m❯[5GContinue[14Gwithout[22Gusing[28Gthis[33GMCP[37Gserver[39m
+
+[3G[38;2;153;153;153m[3mEnter[9Gto[12Gconfirm[20G·[22GEsc[26Gto[29Gcancel[23m[39m
+[2C[3A[>0q[?u]7501;?[c

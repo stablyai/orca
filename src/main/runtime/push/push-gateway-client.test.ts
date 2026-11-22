@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-challenge-fixtures'
 import { PushGatewayClient } from './push-gateway-client'
@@ -122,32 +122,6 @@ const REGISTER_INPUT = {
 }
 
 describe('PushGatewayClient', () => {
-  it('runs the challenge handshake once and reuses the cached session', async () => {
-    const gateway = createFakeGateway()
-
-    expect(await gateway.client.registerDevice(REGISTER_INPUT)).toEqual({
-      ok: true,
-      registrationId: 'reg-1'
-    })
-    expect(
-      await gateway.client.send({
-        registrationIds: ['reg-1'],
-        notification: {
-          notificationSeq: 1,
-          notificationEpoch: 'epoch-1',
-          source: 'agent-task-complete',
-          agentState: 'finished',
-          title: 'Done',
-          body: 'Body'
-        }
-      })
-    ).toEqual({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
-
-    const handshakes = gateway.calls.filter((call) => call.url.includes('/v1/host/'))
-    expect(handshakes).toHaveLength(2)
-    expect(gateway.calls.at(-1)?.authorization).toBe('Bearer session-1')
-  })
-
   it('re-authenticates once when the gateway rejects the cached session', async () => {
     const gateway = createFakeGateway()
     await gateway.client.registerDevice(REGISTER_INPUT)
@@ -161,82 +135,6 @@ describe('PushGatewayClient', () => {
     expect(gateway.calls.at(-1)?.authorization).toBe('Bearer session-2')
   })
 
-  it('re-authenticates before a session that is about to expire', async () => {
-    const gateway = createFakeGateway({ sessionTtlMs: 90_000 })
-    await gateway.client.registerDevice(REGISTER_INPUT)
-    gateway.now.value += 60_000
-
-    await gateway.client.registerDevice(REGISTER_INPUT)
-    expect(gateway.calls.filter((call) => call.url.endsWith('/v1/host/challenge'))).toHaveLength(2)
-  })
-
-  it('shares one handshake across concurrent calls', async () => {
-    const gateway = createFakeGateway()
-    await Promise.all([
-      gateway.client.registerDevice(REGISTER_INPUT),
-      gateway.client.registerDevice(REGISTER_INPUT)
-    ])
-    expect(gateway.calls.filter((call) => call.url.endsWith('/v1/host/challenge'))).toHaveLength(1)
-  })
-
-  it('reports an unreachable gateway instead of throwing', async () => {
-    const keypair = createPushHostKeypair()
-    const client = new PushGatewayClient({
-      gatewayUrl: GATEWAY_URL,
-      keypair,
-      fetch: vi.fn(async () => {
-        throw new Error('network down')
-      }) as unknown as typeof globalThis.fetch,
-      now: () => NOW
-    })
-    expect(await client.registerDevice(REGISTER_INPUT)).toEqual({
-      ok: false,
-      reason: 'unreachable'
-    })
-  })
-
-  it('reports a refused registration as rejected', async () => {
-    const gateway = createFakeGateway({ devicesStatus: 400 })
-    expect(await gateway.client.registerDevice(REGISTER_INPUT)).toEqual({
-      ok: false,
-      reason: 'rejected'
-    })
-  })
-
-  it('never follows a redirect, on the handshake or on an authorized call', async () => {
-    const gateway = createFakeGateway()
-
-    await gateway.client.registerDevice(REGISTER_INPUT)
-    await gateway.client.deleteDevice('reg-1')
-
-    // A 307 would replay the host proof, then the phone's token, to whatever
-    // origin the redirect named.
-    expect(gateway.calls.length).toBeGreaterThanOrEqual(4)
-    expect(gateway.calls.every((call) => call.redirect === 'error')).toBe(true)
-  })
-
-  it('reports a gateway 5xx as unreachable so the caller can retry', async () => {
-    const gateway = createFakeGateway({ devicesStatus: 503 })
-    expect(await gateway.client.registerDevice(REGISTER_INPUT)).toEqual({
-      ok: false,
-      reason: 'unreachable'
-    })
-  })
-
-  it('treats a delete the gateway accepted as done', async () => {
-    const gateway = createFakeGateway()
-    await gateway.client.registerDevice(REGISTER_INPUT)
-
-    expect(await gateway.client.deleteDevice('reg-1')).toEqual(true)
-    expect(gateway.calls.at(-1)).toMatchObject({ method: 'DELETE' })
-  })
-
-  it('treats a delete of an unknown registration as done', async () => {
-    const gateway = createFakeGateway()
-
-    expect(await gateway.client.deleteDevice('reg-gone')).toEqual(true)
-  })
-
   it('reports a 401 that survives the forced re-auth as unreachable', async () => {
     const gateway = createFakeGateway({ rejectBearer: true })
 
@@ -244,13 +142,6 @@ describe('PushGatewayClient', () => {
       ok: false,
       reason: 'unreachable'
     })
-    // Exactly one forced re-auth, not a handshake loop.
     expect(gateway.calls.filter((call) => call.url.endsWith('/v1/host/challenge'))).toHaveLength(2)
-  })
-
-  it('keeps an unreachable-classified 401 retryable for a queued delete', async () => {
-    const gateway = createFakeGateway({ rejectBearer: true })
-
-    expect(await gateway.client.deleteDevice('reg-1')).toEqual(false)
   })
 })

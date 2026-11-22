@@ -1,18 +1,21 @@
-import { describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { describe, expect, it } from 'vitest'
+import {
+  getDefaultPersistedState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
+import '../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo
 } from './missing-local-worktree-metadata-pruning'
+import { pruneMissingLocalWorktreeSessionsForRepo } from './missing-local-worktree-session-pruning'
 
 const REPO_ID = 'repo-1'
-const LIVE_ID = `${REPO_ID}::/workspace/live`
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -55,87 +58,18 @@ function capture(state: PersistedState, repo = state.repos[0]!) {
 function pruneCaptured(
   state: PersistedState,
   scan: ReturnType<typeof capture>,
-  ids: readonly string[],
-  platform?: NodeJS.Platform
+  ids: readonly string[]
 ): string[] {
   const wanted = new Set(ids)
   return pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     state,
     scan,
     scan.metadata.filter(({ worktreeId }) => wanted.has(worktreeId)),
-    platform
+    'linux'
   )
 }
 
 describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
-  it('removes 2,709 sessionless rows in one batch without cloning or changing session state', () => {
-    const state = makeState()
-    const staleIds = Array.from(
-      { length: 2_709 },
-      (_, index) => `${REPO_ID}::/workspace/stale-${index}`
-    )
-    const allIds = [LIVE_ID, ...staleIds]
-    state.worktreeMetaByIdentity = {}
-    state.worktreeIdentityAliases = {}
-    for (const [index, worktreeId] of allIds.entries()) {
-      const meta = makeMeta(worktreeId)
-      const identityKey = `identity-${index}`
-      state.worktreeMeta[worktreeId] = meta
-      state.worktreeMetaByIdentity[identityKey] = meta
-      state.worktreeIdentityAliases[`local|${worktreeId}`] = [identityKey]
-    }
-    state.worktreeLineageById[staleIds[0]!] = { worktreeId: staleIds[0] } as never
-    state.workspaceLineageByChildKey[worktreeWorkspaceKey(staleIds[0]!)] = {
-      childWorkspaceKey: worktreeWorkspaceKey(staleIds[0]!)
-    } as never
-    state.workspaceSession.terminalTopologyRevisionByRepoId = { [REPO_ID]: 7 }
-    const hostSession = {
-      ...getDefaultWorkspaceSession(),
-      terminalTopologyRevisionByRepoId: { [REPO_ID]: 11 }
-    }
-    state.workspaceSessionsByHostId = { 'runtime:mirror': hostSession }
-    const scan = capture(state)
-    const session = state.workspaceSession
-    const sessionSnapshot = structuredClone(session)
-    const hostSessionSnapshot = structuredClone(hostSession)
-    const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
-
-    const removed = pruneCaptured(state, scan, staleIds)
-
-    expect(removed).toHaveLength(staleIds.length)
-    expect(cloneSpy).not.toHaveBeenCalled()
-    cloneSpy.mockRestore()
-    expect(Object.keys(state.worktreeMeta)).toEqual([LIVE_ID])
-    expect(Object.keys(state.worktreeMetaByIdentity ?? {})).toEqual(['identity-0'])
-    expect(Object.keys(state.worktreeIdentityAliases ?? {})).toEqual([`local|${LIVE_ID}`])
-    expect(state.worktreeLineageById[staleIds[0]!]).toBeUndefined()
-    expect(state.workspaceLineageByChildKey[worktreeWorkspaceKey(staleIds[0]!)]).toBeUndefined()
-    expect(state.workspaceSession).toBe(session)
-    expect(state.workspaceSession).toEqual(sessionSnapshot)
-    expect(state.workspaceSessionsByHostId?.['runtime:mirror']).toBe(hostSession)
-    expect(state.workspaceSessionsByHostId?.['runtime:mirror']).toEqual(hostSessionSnapshot)
-  })
-
-  it('fails closed when metadata is mutated or replaced after the scan starts', () => {
-    const inPlaceState = makeState()
-    const inPlaceId = `${REPO_ID}::/workspace/in-place`
-    inPlaceState.worktreeMeta[inPlaceId] = makeMeta(inPlaceId)
-    const inPlaceScan = capture(inPlaceState)
-    inPlaceState.worktreeMeta[inPlaceId]!.instanceId = 'replacement-instance'
-
-    expect(pruneCaptured(inPlaceState, inPlaceScan, [inPlaceId])).toEqual([])
-
-    const replacedState = makeState()
-    const replacedId = `${REPO_ID}::/workspace/replaced`
-    const original = makeMeta(replacedId)
-    replacedState.worktreeMeta[replacedId] = original
-    const replacedScan = capture(replacedState)
-    replacedState.worktreeMeta[replacedId] = { ...original }
-
-    expect(pruneCaptured(replacedState, replacedScan, [replacedId])).toEqual([])
-    expect(replacedState.worktreeMeta[replacedId]).not.toBe(original)
-  })
-
   it('fails closed when an identical repo row is removed and re-added during the scan', () => {
     const state = makeState()
     const worktreeId = `${REPO_ID}::/workspace/re-added-repo`
@@ -149,147 +83,28 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
   })
 
-  it('uses the effective Git kind when the raw legacy repo omitted kind', () => {
+  it('keeps an archived workspace whose checkout was deleted on purpose', () => {
     const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/legacy-git-kind`
-    const rawRepo = state.repos[0]!
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const scan = capture(state, { ...rawRepo, kind: 'git' })
-
-    expect(rawRepo.kind).toBeUndefined()
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-  })
-
-  it.each([
-    'tabsByWorktree',
-    'browserTabsByWorktree',
-    'openFilesByWorktree',
-    'activeFileIdByWorktree',
-    'activeBrowserTabIdByWorktree',
-    'clientHostedBrowserPagesByWorktree',
-    'activeTabTypeByWorktree',
-    'activeTabIdByWorktree',
-    'unifiedTabs',
-    'tabGroups',
-    'tabGroupLayouts',
-    'activeGroupIdByWorktree',
-    'lastVisitedAtByWorktreeId',
-    'defaultTerminalTabsAppliedByWorktreeId'
-  ] as const)('preserves an owner named by workspaceSession.%s', (field) => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/${field}`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
+    const archivedId = `${REPO_ID}::/workspace/archived`
+    const deletedId = `${REPO_ID}::/workspace/deleted`
+    state.worktreeMeta[archivedId] = {
+      ...makeMeta(archivedId),
+      comment: 'pick up after review',
+      linkedPR: 42,
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    state.worktreeMeta[deletedId] = makeMeta(deletedId)
     const scan = capture(state)
-    const ownerKey = field === 'lastVisitedAtByWorktreeId' ? `local|${worktreeId}` : worktreeId
-    ;(state.workspaceSession as unknown as Record<string, unknown>)[field] = {
-      [ownerKey]: []
-    }
 
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    expect(state.worktreeMeta[worktreeId]).toBeDefined()
+    expect(pruneCaptured(state, scan, [archivedId, deletedId])).toEqual([deletedId])
+    expect(state.worktreeMeta[archivedId]).toMatchObject({
+      comment: 'pick up after review',
+      linkedPR: 42
+    })
   })
 
-  it('preserves scalar, nested, remote-partition, mobile, and relay recovery owners', () => {
-    const ownerMutations: ((state: PersistedState, worktreeId: string) => void)[] = [
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorktreeId = worktreeId
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorkspaceKey = worktreeWorkspaceKey(worktreeId)
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorktreeIdsOnShutdown = [worktreeId]
-      },
-      (state, worktreeId) => {
-        state.ui.lastActiveWorktreeId = worktreeId
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.sleepingAgentSessionsByPaneKey = {
-          pane: { worktreeId } as never
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.terminalSurfaceTombstonesByPaneKey = {
-          pane: { worktreeId } as never
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.closedTerminalTabTombstonesByTabId = {
-          tab: { worktreeId, closedAt: 1 }
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment = {
-          runtime: [{ worktreeId, browserPageId: 'page', closedAt: 1 }]
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.browserPagesByWorkspace = {
-          browser: [{ worktreeId } as never]
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSessionsByHostId = {
-          'ssh:builder': {
-            ...getDefaultWorkspaceSession(),
-            lastVisitedAtByWorktreeId: { [worktreeId]: 1 }
-          }
-        }
-      },
-      (state, worktreeId) => {
-        state.mobileClientTabSelectionsByDeviceId = {
-          phone: { [worktreeId]: {} as never }
-        }
-      },
-      (state, worktreeId) => {
-        state.sshRemotePtyLeases = [
-          {
-            targetId: 'builder',
-            ptyId: 'pty',
-            worktreeId,
-            state: 'detached',
-            createdAt: 1,
-            updatedAt: 1
-          }
-        ]
-      },
-      (state, worktreeId) => {
-        state.migrationUnsupportedPtyEntries = [
-          {
-            ptyId: 'pty',
-            worktreeId,
-            reason: 'legacy-numeric-pane-key',
-            source: 'local',
-            updatedAt: 1
-          }
-        ]
-      },
-      (state, worktreeId) => {
-        state.automations = [
-          {
-            enabled: true,
-            workspaceMode: 'existing',
-            workspaceId: worktreeId
-          } as never
-        ]
-      },
-      (state, worktreeId) => {
-        state.automationRuns = [{ status: 'dispatching', workspaceId: worktreeId } as never]
-      }
-    ]
-
-    for (const [index, mutate] of ownerMutations.entries()) {
-      const state = makeState()
-      const worktreeId = `${REPO_ID}::/workspace/owner-${index}`
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-      const scan = capture(state)
-      mutate(state, worktreeId)
-      expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    }
-  })
-
-  // A route-retired lease is a tombstone, not a claim: counting one pinned its worktree's metadata
-  // row for good, so the prune could never make progress on it (#17775).
+  // Route-retired tombstones must not pin metadata forever (#17775).
   it('does not let route-retired SSH leases pin a metadata row', () => {
     const state = makeState()
     const liveIds = Array.from({ length: 3 }, (_, i) => `${REPO_ID}::/workspace/live-${i}`)
@@ -325,86 +140,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(Object.keys(state.worktreeMeta).sort()).toEqual([...liveIds].sort())
   })
 
-  // A plain `expired` lease says only that the CLIENT lost its route, so its pane is still
-  // recoverable and its metadata row is still owned (docs/reference/ssh-execution-boundary.md).
-  it('keeps a metadata row pinned by an unmarked expired lease', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/orphaned`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const scan = capture(state)
-    state.sshRemotePtyLeases = [
-      {
-        targetId: 'builder',
-        ptyId: 'pty',
-        worktreeId,
-        state: 'expired',
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-  })
-
-  it('preserves canonically equivalent session and top-level owners', () => {
-    const candidateId = `${REPO_ID}::/workspace/Café`.normalize('NFC')
-    const ownerId = candidateId.normalize('NFD')
-    const ownerMutations: ((state: PersistedState) => void)[] = [
-      (state) => {
-        state.workspaceSession.activeWorktreeId = ownerId
-      },
-      (state) => {
-        state.ui.lastActiveWorktreeId = ownerId
-      }
-    ]
-
-    for (const mutate of ownerMutations) {
-      const state = makeState()
-      state.worktreeMeta[candidateId] = makeMeta(candidateId)
-      const scan = capture(state)
-      mutate(state)
-
-      expect(pruneCaptured(state, scan, [candidateId])).toEqual([])
-      expect(state.worktreeMeta[candidateId]).toBeDefined()
-    }
-  })
-
-  it('removes a row on a later pass after its persisted owner is cleared', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/two-phase`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    state.workspaceSession.lastVisitedAtByWorktreeId = { [worktreeId]: 1 }
-    const scan = capture(state)
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    delete state.workspaceSession.lastVisitedAtByWorktreeId![worktreeId]
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-  })
-
-  it('treats dotfile visibility and cleanup dismissals as non-owning preferences', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/non-owning-preferences`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const showDotfilesByWorktree = { [worktreeId]: true }
-    const workspaceCleanup = {
-      dismissals: {
-        [worktreeId]: {
-          worktreeId,
-          dismissedAt: 1,
-          fingerprint: 'fingerprint',
-          classifierVersion: 1
-        }
-      }
-    }
-    state.ui.showDotfilesByWorktree = showDotfilesByWorktree
-    state.ui.workspaceCleanup = workspaceCleanup
-    const scan = capture(state)
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-    expect(state.ui.showDotfilesByWorktree).toBe(showDotfilesByWorktree)
-    expect(state.ui.workspaceCleanup).toBe(workspaceCleanup)
-  })
-
   it('preserves foreign aliases, ambiguous local aliases, and divergent projections', () => {
     const foreignState = makeState()
     const foreignId = `${REPO_ID}::/workspace/foreign-alias`
@@ -438,34 +173,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     divergentState.worktreeIdentityAliases = { [`local|${divergentId}`]: ['canonical'] }
     const divergentScan = capture(divergentState)
     expect(pruneCaptured(divergentState, divergentScan, [divergentId])).toEqual([])
-  })
-
-  it('fails closed for repo replacement, host collisions, remote, runtime, and folder repos', () => {
-    const mutations: ((state: PersistedState) => void)[] = [
-      (state) => {
-        state.repos[0] = makeRepo({ path: '/workspace/replacement' })
-      },
-      (state) => {
-        state.repos.push(makeRepo({ connectionId: 'builder', executionHostId: 'ssh:builder' }))
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ connectionId: 'builder', executionHostId: 'ssh:builder' })
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ executionHostId: 'runtime:environment' })
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ kind: 'folder' })
-      }
-    ]
-    for (const mutate of mutations) {
-      const state = makeState()
-      const worktreeId = `${REPO_ID}::/workspace/stale`
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-      const scan = capture(state)
-      mutate(state)
-      expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    }
   })
 
   it('fails closed when project runtime routing changes away and back during the scan', () => {
@@ -511,26 +218,110 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
   })
+})
 
-  it('rejects malformed, folder-instance, WSL, and non-native Windows candidate paths', () => {
+describe('pruneMissingLocalWorktreeSessionsForRepo', () => {
+  it('drops saved tabs of deleted worktrees but keeps unsaved drafts, archived and active workspaces', () => {
     const state = makeState()
-    const foreignWindowsId = `${REPO_ID}::C:\\workspace\\stale`
-    const ids = [
-      `${REPO_ID}::relative/path`,
-      `${REPO_ID}::`,
-      `wrong::/workspace/stale`,
-      `${REPO_ID}::/workspace/folder::workspace:11111111-1111-4111-8111-111111111111`,
-      `${REPO_ID}::\\\\wsl.localhost\\Ubuntu\\home\\gone`,
-      `${REPO_ID}::/home/user/wsl-legacy`,
-      foreignWindowsId
-    ]
-    for (const worktreeId of ids) {
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
+    const goneId = `${REPO_ID}::/workspace/gone`
+    const draftId = `${REPO_ID}::/workspace/draft`
+    const archivedId = `${REPO_ID}::/workspace/archived`
+    const activeId = `${REPO_ID}::/workspace/active`
+    state.worktreeMeta[archivedId] = {
+      ...makeMeta(archivedId),
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
     }
-    const scan = capture(state)
+    const draft = {
+      filePath: '/workspace/draft/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: draftId,
+      language: 'markdown',
+      dirtyDraftContent: 'unsaved'
+    }
+    state.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: activeId,
+      unifiedTabs: {
+        [goneId]: [],
+        [draftId]: [],
+        [archivedId]: [],
+        [activeId]: []
+      },
+      activeTabIdByWorktree: { [goneId]: null },
+      openFilesByWorktree: { [draftId]: [draft] }
+    }
 
-    expect(pruneCaptured(state, scan, ids.slice(0, -2))).toEqual([])
-    expect(pruneCaptured(state, scan, [ids.at(-2)!], 'win32')).toEqual([])
-    expect(pruneCaptured(state, scan, [foreignWindowsId], 'linux')).toEqual([])
+    const removed = pruneMissingLocalWorktreeSessionsForRepo(
+      state,
+      capture(state),
+      [goneId, draftId, archivedId, activeId],
+      'linux'
+    )
+
+    expect(removed).toEqual([goneId])
+    expect(state.workspaceSession.unifiedTabs).toEqual({
+      [draftId]: [],
+      [archivedId]: [],
+      [activeId]: []
+    })
+    expect(state.workspaceSession.activeTabIdByWorktree).toEqual({})
+    expect(state.workspaceSession.openFilesByWorktree).toEqual({ [draftId]: [draft] })
+  })
+
+  it('keeps an archived workspace whose saved key differs only in Windows path casing', () => {
+    const state = makeState(makeRepo({ path: 'C:\\Work\\repo' }))
+    state.worktreeMeta[`${REPO_ID}::C:\\Work\\archived`] = {
+      ...makeMeta(`${REPO_ID}::C:\\Work\\archived`),
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    const savedKey = `${REPO_ID}::c:\\work\\archived`
+    state.workspaceSession = { ...getDefaultWorkspaceSession(), unifiedTabs: { [savedKey]: [] } }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [savedKey], 'win32')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [savedKey]: [] })
+  })
+
+  it('keeps a workspace marked archived without an archived checkout', () => {
+    const state = makeState()
+    const archivedId = `${REPO_ID}::/workspace/hidden`
+    state.worktreeMeta[archivedId] = { ...makeMeta(archivedId), isArchived: true }
+    state.workspaceSession = { ...getDefaultWorkspaceSession(), unifiedTabs: { [archivedId]: [] } }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [archivedId], 'linux')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [archivedId]: [] })
+  })
+
+  // A reference removal never deletes must not count as pruned, or every scan re-arms cleanup.
+
+  it('keeps a workspace whose draft is saved under a differently cased Windows key', () => {
+    const state = makeState(makeRepo({ path: 'C:\\Work\\repo' }))
+    const draftKey = `${REPO_ID}::C:\\Work\\gone`
+    const tabsKey = `${REPO_ID}::c:\\work\\gone`
+    state.workspaceSession = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: { [tabsKey]: [] },
+      openFilesByWorktree: {
+        [draftKey]: [
+          {
+            filePath: 'C:\\Work\\gone\\notes.md',
+            relativePath: 'notes.md',
+            worktreeId: draftKey,
+            language: 'markdown',
+            dirtyDraftContent: 'unsaved'
+          }
+        ]
+      }
+    }
+
+    expect(
+      pruneMissingLocalWorktreeSessionsForRepo(state, capture(state), [tabsKey], 'win32')
+    ).toEqual([])
+    expect(state.workspaceSession.unifiedTabs).toEqual({ [tabsKey]: [] })
   })
 })

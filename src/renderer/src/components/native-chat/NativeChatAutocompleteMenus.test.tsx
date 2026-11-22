@@ -1,249 +1,172 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { buildNativeChatPickerItems } from '../../../../shared/native-chat-picker-items'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
+import { NativeChatMentionMenu } from './composer/pickers/NativeChatAutocompleteMenus'
+import { NativeChatRoomContext } from './native-chat-room-context'
 
-function autocomplete(
-  overrides: Partial<Extract<ComposerAutocomplete, { mode: 'slash' }>> = {}
-): Extract<ComposerAutocomplete, { mode: 'slash' }> {
-  return {
-    mode: 'slash',
-    query: '',
-    triggerKey: '/:0',
-    prefix: '/',
-    dispatchable: true,
-    grouped: true,
-    commandsEnabled: true,
-    skillsEnabled: true,
-    items: [
-      {
-        kind: 'command',
-        id: 'command:clear',
-        name: 'clear',
-        token: '/clear',
-        description: 'Clear history',
-        skillCollision: false
-      },
-      {
-        kind: 'skill',
-        id: 'skill:browser',
-        name: 'browser',
-        token: '/browser',
-        description: 'Use a browser',
-        sources: [{ sourceKind: 'repo', skillFilePath: '/repo/browser/SKILL.md' }]
-      }
-    ],
-    skillStatus: 'ready',
-    ...overrides
-  }
+const TWO_MEMBERS = {
+  replies: null,
+  mentions: [
+    { name: 'Scout', icon: <span data-testid="scout-avatar" /> },
+    { name: 'everyone', icon: null }
+  ],
+  withFiles: false,
+  unavailable: []
+}
+const OTHER_BOTS = {
+  replies: null,
+  mentions: [
+    { name: 'Docs', icon: null, detail: 'keeping the docs current' },
+    { name: 'Release notes', icon: null, unavailable: 'Paused' }
+  ],
+  withFiles: true,
+  unavailable: ['Release notes']
 }
 
-describe('NativeChatPickerMenu', () => {
-  afterEach(() => cleanup())
-
-  it('renders grouped command and skill options with active-descendant ids', () => {
-    const onChoose = vi.fn()
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete()}
-        activeIndex={1}
-        listboxId="picker"
-        onChoose={onChoose}
-        onRetry={vi.fn()}
-      />
-    )
-    expect(screen.getByText('Commands')).toBeTruthy()
-    expect(screen.getByText('Skills')).toBeTruthy()
-    expect(screen.getByRole('option', { name: /browser/i }).getAttribute('aria-selected')).toBe(
-      'true'
-    )
-    expect(screen.getByText('Project')).toBeTruthy()
-  })
-
-  it('completes a command on pointer down instead of dispatching it internally', () => {
-    const onChoose = vi.fn()
-    const value = autocomplete()
-    render(
-      <NativeChatPickerMenu
-        autocomplete={value}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={onChoose}
-        onRetry={vi.fn()}
-      />
-    )
-    fireEvent.pointerDown(screen.getByRole('option', { name: /clear/i }))
-    expect(onChoose).toHaveBeenCalledWith(value.items[0])
-  })
-
-  it('keeps commands selectable while skills load', () => {
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({ items: [autocomplete().items[0]], skillStatus: 'loading' })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    )
-    expect(screen.getByRole('option', { name: /clear/i })).toBeTruthy()
-    expect(screen.getAllByText('Loading skills...')).toHaveLength(2)
-  })
-
-  it('renders a retryable error instead of the loading spinner when discovery fails', () => {
-    const onRetry = vi.fn()
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({ items: [], skillStatus: 'error', skillErrorKind: 'host' })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={onRetry}
-      />
-    )
-
-    expect(screen.getAllByText("Couldn't load skills")).toHaveLength(2)
-    expect(screen.queryByText('Loading skills...')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(onRetry).toHaveBeenCalledOnce()
-  })
-
-  it('announces the same unavailable sentence it shows, with no Retry', () => {
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({
-          items: [],
-          skillStatus: 'error',
-          skillErrorKind: 'unavailable'
-        })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    )
-
-    expect(screen.getAllByText("Skills can't be listed in SSH chats")).toHaveLength(2)
-    expect(screen.queryByText("Couldn't load skills")).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-  })
-
-  it('uses command-only empty copy for a picker without skill support', () => {
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({
-          grouped: false,
-          items: [],
-          skillsEnabled: false,
-          skillStatus: 'ready'
-        })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    )
-    expect(screen.getAllByText('No matching commands')).toHaveLength(2)
-  })
-
-  it('shows the argument hint the provider reported beside the command token', () => {
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({
-          items: buildNativeChatPickerItems(
-            sessionSlashCommandSuggestions('claude', [
-              {
-                name: 'goal',
-                kind: 'command',
-                description: 'Set a goal and keep working until it is met',
-                argumentHint: '<objective>'
-              },
-              { name: 'clear', kind: 'command' },
-              { name: 'wordy', kind: 'command', argumentHint: `<${'a'.repeat(200)}>` }
-            ]),
-            [],
-            '',
-            '/'
-          )
-        })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    )
-    const goal = screen.getByRole('option', { name: /goal/i })
-    expect(goal.textContent).toContain('<objective>')
-    expect(goal.textContent).toContain('Set a goal and keep working until it is met')
-    // A command the report left hintless renders its row unchanged.
-    expect(screen.getByRole('option', { name: /clear/i }).textContent).toBe(
-      '/clearClear conversation history'
-    )
-    // A hint long enough to swamp the row is capped before it reaches the DOM.
-    expect(screen.getByRole('option', { name: /wordy/i }).textContent).toBe(
-      `/wordy<${'a'.repeat(79)}`
-    )
-  })
-
-  it('announces a successful empty skill result distinctly from loading', () => {
-    render(
-      <NativeChatPickerMenu
-        autocomplete={autocomplete({
-          commandsEnabled: false,
-          items: [],
-          skillStatus: 'ready'
-        })}
-        activeIndex={0}
-        listboxId="picker"
-        onChoose={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    )
-    expect(screen.getAllByText('No matching skills')).toHaveLength(2)
-  })
-})
+const NO_BOT_MATCH = { ...OTHER_BOTS, unavailable: [], query: 'notes' }
+// `@notes` matches only the paused bot's name, beside a matching file.
+const PAUSED_ONLY = {
+  ...OTHER_BOTS,
+  mentions: [OTHER_BOTS.mentions[1]],
+  query: 'notes'
+}
+// `@current` matches only what Docs is for.
+const PURPOSE_MATCH = {
+  ...OTHER_BOTS,
+  unavailable: [],
+  query: 'current',
+  matches: [
+    {
+      value: 'Docs',
+      name: 'Docs',
+      tier: 4 as const,
+      nameHits: [],
+      detailHits: [{ start: 'keeping the docs '.length, length: 'current'.length }],
+      unavailable: false
+    }
+  ]
+}
 
 describe('NativeChatMentionMenu', () => {
   afterEach(cleanup)
 
   const NO_ROWS = { files: [], loading: false, failed: false }
 
-  it('lists files by name with their folder and inserts the one pressed', () => {
+  it('in a room, lists members by name with their icon instead of files', () => {
     const onChoose = vi.fn()
     render(
-      <NativeChatMentionMenu
-        mention={{ ...NO_ROWS, files: ['src/app.ts', 'README.md'] }}
-        activeIndex={1}
-        listboxId="files"
-        onChoose={onChoose}
-      />
+      <NativeChatRoomContext.Provider value={TWO_MEMBERS}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['Scout', 'everyone'] }}
+          activeIndex={0}
+          listboxId="members"
+          onChoose={onChoose}
+        />
+      </NativeChatRoomContext.Provider>
     )
-    const options = screen.getAllByRole('option')
-    expect(options.map((option) => option.textContent)).toEqual(['app.tssrc/', 'README.md'])
-    expect(options[1].getAttribute('aria-selected')).toBe('true')
-    fireEvent.pointerDown(options[1], { button: 2 })
-    expect(onChoose).not.toHaveBeenCalled()
-    fireEvent.pointerDown(options[0])
-    expect(onChoose).toHaveBeenCalledWith('src/app.ts')
+    expect(screen.getByTestId('scout-avatar')).toBeTruthy()
+    fireEvent.pointerDown(screen.getAllByRole('option')[1])
+    expect(onChoose).toHaveBeenCalledWith('everyone')
   })
 
-  it.each([
-    [NO_ROWS, 'No matching files'],
-    [{ ...NO_ROWS, loading: true, failed: true }, 'Loading files...'],
-    [{ ...NO_ROWS, failed: true }, "Couldn't load files"]
-  ])('explains an empty list: %#', (mention, text) => {
+  it("in a bot's chat, lists the other bots above files, a paused one shown but not pickable", () => {
+    const onChoose = vi.fn()
     render(
-      <NativeChatMentionMenu
-        mention={mention}
-        activeIndex={0}
-        listboxId="files"
-        onChoose={vi.fn()}
-      />
+      <NativeChatRoomContext.Provider value={OTHER_BOTS}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['Docs', 'notes.md'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={onChoose}
+        />
+      </NativeChatRoomContext.Provider>
     )
-    expect(screen.getAllByText(text).length).toBeGreaterThan(0)
+    expect(
+      screen.getByRole('option', { name: /Release notes/ }).getAttribute('aria-disabled')
+    ).toBe('true')
+    fireEvent.pointerDown(screen.getAllByRole('option')[0])
+    expect(onChoose).toHaveBeenCalledWith('Docs')
+    fireEvent.pointerDown(screen.getAllByRole('option')[1])
+    expect(onChoose).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves the one highlight with real pointer movement only', () => {
+    function Menu() {
+      const [activeIndex, setActiveIndex] = useState(0)
+      return (
+        <NativeChatRoomContext.Provider value={OTHER_BOTS}>
+          <NativeChatMentionMenu
+            mention={{ ...NO_ROWS, files: ['Docs', 'notes.md'] }}
+            activeIndex={activeIndex}
+            listboxId="bots"
+            onChoose={() => {}}
+            onHover={setActiveIndex}
+          />
+        </NativeChatRoomContext.Provider>
+      )
+    }
+    render(<Menu />)
+    const docs = screen.getByRole('option', { name: /Docs/ })
+    const notes = screen.getByRole('option', { name: 'notes.md' })
+    fireEvent.mouseEnter(notes)
+    expect(docs.getAttribute('aria-selected')).toBe('true')
+    // The first mousemove can come from opening the menu under a resting pointer.
+    fireEvent.mouseMove(notes, { clientX: 10, clientY: 40, movementX: 0, movementY: 0 })
+    expect(docs.getAttribute('aria-selected')).toBe('true')
+    expect(notes.getAttribute('aria-selected')).toBe('false')
+    fireEvent.mouseMove(notes, { movementX: 0, movementY: 3 })
+    expect(docs.getAttribute('aria-selected')).toBe('false')
+    expect(notes.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it("in a bot's chat, lets a matching file be picked when no bot matches", () => {
+    const onChoose = vi.fn()
+    render(
+      <NativeChatRoomContext.Provider value={NO_BOT_MATCH}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['notes.md'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={onChoose}
+        />
+      </NativeChatRoomContext.Provider>
+    )
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['notes.md'])
+    fireEvent.pointerDown(screen.getByRole('option', { name: 'notes.md' }))
+    expect(onChoose).toHaveBeenCalledWith('notes.md')
+  })
+
+  it('keeps the Bots heading over a paused bot when it is the only bot listed', () => {
+    render(
+      <NativeChatRoomContext.Provider value={PAUSED_ONLY}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['notes.md'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={vi.fn()}
+        />
+      </NativeChatRoomContext.Provider>
+    )
+    expect(screen.getByText('Bots')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Release notes/ })).toBeTruthy()
+    expect(screen.getByText('Files')).toBeTruthy()
+  })
+
+  it('keeps "For:" before a highlighted purpose match, so it reads apart from the name', () => {
+    render(
+      <NativeChatRoomContext.Provider value={PURPOSE_MATCH}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['Docs'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={vi.fn()}
+        />
+      </NativeChatRoomContext.Provider>
+    )
+    const [row] = screen.getAllByRole('option')
+    expect(row.textContent).toMatch(/^DocsFor: .*current$/)
+    expect(row.querySelector('strong')?.textContent).toBe('current')
   })
 })

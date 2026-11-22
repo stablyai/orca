@@ -1,14 +1,12 @@
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import type { OrchestrationDb } from '../orchestration-db'
 
 /** Mail a settling helper creator never handled, now owned by its Run's mailbox. */
 export type MailHandBack = { mailbox: string; messageIds: string[]; types: string[] }
 
-/**
- * A settled worker no longer reads its mailbox, so its helpers' unread reports and unanswered
- * questions (even ones it read) become the Run coordinator's, delivered as if they just arrived.
- */
+/** Transfer unread reports and unanswered helper questions, including read ones, to the settled creator's Run. */
 export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): void {
-  // Why: every settlement runs this, so read only the Run, not the whole dispatch row.
+  // Every settlement runs this; fetch only the needed Run id.
   const runId = db.db
     .prepare('SELECT run_id FROM dispatch_contexts WHERE id = ?')
     .get(dispatchId)?.run_id
@@ -16,7 +14,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     return
   }
   const mailbox = `dispatch:${dispatchId}`
-  // Why: the recipient mailbox is the ownership fact; report payloads and senders are optional.
+  // Mailbox ownership is authoritative; payload and sender fields can be absent.
   const rows = db.db
     .prepare(
       `SELECT id, type FROM messages
@@ -31,7 +29,8 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     rows.length === 0 ||
     !db.db
       .prepare(
-        'SELECT 1 FROM dispatch_contexts WHERE creator_dispatch_id = ? AND run_id = ? LIMIT 1'
+        // Unary + keeps the stat-less planner on the creator index; the Run index ties with it.
+        'SELECT 1 FROM dispatch_contexts WHERE creator_dispatch_id = ? AND +run_id = ? LIMIT 1'
       )
       .get(dispatchId, runId)
   ) {
@@ -42,7 +41,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     messageIds: rows.map((row) => String(row.id)),
     types: [...new Set(rows.map((row) => String(row.type)))]
   }
-  // Why: the old mailbox's delivery stamp and pointer reservation would hide the rows from the Run.
+  // Clear old delivery and pointer stamps so the Run can see transferred rows.
   db.db
     .prepare(
       `UPDATE messages
@@ -52,9 +51,10 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     )
     .run(handBack.mailbox, JSON.stringify(handBack.messageIds))
   db.fenceUnacknowledgedMailboxDeliveries(mailbox)
+  dropReaderlessRunQuestions(db, runId)
   db.pendingMailHandBacks.push(handBack)
   if (db.pendingMailHandBacks.length === 1) {
-    // Why: settlements are synchronous, so this runs after the outermost COMMIT or ROLLBACK.
+    // Synchronous settlement lets this microtask run after the outermost commit or rollback.
     queueMicrotask(() => {
       for (const pending of db.pendingMailHandBacks.splice(0)) {
         db.mailHandBackListener?.(pending)
@@ -85,7 +85,7 @@ export function handBackReplayTargets(db: OrchestrationDb, dispatchId: string) {
        JOIN messages AS m ON m.to_handle = 'run:' || d.run_id
        WHERE d.id = ? AND m.read = 0 AND m.delivery_contract = 'current_delivery'
          AND EXISTS (SELECT 1 FROM dispatch_contexts AS h
-           WHERE h.creator_dispatch_id = d.id AND h.run_id = d.run_id)
+           WHERE h.creator_dispatch_id = d.id AND +h.run_id = d.run_id)
          AND (m.type IN ('worker_done', 'escalation', 'status') OR (m.type = 'question'
            AND m.id IN (SELECT message_id FROM question_threads
              WHERE run_id = d.run_id AND status = 'pending')))`

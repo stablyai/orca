@@ -1,7 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { getPtyIpc } from '../../pty-host-bindings'
-import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
-import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { getPtyIpc } from '../pty-host-bindings'
+import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty/process-inspection'
+import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getProviderForPty,
   hasPtyProviderForInspection,
@@ -10,7 +10,9 @@ import {
   tryGetProviderForPty,
   type ResolvedPtyHost
 } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'
@@ -27,69 +29,76 @@ export function installPtyInspectIpcHandlers(deps: {
   const ipcMain = getPtyIpc()
   const { getLocalPtyProviderStartupPromise } = deps
 
-  // Why: wait for daemon startup before selecting the local provider for an id
-  // the swap may re-own (#7742); ids owned by an SSH connection never wait.
-  // renderer-kill.ts inlines this — pty:kill's listener teardown is
-  // ordering-sensitive and must not gain even a no-barrier microtask.
+  // Await daemon ownership handoff for local IDs; renderer-kill inlines this to preserve same-turn teardown without a barrier.
   const awaitSwapWindow = async (id: string): Promise<void> => {
     await getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(id))
   }
 
   installPtySessionListingIpcHandler(deps)
 
+  // Await the local provider only when a local id is present; validation drops empty, oversized and repeated ids.
+  const readInspectablePtyIds = async (args: { ids?: unknown }): Promise<string[]> => {
+    const ids = new Set<string>()
+    for (const value of Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []) {
+      if (typeof value === 'string' && value.length > 0 && value.length <= 512) {
+        ids.add(value)
+      }
+    }
+    if ([...ids].some((id) => resolvePtyExecutionHost(id) === LOCAL_EXECUTION_HOST_ID)) {
+      await getLocalPtyProviderStartupPromise()
+    }
+    return [...ids]
+  }
+
   ipcMain.handle(
     'pty:getAuthoritativeBufferSnapshotCapabilities',
-    async (_event, args: { ids?: unknown }) => {
-      const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
-      const hasLocalPtyId = ids.some(
-        (value) =>
-          typeof value === 'string' &&
-          value.length > 0 &&
-          value.length <= 512 &&
-          resolvePtyExecutionHost(value) === LOCAL_EXECUTION_HOST_ID
-      )
-      if (hasLocalPtyId) {
-        await getLocalPtyProviderStartupPromise()
-      }
-      const capabilities: { id: string; authoritative: boolean | null }[] = []
-      const seen = new Set<string>()
-      for (const value of ids) {
-        if (
-          typeof value !== 'string' ||
-          value.length === 0 ||
-          value.length > 512 ||
-          seen.has(value)
-        ) {
-          continue
-        }
-        seen.add(value)
-        const provider = tryGetProviderForPty(value)
-        // Resolved providers without the optional method, and hosts no provider here can serve, are
-        // definitively non-authoritative; an unattached SSH relay remains retryable.
-        capabilities.push({
-          id: value,
+    async (_event, args: { ids?: unknown }) =>
+      (await readInspectablePtyIds(args)).map((id) => {
+        const provider = tryGetProviderForPty(id)
+        // Missing inspection support is non-authoritative; unattached SSH relays remain retryable.
+        return {
+          id,
           authoritative: !provider
-            ? isDispatchablePtyHost(resolvePtyExecutionHost(value))
+            ? isDispatchablePtyHost(resolvePtyExecutionHost(id))
               ? null
               : false
             : provider.canProvideAuthoritativeBufferSnapshot
-              ? provider.canProvideAuthoritativeBufferSnapshot(value)
+              ? provider.canProvideAuthoritativeBufferSnapshot(id)
               : false
-        })
-      }
-      return capabilities
-    }
+        }
+      })
   )
+
+  ipcMain.removeHandler('pty:getGoneSessionIds')
+  // Only a local provider's explicit absent answer marks a session gone; SSH and remote hosts keep their own parking rules.
+  ipcMain.handle('pty:getGoneSessionIds', async (_event, args: { ids?: unknown }) => {
+    // Bare legacy ids resolve local by fallback and may be old SSH panes; only daemon-minted ids qualify.
+    const ids = (await readInspectablePtyIds(args)).filter(
+      (id) =>
+        resolvePtyExecutionHost(id) === LOCAL_EXECUTION_HOST_ID &&
+        parsePtySessionId(id).worktreeId !== null
+    )
+    // Bounded so a large restore cannot flood the daemon socket during reconnect.
+    const gone = await mapWithConcurrency(ids, 8, async (id) => {
+      const provider = tryGetProviderForPty(id)
+      if (!provider?.probePtyLiveness || provider.canProvideAuthoritativeBufferSnapshot?.(id)) {
+        return false
+      }
+      try {
+        return (await provider.probePtyLiveness(id)) === false
+      } catch {
+        return false
+      }
+    })
+    return ids.filter((_id, index) => gone[index])
+  })
 
   ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
     if (typeof args?.id !== 'string' || isRemoteRuntimePtyId(args.id)) {
-      // Why before the swap wait: a runtime terminal handle runs on another host, so only
-      // "unverifiable" is honest and the local daemon startup is irrelevant to it.
+      // Remote runtime handles need no local startup wait and cannot be inspected authoritatively here.
       return null
     }
-    // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, and
-    // its "no PTY" is exactly the false the renderer reconciler is allowed to
-    // close panes on.
+    // Pre-swap local absence could falsely authorize the renderer to close restored panes.
     await awaitSwapWindow(args.id)
     const provider = tryGetProviderForPty(args.id)
     if (!provider?.hasPty) {
@@ -99,10 +108,10 @@ export function installPtyInspectIpcHandlers(deps: {
       if (provider.hasPty(args.id)) {
         return true
       }
-      // Why: hasPty only knows sessions attached this run, so a session that survived a restart reads absent until the host answers.
+      // hasPty sees only this run's attachments; probe the host for sessions surviving restart.
       return provider.probePtyLiveness ? await provider.probePtyLiveness(args.id) : false
     } catch {
-      // Why: liveness is only allowed to close panes on an authoritative false.
+      // Only authoritative false may close a pane.
       return null
     }
   })
@@ -136,29 +145,39 @@ export function installPtyInspectIpcHandlers(deps: {
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
         steadyState?: boolean
+        jobMembershipOnly?: boolean
+        foregroundOnly?: boolean
       }
     ) => {
-      // Why: as pty:hasPty — another host's PTY reads as client-only unverifiable, not a raised IPC error.
+      // Another host's PTY remains unverifiable here.
       if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
-      // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
-      // nothing it reports about one is an observation; the post-swap owner must
-      // answer completion-sensitive inspection.
+      // Completion-sensitive inspection must wait for the provider that owns restored daemon sessions.
       await awaitSwapWindow(args.id)
       if (!hasPtyProviderForInspection(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
+      const provider = getProviderForPty(args.id)
+      // A provider without fenced foreground reads (SSH, old daemons) would answer with slower, unfenced ones.
+      if (
+        args.foregroundOnly === true &&
+        provider.supportsForegroundObservation?.(args.id) !== true
+      ) {
+        return clientOnlyUnverifiableInspection('old_host')
+      }
       const options = {
+        ...(args.foregroundOnly === true ? { foregroundOnly: true } : {}),
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
-        ...(args.steadyState === true ? { steadyState: true } : {})
+        ...(args.steadyState === true ? { steadyState: true } : {}),
+        ...(args.jobMembershipOnly === true ? { jobMembershipOnly: true } : {})
       }
       return Object.keys(options).length > 0
-        ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
-        : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+        ? inspectPtyProviderProcessForRenderer(provider, args.id, options)
+        : inspectPtyProviderProcessForRenderer(provider, args.id)
     }
   )
 
@@ -169,12 +188,12 @@ export function installPtyInspectIpcHandlers(deps: {
         return null
       }
       const provider = getProviderForPty(args.id)
-      // Why: the cached foreground API would turn stale process identity into shell/agent authority at a command boundary.
+      // Cached foreground identity cannot authorize a command-boundary decision.
       return provider.confirmForegroundProcess?.(args.id) ?? null
     }
   )
 
-  // Why: Cmd+D split needs the live shell cwd so the new pane inherits it (not the worktree root); '' means unknown/unresolvable (Windows) → renderer falls through.
+  // Split panes inherit live shell cwd; empty means unknown and lets the renderer fall back.
   ipcMain.handle('pty:getCwd', async (_event, args: { id: string }): Promise<string> => {
     try {
       return await getProviderForPty(args?.id).getCwd(args.id)
@@ -183,26 +202,24 @@ export function installPtyInspectIpcHandlers(deps: {
     }
   })
 
-  // Why: prefer the provider's APPLIED size over the requested ptySizes so the renderer's resume drift-check can spot a dropped resize; null means "cannot confirm" → re-forward once.
+  // Report applied geometry so the renderer can detect and retry a dropped resize.
   ipcMain.handle(
     'pty:getSize',
     async (_event, args: { id: string }): Promise<{ cols: number; rows: number } | null> => {
       const provider = tryGetProviderForPty(args?.id)
       try {
         if (provider?.getAppliedSize) {
-          // Why: a provider-owned null means it could not verify the applied
-          // grid; preserve null so the renderer re-forwards instead of trusting
-          // the requested-size cache that may describe a dropped resize.
+          // Provider-owned null preserves uncertainty; a requested-size cache may describe a dropped resize.
           return await provider.getAppliedSize(args.id)
         }
       } catch {
-        // Fall through to the requested-size cache so a dead daemon/relay can't throw across the IPC boundary.
+        // Provider failure must not escape IPC; retain requested size as a fallback.
       }
       return ptySizes.get(args?.id) ?? null
     }
   )
 
-  // Pre-signal handshake handlers (declare→spawn→settle/clear); see docs/mobile-prefer-renderer-scrollback.md and `pendingByPaneKey` above.
+  // Predeclare serializer ownership before spawn; see docs/mobile-prefer-renderer-scrollback.md.
   ipcMain.handle(
     'pty:declarePendingPaneSerializer',
     async (event, args: { paneKey?: unknown }): Promise<number> => {
@@ -221,7 +238,7 @@ export function installPtyInspectIpcHandlers(deps: {
       }
       const ptyId = pendingPtyIdBySerializerGeneration.get(args.gen)
       const settledCurrentGeneration = settlePendingPaneSerializer(args.paneKey, args.gen)
-      // Why: the generation-to-PTY binding survives late teardown of a reused id; paneKey reverse maps may already be gone.
+      // Keep generation-to-PTY binding through late teardown; reverse pane maps may already be gone.
       pendingPtyIdBySerializerGeneration.delete(args.gen)
       if (settledCurrentGeneration && ptyId) {
         rendererSerializerReadiness.markReady(ptyId)
@@ -250,7 +267,7 @@ export function installPtyInspectIpcHandlers(deps: {
       ) {
         return
       }
-      // Why: remote-runtime panes skip the local spawn cooperation gate, so their exact PTY id is the only readiness key.
+      // Remote-runtime panes bypass local spawn coordination; readiness must use their exact PTY ID.
       rendererSerializerReadiness.markReady(args.ptyId)
     }
   )
