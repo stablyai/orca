@@ -79,3 +79,52 @@ it("a person's Stop withdraws the continue a switch gives an unknown-reset cut",
   expect(isOptionalUsageLimitContinueCancel(withdrawal)).toBe(true)
   expect(cancelsCut(withdrawal, holds.withSwitchReset('chat', CUT))).toBe(true)
 })
+
+const WEEKLY_RESET = ENDED + 4 * 86_400_000
+const weekly = (usedPercent: number, updatedAt: number): ProviderRateLimits => ({
+  provider: 'codex',
+  session: null,
+  weekly: { usedPercent, resetsAt: WEEKLY_RESET, windowMinutes: 10_080, resetDescription: null },
+  updatedAt,
+  error: null,
+  status: 'ok'
+})
+
+async function sameFolder(readings: ProviderRateLimits[]) {
+  let current = readings[0]!
+  const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 3, accountHome: HIT }
+      })
+    },
+    launchAccountHome: async () => HIT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: HIT.path,
+        account: { key: HIT.path, read: () => current, refresh: () => true }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  const cut = { ...CUT, resetsAt: WEEKLY_RESET }
+  await holds.attribute('chat', host, cut, SWITCHED)
+  for (const next of readings) {
+    current = next
+    holds.verdict('chat', cut, next.updatedAt)
+  }
+  return { holds, cut }
+}
+
+it('continues before the reset once the same folder, seen spent, reads with room (a new login)', async () => {
+  const { holds, cut } = await sameFolder([weekly(100, SWITCHED), weekly(5, SWITCHED + 60_000)])
+  expect(holds.ready('chat', cut, SWITCHED + 90_000)).toBe(true)
+})
+
+it('keeps the reset when the folder was never seen spent: room alone may not cover the limit hit', async () => {
+  const { holds, cut } = await sameFolder([weekly(5, SWITCHED), weekly(5, SWITCHED + 60_000)])
+  expect(holds.ready('chat', cut, SWITCHED + 90_000)).toBe(false)
+})

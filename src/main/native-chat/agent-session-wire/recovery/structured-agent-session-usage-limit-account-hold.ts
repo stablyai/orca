@@ -21,6 +21,7 @@ import {
   type HostUsageLimitCut,
   type SwitchReset
 } from './structured-agent-session-usage-limit-chain'
+import { UsageLimitAccountRoom } from './structured-agent-session-usage-limit-account-room'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */
 export type UsageLimitAccountUsage = {
@@ -74,8 +75,8 @@ type AttributionHost = Pick<
 const GRACE_MS = 15_000
 /** How long a due send waits for a fresh reading before it goes on the reset it has. */
 const READING_WAIT_MS = 120_000
-/** How often an account with an unknown reset is asked for a reading; only room can end it. */
-const UNKNOWN_RESET_ASK_MS = 10 * 60_000
+/** How often a held account is asked for a reading; room it shows can end the hold early. */
+const HELD_ACCOUNT_ASK_MS = 10 * 60_000
 
 /** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
 export class UsageLimitAccountHolds {
@@ -88,6 +89,7 @@ export class UsageLimitAccountHolds {
     string,
     { cut: string; to: AgentSessionAccountHome; at: number }
   >()
+  private readonly room = new UsageLimitAccountRoom()
   /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
@@ -193,6 +195,7 @@ export class UsageLimitAccountHolds {
         this.movedSince.delete(id)
       }
     }
+    this.room.retain(shown)
   }
 
   clear(): void {
@@ -200,6 +203,7 @@ export class UsageLimitAccountHolds {
     this.scopes.clear()
     this.witnesses.clear()
     this.movedSince.clear()
+    this.room.clear()
     this.beginPass()
   }
 
@@ -214,14 +218,14 @@ export class UsageLimitAccountHolds {
 
   verdict(
     id: string,
-    limited: { turnItemId: string; resetsAt: number } & SwitchReset,
+    limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
     // The account the chat moved to never hit this cut: from the move on, only its reading holds.
     const moved = this.movedSince.get(id)
     const movedCut = moved?.cut === switchFreeIdentity(limited)
-    const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
+    const cut = this.room.freed(id, limited, scope, movedCut ? moved.at : undefined)
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
     if (!hold && !scope) {
@@ -324,7 +328,7 @@ export class UsageLimitAccountHolds {
    *  starts one read per held reset. */
   ready(
     id: string,
-    cut: { turnItemId: string; resetsAt: number } & SwitchReset,
+    cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
     now: number,
     notBefore = 0
   ): boolean {
@@ -333,10 +337,12 @@ export class UsageLimitAccountHolds {
     const scope = this.scopes.get(id)
     if (hold.unknownReset) {
       // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
-      scope?.account?.refresh(UNKNOWN_RESET_ASK_MS)
+      scope?.account?.refresh(HELD_ACCOUNT_ASK_MS)
       return false
     }
     if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
+      // Still held: a reading with room after a new login frees it sooner (UsageLimitAccountRoom).
+      scope?.account?.refresh(HELD_ACCOUNT_ASK_MS)
       return false
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap
