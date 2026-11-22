@@ -1,5 +1,8 @@
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import { ORCA_CLOUD_TEAM_SETTINGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import {
+  getTeamCapabilitiesForOrg,
+  type OrcaCloudTeamFeatureFlag
+} from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { OrcaProfileSummary } from '../../../shared/orca-profiles/orca-profiles'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { sessionBelongsToProfile } from '../cloud-session/profile-cloud-session-identity'
@@ -21,11 +24,7 @@ export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
   if (!cloud?.activeOrgId || !session || !sessionBelongsToProfile(session, cloud)) {
     return undefined
   }
-  const { capabilities } = session
-  return capabilities.flags[ORCA_CLOUD_TEAM_SETTINGS] === true &&
-    capabilities.teamPolicy?.orgId === cloud.activeOrgId
-    ? capabilities
-    : undefined
+  return getTeamCapabilitiesForOrg(session.capabilities, cloud.activeOrgId)
 }
 
 export function initializeActiveTeamProfile(
@@ -86,4 +85,22 @@ export function onTeamCapabilitiesInvalidated(listener: () => void): () => void 
   return () => {
     listeners.delete(listener)
   }
+}
+
+export function isTeamFeatureBlocked(flag: OrcaCloudTeamFeatureFlag): boolean {
+  return getActiveTeamCapabilities()?.flags[flag] === false
+}
+
+export function onTeamFeatureBlockChanged(
+  flag: OrcaCloudTeamFeatureFlag,
+  listener: (blocked: boolean) => void
+): () => void {
+  let blocked = isTeamFeatureBlocked(flag)
+  return onTeamCapabilitiesInvalidated(() => {
+    const next = isTeamFeatureBlocked(flag)
+    if (next !== blocked) {
+      blocked = next
+      listener(blocked)
+    }
+  })
 }

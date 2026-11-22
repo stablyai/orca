@@ -89,11 +89,13 @@ export class ConnectorCloud {
       return
     }
     this.connected = true
-    this.options.machine.onHelloInputsChanged(() => {
-      // A running client says the change first, so a last connector's removal reaches the cloud before it stops.
-      this.client?.sayChanged()
-      this.reconcile()
-    })
+    this.options.machine.onHelloInputsChanged(() => this.helloInputsChanged())
+    this.reconcile()
+  }
+
+  helloInputsChanged(): void {
+    // A running client says the change first, so a last connector's removal reaches the cloud before it stops.
+    this.client?.sayChanged()
     this.reconcile()
   }
 

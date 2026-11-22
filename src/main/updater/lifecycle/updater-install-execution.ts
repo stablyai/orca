@@ -94,6 +94,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
           return
         }
+        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+          return
+        }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
         // Deferred staging begins inside the native install call below.
         await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
@@ -216,9 +219,12 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
     }
   }
 
-  // Supervised serve disables autoInstallOnAppQuit; MacUpdater only stages inside quitAndInstall, so waiting first deadlocks.
+  // These downloads reach Squirrel inside quitAndInstall, after the final policy check.
   protected isMacStagingDeferredToInstall(): boolean {
-    return process.platform === 'darwin' && this.updateInstallMode === 'supervised-headless-serve'
+    return (
+      process.platform === 'darwin' &&
+      (this.macTeamDownloadDeferred || this.updateInstallMode === 'supervised-headless-serve')
+    )
   }
 
   protected isAwaitingMacStaging(): boolean {

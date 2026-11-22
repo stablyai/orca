@@ -1756,7 +1756,8 @@
       "soulEdit": "Edit",
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
-      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
+      "teamDisabled": "Bots are turned off by your team."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -1791,7 +1792,8 @@
       "keywordSecurity": "security",
       "1b4d825e0e": "Update delay",
       "ab7e864374": "About update delay",
-      "ee1d96f74a": "Skip delay once"
+      "ee1d96f74a": "Skip delay once",
+      "teamManaged": "Set by your team"
     },
     "editorFormatOnSave": {
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
@@ -1969,6 +1971,12 @@
       },
       "signInFailed": "Couldn’t sign you in to the console",
       "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
+    },
+    "mobile": {
+      "teamDisabledRelay": "Orca Relay is turned off by your team. Use LAN."
+    },
+    "computerUse": {
+      "teamDisabled": "Computer Use is turned off by your team."
     }
   },
   "menu": {

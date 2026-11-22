@@ -45,9 +45,10 @@ export type UpdaterSetupOptions = {
 export class UpdaterSetup extends UpdaterDownloadInstall {
   applyTeamPolicyBeforeQuit(): void {
     if (this.autoUpdater && this.implicitInstallOnQuit) {
-      this.autoUpdater.autoInstallOnAppQuit = this.allowsCurrentTeamUpdate(
-        this.getPendingInstallVersion()
-      )
+      this.autoUpdater.autoInstallOnAppQuit =
+        !this.isMacStagingDeferredToInstall() &&
+        !this.shouldDeferTeamMacStaging() &&
+        this.allowsCurrentTeamUpdate(this.getPendingInstallVersion())
     }
   }
 
@@ -176,8 +177,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     // Implicit quit install requires interactive mode and an explicit non-root/AppImage marker; serve requires handoff.
     this.implicitInstallOnQuit =
       this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
-    autoUpdater.autoInstallOnAppQuit =
-      this.implicitInstallOnQuit && this.allowsCurrentTeamUpdate(this.getPendingInstallVersion())
+    autoUpdater.autoInstallOnAppQuit = false
+    this.applyTeamPolicyBeforeQuit()
     // MacUpdater ignores quitAndInstall arguments; only the surviving CLI supervisor may relaunch serve.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Keep native updater diagnostics visible through local logging.
@@ -241,6 +242,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       },
       isAwaitingMacStaging: () => this.isAwaitingMacStaging(),
       isMacStagingDeferredToInstall: () => this.isMacStagingDeferredToInstall(),
+      shouldAcceptDownloadedUpdate: (version, obsolete) =>
+        this.shouldAcceptDownloadedUpdate(version, obsolete),
       watchMacStaging: (version) => this.watchMacStaging(version),
       shouldDeferMacQuitForInstall: () => this.updateInstallMode === 'interactive',
       recordCompletedUpdateCheck: () => this.recordCompletedUpdateCheck(),

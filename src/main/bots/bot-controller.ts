@@ -10,7 +10,7 @@ import {
 } from '../../shared/bot-avatar'
 import { type Bot, botFolderName } from '../../shared/bot-types'
 import { assertBotNameFree, freeBotName } from './bot-free-name'
-import { BotsDisabledError, isBotsEnabled } from '../../shared/bots-switch'
+import { areHostBotsEnabled, assertHostBotsEnabled } from './bot-team-policy'
 import { type BotRosterEntry, botRosterFields, soulSpecialty } from '../../shared/bot-roster'
 import {
   applyBotUpdates,
@@ -65,7 +65,6 @@ function isBotStore(store: RuntimeStore | null): store is RuntimeStore & BotStor
 
 export type BotControllerDependencies = {
   getStore: () => RuntimeStore | null
-  allowedByTeam?: () => boolean
   /** A bot record was saved or removed; `catalogChanged` when its home workspace was added, renamed
    *  or removed with it, which the project catalog also announces. */
   notifyBotsWritten: (catalogChanged: boolean) => void
@@ -105,18 +104,11 @@ export class BotController {
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */
   enabled(): boolean {
-    return (
-      isBotsEnabled(this.deps.getStore()?.getSettings()) && this.deps.allowedByTeam?.() !== false
-    )
+    return areHostBotsEnabled(this.deps.getStore()?.getSettings())
   }
 
   assertEnabled(): void {
-    if (this.deps.allowedByTeam?.() === false) {
-      throw new BotsDisabledError('Bots are turned off by your team.')
-    }
-    if (!isBotsEnabled(this.deps.getStore()?.getSettings())) {
-      throw new BotsDisabledError()
-    }
+    assertHostBotsEnabled(this.deps.getStore()?.getSettings())
   }
 
   list(): Bot[] {

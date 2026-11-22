@@ -49,6 +49,7 @@ export function registerAutoUpdaterHandlers({
   failMacStaging,
   isAwaitingMacStaging,
   isMacStagingDeferredToInstall,
+  shouldAcceptDownloadedUpdate,
   watchMacStaging,
   shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
@@ -235,13 +236,12 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('update-downloaded', (info) => {
     // An older download can finish after a new target replaces it.
-    if (
-      shouldIgnoreDownloadedUpdateEvent(
-        getCurrentStatus(),
-        info.version,
-        getPendingInstallVersion()
-      )
-    ) {
+    const obsolete = shouldIgnoreDownloadedUpdateEvent(
+      getCurrentStatus(),
+      info.version,
+      getPendingInstallVersion()
+    )
+    if (!shouldAcceptDownloadedUpdate(info.version, obsolete)) {
       return
     }
     clearBackgroundCheckLaunchPending()

@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { botAutomationSetup, botOnSetup } from '../../shared/bots/bot-agent-setup'
+import { botsBlockedByTeam } from '../bots/bot-team-policy'
 
 export type AutomationBotRunTarget = {
   ok: true
@@ -33,6 +34,9 @@ export function resolveBotAutomationRunTarget(
   store: BotTargetStore,
   target: AutomationBotTarget
 ): AutomationBotRunTarget | { ok: false; error: string } {
+  if (botsBlockedByTeam()) {
+    return { ok: false, error: 'Bots are turned off by your team, so Orca skipped this run.' }
+  }
   if (store.getSettings().botsEnabled === false) {
     return { ok: false, error: BOTS_OFF }
   }

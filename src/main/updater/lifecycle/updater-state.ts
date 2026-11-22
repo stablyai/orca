@@ -133,6 +133,7 @@ export abstract class UpdaterState {
   protected teamUpdateApproval: TeamUpdateApproval | null = null
   protected teamControlledPrerelease = false
   protected implicitInstallOnQuit = false
+  protected macTeamDownloadDeferred = false
   protected getUpdateDelayDays: (() => number) | null = null
   // Newest release the last release-feed check withheld for the user's delay.
   protected delayedUpdate: DelayedUpdate | null = null

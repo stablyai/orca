@@ -67,7 +67,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
     if (status.state === 'available' && this.autoUpdater && this.implicitInstallOnQuit) {
-      this.autoUpdater.autoInstallOnAppQuit = true
+      this.macTeamDownloadDeferred = this.shouldDeferTeamMacStaging()
+      this.autoUpdater.autoInstallOnAppQuit = !this.macTeamDownloadDeferred
     }
     this.automaticDownloadOfferVersion =
       eligible && backgroundCheck && status.state === 'available' ? status.version : null
@@ -144,7 +145,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     return (
       app.isPackaged &&
       this.getAutomaticUpdates?.() === true &&
-      this.autoUpdater?.autoInstallOnAppQuit === true &&
+      this.implicitInstallOnQuit &&
       this.automaticDownloadOfferVersion === version &&
       this.activeUpdateSource === 'release' &&
       !this.isPinnedBuildActive

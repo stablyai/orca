@@ -24,7 +24,11 @@ import {
 } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
 import { releaseServeSupervisorPark } from './serve-supervisor-install-park'
-import { teamAllowsUpdate, type TeamUpdatePolicy } from '../releases/updater-release-policy'
+import {
+  managesUpdates,
+  teamAllowsUpdate,
+  type TeamUpdatePolicy
+} from '../releases/updater-release-policy'
 
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   protected configureTeamReleaseChannel(
@@ -63,6 +67,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     if (this.allowsCurrentTeamUpdate(version)) {
       return false
     }
+    if (this.autoUpdater) {
+      this.autoUpdater.autoInstallOnAppQuit = false
+    }
     this.finishActiveUpdateCheckAttempt()
     this.clearBackgroundCheckLaunchPending()
     this.clearAvailableUpdateContext()
@@ -70,6 +77,19 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.sendStatus({ state: 'error', ...updaterCodedMessage('teamUpdatePolicy') })
     this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
     return true
+  }
+
+  protected shouldDeferTeamMacStaging(): boolean {
+    return process.platform === 'darwin' && managesUpdates(this.getTeamUpdatePolicy?.())
+  }
+
+  protected shouldAcceptDownloadedUpdate(version: string, obsolete: boolean): boolean {
+    // MacUpdater reads this flag after it emits update-downloaded, before handing the ZIP to Squirrel.
+    if (this.autoUpdater && this.shouldDeferTeamMacStaging()) {
+      this.macTeamDownloadDeferred = true
+      this.autoUpdater.autoInstallOnAppQuit = false
+    }
+    return !obsolete && !this.holdUpdateForTeamPolicy(version)
   }
 
   protected getKnownReleaseUrl(): string | undefined {

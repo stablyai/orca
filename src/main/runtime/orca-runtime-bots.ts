@@ -11,8 +11,6 @@ import { BotChangeNotices } from '../bots/bot-change-notices'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
-import { getActiveTeamCapabilities } from '../orca-profiles/cloud-auth/active-team-capabilities'
-import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   BotLookAroundStore,
   lookAroundFileIo,
@@ -81,8 +79,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   readonly bots = new BotController({
     getStore: () => this.store,
-    allowedByTeam: () =>
-      getActiveTeamCapabilities()?.flags[ORCA_CLOUD_TEAM_POLICY_FLAGS.bots] !== false,
     notifyBotsWritten: (catalogChanged) => {
       if (catalogChanged) {
         this.notifyReposChanged()
