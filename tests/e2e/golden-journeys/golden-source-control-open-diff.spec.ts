@@ -79,12 +79,13 @@ test('@golden navigates unstaged and untracked files from diff controls', async 
   await navigateWithHeaderUntil(orcaPage, 'Next change', 'deleted.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
   await navigateWithHeaderUntil(orcaPage, 'Next change', 'unstaged.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts', true)
+  // Non-deleted targets open as Changes-mode edit tabs, so the wrap lands without the (diff) title.
+  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
 
   await navigateWithHeaderUntil(orcaPage, 'Previous change', 'deleted.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
   await pressDiffShortcutUntil(orcaPage, 'F7', 'unstaged.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts', true)
+  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
   await pressDiffShortcutUntil(orcaPage, 'Shift+F7', 'deleted.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
 
