@@ -107,6 +107,11 @@ function desktopCoreNative(store: Store): DesktopCoreNative {
           request
         )
       )
+      browserManager.setServerPagePopupPresenter((popup) => {
+        void runtime.showServerPagePopupToClient(popup).catch((error: unknown) => {
+          console.warn('[browser] could not show a page popup to its client:', error)
+        })
+      })
       browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
     },
     createAgentBrowserBridge: (onTabsChanged) => {

@@ -165,7 +165,10 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getBrowserPageNavigationState(
     browserPageId: string
   ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
-    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const webContentsId =
+      this.webContentsIdByTabId.get(browserPageId) ??
+      this.resolvePopupPageWebContentsId(browserPageId) ??
+      undefined
     const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
       return null
@@ -235,10 +238,10 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
 
   protected notifyBrowserGuestStateChanged(webContentsId: number): void {
     this.offscreenGuestStateNotices.cancel(String(webContentsId))
-    if (!this.offscreenGuestIds.has(webContentsId)) {
+    if (!this.isListedAsServerPage(webContentsId)) {
       return
     }
-    const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(webContentsId)
     const worktreeId = browserPageId ? this.worktreeIdByTabId.get(browserPageId) : null
     if (worktreeId) {
       // Isolate listener exceptions from Electron event dispatch.

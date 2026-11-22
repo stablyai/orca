@@ -227,7 +227,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
 
     // Offscreen pages have no renderer; titles parse after commit and loads finish later.
     const offscreenStateChangedHandler = (): void => {
-      if (this.offscreenGuestIds.has(guest.id)) {
+      if (this.isListedAsServerPage(guest.id)) {
         this.offscreenGuestStateNotices.schedule(String(guest.id))
       }
     }
