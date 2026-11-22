@@ -249,7 +249,8 @@
         "safariFullDiskAccess": "macOS a refusé l'accès aux cookies de Safari. Accordez à Orca l'accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque.",
         "connectionEnded": "La connexion à ce serveur a été interrompue pendant l'importation. Reconnectez-vous et réessayez.",
         "serverRepaired": "Ce serveur a été jumelé à nouveau pendant l'importation. Réessayez.",
-        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca."
+        "macFullDiskAccess": "macOS a refusé l’accès aux cookies de {{browser}}. Accordez à Orca un accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque, puis redémarrez Orca.",
+        "sshHostDisconnected": "Cette page n’est plus connectée via son hôte SSH. Reconnectez-vous et réessayez."
       },
       "notice": {
         "importedMore_one": "{{count}} cookie importé pour les domaines {{domains}} (+{{more}}). Rechargez la page pour l'utiliser.",
@@ -259,6 +260,13 @@
         "imported_other": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
+      },
+      "sshPage": {
+        "label": "Navigateurs sur cet appareil",
+        "destination": "Importe dans le navigateur de {{host}}.",
+        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
+        "stored": "Enregistré dans le navigateur de {{host}}.",
+        "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
     },
     "passwords": {
@@ -1267,7 +1275,7 @@
           "28810273af": "Kimi",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
-          "9e2a9bb87b": "Continuer",
+          "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
           "cbaf0c2e0b": "Cline",
@@ -5977,7 +5985,7 @@
           "removeWithChildrenGit_other": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeWithChildrenGit_many": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> de git et supprimer leurs dossiers d'espace de travail.",
           "removeSingleFolderFromOrca": "Le retire d'Orca. Le dossier sur le disque est conservé.",
-          "deleteSingleWorktreeAndBranch": "Supprime le worktree et sa branche (conservée si non fusionnée)."
+          "deleteSingleWorktreeAndBranch": "Supprime le worktree et ses modifications locales, ainsi que sa branche si elle a été fusionnée."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Afficher les chemins chargés",
@@ -7160,7 +7168,6 @@
           "stopped": "Arrêtée",
           "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
-          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
@@ -17648,11 +17655,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aucune exécution pour l'instant.",
-          "13988187b3": "Tokens",
           "86a248187e": "Dépense",
           "149c0b49c7": "Espace de travail",
           "8faaa00726": "Exécution",
-          "a00e38d1a3": "—",
           "historyUnavailable": "L'historique des exécutions n'est pas disponible sur cet hôte. Cela ne signifie pas que l’automatisation a échoué ou qu’elle n’a pas été exécutée."
         },
         "AutomationSchedulePicker": {
@@ -17719,7 +17724,6 @@
           "missingWorkspace": "Espace de travail manquant",
           "usageUnavailable": "Utilisation indisponible",
           "noRunUsageYet": "Aucune utilisation d'exécution pour l'instant",
-          "noWorkspace": "Aucun espace de travail",
           "latestSavedOutput": "Dernière sortie enregistrée",
           "fullOutputUnavailable": "Impossible de charger la sortie complète.",
           "retryFullOutput": "Réessayer",
@@ -17994,7 +17998,6 @@
           "failed7d": "Échec · 7j",
           "automation": "Automation",
           "triggered": "Déclenché",
-          "trigger": "Déclenchement",
           "loading": "Chargement des courses…",
           "noRuns": "Aucune course pour l'instant",
           "emptyDescription": "Les exécutions apparaissent ici après le déclenchement d'une automatisation.",
@@ -18074,7 +18077,11 @@
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} dépensés",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens",
+          "tokens_many": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "Hôte SSH",
@@ -19710,7 +19717,17 @@
         "skip": "Ignorer",
         "sending": "Envoi…",
         "terminalRequired": "Répondez à cette question OMP dans le terminal.",
-        "openTerminal": "Répondre dans le terminal"
+        "openTerminal": "Répondre dans le terminal",
+        "recommended": "Recommandé",
+        "stepAnswered": "{{value0}}, répondue",
+        "stepOf": "{{value0}} sur {{value1}}",
+        "answered": "Répondue",
+        "title": "Question",
+        "previous": "Question précédente",
+        "nextQuestion": "Question suivante",
+        "back": "Retour",
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",
@@ -19985,12 +20002,10 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
-        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
         "withdrawnHold": "Arrêté avant l'envoi",
-        "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
         "paused": "En pause",
         "resume": "Reprendre",
         "fromSender": "De",
@@ -20006,14 +20021,16 @@
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images",
         "imageCount_many": "{{count}} images",
-        "collapse": "Réduire",
-        "expand": "Développer",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "couldNotSend": "Envoi impossible",
+        "retry": "Réessayer",
+        "showLessRows": "Afficher moins",
+        "moreRows": "+{{value0}} de plus"
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -20280,6 +20297,9 @@
       },
       "splitRight": "Diviser à droite",
       "splitDown": "Diviser vers le bas",
+      "dock": {
+        "label": "Zone de message et demandes"
+      },
       "automationSaved": {
         "openFullPage": "Ouvrir la page"
       },
@@ -20374,9 +20394,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Nettoyage alpha de la revue"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24438,19 +24455,20 @@
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
       "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "every2h": "toutes les 2 heures",
-      "every4h": "toutes les 4 heures",
       "lookFirst": "Après votre premier chat · puis {{every}}",
-      "mornings": "chaque matin",
       "tidyUp": "Ranger la mémoire",
-      "twiceDaily": "deux fois par jour",
       "lastNeededSignIn": "Sa dernière exécution s’est arrêtée en attendant une connexion",
       "stopped": "Arrêté",
       "lookAroundSettings": "Paramètres du tour d’horizon",
       "dueNow": "À exécuter maintenant",
       "runsEvery": "S’exécute {{every}}",
       "tidySettings": "Paramètres du rangement de la mémoire",
-      "needsSignIn": "Connexion requise"
+      "needsSignIn": "Connexion requise",
+      "every4hWindow": "de {{from}} à {{to}}, toutes les 4 heures",
+      "every2hWindow": "de {{from}} à {{to}}, toutes les 2 heures",
+      "twiceDailyAt": "deux fois par jour, {{first}} et {{second}}",
+      "morningsAt": "chaque matin à {{time}}",
+      "weekdays": "en semaine, {{schedule}}"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

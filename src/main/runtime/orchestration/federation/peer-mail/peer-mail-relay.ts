@@ -1,19 +1,18 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
-import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import {
+  PeerMailItem,
+  PeerMailRelayPayload
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
 import { HeldPeerConversations } from './held-peer-conversations'
+import { storePeerReply } from './peer-reply-store'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
-import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
-import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
-  closeRemoteRunLinksOfChangedPairing,
-  closeRemoteRunLinksOfRemovedServer,
   dueRemoteResendsNow,
   getRemoteRunLink,
   noteRemoteRunLinkError,
@@ -22,22 +21,15 @@ import {
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
+import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
+import { deletedCoordinatorChat } from '../../../rpc/methods/orchestration/messaging/deleted-coordinator-chat'
+import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
 const PULL_TIMEOUT_MS = PULL_WAIT_MS + 15_000
 
-const PulledPeerMail = z.object({
-  items: z.array(
-    z.object({
-      conversationId: z.string(),
-      sequence: z.number().int().positive(),
-      messageId: z.string(),
-      kind: z.string().optional(),
-      payload: z.string()
-    })
-  )
-})
+const PulledPeerMail = z.object({ items: z.array(PeerMailItem) })
 
 /** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
 export type PeerServerAnswerStatus = {
@@ -111,6 +103,7 @@ export class PeerMailRelay {
     while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
         await this.pullOnce(environmentId, loop)
+        retryRemoteAskNotices(environmentId)
         if (failures > 0) {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
           dueRemoteResendsNow(loop.db, environmentId)
@@ -121,12 +114,7 @@ export class PeerMailRelay {
         if (await this.isEnvironmentRemoved(environmentId)) {
           // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
           try {
-            closeRemoteRunLinksOfRemovedServer(
-              loop.db,
-              environmentId,
-              `${serverName} was removed from this Orca's paired servers.`,
-              (handle, type) => this.runtime.notifyMessageArrived(handle, type)
-            )
+            settleRemovedPairedServer(this.runtime, loop.db, environmentId, serverName)
           } catch (error) {
             console.warn(
               `[orchestration] Settling the Runs on removed server ${environmentId} failed:`,
@@ -158,12 +146,7 @@ export class PeerMailRelay {
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
     // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
     const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
-    closeRemoteRunLinksOfChangedPairing(
-      loop.db,
-      remoteServerPin(server),
-      server.name,
-      (handle, type) => this.runtime.notifyMessageArrived(handle, type)
-    )
+    settleRepairedServer(this.runtime, loop.db, server)
     this.resendOwed(environmentId, loop)
     const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
     const response = await this.runtime
@@ -277,7 +260,8 @@ export class PeerMailRelay {
       const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {
         name: server.name,
-        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type),
+        deletedChat: deletedCoordinatorChat
       })
     }
     const stored = this.importReply(db, environmentId, item)
@@ -303,28 +287,7 @@ export class PeerMailRelay {
       )
       return undefined
     }
-    const handle = peerMailLocalRecipient(this.runtime, conversation)
-    // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
-    const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const { from, body, ...carried } = presentImportedPeerItem({
-      kind: 'peer_mail',
-      ...payload.data
-    })
-    const stored = db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.data.fromAddress,
-      message: {
-        id: item.messageId,
-        from,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.data.subject,
-        body,
-        threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined,
-        ...carried
-      }
-    })
-    return stored.duplicate ? undefined : stored.message
+    return storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
   }
 }
 

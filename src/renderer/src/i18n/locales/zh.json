@@ -6299,7 +6299,7 @@
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
           "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹",
           "removeSingleFolderFromOrca": "将其从 Orca 中移除。磁盘上的文件夹会保留。",
-          "deleteSingleWorktreeAndBranch": "删除工作树及其分支（未合并的分支会保留）。"
+          "deleteSingleWorktreeAndBranch": "删除工作树和本地更改。如果其分支已合并，也会将其删除。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "显示已加载的路径",
@@ -7487,7 +7487,6 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。此发行版中通过 \\\\wsl.localhost 打开的项目会在其终端空闲时自动移到此主机；位于 Windows 驱动器 (/mnt/…) 上的项目会留在此电脑。你可以从侧边栏将已移动的项目移回",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -18018,7 +18017,6 @@
           "failed7d": "失败 · 7 天",
           "automation": "自动化",
           "triggered": "已触发",
-          "trigger": "触发",
           "loading": "正在加载运行…",
           "noRuns": "尚无运行",
           "emptyDescription": "触发自动化后，运行记录会显示在这里",
@@ -18143,11 +18141,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "还没有运行",
-          "13988187b3": "Token",
           "86a248187e": "花费",
           "149c0b49c7": "工作区",
           "8faaa00726": "执行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "无法从此主机获取运行历史，这并不表示自动化运行失败或从未运行"
         },
         "AutomationSchedulePicker": {
@@ -18217,7 +18213,6 @@
           "missingWorkspace": "缺少工作区",
           "usageUnavailable": "用量不可用",
           "noRunUsageYet": "尚无运行用量",
-          "noWorkspace": "无工作区",
           "latestSavedOutput": "最近保存的输出",
           "fullOutputUnavailable": "无法加载完整输出。",
           "retryFullOutput": "重试",
@@ -18532,7 +18527,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "已花费 {{spend}}",
+          "tokens_other": "{{tokens}} token"
         },
         "externalDisplay": {
           "sshHost": "SSH 主机",
@@ -18577,7 +18574,6 @@
           "needsCredentials": "{{host}} 需要凭据才能重新连接，因此此次运行未启动",
           "signIn": "登录 {{host}}",
           "output": "输出",
-          "details": "详情",
           "runNumber": "运行 #{{number}}",
           "runFailed": "运行失败",
           "scheduledAt": "计划于 {{time}}",
@@ -20208,7 +20204,17 @@
         "skip": "跳过",
         "sending": "正在发送…",
         "terminalRequired": "在终端中回答这个 OMP 问题",
-        "openTerminal": "在终端中回答"
+        "openTerminal": "在终端中回答",
+        "recommended": "推荐",
+        "stepAnswered": "{{value0}}，已回答",
+        "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
+        "answered": "已回答",
+        "title": "问题",
+        "previous": "上一个问题",
+        "nextQuestion": "下一个问题",
+        "back": "返回",
+        "skipAndSubmit": "跳过并提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "此请求需要更新版本的 Orca",
@@ -20507,7 +20513,6 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
-        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",
@@ -20515,7 +20520,6 @@
         "showFullMessage": "显示完整消息",
         "showLess": "收起",
         "withdrawnHold": "在发送前已停止",
-        "pausedSendFailed": "无法发送，点按发送以重试",
         "paused": "已暂停",
         "resume": "继续",
         "fromSender": "来自",
@@ -20530,11 +20534,13 @@
         "editGonePrompt": "此消息已发送或移除，回答代理后，你编辑的内容会出现在聊天输入框中",
         "imageCount_one": "{{count}} 张图片",
         "imageCount_other": "{{count}} 张图片",
-        "collapse": "收起",
-        "expand": "展开",
         "queued": "已排队",
         "clearAll": "全部清除",
         "imageCount": "{{count}} 张图片",
+        "couldNotSend": "无法发送",
+        "retry": "重试",
+        "showLessRows": "收起",
+        "moreRows": "还有 {{value0}} 条",
         "editReturned": "你编辑的内容已放入聊天输入框",
         "commandsUnsupported": "排队的消息中无法保存命令"
       },
@@ -20811,6 +20817,9 @@
       "splitDown": "向下拆分",
       "newRowsAnnouncement": "你离开期间有新消息",
       "newRowsMarker": "新消息",
+      "dock": {
+        "label": "消息框和提示"
+      },
       "editDeliveryNotice": "编辑",
       "signIn": {
         "title": "登录 {{agent}} 即可开始聊天"
@@ -21167,9 +21176,6 @@
           "multipleErrorsWithMore_other": "无法检查 {{count}} 个仓库（{{names}}，另有 {{moreCount}} 个）。部分工作区可能未显示。请刷新后重试",
           "multipleErrorsCount_other": "无法检查 {{count}} 个仓库（{{names}}）。部分工作区可能未显示。请刷新后重试",
           "readyCount_other": "找到 {{count}} 个工作区"
-        },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "评审 Alpha 清理"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
@@ -22608,12 +22614,20 @@
         "safariFullDiskAccess": "macOS 拒绝访问 Safari 的 Cookie。请在系统设置 → 隐私与安全 → 完全磁盘访问权限中授予 Orca 完全磁盘访问权限",
         "connectionEnded": "导入期间与此服务器的连接已断开。请重新连接后重试",
         "serverRepaired": "此服务器在导入期间已重新配对。请重试",
-        "macFullDiskAccess": "macOS 拒绝访问 {{browser}} Cookie。请在“系统设置”→“隐私与安全性”→“完全磁盘访问权限”中授予 Orca 权限，然后重启 Orca。"
+        "macFullDiskAccess": "macOS 拒绝访问 {{browser}} Cookie。请在“系统设置”→“隐私与安全性”→“完全磁盘访问权限”中授予 Orca 权限，然后重启 Orca。",
+        "sshHostDisconnected": "此页面已不再通过其 SSH 主机连接。请重新连接后重试。"
       },
       "notice": {
         "importedMore_other": "已为 {{domains}} 及其他 {{more}} 个域名导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
+      },
+      "sshPage": {
+        "label": "此设备上的浏览器",
+        "destination": "导入到 {{host}} 的浏览器。",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
+        "stored": "已存储到 {{host}} 的浏览器。",
+        "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
       }
     },
     "googleCookieClear": {
@@ -25979,21 +25993,22 @@
       "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
       "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
       "empty": "在聊天中让 {{name}} 按计划运行任务，或在特定事件发生时运行任务。",
-      "every2h": "每 2 小时",
-      "every4h": "每 4 小时",
       "lookFirst": "首次聊天后开始 · 此后 {{every}}",
-      "mornings": "每天早晨",
       "tidyUp": "整理记忆",
       "today": "今天 {{time}}",
       "tomorrow": "明天 {{time}}",
-      "twiceDaily": "每天两次",
       "lastNeededSignIn": "上次运行因需要登录而停止",
       "stopped": "已停止",
       "lookAroundSettings": "巡视设置",
       "dueNow": "已到运行时间",
       "runsEvery": "运行频率：{{every}}",
       "tidySettings": "记忆整理设置",
-      "needsSignIn": "需要登录"
+      "needsSignIn": "需要登录",
+      "every4hWindow": "{{from}}至{{to}}，每 4 小时",
+      "every2hWindow": "{{from}}至{{to}}，每 2 小时",
+      "twiceDailyAt": "每天两次，{{first}}和{{second}}",
+      "morningsAt": "每天早上{{time}}",
+      "weekdays": "工作日，{{schedule}}"
     },
     "palette": {
       "placeholder": "搜索 bots、聊天、终端、工作区、任务、设置和操作...",
@@ -26538,7 +26553,6 @@
       "empty": {
         "allClear": "没有需要你处理的条目，也没有正在运行的条目。",
         "body": "{{bot}} 为你接手的事情会显示在这里，包括它正在做什么，以及需要你做什么。",
-        "chatNeedsYou": "{{chat}} 中没有需要你处理的条目。",
         "filtered": "没有匹配的条目。",
         "needsYou": "没有需要你处理的条目。",
         "title": "暂无条目",
@@ -26552,7 +26566,6 @@
         "title": "标题"
       },
       "filter": {
-        "all": "所有聊天",
         "chat": "聊天",
         "clearAll": "清除筛选",
         "label": "筛选条目",

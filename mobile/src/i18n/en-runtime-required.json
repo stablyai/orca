@@ -240,6 +240,7 @@
         "added": "Added",
         "indexChanged": "MEMORY.md changed",
         "noteChanged": "Note changed",
+        "openMemory": "Open memory",
         "removed": "Removed"
       },
       "offer": {

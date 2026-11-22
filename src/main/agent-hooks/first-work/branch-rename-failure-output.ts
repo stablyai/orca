@@ -30,7 +30,3 @@ export function readBranchRenameFailureOutputForDisplay(worktreeId: string): str
   const entry = entriesByWorktreeId.get(worktreeId)
   return entry ? formatAgentGenerationFailureOutputForDisplay(entry) : null
 }
-
-export function __resetBranchRenameFailureOutputForTests(): void {
-  entriesByWorktreeId.clear()
-}

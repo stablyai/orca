@@ -1,5 +1,6 @@
 import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AppState } from '@/store/types'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import {
   ownerInputsChanged,
   relevantRecordEqual
@@ -21,11 +22,21 @@ export function terminalTabNamesChanged(current: AppState, previous: AppState): 
   if (current.tabsByWorktree === previous.tabsByWorktree) {
     return false
   }
-  const currentKeys = Object.keys(current.tabsByWorktree)
-  if (currentKeys.length !== Object.keys(previous.tabsByWorktree).length) {
+  const changes = readTabMapChanges(current.tabsByWorktree, previous.tabsByWorktree)
+  if (changes?.kind === 'addressed' && changes.workspaceSetChanged) {
     return true
   }
-  for (const worktreeId of currentKeys) {
+  let worktreeIds: Iterable<string>
+  if (changes?.kind === 'addressed') {
+    worktreeIds = changes.workspaceIds
+  } else {
+    const currentKeys = Object.keys(current.tabsByWorktree)
+    if (currentKeys.length !== Object.keys(previous.tabsByWorktree).length) {
+      return true
+    }
+    worktreeIds = currentKeys
+  }
+  for (const worktreeId of worktreeIds) {
     const tabs = current.tabsByWorktree[worktreeId]
     const before = previous.tabsByWorktree[worktreeId]
     if (tabs === before) {

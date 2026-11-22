@@ -554,7 +554,8 @@
         "serverRepaired": "Во время импорта было выполнено повторное сопряжение с этим сервером. Повторите попытку.",
         "fileNoValidCookies_few": "Не найдено корректных файлов cookie. Пропущены {{count}} записи из-за отсутствующих или некорректных полей.",
         "fileNoValidCookies_many": "Не найдено корректных файлов cookie. Пропущено {{count}} записей из-за отсутствующих или некорректных полей.",
-        "macFullDiskAccess": "macOS запретила доступ к файлам cookie {{browser}}. Предоставьте Orca полный доступ к диску в разделе Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску, затем перезапустите Orca."
+        "macFullDiskAccess": "macOS запретила доступ к файлам cookie {{browser}}. Предоставьте Orca полный доступ к диску в разделе Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску, затем перезапустите Orca.",
+        "sshHostDisconnected": "Эта страница больше не подключена через свой SSH-хост. Подключитесь снова и повторите попытку."
       },
       "notice": {
         "importedMore_one": "Импортирован {{count}} файл cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать его.",
@@ -566,6 +567,13 @@
         "importedMore_many": "Импортировано {{count}} файлов cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать их.",
         "imported_few": "Импортировано {{count}} файла cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их.",
         "imported_many": "Импортировано {{count}} файлов cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их."
+      },
+      "sshPage": {
+        "label": "Браузеры на этом устройстве",
+        "destination": "Импорт в браузер для {{host}}.",
+        "hostAgents": "Агенты на {{host}} могут использовать эти входы, но не могут читать файлы cookie.",
+        "stored": "Сохранено в браузере для {{host}}.",
+        "googleCookiesSkipped": "Файлы cookie Google не импортированы. Откройте страницу, которая работает через {{host}}, и войдите в Google."
       }
     },
     "passwords": {
@@ -6388,7 +6396,7 @@
           "removeWithChildrenGit_few": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространства</descendants> из git и удалить их папки рабочих пространств.",
           "removeWithChildrenGit_many": "Удалить <target/> и <descendants>{{count}} дочерних рабочих пространств</descendants> из git и удалить их папки рабочих пространств.",
           "removeSingleFolderFromOrca": "Удаляет его из Orca. Папка на диске сохраняется.",
-          "deleteSingleWorktreeAndBranch": "Удаляет рабочее дерево и его ветку (несмерженная ветка сохраняется)."
+          "deleteSingleWorktreeAndBranch": "Удаляет рабочее дерево и локальные изменения. Ветка удаляется, если она уже слита."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Показать загруженные пути",
@@ -7605,7 +7613,6 @@
           "stopped": "Остановлен",
           "unverifiable": "Неизвестно",
           "title": "Добавить дистрибутив WSL",
-          "description": "Orca запускает сервер внутри дистрибутива, поэтому Git, файлы и терминалы работают непосредственно в Linux. Проекты этого дистрибутива, открытые через \\\\wsl.localhost, автоматически переносятся на этот хост, когда их терминалы простаивают; проекты на диске Windows (/mnt/…) остаются на этом компьютере. Перенесённый проект можно вернуть из боковой панели.",
           "distro": "Дистрибутив",
           "loading": "Поиск дистрибутивов WSL…",
           "placeholder": "Выберите дистрибутив",
@@ -18161,11 +18168,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Запусков пока нет.",
-          "13988187b3": "Токены",
           "86a248187e": "Расходы",
           "149c0b49c7": "Рабочее пространство",
           "8faaa00726": "Запуск",
-          "a00e38d1a3": "—",
           "historyUnavailable": "История запусков на этом сервере недоступна. Это не означает, что автоматизация завершилась с ошибкой или не запускалась."
         },
         "AutomationSchedulePicker": {
@@ -18235,7 +18240,6 @@
           "missingWorkspace": "Рабочее пространство не найдено",
           "usageUnavailable": "Данные об использовании недоступны",
           "noRunUsageYet": "Данных об использовании запусков пока нет",
-          "noWorkspace": "Нет рабочего пространства",
           "latestSavedOutput": "Последний сохранённый вывод",
           "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
           "retryFullOutput": "Повторить",
@@ -18510,7 +18514,6 @@
           "failed7d": "Неуспешно · 7 дн",
           "automation": "Автоматизация",
           "triggered": "Запущено",
-          "trigger": "Триггер",
           "loading": "Загрузка запусков…",
           "noRuns": "Запусков пока нет",
           "emptyDescription": "После срабатывания автоматизации её запуски появятся здесь.",
@@ -18595,7 +18598,12 @@
           "tokensAndCost_few": "{{tokens}} токена · {{cost}}",
           "tokensAndCost_many": "{{tokens}} токенов · {{cost}}",
           "tokensAndCost_other": "{{tokens}} токена · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "Потрачено {{spend}}",
+          "tokens_one": "{{tokens}} токен",
+          "tokens_few": "{{tokens}} токена",
+          "tokens_many": "{{tokens}} токенов",
+          "tokens_other": "{{tokens}} токена"
         },
         "externalDisplay": {
           "sshHost": "SSH-сервер",
@@ -20484,7 +20492,17 @@
         "skip": "Пропустить",
         "sending": "Отправка…",
         "terminalRequired": "Ответьте на этот вопрос OMP в терминале.",
-        "openTerminal": "Ответить в терминале"
+        "openTerminal": "Ответить в терминале",
+        "recommended": "Рекомендуется",
+        "stepAnswered": "{{value0}}, есть ответ",
+        "stepOf": "{{value0}} из {{value1}}",
+        "answered": "Есть ответ",
+        "title": "Вопрос",
+        "previous": "Предыдущий вопрос",
+        "nextQuestion": "Следующий вопрос",
+        "back": "Назад",
+        "skipAndSubmit": "Пропустить и отправить",
+        "stepLabel": "{{value0}}, {{value1}} из {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Ждёт вашего ответа:",
@@ -20643,7 +20661,6 @@
         "steerHint": "Отправить сейчас, пока агент продолжает работу",
         "sendHint": "Отправить это сообщение сейчас",
         "delete": "Удалить",
-        "moreActions": "Другие действия",
         "moveChanged": "Очередь изменилась до перемещения. Попробуйте перетащить сообщение ещё раз.",
         "reorderHint": "Перетащите для изменения порядка или используйте клавиши со стрелками вверх и вниз.",
         "reorderMessage": "Изменить порядок сообщения",
@@ -20653,7 +20670,6 @@
         "listLabel": "Очередь сообщений",
         "alreadySent": "Это сообщение уже отправлено.",
         "withdrawnHold": "Остановлено до отправки",
-        "pausedSendFailed": "Не удалось отправить. Нажмите «Отправить», чтобы повторить.",
         "paused": "Приостановлено",
         "resume": "Продолжить",
         "fromSender": "Отправитель",
@@ -20670,10 +20686,12 @@
         "imageCount_few": "{{count}} изображения",
         "imageCount_many": "{{count}} изображений",
         "imageCount_other": "{{count}} изображения",
-        "collapse": "Свернуть",
-        "expand": "Развернуть",
         "queued": "В очереди",
-        "clearAll": "Очистить всё"
+        "clearAll": "Очистить всё",
+        "couldNotSend": "Не удалось отправить",
+        "retry": "Повторить",
+        "showLessRows": "Свернуть",
+        "moreRows": "+{{value0}} ещё"
       },
       "thought": "Размышлял",
       "thoughtForDuration": "Размышлял {{duration}}",
@@ -20910,6 +20928,9 @@
       },
       "splitRight": "Разделить вправо",
       "splitDown": "Разделить вниз",
+      "dock": {
+        "label": "Поле сообщения и запросы"
+      },
       "automationSaved": {
         "openFullPage": "Открыть страницу"
       },
@@ -21009,9 +21030,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Проверить очистку alpha"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24616,18 +24634,19 @@
       "tidyNightAfter": "Каждую ночь после {{from}} или как только компьютер выйдет из сна",
       "tidyWeekAfter": "Раз в неделю после {{from}} или как только компьютер выйдет из сна",
       "dueNow": "Сейчас",
-      "every2h": "каждые 2 часа",
-      "every4h": "каждые 4 часа",
       "lastNeededSignIn": "Последний запуск прерван, требуется вход",
       "lookAroundSettings": "Настройки осмотра",
       "lookFirst": "После вашего первого чата · затем {{every}}",
-      "mornings": "каждое утро",
       "needsSignIn": "Требуется вход",
       "runsEvery": "Запускается {{every}}",
       "stopped": "Остановлен",
       "tidySettings": "Настройки уборки памяти",
       "tidyUp": "Уборка памяти",
-      "twiceDaily": "дважды в день"
+      "every4hWindow": "с {{from}} до {{to}}, каждые 4 часа",
+      "every2hWindow": "с {{from}} до {{to}}, каждые 2 часа",
+      "twiceDailyAt": "дважды в день, {{first}} и {{second}}",
+      "morningsAt": "каждое утро в {{time}}",
+      "weekdays": "по будням, {{schedule}}"
     },
     "palette": {
       "placeholder": "Поиск bots, чатов, терминалов, рабочих пространств, задач, настроек и действий…",

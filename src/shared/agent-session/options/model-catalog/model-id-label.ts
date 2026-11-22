@@ -35,3 +35,11 @@ export function unlistedModelLabel(agent: string, modelId: string): string {
 export function withoutClaudeVendor(label: string): string {
   return label.replace(/^Claude (?=[a-z])/i, '')
 }
+
+/** Window suffixes (`[1m]`) and casing do not change model identity. */
+export function baseModelId(model: string): string {
+  return model
+    .replace(/\[[^\]]*\]$/u, '')
+    .trim()
+    .toLowerCase()
+}

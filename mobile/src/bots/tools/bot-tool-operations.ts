@@ -2,6 +2,7 @@
 // phone's bot allowlist and run on the bot's own host.
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { NODE_PLATFORM_NAMES } from '../../transport/connection/mobile-runtime-host-platform'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
 const SignInStatusSchema = z.looseObject({
@@ -76,6 +77,66 @@ export const botToolAdd = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('bot-tool-added', z.looseObject({ tool: OwnToolSchema }))
+  })
+)
+
+const MaskedSecretsSchema = z.array(z.looseObject({ key: z.string(), configured: z.boolean() }))
+
+/** The saved tool, with its secrets as names only, and the version a save must match. */
+export const botToolDetailsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.tools.details',
+    method: 'bots.tools.details',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'bot-tool-details',
+      z.looseObject({
+        version: z.string(),
+        server: z.union([
+          z.looseObject({
+            name: z.string(),
+            url: z.string(),
+            transport: z.literal('http'),
+            headers: MaskedSecretsSchema
+          }),
+          z.looseObject({
+            name: z.string(),
+            command: z.string(),
+            args: z.array(z.string()),
+            env: MaskedSecretsSchema
+          })
+        ])
+      })
+    )
+  })
+)
+
+/** The computer the bot's tools run on: its platform decides how env names compare. */
+export const botToolContextRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.tools.context',
+    method: 'bots.tools.context',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'bot-tool-context',
+      z.looseObject({
+        folder: z.string(),
+        // One this build doesn't know compares env names case-sensitively, as every host but Windows.
+        platform: z.enum(NODE_PLATFORM_NAMES).catch('linux')
+      })
+    )
+  })
+)
+
+export const botToolUpdate = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.tools.update',
+    method: 'bots.tools.update',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-tool-updated', z.looseObject({ tool: OwnToolSchema }))
   })
 )
 

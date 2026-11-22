@@ -8,8 +8,8 @@ import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './editor/use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from '../drafts/use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-launch-draft-adoption'
-import { NativeChatRoomContext, useNativeChatComposerMentions } from '../native-chat-composer-room'
-import { NativeChatBotChatChooserContext } from '../native-chat-room-context'
+import { useNativeChatComposerMentions } from '../native-chat-composer-room'
+import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../attachments/chips/use-native-chat-composer-attachments'
@@ -56,7 +56,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -217,7 +216,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
-      readTerminalScreen,
       paneKey,
       structuredTransport
     })
@@ -360,62 +358,60 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editSession || launchPrompt ? undefined : <NativeChatComposerWorkspace {...workspace} />
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
-        <NativeChatRoomContext.Provider value={mentions.roomContext}>
-          <NativeChatBotChatChooserContext.Provider value={mentions.chooser}>
-            <NativeChatComposerField
-              draftScopeKey={draftScopeKey}
-              positionTarget={editSession ? undefined : terminalTabId}
-              textareaRef={textareaRef}
-              draft={draft}
-              disabled={disabled}
-              hasPty={hasPty}
-              canSend={canSend}
-              placeholderHint={unavailableHint}
-              idleHint={afterStop ? undefined : mentions.hint}
-              autocomplete={autocomplete}
-              mentionFiles={mentions.listed}
-              activeSuggestion={mentions.activeIndex ?? activeSuggestion}
-              notices={mentions.notices}
-              imageAttachments={imageAttachments}
-              numberImages={Boolean(structuredTransport)}
-              attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
-              {...sendButton}
-              isWorking={isWorking}
-              isStopping={isStopping}
-              afterStop={afterStop}
-              attachDisabled={attachDisabled}
-              dictationDisabled={dictation.dictationDisabled}
-              isDictating={dictation.isDictating}
-              isDictationHoldMode={dictation.isDictationHoldMode}
-              imeEnterGesture={imeEnterGesture}
-              {...draftEvents}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePasteEvent}
-              pickerListboxId={picker.listboxId}
-              onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
-              goalMode={goalMode}
-              onRetrySkills={picker.retrySkills}
-              onChooseMentionFile={mentions.chooseMention}
-              onRemoveImageAttachment={attachments.removeImageAttachment}
-              onAttach={fileDrops.pickAttachments}
-              onDictationToggle={dictation.toggleDictation}
-              onDictationHoldStart={dictation.startHoldDictation}
-              onDictationHoldEnd={dictation.stopHoldDictation}
-              onSend={send}
-              steerPreview={steerChord.preview}
-              onSteerPreview={steerChord.runPreview}
-              onStop={interrupt}
-              sessionOptionsSurface={sessionOptions.surface}
-              sessionOptionsSnapshot={sessionOptions.snapshot}
-              contextUsage={contextUsageSummary}
-              sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
-              agent={agent}
-              launchPrompt={launchPrompt}
-              workspaceFooter={workspaceFooter}
-              {...fieldOverrides}
-            />
-          </NativeChatBotChatChooserContext.Provider>
-        </NativeChatRoomContext.Provider>
+        <NativeChatComposerRoomProvider mentions={mentions}>
+          <NativeChatComposerField
+            draftScopeKey={draftScopeKey}
+            positionTarget={editSession ? undefined : terminalTabId}
+            textareaRef={textareaRef}
+            draft={draft}
+            disabled={disabled}
+            hasPty={hasPty}
+            canSend={canSend}
+            placeholderHint={unavailableHint}
+            idleHint={afterStop ? undefined : mentions.hint}
+            autocomplete={autocomplete}
+            mentionFiles={mentions.listed}
+            activeSuggestion={mentions.activeIndex ?? activeSuggestion}
+            notices={mentions.notices}
+            imageAttachments={imageAttachments}
+            numberImages={Boolean(structuredTransport)}
+            attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
+            {...sendButton}
+            isWorking={isWorking}
+            isStopping={isStopping}
+            afterStop={afterStop}
+            attachDisabled={attachDisabled}
+            dictationDisabled={dictation.dictationDisabled}
+            isDictating={dictation.isDictating}
+            isDictationHoldMode={dictation.isDictationHoldMode}
+            imeEnterGesture={imeEnterGesture}
+            {...draftEvents}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePasteEvent}
+            pickerListboxId={picker.listboxId}
+            onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
+            goalMode={goalMode}
+            onRetrySkills={picker.retrySkills}
+            onChooseMentionFile={mentions.chooseMention}
+            onRemoveImageAttachment={attachments.removeImageAttachment}
+            onAttach={fileDrops.pickAttachments}
+            onDictationToggle={dictation.toggleDictation}
+            onDictationHoldStart={dictation.startHoldDictation}
+            onDictationHoldEnd={dictation.stopHoldDictation}
+            onSend={send}
+            steerPreview={steerChord.preview}
+            onSteerPreview={steerChord.runPreview}
+            onStop={interrupt}
+            sessionOptionsSurface={sessionOptions.surface}
+            sessionOptionsSnapshot={sessionOptions.snapshot}
+            contextUsage={contextUsageSummary}
+            sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
+            agent={agent}
+            launchPrompt={launchPrompt}
+            workspaceFooter={workspaceFooter}
+            {...fieldOverrides}
+          />
+        </NativeChatComposerRoomProvider>
       </div>
     )
   }

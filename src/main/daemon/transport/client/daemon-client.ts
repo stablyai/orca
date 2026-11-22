@@ -13,7 +13,8 @@ import {
 import {
   armDaemonSocketCloseHandlers,
   connectDaemonSocket,
-  waitForDaemonConnectionAttempt
+  waitForDaemonConnectionAttempt,
+  watchControlSocketBootstrap
 } from './daemon-client-socket-connect'
 import { DaemonClientListeners } from './daemon-client-listener-registry'
 import { sameDaemonIdentity, sendDaemonHello } from './daemon-client-hello-handshake'
@@ -150,7 +151,6 @@ export class DaemonClient {
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
       const controlHello = await sendHello(pendingControlSocket, 'control')
-      const controlIdentity = controlHello.identity
       this.assertConnectionAttemptCurrent(attemptGeneration, this.controlSocket)
       pendingListenerCleanups.push(
         attachControlResponseReader(
@@ -160,12 +160,14 @@ export class DaemonClient {
         )
       )
 
-      const pendingStreamSocket = await connectDaemonSocket(this.socketPath, remainingMs())
+      const controlBootstrap = watchControlSocketBootstrap(this.controlSocket, connectDaemonSocket)
+      pendingListenerCleanups.push(controlBootstrap.stop)
+      const pendingStreamSocket = await controlBootstrap.connect(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingStreamSocket)
       this.streamSocket = pendingStreamSocket
-      const streamHello = await sendHello(pendingStreamSocket, 'stream')
+      const streamHello = await controlBootstrap.race(sendHello(pendingStreamSocket, 'stream'))
       this.assertConnectionAttemptCurrent(attemptGeneration, this.streamSocket)
-      if (!sameDaemonIdentity(controlIdentity, streamHello.identity)) {
+      if (!sameDaemonIdentity(controlHello.identity, streamHello.identity)) {
         throw new DaemonProtocolError('Daemon identity changed during connection')
       }
       const streamReader = attachStreamEventReader(this.streamSocket, streamHello, (event) => {
@@ -176,7 +178,7 @@ export class DaemonClient {
       this.assertConnectionAttemptCurrent(attemptGeneration)
       this.connected = true
       this.observedAuthenticatedDisconnect = false
-      this.daemonIdentity = controlIdentity
+      this.daemonIdentity = controlHello.identity
       this.daemonResizeModel = controlHello.resizeModel
       this.visibleProjectionSnapshots = controlHello.visibleProjectionSnapshots
       this.disconnectArmed = true
@@ -191,6 +193,7 @@ export class DaemonClient {
           streamReader.drainBuffered
         )
       )
+      controlBootstrap.stop()
       this.cleanupSocketListeners = cleanupPendingListeners
     } catch (error) {
       cleanupPendingListeners()

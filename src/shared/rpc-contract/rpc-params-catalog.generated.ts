@@ -667,7 +667,8 @@ import {
 import {
   PeerMailAckParams,
   PeerMailDeliverParams,
-  PeerMailPullParams
+  PeerMailPullParams,
+  PeerMailReturnParams
 } from './orchestration/orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration/orchestration-runs-mutation-request-show-params'
 import {
@@ -1119,6 +1120,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
   'agentSession.currentRequests': CurrentRequestsParams,
+  'agentSession.delete': OptionsParams,
   'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
@@ -1869,6 +1871,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.peerMailAck': PeerMailAckParams,
   'orchestration.peerMailDeliver': PeerMailDeliverParams,
   'orchestration.peerMailPull': PeerMailPullParams,
+  'orchestration.peerMailReturn': PeerMailReturnParams,
   'orchestration.peerRunCancel': PeerRunCancelParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,

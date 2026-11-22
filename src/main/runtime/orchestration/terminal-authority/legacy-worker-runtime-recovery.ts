@@ -18,7 +18,7 @@ import type { TerminalWorkerTurnStops } from '../workers/turn-stops/terminal-wor
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
-import { settleRestartCutWorkerStart } from '../db/worker-dispatch/restart-cut-worker-start'
+import { settleRestartCutStart } from '../workers/turn-stops/awaiting-worker-start-report'
 import {
   observeUnconfirmedWorkerStart,
   type UnconfirmedWorkerStart
@@ -141,7 +141,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     if (!db || db.getFederatedDispatch(dispatchId)) {
       return
     }
-    const worker = settleRestartCutWorkerStart(db, dispatchId, this.getRuntimeId())
+    const worker = settleRestartCutStart(db, dispatchId, this)
     if (worker?.state !== 'start_unknown') {
       return
     }

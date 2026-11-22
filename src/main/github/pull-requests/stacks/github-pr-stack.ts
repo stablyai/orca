@@ -58,11 +58,6 @@ type GraphQLStackResponse = {
 const stackDetailsCache = new Map<string, CachedStackDetails>()
 const stackDetailsInFlight = new Map<string, Promise<Omit<GitHubPRStack, 'position'> | null>>()
 
-export function _resetGitHubPRStackCacheForTests(): void {
-  stackDetailsCache.clear()
-  stackDetailsInFlight.clear()
-}
-
 function stackCacheKey(
   repository: GitHubApiRepository,
   stackNumber: number,
