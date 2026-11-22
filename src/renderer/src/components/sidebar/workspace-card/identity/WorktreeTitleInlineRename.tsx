@@ -7,6 +7,7 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -230,6 +231,7 @@ export function WorktreeTitleInlineRename({
       }
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
+  useBlurSaveOnUnmount(editing, commitRename)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {

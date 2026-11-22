@@ -3,6 +3,7 @@ import {
   RENAME_TERMINAL_TAB_EVENT,
   type RenameTerminalTabDetail
 } from './terminal-tab-rename-request'
+import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
 
 /** Snapshot rename text once, commit at most once, and handle only events addressed to this tab. */
 export function useSortableTabRename({
@@ -44,6 +45,8 @@ export function useSortableTabRename({
     onSetCustomTitle(tabId, trimmed.length > 0 ? trimmed : null)
     setIsEditing(false)
   }, [renameValue, onSetCustomTitle, tabId])
+
+  useBlurSaveOnUnmount(isEditing, commitRename)
 
   const cancelRename = useCallback(() => {
     committedOrCancelledRef.current = true
