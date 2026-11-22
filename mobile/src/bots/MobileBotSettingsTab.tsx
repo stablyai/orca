@@ -31,7 +31,7 @@ import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
   MobileBotSettingsRoot,
   MobileBotStalePage,
-  type SettingsRootPage
+  type BotSettingsTarget
 } from './MobileBotSettingsRoot'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
@@ -64,6 +64,8 @@ export function MobileBotSettingsTab(props: {
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
   onOpenFile?: (path: string) => void
+  /** The page Settings opens on, read as it mounts; absent opens the list. */
+  initialPage?: BotSettingsTarget
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -73,7 +75,7 @@ export function MobileBotSettingsTab(props: {
   const locked = saving || !props.online
   const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const [deleting, setDeleting] = useState(false)
-  const [page, setPage] = useState<SettingsRootPage | null>(null)
+  const [page, setPage] = useState(typeof props.initialPage === 'string' ? props.initialPage : null)
   // A page drilled into from Look around or Memory upkeep; its Back returns there.
   const [lookPage, setLookPage] = useState<LookAroundPage | null>(null)
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
@@ -120,7 +122,11 @@ export function MobileBotSettingsTab(props: {
       setSaving(false)
     }
   }
-  const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const connectors = useMobileBotConnectorSettings(props, offlineBanner, {
+    accessBot,
+    save,
+    initialPage: typeof props.initialPage === 'object' ? props.initialPage : undefined
+  })
   const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
