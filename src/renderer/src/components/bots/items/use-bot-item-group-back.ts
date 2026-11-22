@@ -56,7 +56,9 @@ export function useBotItemGroupBack({
       focusBotItemBackRow(
         section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)
       )
+      // Focused: nothing is looked for after this.
+      backFocused()
     }
-  }, [backItem, open, unfold, id, section])
+  }, [backItem, open, unfold, id, section, backFocused])
   return { backItem, backFocused }
 }
