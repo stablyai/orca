@@ -11,6 +11,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { CodexAppServerLaunch } from '../codex-app-server-connection'
+import { parseTomlKeyPath } from '../../configuration/toml/config-toml-key-path'
 
 /** Per-chat keys: each thread gets them through shell_environment_policy.set, never the shared env. */
 const PER_CHAT_ENV_KEYS = [
@@ -53,9 +54,7 @@ export async function codexSharedServerSpec(
 ): Promise<CodexSharedServerSpec> {
   const generation = await launchGeneration(launch, codexVersion)
   // A --config value may be a path Codex resolves from its folder, so such a launch keeps its own.
-  const cwd = launch.args.some(
-    (arg) => arg === '--config' || arg.startsWith('--config=') || arg.startsWith('-c')
-  )
+  const cwd = configValues(launch.args).some((value) => !isOrcaHooksState(value))
     ? launch.cwd
     : homedir()
   const env = { ...launch.env }
@@ -82,4 +81,20 @@ export async function codexSharedServerSpec(
     // folder (Windows can't delete it) for every chat on the server.
     launch: { command: launch.command, args: launch.args, cwd, env, envToDelete }
   }
+}
+
+function configValues(args: readonly string[]): string[] {
+  return args.flatMap((arg, index) => {
+    if (arg === '-c' || arg === '--config') {
+      return [args[index + 1] ?? '']
+    }
+    const inline = /^(?:--config=|-c=?)(.+)$/.exec(arg)
+    return inline ? [inline[1]!] : []
+  })
+}
+
+/** Orca's own hooks-off override: trust keys built from absolute paths, never cwd-relative. */
+function isOrcaHooksState(value: string): boolean {
+  const segments = parseTomlKeyPath(value)?.segments
+  return segments?.[0] === 'hooks' && segments[1] === 'state'
 }
