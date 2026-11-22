@@ -47,8 +47,8 @@ export function useMobileNativeChatPacedText(
   const reducedMotion = list?.reducedMotion === true
   const revealMs = reducedMotion ? REDUCED_MOTION_REVEAL_MS : REVEAL_MS
   const [frames] = useState(() => nativeChatRevealStepFrames(STEP_MS, REVEAL_BUSY_SHARE))
-  const [initial] = useState(() =>
-    startNativeChatTextReveal(
+  const [initial] = useState(() => {
+    const started = startNativeChatTextReveal(
       text,
       streaming,
       list?.drawn.get(rowKey),
@@ -57,7 +57,11 @@ export function useMobileNativeChatPacedText(
       revealMs,
       savedRevision
     )
-  )
+    // Native can't time a step apart from the work queued before it, so it shows as saves would.
+    return REVEAL_STEP_TIMED_EXACTLY || immediate
+      ? started
+      : savePacedNativeChatText(started, frames.now(), savedRevision)
+  })
   const pace = useRef(initial)
   const [shown, setShown] = useState(initial.shown)
   // A reply redrawn whole each step shows as saves would until it ends.
@@ -113,7 +117,7 @@ export function useMobileNativeChatPacedText(
   useLayoutEffect(() => {
     onScreen.current = shown
     if (stepStartedAt.current !== null) {
-      frames.stepCost?.(performance.now() - stepStartedAt.current, REVEAL_STEP_TIMED_EXACTLY)
+      frames.stepCost?.(performance.now() - stepStartedAt.current)
       stepStartedAt.current = null
       if (frames.redrawsWhole?.() && !pace.current.savePaced) {
         pace.current = savePacedNativeChatText(pace.current, performance.now(), savedRevision)

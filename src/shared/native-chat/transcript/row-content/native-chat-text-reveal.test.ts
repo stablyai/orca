@@ -83,11 +83,6 @@ it('still spaces its steps out when each step is slow to draw', () => {
 describe('a reply redrawn whole each step', () => {
   it('switches to save pacing once its steps are slow, and stays there', () => {
     const frames = nativeChatRevealStepFrames(60, 1 / 10)
-    // Times that may hold other work queued before the render space steps but never switch.
-    for (const ms of [500, 500, 500]) {
-      frames.stepCost?.(ms, false)
-    }
-    expect(frames.redrawsWhole?.()).toBe(false)
     for (const ms of [20, 20, 150]) {
       frames.stepCost?.(ms)
     }
