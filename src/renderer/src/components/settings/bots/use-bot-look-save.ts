@@ -13,7 +13,6 @@ type LookSaves = {
   waiting: BotLookUpdate | null
   update: (look: BotLookUpdate) => Promise<unknown>
   drained: Set<() => void>
-  finished: Promise<void>
 }
 
 /** Holds the host's re-read back until the returned release runs. */
@@ -40,20 +39,22 @@ function sendPicksOnLeave(): void {
 }
 // Closing or quitting waits a moment for picks on their way, so the app's last save before it goes has them.
 const CLOSE_SAVE_WAIT_MS = 2000
+// Closes waiting for every save to land; each removes itself at its deadline, so a hung save keeps none.
+const idleWaiters = new Set<() => void>()
 async function savePicksBeforeClose(): Promise<boolean> {
   for (const save of pausedPicks) {
     save()
   }
-  const running = [...lookSaves.values()].map((saves) => saves.finished.catch(() => undefined))
-  if (running.length > 0) {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    await Promise.race([
-      Promise.all(running),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, CLOSE_SAVE_WAIT_MS)
-      })
-    ])
-    clearTimeout(timer)
+  if (lookSaves.size > 0) {
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer)
+        idleWaiters.delete(done)
+        resolve()
+      }
+      const timer = setTimeout(done, CLOSE_SAVE_WAIT_MS)
+      idleWaiters.add(done)
+    })
   }
   return true
 }
@@ -86,13 +87,12 @@ export function saveBotLook(
   const saves: LookSaves = {
     waiting: look,
     update,
-    drained: new Set(onDrained ? [onDrained] : []),
-    finished: Promise.resolve()
+    drained: new Set(onDrained ? [onDrained] : [])
   }
   lookSaves.set(key, saves)
   sendOnLeave()
   const release = hold?.()
-  saves.finished = (async () => {
+  void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
       saves.waiting = null
@@ -100,6 +100,11 @@ export function saveBotLook(
       await saves.update(next).catch(() => undefined)
     }
     lookSaves.delete(key)
+    if (lookSaves.size === 0) {
+      for (const waiting of idleWaiters) {
+        waiting()
+      }
+    }
     release?.()
     for (const listener of saves.drained) {
       listener()
