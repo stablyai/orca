@@ -20,6 +20,8 @@ export abstract class SessionProcessInspection {
   protected _outputChunks = 0
   /** Input writes accepted, so a proof taken before a keystroke cannot vouch for what it started. */
   protected _inputWrites = 0
+  /** Wall-clock time of the latest output or input, so a capture older than it cannot vouch for the pane. */
+  protected _lastActivityAt = 0
 
   abstract get isAlive(): boolean
   abstract getAppliedSize(): { cols: number; rows: number } | null
@@ -60,8 +62,18 @@ export abstract class SessionProcessInspection {
     return this._inputWrites
   }
 
+  get lastActivityAt(): number {
+    return this._lastActivityAt
+  }
+
+  protected noteOutput(): void {
+    this._outputChunks += 1
+    this._lastActivityAt = Date.now()
+  }
+
   protected writeInput(data: string): void {
     this._inputWrites += 1
+    this._lastActivityAt = Date.now()
     this.subprocess.write(data)
   }
 

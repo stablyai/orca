@@ -172,9 +172,17 @@ export async function inspectTerminalHostProcess(args: {
     try {
       const activity = paneActivity(session)
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      // A shared capture that started before the pane's latest input or output may predate a child it started.
+      const capturedAfterActivity = Date.now() - snapshot.capturedAgeMs > session.lastActivityAt
       idleShellProven =
         !session.processNameIsSpawnFile &&
-        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, activity)
+        rememberIdleShellProof(
+          session,
+          snapshot.rows,
+          snapshot.capturedAgeMs,
+          activity,
+          capturedAfterActivity
+        )
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess

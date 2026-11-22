@@ -31,6 +31,11 @@ describe('rememberIdleShellProof', () => {
     expect(rememberIdleShellProof(shellSession(1866, true), [login, shell], 0, 0)).toBe(true)
   })
 
+  it("does not prove a shell idle from a capture older than the pane's latest input or output", () => {
+    // A keystroke may have forked a child after a capture another pane shared had already started.
+    expect(rememberIdleShellProof(shellSession(1876, false), [shell], 0, 0, false)).toBe(false)
+  })
+
   it('does not prove a shell idle while it has any child, even one detached from the terminal', () => {
     // `sleep 30 & wait; aider …` and `set +m; setsid sleep 30 & wait; aider …`: the agent may follow the child.
     const backgroundJob: ProcessTableRow = {

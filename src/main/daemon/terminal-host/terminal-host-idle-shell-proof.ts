@@ -62,7 +62,9 @@ export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
   capturedAgeMs: number,
-  activity: number
+  activity: number,
+  /** False when the capture may predate the pane's latest activity: it still keeps re-checks cheap, but proves nothing idle. */
+  capturedAfterActivity = true
 ): boolean {
   const name = session.getForegroundProcess({ rawFallback: true })
   if (!name || !isShellProcess(name)) {
@@ -82,7 +84,8 @@ export function rememberIdleShellProof(
     groups.rowsByProcessGroup.get(shell.pid) === 1
   ) {
     // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
-    const childless = (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
+    const childless =
+      capturedAfterActivity && (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
     proofs.set(session, {
       shellPid: shell.pid,
       provedAt: monotonicNow() - capturedAgeMs,
