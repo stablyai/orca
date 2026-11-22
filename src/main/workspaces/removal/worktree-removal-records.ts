@@ -1,5 +1,10 @@
 // The sidecar persists before deletion without waiting for batched profile writes or entering profile exports.
-import { renameDurable } from '../../filesystem/durable-file-write'
+import { readFile } from 'node:fs/promises'
+import {
+  durableWriteTempPath,
+  renameDurable,
+  writeFileDurable
+} from '../../filesystem/durable-file-write'
 import {
   readSidecarSnapshotResult,
   sidecarSnapshotFile,
@@ -110,20 +115,34 @@ export function worktreeRemovalRecordsFile(directory: string): string {
   return sidecarSnapshotFile(directory, RECORDS_FILE_NAME)
 }
 
-/** Rename a bad or unreadable journal aside before overwriting it; returns null when already absent. */
-export async function quarantineWorktreeRemovalJournal(file: string): Promise<string | null> {
+function nextCorruptJournalPath(file: string): string {
   const timestamp = Math.max(Date.now(), lastQuarantineTimestamp + 1)
   lastQuarantineTimestamp = timestamp
-  const target = `${file}.corrupt-${timestamp}`
+  return `${file}.corrupt-${timestamp}`
+}
+
+function isMissingFileError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+/** Move or copy a degraded journal aside before overwriting it; partial journals copy so the canonical path stays valid until replacement lands. */
+export async function quarantineWorktreeRemovalJournal(
+  file: string,
+  mode: 'rename' | 'copy' = 'rename'
+): Promise<string | null> {
+  const target = nextCorruptJournalPath(file)
   try {
-    await renameDurable(file, target)
+    if (mode === 'copy') {
+      const raw = await readFile(file)
+      await writeFileDurable(durableWriteTempPath(target), target, raw)
+    } else {
+      await renameDurable(file, target)
+    }
     return target
   } catch (error) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? String(error.code)
-        : undefined
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
+    if (isMissingFileError(error)) {
       return null
     }
     throw error

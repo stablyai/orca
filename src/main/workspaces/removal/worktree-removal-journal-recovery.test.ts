@@ -6,13 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 
 let readFileFault: { path: string; code: string } | null = null
-let renameFault: { path: string; code: string } | null = null
+let readFileDelay: { path: string; promise: Promise<void> } | null = null
+let renameFault: { path: string; code: string; matchTarget?: boolean } | null = null
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
     readFile: async (path: Parameters<typeof actual.readFile>[0], ...rest: unknown[]) => {
+      if (readFileDelay && String(path) === readFileDelay.path) {
+        await readFileDelay.promise
+      }
       if (readFileFault && String(path) === readFileFault.path) {
         throw Object.assign(new Error(`${readFileFault.code}: readFile ${String(path)}`), {
           code: readFileFault.code
@@ -24,8 +28,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       oldPath: Parameters<typeof actual.rename>[0],
       newPath: Parameters<typeof actual.rename>[1]
     ) => {
-      if (renameFault && String(oldPath) === renameFault.path) {
-        throw Object.assign(new Error(`${renameFault.code}: rename ${String(oldPath)}`), {
+      const checked = renameFault?.matchTarget ? String(newPath) : String(oldPath)
+      if (renameFault && checked === renameFault.path) {
+        throw Object.assign(new Error(`${renameFault.code}: rename ${checked}`), {
           code: renameFault.code
         })
       }
@@ -96,6 +101,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   readFileFault = null
+  readFileDelay = null
   renameFault = null
   vi.restoreAllMocks()
   await rm(directory, { recursive: true, force: true })
@@ -195,7 +201,7 @@ describe('worktree removal journal recovery', () => {
     }
   )
 
-  it('restores valid entries from a partially malformed journal while preserving the original file before rewriting', async () => {
+  it('restores valid entries from a partially malformed journal and keeps the canonical file intact until replacement lands', async () => {
     const mods = await importFreshModules()
     const file = mods.worktreeRemovalRecordsFile(directory)
     const contents = JSON.stringify({ version: 1, removals: [recordA, { worktreeId: 123 }] })
@@ -209,16 +215,44 @@ describe('worktree removal journal recovery', () => {
     })
     expect(mods.waitForPendingWorktreeRemoval(recordA.worktreeId)).toBeDefined()
 
-    await mods.recordWorktreeRemoval(recordB)
-
+    // If replacing the canonical file fails, the backup copy exists and the canonical file is still intact.
+    renameFault = { path: file, code: 'EIO', matchTarget: true }
+    await expect(mods.recordWorktreeRemoval(recordB)).rejects.toThrow(/EIO/)
     const backups = await corruptBackupsIn(directory, file)
     expect(backups).toHaveLength(1)
     expect(await readFile(join(directory, backups[0]), 'utf-8')).toBe(contents)
+    expect(await readFile(file, 'utf-8')).toBe(contents)
+
+    // Once replacement succeeds, both valid record A and new record B are persisted without duplicating the backup.
+    renameFault = null
+    await mods.recordWorktreeRemoval(recordB)
+    expect(await corruptBackupsIn(directory, file)).toEqual(backups)
     expect((await mods.readWorktreeRemovalRecords(directory)).map((r) => r.worktreeId)).toEqual([
       recordA.worktreeId,
       recordB.worktreeId
     ])
     mods.releaseStartupRemovalFence(recordA.worktreeId)
     await mods.drainBackgroundWorktreeRemovals()
+  })
+
+  it('ignores a journal load that finishes after closeWorktreeRemovalRecords resets the state', async () => {
+    const mods = await importFreshModules()
+    await mods.writeWorktreeRemovalRecords(directory, () => [recordA])
+    const file = mods.worktreeRemovalRecordsFile(directory)
+
+    let releaseRead!: () => void
+    readFileDelay = {
+      path: file,
+      promise: new Promise<void>((resolve) => {
+        releaseRead = resolve
+      })
+    }
+    const loading = mods.loadWorktreeRemovalRecords(directory)
+    await mods.closeWorktreeRemovalRecords()
+    releaseRead()
+    await loading
+
+    expect(mods.getWorktreeRemovalJournalState()).toEqual({ status: 'unloaded' })
+    expect(mods.waitForPendingWorktreeRemoval(recordA.worktreeId)).toBeUndefined()
   })
 })

@@ -33,16 +33,19 @@ export const finishedWorktreeRemovals = new WeakSet<WorktreeRemovalRecord>()
 type PendingJournalQuarantine = {
   file: string
   reason: WorktreeRemovalJournalQuarantineReason
+  mode: 'rename' | 'copy'
   done: boolean
 }
 let journalState: WorktreeRemovalJournalState = { status: 'unloaded' }
 let pendingQuarantine: PendingJournalQuarantine | null = null
+let journalGeneration = 0
 
 export function getWorktreeRemovalJournalState(): WorktreeRemovalJournalState {
   return journalState
 }
 
 export function setWorktreeRemovalRecordsDirectory(directory: string | null): void {
+  journalGeneration += 1
   pendingQuarantine = null
   journalState = directory ? { status: 'ready', directory } : { status: 'unloaded' }
 }
@@ -51,9 +54,13 @@ export function setWorktreeRemovalRecordsDirectory(directory: string | null): vo
 export async function openWorktreeRemovalJournal(
   directory: string
 ): Promise<WorktreeRemovalJournalLoadResult> {
+  const generation = ++journalGeneration
   const loaded = await readWorktreeRemovalJournal(directory)
+  if (generation !== journalGeneration) {
+    return { status: 'missing', records: [] }
+  }
   if (loaded.status === 'unavailable') {
-    pendingQuarantine = { file: loaded.file, reason: loaded.reason, done: false }
+    pendingQuarantine = { file: loaded.file, reason: loaded.reason, mode: 'rename', done: false }
     journalState = {
       status: 'degraded',
       directory,
@@ -68,7 +75,12 @@ export async function openWorktreeRemovalJournal(
     return loaded
   }
   if (loaded.status === 'partial') {
-    pendingQuarantine = { file: loaded.file, reason: 'partial-entries', done: false }
+    pendingQuarantine = {
+      file: loaded.file,
+      reason: 'partial-entries',
+      mode: 'copy',
+      done: false
+    }
     journalState = {
       status: 'degraded',
       directory,
@@ -76,7 +88,7 @@ export async function openWorktreeRemovalJournal(
       reason: 'partial-entries'
     }
     console.warn(
-      `[worktrees] skipped ${loaded.droppedCount} malformed worktree removal journal entry(s); will move ${loaded.file} aside before next write`
+      `[worktrees] skipped ${loaded.droppedCount} malformed worktree removal journal entry(s); will preserve ${loaded.file} before next write`
     )
     return loaded
   }
@@ -92,10 +104,10 @@ async function quarantineBeforeWrite(
   if (!quarantine || quarantine.done) {
     return
   }
-  const moved = await quarantineWorktreeRemovalJournal(quarantine.file)
+  const moved = await quarantineWorktreeRemovalJournal(quarantine.file, quarantine.mode)
   quarantine.done = true
   if (moved) {
-    console.warn(`[worktrees] moved ${quarantine.reason} worktree removal journal to ${moved}`)
+    console.warn(`[worktrees] preserved ${quarantine.reason} worktree removal journal at ${moved}`)
   }
   if (pendingQuarantine === quarantine) {
     pendingQuarantine = null
@@ -107,6 +119,7 @@ async function quarantineBeforeWrite(
 
 export function closeWorktreeRemovalRecords(): Promise<void> {
   const directory = journalState.status === 'unloaded' ? null : journalState.directory
+  journalGeneration += 1
   pendingQuarantine = null
   journalState = { status: 'unloaded' }
   return directory
