@@ -4,14 +4,16 @@ import type { AgentType } from '../../../agent-status/contracts/agent-status-typ
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,
-  SessionOptionValue
+  SessionOptionValue,
+  SessionOptionValueSource
 } from '../native-chat-session-options'
 import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-commands'
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
-  setTrackedSessionOption
+  setTrackedSessionOption,
+  type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import {
   readNativeChatSessionOptionCache,
@@ -36,7 +38,12 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
-  reportSessionOptions(values: Record<string, SessionOptionValue>): void
+  /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
+   *  own (an unchanged effort) but describe a model the session switches to. */
+  reportSessionOptions(
+    values: Record<string, SessionOptionValue>,
+    forNewModel?: Record<string, SessionOptionValue>
+  ): void
   replaceModels(models: CatalogModel[]): void
   /** The context window the host's model listing states for `modelId`, or null. */
   contextWindowTokens(modelId: string): number | null
@@ -185,8 +192,11 @@ export function createNativeChatPtySessionOptions(
         args.onAgentPicker?.()
       }
     },
-    reportSessionOptions: (values) => {
-      if (applyNativeChatReportedSessionOptions(record, values)) {
+    reportSessionOptions: (values, forNewModel) => {
+      const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
+      const reported = { ...carriedValues(record, values, forNewModel), ...values }
+      const offered = offeredValues(activeModels(), targetModel, reported)
+      if (applyNativeChatReportedSessionOptions(record, offered)) {
         publish()
       }
     },
@@ -198,4 +208,46 @@ export function createNativeChatPtySessionOptions(
     contextWindowTokens: (modelId) =>
       models.find((model) => model.id === modelId)?.contextWindowTokens ?? null
   }
+}
+
+/** Known values describe the reported model where the session switches to it, or where it already
+ *  runs it (a chip pick just confirmed) without a value the user chose. */
+function carriedValues(
+  record: NativeChatSessionOptionRecord,
+  values: Record<string, SessionOptionValue>,
+  forNewModel: Record<string, SessionOptionValue> | undefined
+): Record<string, SessionOptionValue> {
+  if (!forNewModel || typeof values.model !== 'string') {
+    return {}
+  }
+  const switches = values.model !== record.model?.value
+  const tracked = record.valuesByModel[values.model]
+  return Object.fromEntries(
+    Object.entries(forNewModel).filter(([id]) => switches || !isUserChoice(tracked?.[id]?.source))
+  )
+}
+
+function isUserChoice(source: SessionOptionValueSource | undefined): boolean {
+  return source === 'applied' || source === 'dispatched'
+}
+
+/** Keeps the reported values the receiving model offers; a hook can name a model the user already
+ *  switched away from, so values are checked against the model they land on. */
+function offeredValues(
+  models: readonly CatalogModel[],
+  modelId: SessionOptionValue | undefined,
+  values: Record<string, SessionOptionValue>
+): Record<string, SessionOptionValue> {
+  const options = models.find((model) => model.id === modelId)?.options ?? []
+  return Object.fromEntries(
+    Object.entries(values).filter(([id, value]) => {
+      if (id === 'model') {
+        return true
+      }
+      const kind = options.find((option) => option.id === id)?.kind
+      return kind?.type === 'select'
+        ? kind.choices.some((choice) => choice.value === value)
+        : kind?.type === 'boolean' && typeof value === 'boolean'
+    })
+  )
 }

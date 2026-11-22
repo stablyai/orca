@@ -2,7 +2,10 @@ import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
+import {
+  takeNativeChatStatusReport,
+  type NativeChatStatusReportMemory
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
@@ -21,7 +24,6 @@ import {
 } from '../catalog/native-chat-session-option-discovery'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
-import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/input/composer/native-chat-scope-cache'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -31,7 +33,7 @@ const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
 // Kept across chat remounts, as on the phone: the same agent session repeating its model is not
 // fresh evidence, and reapplying it would revert a newer pick.
-const appliedReportByPty = new Map<string, string>()
+const appliedReportByPty: NativeChatStatusReportMemory = new Map()
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -39,7 +41,7 @@ export function useNativeChatSessionOptions(args: {
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
-  /** The pane whose agent status reports the session's model, as it does on the phone. */
+  /** The pane whose agent status reports the session's model and effort, as it does on the phone. */
   paneKey?: string
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
@@ -47,8 +49,9 @@ export function useNativeChatSessionOptions(args: {
 } {
   const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, paneKey } = args
   const status = useAgentStatus(paneKey)
-  const reportedModel = status?.model ?? null
-  const reportingSessionId = status?.providerSession?.id ?? null
+  const reportedModel = status?.model
+  const reportingSessionId = status?.providerSession?.id
+  const reportedEffort = status?.providerSession?.effort
   const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
   // Host discovery can resolve a reported id the seed families only matched by family.
   const [discoveredModelsRevision, setDiscoveredModelsRevision] = useState(0)
@@ -105,24 +108,26 @@ export function useNativeChatSessionOptions(args: {
     const models =
       (discoveryContext ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey) : null) ??
       catalog.models
-    // OMP reports exact selectors, including models absent from cached discovery.
-    const matched =
-      agent === 'omp'
-        ? reportedModel.trim()
-        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
-            allowUnlisted: agent === 'codex'
-          })
     // A new agent or session in the same terminal reports afresh, even the same model.
-    const report = JSON.stringify([agent, reportingSessionId, matched])
-    if (!matched || appliedReportByPty.get(targetPtyId) === report) {
-      return
+    const report = takeNativeChatStatusReport(
+      appliedReportByPty,
+      targetPtyId,
+      agent,
+      catalog,
+      models,
+      {
+        model: reportedModel,
+        providerSession: { id: reportingSessionId, effort: reportedEffort }
+      }
+    )
+    if (report) {
+      surface.reportSessionOptions(report.values, report.forNewModel)
     }
-    setBoundedScopeCacheEntry(appliedReportByPty, targetPtyId, report)
-    surface.reportSessionOptions({ model: matched })
   }, [
     agent,
     discoveredModelsRevision,
     discoveryContext,
+    reportedEffort,
     reportedModel,
     reportingSessionId,
     surface,
