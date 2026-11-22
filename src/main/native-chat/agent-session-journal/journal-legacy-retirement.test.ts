@@ -733,9 +733,11 @@ it('retires a journal v1.4.219 wrote, with or without its Stop pauses, upgraded 
   }
 })
 
-it('keeps a journal whose pause table is not the one v1.4.219 created', async () => {
+it('keeps a journal whose pause table is not the one v1.4.219 created, or a table no build named', async () => {
   const reshaped = [
     'ALTER TABLE queued_message_pauses ADD COLUMN body_json TEXT',
+    'ALTER TABLE queued_message_pauses ADD COLUMN body_json TEXT GENERATED ALWAYS AS (reason) VIRTUAL',
+    'CREATE TABLE "constructor" (value TEXT)',
     'ALTER TABLE queued_message_pauses DROP COLUMN recorded_at',
     // The retired column belongs to the queue only.
     'ALTER TABLE journal_rows ADD COLUMN source_json TEXT'
