@@ -23,16 +23,53 @@ function ensureModelRestoreNeededChannel(): void {
 }
 
 /** Register the single model-restore-needed handler for a PTY (the pane
- *  connection that owns its view). A new registration replaces a stale one. */
+ *  connection that owns its view). A new registration replaces a stale one.
+ *  `onHiddenOutputActivity` hears about output main dropped while the pane was hidden. */
 export function registerPtyModelRestoreNeededHandler(
   ptyId: string,
-  handler: (event: PtyModelRestoreNeededEvent) => void
+  handler: (event: PtyModelRestoreNeededEvent) => void,
+  onHiddenOutputActivity?: () => void
 ): () => void {
   ensureModelRestoreNeededChannel()
   ptyModelRestoreNeededHandlers.set(ptyId, handler)
+  const unregisterActivity = onHiddenOutputActivity
+    ? registerPtyHiddenOutputActivityHandler(ptyId, onHiddenOutputActivity)
+    : undefined
   return () => {
+    unregisterActivity?.()
     if (ptyModelRestoreNeededHandlers.get(ptyId) === handler) {
       ptyModelRestoreNeededHandlers.delete(ptyId)
+    }
+  }
+}
+
+const ptyHiddenOutputActivityHandlers = new Map<string, () => void>()
+let hiddenOutputActivityChannelAttached = false
+
+function ensureHiddenOutputActivityChannel(): void {
+  if (hiddenOutputActivityChannelAttached) {
+    return
+  }
+  const onHiddenOutputActivity = (globalThis as { window?: Window }).window?.api?.pty
+    ?.onHiddenOutputActivity
+  if (typeof onHiddenOutputActivity !== 'function') {
+    return
+  }
+  hiddenOutputActivityChannelAttached = true
+  onHiddenOutputActivity((event) => {
+    for (const id of event.ids) {
+      ptyHiddenOutputActivityHandlers.get(id)?.()
+    }
+  })
+}
+
+/** Register the handler told when main drops output for this hidden PTY; a new registration replaces a stale one. */
+function registerPtyHiddenOutputActivityHandler(ptyId: string, handler: () => void): () => void {
+  ensureHiddenOutputActivityChannel()
+  ptyHiddenOutputActivityHandlers.set(ptyId, handler)
+  return () => {
+    if (ptyHiddenOutputActivityHandlers.get(ptyId) === handler) {
+      ptyHiddenOutputActivityHandlers.delete(ptyId)
     }
   }
 }
@@ -44,9 +81,4 @@ export function deliverPulledPtyModelRestoreMarkers(
   for (const event of events) {
     dispatchPtyModelRestoreNeeded(event)
   }
-}
-
-/** Test seam: deliver a marker as if it arrived on the channel. */
-export function _dispatchPtyModelRestoreNeededForTest(event: PtyModelRestoreNeededEvent): void {
-  dispatchPtyModelRestoreNeeded(event)
 }

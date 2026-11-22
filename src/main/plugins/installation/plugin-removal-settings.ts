@@ -1,5 +1,5 @@
-import { pluginThemeSettingsAfterRemoval } from '../../../shared/plugin-theme-settings'
-import { pluginFontSettingsAfterRemoval } from '../../../shared/plugin-font-settings'
+import { pluginThemeSettingsAfterRemoval } from '../../../shared/plugins/appearance/plugin-theme-settings'
+import { pluginFontSettingsAfterRemoval } from '../../../shared/plugins/appearance/plugin-font-settings'
 import { normalizePluginIdList } from '../../../shared/plugins/approval/plugin-consent-state'
 import type { Store } from '../../persistence/loading-store/store'
 

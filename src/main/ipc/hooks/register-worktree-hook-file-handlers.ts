@@ -1,13 +1,16 @@
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { ipcMain } from 'electron'
-import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'
 import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from '../../workspace-hooks/issue-command-file'
-import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
+import { broadcastWhenWslDistroRunning } from '../preflight/preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'

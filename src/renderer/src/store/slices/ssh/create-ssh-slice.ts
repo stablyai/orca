@@ -13,7 +13,7 @@ import {
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-metadata'
-import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import { createBoundedGenerationMap } from '../../../lib/bounded-generation-map'
 
 export type SshCredentialRequest = {

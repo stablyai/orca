@@ -1,4 +1,5 @@
 import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
+import { codexPlanWorkspaceLabel } from '../../../shared/agent-accounts/codex/codex-plan-workspace-label'
 
 export type CodexAuthIdentity = {
   email: string | null
@@ -184,37 +185,12 @@ export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | nul
     workspaceLabel:
       normalizeField(readStringClaim(authClaims, 'workspace_name')) ??
       normalizeField(readStringClaim(profileClaims, 'workspace_name')) ??
-      readPlanWorkspaceLabel(authClaims),
+      codexPlanWorkspaceLabel(normalizeField(readStringClaim(authClaims, 'chatgpt_plan_type'))),
     workspaceAccountId: normalizeField(
       readStringClaim(authClaims, 'workspace_account_id') ??
         tokenAccountId ??
         readStringClaim(payload, 'chatgpt_account_id')
     )
-  }
-}
-
-function readPlanWorkspaceLabel(authClaims: Record<string, unknown> | null): string | null {
-  // Codex tokens commonly omit workspace_name but identify the account's plan.
-  switch (normalizeField(readStringClaim(authClaims, 'chatgpt_plan_type'))?.toLowerCase()) {
-    case 'free':
-      return 'Personal (Free)'
-    case 'go':
-      return 'Personal (Go)'
-    case 'plus':
-      return 'Personal (Plus)'
-    case 'pro':
-      return 'Personal (Pro)'
-    case 'team':
-      return 'Team'
-    case 'business':
-      return 'Business'
-    case 'enterprise':
-      return 'Enterprise'
-    case 'edu':
-      return 'Education'
-    case undefined:
-    default:
-      return null
   }
 }
 

@@ -13,7 +13,7 @@ import {
   type SkillDeleteRequestDependencies
 } from '../../skills/skill-delete/skill-delete-request'
 import { resolveSkillDiscoveryTarget } from '../../skills/discovery/skill-discovery-target'
-import { handleMainWindowSkillIpc } from '../skill-ipc-main-window'
+import { handleMainWindowSkillIpc } from '../skills/skill-ipc-main-window'
 
 /** Local IPC only: remote scan/delete use renderer runtime RPC, so their capability checks stay on that transport. */
 export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRuntimeService): void {

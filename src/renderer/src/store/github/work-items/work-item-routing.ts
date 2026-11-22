@@ -15,7 +15,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { classifyGitHubUnavailable } from '../../../../../shared/github/api/api-availability'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'

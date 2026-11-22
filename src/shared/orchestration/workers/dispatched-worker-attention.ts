@@ -1,4 +1,4 @@
-import type { AgentSessionAttentionEdge } from '../../agent-session/agent-session-attention'
+import type { AgentSessionAttentionEdge } from '../../agent-session/view/agent-session-attention'
 import { detectAgentStatusFromTitle } from '../../agent-status/title/agent-title-status'
 import type {
   AgentStatusOrchestrationContext,

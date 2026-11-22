@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import type { WorktreeVisibilityDefaults, Repo } from '../../repository/repo-types'
 import type { DetectedWorktree, DetectedWorktreeListResult } from '../types'
 import {

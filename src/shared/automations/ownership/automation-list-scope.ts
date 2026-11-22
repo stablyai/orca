@@ -4,7 +4,7 @@ import type { Automation } from '../automation-definition'
 import type { AutomationUsageSummary } from '../history/automation-usage-summary'
 import type { FolderWorkspaceHost } from '../../folder-workspaces/folder-workspace-execution-host'
 import { getAutomationRunRepoId } from '../history/automation-run-identity'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import { sanitizeSshTargetGeneration } from '../../remote-runtime/ssh/ssh-target-generation'
 import { isWorkspaceSshPinRepinned } from './automation-workspace-repin'
 
@@ -148,6 +148,10 @@ export function projectAutomationSelector(
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {
     return workspacePinSelector(automation, workspaceHost.targetId, context)
+  }
+  // A bot automation has no project; its bot lives on this computer.
+  if (automation.bot) {
+    return { kind: 'self' }
   }
   const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation), automation)
   if (connectionId === undefined) {

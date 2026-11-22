@@ -2,7 +2,7 @@ import type {
   OrcaVmRecipe,
   OrcaVmRecipeLifecycleMode,
   OrcaVmRecipeTimeoutSeconds
-} from '../../orca-yaml-hook-types'
+} from '../../workspace-setup/orca-yaml-hook-types'
 
 const LIFECYCLE_MODES: readonly OrcaVmRecipeLifecycleMode[] = [
   'create',

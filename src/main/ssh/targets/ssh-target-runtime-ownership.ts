@@ -1,5 +1,5 @@
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../shared/execution-host'
+import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../shared/execution-host/execution-host'
 
 export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
   return `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}${runtimeId}`

@@ -12,7 +12,7 @@ import {
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { isGitWorktreeMutationInFlight } from '../../command-runner/git-worktree-mutation-state'
 import { resolveGitDir } from '../../source-control/resolve-git-dir'
 import {

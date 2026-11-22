@@ -1,11 +1,11 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
   getRuntimeTargetHostId,

@@ -14,7 +14,7 @@ import {
   classifiedFailure,
   codeHostFailure,
   type CodeHostFailure
-} from '../../../../shared/code-host-failure-copy'
+} from '../../../../shared/source-control/code-host-failure-copy'
 export const PR_AUTO_MERGE_IDENTITY_JSON_FIELDS = 'id,headRefOid,baseRefName'
 
 export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' | 'REBASE'> =

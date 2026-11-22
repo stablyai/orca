@@ -1,7 +1,7 @@
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
+import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -198,8 +198,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       activeTab
     )
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   protected persistHeadlessTerminalActiveLeaf(

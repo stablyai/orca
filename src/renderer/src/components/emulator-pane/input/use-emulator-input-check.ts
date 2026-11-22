@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emulatorErrorText } from '@/lib/simulator/launch/emulator-error-copy'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
-import { EMULATOR_FAILURE_COPY } from '../../../../../shared/emulator-failure-copy'
+import { EMULATOR_FAILURE_COPY } from '../../../../../shared/emulator/emulator-failure-copy'
 
 const INTERACTION_RECHECK_MS = 5_000
 

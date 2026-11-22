@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { createWorktreeAgentHostKeysSelector } from './worktree-agent-rows-projection'
 
 /** Roots a host-scoped card shows; the same keys while no same-ID twin's rows are mixed in. */

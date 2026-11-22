@@ -1,7 +1,9 @@
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
+
+const REPLY_FLAGS = ['id', 'body', 'body-file', 'run', 'from', 'on', 'retry-request']
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -50,15 +52,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
+      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|bot:name|legacy_handle>] [--chat <id|new> | --item <n> [--file <path>]...] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text> | --body-file <path|->] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
+      'chat',
+      'item',
+      'file',
       'on',
       'run',
       'from',
       'subject',
       'body',
+      'body-file',
       'type',
       'priority',
       'thread-id',
@@ -73,18 +79,21 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'phase'
     ],
     identityFlagRoles: { from: 'caller' },
+    repeatableFlags: ['file'],
     notes: [
       'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
       'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',
-      'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators.',
-      'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
-      "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
-      'worker_done requires --outcome succeeded or --outcome failed.',
+      'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators. On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
+      '--to bot:<name> (or bot:<id>) mails another bot on this computer with --type handoff (it takes over), --type question (it answers you by mail) or --type status (information, with no job and nothing back); `orca bot list` prints each command. It carries whom your turn is for, and the bot takes it whoever that is: every bot runs as your owner.',
+      'With --to bot:<name>, --chat <id> (from `orca bot chats`) lands it in that chat of the bot instead of its Home Chat, and --chat new starts a new chat on the bot for a handoff or question, titled from --subject. Without --chat it lands in the Home Chat, whoever your turn is for. All three work for your own bot too; only the chat you send from is refused, and nothing is sent.',
+      "Mail about one of a bot's items goes to the chat that owns it: --item <n> with --to bot:<name> (yours too) lands it there, or in the Home Chat once that chat is gone. --file <path> (repeat it) sends files with it, copied to that bot's computer.",
+      "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox. worker_done requires --outcome succeeded or --outcome failed.",
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
       'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.',
+      'For a long or multi-line body, write it to a file and pass --body-file <path> (or - for stdin); the CLI reads it on this computer, so no shell quoting applies.',
       '--on <server> mails a terminal or chat agent on a paired server (--to term_… or orca_session_id:…). Your own Orca carries it, and replies come back to your own check. From an agent, --environment runs the command on that server and delivers no mail.'
     ]
   },
@@ -128,9 +137,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'reply'],
     summary: 'Reply to a message',
     usage:
-      'orca orchestration reply --id <msg_id> --body <text> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration reply --id <msg_id> (--body <text> | --body-file <path|->) [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     // --on is accepted only to refuse it with the fix; a reply finds its server by itself.
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'body', 'run', 'from', 'on', 'retry-request'],
+    allowedFlags: [...GLOBAL_FLAGS, ...REPLY_FLAGS],
     identityFlagRoles: { from: 'caller' },
     notes: [
       'A reply to mail from an agent on another server goes back to that server by itself; no flag is needed.'

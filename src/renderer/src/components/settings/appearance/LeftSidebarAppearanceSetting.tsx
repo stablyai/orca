@@ -1,11 +1,11 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { LeftSidebarAppearanceMode } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { LeftSidebarAppearanceMode } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
   MAX_LEFT_SIDEBAR_TINT_OPACITY
-} from '../../../../../shared/left-sidebar-appearance'
+} from '../../../../../shared/sidebar-list/appearance/left-sidebar-appearance'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ColorField,

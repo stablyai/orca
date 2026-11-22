@@ -1,5 +1,8 @@
 import { sshArtifactSourceKey } from '../../../../../shared/artifacts/artifact-cli-bridge'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 /** The host a shared file is read from. */
 export type FileArtifactOwner = {

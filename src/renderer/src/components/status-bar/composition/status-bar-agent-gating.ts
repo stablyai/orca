@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 // Hide missing CLI items and toggles after detection; unknown detection preserves them to avoid cold-start flicker.
 const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([

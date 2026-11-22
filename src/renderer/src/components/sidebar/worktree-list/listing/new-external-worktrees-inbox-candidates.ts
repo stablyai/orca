@@ -1,14 +1,14 @@
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
-  GlobalSettings,
-  WorktreeVisibilityDefaults
-} from '../../../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+  WorktreeVisibilityDefaults,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
-import { isRepoHidden } from '../../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 import type { NewExternalWorktreesInboxCandidate } from '../../../../../../shared/sidebar-list/row-types'
 
 export function buildNewExternalWorktreesInboxCandidates(args: {

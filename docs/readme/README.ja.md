@@ -36,7 +36,7 @@
 
 スマートフォンからエージェントを監視・操作 — エージェントの完了を通知で受け取り、どこからでもフォローアップを送信できます。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://orca.dev/download/android) · [ドキュメント →](https://orca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Android APK](https://orca.dev/download/android) · [ドキュメント →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -234,7 +234,7 @@ yay -S stably-orca-bin
 デスクトップアプリとペアリングして、スマートフォンからエージェントを監視・操作できます。
 
 - **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK をダウンロード](https://orca.dev/download/android)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK をダウンロード](https://orca.dev/download/android)
 
 ---
 

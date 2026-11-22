@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project/groups/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
@@ -14,14 +14,15 @@ import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-set
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { groupHookYamlPresentation } from './repository-hook-settings-draft'
 import type {
   ProjectGroupHookSupport,
   ProjectGroupSettingsEntry
-} from '@/hooks/use-supported-group-hook-settings'
+} from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group
@@ -67,16 +68,14 @@ function GroupHooksEditor({
   const owner = projectGroupHookOwner(
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
   )
-  const [repos, groups, platform] = useAppStore(
-    useShallow((state) => {
-      const facts = getFolderWorkspaceAgentLaunchFact(state, group)
-      return [
-        state.repos,
-        state.projectGroups,
-        facts.kind === 'known' ? facts.platform : null
-      ] as const
-    })
-  )
+  const [repos, groups, platform] = useAppStoreWithHostStatuses((state, statuses) => {
+    const facts = getFolderWorkspaceAgentLaunchFact(state, statuses, group)
+    return [
+      state.repos,
+      state.projectGroups,
+      facts.kind === 'known' ? facts.platform : null
+    ] as const
+  }, shallow)
   const hostId = getRepoExecutionHostId(group)
   const canInspect = support.setup && (!support.pending || inspection !== null)
   useEffect(() => {

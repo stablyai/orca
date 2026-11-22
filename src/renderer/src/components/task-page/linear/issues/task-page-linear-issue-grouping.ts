@@ -5,7 +5,7 @@ import type {
 } from '../../../../../../shared/linear/issue-view-resume-state'
 import { getLinearPriorityLabel } from '../../task-page-localized-options'
 import { translate } from '../../../../i18n/i18n'
-import { compareNumericLocaleText } from '../../../../../../shared/locale-text-collators'
+import { compareNumericLocaleText } from '../../../../../../shared/i18n/locale-text-collators'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type LinearGroupSection = {

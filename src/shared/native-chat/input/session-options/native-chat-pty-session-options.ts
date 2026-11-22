@@ -51,7 +51,6 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   /** The model row's name in the reader's language. */
   modelLabel: string
   canSwitchOmpModel?: boolean
-  reportedValues?: Record<string, SessionOptionValue> | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   persistSelection?: PersistSelection
@@ -79,9 +78,6 @@ export function createNativeChatPtySessionOptions(
     record = createNativeChatSessionOptionRecord(args.agent)
   }
 
-  if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
-    writeNativeChatSessionOptionCache(args.scopeKey, record)
-  }
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,

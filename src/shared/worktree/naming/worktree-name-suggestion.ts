@@ -1,4 +1,4 @@
-import { MARINE_CREATURES } from '../../marine-creatures'
+import { MARINE_CREATURES } from './marine-creatures'
 import {
   clampExhaustedTiers,
   creatureNameAtTier,

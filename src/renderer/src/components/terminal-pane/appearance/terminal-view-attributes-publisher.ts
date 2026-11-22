@@ -1,6 +1,6 @@
 /** Publish xterm-equivalent theme reply attributes to main’s hidden-PTY responder; module-global dedup avoids repeated sends from per-pane/attribute-neutral appearance updates. */
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   terminalColorSchemeReport,
@@ -266,10 +266,4 @@ export function publishTerminalViewAttributes(
     listener(attributes)
   }
   return true
-}
-
-export function _resetTerminalViewAttributesPublisherForTest(): void {
-  lastPublishedSnapshot = null
-  lastPublishedAttributes = null
-  publishedAttributesListeners.clear()
 }

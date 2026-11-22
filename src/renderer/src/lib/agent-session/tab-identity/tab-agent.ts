@@ -8,7 +8,7 @@ import {
   selectCompletedTabAgentPanes,
   selectLiveTabAgentPanes
 } from './tab-agent-status-index'
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'

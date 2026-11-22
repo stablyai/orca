@@ -10,7 +10,7 @@ import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 
 export async function claudePipedFixture() {

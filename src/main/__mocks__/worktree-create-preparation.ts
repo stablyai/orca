@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import type * as WorktreeLogic from '../ipc/worktree-logic'
+import type * as WorktreeLogic from '../ipc/worktrees/paths/worktree-logic'
 import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repository/repo-types'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-refs/base-ref'
@@ -66,7 +66,7 @@ vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: () => undefined
 }))
-vi.mock('../ipc/worktree-logic', async (importOriginal) => ({
+vi.mock('../ipc/worktrees/paths/worktree-logic', async (importOriginal) => ({
   isOrphanedWorktreeError: (await importOriginal<typeof WorktreeLogic>()).isOrphanedWorktreeError,
   computeWorkspaceRoot: mocks.computeWorkspaceRoot,
   computeWorkspaceRootAsync: mocks.computeWorkspaceRootAsync,

@@ -3,9 +3,24 @@ import {
   type SharedClientEventsClient
 } from '../../transport/connection/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../../host-screen/sidebar-feed/host-sidebar-feed-connection'
+import {
+  botChangeConcerns,
+  readBotChangeScope,
+  type BotChangeInterest
+} from '../../../../src/shared/bots/bot-change-scope'
+
+/** Which hosts' bots the Bots section re-reads: only this host's (with their threads' facts when the
+ *  change may touch chats or threads), or every host's it lists. */
+export type BotsChangeScope = 'host' | 'host-threads' | 'every-host'
+
+// The kinds of change that can move a bot's new-thread count or its threads' links.
+const THREAD_KINDS: BotChangeInterest = { kinds: ['chats', 'threads'] }
+
+/** The poll for hosts whose change events cannot be relied on. */
+export const HOST_REFRESH_FALLBACK_MS = 3000
 
 // Keep lifecycle callers independent of RN types.
-type HostAppState = {
+export type HostAppState = {
   currentState: string | null | undefined
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
 }
@@ -20,6 +35,8 @@ type HostWorktreeRefreshArgs = {
   sidebarFeed?: HostSidebarFeedTriggers | null
   /** React Native's AppState; passed in so the lifecycle also runs off the device. */
   appState: HostAppState
+  /** The host's bots changed (`host`), or any host's may have while the phone was away (`every-host`). */
+  onBotsChanged?: (scope: BotsChangeScope) => void
 }
 
 /**
@@ -31,7 +48,8 @@ export function startHostWorktreeRefresh({
   refreshWorktrees,
   syncViewSettings,
   sidebarFeed,
-  appState
+  appState,
+  onBotsChanged
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   // Set when a buried or backgrounded page skips a notice; coming back then re-reads the options once.
@@ -43,6 +61,7 @@ export function startHostWorktreeRefresh({
       return
     }
     sidebarFeed?.refresh()
+    onBotsChanged?.('every-host')
     if (owed) {
       owed = false
       void syncViewSettings({ resend: true })
@@ -61,6 +80,7 @@ export function startHostWorktreeRefresh({
           owed = true
         } else {
           void syncViewSettings({ resend: true })
+          onBotsChanged?.('every-host')
         }
       }
       return
@@ -77,6 +97,11 @@ export function startHostWorktreeRefresh({
     } else if (event.type === 'sidebarInputsChanged' && !hidden()) {
       // Coming back to the foreground refreshes the feed anyway.
       sidebarFeed?.changed(event)
+    } else if (event.type === 'botsChanged' && !hidden()) {
+      // In the background it waits for the foreground re-read. It speaks for this host's bots only.
+      onBotsChanged?.(
+        botChangeConcerns(readBotChangeScope(event), THREAD_KINDS) ? 'host-threads' : 'host'
+      )
     }
   })
 

@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   getHostContextLabel,
   getMixedHostContextLabels as getSharedMixedHostContextLabels

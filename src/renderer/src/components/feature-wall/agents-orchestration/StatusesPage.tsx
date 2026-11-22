@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/accounts/provider-icons'

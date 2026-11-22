@@ -3,8 +3,8 @@ import {
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'

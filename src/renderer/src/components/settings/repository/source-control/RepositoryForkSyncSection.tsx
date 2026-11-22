@@ -13,7 +13,7 @@ import { SettingsSegmentedControl } from '../../form-controls/SettingsFormContro
 import { syncRuntimeGitForkDefaultBranch } from '../../../../runtime/source-control/git/runtime-git-sync-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'

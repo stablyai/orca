@@ -10,7 +10,7 @@ import {
   withSidecarSnapshotQueue,
   writeSidecarSnapshot
 } from '../../filesystem/sidecar-snapshot-file'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   activeWorkspaceSnapshotPruneKeys,
   registerWorkspaceSnapshotPrunesForFile,

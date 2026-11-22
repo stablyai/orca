@@ -1,5 +1,5 @@
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Sync the Add project menu's initial host with the composer's active Run on host selection. */
 export function resolveComposerAddProjectDefaultHostId({

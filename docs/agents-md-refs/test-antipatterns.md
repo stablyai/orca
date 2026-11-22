@@ -1,5 +1,7 @@
 # Test anti-patterns
 
+Default to no test: prove a change by running it. The suite is deliberately small (security, wire formats, data integrity, concurrency invariants, a few golden E2E journeys); keep it that way.
+
 Keep a test only if it fails when your change is reverted, its expected values are hardcoded (not computed by production code), it lives at the one cheapest layer that owns the behavior, and its size matches the change (a one-line fix gets about one case).
 
 Tests that:
@@ -16,7 +18,7 @@ Tests that:
 - Assert copy or translations (`changeLanguage('es')` + `getByText`, `key.replace('{{x}}', …)`).
 - Pin constants, defaults, versions, or schema values.
 - Test third-party behavior (Radix focus, zustand selectors, zod, i18next).
-- Count internal work (`String.prototype` spies, getter/Proxy counts, read budgets) or assert wall-clock timing. Perf changes get correctness tests only.
+- Count internal work (`String.prototype` spies, getter/Proxy counts, read budgets) or assert wall-clock timing. Perf changes get correctness tests only, except for the perf contracts below.
 - Reach into private state (`obj['x']`, `*ForTests()`, test-only subclasses).
 - Check persistence at a path the code never writes, or capability flags instead of delivery.
 - Wait on real time or networks instead of fake clocks.
@@ -30,3 +32,14 @@ Mocks and fixtures that:
 - Are hand-copied across files instead of extending a shared typed fake.
 
 Production code that adds exports, globals, wrappers, dependency overrides, or code paths only for tests.
+
+## Perf contracts
+
+The only tests allowed to count work. A perf contract:
+
+- lives in a `*.performance.test.{ts,tsx,mjs}` file, which `pnpm test:perf:contracts` (`config/vitest.performance.config.ts`) and its CI job select;
+- names, in a comment, the incident it guards (PR number) and fails when that fix is reverted (show it in the PR);
+- counts operations at the layer that owns the behavior (frames sent, store publications, our own listener registrations, admitted launches), against hardcoded values, and never wall time;
+- runs in seconds, with fake clocks.
+
+No test outside those files may count work, and a perf contract may not test third-party behavior, reach into private state, or use test-only subclasses. The older regression tests that `config/vitest.performance.config.ts` also lists by name get no exception.

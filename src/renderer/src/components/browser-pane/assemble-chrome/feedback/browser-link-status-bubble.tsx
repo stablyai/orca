@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { windowDipToCssPx } from '@/app-shell/chrome/ui-zoom'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
+import { useBrowserLoadStallStatus } from '../../navigate/use-browser-load-stall-status'
 
 // Chrome's status bubble timings (status_bubble_views.cc, status_bubble.h).
 const SHOW_DELAY_MS = 80
@@ -115,23 +116,38 @@ export function BrowserLinkStatusBubble({
     }
   }, [status.text, status.pointer, status.expanded])
 
+  // Like Chrome's bubble: a hovered link wins, and a stuck load's status shows otherwise.
+  const loadStatus = useBrowserLoadStallStatus(browserPageId)
+  const showLoadStatus = !status.visible && loadStatus !== null
   const { head, tail } = useMemo(() => splitLinkStatusText(status.text), [status.text])
   return (
-    <div
-      ref={bubbleRef}
-      aria-hidden
-      data-browser-link-status={side}
-      className={cn(
-        'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-opacity ease-out',
-        side === 'left' ? 'left-1' : 'right-1',
-        status.expanded
-          ? 'max-w-[calc(100%-0.5rem)]'
-          : 'max-w-[min(calc(100%-0.5rem),max(33%,20rem))]',
-        status.visible ? 'opacity-100 duration-100' : 'opacity-0 duration-200'
-      )}
-    >
-      <span className="truncate">{head}</span>
-      <span className="shrink-0 whitespace-nowrap">{tail}</span>
-    </div>
+    <>
+      {/* Mounted for the page's life so screen readers announce the text when it changes. */}
+      <span role="status" className="sr-only">
+        {loadStatus ?? ''}
+      </span>
+      <div
+        ref={bubbleRef}
+        aria-hidden
+        data-browser-link-status={side}
+        className={cn(
+          'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-opacity ease-out',
+          side === 'left' ? 'left-1' : 'right-1',
+          status.expanded || showLoadStatus
+            ? 'max-w-[calc(100%-0.5rem)]'
+            : 'max-w-[min(calc(100%-0.5rem),max(33%,20rem))]',
+          status.visible || showLoadStatus ? 'opacity-100 duration-100' : 'opacity-0 duration-200'
+        )}
+      >
+        {showLoadStatus ? (
+          <span className="truncate">{loadStatus}</span>
+        ) : (
+          <>
+            <span className="truncate">{head}</span>
+            <span className="shrink-0 whitespace-nowrap">{tail}</span>
+          </>
+        )}
+      </div>
+    </>
   )
 }

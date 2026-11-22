@@ -1,7 +1,7 @@
 import {
   createRawMarkdownCodeSpanScanner,
   type MarkdownCodeSpanScanner
-} from '../../../../../src/shared/markdown-code-span-runs'
+} from '../../../../../src/shared/markdown/markdown-code-span-runs'
 import {
   decodeMarkdownEntities,
   escapeAttr,

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   resolveEditorTypography,
   resolveFileEditorMinimapEnabled,

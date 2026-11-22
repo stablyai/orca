@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizePendingRuntimeRepoRemovals,
   type PendingRuntimeRepoRemoval
@@ -136,9 +136,4 @@ export function replayPendingRuntimeRepoRemovals(
     }
     return 'settled'
   })
-}
-
-export function resetPendingRuntimeRepoRemovalsForTests(): void {
-  pending = []
-  environmentChains.clear()
 }

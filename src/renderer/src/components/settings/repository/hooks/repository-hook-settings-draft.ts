@@ -2,7 +2,7 @@ import type {
   HookCommandSourcePolicy,
   OrcaHooks,
   RepoHookSettings
-} from '../../../../../../shared/orca-yaml-hook-types'
+} from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './repository-hook-defaults'
 import { translate } from '@/i18n/i18n'

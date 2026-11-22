@@ -18,7 +18,6 @@ import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runti
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
-  readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
@@ -180,15 +179,21 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+  /** `confirmedExit`: a command mark finished the launched command (whether its agent quit or
+   *  stopped is the host's proof to tell); undefined when the PTY exited. */
+  protected retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void {
+    const finishedBefore = this.ptysById.get(ptyId)?.launchEvidence?.kind === 'gone'
     const pty = this.retireHeldLaunch(ptyId)
-    if (!pty) {
-      return
-    }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent) {
+    const launch = pty && (pty.launchToken || pty.launchAgent || pty.launchCommandAgent)
+    // A restored receipt whose launch already finished retires nothing; an agent typed since is
+    // the launchless mark's to prove.
+    if (!pty || (!launch && (!receipt || finishedBefore))) {
+      this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
+      this.noticeLaunchlessCommandMark(ptyId, confirmedExit)
       return
     }
+    const exited = confirmedExit === true && Boolean(launch || receipt)
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
@@ -199,7 +204,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     pty.launchAgent = null
     pty.launchCommandAgent = null
     for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey, { confirmedExit: exited })
     }
     if (changed) {
       void this.refreshAgentSenderAssociations().catch(console.warn)
@@ -263,19 +268,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
-    if (!context) {
-      return readOrchestrationFleetAgentStatusSnapshot(this)
-    }
-    const dependencies = this.agentOrchestrationDependencies({
-      paneOf: (pty) => context.paneOf(pty),
-      issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
-      issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
-      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
-      getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
-      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
-      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
-      getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
-    })
+    // One facts view per fleet read; per-pane raw lookups refreshed the facts source each pane.
+    const dependencies = context
+      ? this.agentOrchestrationDependencies({
+          paneOf: (pty) => context.paneOf(pty),
+          issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
+          issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
+          getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
+          getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
+          getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
+          getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
+          getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
+        })
+      : this.agentOrchestrationDependencies()
     return readCapturedOrchestrationFleetAgentStatusSnapshot(
       {
         getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,

@@ -3,8 +3,8 @@ import type {
   ArtifactCloudOperation,
   ArtifactListItem
 } from '../../../../shared/artifacts/artifacts'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'

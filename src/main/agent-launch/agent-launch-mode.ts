@@ -17,12 +17,16 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentCreateSupportReason,
   StructuredAgentCreateSupportReply
-} from '../../shared/agent-session/structured-agent-create-support-reply'
+} from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
+import {
+  withWslHostChatRecovery,
+  type WslHostChatSettingsSource
+} from './agent-launch-wsl-host-recovery'
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 
@@ -69,7 +73,8 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  chat_unavailable_on_windows: "this agent's chat isn't available on Windows yet",
+  chat_unavailable_on_windows:
+    "on Windows this agent's chat runs on agy, which is missing, outdated, or not signed in with a personal Google account",
   structured_unsupported_on_host: 'the execution host cannot create one here',
   chat_runtime_not_installed:
     "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
@@ -167,7 +172,8 @@ export function decideAgentLaunchMode(args: {
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -189,12 +195,13 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  return downgradeAgentLaunchModeForHost(
-    receipt,
-    await readStructuredCreateSupport(runtime, worktreeId, agent),
-    vocabulary,
-    context ? { ...context, agent } : undefined
-  )
+  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  const settlement = context ? { ...context, agent } : undefined
+  try {
+    return downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
+  } catch (error) {
+    throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
+  }
 }
 
 /** Unknown host support must fall back to a terminal. */
@@ -281,7 +288,8 @@ function unavailableLaunchMode(
 ): AgentLaunchModeReceipt {
   if (requested && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      reason
     )
   }
   return downgraded(reason, vocabulary, requested)

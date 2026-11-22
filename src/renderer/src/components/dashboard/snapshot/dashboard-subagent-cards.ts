@@ -1,4 +1,4 @@
-import type { DashboardCardSubagent } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardSubagent } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { nonEmpty } from './dashboard-card-labels'
 import type { DashboardAgentRow } from '../rows/dashboard-agent-row'
 import { dashboardCardDotState } from '../rows/dashboard-row-bucket'

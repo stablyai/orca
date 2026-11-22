@@ -4,9 +4,13 @@ import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
+import {
+  JOURNAL_WAL_BACKPRESSURE_FRAMES,
+  JournalWalWaiters,
+  journalWalGated
+} from './journal-wal-admission'
 
 const HEALTH_TIMEOUT_MS = 5000
-export const JOURNAL_WAL_BACKPRESSURE_FRAMES = 32_768
 
 type CheckpointResponse = {
   type: 'checked' | 'truncate-request'
@@ -29,13 +33,14 @@ export class JournalCheckpointOwner {
   private nextRequest = 0
   private generation = 0
   private checkAgain = false
-  private log = 0
+  /** WAL frames since the last reset; the writer reports it beside each commit. */
+  log = 0
   private checkpointed = 0
   private frames: ReturnType<Database.Database['prepare']> | undefined
   private unknown = true
   private blocked = false
   private truncate: { id: number; acknowledged: boolean } | undefined
-  private readonly waiters = new Set<() => void>()
+  private readonly waiters = new JournalWalWaiters()
   private restoreNeeded = false
   private warned = false
   private closePromise: Promise<void> | undefined
@@ -59,6 +64,7 @@ export class JournalCheckpointOwner {
       const worker = options.factory
         ? options.factory()
         : spawnWorkerThread(journalCheckpointWorkerSource, {
+            name: 'orca-journal-checkpoint',
             eval: true,
             workerData: {
               filename,
@@ -87,17 +93,21 @@ export class JournalCheckpointOwner {
   }
 
   /** Only the serialized writer calls this, before its outer transaction. */
-  async beforeWrite(): Promise<void> {
+  async beforeWrite(urgent = false): Promise<void> {
     if (this.writer.isTransaction) {
       throw new Error('journal WAL admission requires a transaction-free writer')
     }
-    while (this.gated()) {
+    while (this.gated(urgent)) {
       await new Promise<void>((resolve) => {
-        this.waiters.add(resolve)
+        this.waiters.park(urgent, resolve)
         this.request()
         this.wake()
       })
     }
+  }
+
+  admits(urgent: boolean): boolean {
+    return !this.gated(urgent)
   }
 
   /** Also called in finally after rollback or partially successful autocommit maintenance. */
@@ -133,25 +143,13 @@ export class JournalCheckpointOwner {
     return this.closePromise
   }
 
-  private gated(): boolean {
-    return (
-      !this.stopped &&
-      (this.unknown ||
-        this.blocked ||
-        this.truncate !== undefined ||
-        this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES)
-    )
+  private gated(urgent = false): boolean {
+    const { stopped, unknown, blocked, log } = this
+    return journalWalGated({ stopped, unknown, blocked, log, truncating: !!this.truncate }, urgent)
   }
 
   private wake(): void {
-    if (this.gated()) {
-      return
-    }
-    const waiters = [...this.waiters]
-    this.waiters.clear()
-    for (const resume of waiters) {
-      resume()
-    }
+    this.waiters.wake((urgent) => this.gated(urgent))
   }
 
   private request(): void {

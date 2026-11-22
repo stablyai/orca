@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 const EXIT_CODES_NOTE =
   'Exit codes: 0 ok, 1 error, 3 approval is needed (approval_required or approval_stale).'
@@ -46,7 +46,7 @@ export const PLUGIN_INSTALL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Catalog installs move to the release their catalog offers now; Git installs from a version tag move to the newest version tag, from a branch to its newest commit; commit pins stay put; folder installs re-copy the folder.',
       'An update that asks for no new access, from the same repository, keeps its approval. One that grows access (new capabilities, a higher execution level, new commands, shortcuts or panels) or moves to another repository fails with approval_required and leaves the running version untouched.',
-      '--all updates everything it can and exits 3 if any update waits on approval, with one --approve command per plugin.',
+      '--all updates everything it can. It exits 3 if any update waits on approval, with one --approve command per plugin, else 1 if any update failed (error.data.failed lists each one with its code); updates that installed stay installed.',
       PRIVATE_NOTE,
       EXIT_CODES_NOTE
     ],

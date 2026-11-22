@@ -50,10 +50,9 @@ export function renderMobileTasksSearchControl(
         isGithubProjectSearch
           ? translate('tasks.searchControl.projectPlaceholder', 'Search project view...')
           : provider === 'jira'
-            ? // Jira accepts raw JQL, matching desktop.
-              translate(
-                'tasks.searchControl.jiraPlaceholder',
-                'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+            ? translate(
+                'auto.components.TaskPage.99c2755218',
+                'Search issues or enter JQL, e.g. project = ABC'
               )
             : translate('tasks.searchControl.providerPlaceholder', 'Search {{provider}} tasks...', {
                 provider: providerLabel

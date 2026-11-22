@@ -4,7 +4,7 @@
  * journal the conversion and restart. The next startup rewrites everything before the window
  * opens (wsl-drive-unc-conversion-startup.ts); the woken panes reattach to their renamed sessions.
  */
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
 import type {
   WslDriveUncConversionBlocker,
@@ -26,8 +26,10 @@ import {
 import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import {
   collectWslDriveUncScope,
+  isLocalFolderWorkspace,
+  isLocalRepo,
   withNestedWslDriveUncProjects,
-  wslDriveUncDuplicatesSplitBy
+  wslDriveUncRefusedSplitBy
 } from './wsl-drive-unc-project-scope'
 import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
@@ -76,7 +78,7 @@ export async function startWslDriveUncConversion(
   } catch (error) {
     return refused([stateConflict(error)])
   }
-  const repos = state.repos.filter((repo) => repoIds.includes(repo.id))
+  const repos = state.repos.filter((repo) => repoIds.includes(repo.id) && isLocalRepo(repo))
   const gitBlockers = await windowsGitBlockers(deps, repos, request.distro)
   if (gitBlockers.length > 0) {
     return refused(gitBlockers)
@@ -106,7 +108,10 @@ export async function startWslDriveUncConversion(
     rootPaths: [
       ...repos.flatMap(wslMoveRepoPaths),
       ...state.folderWorkspaces
-        .filter((folder) => folderWorkspaceIds.includes(folder.id))
+        .filter(
+          (folder) =>
+            folderWorkspaceIds.includes(folder.id) && isLocalFolderWorkspace(state, folder)
+        )
         .map((folder) => folder.folderPath)
     ],
     phase: 'prepared',
@@ -155,7 +160,7 @@ function checkScope(
     { repoIds, folderWorkspaceIds },
     rewriteRoots
   )
-  const split = wslDriveUncDuplicatesSplitBy(state, scope, request.distro, converting, () =>
+  const split = wslDriveUncRefusedSplitBy(state, scope, request.distro, converting, () =>
     rewriteRoots(converting)
   )
   return split.length > 0

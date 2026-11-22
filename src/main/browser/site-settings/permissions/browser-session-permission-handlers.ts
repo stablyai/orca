@@ -18,6 +18,7 @@ import {
   isBrowserSitePermissionAllowed
 } from './browser-site-permission-prompt'
 import {
+  registerBrowserSessionSitePermissions,
   savedBrowserSitePermissions,
   sessionBrowserSitePermissions
 } from './browser-site-permission-memory'
@@ -97,6 +98,7 @@ export function installBrowserSessionPermissionHandlers(
     options.sitePermissions === 'session'
       ? sessionBrowserSitePermissions(partition)
       : savedBrowserSitePermissions(profile.id)
+  registerBrowserSessionSitePermissions(sess, siteMemory)
   registerBrowserSessionNotificationGrant(sess, (pageUrl) =>
     isBrowserSitePermissionAllowed({
       source: { pageUrl, frameOrigin: pageUrl },

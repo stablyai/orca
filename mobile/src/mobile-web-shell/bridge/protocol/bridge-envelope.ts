@@ -1,7 +1,8 @@
 import * as z from 'zod'
 import { BRIDGE_APP_INACTIVE_FRAME } from '../page-lifecycle/bridge-app-inactive'
+import { BRIDGE_APP_RESUMED_FRAME } from '../page-lifecycle/bridge-app-resumed'
 import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
-import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/ui-locale'
+import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/i18n/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'
 import { isRpcResponse } from '../../../transport/rpc/rpc-response-shape'
@@ -137,7 +138,10 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     // Pages that read `connectionPath` frames say so; older pages never receive one.
     connectionPathFrames: z.literal(true).optional().catch(undefined),
     // Pages that read `appInactive` frames say so; older pages never receive one.
-    appInactiveFrames: z.literal(true).optional().catch(undefined)
+    appInactiveFrames: z.literal(true).optional().catch(undefined),
+    // Pages that read `appResumed` frames, and answer each with `swapSafe`, say so.
+    appResumedFrames: z.literal(true).optional().catch(undefined),
+    botItemLinks: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,
@@ -227,6 +231,14 @@ const BridgeHostMessageSchema = z.union([
   z.object({ v: versionSchema, type: z.literal('parked') }),
   // The app is leaving the foreground: save what a hide would save (bridge-app-inactive.ts).
   z.object({ v: versionSchema, type: z.literal(BRIDGE_APP_INACTIVE_FRAME) }),
+  // The app came back from the background: answer whether a reload now is safe (bridge-app-resumed.ts).
+  z.object({
+    v: versionSchema,
+    type: z.literal(BRIDGE_APP_RESUMED_FRAME),
+    round: z.number().int().nonnegative(),
+    // A newer build waits on this round's answers: only then does a safe answer owe a retraction.
+    reloading: z.literal(true).optional()
+  }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
   z.object({
     v: versionSchema,

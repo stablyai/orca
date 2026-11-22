@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../../../../shared/gitlab/gitlab-types'
 import type {
   PRCheckDetail,
   PRCheckRunDetails

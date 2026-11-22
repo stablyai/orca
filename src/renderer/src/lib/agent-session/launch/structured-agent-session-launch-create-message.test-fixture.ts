@@ -1,7 +1,7 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import {
@@ -9,7 +9,7 @@ import {
   SetOptionParams,
   SendParams
 } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
 import { registerStructuredSelectionCatalogStore } from '../options/structured-agent-session-selection-controller'
@@ -60,7 +60,7 @@ const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
   }
 })
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
-vi.mock('../../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }

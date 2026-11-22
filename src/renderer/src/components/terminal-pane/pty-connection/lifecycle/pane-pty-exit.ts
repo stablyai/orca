@@ -18,7 +18,7 @@ import { isPtyExitReplacedByRestart } from '../../pty-transport/delivery/pty-exi
 import { armRestartReplacement } from '../spawn/restart-replacement-on-show'
 import { noteHiddenAgentResumePtyEnded } from '../spawn/hidden-agent-resume-deferral'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function initializePanePtyExit(session: ConnectPanePtySession): void {
   session.focusSurvivingPtyPaneAfterKeptExit = (): void => {

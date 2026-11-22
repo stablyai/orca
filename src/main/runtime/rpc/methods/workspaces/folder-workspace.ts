@@ -1,5 +1,6 @@
 import { defineMethod } from '../../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
+import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import {
   FolderWorkspaceCreate,
   FolderWorkspaceDelete,
@@ -20,12 +21,15 @@ export const FOLDER_WORKSPACE_METHODS = [
     name: 'folderWorkspace.create',
     permission: 'workspace',
     params: FolderWorkspaceCreate,
-    handler: async (params, context) =>
-      context.runtime.createFolderWorkspace({
+    handler: async (params, context) => {
+      const viewerSupported = terminalImageViewerSupported(context)
+      return context.runtime.createFolderWorkspace({
         ...params,
         signal: context.signal,
-        creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+        creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context),
+        ...(viewerSupported !== undefined ? { terminalImageViewerSupported: viewerSupported } : {})
       })
+    }
   }),
   defineMethod({
     name: 'folderWorkspace.update',

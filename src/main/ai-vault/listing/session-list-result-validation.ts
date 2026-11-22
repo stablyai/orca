@@ -8,7 +8,7 @@ import {
   type AiVaultScanIssue,
   type AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 
 const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)

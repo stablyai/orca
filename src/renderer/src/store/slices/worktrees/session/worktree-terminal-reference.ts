@@ -2,7 +2,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { WorktreeSlice } from '../worktree-slice-contract'

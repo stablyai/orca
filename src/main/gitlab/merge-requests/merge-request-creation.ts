@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { hostedReviewSshConnectionId } from '../../source-control/hosted-review-execution-host'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

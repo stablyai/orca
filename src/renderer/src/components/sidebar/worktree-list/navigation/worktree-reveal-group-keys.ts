@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'

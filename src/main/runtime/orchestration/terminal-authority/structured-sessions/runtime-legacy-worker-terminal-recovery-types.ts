@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../release/orchestration-legacy-worker-terminal-recovery'
 import type { PtyControllerInventory } from '../../../terminal/lifecycle/runtime-pty-controller-contract'

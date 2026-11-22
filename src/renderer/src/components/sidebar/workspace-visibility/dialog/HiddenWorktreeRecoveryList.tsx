@@ -10,7 +10,7 @@ import {
   getHiddenImportableExternalWorktrees,
   getVisibleNonOrcaWorktrees
 } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
-import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 
 type Props = {
   repo: Repo

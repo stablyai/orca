@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { GitLabMRInvolvement } from '../../../shared/gitlab-types'
+import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 type GitLabRepoSelectorArgs = {

@@ -1,5 +1,9 @@
-import type { OrcaHooks, RepoHookSettings, SetupRunPolicy } from '../../orca-yaml-hook-types'
-import type { SetupConfig } from '../../orca-hook-setup-config'
+import type {
+  OrcaHooks,
+  RepoHookSettings,
+  SetupRunPolicy
+} from '../../workspace-setup/orca-yaml-hook-types'
+import type { SetupConfig } from '../../workspace-setup/hooks/orca-hook-setup-config'
 export type GroupHookCheckResult = {
   status?: 'ok' | 'error'
   hasHooks: boolean

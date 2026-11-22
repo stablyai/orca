@@ -2,7 +2,7 @@
 // recomputing on later frames imports jitter and can move the anchor later, making elapsed go backwards.
 // Keep the offset fixed so improved origins only move the anchor earlier.
 
-import type { StructuredAgentHostClock } from '../../../agent-session/structured-agent-session-reducer'
+import type { StructuredAgentHostClock } from '../../../agent-session/view/live-read/structured-agent-session-reducer'
 import {
   structuredAgentTurnLocalStartedAt,
   type StructuredAgentTurnTiming

@@ -10,7 +10,8 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     githubMode,
     appliedTaskSearch,
     taskRefreshNonce,
-    githubWorkItemMutationQueryKey
+    githubWorkItemMutationQueryKey,
+    unreachableTaskSourceHostKey
   } = model
   useEffect(() => {
     return runTaskPageGitHubLandingRefresh(model)
@@ -24,7 +25,8 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     githubMode,
     workItemsInvalidationNonce,
     taskResumeApplied,
-    githubWorkItemMutationQueryKey
+    githubWorkItemMutationQueryKey,
+    unreachableTaskSourceHostKey
   ])
 
   // Nonce rerenders must not cancel shared in-flight/trailing bookkeeping; only true unmount does.

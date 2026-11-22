@@ -3,7 +3,7 @@ import {
   parseWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -36,7 +36,11 @@ export function removeSourceRepo(state: PersistedState, repoId: string): Persist
         state.ui.explorerDisplayRootByWorktree,
         repoId
       ),
-      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
+      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId),
+      notificationsMutedByWorktree: removeRepoWorktreeRecord(
+        state.ui.notificationsMutedByWorktree,
+        repoId
+      )
     }
   }
   delete next.sparsePresetsByRepo[repoId]

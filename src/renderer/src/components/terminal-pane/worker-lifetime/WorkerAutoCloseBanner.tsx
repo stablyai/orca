@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store/index'
+import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   useWorkerAutoClose,

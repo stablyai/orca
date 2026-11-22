@@ -1,6 +1,6 @@
 import { automationTerminalLaunchInputs } from '../../../shared/automations/launch/automation-launch-setup'
 import { hostQualifiedRepoSelector } from '../../runtime/workspaces/catalog/runtime-repo-selector'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { buildAutomationWorkspaceProvenance } from '../../../shared/automations/ownership/automation-workspace-provenance'

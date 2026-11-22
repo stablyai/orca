@@ -1,27 +1,23 @@
-import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { setTimeout as delay } from 'node:timers/promises'
+import { runProcess } from '@orca/process-host'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionStatus,
   ComputerUsePermissionStatusResult
-} from '../../../shared/computer-use-permissions-types'
+} from '../../../shared/computer/computer-use-permissions-types'
 import {
   resolveMacOSComputerUseAppPath,
   resolveMacOSComputerUseExecutablePath
 } from '../macos-native/macos-native-provider-paths'
 import { RuntimeClientError } from '../runtime-client-error'
-import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
 
-const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
+// Covers both settled TCC reads (up to ~2 s each, run in parallel) with room for a slow spawn.
+const PERMISSION_STATUS_HELPER_TIMEOUT_MS = 10_000
 
 type HelperPermissionStatus = Partial<
   Record<ComputerUsePermissionId, ComputerUsePermissionStatus> & { sessionLocked: boolean }
 >
 
-// onHelperSpawn fires when `open` actually starts, so launch budgets measure real spawns.
+// onHelperSpawn fires when the helper actually starts, so launch budgets measure real spawns.
 export function getComputerUsePermissionStatus(
   onHelperSpawn: () => void = () => {}
 ): Promise<ComputerUsePermissionStatusResult> {
@@ -44,15 +40,16 @@ async function getComputerUsePermissionStatusAsync(
   }
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
+  const executablePath = resolveMacOSComputerUseExecutablePath()
   const unavailableReason = resolveComputerUseHelperUnavailableReason()
-  if (!helperAppPath || unavailableReason) {
+  if (!helperAppPath || !executablePath || unavailableReason) {
     return createUnavailablePermissionStatus(
       unavailableReason ?? 'Orca Computer Use.app was not found',
       helperAppPath
     )
   }
 
-  const raw = await readPermissionStatusFromHelperApp(helperAppPath, onHelperSpawn)
+  const raw = await readPermissionStatusFromHelper(executablePath, onHelperSpawn)
 
   return {
     platform: process.platform,
@@ -93,125 +90,32 @@ function createUnavailablePermissionStatus(
   }
 }
 
-async function readPermissionStatusFromHelperApp(
-  helperAppPath: string,
+async function readPermissionStatusFromHelper(
+  executablePath: string,
   onHelperSpawn: () => void
 ): Promise<HelperPermissionStatus> {
-  const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
-  const statusPath = join(tempDir, 'status.json')
-  try {
-    // Launch the helper app so TCC checks its identity instead of inheriting the parent's grants.
-    await launchPermissionStatusHelper(helperAppPath, statusPath, onHelperSpawn)
-
-    for (let attempt = 0; attempt < 50; attempt++) {
-      if (await fileExists(statusPath)) {
-        const output = await readFile(statusPath, 'utf8')
-        const status: HelperPermissionStatus = JSON.parse(output)
-        return status
-      }
-      await delay(100)
-    }
-    throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
-  } finally {
-    void stopMacOSPermissionStatusHelper(statusPath)
-    await rm(tempDir, { recursive: true, force: true })
-  }
-}
-
-function launchPermissionStatusHelper(
-  helperAppPath: string,
-  statusPath: string,
-  onHelperSpawn: () => void
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const launch = spawn(
-      '/usr/bin/open',
-      ['-n', helperAppPath, '--args', '--permission-status-file', statusPath],
-      {
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    )
-    onHelperSpawn()
-    let stdout = ''
-    let stderr = ''
-
-    launch.stdout?.setEncoding('utf8')
-    launch.stderr?.setEncoding('utf8')
-    const onStdoutData = (chunk: string): void => {
-      stdout += chunk
-    }
-    const onStderrData = (chunk: string): void => {
-      stderr += chunk
-    }
-    let settled = false
-    let launchTimeout: ReturnType<typeof setTimeout> | null = null
-    const removeListeners = (): void => {
-      launch.stdout?.off('data', onStdoutData)
-      launch.stderr?.off('data', onStderrData)
-      launch.off('error', onError)
-      launch.off('close', onClose)
-      if (launchTimeout) {
-        clearTimeout(launchTimeout)
-        launchTimeout = null
-      }
-    }
-    const settleResolve = (): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      removeListeners()
-      resolve()
-    }
-    const settleReject = (error: Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      removeListeners()
-      reject(error)
-    }
-    const onError = (): void => {
-      settleReject(
-        new RuntimeClientError(
-          'accessibility_error',
-          'Could not check permissions: failed to launch helper'
-        )
-      )
-    }
-    const onClose = (status: number | null): void => {
-      if (status === 0) {
-        settleResolve()
-        return
-      }
-      const detail = stderr.trim() || stdout.trim() || `exit ${status ?? 'unknown'}`
-      settleReject(
-        new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
-      )
-    }
-    const onTimeout = (): void => {
-      launch.kill()
-      settleReject(
-        new RuntimeClientError('accessibility_error', 'Timed out launching permission helper')
-      )
-    }
-    // Polling starts after open exits, so a stalled launch needs its own deadline.
-    launchTimeout = setTimeout(onTimeout, PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS)
-    if (typeof launchTimeout.unref === 'function') {
-      launchTimeout.unref()
-    }
-    launch.stdout?.on('data', onStdoutData)
-    launch.stderr?.on('data', onStderrData)
-    launch.on('error', onError)
-    launch.on('close', onClose)
+  // A direct child, so a timeout stops this probe by PID; the helper disclaims Orca so TCC checks its own grant.
+  const probe = runProcess({
+    program: executablePath,
+    args: ['--permission-status'],
+    timeoutMs: PERMISSION_STATUS_HELPER_TIMEOUT_MS,
+    maxOutputBytes: 64 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe']
   })
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await stat(path)
-    return true
-  } catch {
-    return false
+  onHelperSpawn()
+  const result = await probe.catch(() => {
+    throw new RuntimeClientError(
+      'accessibility_error',
+      'Could not check permissions: failed to launch helper'
+    )
+  })
+  if (result.timedOut) {
+    throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
   }
+  if (result.code !== 0) {
+    const detail = result.stderr.trim() || `exit ${result.code ?? result.signal ?? 'unknown'}`
+    throw new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
+  }
+  const status: HelperPermissionStatus = JSON.parse(result.stdout)
+  return status
 }

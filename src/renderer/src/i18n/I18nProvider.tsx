@@ -7,7 +7,7 @@ import {
   RendererLanguageLoadError
 } from './i18n'
 import { usePluginLanguagePacks } from '../store/plugins/localization/plugin-language-packs'
-import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { isPluginUiLanguage } from '../../../shared/i18n/ui-language'
 import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 import { TranslationScopeProvider } from './translation-scope-provider'
 

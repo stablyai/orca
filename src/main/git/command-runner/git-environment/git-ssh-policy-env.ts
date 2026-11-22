@@ -47,6 +47,7 @@ export async function buildNetworkSshPolicyEnv(
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
       cwd: resolved.cwd,
+      ownedPosixGroup: process.platform !== 'win32' && !resolved.wsl,
       encoding: 'utf-8',
       maxBuffer: DEFAULT_GIT_MAX_BUFFER,
       timeout: Math.min(
@@ -55,7 +56,9 @@ export async function buildNetworkSshPolicyEnv(
       ),
       env: promptEnv,
       signal: options.signal,
-      onChildTerminated: reportTerminated
+      onChildTerminated: reportTerminated,
+      // A read-only probe holds only admission, which a lost worker returns.
+      workerLossEndsLifetime: true
     })
     const payload = resolved.captured?.readStdout(String(stdout)) ?? String(stdout)
     configured = parseGitSshConfig(payload)

@@ -20,9 +20,9 @@ if (
 ) {
   fail('--all-entrypoints cannot be combined with individual case options')
 }
+// Bare AppRun is skipped: appimage TERMs/INTs the Electron AppRun starts; launcher covers process-group INT.
 const cases = allEntrypoints
   ? [
-      { entrypoint: 'app', signalTarget: 'app', intDelivery: 'foreground-process-group' },
       { entrypoint: 'launcher', signalTarget: 'app', intDelivery: 'foreground-process-group' },
       { entrypoint: 'appimage', signalTarget: 'serving-electron', intDelivery: 'pid' }
     ]

@@ -1,19 +1,19 @@
-import { randomBytes } from 'node:crypto'
-import { setTimeout as delay } from 'node:timers/promises'
-import { z } from 'zod'
 import { spawnProcess } from '@orca/process-host'
 import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
+import { randomBytes } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
+import { z } from 'zod'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../../shared/network/fetch-response-body'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import type { ChildProcess } from 'node:child_process'
+import type { ProviderChild } from '../../provider-process/provider-child'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
 import { stopSupervisedChildProcess } from '../../provider-process/supervised-child-process-stop'
-import { guardSupervisedProviderGroup } from '../../provider-process/provider-group-orphan-guard'
+import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 
 const OPENCODE_PREFLIGHT_KILL_SITE = 'opencode-launch-model-preflight'
 const SUPERVISOR_PIPE_CLOSE_MS = 1_000
@@ -69,18 +69,17 @@ export async function probeOpenCodeLaunchModelContext(options: {
     // opencode serve ignores stdin EOF; POSIX supervision must stop it with Orca.
     { lifetime: 'one-shot' }
   )
-  const child = spawnProcess({
-    program: spawnSpec.program,
-    args: spawnSpec.args,
-    cwd: options.cwd,
-    env: spawnSpec.env,
-    detached: true,
-    stdio: ['pipe', 'pipe', 'pipe', ...spawnSpec.groupReportStdio]
-  })
-  guardSupervisedProviderGroup(child, {
-    site: OPENCODE_PREFLIGHT_KILL_SITE,
-    supervised: spawnSpec.supervised
-  })
+  const unsupervisedChild = !spawnSpec.supervised
+    ? spawnProcess({
+        program: spawnSpec.program,
+        args: spawnSpec.args,
+        cwd: options.cwd,
+        env: spawnSpec.env,
+        detached: true,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+    : null
+  const child = unsupervisedChild ?? spawnProviderProcess(spawnSpec)
   const output = createOutputSink(4096)
   let childClosed = false
   let rootExited = false
@@ -155,35 +154,32 @@ export async function probeOpenCodeLaunchModelContext(options: {
   } finally {
     if (spawnSpec.supervised) {
       stopped = await stopSupervisedPreflight(child, closed)
-    } else {
+    } else if (unsupervisedChild) {
       if (!childClosed && !rootExited) {
-        await signalProcessTree(child, 'SIGTERM')
+        await signalProcessTree(unsupervisedChild, 'SIGTERM')
       }
       stopped = childClosed || (await withTimeout(closed, 1_500, false))
       // A reaped root's PID can be reused while descendants still hold its pipes.
       if (!stopped && !rootExited) {
-        stopped = await forceTerminateProcessTree(child)
+        stopped = await forceTerminateProcessTree(unsupervisedChild)
       }
     }
   }
   return stopped ? context : null
 }
 
-/** Only the supervisor’s normal stop/relayed exit proves its detached server group is gone.
- * Forced supervisor teardown and failed group reap (exit 1) prove nothing. */
+/** Group cleanup evidence is independent of the CLI exit status. */
 async function stopSupervisedPreflight(
-  child: ChildProcess,
+  child: ProviderChild,
   closed: Promise<boolean>
 ): Promise<boolean> {
-  if (!child.pid) {
+  if (!child.pid && !child.ready) {
     return true
   }
-  const { root, tree } = await stopSupervisedChildProcess(child, {
+  const { root } = await stopSupervisedChildProcess(child, {
     site: OPENCODE_PREFLIGHT_KILL_SITE
   })
-  const forced = tree !== null || child.signalCode === 'SIGKILL'
-  const failedReap = child.signalCode === null && child.exitCode === 1
-  if (root !== 'exited' || forced || failedReap) {
+  if (root !== 'exited' || child.groupVerdict !== 'exited') {
     return false
   }
   return withTimeout(closed, SUPERVISOR_PIPE_CLOSE_MS, false)

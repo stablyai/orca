@@ -11,8 +11,6 @@ import { useAppStore } from '@/store'
 import type { PluginFilterKind } from '@/components/plugins/list/plugin-list-filter'
 
 type PluginPreviewRequest = { marketplaceSourceId: string; pluginKey: string }
-/** Opens one plugin's update review, or the Updates list when several wait; never approves. */
-export type PluginUpdateReviewRequest = { pluginKey: string } | { pluginKey: null }
 /** A linked catalog awaiting the user's "Add catalog?" answer; nothing is fetched before it. */
 export type PluginCatalogToAdd = { pluginKey: string; source: PluginMarketplaceGitSource }
 
@@ -22,14 +20,12 @@ export const usePluginPreviewRequestStore = create<{
   request: PluginPreviewRequest | null
   link: PluginInstallLink | null
   catalogToAdd: PluginCatalogToAdd | null
-  updateReview: PluginUpdateReviewRequest | null
   /** A plugin kind to browse, e.g. "themes"; the plugin manager opens its list filtered to it. */
   browseKind: PluginFilterKind | null
 }>()(() => ({
   request: null,
   link: null,
   catalogToAdd: null,
-  updateReview: null,
   browseKind: null
 }))
 
@@ -43,13 +39,6 @@ export function requestPluginBrowse(browseKind: PluginFilterKind): void {
 
 export function requestPluginPreview(request: PluginPreviewRequest): void {
   usePluginPreviewRequestStore.setState({ request })
-}
-
-export function requestPluginUpdateReview(updateReview: PluginUpdateReviewRequest): void {
-  usePluginPreviewRequestStore.setState({ updateReview })
-  const state = useAppStore.getState()
-  state.openSettingsTarget({ pane: 'plugins', repoId: null })
-  state.openSettingsPage()
 }
 
 /** An `orca://plugins/...` link: opens Settings → Plugins at that plugin; never installs. */

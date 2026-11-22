@@ -14,8 +14,8 @@ import {
   sidebarHostDisplayLabel,
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { translateExecutionHostDetail } from '../../execution-host-label'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { translateExecutionHostDetail } from '../../../../runtime/hosts/display/execution-host-label'
 
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

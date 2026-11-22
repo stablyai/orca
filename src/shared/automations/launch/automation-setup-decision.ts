@@ -1,4 +1,4 @@
-import type { SetupRunPolicy } from '../../orca-yaml-hook-types'
+import type { SetupRunPolicy } from '../../workspace-setup/orca-yaml-hook-types'
 import type { SetupDecision } from '../../worktree/create-types'
 
 export function getAutomationSetupDefaultDecision(

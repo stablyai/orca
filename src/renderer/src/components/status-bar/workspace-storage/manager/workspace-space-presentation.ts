@@ -1,11 +1,11 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import { compareDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { compareDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'

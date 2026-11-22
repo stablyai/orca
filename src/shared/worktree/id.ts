@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 import type { Repo } from '../repository/repo-types'
 
@@ -84,6 +84,16 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
     // Filesystem callers need the folder path without its workspace-session UUID suffix.
     worktreePath: parsed.worktreePath.replace(FOLDER_WORKSPACE_INSTANCE_SUFFIX, '')
   }
+}
+
+/** Folder-project workspaces on one directory differ only by instance suffix; they share the repo and cwd. */
+export function worktreeIdsShareCheckout(left: string, right: string): boolean {
+  return worktreeIdsEqual(checkoutWorktreeId(left), checkoutWorktreeId(right))
+}
+
+function checkoutWorktreeId(worktreeId: string): string {
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  return parsed ? composeWorktreeId(parsed.repoId, parsed.worktreePath) : worktreeId
 }
 
 export function getWorktreePathBasenameFromId(worktreeId: string): string | null {

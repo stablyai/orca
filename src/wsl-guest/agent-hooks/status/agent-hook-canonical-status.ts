@@ -5,7 +5,7 @@ import {
   isTmuxInnerSubject,
   readTmuxUnavailable,
   tmuxCanonicalStatusEvent
-} from '../../../shared/tmux-selected-status'
+} from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { createRelayTmuxHookOwner } from '../presence/relay-tmux-hook-owner'

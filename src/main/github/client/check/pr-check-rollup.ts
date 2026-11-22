@@ -4,7 +4,6 @@ import { githubHostExecOptions } from '../../repositories/github-repository-host
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
-import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
 
 type ConnectionKind = 'contexts' | 'suites'
 
@@ -19,13 +18,23 @@ export const PENDING_APPROVAL_ROLLUP_ROW = {
   pendingApproval: true
 } as const
 
-export function prCheckRollupFields(kind?: ConnectionKind): string {
+export function isPendingApprovalSuiteWithoutRuns(conclusion: unknown, hasRuns: boolean): boolean {
+  return (
+    typeof conclusion === 'string' && conclusion.toLowerCase() === 'action_required' && !hasRuns
+  )
+}
+
+export function prCheckRollupFields(kind?: ConnectionKind, detailed = false): string {
   return `commits(last: 1) { nodes { commit {
     oid
     ${
       kind !== 'suites'
         ? `statusCheckRollup { contexts(first: 100, after: $checksCursor) {
-      nodes { __typename ... on CheckRun { name databaseId status conclusion checkSuite { databaseId } }
+      nodes { __typename ... on CheckRun {
+        name databaseId status conclusion
+        ${detailed ? 'detailsUrl url startedAt completedAt' : ''}
+        checkSuite { databaseId ${detailed ? 'workflowRun { databaseId }' : ''} }
+      }
         ... on StatusContext { context state targetUrl createdAt } }
       pageInfo { hasNextPage endCursor }
     } }`
@@ -34,7 +43,7 @@ export function prCheckRollupFields(kind?: ConnectionKind): string {
     ${
       kind !== 'contexts'
         ? `checkSuites(first: 100, after: $suitesCursor) {
-      nodes { databaseId conclusion }
+      nodes { databaseId conclusion ${detailed ? 'url app { name slug }' : ''} }
       pageInfo { hasNextPage endCursor }
     }`
         : ''
@@ -60,7 +69,14 @@ const contextSchema = z.discriminatedUnion('__typename', [
     databaseId: z.number().nullish(),
     status: z.enum(['COMPLETED', 'IN_PROGRESS', 'QUEUED', 'REQUESTED', 'WAITING', 'PENDING']),
     conclusion: checkConclusion.nullable(),
-    checkSuite: z.object({ databaseId: z.number() })
+    detailsUrl: z.string().nullish(),
+    url: z.string().nullish(),
+    startedAt: z.string().nullish(),
+    completedAt: z.string().nullish(),
+    checkSuite: z.object({
+      databaseId: z.number(),
+      workflowRun: z.object({ databaseId: z.number().nullish() }).nullish()
+    })
   }),
   z.object({
     __typename: z.literal('StatusContext'),
@@ -70,9 +86,12 @@ const contextSchema = z.discriminatedUnion('__typename', [
     createdAt: z.string().nullish()
   })
 ])
-const connectionSchema = z.object({
-  nodes: z.array(contextSchema),
-  pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
+const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
+const suiteSchema = z.object({
+  databaseId: z.number(),
+  conclusion: checkConclusion.nullable(),
+  url: z.string().nullish(),
+  app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
 })
 
 export const prCheckRollupCommitsSchema = z.object({
@@ -81,13 +100,16 @@ export const prCheckRollupCommitsSchema = z.object({
       z.object({
         commit: z.object({
           oid: z.string().min(1),
-          statusCheckRollup: z.object({ contexts: connectionSchema }).nullable().optional(),
+          statusCheckRollup: z
+            .object({
+              contexts: z.object({ nodes: z.array(contextSchema), pageInfo: pageInfoSchema })
+            })
+            .nullable()
+            .optional(),
           checkSuites: z
             .object({
-              nodes: z.array(
-                z.object({ databaseId: z.number(), conclusion: checkConclusion.nullable() })
-              ),
-              pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
+              nodes: z.array(suiteSchema),
+              pageInfo: pageInfoSchema
             })
             .optional()
         })
@@ -97,6 +119,14 @@ export const prCheckRollupCommitsSchema = z.object({
 })
 
 type CheckCommits = z.infer<typeof prCheckRollupCommitsSchema>
+type CheckCommit = CheckCommits['nodes'][number]['commit']
+export type PRCheckContext = z.infer<typeof contextSchema>
+export type PRCheckSuite = z.infer<typeof suiteSchema>
+export type PRCheckPages = {
+  headSha: string
+  contexts: PRCheckContext[]
+  suites: PRCheckSuite[]
+}
 type CheckPage = { number: number; headRefOid: string; commits: CheckCommits }
 const pageSchema = z.object({
   data: z.object({
@@ -111,11 +141,11 @@ const pageSchema = z.object({
   errors: z.array(z.unknown()).optional()
 })
 
-export async function collectPRCheckRollup(
+async function collectPRCheckPages(
   first: CheckPage,
   readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>,
   pageLimit = Number.POSITIVE_INFINITY
-): Promise<unknown[]> {
+): Promise<PRCheckPages> {
   const initial = first.commits.nodes[0]?.commit
   if (
     !initial ||
@@ -125,11 +155,14 @@ export async function collectPRCheckRollup(
   ) {
     throw new Error('Incomplete PR checks observation')
   }
-  const collect = async (kind: ConnectionKind) => {
-    const connection = (commit: typeof initial) =>
-      kind === 'contexts' ? commit.statusCheckRollup?.contexts : commit.checkSuites
+  const collect = async <T>(
+    kind: ConnectionKind,
+    connection: (
+      commit: CheckCommit
+    ) => { nodes: T[]; pageInfo: z.infer<typeof pageInfoSchema> } | undefined
+  ): Promise<T[]> => {
     let page = connection(initial)
-    const nodes: Record<string, unknown>[] = [...(page?.nodes ?? [])]
+    const nodes = [...(page?.nodes ?? [])]
     const cursors = new Set<string>()
     while (page?.pageInfo.hasNextPage) {
       const cursor = page.pageInfo.endCursor
@@ -155,37 +188,40 @@ export async function collectPRCheckRollup(
     }
     return nodes
   }
-  const contexts = await collect('contexts')
-  const suites = await collect('suites')
+  const contexts = await collect('contexts', (commit) => commit.statusCheckRollup?.contexts)
+  const suites = await collect('suites', (commit) => commit.checkSuites)
+  return { headSha: initial.oid, contexts, suites }
+}
+
+export function prCheckRollupRows({ contexts, suites }: PRCheckPages): unknown[] {
   const representedSuites = new Set(
-    contexts.flatMap((context) => {
-      const suite = context.checkSuite
-      return context.__typename === 'CheckRun' &&
-        typeof suite === 'object' &&
-        suite !== null &&
-        'databaseId' in suite &&
-        typeof suite.databaseId === 'number'
-        ? [suite.databaseId]
-        : []
-    })
+    contexts.flatMap((context) =>
+      context.__typename === 'CheckRun' ? [context.checkSuite.databaseId] : []
+    )
   )
   return [
     ...contexts,
     ...suites
       .filter((suite) =>
-        isPendingApprovalSuiteWithoutRuns(
-          suite.conclusion,
-          typeof suite.databaseId === 'number' && representedSuites.has(suite.databaseId)
-        )
+        isPendingApprovalSuiteWithoutRuns(suite.conclusion, representedSuites.has(suite.databaseId))
       )
       .map(() => ({ ...PENDING_APPROVAL_ROLLUP_ROW }))
   ]
 }
 
+export async function collectPRCheckRollup(
+  first: CheckPage,
+  readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>,
+  pageLimit?: number
+): Promise<unknown[]> {
+  return prCheckRollupRows(await collectPRCheckPages(first, readPage, pageLimit))
+}
+
 export function createPRCheckRollupPageReader(
   repository: GitHubApiRepository,
   number: number,
-  options: GhExecOptions
+  options: GhExecOptions,
+  detailed = false
 ): (kind?: ConnectionKind, cursor?: string) => Promise<CheckPage> {
   return async (kind, cursor) => {
     const cursors = [
@@ -195,7 +231,7 @@ export function createPRCheckRollupPageReader(
     const query = `query($owner: String!, $repo: String!, $number: Int!,
       ${cursors}) {
       repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
-        number headRefOid ${prCheckRollupFields(kind)}
+        number headRefOid ${prCheckRollupFields(kind, detailed)}
       } }
     }`
     const args = [
@@ -233,10 +269,25 @@ export async function readGraphQLPRCheckRollup(
   options: GhExecOptions,
   pageLimit?: number
 ): Promise<unknown[]> {
-  const readPage = createPRCheckRollupPageReader(repository, number, options)
+  return prCheckRollupRows(
+    await readGraphQLPRCheckPages(repository, number, options, { headSha, pageLimit })
+  )
+}
+
+export async function readGraphQLPRCheckPages(
+  repository: GitHubApiRepository,
+  number: number,
+  options: GhExecOptions,
+  {
+    detailed,
+    headSha,
+    pageLimit
+  }: { detailed?: boolean; headSha?: string; pageLimit?: number } = {}
+): Promise<PRCheckPages> {
+  const readPage = createPRCheckRollupPageReader(repository, number, options, detailed)
   const first = await readPage()
-  if (first.number !== number || first.headRefOid !== headSha) {
+  if (first.number !== number || (headSha !== undefined && first.headRefOid !== headSha)) {
     throw new Error('PR head changed before checks observation')
   }
-  return collectPRCheckRollup(first, readPage, pageLimit)
+  return collectPRCheckPages(first, readPage, pageLimit)
 }

@@ -1,5 +1,5 @@
 import { fetchAllGitLabPages } from '../requests/gitlab-paginated-list'
-import type { MRComment } from '../../../shared/gitlab-types'
+import type { MRComment } from '../../../shared/gitlab/gitlab-types'
 import { viewerAuthorship } from '../../source-control/comment-viewer-authorship'
 import { readGlabViewer } from '../requests/gitlab-auth-and-rate-limit'
 import { encodedProject } from '../projects/project-path-encoding'

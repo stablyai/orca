@@ -1,4 +1,4 @@
-import { uiZoomFactorFromLevel } from '../../../../shared/ui-zoom-level'
+import { uiZoomFactorFromLevel } from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
 
 const isMac = navigator.userAgent.includes('Mac')
 

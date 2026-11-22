@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
@@ -30,11 +30,14 @@ export type WorkspaceCleanupRuleChangeRequest = {
 export function WorkspaceCleanupRuleChangeDialog({
   request,
   onCancel,
-  onConfirm
+  onConfirm,
+  onCloseAutoFocus
 }: {
   request: WorkspaceCleanupRuleChangeRequest | null
   onCancel: () => void
   onConfirm: (keep: WorkspaceCleanupPreviewRow[]) => Promise<void>
+  /** Lets the page hand focus back to the control that started the change. */
+  onCloseAutoFocus?: (event: Event) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set())
@@ -76,6 +79,7 @@ export function WorkspaceCleanupRuleChangeDialog({
     >
       <DialogContent
         surface="security"
+        onCloseAutoFocus={onCloseAutoFocus}
         {...(disablingProtection
           ? { 'aria-describedby': 'cleanup-protection-risk cleanup-protection-consequences' }
           : {})}

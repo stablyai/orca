@@ -1,11 +1,11 @@
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
+import type { PendingSmartGitHubSubmitResolution } from './linked-work-items/source-selection-decisions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 export type ComposerSourceModel = {
   addComposerAttachments: (paths: string[]) => void

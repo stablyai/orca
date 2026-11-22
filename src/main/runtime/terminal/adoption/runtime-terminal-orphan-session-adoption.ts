@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'

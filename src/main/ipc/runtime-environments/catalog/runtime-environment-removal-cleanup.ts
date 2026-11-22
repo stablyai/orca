@@ -5,7 +5,10 @@ import { clearBrowserRoutePartitionStorageForEnvironment } from '../../../browse
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from '../connections/runtime-environment-capability-evidence'
 import { clearRuntimeEnvironmentManualDisconnect } from '../connectivity/runtime-environment-manual-disconnect'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   forgetRemoteLayoutSnapshot,
   type RemoteLayoutSnapshotStore

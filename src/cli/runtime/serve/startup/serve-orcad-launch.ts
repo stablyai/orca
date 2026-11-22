@@ -17,6 +17,7 @@ import {
   orcadServeArgs,
   type ServeOrcaAppArgs
 } from '../../../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../../../shared/speech/native-recognizer/speech-recognizer-package'
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 
@@ -76,7 +77,8 @@ export function serveWithOrcad(
   /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
   webClientRoot?: string,
   /** orcad’s slot has no speech recognizer; use the app’s copy. */
-  speechRecognizerDir?: string
+  speechRecognizerDir?: string,
+  appImagePath?: string
 ): Promise<number> {
   const spec: ProcessSpec = {
     program: selection.runtime,
@@ -91,6 +93,7 @@ export function serveWithOrcad(
       ORCA_VERSION: selection.version,
       // Always set: a value inherited from an Orca terminal would name another install's copy.
       [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? '',
+      [ORCA_SERVE_APPIMAGE_ENV]: appImagePath ?? '',
       // A service manager restarts this server, so it must not run terminals that die with it.
       [ORCA_SERVE_SUPERVISED_ENV]: args.supervise === true ? '1' : ''
     }

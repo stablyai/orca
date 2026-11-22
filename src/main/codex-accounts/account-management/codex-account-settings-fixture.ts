@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { createGlobalSettingsFixture } from '../../../shared/settings/global-settings-test-fixture'
 
 // Preserve historical account-test defaults independently of current app defaults.
 export function createCodexAccountSettings(

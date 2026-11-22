@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {

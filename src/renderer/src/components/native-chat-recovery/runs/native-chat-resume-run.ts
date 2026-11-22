@@ -1,5 +1,5 @@
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
-import type { RestartContinuationOutcome } from './native-chat-restart-action-notifications'
+import type { RestartContinuationOutcome } from './native-chat-restart-continuation-outcomes'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 
 export type ResumeRunHostStatus = Pick<
@@ -83,4 +83,24 @@ const NONE: readonly string[] = []
 /** Keep the selection protected until the action's authoritative reply has been published. */
 export function resumeRunPendingIds(run: ResumeRun | null): readonly string[] {
   return run?.inFlight ? run.entries.map((entry) => entry.candidate.sessionId) : NONE
+}
+
+/** Drops dismissed chats from a settled run; no ids means every chat was dismissed. */
+export function withoutResumeRunSessions(
+  run: ResumeRun,
+  sessionIds: readonly string[] | undefined
+): ResumeRun | null {
+  if (sessionIds === undefined) {
+    return null
+  }
+  const dismissed = new Set(sessionIds)
+  const entries = run.entries.filter((entry) => !dismissed.has(entry.candidate.sessionId))
+  if (entries.length === 0) {
+    return null
+  }
+  return {
+    ...run,
+    entries,
+    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId))
+  }
 }

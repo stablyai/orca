@@ -468,8 +468,16 @@ final class Provider {
             let inSpaces = WindowSpaces.windowsInAnySpace(unlisted) ?? Set(unlisted)
             // Why: kAXWindowsAttribute leaves out windows on other Spaces; skip the lookup when the app stopped answering.
             if status != .cannotComplete {
+                // Why: the app still returns its main and focused window from another Space, which the remote-token
+                // scan misses until something has read that window once.
+                for attribute in [kAXMainWindowAttribute, kAXFocusedWindowAttribute] where !inSpaces.isSubset(of: elements.keys) {
+                    if let window = copyElement(appElement, attribute), let id = windowNumber(window), inSpaces.contains(id) {
+                        elements[id] = window
+                    }
+                }
                 let live = Set(all.map(\.windowId))
-                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: inSpaces, live: live)) { listed, _ in listed }
+                let wanted = inSpaces.subtracting(elements.keys)
+                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: wanted, live: live)) { listed, _ in listed }
             }
             unreadable = inSpaces.subtracting(elements.keys)
         }
@@ -1284,7 +1292,9 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let requested = try requiredString(params, "action")
-        let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
+        // Why: a custom action keeps its case ("Delete"), so an exact match picks it over AXDelete ("delete").
+        let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0) == requested }
+            ?? record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
@@ -2768,7 +2778,7 @@ private final class TreeRenderer {
         let placeholder = reader.placeholderString(element)
         let rawActions = reader.actions(element)
         let rowSummary = reader.rowTextSummary(element, role: role)
-        let roleDescription = reader.stringAttribute(element, kAXRoleDescriptionAttribute as String)
+        let roleDescription = reader.roleDescription(element, role: role)
         let title = reader.stringAttribute(element, kAXTitleAttribute as String)
         let label = reader.stringAttribute(element, kAXDescriptionAttribute as String)
         let url = reader.stringAttribute(element, kAXURLAttribute as String)
@@ -2868,7 +2878,7 @@ private final class TreeRenderer {
             let role = reader.stringAttribute(child, kAXRoleAttribute as String) ?? "AXUnknown"
             return SnapshotRenderNode(
                 role: role,
-                roleDescription: reader.stringAttribute(child, kAXRoleDescriptionAttribute as String),
+                roleDescription: reader.roleDescription(child, role: role),
                 title: reader.stringAttribute(child, kAXTitleAttribute as String),
                 label: reader.stringAttribute(child, kAXDescriptionAttribute as String),
                 value: reader.valueString(child, role: role),
@@ -2952,6 +2962,7 @@ private final class AXSnapshotReader {
     }
 
     private var elementsByHash: [CFHashCode: [ElementCache]] = [:]
+    private static let standardRoleDescriptions = StandardRoleDescriptions.system()
 
     func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
         guard let value = copyAttribute(element, attribute) else { return nil }
@@ -3040,6 +3051,12 @@ private final class AXSnapshotReader {
             return number.stringValue
         }
         return nil
+    }
+
+    /// A standard description reads in English whatever the app's language; the app's own wording stays as written.
+    func roleDescription(_ element: AXUIElement, role: String) -> String? {
+        guard let description = stringAttribute(element, kAXRoleDescriptionAttribute as String) else { return nil }
+        return Self.standardRoleDescriptions.english(role: role, description: description) ?? description
     }
 
     func placeholderString(_ element: AXUIElement) -> String? {
@@ -3493,6 +3510,7 @@ private struct WindowCapture {
 
     private static func captureImage(windowId: CGWindowID, bounds: CGRect) -> CapturedImage? {
         if ProcessInfo.processInfo.environment["ORCA_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
+           #available(macOS 14, *),
            let image = captureImageWithScreenCaptureKit(windowId: windowId, bounds: bounds) {
             return CapturedImage(image: image, engine: "screenCaptureKit")
         }
@@ -3502,6 +3520,7 @@ private struct WindowCapture {
         return nil
     }
 
+    @available(macOS 14, *)
     private static func captureImageWithScreenCaptureKit(windowId: CGWindowID, bounds: CGRect) -> CGImage? {
         try? BlockingAsync.run(timeout: 3) {
             let content = try await SCShareableContent.current
@@ -5306,14 +5325,36 @@ private func printPermissionStatus() {
     print(permissionStatusJSON())
 }
 
-private func writePermissionStatus(to path: String) {
-    let text = permissionStatusJSON()
-    do {
-        try text.write(toFile: path, atomically: true, encoding: .utf8)
-    } catch {
-        fputs("failed to write permission status: \(error)\n", stderr)
-        exit(1)
+private let selfResponsibleMarker = "ORCA_COMPUTER_USE_SELF_RESPONSIBLE"
+
+// Why: Orca spawns this probe directly to own its PID, so TCC must be told to judge this helper, not Orca.
+private func becomeSelfResponsible() {
+    typealias ResponsiblePid = @convention(c) (pid_t) -> pid_t
+    typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Bool) -> Int32
+    let defaultHandle = UnsafeMutableRawPointer(bitPattern: -2)
+    guard let responsibleSymbol = dlsym(defaultHandle, "responsibility_get_pid_responsible_for_pid"),
+          let disclaimSymbol = dlsym(defaultHandle, "responsibility_spawnattrs_setdisclaim")
+    else {
+        fputs("permission status needs macOS responsibility disclaim\n", stderr)
+        exit(70)
     }
+    if unsafeBitCast(responsibleSymbol, to: ResponsiblePid.self)(getpid()) == getpid() {
+        return
+    }
+    guard getenv(selfResponsibleMarker) == nil else {
+        fputs("permission status helper is still attributed to its parent\n", stderr)
+        exit(70)
+    }
+    setenv(selfResponsibleMarker, "1", 1)
+    var attributes: posix_spawnattr_t?
+    posix_spawnattr_init(&attributes)
+    // SETEXEC replaces this image in place, so the PID Orca owns stays the probe's PID.
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETEXEC))
+    _ = unsafeBitCast(disclaimSymbol, to: SetDisclaim.self)(&attributes, true)
+    let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
+    let status = posix_spawn(nil, executable, nil, &attributes, CommandLine.unsafeArgv, environ)
+    fputs("failed to re-exec permission status helper: \(String(cString: strerror(status)))\n", stderr)
+    exit(70)
 }
 
 private func runStdio() {
@@ -5448,13 +5489,8 @@ if arguments.first == "--agent" {
         copy: permissionCopy
     )
 } else if arguments.first == "--permission-status" {
+    becomeSelfResponsible()
     printPermissionStatus()
-} else if arguments.first == "--permission-status-file" {
-    guard arguments.count >= 2 else {
-        fputs("usage: orca-computer-use-macos --permission-status-file <path>\n", stderr)
-        exit(2)
-    }
-    writePermissionStatus(to: arguments[1])
 } else {
     runStdio()
 }

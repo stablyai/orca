@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -18,13 +19,15 @@ export function NativeChatCopyButton({
   const [copied, setCopied] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    return () => {
-      if (resetTimerRef.current !== null) {
-        window.clearTimeout(resetTimerRef.current)
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      return () => {
+        if (resetTimerRef.current !== null) {
+          window.clearTimeout(resetTimerRef.current)
+        }
       }
-    }
-  }, [])
+    }, [])
+  )
 
   const handleCopy = useCallback(async () => {
     try {

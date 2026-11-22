@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import type { Repo } from './repo-types'
 
 declare const hostScopedRepoKeyBrand: unique symbol
@@ -12,7 +12,7 @@ export type RepoHostTarget = Pick<Repo, 'id' | 'connectionId' | 'executionHostId
 export function getRepoHostIdentityForParts(repoId: string, hostId: string): HostScopedRepoKey {
   // Why: host ids and repo ids can contain punctuation; NUL keeps the composite
   // key collision-free without escaping user/provider-owned strings.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the only constructor of the brand; the bytes are the unbranded composite, frozen by golden tests (D25).
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the only constructor of the brand; the bytes are the unbranded composite.
   return `${hostId}\0${repoId}` as HostScopedRepoKey
 }
 

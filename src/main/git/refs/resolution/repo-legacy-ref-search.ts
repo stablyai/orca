@@ -5,6 +5,7 @@ import {
   REPO_SEARCH_REFS_DEFAULT_LIMIT,
   isRepoSearchRefsRequestLimit
 } from '../../../../shared/git/refs/repo-search-limits'
+import { getRefSearchTokens } from '../../../../shared/git/refs/ref-search-tokens'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { runSearchBaseRefsGit } from './repo-ref-search-command'
@@ -14,9 +15,6 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { isQualifiedBaseRef, resolveBaseRefSearchSelector } from './base-ref-search-selector'
 
 type RefSearchPatternGroup = 'all' | 'segmented' | 'branchRoot'
-function getRefSearchTokens(query: string) {
-  return query.split('/').filter(Boolean)
-}
 
 export function mergeBaseRefSearchResultGroups(
   groups: readonly BaseRefSearchResult[][],

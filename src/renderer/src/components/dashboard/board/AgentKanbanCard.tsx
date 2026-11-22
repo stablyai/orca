@@ -8,15 +8,15 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import {
   dashboardCardDisplayState,
   type DashboardCard
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

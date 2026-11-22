@@ -2,9 +2,6 @@
 
 import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type * as accountTypes from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   createAcpAgentConnection,
@@ -18,22 +15,26 @@ import {
   type AcpLaunchSettings
 } from '../acp/launch/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/launch/acp-structured-launch-preparation'
-import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
+import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
-import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
+import { antigravitySignInFailure } from './antigravity-sign-in-failure'
 import type { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
   AntigravitySignInSentence,
   antigravityChatSignIn,
-  closeAntigravitySignInOwner
+  answerAntigravityChatAuth
 } from './antigravity-chat-account'
 import {
   antigravitySignInCallback,
   sendAntigravitySignInCallback,
   type AntigravitySignInPending
 } from './antigravity-sign-in-callback'
-import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
+import {
+  antigravitySignInHome,
+  antigravitySignInCredentialCommit
+} from './antigravity-sign-in-home'
+import { antigravitySignInServers } from './antigravity-sign-in-server'
 import { antigravitySignInUrl } from './antigravity-sign-in-url'
 
 // Match the server’s browser wait.
@@ -43,18 +44,19 @@ const SECOND_LINK = {
   error: 'Antigravity started more than one Google sign-in request.'
 } as const
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
-const SESSION_FAILED =
-  'Antigravity authenticated, but could not initialize a session or load models.'
 
 type Phase = accountTypes.AntigravityChatSignInState['phase']
 type Flow = {
   id: string
   owner: string
+  intent: accountTypes.AntigravityChatSignInIntent
   ended: AbortController
   done: Promise<void>
   pending?: { url: string } & AntigravitySignInPending
   callbackSent?: boolean
   forwarding?: Promise<void>
+  /** The replacement token is moving; only its own result may change the phase. */
+  committing?: boolean
 }
 
 export type AntigravityChatSignInHost = {
@@ -88,7 +90,10 @@ function publish(
   if (shown?.flowId !== current.id || (settled(shown.phase) && !cleanupFailed)) {
     return
   }
-  const shownNext = { ...next, flowId: current.id, owner: current.owner }
+  if (current.committing) {
+    return
+  }
+  const shownNext = { ...next, flowId: current.id, owner: current.owner, intent: current.intent }
   antigravityChatSignIn.set({ ...value, flow: shownNext })
   if (settled(next.phase)) {
     current.pending = undefined
@@ -98,8 +103,9 @@ function publish(
 
 export function startAntigravityChatSignIn(
   host: AntigravityChatSignInHost,
-  owner: string
-): { flowId: string } {
+  owner: string,
+  intent: accountTypes.AntigravityChatSignInIntent = 'signIn'
+): accountTypes.AntigravityChatSignInStartResult {
   if (ANTIGRAVITY_LAUNCH_SPEC.managedRuntime.pin() === null) {
     throw new Error(`Antigravity chats are not available on ${process.platform} ${process.arch}.`)
   }
@@ -110,19 +116,23 @@ export function startAntigravityChatSignIn(
     if (!running(active)) {
       throw new Error('The last Antigravity sign-in is still stopping. Try again in a moment.')
     }
-    return { flowId: active.id }
+    return { flowId: active.id, status: readAntigravityChatSignInStatus(owner) }
   }
   const current: Flow = {
     id: randomUUID(),
     owner,
+    intent,
     ended: new AbortController(),
     done: Promise.resolve()
   }
   active = current
   const { value } = antigravityChatSignIn.get()
-  antigravityChatSignIn.set({ ...value, flow: { flowId: current.id, owner, phase: 'starting' } })
+  antigravityChatSignIn.set({
+    ...value,
+    flow: { flowId: current.id, owner, intent, phase: 'starting' }
+  })
   current.done = runFlow(current, host)
-  return { flowId: current.id }
+  return { flowId: current.id, status: readAntigravityChatSignInStatus(owner) }
 }
 
 async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<void> {
@@ -178,40 +188,23 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     })
   // Reuse chat launch resolution without downloading a runtime.
   const launch = await prepareAcpLaunch(resolve, closed)
-  const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
-  const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
-  let connection: AcpAgentConnection | null = null
-  // Wait for proven exit and session ownership before deleting files.
-  const owned = { sessionId: '', exited: false, done: false, disposed: false }
-  const disposeWhenGone = async (): Promise<void> => {
-    if (!owned.exited || !owned.done || owned.disposed) {
-      return
-    }
-    owned.disposed = true
-    const files = removeAntigravitySignInSessionFiles(home, owned.sessionId, cwd)
-    await Promise.all([files, rm(cwd, { recursive: true, force: true })]).catch((error: unknown) =>
-      console.warn('[antigravity] sign-in session files not removed:', error)
-    )
-  }
+  const target = await antigravitySignInHome(launch, current.intent, spec.signIn, closed)
+  const { replacement } = target
+  let sessionId = ''
   try {
-    connection = connect(
-      { ...launch, args: launch.spec.args({ fullAccess: false, pluginDir: null }), cwd },
-      {
-        clientInfo: { name: 'orca', version: '1' },
-        signIn: { ...ANTIGRAVITY_LAUNCH_SPEC.signIn, link: (link) => receiveLink(current, link) }
-      }
-    )
-    const server = connection
-    server.onExit(() => {
-      owned.exited = true
-      void disposeWhenGone()
+    const servers = antigravitySignInServers({
+      connectServer: () => acpPrivateTempConnect(deps, closed),
+      home: target.home,
+      launch: target.launch,
+      signal,
+      closed,
+      spawned: target.spawned
     })
-    const stop = (): void => void server.close().catch(() => false)
-    signal.addEventListener('abort', stop, { once: true })
-    try {
-      const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
-      const initialized = await connection.initialize()
+    const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
+    const watch = { ...target.watch, link: (link: string) => receiveLink(current, link) }
+    await servers.run(watch, async (server) => {
+      const initialized = await server.initialize()
       closed()
       if (
         initialized.authMethods &&
@@ -219,26 +212,34 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       ) {
         throw new AntigravitySignInSentence(spec.authMethodUnavailableMessage)
       }
-      await connection.authenticate(method)
-      publish(current, { phase: 'verifying' })
-      // Authentication alone does not prove a chat can start.
-      const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        const plain = error instanceof AcpAgentError && error.code === -32603
-        throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-          ? new AntigravitySignInSentence(SESSION_FAILED)
-          : error
-      })
-      owned.sessionId = started.sessionId
+      await server.authenticate(method)
       current.pending = undefined
-      publishModels(accountHome, started, !connection.exited)
-    } finally {
-      signal.removeEventListener('abort', stop)
-      await closeAntigravitySignInOwner(home, server)
+    })
+    closed()
+    publish(current, { phase: 'verifying' })
+    const { started, live } = await servers.startOnSavedSignIn(
+      { ...spec, signIn: target.watch },
+      method,
+      (id) => (sessionId = id)
+    )
+    if (replacement) {
+      const commit = await antigravitySignInCredentialCommit(target.home, home, method)
+      closed()
+      current.committing = true
+      try {
+        await commit()
+      } finally {
+        current.committing = false
+      }
+      // Publish before yielding again so no late cancel or failure relabels the replaced login.
+      answerAntigravityChatAuth(true)
+    }
+    publishModels(accountHome, started, live)
+    if (replacement) {
+      publish(current, { phase: 'signedIn' })
     }
   } finally {
-    owned.done = true
-    owned.exited ||= !connection || connection.exited
-    await disposeWhenGone()
+    await target.remove(sessionId)
   }
 }
 
@@ -263,7 +264,6 @@ function ownFlow(owner: string, flowId: string): Flow {
   }
   return current
 }
-
 /** Await cleanup so the next chat start can acquire the launch gate. */
 export async function cancelAntigravityChatSignIn(
   owner: string,
@@ -306,7 +306,6 @@ export async function completeAntigravityChatSignIn(
   }
   return readAntigravityChatSignInStatus(owner).flow
 }
-
 export const subscribeAntigravityChatSignIn = (onChange: () => void): (() => void) =>
   antigravityChatSignIn.subscribe(onChange)
 

@@ -3,7 +3,7 @@
 
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 

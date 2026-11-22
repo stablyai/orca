@@ -18,6 +18,8 @@ export const codexAccountsApi = {
   reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
     ipcRenderer.invoke('codexAccounts:reauthenticate', args),
   remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
+  rename: (args: { accountId: string; displayName: string | null }) =>
+    ipcRenderer.invoke('codexAccounts:rename', args),
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

@@ -10,6 +10,8 @@ import {
   REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
 } from './row-column-lists'
 
+export type DispatchCreatorTurnSource = NonNullable<DispatchContextRow['creator_turn_source']>
+
 /** The system root is internal host-local coordinator code; never let callers select it to bypass depth. */
 export type DispatchCreator =
   | { kind: 'system' }
@@ -21,30 +23,40 @@ export type DispatchCreator =
       processIncarnation?: string
       /** A structured worker's bare Orca session id, recorded beside its handle. */
       orcaSessionId?: OrcaSessionId | null
+      turnSource?: DispatchCreatorTurnSource
     }
   /** A structured session with no terminal handle, identified by its Orca session id alone. */
-  | { kind: 'session'; orcaSessionId: OrcaSessionId }
+  | { kind: 'session'; orcaSessionId: OrcaSessionId; turnSource?: DispatchCreatorTurnSource }
 
 /** Creator identity to persist on a new row, so depth can later tell delegation from bookkeeping. */
 export function recordedCreatorIdentity(creator: DispatchCreator): {
   creatorHandle: string | null
   creatorPaneKey: string | null
   creatorOrcaSessionId: OrcaSessionId | null
+  creatorTurnSource: DispatchCreatorTurnSource | null
 } {
   if (creator.kind === 'system') {
-    return { creatorHandle: null, creatorPaneKey: null, creatorOrcaSessionId: null }
+    return {
+      creatorHandle: null,
+      creatorPaneKey: null,
+      creatorOrcaSessionId: null,
+      creatorTurnSource: null
+    }
   }
+  const creatorTurnSource = creator.turnSource ?? null
   if (creator.kind === 'session') {
     return {
       creatorHandle: null,
       creatorPaneKey: null,
-      creatorOrcaSessionId: creator.orcaSessionId
+      creatorOrcaSessionId: creator.orcaSessionId,
+      creatorTurnSource
     }
   }
   return {
     creatorHandle: creator.handle,
     creatorPaneKey: creator.paneKey ?? null,
-    creatorOrcaSessionId: creator.orcaSessionId ?? null
+    creatorOrcaSessionId: creator.orcaSessionId ?? null,
+    creatorTurnSource
   }
 }
 

@@ -1,27 +1,27 @@
-import { useSourceControlWatchConsumers } from './source-control-watch-consumers'
+import { useSourceControlWatchConsumers } from '../components/editor/external-changes/watching/source-control-watch-consumers'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { subscribeEditorRuntimeFileWatch } from '../components/editor/external-changes/watching/editor-runtime-file-watch'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
-} from './editor-external-watch-targets'
-import { markWorktreeCatchUpPayload } from './worktree-file-change-event'
-import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
-import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
+} from '../components/editor/external-changes/watching/editor-external-watch-targets'
+import { markWorktreeCatchUpPayload } from '../runtime/files/watching/worktree-file-change-event'
+import { buildEditorExternalWatchEventHandler } from '../components/editor/external-changes/watching/editor-external-watch-event-reconciliation'
+import { verifyLatchedEditorMoveDestinations } from '../components/editor/external-changes/watching/editor-external-watch-disk-verification'
 import {
   acquireWatchRoot,
   releaseAllWatchRoots,
   releaseWatchRoot,
   type HeldWatchRoots
-} from './editor-external-watch-local-roots'
+} from '../components/editor/external-changes/watching/editor-external-watch-local-roots'
 import {
   selectLocalTabFoldersKey,
   SymlinkedTabFolderWatches
-} from './editor-external-watch-symlink-folders'
+} from '../components/editor/external-changes/watching/editor-external-watch-symlink-folders'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,

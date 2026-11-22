@@ -1,7 +1,7 @@
 import { claudeProfileHistoryDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../../pty/shell-startup/codex-home-wsl-env'
 import { ompProfileSessionsDirs, resolveOmpSessionsDir } from '../scanners/omp/omp-session-root'
 

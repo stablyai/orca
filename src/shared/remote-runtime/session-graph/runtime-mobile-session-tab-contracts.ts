@@ -27,7 +27,11 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
+  /** Same-build renderer graph input; main never returns this in client frames. */
+  statusSuppressionTitle?: string
   agentStatus?: AgentStatusEntry | null
+  /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
+  unread?: true
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
@@ -128,6 +132,8 @@ export type RuntimeMobileSessionAgentTab = {
   forked?: true
   /** The host's structured status row for this chat. Optional: old hosts never send it. */
   chatStatus?: RuntimeMobileSessionAgentTabStatus
+  /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
+  unread?: true
   color?: string | null
   isPinned?: boolean
   isActive: boolean

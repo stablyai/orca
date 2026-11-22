@@ -4,12 +4,16 @@ import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
-} from '../../../shared/mobile-push-contract'
+} from '../../../shared/notifications/mobile-push-contract'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
-import { PushDispatcher } from './push-dispatcher'
+import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
+import { PushBadgeSync } from './push-badge-sync'
+import type { ExecutionHostPushCoverage } from './push-burst-slots'
+import { mobilePushTokenDigest } from './push-token-digest'
+import { pushTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import {
@@ -33,6 +37,8 @@ type DesktopPushServiceOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
   /** Inject the per-device registration bucket for tests. */
   registerThrottle?: PushRegisterThrottle
+  /** Asks a mirrored session's execution host which of this host's phones it pushes itself. */
+  coverage?: ExecutionHostPushCoverage
 }
 
 export class DesktopPushService {
@@ -42,6 +48,7 @@ export class DesktopPushService {
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
   private readonly dispatcher: PushDispatcher
+  private readonly badgeSync: PushBadgeSync
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly registerThrottle: PushRegisterThrottle
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
@@ -64,7 +71,13 @@ export class DesktopPushService {
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
     this.deliveryMode = readMobilePushDeliveryMode()
-    this.dispatcher = new PushDispatcher({ client, registry, deliveryMode: this.deliveryMode })
+    this.dispatcher = new PushDispatcher({
+      client,
+      registry,
+      deliveryMode: this.deliveryMode,
+      coverage: options.coverage
+    })
+    this.badgeSync = new PushBadgeSync({ client, registry, runtime: options.runtime })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??
@@ -93,6 +106,9 @@ export class DesktopPushService {
     this.unsubscribe = this.runtime.onNotificationDispatched((event) => {
       this.dispatcher.enqueue(event)
     })
+    if (this.deliveryMode !== 'disabled') {
+      this.badgeSync.start()
+    }
     // Unpairing queues a delete without going through this service; drain on that too.
     this.runtimeRpc.setOnPushUnregisterQueued(() => {
       void this.flushUnregisterOutbox()
@@ -106,6 +122,7 @@ export class DesktopPushService {
     this.dispatcher.stop()
     this.unsubscribe?.()
     this.unsubscribe = null
+    this.badgeSync.stop()
     this.runtimeRpc.setOnPushUnregisterQueued(null)
     this.runtime.setMobilePushRegistrar(null)
   }
@@ -134,27 +151,7 @@ export class DesktopPushService {
         sound: registration.filter.sound !== false
       }
     })
-    if (!result.ok) {
-      return {
-        accepted: false,
-        reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
-      }
-    }
-    const status = result.results.find(
-      (entry) => entry.registrationId === registration.registrationId
-    )?.status
-    if (status === 'queued') {
-      return { accepted: true }
-    }
-    return {
-      accepted: false,
-      reason:
-        status === 'rate_limited'
-          ? 'rate_limited'
-          : status === 'dead'
-            ? 'not_registered'
-            : 'rejected'
-    }
+    return pushTestResult(result, registration.registrationId)
   }
 
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {
@@ -205,9 +202,16 @@ export class DesktopPushService {
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
     }
     void this.flushUnregisterOutbox()
+    if (!failure) {
+      this.badgeSync.noteRegistered(result.registrationId)
+    }
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }
+  }
+
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
+    return this.dispatcher.coveredTokenDigests(request)
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
@@ -267,7 +271,8 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+        tokenDigest: mobilePushTokenDigest(input)
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.

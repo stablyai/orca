@@ -10,6 +10,16 @@
     // Loaded by path beside its launcher, so no import reaches it.
     "../src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts"
   ],
+  "exclude": [
+    // Shared tests run under vitest's ESM and the node project; Node16 CommonJS rejects their syntax.
+    "../src/shared/**/*.test.ts",
+    "../src/shared/**/*.test.tsx",
+    "../src/shared/**/*.spec.ts",
+    "../src/shared/**/*.spec.tsx",
+    // tsconfig.tc.bot-evals.json checks them.
+    "../src/cli/bot-automation-eval/**",
+    "../src/cli/bot-orchestration-eval/**"
+  ],
   "compilerOptions": {
     // The CLI runs on Node 24; Node20 models synchronous ESM imports from CommonJS.
     "module": "Node20",

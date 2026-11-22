@@ -1,6 +1,10 @@
 import type { TaskPageJiraListProjectionModel } from '../../jira/listing/use-task-page-jira-list-projection'
 import { useState, useMemo, useEffect, useReducer, type SetStateAction } from 'react'
-import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
+import {
+  useTeamMembers,
+  useTeamLabels,
+  useTeamStates
+} from '@/lib/work-items/linear/useIssueMetadata'
 import {
   useTaskCreationDraftRetention,
   type LinearIssueForm,
@@ -9,8 +13,8 @@ import {
   linearIssueFormSignature as signatureOf,
   completeLinearIssueForm,
   handoffLinearIssueForm as handoff
-} from '@/components/use-task-creation-draft-retention'
-import { useNewLinearIssueProjects } from '../../../use-new-linear-issue-projects'
+} from '@/components/task-page/creation/use-task-creation-draft-retention'
+import { useNewLinearIssueProjects } from './use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../../task-page-draft-storage'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'

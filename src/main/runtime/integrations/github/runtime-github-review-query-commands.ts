@@ -7,7 +7,7 @@ import { getPRCheckDetails } from '../../../github/client/check/get-pr-check-det
 import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
 import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]

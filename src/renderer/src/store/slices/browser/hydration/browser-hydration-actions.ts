@@ -1,5 +1,5 @@
 import { markHydratedBrowserPageHandles } from '../hosts/browser-initialization-presentation-ownership'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
@@ -8,7 +8,7 @@ import { destroyWorkspaceWebviews } from '../cleanup/browser-webview-cleanup'
 import { projectHydratedBrowserSession } from './browser-hydration-state'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'

@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useLayoutEffect } from 'react'
 
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
@@ -17,6 +17,7 @@ import {
   getLayoutEntries,
   getStatusBarEntries,
   getThemeEntries,
+  getTilingWindowModeEntry,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
@@ -72,6 +73,8 @@ export function AppearancePane({
   // Windows web clients have no local system tray; require desktop Electron.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+  const tilingWindowModeEntry =
+    getRendererAppPlatform() === 'linux' && !isWebClient ? getTilingWindowModeEntry(t) : undefined
 
   useLayoutEffect(() => {
     if (!appearanceAccordionDeepLink) {
@@ -124,6 +127,7 @@ export function AppearancePane({
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getLayoutEntries(),
+    ...(tilingWindowModeEntry ? [tilingWindowModeEntry] : []),
     getLeftSidebarAppearanceEntry(),
     getWorkspaceCardLayoutEntry()
   ]
@@ -176,6 +180,7 @@ export function AppearancePane({
           <AppearanceWindowSidebarSection
             settings={settings}
             updateSettings={updateSettings}
+            tilingWindowModeEntry={tilingWindowModeEntry}
             forceVisiblePrimary={windowLabelMatches}
           />
         </SettingsGroup>

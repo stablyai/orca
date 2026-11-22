@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { LinkPreviewResult } from '../../shared/link-preview'
+import type { LinkPreviewResult } from '../../shared/browser/link-preview'
 import { getLinkPreview } from '../link-preview/link-preview'
 
 export function registerLinkPreviewHandlers(): void {

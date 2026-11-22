@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/work-items/task-source-context'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function buildAutomationRunContextForRepo(args: {
   repoId: string

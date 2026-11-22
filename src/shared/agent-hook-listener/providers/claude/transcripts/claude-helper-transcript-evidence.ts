@@ -4,7 +4,7 @@ import type {
   ClaudeTranscriptCursor,
   ClaudeTranscriptApplication
 } from './claude-transcript-cursor'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../agent-session/journal/harness-injected-user-turns'
 
 export type ClaudeHelperTranscriptEvidence = {
   observedAt: number

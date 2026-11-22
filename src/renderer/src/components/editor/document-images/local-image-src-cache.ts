@@ -157,15 +157,25 @@ export function resetLocalImageCacheState(): void {
   cacheListeners.clear()
 }
 
+/** A window shown again without focus (uncovered, restored behind another) gets no focus event. */
+function invalidateWhenShownUnfocused(): void {
+  if (document.visibilityState === 'visible' && !document.hasFocus()) {
+    invalidateLocalImageCache()
+  }
+}
+
 export function disposeLocalImageCacheState(): void {
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', invalidateLocalImageCache)
+    document.removeEventListener('visibilitychange', invalidateWhenShownUnfocused)
   }
   resetLocalImageCacheState()
 }
 
+// Every shown image, including one whose read failed, reads again when the window comes back.
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', invalidateLocalImageCache)
+  document.addEventListener('visibilitychange', invalidateWhenShownUnfocused)
 }
 
 if (import.meta !== undefined && import.meta.hot) {

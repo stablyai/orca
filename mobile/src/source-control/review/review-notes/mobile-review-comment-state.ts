@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import type { MobileDiffLine } from '../diff-state/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../../../files/session-documents/mobile-file-syntax'
 import type { ReadyFileDocState } from '../../../files/session-documents/session-document-state'

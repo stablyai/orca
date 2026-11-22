@@ -2,7 +2,7 @@ import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/cl
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readdir } from 'node:fs/promises'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 const CLAUDE_TRANSCRIPTS_DIR = join(homedir(), '.claude', 'transcripts')

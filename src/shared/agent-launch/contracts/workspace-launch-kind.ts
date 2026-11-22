@@ -1,7 +1,7 @@
 /** Derive launch kind from the resolved workspace ID on renderer and host. Floating has no backing row, uses its own directory setting and stays local; never trust caller-supplied kind. */
 
 import type { AgentLaunchTarget } from './agent-launch-intent'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 
 export type WorkspaceLaunchKind = 'git-worktree' | 'folder' | 'floating'

@@ -1,8 +1,11 @@
 // Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
 import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
@@ -20,6 +23,7 @@ import {
   createWslMoveStringNormalizer,
   isRecord
 } from './wsl-move-canonical-form'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { WSL_MOVE_DROPPED_PTY_BINDING_KEYS } from '../../../../shared/wsl-move/wsl-move-dispositions'
 import {
   fieldOf,
@@ -31,6 +35,8 @@ import {
 
 export type WslMoveProjectionScope = {
   distro: string
+  /** The move's mapped drives, from its cutover. */
+  mappedDrives?: readonly WslMappedDrive[]
   repoIds: ReadonlySet<string>
   folderWorkspaceIds: ReadonlySet<string>
   ownerHostId: ExecutionHostId

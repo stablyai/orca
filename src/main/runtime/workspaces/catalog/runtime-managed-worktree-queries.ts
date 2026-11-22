@@ -16,7 +16,7 @@ import {
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -33,7 +33,7 @@ import {
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../../../shared/worktree/visibility/visibility-sources'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
   canPruneAuthoritativeLocalMetadata,

@@ -9,7 +9,7 @@ import {
   deliveryReceipt,
   exposeMessages,
   handsOverBatch,
-  withReportFollowUps
+  withReplyFollowUps
 } from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from './mailbox-page-routing'
@@ -17,7 +17,10 @@ import { resolveRunScope } from '../runs/run-scope'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
-import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { withTakenRunCheckNext } from '../receipt-next'
@@ -32,6 +35,7 @@ export async function checkRunMailbox(args: {
   handle: string
   paneKey: string | undefined
   callerSession: OrchestrationEntryCaller | undefined
+  reader: OrchestrationSessionCaller | undefined
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   legacyCoordinatorRunId: string | undefined
@@ -156,7 +160,9 @@ export async function checkRunMailbox(args: {
       acknowledged,
       format: params.format === true || params.inject === true
     })
-    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+    return batch?.finalResponse
+      ? receipt
+      : withReplyFollowUps(args.runtime, db, args.reader, receipt)
   }
   const takeDelivery = (wakeTypes?: MessageType[], wake?: MessageWake) =>
     args.reconciliation.takeRole({

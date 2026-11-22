@@ -7,7 +7,7 @@ import type {
   MobilePushApnsEnvironment,
   MobilePushPlatform,
   MobilePushSource
-} from '../../../shared/mobile-push-contract'
+} from '../../../shared/notifications/mobile-push-contract'
 import {
   PUSH_REQUEST_DEADLINE_MS,
   readPushGatewayJson,
@@ -33,7 +33,9 @@ const SendResponseSchema = z.object({
 export type PushSendResult = z.infer<typeof SendResponseSchema>['results'][number]
 
 export type PushSendNotification = {
-  kind?: 'alert' | 'dismiss'
+  kind?: 'alert' | 'dismiss' | 'badge'
+  /** This host's unread count; the gateway sums every host's into the phone's icon badge. */
+  badge?: number
   expiresAt?: number
   sound?: boolean
   notificationId?: string

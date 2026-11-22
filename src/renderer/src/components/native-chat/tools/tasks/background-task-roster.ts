@@ -1,6 +1,6 @@
 // Localize the shared background-task grouping vocabulary.
 
-import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildRowContext } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
@@ -8,7 +8,7 @@ import {
   buildBackgroundTaskGroups as buildGroups,
   buildBackgroundTaskGroupsFromViews,
   type BackgroundTaskGroup
-} from '../../../../../../shared/background-task-roster'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

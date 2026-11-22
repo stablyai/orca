@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { forgetDetachedOwner } from '../metadata/detached-hosted-review-owners'
 import { worktreeCopyOwnerKey } from '../metadata/worktree-copy-review-clear'
 
