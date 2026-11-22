@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -12,7 +11,9 @@ import {
   type WorkerPresenceRow
 } from '../../db/worker-presence/worker-presence-store'
 import {
+  approvalReportId,
   isDeliberateRest,
+  presenceReportId,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
@@ -295,19 +296,6 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )
   return sent || keep()
-}
-
-/** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
-export function presenceReportId(dispatchId: string, generation: number): string {
-  return `msg_rest_${createHash('sha256')
-    .update(JSON.stringify([dispatchId, generation]))
-    .digest('hex')
-    .slice(0, 24)}`
-}
-
-/** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
-export function approvalReportId(dispatchId: string, approvalId: string): string {
-  return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 
 /** A build before the presence table may already have told the coordinator of this rest, by its own key.

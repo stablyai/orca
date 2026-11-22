@@ -65,6 +65,7 @@ export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
 export type BrowserStopResult = { url: string; title: string }
+export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -89,7 +90,13 @@ export type BrowserScreencastReadyResult = {
   tab: BrowserTabInfo
   // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
   frameAck?: true
+  /** Present only when asked with `pointerEvents: 1`; older hosts omit it. */
+  pointer?: BrowserScreencastPointer
 }
+
+/** What a local guest shows under the mouse: its cursor (an Electron cursor type) and hovered link. */
+export type BrowserScreencastPointer = { cursor: string; targetUrl: string }
+export type BrowserScreencastPointerResult = { type: 'pointer' } & BrowserScreencastPointer
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
 export type BrowserScreencastDialogResult = {
@@ -108,6 +115,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastEndResult
   | BrowserScreencastDialogResult
   | BrowserScreencastDialogClosedResult
+  | BrowserScreencastPointerResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }

@@ -15,7 +15,12 @@ import {
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
+import {
+  switchFreeIdentity,
+  usageLimitContinueIdentity as identity,
+  type HostUsageLimitCut,
+  type SwitchReset
+} from './structured-agent-session-usage-limit-chain'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */
 export type UsageLimitAccountUsage = {
@@ -98,15 +103,20 @@ export class UsageLimitAccountHolds {
     this.readings = new Map()
   }
 
-  /** Re-attributed each pass: the account a chat continues on follows the host's selection.
-   *  `hit` names the cut and the account it hit, when known. */
+  /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
+   *  account the cut hit is the one its turn's runtime launched under, when the record names it. */
   async attribute(
     id: string,
     host: AttributionHost,
-    hit?: { cut: string; home: AgentSessionAccountHome | null },
+    limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'fence'> & SwitchReset,
     now = Date.now()
   ): Promise<void> {
     const record = host.store.getRecord(id)
+    const launched = record?.launchedAccount
+    const hit = {
+      cut: switchFreeIdentity(limited),
+      home: launched && launched.fence === limited.fence ? launched.accountHome : null
+    }
     const read = host.usageLimitAutoContinue?.accountUsage
     const witness = record ? liveWitness(host, record.provider) : undefined
     let scope: UsageLimitAccountScope | undefined
@@ -122,7 +132,7 @@ export class UsageLimitAccountHolds {
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
-        movedTo = hit?.home && !sameAccountHome(home, hit.home) ? home : null
+        movedTo = hit.home && !sameAccountHome(home, hit.home) ? home : null
         const path = agentSessionAccountHomePath(home)
         if (read && home && path) {
           const key = JSON.stringify([witness, record.provider, path])
@@ -146,7 +156,7 @@ export class UsageLimitAccountHolds {
     this.scopes.set(id, scope)
     this.witnesses.set(id, witness)
     const since = this.movedSince.get(id)
-    if (!movedTo || !hit) {
+    if (!movedTo) {
       this.movedSince.delete(id)
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
       // Each destination counts from when it was chosen, so an older reading of it never releases.
@@ -193,14 +203,23 @@ export class UsageLimitAccountHolds {
     this.beginPass()
   }
 
+  /** A cut with no known reset, once the chat continues on an account the cut never hit: the
+   *  switch stands in for its reset, so the new account's reading decides as for any other move. */
+  withSwitchReset<T extends NativeChatUsageLimitCut>(id: string, cut: T): T & SwitchReset {
+    const moved = this.movedSince.get(id)
+    return cut.resetsAt === undefined && moved?.cut === switchFreeIdentity(cut)
+      ? { ...cut, resetsAt: moved.at, resetFromSwitch: true }
+      : cut
+  }
+
   verdict(
     id: string,
-    limited: { turnItemId: string; resetsAt: number },
+    limited: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
     // The account the chat moved to never hit this cut: from the move on, only its reading holds.
     const moved = this.movedSince.get(id)
-    const movedCut = moved?.cut === identity(limited)
+    const movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
@@ -291,7 +310,7 @@ export class UsageLimitAccountHolds {
   /** The day Orca may still continue a cut runs from the reset it actually waits for. */
   schedulable(
     id: string,
-    cut: NativeChatUsageLimitCut,
+    cut: NativeChatUsageLimitCut & SwitchReset,
     now: number
   ): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
     // At no time at all, this checks only that the reset is known and later than the turn's end.
@@ -305,7 +324,7 @@ export class UsageLimitAccountHolds {
    *  starts one read per held reset. */
   ready(
     id: string,
-    cut: { turnItemId: string; resetsAt: number },
+    cut: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number,
     notBefore = 0
   ): boolean {

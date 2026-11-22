@@ -12,6 +12,7 @@ import type {
 export function createCodexSessionJournalTranslator(input: {
   sink: StructuredAgentSessionEventSink | undefined
   account: () => AgentSessionAccountKind | undefined
+  localClock: boolean
   sessionId: string
   acquisitionId: string
   deps: CodexStructuredSessionAdapterDeps
@@ -25,6 +26,7 @@ export function createCodexSessionJournalTranslator(input: {
     ? createCodexJournalTranslator({
         sink,
         account,
+        localClock: input.localClock,
         sessionId,
         acquisitionId,
         ...(deps.now ? { now: deps.now } : {}),

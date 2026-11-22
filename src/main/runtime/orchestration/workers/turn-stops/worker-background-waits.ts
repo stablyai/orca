@@ -150,9 +150,7 @@ export class WorkerBackgroundWaits {
     if (row?.state === 'working' && row.mainAgent?.state !== 'done') {
       for (const worker of this.workersOf(paneKey, row)) {
         observeWorker(worker.db, worker.target, { presence: 'working' }, this.deps)
-        const dispatchId = workerTurnStopDispatchId(worker.target)
-        this.timers.get(dispatchId)?.cancel()
-        this.timers.delete(dispatchId)
+        this.cancelNotice(workerTurnStopDispatchId(worker.target))
       }
     }
   }
@@ -190,10 +188,16 @@ export class WorkerBackgroundWaits {
           },
           this.deps
         )
+        this.cancelNotice(workerTurnStopDispatchId(worker.target))
       }
     } catch (error) {
       console.warn('[orchestration] reporting a chat background finish failed', error)
     }
+  }
+
+  private cancelNotice(dispatchId: string): void {
+    this.timers.get(dispatchId)?.cancel()
+    this.timers.delete(dispatchId)
   }
 
   /** A notice falls due: the stored rest decides, so a turn, worker_done, stop or exit since supersedes

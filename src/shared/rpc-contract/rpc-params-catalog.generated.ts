@@ -237,7 +237,13 @@ import {
   BotToolsList
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
-import { CertificateProceed, PageZoom, Reload } from './browser/browser-core-params'
+import {
+  CertificateProceed,
+  FindInPage,
+  PageZoom,
+  Reload,
+  SiteColorScheme
+} from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
 import { MouseClick } from './browser/browser-extras-params'
 import {
@@ -1371,6 +1377,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.extensionReload': ExtensionReload,
   'browser.fill': Fill,
   'browser.find': Find,
+  'browser.findInPage': FindInPage,
   'browser.focus': Element,
   'browser.forward': ExpectUrlBrowserTarget,
   'browser.fullScreenshot': FullScreenshot,
@@ -1423,8 +1430,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.setHeaders': SetHeaders,
   'browser.setMedia': SetMedia,
   'browser.setOffline': SetOffline,
+  'browser.setSiteColorScheme': SiteColorScheme,
+  'browser.siteDisplay': BrowserTarget,
   'browser.snapshot': Snapshot,
   'browser.stop': BrowserTarget,
+  'browser.stopFindInPage': BrowserTarget,
   'browser.storage.local.clear': ExpectUrlBrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,

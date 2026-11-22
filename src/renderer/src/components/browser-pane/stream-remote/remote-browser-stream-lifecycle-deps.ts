@@ -1,3 +1,4 @@
+import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RemoteBrowserJavaScriptDialogAsk } from './remote-browser-javascript-dialog'
 import type { RemoteBrowserPageSessionDeps } from './remote-browser-page-session'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
@@ -19,5 +20,6 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
   setStatus: (status: RemoteBrowserStreamStatus) => void
   clearFrame: () => void
   handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
+  setPointer: (pointer: BrowserScreencastPointer | null) => void
   askJavaScriptDialog: RemoteBrowserJavaScriptDialogAsk
 }

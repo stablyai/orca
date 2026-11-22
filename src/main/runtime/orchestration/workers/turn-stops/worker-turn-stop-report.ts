@@ -13,6 +13,7 @@ import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 import type { AgentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
 import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
+import type { UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 
 export type WorkerTurnStopReason =
   | 'finished'
@@ -52,6 +53,8 @@ export type WorkerTurnStop = {
   blockedStart?: { screen: string; readyBy: number }
   /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
   startSurface?: 'terminal' | 'chat'
+  /** For `start-unconfirmed`: when the brief and its Enter went in, and what the terminal showed since. */
+  startEvidence?: UnconfirmedStartEvidence
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */
@@ -71,6 +74,7 @@ export type WorkerRestFact =
   | 'mailTaken'
   | 'requestError'
   | 'startSurface'
+  | 'startEvidence'
   | 'blockedStart'
   | 'backgroundWait'
 
@@ -101,7 +105,7 @@ export type WorkerTurnStopReportDeps = {
   /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
   chatWaitsOnBackground?: (sessionId: string) => boolean
   /** Whether a recorded background wait's pane still shows it; unknown reads as yes. */
-  backgroundWaitShown?: (wait: { since: number; paneKey?: string }) => boolean
+  backgroundWaitShown?: (wait: { since: number; paneKey?: string; chat?: true }) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
@@ -279,6 +283,19 @@ export function stopReportId(dispatchId: string, stopKey: string): string {
     .update(JSON.stringify([dispatchId, stopKey]))
     .digest('hex')
     .slice(0, 24)}`
+}
+
+/** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
+export function presenceReportId(dispatchId: string, generation: number): string {
+  return `msg_rest_${createHash('sha256')
+    .update(JSON.stringify([dispatchId, generation]))
+    .digest('hex')
+    .slice(0, 24)}`
+}
+
+/** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
+export function approvalReportId(dispatchId: string, approvalId: string): string {
+  return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 
 /** The one closing line for a reported approval; the same stable id makes a second closer a no-op. */
