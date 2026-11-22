@@ -293,7 +293,9 @@ export function MobileBotSettingsTab(props: {
         onSwitch={async (agent) => {
           // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
           if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id)
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
           }
         }}
       />
