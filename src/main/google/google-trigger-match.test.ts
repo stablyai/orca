@@ -92,10 +92,10 @@ describe('Gmail to= rules match real recipient addresses', () => {
 })
 
 describe('a rule without an account listens on the default', () => {
-  const automation = (account?: string) => ({
+  const automation = (account?: string): Parameters<typeof googleRuleTargets>[0][number] => ({
     id: 'a1',
     enabled: true,
-    bot: { botId: 'b1' },
+    bot: { botId: 'b1', runsIn: 'new', resultsTo: 'chat' },
     on: [{ ...rule([]), ...(account ? { account } : {}) }]
   })
   const listens = (
@@ -104,7 +104,7 @@ describe('a rule without an account listens on the default', () => {
     defaultAccount: string | null
   ) =>
     googleRuleTargets(
-      [automation(account)] as unknown as Parameters<typeof googleRuleTargets>[0],
+      [automation(account)],
       [{ id: 'b1', google: true }],
       connected,
       defaultAccount
