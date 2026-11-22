@@ -259,6 +259,32 @@ async function emptyRestartPane(store: FixtureStore) {
   }
 }
 
+it.each([
+  { reason: 'claimed', stop: 'not-started' },
+  { reason: 'unverifiable', stop: 'unknown' }
+] as const)('reports $stop after a $reason provider stop refusal', async ({ reason, stop }) => {
+  const provider = localRestartProvider()
+  vi.spyOn(provider, 'killFenced').mockImplementation(async (_request, authorize) => {
+    authorize?.()
+    return { outcome: 'refused', reason }
+  })
+  const { store } = await fixture()
+  const pane = await bindRestartPane(store, 'refused-stop', 'original-incarnation')
+  const { condition } = beginHostRestart(store, pane, 'refused-stop', 'original-incarnation')
+  const deps = rendererRestartDeps({ ...makeRuntimePtySpawnTestDeps(), store })
+  const result = await runPtyIpcSpawn(deps, {
+    ...pane,
+    cols: 80,
+    rows: 24,
+    accountRestart: condition
+  }).catch((error: unknown) => error)
+
+  expect(accountRestartErrorReceipt(result)).toMatchObject({
+    stop,
+    current: { kind: 'original', incarnationId: 'original-incarnation' }
+  })
+})
+
 it('sends the restart attempt to the provider despite a request to delete its environment key', async () => {
   const provider = localRestartProvider()
   const spawn = vi.spyOn(provider, 'spawn').mockResolvedValue({

@@ -58,16 +58,20 @@ function groupSweepFor(proc: pty.IPty): PendingPtyGroupSweep {
   return sweep
 }
 
-function killLocalPtyProcess(proc: pty.IPty, immediate: boolean): void {
+function killLocalPtyProcess(proc: pty.IPty, immediate: boolean, authorize?: () => void): void {
   if (process.platform === 'win32') {
+    authorize?.()
     proc.kill()
     return
   }
   if (!immediate) {
+    authorize?.()
     proc.kill('SIGTERM')
     return
   }
-  forceKillPosixPtyProcessGroupsSync(proc.pid, () => proc.kill('SIGKILL'))
+  forceKillPosixPtyProcessGroupsSync(proc.pid, () => proc.kill('SIGKILL'), {
+    beforeSignal: authorize
+  })
 }
 
 function armLocalPtyForceKill(
@@ -161,14 +165,19 @@ function finishPtyTermination(id: string, proc: pty.IPty): void {
   destroyPtyProcess(proc, { alreadyKilled: true })
 }
 
-function requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {
+function requestTrackedPtyShutdown(
+  id: string,
+  proc: pty.IPty,
+  immediate: boolean,
+  authorize?: () => void
+): void {
   const previousMode = ptyTerminationMode.get(id)
   // Bare ConPTY kill closes the pseudoconsole; Windows has no graceful-signal phase.
   const requestedMode = immediate || process.platform === 'win32' ? 'force' : 'graceful'
   if (!previousMode || (requestedMode === 'force' && previousMode !== 'force')) {
     ptyTerminationMode.set(id, requestedMode)
     try {
-      killLocalPtyProcess(proc, immediate)
+      killLocalPtyProcess(proc, immediate, authorize)
       if (requestedMode === 'graceful') {
         armLocalPtyForceKill(id, proc)
       } else {
@@ -192,12 +201,17 @@ async function shutdownTrackedPty(
   authorize?: () => void
 ): Promise<void> {
   const physicalExit = ptyPhysicalExits.get(id)
-  const beforeSignal = authorize
+  const authorizeCurrentRoot = authorize
     ? () => {
         if (ptyProcesses.get(id) !== proc) {
           throw new Error('terminal_pane_owner_changed')
         }
         authorize()
+      }
+    : undefined
+  const beforeSignal = authorizeCurrentRoot
+    ? () => {
+        authorizeCurrentRoot()
         cancelPendingLocalPtySpawns(id)
       }
     : undefined
@@ -210,7 +224,7 @@ async function shutdownTrackedPty(
     // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
     runPtyCleanup(id)
     operation.rootSignalled = true
-    requestTrackedPtyShutdown(id, proc, operation.immediate)
+    requestTrackedPtyShutdown(id, proc, operation.immediate, authorizeCurrentRoot)
   }
   if (ptyAgentSessionIds.has(id) || operation.immediate) {
     // Typed agents also detach tool process groups; immediate close must snapshot before root exit.
@@ -246,7 +260,7 @@ export async function shutdownLocalPty(
       opts.authorize?.()
       pending.immediate = true
       if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
-        requestTrackedPtyShutdown(id, pending.proc, true)
+        requestTrackedPtyShutdown(id, pending.proc, true, opts.authorize)
       }
     }
     await pending.promise

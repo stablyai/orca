@@ -5,6 +5,7 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
 import { resolveStablePaneOwner } from './stable-owner'
 import { settlePaneSpawnReservation } from './spawn-reservation'
+import { PtyRetirementRefusedBeforeSignal } from '../provider/shutdown-detect'
 import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -124,7 +125,7 @@ export function stampAccountRestartFailure(
     v: 1,
     requestId: operation.condition.requestId,
     attemptId: operation.condition.attemptId,
-    stop: operation.stop,
+    stop: error instanceof PtyRetirementRefusedBeforeSignal ? 'not-started' : operation.stop,
     outcome:
       operation.outcomeUnknown ||
       (error &&

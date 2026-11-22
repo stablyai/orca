@@ -2,6 +2,8 @@ import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { ptyIncarnationById } from './ownership-state'
 
+export class PtyRetirementRefusedBeforeSignal extends Error {}
+
 export async function shutdownPtyIncarnation(
   provider: IPtyProvider,
   id: string,
@@ -39,7 +41,8 @@ export async function shutdownPtyIncarnation(
     throw authorityError
   }
   if (result.outcome === 'refused') {
-    throw new Error(
+    const Refusal = result.reason === 'unverifiable' ? Error : PtyRetirementRefusedBeforeSignal
+    throw new Refusal(
       result.reason === 'replaced'
         ? 'terminal_pane_owner_changed'
         : 'terminal_replaced_pty_stop_unverified'

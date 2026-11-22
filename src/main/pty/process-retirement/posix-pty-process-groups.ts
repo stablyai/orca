@@ -11,6 +11,7 @@ import {
 type PosixPtyGroupSignalDeps = {
   platform?: NodeJS.Platform
   currentPid?: number
+  beforeSignal?: () => void
   signalProcessGroup?: (pgid: number) => void
 }
 
@@ -105,6 +106,7 @@ export async function signalPosixPtyProcessGroups(
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
+    deps.beforeSignal?.()
     fallback()
     return
   }
@@ -137,6 +139,7 @@ function signalPosixPtyProcessGroupsSync(
 ): void {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
+    deps.beforeSignal?.()
     fallback()
     return
   }
@@ -177,6 +180,7 @@ function deliverPosixPtyGroupSignal(
   deps: PosixPtyGroupSignalDeps
 ): void {
   if (!groups || groups.length === 0) {
+    deps.beforeSignal?.()
     fallback()
     return
   }
@@ -189,6 +193,7 @@ function deliverPosixPtyGroupSignal(
     deps.signalProcessGroup ?? ((pgid: number) => process.kill(-pgid, signal))
   let firstError: unknown
   for (const pgid of groups) {
+    deps.beforeSignal?.()
     try {
       signalProcessGroup(pgid)
     } catch (error) {

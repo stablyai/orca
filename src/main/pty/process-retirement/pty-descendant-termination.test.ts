@@ -15,6 +15,7 @@ import type { ProcessTableCapture } from './pty-descendant-fresh-table'
 import type { ProcessTableRow } from './pty-process-table-parser'
 import { terminateDescendantSnapshotWithVerdict } from './pty-descendant-exit-verification'
 import { excludeShellBackgroundJobs } from './pty-shell-job-preservation'
+import { forceKillPosixPtyProcessGroupsSync } from './posix-pty-process-groups'
 
 const CAPTURED_AT_MS = Date.parse('Tue Jul 14 12:00:00 2026')
 
@@ -60,6 +61,24 @@ function snapshot(
     ...(rootPgid === null ? {} : { reDerivedPids: new Set(descendants.map((row) => row.pid)) })
   }
 }
+
+it('refuses further POSIX groups when restart authority expires after the first signal', () => {
+  const signalled: number[] = []
+  expect(() =>
+    forceKillPosixPtyProcessGroupsSync(10, () => signalled.push(10), {
+      platform: 'darwin',
+      currentPid: 100,
+      readProcessTable: () => '10 10 ttys001 S\n20 20 ttys001 S\n30 30 ttys001 S',
+      beforeSignal: () => {
+        if (signalled.length) {
+          throw new Error('pane changed')
+        }
+      },
+      signalProcessGroup: (pgid) => signalled.push(pgid)
+    })
+  ).toThrow('pane changed')
+  expect(signalled).toEqual([20])
+})
 
 describe('collectDescendantRows', () => {
   it("excludes only the shell's own background jobs; agent-made process groups stay swept", () => {

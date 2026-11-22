@@ -110,13 +110,14 @@ export function reconcileTrackedPtyBindingGenerations(
   after: WorkspaceSessionState,
   includeUntrackedRebindings = false
 ): void {
-  if (!includeUntrackedRebindings) {
+  if (
+    !includeUntrackedRebindings ||
+    before?.terminalLayoutsByTabId === after.terminalLayoutsByTabId
+  ) {
     reconcileTrackedPaneBindings(runtime, hostId, before, after)
     return
   }
-  if (before?.terminalLayoutsByTabId === after.terminalLayoutsByTabId) {
-    return
-  }
+  const trackedTabs = runtime.ptyBindingTrackedTabsByHost?.get(hostId)
   const was = new Map<string, { tabId: string; ptyId?: string; incarnationId?: string }>()
   const now = new Map<string, { tabId: string; ptyId?: string; incarnationId?: string }>()
   const tabIds = new Set([
@@ -126,7 +127,7 @@ export function reconcileTrackedPtyBindingGenerations(
   for (const tabId of tabIds) {
     const old = before?.terminalLayoutsByTabId?.[tabId],
       next = after.terminalLayoutsByTabId?.[tabId]
-    if (old === next) {
+    if (old === next && !trackedTabs?.has(tabId)) {
       continue
     }
     for (const [layout, session, target] of [
@@ -152,7 +153,6 @@ export function reconcileTrackedPtyBindingGenerations(
       bumpPtyBindingGeneration(runtime, hostId, leafId)
     }
   }
-  const trackedTabs = runtime.ptyBindingTrackedTabsByHost?.get(hostId)
   for (const [leafId, old] of was) {
     const next = now.get(leafId)
     if (!next) {
