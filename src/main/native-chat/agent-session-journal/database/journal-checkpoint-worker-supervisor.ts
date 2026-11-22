@@ -3,6 +3,8 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
   JOURNAL_CHECKPOINT_PROGRESS,
+  JOURNAL_CHECKPOINT_TRUNCATE,
+  JOURNAL_TRUNCATE_RUNNING,
   grantJournalTruncate,
   journalCheckpointWorkerSource,
   revokeJournalTruncate
@@ -329,8 +331,12 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       return
     }
     // Inside a native call it can't answer; it is kept and watched, less often the longer it stays busy.
+    // A truncate holding writes is watched at the normal pace, so they resume soon after its call returns.
     this.host.late()
     const timeout = this.options.timeoutMs ?? HEALTH_TIMEOUT_MS
-    this.watch(progress, Math.min(timeout * 2 ** attached.busyDeadlines++, RESTART_MAX_MS))
+    const truncating =
+      Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_TRUNCATE) === JOURNAL_TRUNCATE_RUNNING
+    const backoff = Math.min(timeout * 2 ** attached.busyDeadlines++, RESTART_MAX_MS)
+    this.watch(progress, truncating ? timeout : backoff)
   }
 }

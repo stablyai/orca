@@ -470,3 +470,33 @@ it('skips a truncate the worker measured before it last took checkpoints over', 
     writer.prepare("INSERT INTO writes VALUES(?, 'bulk')").run(id)
   )
 })
+
+// A long truncate runs for seconds of real deadlines, long enough for a busy backoff to outgrow the wait.
+it('hands parked writes back at the next deadline once a long truncate returns but its reply is late', async () => {
+  const { filename, writer } = fixture()
+  let worker!: LivenessCheckpoint
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    factory: (workerData) => {
+      worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  worker.busy(false)
+  worker.ready()
+  worker.emit('message', { type: 'truncate-request', truncateId: 5, generation: 99 })
+  worker.busy(true)
+  Atomics.store(worker.liveness, JOURNAL_CHECKPOINT_TRUNCATE, JOURNAL_TRUNCATE_RUNNING)
+  let admitted = false
+  const write = new JournalSqlBatch(writer, owner).run([1], (id) => {
+    admitted = true
+    writer.prepare("INSERT INTO writes VALUES(?, 'parked')").run(id)
+  })
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+  expect(admitted).toBe(false)
+  // The call returned and freed the write lock; the worker stalls before replying.
+  Atomics.store(worker.liveness, JOURNAL_CHECKPOINT_TRUNCATE, 0)
+  await vi.waitFor(() => expect(admitted).toBe(true), { timeout: 500 })
+  await write
+}, 10000)
