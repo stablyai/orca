@@ -56,6 +56,8 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
 
   if (event.type === 'ready') {
     clearStartupTimer()
+    // A stream that answers after the startup timeout is live after all.
+    setStreamStopped(null)
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)

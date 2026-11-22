@@ -13,15 +13,16 @@ import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isBlankBrowserUrl } from '../../browser/pane-view/browser-url'
 import { canOpenExternalLink, openExternalLink } from '../../platform/external-links/external-link'
-import { isLoopbackHttpUrl } from '../../../../src/shared/workspace/ports/localhost-worktree-labels'
+import { resolveRemoteFailureExternalUrl } from '../../../../src/shared/browser/navigation/browser-url'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
 export type MobileBrowserNavigationOptions = { ignoreCache?: boolean }
 
-/** Only a page the phone itself can load; a loopback URL names the host, not the phone. */
-export function canOpenBrowserTabOnPhone(url: string): boolean {
-  return /^https?:\/\//i.test(url) && !isLoopbackHttpUrl(url) && canOpenExternalLink(url)
+/** As desktop's streamed pane: only a public URL, since a local one names the host, not the phone. */
+function phoneOpenableBrowserUrl(url: string): string | null {
+  const external = resolveRemoteFailureExternalUrl(url)
+  return external && canOpenExternalLink(external) ? external : null
 }
 
 export function MobileBrowserTabActionSheet(props: {
@@ -54,6 +55,7 @@ export function MobileBrowserTabActionSheet(props: {
     bulkCloseActions
   } = props
   const url = target && !isBlankBrowserUrl(target.url) ? target.url : null
+  const externalUrl = url ? phoneOpenableBrowserUrl(url) : null
   return (
     <ActionSheetModal
       visible={target != null}
@@ -136,14 +138,14 @@ export function MobileBrowserTabActionSheet(props: {
               }
             ]
           : []),
-        ...(url && canOpenBrowserTabOnPhone(url)
+        ...(externalUrl
           ? [
               {
                 id: 'openInBrowser',
                 label: t('session.linkActionSheet.openInBrowser', 'Open in system browser'),
                 icon: ExternalLink,
                 closeBeforePress: true,
-                onPress: () => openExternalLink(url)
+                onPress: () => openExternalLink(externalUrl)
               }
             ]
           : []),

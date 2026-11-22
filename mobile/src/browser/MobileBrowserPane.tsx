@@ -38,6 +38,8 @@ import { useMobileBrowserInteractions } from './page-interaction/use-mobile-brow
 import { useMobileBrowserStream } from './screencast/use-mobile-browser-stream'
 import { useBrowserBinaryScreencastGrant } from './screencast/use-browser-binary-screencast-grant'
 import type { MobileBrowserHostSupport } from './mobile-browser-host-support'
+import { useRouteRelaysCapability } from '../worktree/execution-hosts/workspace-server-context'
+import { BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY } from '../../../src/shared/browser/runtime/browser-runtime-capabilities'
 
 type MobileBrowserPaneProps = {
   client: RpcClient | null
@@ -303,7 +305,9 @@ export function MobileBrowserPane({
     )
   }, [controlsDisabled, sendBrowserRequest])
   // As on desktop, the reload button doubles as Stop while the page loads.
-  const showStop = hostSupport.stop && tab.loading
+  // An older paired desktop relaying to a newer server refuses browser.stop from a phone.
+  const stopRelayed = useRouteRelaysCapability(BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY)
+  const showStop = hostSupport.stop && stopRelayed && tab.loading
   const stopPage = useCallback(() => {
     if (controlsDisabled) {
       return

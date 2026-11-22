@@ -191,10 +191,13 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
     busyRef.current = true
     setBusy(true)
+    // The subscription stays open after the timeout, so a late first frame clears the notice.
+    let timedOut = false
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (streamGenerationRef.current !== generation) {
         return
       }
+      timedOut = true
       busyRef.current = false
       setBusy(false)
       setStreamStopped(translate('browser.stream.timedOut', 'Browser stream timed out.'))
@@ -242,6 +245,10 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
             return
           }
           clearStartupTimer()
+          if (timedOut) {
+            timedOut = false
+            setStreamStopped(null)
+          }
           if (ackSubscriptionId) {
             // Cumulative, so a frame the shell dropped is covered by the next one's ack.
             void client
