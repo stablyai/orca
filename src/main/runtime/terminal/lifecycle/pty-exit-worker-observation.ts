@@ -9,6 +9,7 @@ import {
   observeRemoteWorkerExit,
   observeTerminalWorkerExit
 } from '../../orchestration/workers/lifecycle/worker-exit-observation'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { WorkerGone } from '../../orchestration/workers/turn-stops/worker-presence-report'
 
 /** A worker's terminal ending or losing its agent, told to the Dispatch it runs. */
@@ -18,18 +19,47 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     handle: string,
     paneKey: string | null,
     cause: TerminalExitCause,
-    lastOutput?: string
+    lastOutput?: string,
+    options: { paneRespawning?: boolean } = {}
   ): void {
     const db = this._orchestrationDb
     if (!db) {
       return
     }
+    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    const fail = (): void =>
+      this.observeWorkerTerminalExit(db, handle, paneKey, processIncarnation, cause, lastOutput)
+    // Its pane is starting again where the window's restore resumes the conversation: the Dispatch waits for it.
+    const respawning = options.paneRespawning && paneKey
+    const dispatch = respawning ? db.getActiveDispatchForTerminal(handle, paneKey) : undefined
+    if (
+      respawning &&
+      dispatch &&
+      this.terminalWorkerRestartResume.holdInPlace(
+        dispatch.id,
+        respawning,
+        processIncarnation,
+        fail
+      )
+    ) {
+      return
+    }
+    fail()
+  }
+
+  private observeWorkerTerminalExit(
+    db: OrchestrationDb,
+    handle: string,
+    paneKey: string | null,
+    processIncarnation: string | null,
+    cause: TerminalExitCause,
+    lastOutput: string | undefined
+  ): void {
     const errorContext = describeTerminalExitCause(cause)
     // A person closing the pane leaves the task unowned; any other end is the agent's exit.
     const gone = isDeliberateTerminalExit(cause)
       ? { reason: 'lost' as const, cause: 'it was closed in Orca', lastOutput }
       : { reason: 'exited' as const, cause: errorContext, lastOutput }
-    const processIncarnation = this.getTerminalProcessIncarnation(handle)
     const settledLocally = observeTerminalWorkerExit(
       db,
       this.getRuntimeId(),

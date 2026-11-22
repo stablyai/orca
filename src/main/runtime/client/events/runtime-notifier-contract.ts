@@ -121,6 +121,8 @@ export type RuntimeNotifier = {
   agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   /** A launch's recipe when no reveal carried it, so resume can replay it. */
   rememberLaunchRecipe?(recipe: PaneLaunchRecipe): void
+  /** A terminal worker's restart resume now waits on a person beside the cut chats. */
+  restartOffersChanged?(): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
