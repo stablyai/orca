@@ -6996,7 +6996,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Another install is still running",
-          "edited": "Skill edited outside Orca",
           "install": "Install",
           "installFor": "Install for {{value0}}",
           "installed": "Installed",
@@ -14348,7 +14347,6 @@
           "attentionUnwritable": "Needs attention · Orca can't write to {{folder}}",
           "attentionBusy": "Needs attention · Another skill install is still finishing here",
           "attentionUnreadable": "Needs attention · Orca can't read every file in this copy",
-          "attentionEdited": "Needs attention · You edited this copy",
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",

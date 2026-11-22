@@ -10,7 +10,7 @@ const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
 const SKILLS_FORCE_FLAG_HELP =
-  '--force                Replace skipped copies after moving them to a backup.'
+  '--force                Replace skipped copies where possible, moving each to a backup first.'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'bot item add': {

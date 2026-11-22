@@ -239,7 +239,8 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
     const forceHint = hasReplaceableLeave(plan)
       ? [
           '',
-          'Rerun with --force to replace skipped copies. They move to a backup first, with any extra files.'
+          'Rerun with --force to replace skipped copies where possible. ' +
+            'Orca moves each copy it replaces, including any extra files, to a backup first.'
         ]
       : []
 

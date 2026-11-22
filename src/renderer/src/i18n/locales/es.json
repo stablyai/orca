@@ -5483,7 +5483,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Otra instalación sigue en curso",
-          "edited": "Skill modificada fuera de Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -12751,7 +12750,6 @@
           "attentionUnwritable": "Requiere atención · Orca no puede escribir en {{folder}}",
           "attentionBusy": "Requiere atención · Otra instalación de habilidades aún está terminando aquí",
           "attentionUnreadable": "Requiere atención · Orca no puede leer todos los archivos de esta copia",
-          "attentionEdited": "Requiere atención · Editaste esta copia",
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",

@@ -2,6 +2,13 @@ import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
+const SKILL_UPDATE_NOTE =
+  'A copy that matches an older Orca release and has only SKILL.md can update in place. ' +
+  'A copy with extra files or other differences may be skipped.'
+const SKILL_REPLACE_NOTE =
+  'Use --force to replace skipped copies where possible. ' +
+  'Orca moves each copy it replaces, including any extra files, to a backup first.'
+
 export const SKILL_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['skills', 'installed'],
@@ -78,10 +85,9 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'Writes the copy this Orca build ships into the shared .agents/skills folder and ' +
         'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +
         'Update skills does.',
-      'Only copies that match what Orca ships are updated. A copy that differs from ' +
-        "Orca's, or a different skill with the same name, is skipped and reported. " +
-        'Pass --force to replace skipped copies where possible. Orca moves those copies, ' +
-        'including any extra files, to a backup first. Use --json for backup paths.',
+      SKILL_UPDATE_NOTE,
+      SKILL_REPLACE_NOTE,
+      'Use --json for backup paths.',
       'Installs globally (all projects) by default. Use --local to install into the ' +
         'current project; it links only into agent folders the project already has.',
       'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +
@@ -108,10 +114,9 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Runs the same planner as `orca skills install`, but only at locations that already ' +
         'hold the skill; it never adds a skill, or an existing skill for another agent.',
-      'Updates each untouched copy where it is. Other copies are skipped. Pass --force ' +
-        'to replace skipped copies where possible. Orca moves those copies, including any ' +
-        'extra files, to a backup first. ' +
-        'Use `orca skills install` to add a skill for a newly detected agent.',
+      SKILL_UPDATE_NOTE,
+      SKILL_REPLACE_NOTE,
+      'Use `orca skills install` to add a skill for a newly detected agent.',
       'Updates the global install by default. Use --local to update the current project.',
       'Use --dry-run to print what would change and the plan digest without writing.',
       'With --json, both dry runs and real runs print the plan, and real runs the result.',

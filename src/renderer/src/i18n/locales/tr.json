@@ -6013,7 +6013,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Başka bir yükleme hâlâ sürüyor",
-          "edited": "Beceri Orca dışında düzenlendi",
           "install": "Yükle",
           "installFor": "{{value0}} için yükle",
           "installed": "Yüklü",
@@ -13170,7 +13169,6 @@
           "attentionUnwritable": "Dikkat gerekiyor · Orca tarafından {{folder}} konumuna yazılamıyor",
           "attentionBusy": "Dikkat gerekiyor · Burada başka bir becerinin yüklenmesi hâlâ sürüyor",
           "attentionUnreadable": "Dikkat gerekiyor · Bu kopyadaki bazı dosyalar Orca tarafından okunamıyor",
-          "attentionEdited": "Dikkat gerekiyor · Bu kopyayı düzenlediniz",
           "attentionOther": "Dikkat gerekiyor · Bu adı zaten başka bir beceri kullanıyor",
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
