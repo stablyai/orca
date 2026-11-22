@@ -108,12 +108,19 @@ export async function deliverWorkerDispatchPreamble(args: {
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
   const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
+  // A stop or abandon mid-delivery hands the terminal back: nothing more of the brief goes in.
+  const beforeWrite = async (ptyId: string): Promise<void> => {
+    if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
+      throw new Error('request_aborted')
+    }
+    await briefGuard?.beforeWrite(ptyId)
+  }
   try {
     const sent = await sendAgentTurn({
       kind: 'terminal',
       runtime,
       handle: terminalHandle,
-      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+      beforeWrite,
       turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
     })
     return { prompt: sent.prompt }

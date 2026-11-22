@@ -1,10 +1,5 @@
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
-import {
-  SETUP_COMPLETE_MESSAGE,
-  SETUP_FAILED_MESSAGE_PREFIX,
-  SETUP_WAIT_TIMEOUT_MESSAGE
-} from '../../../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { readTerminalStartFailure } from '../../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   RuntimeTerminalWait,
@@ -23,6 +18,8 @@ import {
   type TerminalReadinessCreation
 } from '../../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { WorkerSetupReceipt } from '../placement/worker-placement-topology'
+import type { SetupEndWatch } from './worker-setup-end-watch'
+import { registerWorkerStartWait } from './worker-start-waits'
 import { WORKER_AWAITING_AGENT_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 
 const READY_DEADLINE_MS = 10 * 60_000
@@ -37,14 +34,6 @@ export function workerStartReadyDeadlineMs(): number {
 export function deadlineText(): string {
   const ms = workerStartReadyDeadlineMs()
   return ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`
-}
-
-/** One wait per Dispatch, in this runtime only: a restart ends it (see settleRestartCutWorkerStart). */
-const waits = new Map<string, AbortController>()
-
-/** A stop or abandon ends the wait; the Dispatch's own state already says why. */
-export function cancelWorkerStartWait(dispatchId: string): void {
-  waits.get(dispatchId)?.abort()
 }
 
 export type WorkerReadinessWaitArgs = {
@@ -69,6 +58,18 @@ export function readinessStillPending(
     : null
 }
 
+/** The PTY behind a waiting worker's pane: the one its launch created, else whatever backs the handle now. */
+export function workerPanePtyId(
+  runtime: Pick<OrcaRuntimeService, 'getTerminalPtyIdForHandle'>,
+  handle: string,
+  readiness: WorkerReadinessWaitArgs
+): string | null {
+  return (
+    (!readiness.reusesTerminal && freshLaunchPtyId(handle, readiness.creation)) ||
+    runtime.getTerminalPtyIdForHandle(handle)
+  )
+}
+
 export type AwaitingWorkerStart = {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -78,6 +79,8 @@ export type AwaitingWorkerStart = {
   setup: WorkerSetupReceipt
   /** When the agent was launched; its deadline counts from here unless Setup holds it. */
   launchedAt: number
+  /** A wait-for-setup launch's watch for Setup's end, kept from launch; the wait owns it from here. */
+  setupEnd?: SetupEndWatch | null
   blockedReason?: RuntimeTerminalWaitBlockedReason
   /** Types the brief and settles the start, as a start ready in time does. */
   handOver: (ready: RuntimeTerminalWait) => Promise<void>
@@ -89,29 +92,30 @@ export type AwaitingWorkerStart = {
 export function awaitWorkerAgentInBackground(start: AwaitingWorkerStart): {
   readyBy: number | null
 } {
-  start.db.recordWorkerStage({ dispatchId: start.dispatchId, stage: WORKER_AWAITING_AGENT_STAGE })
-  const controller = new AbortController()
-  waits.get(start.dispatchId)?.abort()
-  waits.set(start.dispatchId, controller)
   // A screen already up means the agent runs, so Setup is over.
-  const gated =
-    start.setup.startupPolicy === 'wait-for-setup' &&
-    start.setup.state === 'running' &&
-    !start.blockedReason
-  void watch(start, controller.signal, gated)
-    .catch((error: unknown) => {
+  const setupEnd = start.blockedReason ? null : (start.setupEnd ?? null)
+  if (!setupEnd) {
+    start.setupEnd?.dispose()
+  }
+  const clock = readyClock(setupEnd, start.launchedAt)
+  try {
+    start.db.recordWorkerStage({ dispatchId: start.dispatchId, stage: WORKER_AWAITING_AGENT_STAGE })
+  } catch (error) {
+    clock.dispose()
+    throw error
+  }
+  registerWorkerStartWait(start.dispatchId, (signal) =>
+    watch(start, signal, clock).catch((error: unknown) => {
       console.warn('[orchestration] waiting for a worker agent failed', start.dispatchId, error)
     })
-    .finally(() => {
-      if (waits.get(start.dispatchId) === controller) {
-        waits.delete(start.dispatchId)
-      }
-    })
-  // A gated launch's clock starts when Setup ends, so no time can be promised yet.
-  return { readyBy: gated ? null : start.launchedAt + workerStartReadyDeadlineMs() }
+  )
+  // A launch still behind Setup has its clock start when Setup ends, so no time can be promised yet;
+  // one whose Setup failed is ending now.
+  const setupEnded = setupEnd?.ended()
+  return { readyBy: setupEnd && (!setupEnded || setupEnded.failed) ? null : clock.readyBy() }
 }
 
-async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boolean) {
+async function watch(start: AwaitingWorkerStart, signal: AbortSignal, clock: ReadyClock) {
   const { runtime, db, dispatchId, terminalHandle } = start
   const awaiting = () => {
     const worker = db.getWorkerDispatch(dispatchId)
@@ -121,11 +125,7 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, gated: boo
       worker.stage === WORKER_AWAITING_AGENT_STAGE
     )
   }
-  const ptyId = () =>
-    (!start.readiness.reusesTerminal &&
-      freshLaunchPtyId(terminalHandle, start.readiness.creation)) ||
-    runtime.getTerminalPtyIdForHandle(terminalHandle)
-  const clock = readyClock(runtime, gated ? ptyId() : null, start.launchedAt)
+  const ptyId = () => workerPanePtyId(runtime, terminalHandle, start.readiness)
   // The clock ran out, or Setup failed and no agent will start: either way the start ends here.
   const expire = async () => {
     await (clock.setupFailed()
@@ -230,55 +230,30 @@ type ReadyClock = {
   dispose: () => void
 }
 
-const SETUP_END_LINES = [
-  { line: SETUP_COMPLETE_MESSAGE, failed: false },
-  { line: SETUP_FAILED_MESSAGE_PREFIX, failed: true },
-  { line: SETUP_WAIT_TIMEOUT_MESSAGE, failed: true }
-] as const
-const SETUP_END_CARRY = Math.max(...SETUP_END_LINES.map(({ line }) => line.length)) - 1
-
-/** Runs from launch, or for a wait-for-setup pane (`setupPtyId`) from the line its wrapper prints in
- *  that pane when Setup ends; until then only the wrapper's own 2-hour limit bounds it. */
-function readyClock(
-  runtime: Pick<OrcaRuntimeService, 'subscribeToTerminalData' | 'readRecentTerminalOutput'>,
-  setupPtyId: string | null,
-  launchedAt: number
-): ReadyClock {
+/** Runs from launch, or for a launch behind Setup from the moment its wrapper printed that Setup
+ *  ended; until then only the wrapper's own 2-hour limit bounds it. */
+function readyClock(setupEnd: SetupEndWatch | null, launchedAt: number): ReadyClock {
   const expire = new AbortController()
   let deadline = 0
   let timer: ReturnType<typeof setTimeout> | undefined
   let failed = false
-  let unsubscribe = (): void => {}
   const arm = (at: number): void => {
     deadline = at
     clearTimeout(timer)
     timer = setTimeout(() => expire.abort(), Math.max(0, at - Date.now()))
   }
-  if (!setupPtyId) {
+  if (!setupEnd) {
     arm(launchedAt + workerStartReadyDeadlineMs())
   } else {
     arm(Date.now() + SETUP_WAIT_GATE_MAX_MS + workerStartReadyDeadlineMs())
-    let carry = ''
-    let ended = false
-    const scan = (chunk: string): void => {
-      const window = carry + chunk
-      carry = window.slice(-SETUP_END_CARRY)
-      const end = ended ? undefined : SETUP_END_LINES.find(({ line }) => window.includes(line))
-      if (!end) {
-        return
-      }
-      ended = true
-      unsubscribe()
+    setupEnd.onEnd((end) => {
       if (end.failed) {
         failed = true
         expire.abort()
       } else {
-        arm(Date.now() + workerStartReadyDeadlineMs())
+        arm(end.at + workerStartReadyDeadlineMs())
       }
-    }
-    unsubscribe = runtime.subscribeToTerminalData(setupPtyId, scan)
-    // The line may have come before this wait began; the pane's recent bytes still hold it.
-    scan(runtime.readRecentTerminalOutput(setupPtyId) ?? '')
+    })
   }
   return {
     expired: expire.signal,
@@ -286,7 +261,7 @@ function readyClock(
     readyBy: () => deadline,
     dispose: () => {
       clearTimeout(timer)
-      unsubscribe()
+      setupEnd?.dispose()
     }
   }
 }
