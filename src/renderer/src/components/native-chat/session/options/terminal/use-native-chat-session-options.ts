@@ -31,7 +31,7 @@ const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
 // Kept across chat remounts, as on the phone: a repeated hook model is not fresh evidence, and
 // reapplying it would revert a newer pick.
-const appliedReportByScope = new Map<string, string>()
+const appliedReportByPty = new Map<string, { agent: AgentType; model: string }>()
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -111,12 +111,12 @@ export function useNativeChatSessionOptions(args: {
         : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
             allowUnlisted: agent === 'codex'
           })
-    // Another agent in the same terminal starts over.
-    const reportScope = `${agent}\u0000${targetPtyId}`
-    if (!matched || appliedReportByScope.get(reportScope) === matched) {
+    // Another agent in the same terminal starts over, and so does a later return to this one.
+    const applied = appliedReportByPty.get(targetPtyId)
+    if (!matched || (applied?.agent === agent && applied.model === matched)) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, reportScope, matched)
+    setBoundedScopeCacheEntry(appliedReportByPty, targetPtyId, { agent, model: matched })
     surface.reportSessionOptions({ model: matched })
   }, [agent, discoveredModelsRevision, discoveryContext, reportedModel, surface, targetPtyId])
 

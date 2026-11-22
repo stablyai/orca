@@ -111,7 +111,9 @@ class StopTranscriptReader<T> {
           }
           const restated = found ? this.spec.restate(original, found, stoppedAt) : undefined
           if (restated) {
-            this.host.applyEvent(restated, source, env, version)
+            // A restatement of the Stop never opens another turn.
+            const { opensTurn: _opensTurn, ...sameTurn } = restated
+            this.host.applyEvent(sameTurn, source, env, version)
           }
         })
       }, delayMs)
