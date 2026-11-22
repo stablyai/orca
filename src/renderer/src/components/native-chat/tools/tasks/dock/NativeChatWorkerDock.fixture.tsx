@@ -84,4 +84,6 @@ export const botHomeChatFolded = defineFixture({ width: 720, render: () => botCh
 
 export const botHomeChatOpen = defineFixture({ width: 720, render: () => botChat(true) })
 
-export const botHomeChatNarrowOpen = defineFixture({ width: 360, render: () => botChat(true) })
+export const botHomeChatNarrowFolded = defineFixture({ width: 390, render: () => botChat(false) })
+
+export const botHomeChatNarrowOpen = defineFixture({ width: 390, render: () => botChat(true) })
