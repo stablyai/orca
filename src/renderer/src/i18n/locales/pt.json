@@ -24976,18 +24976,19 @@
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
       "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
       "dueNow": "Previsto para agora",
-      "every2h": "a cada 2 horas",
-      "every4h": "a cada 4 horas",
       "lastNeededSignIn": "A última execução parou para você entrar",
       "lookAroundSettings": "Configurações das olhadas",
       "lookFirst": "Após seu primeiro chat · depois {{every}}",
-      "mornings": "todas as manhãs",
       "needsSignIn": "Precisa entrar",
       "runsEvery": "Executa {{every}}",
       "stopped": "Parado",
       "tidySettings": "Configurações de arrumação da memória",
       "tidyUp": "Arrumar memória",
-      "twiceDaily": "duas vezes ao dia"
+      "every4hWindow": "das {{from}} às {{to}}, a cada 4 horas",
+      "every2hWindow": "das {{from}} às {{to}}, a cada 2 horas",
+      "twiceDailyAt": "duas vezes por dia, {{first}} e {{second}}",
+      "morningsAt": "toda manhã às {{time}}",
+      "weekdays": "dias úteis, {{schedule}}"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",

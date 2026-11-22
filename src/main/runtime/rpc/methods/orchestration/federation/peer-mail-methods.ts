@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
+import { withDeliveryHoldWarning } from '../messaging/send-delivery-hold'
 import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
 import { storePeerMailForAgent } from './peer-mail-agent-store'
 import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
@@ -112,7 +113,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         )
       }
       // A retry after a lost answer is acknowledged even if the recipient has since gone.
-      const delivered = (): { message: { id: string; to: string } } | null => {
+      const delivered = async (): Promise<{ message: { id: string; to: string } } | null> => {
         const message = db.getPeerMailMessage(params.messageId)
         if (!message) {
           return null
@@ -128,10 +129,15 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
             NOTHING_DELIVERED
           )
         }
-        return { message: { id: params.messageId, to: params.to } }
+        const receipt = { message: { id: params.messageId, to: params.to } }
+        const stored = db.getMessageById(params.messageId)
+        // A retry reads the hold again; bot mail reports none, as its first answer did, and read mail is held no longer.
+        return !stored || db.getBotRequest(params.messageId)
+          ? receipt
+          : withDeliveryHoldWarning(receipt, runtime, db, stored.to_handle, stored.read !== 0)
       }
       // A replay needs no routing, so it never waits on the recipient's preparation.
-      const replayed = delivered()
+      const replayed = await delivered()
       if (replayed) {
         return replayed
       }
@@ -144,7 +150,16 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       const landed = await storePeerMailForAgent(
         runtime,
         { ...params, to, body, peerFingerprint, senderSnapshot },
-        delivered
+        delivered,
+        // An older sending Orca ignores the warnings; the sender learns the mail waits unread.
+        (stored, takenByWaiter) =>
+          withDeliveryHoldWarning(
+            { message: { id: params.messageId, to: params.to } },
+            runtime,
+            db,
+            stored,
+            takenByWaiter
+          )
       )
       if (landed) {
         return landed

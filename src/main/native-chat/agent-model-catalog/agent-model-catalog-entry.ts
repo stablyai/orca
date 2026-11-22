@@ -219,9 +219,12 @@ export function agentModelCatalogEntryWithSuccess(
     )
   }
   const incoming = retainedAgentModelCatalogModels(previous, success)
-  const models = modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent)
-    ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
-    : incoming
+  // A later listing must not forget a menu a chat confirmed; probes stay model-specific-only.
+  const models =
+    modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent) ||
+    modelCatalogOwnership.confirmsListedEffortAtSend(identity.agent)
+      ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
+      : incoming
   if (models.length === 0) {
     return null
   }

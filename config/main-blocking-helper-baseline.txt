@@ -855,13 +855,14 @@
 11 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
 19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
 30 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
+1 src/main/orca-profiles/cloud-console/cloud-console-link.ts # click-time console link reads the profile index once
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
 2 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
 9 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
 21 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
-7 src/main/orca-profiles/orca-account-service.ts
+8 src/main/orca-profiles/orca-account-service.ts # +1 openConsole: click-time console link reads the profile index once
 1 src/main/orca-profiles/profile-account-user-id.ts
 21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts

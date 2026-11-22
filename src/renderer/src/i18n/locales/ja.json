@@ -25333,19 +25333,20 @@
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
       "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "every2h": "2 時間ごと",
-      "every4h": "4 時間ごと",
       "lookFirst": "最初のチャットの後 · 以降は {{every}}",
-      "mornings": "毎朝",
       "tidyUp": "メモリーを整理",
-      "twiceDaily": "1 日 2 回",
       "lastNeededSignIn": "前回の実行はサインインが必要なため停止しました",
       "stopped": "停止中",
       "lookAroundSettings": "見回りの設定",
       "dueNow": "実行時刻です",
       "runsEvery": "{{every}} に実行",
       "tidySettings": "メモリー整理の設定",
-      "needsSignIn": "サインインが必要です"
+      "needsSignIn": "サインインが必要です",
+      "every4hWindow": "{{from}}〜{{to}}、4時間ごと",
+      "every2hWindow": "{{from}}〜{{to}}、2時間ごと",
+      "twiceDailyAt": "1日2回、{{first}}と{{second}}",
+      "morningsAt": "毎朝{{time}}",
+      "weekdays": "平日、{{schedule}}"
     },
     "palette": {
       "placeholder": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",

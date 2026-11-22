@@ -23532,19 +23532,20 @@
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
       "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
-      "every2h": "每 2 小時",
-      "every4h": "每 4 小時",
       "lookFirst": "第一次聊天後 · 之後 {{every}}",
-      "mornings": "每天早上",
       "tidyUp": "整理記憶",
-      "twiceDaily": "每天兩次",
       "lastNeededSignIn": "上次執行因需要登入而停止",
       "stopped": "已停止",
       "lookAroundSettings": "四處檢視設定",
       "dueNow": "已到執行時間",
       "runsEvery": "{{every}} 執行",
       "tidySettings": "整理記憶設定",
-      "needsSignIn": "需要登入"
+      "needsSignIn": "需要登入",
+      "every4hWindow": "{{from}}至{{to}}，每 4 小時",
+      "every2hWindow": "{{from}}至{{to}}，每 2 小時",
+      "twiceDailyAt": "每天兩次，{{first}}和{{second}}",
+      "morningsAt": "每天早上{{time}}",
+      "weekdays": "平日，{{schedule}}"
     },
     "palette": {
       "placeholder": "搜尋 bots、聊天、終端機、工作區、任務、設定和操作...",

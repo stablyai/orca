@@ -3996,7 +3996,7 @@
     "ko": "Hex"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
-    "ko": "워크스페이스 안전성 확인 중"
+    "ko": "워크스페이스 스캔 중"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
@@ -4588,6 +4588,9 @@
   },
   "auto.components.settings.accounts.search.zcodePlan.description": {
     "ko": "Z.AI 또는 Zhipu(BigModel) GLM Coding Plan 사용량을 추적합니다. 사이트를 선택하고 요금제 API 키를 저장하세요."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.rateLimit": {
+    "ko": "속도 제한"
   },
   "auto.components.settings.GrokAccountsSection.e6dadc1e2b": {
     "ko": "월간 사용량"
@@ -5305,6 +5308,18 @@
   },
   "auto.components.settings.artifacts.showButton": {
     "ko": "아티팩트 버튼 표시"
+  },
+  "auto.components.settings.artifacts.keywordPublish": {
+    "ko": "게시"
+  },
+  "auto.components.settings.artifacts.keywordPublic": {
+    "ko": "공개"
+  },
+  "auto.components.settings.artifacts.keywordPermission": {
+    "ko": "권한"
+  },
+  "auto.components.settings.OrchestrationPane.coordinatorApprovalsKeywordPermission": {
+    "ko": "권한"
   },
   "auto.components.settings.Settings.6855b0f77d": {
     "ko": "Orca를 병렬 에이전트 작업에 유용하게 만드는 핵심 워크플로를 완료합니다."
