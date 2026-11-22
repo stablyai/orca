@@ -29,6 +29,7 @@ describe('worker-start --item', () => {
       byNumber: async (n: number) => store.byNumber(n),
       get: async (uid: string) => store.get(uid)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only these fields of the context.
     const context = {
       orchestrationCaller: { sessionId: 'helper' },
       runtime: {
