@@ -1,7 +1,11 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
-import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import {
+  readExactAgentForeground,
+  type ExactAgentName,
+  type LaunchedAgentForeground
+} from '../wait/launched-agent-foreground'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -28,7 +32,8 @@ export type ReattachedLaunchIdentity = { incarnationId: PtyIncarnationId; launch
 export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInvalidateAllHandlesForPty {
   abstract readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent
+    agent: TuiAgent,
+    exact?: ExactAgentName
   ): Promise<LaunchedAgentForeground>
 
   protected abstract watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void
@@ -146,15 +151,17 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     }
   }
 
-  /** No note: main never armed one (a launch without a recipe) or saw the launch finish, while the
-   *  daemon's launch agent outlives both. Only a shell in front proves it gone; an unreadable
-   *  foreground (Windows) keeps the restore. */
+  /** No note: main never armed one (a launch without a recipe), or an older daemon kept the agent of
+   *  a launch main saw finish. Only that agent's own process in front proves it still runs; anything
+   *  else (vim, ssh, another agent, an unreadable Windows/WSL/SSH foreground) restores nothing. */
   private async restoreUnnotedLaunchAgent(
     pty: RuntimePtyWorktreeRecord,
     identity: ReattachedLaunchIdentity,
     evidence: LaunchEvidence | undefined
   ): Promise<void> {
-    const foreground = await this.readLaunchedAgentForeground(
+    const foreground = await readExactAgentForeground(
+      this,
+      this.ptyController,
       pty.ptyId,
       identity.launchAgent
     ).catch(() => 'unknown' as const)
@@ -165,13 +172,11 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     ) {
       return
     }
-    if (foreground === 'shell') {
+    if (foreground === 'agent') {
+      pty.launchAgent ??= identity.launchAgent
+    } else if (pty.launchAgent === identity.launchAgent) {
       // An earlier attach may have restored it before the launch ended.
-      if (pty.launchAgent === identity.launchAgent) {
-        pty.launchAgent = null
-      }
-    } else if (!pty.launchAgent) {
-      pty.launchAgent = identity.launchAgent
+      pty.launchAgent = null
     }
   }
 
