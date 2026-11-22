@@ -7,13 +7,13 @@ import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-sco
 import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
-  Partial<Pick<Store, 'getFolderWorkspace' | 'getRepos'>> & {
+  Partial<Pick<Store, 'getFolderWorkspace'>> & {
     getProjectGroup?: (id: string) => Pick<ProjectGroup, 'id' | 'name'> | undefined
     getProjectGroups?: () => Pick<ProjectGroup, 'id' | 'name'>[]
   }
 
 const APP_HISTORY_KEY = '__app__'
-const HISTORY_CAPACITY = 60
+export const HISTORY_CAPACITY = 60
 const HISTORY_STALE_MS = 10 * 60 * 1000
 
 type HistoryRing = {
@@ -39,10 +39,6 @@ export function pushMemoryHistorySample(key: string, memoryBytes: number, now: n
 /** A workspace's series with its chats included, kept while it has chats; the plain key is terminals only. */
 export function chatInclusiveHistoryKey(worktreeId: string): string {
   return `${worktreeId}\u0000chats`
-}
-
-export function hasMemoryHistory(key: string): boolean {
-  return historyByKey.has(key)
 }
 
 /** Starts `key` as a copy of `fromKey`'s series, so a new series continues the old one. */
@@ -117,28 +113,13 @@ export function createProjectGroupNameLookup(store: MemorySnapshotStore): Projec
 /** Repo display names read once per repo per snapshot; the store's repo lookup scans the catalog. */
 export type RepoNameLookup = (repoId: string) => string | undefined
 
-// getRepo scans the catalog, so a sample spanning more projects than this indexes it once instead.
-const REPO_LOOKUPS_BEFORE_INDEX = 4
-
 export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup {
   const names = new Map<string, string | undefined>()
-  let byId: Map<string, string | undefined> | undefined
   return (repoId) => {
-    if (names.has(repoId)) {
-      return names.get(repoId)
+    if (!names.has(repoId)) {
+      names.set(repoId, store.getRepo(repoId)?.displayName?.trim() || undefined)
     }
-    if (!byId && store.getRepos && names.size >= REPO_LOOKUPS_BEFORE_INDEX) {
-      byId = new Map()
-      // A repo id registered on several hosts keeps its first row's name, as getRepo does.
-      for (const repo of store.getRepos()) {
-        if (!byId.has(repo.id)) {
-          byId.set(repo.id, repo.displayName?.trim() || undefined)
-        }
-      }
-    }
-    const name = byId ? byId.get(repoId) : store.getRepo(repoId)?.displayName?.trim() || undefined
-    names.set(repoId, name)
-    return name
+    return names.get(repoId)
   }
 }
 

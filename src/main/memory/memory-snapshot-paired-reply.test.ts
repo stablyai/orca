@@ -40,12 +40,13 @@ describe('the memory snapshot a paired machine receives', () => {
   it('carries terminals only, with terminal totals, history and no restored pane keys', () => {
     recordPairedReplyParts(snapshot, {
       rowsDiffer: true,
+      hasChatOnlyRows: true,
       readTerminalHistory: () => [100],
       terminalSeries: [
         { worktreeId: 'repo::/mixed', usage: { cpu: 1, memory: 100, privateMemory: 0 } }
       ],
       hasPrivateMemory: false,
-      restoredSessionIds: new Set(['s1']),
+      restoredSessionIds: new Map([['repo::/mixed', new Set(['s1'])]]),
       totals: { totalCpu: 2, totalMemory: 1_100 }
     })
 

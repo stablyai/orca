@@ -1,4 +1,7 @@
-import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  MemorySnapshot,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { PtyListedSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { isProgramStatusRow } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '../../../../store/index'
@@ -40,7 +43,8 @@ export function splitSnapshotByOwner(
 
 /** Agent processes no listed chat row accounts for, such as a server several chats share. */
 export function sharedAgentProcessUsage(
-  snapshot: MemorySnapshot
+  snapshot: MemorySnapshot,
+  isListed: (worktree: WorktreeMemory) => boolean
 ): { cpu: number; memory: number } | null {
   const total = snapshot.agentProcesses
   if (!total || total.memory <= 0) {
@@ -49,7 +53,7 @@ export function sharedAgentProcessUsage(
   let cpu = total.cpu
   let memory = total.memory
   for (const worktree of snapshot.worktrees) {
-    if (!worktree.chats) {
+    if (!worktree.chats || !isListed(worktree)) {
       continue
     }
     for (const chat of worktree.chats) {

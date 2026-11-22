@@ -41,18 +41,6 @@ import type { Translate } from '@/i18n/use-translate'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
 
-/** A workspace sample's chats alone, for when its terminals are another host's to show. */
-function chatPartOf(wt: WorktreeMemory): WorktreeMemory {
-  const { privateMemory: _privateMemory, chats = [], ...rest } = wt
-  return {
-    ...rest,
-    chats,
-    cpu: chats.reduce((sum, chat) => sum + chat.cpu, 0),
-    memory: chats.reduce((sum, chat) => sum + chat.memory, 0),
-    history: [],
-    sessions: []
-  }
-}
 const LOCAL_SAMPLE = 'local'
 const NO_RUNTIME_PANE_TITLES = { runtimePaneTitlesByTabId: {} }
 function getUnattributedRepoName(t: Translate = translate): string {
@@ -116,10 +104,6 @@ export function mergeSnapshotAndSessions(
   // so a later merge of the same sample never visits its chat rows.
   const chatOnly: WorktreeMemory[] = []
   let terminalSamples: WorktreeMemory[] | undefined
-  const shownLocally = new Set<string>()
-  // A same-id row already in the project is this machine's.
-  const isShownLocally = (worktreeId: string, repoId: string): boolean =>
-    shownLocally.has(worktreeId) || groups.hasRow(repoId, worktreeId)
   const ingestSource = cached ? (cached.terminalSamples ?? source) : source
   for (let i = 0; i < ingestSource.length; i++) {
     const wt = ingestSource[i]
@@ -131,21 +115,13 @@ export function mergeSnapshotAndSessions(
       }
       terminalSamples?.push(wt)
     }
-    const placement = localSamplePlacement(ctx, wt, false)
+    const placement = localSamplePlacement(ctx, wt)
     if (placement) {
-      shownLocally.add(placement.worktreeId)
       ingestSampledWorktree(wt, placement)
-    } else if (wt.chats?.length) {
-      // Its terminals follow a paired repo host, but its chats run here.
-      const chats = chatPartOf(wt)
-      const chatPlacement = localSamplePlacement(ctx, chats, true)
-      if (chatPlacement) {
-        ingestSampledWorktree(chats, chatPlacement)
-      }
     }
   }
   const localGroups =
-    cached?.groups ?? buildChatRowGroups(chatOnly, (wt) => localSamplePlacement(ctx, wt, true))
+    cached?.groups ?? buildChatRowGroups(chatOnly, (wt) => localSamplePlacement(ctx, wt))
   if (snapshot) {
     nextSamples.set(
       LOCAL_SAMPLE,
@@ -159,7 +135,13 @@ export function mergeSnapshotAndSessions(
     groups.addChatRowGroup(part)
   }
 
-  // This machine's live terminals come before paired samples, so a same-id paired sample is host-qualified.
+  // Paired machines send terminals only, so their samples go straight to placement.
+  for (const host of ctx.runtimeHostResources ?? []) {
+    for (const wt of host.worktrees) {
+      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt))
+    }
+  }
+
   for (const session of daemonSessions) {
     if (seenSessionIds.has(session.id)) {
       continue
@@ -196,7 +178,6 @@ export function mergeSnapshotAndSessions(
     if (runtimeHostId) {
       continue
     }
-    shownLocally.add(finalWorktreeId)
 
     const row =
       groups.rowToUpdate(finalRepoId, finalWorktreeId) ??
@@ -228,13 +209,6 @@ export function mergeSnapshotAndSessions(
       memory: null,
       hasLocalSamples: false
     })
-  }
-
-  // Paired machines send terminals only, so their samples go straight to placement.
-  for (const host of ctx.runtimeHostResources ?? []) {
-    for (const wt of host.worktrees) {
-      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, isShownLocally))
-    }
   }
 
   for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {

@@ -24,11 +24,14 @@ export class ResourceSessionInventoryCache {
   private state: {
     sessionInventory: DaemonSessionInventory
     sessionsError: boolean
+    /** True while an outdated listing is being read again; the list shown can't back an action. */
+    rereading: boolean
     observedAt: number | null
     loading: boolean
   } = {
     sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
     sessionsError: false,
+    rereading: false,
     observedAt: null,
     loading: false
   }
@@ -85,6 +88,9 @@ export class ResourceSessionInventoryCache {
     this.epoch++
     this.pendingRefresh = false
     this.outdatedRetries = 0
+    if (this.state.rereading) {
+      this.publish({ rereading: false })
+    }
     if (!active) {
       if (this.timer) {
         clearTimeout(this.timer)
@@ -184,6 +190,7 @@ export class ResourceSessionInventoryCache {
         this.outdatedRetries = 0
         this.publishInventory({
           sessionsError: false,
+          rereading: false,
           observedAt: Date.now()
         })
       })
@@ -195,10 +202,13 @@ export class ResourceSessionInventoryCache {
         if (isOutdatedSessionListing(error) && this.outdatedRetries < OUTDATED_RETRY_LIMIT) {
           this.outdatedRetries += 1
           this.pendingRefresh = true
+          if (!this.state.rereading) {
+            this.publish({ rereading: true })
+          }
           return
         }
         this.outdatedRetries = 0
-        this.publish({ sessionsError: true })
+        this.publish({ sessionsError: true, rereading: false })
       })
       .finally(() => {
         this.tombstones.clear()

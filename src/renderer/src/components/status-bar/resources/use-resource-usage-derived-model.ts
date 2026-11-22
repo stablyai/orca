@@ -8,6 +8,10 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
 import { createResourceMergeCache } from './workspace-attribution/resource-chat-row-groups'
+import {
+  resolveResourceFolderWorkspace,
+  resolveResourceWorkspaceHost
+} from './workspace-attribution/resource-workspace-host'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
@@ -170,9 +174,26 @@ export function useResourceUsageDerivedModel({
     if (!open || !resourceSnapshot) {
       return null
     }
-    // Every chat sampled here has a row, so only usage outside them is shared.
-    return sharedAgentProcessUsage(resourceSnapshot)
-  }, [open, resourceSnapshot])
+    const hostCtx = {
+      worktreeById,
+      ambiguousWorktreeIds,
+      repoConnectionIdById,
+      repoRuntimeHostIdById
+    }
+    // The merge leaves out local samples for workspaces a paired machine hosts, chats included; those stay shared.
+    return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
+      const repoId =
+        resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
+      return !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId
+    })
+  }, [
+    open,
+    resourceSnapshot,
+    worktreeById,
+    ambiguousWorktreeIds,
+    repoConnectionIdById,
+    repoRuntimeHostIdById
+  ])
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {

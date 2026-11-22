@@ -5,13 +5,15 @@ import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values
 export type PairedReplyParts = {
   /** False when every row is already what paired clients receive, so the reply sends them as they are. */
   rowsDiffer: boolean
+  /** Rows without terminals exist, which paired replies leave out. */
+  hasChatOnlyRows: boolean
   /** Terminal-only usage of workspaces that also have chats. */
   terminalSeries: readonly { worktreeId: string; usage: RowUsage }[]
   hasPrivateMemory: boolean
   /** A workspace's terminal-only history; read only for the rows that need it. */
   readTerminalHistory: (worktreeId: string) => number[]
-  /** Sessions whose pane key came from startup restore; paired replies send them without one. */
-  restoredSessionIds: ReadonlySet<string>
+  /** Per workspace, sessions whose pane key came from startup restore; paired replies send them without one. */
+  restoredSessionIds: ReadonlyMap<string, ReadonlySet<string>>
   totals: Pick<
     MemorySnapshot,
     'processCommitMetric' | 'totalCpu' | 'totalMemory' | 'totalPrivateMemory'
@@ -33,9 +35,7 @@ function pairedRow(
   terminalUsage: ReadonlyMap<string, RowUsage>
 ): WorktreeMemory {
   const terminal = terminalUsage.get(wt.worktreeId)
-  const restored =
-    parts.restoredSessionIds.size > 0 &&
-    wt.sessions.some((session) => parts.restoredSessionIds.has(session.sessionId))
+  const restored = parts.restoredSessionIds.get(wt.worktreeId)
   if (!terminal && !restored) {
     return wt
   }
@@ -52,7 +52,7 @@ function pairedRow(
       : {}),
     sessions: restored
       ? wt.sessions.map((session) =>
-          parts.restoredSessionIds.has(session.sessionId) ? { ...session, paneKey: null } : session
+          restored.has(session.sessionId) ? { ...session, paneKey: null } : session
         )
       : wt.sessions
   }
@@ -83,7 +83,10 @@ export function toPairedMemoryReply(snapshot: MemorySnapshot): MemorySnapshot {
   let worktrees: WorktreeMemory[] | undefined
   if (parts.rowsDiffer) {
     snapshot.worktrees.forEach((wt, i) => {
-      const row = wt.sessions.length > 0 ? pairedRow(wt, parts, terminalUsage) : undefined
+      const row =
+        parts.hasChatOnlyRows && wt.sessions.length === 0
+          ? undefined
+          : pairedRow(wt, parts, terminalUsage)
       if (row !== wt) {
         // Copied only from the first row that differs.
         worktrees ??= snapshot.worktrees.slice(0, i)

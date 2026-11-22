@@ -13,13 +13,20 @@ describe('a session listing a terminal change outdated', () => {
       .mockResolvedValueOnce([{ id: 'shell-a', cwd: '/a', title: 'zsh' }])
     const cache = new ResourceSessionInventoryCache(list, false)
     const errors: boolean[] = []
-    cache.subscribe(() => errors.push(cache.getSnapshot().sessionsError))
+    const rereading: boolean[] = []
+    cache.subscribe(() => {
+      errors.push(cache.getSnapshot().sessionsError)
+      rereading.push(cache.getSnapshot().rereading)
+    })
 
     cache.setActive(true)
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(cache.getSnapshot().loading).toBe(false))
 
     expect(errors).not.toContain(true)
+    // Actions on the old list stay off until the new one arrives.
+    expect(rereading).toContain(true)
+    expect(cache.getSnapshot().rereading).toBe(false)
     expect(cache.getSnapshot().observedAt).not.toBeNull()
   })
 

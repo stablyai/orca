@@ -39,7 +39,7 @@ describe('terminal-only Resource Manager samples pay nothing for chats', () => {
       agentProcesses: { cpu: 0, memory: 0 }
     } as unknown as MemorySnapshot
 
-    expect(sharedAgentProcessUsage(snapshot)).toBeNull()
+    expect(sharedAgentProcessUsage(snapshot, () => true)).toBeNull()
     expect(visited).toBe(0)
   })
 

@@ -19,13 +19,12 @@ import {
 } from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
 import { recordPairedReplyParts } from './memory-snapshot-paired-reply'
-import { recordWorkspaceMemorySeries } from './workspace-memory-series'
+import { readWorkspaceHistory, recordWorkspaceMemorySeries } from './workspace-memory-series'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
   readAppMemoryHistory,
   readMemoryHistory,
-  chatInclusiveHistoryKey,
   createProjectGroupNameLookup,
   createRepoNameLookup,
   resolveWorktreeMemoryNames,
@@ -191,7 +190,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
 
   const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
-  const restoredSessionIds = new Set<string>()
+  // Per workspace, sessions whose pane key came from startup restore.
+  const restoredSessionIds = new Map<string, Set<string>>()
   for (const { pty, rows } of ptyTrees) {
     // This machine's panel names a restored terminal by its pane before the pane mounts; paired replies don't carry it.
     const restoredPaneKey = pty.paneKey ? null : (pty.restoredPaneKey ?? null)
@@ -201,10 +201,12 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       pid: pty.pid ?? 0,
       ...usageOf(sumRows(rows), hasPrivateMemory)
     }
-    if (restoredPaneKey) {
-      restoredSessionIds.add(session.sessionId)
-    }
     const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
+    if (restoredPaneKey) {
+      const restored = restoredSessionIds.get(bucket.worktreeId) ?? new Set<string>()
+      restored.add(session.sessionId)
+      restoredSessionIds.set(bucket.worktreeId, restored)
+    }
     addUsage(bucket, session)
     addUsage(terminals, session)
     bucket.sessions.push(session)
@@ -251,7 +253,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
     ...optionalCommitField(hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(b.chats ? chatInclusiveHistoryKey(b.worktreeId) : b.worktreeId)
+    history: readWorkspaceHistory(b.worktreeId)
   }))
   const agentProcesses = usageOf(agents, hasPrivateMemory)
 
@@ -271,6 +273,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
   recordPairedReplyParts(snapshot, {
     rowsDiffer: hasChatOnlyRows || terminalSeries.length > 0 || restoredSessionIds.size > 0,
+    hasChatOnlyRows,
     terminalSeries,
     hasPrivateMemory,
     readTerminalHistory: readMemoryHistory,
