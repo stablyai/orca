@@ -176,7 +176,7 @@
 
 .native-chat-question-card-options {
   scroll-timeline: --native-chat-question-options block;
-  animation-timeline: --native-chat-question-options;
+  animation-timeline: scroll(self);
 }
 
 [data-native-chat-dock-fit~='card'] .native-chat-question-card-body {
