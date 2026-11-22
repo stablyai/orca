@@ -187,7 +187,6 @@
 3 src/main/claude-accounts/profiles/routing/claude-observed-config-dirs.ts
 1 src/main/claude-accounts/profiles/routing/claude-profile-installed-router.ts
 1 src/main/claude-accounts/profiles/routing/claude-profile-launch-preparation.ts
-1 src/main/claude-accounts/profiles/routing/claude-profile-routed-home.ts
 11 src/main/claude-accounts/profiles/routing/claude-profile-router.ts
 3 src/main/claude-accounts/profiles/setup/claude-profile-history.ts
 14 src/main/claude-accounts/profiles/setup/claude-profile-prompt-history.ts
@@ -202,7 +201,7 @@
 2 src/main/claude-accounts/runtime-auth/keychain.ts
 5 src/main/claude-accounts/selection/claude-account-selection.ts
 1 src/main/claude-accounts/service.ts
-6 src/main/claude-accounts/sign-in/claude-account-folder.ts
+4 src/main/claude-accounts/sign-in/claude-account-folder.ts
 2 src/main/claude-accounts/sign-in/claude-account-registration.ts
 7 src/main/claude-accounts/sign-in/claude-command-process.ts
 2 src/main/claude-usage/store.ts
@@ -1121,7 +1120,6 @@
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
-1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
