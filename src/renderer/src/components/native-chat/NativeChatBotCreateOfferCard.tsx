@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { createBot, openBotHomeTabById, updateBot, useBots } from '@/lib/bot-catalog'
+import { createBot, openBotHomeTabById, useBots } from '@/lib/bot-catalog'
 import { botHostHas } from '@/lib/bot-host-status'
 import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { BotAvatar, BotAvatarTile } from '../bots/BotAvatar'
@@ -30,7 +30,7 @@ import {
   botProposalDetails,
   type BotCreateOfferSay
 } from '../../../../shared/bots/bot-create-offer-view'
-import { botTemplateShownName, botTemplateText } from '../../../../shared/bots/bot-template-text'
+import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import {
   NativeChatCardActions,
@@ -178,8 +178,6 @@ function OfferCard({
 
   const create = (): void => {
     setCreating(true)
-    const hostNames = bots.filter((bot) => bot.hostId === proposer.hostId).map((bot) => bot.name)
-    const goesBy = botTemplateShownName(proposal, proposal.name, hostNames, t)
     // The new bot runs on the agent its proposer runs on, which the owner already uses.
     void createBot(
       proposer.hostId,
@@ -188,10 +186,6 @@ function OfferCard({
         fromOffer
       })
     )
-      // Made under the template's English name, which names its folder; a failed rename keeps it.
-      .then((bot) =>
-        goesBy === bot.name ? bot : updateBot(bot, { name: goesBy }).catch(() => bot)
-      )
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setCreating(false))
   }

@@ -45,12 +45,6 @@ export type BotCreateOfferSay = BotCardSay<keyof typeof BOT_CREATE_OFFER_COPY>
 export type BotOfferShownText = (english: string) => string
 const asWritten: BotOfferShownText = (text) => text
 
-/** The proposed name as the card shows it: a template's own name reads in the UI language. */
-function shownProposalName(proposal: BotProposal, shown: BotOfferShownText): string {
-  const template = botTemplate(proposal.templateId)
-  return template && proposal.name === template.name ? shown(template.name) : proposal.name
-}
-
 export type BotCreateOfferView = {
   /** The bot made from the offer, while it's there. */
   createdBotId: string | null
@@ -127,7 +121,7 @@ export function botCreateOfferView(
   if (state.kind === 'deleted') {
     return {
       createdBotId: null,
-      title: shownProposalName(proposal, shown),
+      title: proposal.name,
       line: { kind: 'deleted', text: say('deleted') },
       takeover: null,
       open: null
@@ -143,7 +137,7 @@ export function botCreateOfferView(
         : say('takesOverMany', { count })
   return {
     createdBotId: null,
-    title: shownProposalName(proposal, shown),
+    title: proposal.name,
     line: { kind: 'purpose', text: shown(proposal.purpose) },
     takeover: null,
     open: { note, actions: nameTaken ? 'rename' : 'editAndCreate' }

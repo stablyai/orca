@@ -11,17 +11,14 @@ import {
   botCreateOfferView,
   botProposalDetails
 } from '../../../../../../src/shared/bots/bot-create-offer-view'
-import {
-  botTemplateShownName,
-  botTemplateText
-} from '../../../../../../src/shared/bots/bot-template-text'
+import { botTemplateText } from '../../../../../../src/shared/bots/bot-template-text'
 import {
   botCreateOfferState,
   proposalCreateParams,
   type BotCreateOffer
 } from '../../../../../../src/shared/bots/bot-proposal'
 import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../../../src/shared/bot-runtime-capabilities'
-import { botCreate, botUpdate } from '../../../../bots/bot-sheet-operations'
+import { botCreate } from '../../../../bots/bot-sheet-operations'
 import { publishHostBot, useHostBotById, useHostBotsEntry } from '../../../../bots/host-bot-store'
 import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
@@ -146,24 +143,7 @@ export function MobileBotCreateOfferCard({
         client,
         proposalCreateParams(proposal, agent, { templatePackages: takesTemplates, fromOffer })
       )
-      .then(async (response) => {
-        const made = botCreate.interpret(response).bot
-        const goesBy = botTemplateShownName(
-          proposal,
-          proposal.name,
-          bots.map((bot) => bot.name),
-          t
-        )
-        // Made under the template's English name, which names its folder; a failed rename keeps it.
-        const bot =
-          goesBy === made.name
-            ? made
-            : await botUpdate
-                .request(client, { botId: made.id, updates: { name: goesBy } })
-                .then((reply) => botUpdate.interpret(reply).bot)
-                .catch(() => made)
-        publishHostBot(host.hostKey, bot)
-      })
+      .then((response) => publishHostBot(host.hostKey, botCreate.interpret(response).bot))
       .catch(fail)
       .finally(() => setBusy(false))
   }
