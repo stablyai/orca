@@ -11,7 +11,6 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { CodexAppServerLaunch } from '../codex-app-server-connection'
-import { parseTomlKeyPath } from '../../configuration/toml/config-toml-key-path'
 
 /** Per-chat keys: each thread gets them through shell_environment_policy.set, never the shared env. */
 const PER_CHAT_ENV_KEYS = [
@@ -93,8 +92,23 @@ function configValues(args: readonly string[]): string[] {
   })
 }
 
-/** Orca's own hooks-off override: trust keys built from absolute paths, never cwd-relative. */
+const HOOK_STATE_OFF = /"((?:[^"\\]|\\.)*)"=\{enabled=false\}/g
+
+/** Orca's own hooks-off override (`hooks.state={"<absolute hooks.json>:<event>:<g>:<h>"=
+ *  {enabled=false},…}`): every entry names a hooks.json by absolute path, so nothing in it
+ *  depends on the folder. Any other hooks.state value counts as folder-sensitive. */
 function isOrcaHooksState(value: string): boolean {
-  const segments = parseTomlKeyPath(value)?.segments
-  return segments?.[0] === 'hooks' && segments[1] === 'state'
+  const body = /^hooks\.state=\{(.+)\}$/.exec(value)?.[1]
+  if (!body || body.replace(HOOK_STATE_OFF, '').replace(/,/g, '') !== '') {
+    return false
+  }
+  return [...body.matchAll(HOOK_STATE_OFF)].every((match) => {
+    let trustKey: string
+    try {
+      trustKey = JSON.parse(`"${match[1]}"`)
+    } catch {
+      return false
+    }
+    return isAbsolute(trustKey.split(':').slice(0, -3).join(':'))
+  })
 }
