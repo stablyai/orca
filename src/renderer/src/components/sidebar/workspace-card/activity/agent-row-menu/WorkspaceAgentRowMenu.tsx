@@ -6,7 +6,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { agentMenuLabels } from '@/components/agent/menu/agent-menu-labels'
@@ -301,7 +300,6 @@ export function AgentRowMenuContent({
           <PanelRight className="size-3.5" />
           {labels.open}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           // A row with no title shows a state label instead; there is no title to copy.
           disabled={!title.trim()}
@@ -310,7 +308,6 @@ export function AgentRowMenuContent({
           <Copy className="size-3.5" />
           {labels.copyTitle}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={!canToggleRead || (!unread && !canMarkUnread)}
           onSelect={() =>
