@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { isRowActivationKey } from '@/lib/list-interaction/list-row-interaction'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
@@ -143,12 +144,8 @@ export function AutomationRunDetailsPage({
       : run.trigger === 'event'
         ? sayAutomationRun(t)(automationRunEventSourceKey(run))
         : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
-  // Nonbreaking spaces keep the dot on the same line as the preceding text.
-  const dot = (
-    <span aria-hidden="true" className="text-muted-foreground">
-      {'\u00a0\u00a0·'}
-    </span>
-  )
+  // The nonbreaking space keeps each separator with the preceding item.
+  const dot = <span aria-hidden="true">{'\u00a0· '}</span>
   const rerunLabel = t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')
   const stepLabel = {
     newer: t('auto.components.automations.runIdentity.newerRun', 'Newer run'),
@@ -173,6 +170,7 @@ export function AutomationRunDetailsPage({
                   size="sm"
                   className="@max-[32.5rem]/run-header:hidden"
                   disabled={isRerunPending}
+                  aria-busy={isRerunPending || undefined}
                   onClick={onRerun}
                 >
                   <RefreshCw
@@ -189,6 +187,7 @@ export function AutomationRunDetailsPage({
                         size="icon-sm"
                         aria-label={rerunLabel}
                         disabled={isRerunPending}
+                        aria-busy={isRerunPending || undefined}
                         onClick={onRerun}
                       >
                         <RefreshCw
@@ -197,7 +196,7 @@ export function AutomationRunDetailsPage({
                       </Button>
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={4}>
+                  <TooltipContent side="top" sideOffset={4}>
                     {rerunLabel}
                   </TooltipContent>
                 </Tooltip>
@@ -231,7 +230,7 @@ export function AutomationRunDetailsPage({
               )
             })}
           </div>
-          <p className="mt-1 flex min-w-0 flex-wrap gap-x-2 text-sm wrap-anywhere text-muted-foreground">
+          <p className="mt-1 min-w-0 text-sm text-muted-foreground">
             {startedLate ? (
               <>
                 <span>
@@ -273,50 +272,58 @@ export function AutomationRunDetailsPage({
                 {dot}
               </span>
             ) : null}
-            <span>
-              {triggerLabel}
-              {dot}
-            </span>
+            {triggerLabel}
+            {workspaceName ? <span aria-hidden="true">{'\u00a0·\u00a0'}</span> : dot}
             {workspaceName ? (
-              <span className="min-w-0">
+              <>
                 {viewState?.canOpen ? (
-                  <button
-                    type="button"
-                    className="group max-w-full cursor-pointer rounded-sm text-left text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={workspaceName}
+                    className="cursor-pointer rounded-sm box-decoration-clone wrap-anywhere text-foreground outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     onClick={onOpenWorkspace}
+                    onKeyDown={(event) => {
+                      if (isRowActivationKey(event)) {
+                        event.preventDefault()
+                        if (!event.repeat) {
+                          onOpenWorkspace()
+                        }
+                      }
+                    }}
                   >
-                    <span className="group-hover:underline">{workspaceName}</span>
-                    <span className="whitespace-nowrap">
-                      <ArrowUpRight
-                        aria-hidden="true"
-                        className="ml-0.5 inline size-3 align-[-0.125em] text-muted-foreground"
-                      />
-                      {dot}
-                    </span>
-                  </button>
-                ) : (
-                  <>
                     {workspaceName}
-                    {dot}
-                  </>
+                    {'\u2060'}
+                    <ArrowUpRight
+                      aria-hidden="true"
+                      className="ml-0.5 inline size-3 align-[-0.125em] text-muted-foreground"
+                    />
+                    {'\u2060'}
+                  </span>
+                ) : (
+                  <span className="wrap-anywhere">{workspaceName}</span>
                 )}
-              </span>
+                {dot}
+              </>
             ) : null}
             <span>
               <Monitor aria-hidden="true" className="mr-1 inline size-3.5 align-[-0.15em]" />
+              {'\u2060'}
               {hostLabel}
               {hasCost || hasTokens ? dot : null}
             </span>
             {hasCost ? (
-              <span>
-                {t('auto.components.automations.usage.spent', '{{spend}} spent', {
-                  spend: formatAutomationCost(cost, t)
-                })}
+              <>
+                <span className="whitespace-nowrap">
+                  {t('auto.components.automations.usage.spent', '{{spend}} spent', {
+                    spend: formatAutomationCost(cost, t)
+                  })}
+                </span>
                 {hasTokens ? dot : null}
-              </span>
+              </>
             ) : null}
             {hasTokens ? (
-              <span>
+              <span className="whitespace-nowrap">
                 {t('auto.components.automations.usage.tokens', '{{tokens}} tokens', {
                   count: tokens,
                   tokens: formatAutomationTokens(tokens, intlLocale),
