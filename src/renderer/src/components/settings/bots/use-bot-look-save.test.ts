@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchWindowCloseRequest } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import { ORCA_APP_RESTART_STARTED_EVENT } from '../../../../../shared/updater/updater-renderer-events'
 import { saveBotLook, useBotLookSave, type BotLookUpdate } from './use-bot-look-save'
 
 afterEach(() => {
@@ -60,6 +61,33 @@ describe('saveBotLook', () => {
     expect(events).toEqual(['hold', 'send #f4c4cf', 'send party', 'release'])
   })
 
+  it('lets a close go on as soon as every look save lands', async () => {
+    vi.useFakeTimers()
+    const events: string[] = []
+    vi.stubGlobal('api', {
+      app: { awaitBeforeUnloadCheckpoint: async () => void events.push('checkpoint') },
+      ui: {
+        confirmWindowClose: () => events.push('close'),
+        cancelWindowClose: () => events.push('cancel')
+      }
+    })
+    let land = (): void => {}
+    saveBotLook(
+      'local:b9',
+      { avatarOutfit: 'tie' },
+      () =>
+        new Promise<void>((resolve) => {
+          land = resolve
+        })
+    )
+    const closing = dispatchWindowCloseRequest({ isQuitting: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(events).toEqual([])
+    land()
+    await closing
+    expect(events).toEqual(['checkpoint', 'close'])
+  })
+
   it('sends a pick still waiting behind a slow save when the window goes, so quitting keeps it', () => {
     const sent: BotLookUpdate[] = []
     const update = (look: BotLookUpdate): Promise<unknown> => {
@@ -69,6 +97,18 @@ describe('saveBotLook', () => {
     saveBotLook('local:b3', { avatarColor: '#f4c4cf' }, update)
     saveBotLook('local:b3', { avatarOutfit: 'tie' }, update)
     window.dispatchEvent(new Event('pagehide'))
+    expect(sent).toEqual([{ avatarColor: '#f4c4cf' }, { avatarOutfit: 'tie' }])
+  })
+
+  it('sends a pick still waiting behind a slow save when a restart starts, before its checkpoint', () => {
+    const sent: BotLookUpdate[] = []
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      sent.push(look)
+      return new Promise(() => {})
+    }
+    saveBotLook('local:b10', { avatarColor: '#f4c4cf' }, update)
+    saveBotLook('local:b10', { avatarOutfit: 'tie' }, update)
+    window.dispatchEvent(new Event(ORCA_APP_RESTART_STARTED_EVENT))
     expect(sent).toEqual([{ avatarColor: '#f4c4cf' }, { avatarOutfit: 'tie' }])
   })
 

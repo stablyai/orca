@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../../shared/bots/bot-avatar-color'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import {
+  ORCA_APP_RESTART_STARTED_EVENT,
+  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
+} from '../../../../../shared/updater/updater-renderer-events'
 import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
@@ -63,6 +67,9 @@ function sendOnLeave(): void {
   if (!listening && typeof window !== 'undefined') {
     listening = true
     window.addEventListener('pagehide', sendPicksOnLeave)
+    // A restart or update install skips the close guards; its checkpoint comes after these start.
+    window.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, sendPicksOnLeave)
+    window.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT, sendPicksOnLeave)
     registerWindowCloseGuard(savePicksBeforeClose)
   }
 }
