@@ -77,6 +77,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   let readTextAppends: ReturnType<typeof createAgentSessionTextAppendReader> | null = null
   /** An open whose stream must not be applied further; the next open replaces it. */
   let replacedOpenGeneration = 0
+  /** An open whose stream ended; it must not apply later frames or mark connected. */
+  let endedOpenGeneration = 0
   const asks = createStructuredAgentSessionSubscribeAsks(args)
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
@@ -155,7 +157,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   const handleEvent = (received: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (
       !isCurrentOpenGeneration(eventOpenGeneration) ||
-      eventOpenGeneration === replacedOpenGeneration
+      eventOpenGeneration === replacedOpenGeneration ||
+      eventOpenGeneration === endedOpenGeneration
     ) {
       return
     }
@@ -181,6 +184,7 @@ export function startStructuredAgentSessionLiveRead(args: {
         return
       }
     } else if (event.type === 'end') {
+      endedOpenGeneration = eventOpenGeneration
       loseContact()
     }
     const opensSubscription = event.type !== 'end' && openingFrameGeneration === eventOpenGeneration
@@ -259,6 +263,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       if (
         !isCurrentOpenGeneration(currentOpenGeneration) ||
         closedDuringOpen ||
+        endedOpenGeneration === currentOpenGeneration ||
         replacedOpenGeneration === currentOpenGeneration
       ) {
         handle.unsubscribe()
