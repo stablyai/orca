@@ -23,6 +23,7 @@ import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
 import { hasLayoutBox } from '@/lib/list-interaction/virtualized-hidden-row-measurement'
 import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
+import { liveCombinedDiffModelEdits } from '../../combined-diff/remember-view/combined-diff-close-drafts'
 
 export function DiffSectionItem({
   section,
@@ -249,6 +250,7 @@ export function DiffSectionItem({
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
     const modelContentSub = modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
+      liveCombinedDiffModelEdits.set(modified, current)
       setSections((prev) => {
         let changed = false
         const next = prev.map((s, i) => {

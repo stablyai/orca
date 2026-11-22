@@ -3,6 +3,7 @@ import {
   editorTabNeedsSavePrompt
 } from '@/store/slices/editor/tabs/editor-tab-close-target'
 import { useCallback, useEffect } from 'react'
+import { cancelWindowCloseRequest } from '@/app-shell/shutdown/window-close-request-coordinator'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import {
@@ -169,7 +170,7 @@ export function useTerminalEditorCloseDialogActions(
     pendingEditorCloseQueueRef.current = []
     closedReactionsRef.current.clear()
     if (windowCloseAfterDirtyRef.current) {
-      window.api.ui.cancelWindowClose()
+      cancelWindowCloseRequest(windowCloseAfterDirtyRef.current)
     }
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
