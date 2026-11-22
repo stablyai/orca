@@ -168,8 +168,18 @@ export function useResourceUsageDerivedModel({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
+  // Paired-server samples exist only while the Resources tab is open, so the closed badge stays local.
+  const hostSessionCount = useMemo(
+    () =>
+      runtimeHostResources.reduce(
+        (total, host) =>
+          total + host.worktrees.reduce((sum, worktree) => sum + worktree.sessions.length, 0),
+        0
+      ),
+    [runtimeHostResources]
+  )
   // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
-  const triggerSessionCount = sessionCount
+  const triggerSessionCount = sessionCount === null ? null : sessionCount + hostSessionCount
 
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss',
