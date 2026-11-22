@@ -3,19 +3,17 @@ import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement,
   ProfileStateMaintenance
-} from '../loading-store/profile-state-authority'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { runProfileStateBackupWorker } from './profile-state-backup-worker'
-import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
-import {
-  ProfileStateWriteWorkerClient,
-  ProfileStateWriterError,
-  type ProfileStateWriterInitialization
-} from './profile-state-writer-worker-client'
+} from '../loading-store/profile-writing/profile-state-authority'
+import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
+import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
+import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
+import { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
+import { ProfileStateWriterError } from './writer/profile-state-writer-errors'
+import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
 import {
   ProfileStateWriterReopenPolicy,
   reportTerminalReopenFailure
-} from './profile-state-writer-reopen-policy'
+} from './writer/profile-state-writer-reopen-policy'
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
@@ -87,8 +85,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.run((writer) => writer.assertCurrentRevision()).then(() => {})
   }
 
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void> {
-    return this.run((writer) => writer.writeSerializedDomains(replacements)).then(() => {})
+  writeSerializedDomains(
+    ...args: Parameters<AsyncProfileStateAuthority['writeSerializedDomains']>
+  ): Promise<void> {
+    return this.run((writer) => writer.writeSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedAutomationRuns(
@@ -101,9 +101,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeCompleteSerializedDomains(replacements)).then(() => {})
+    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {

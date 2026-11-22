@@ -1,0 +1,123 @@
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import { getEditorDisplayLabel } from './editor-labels'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+
+export type EditorHeaderCopyState = {
+  copyText: string | null
+  copyToastLabel: string
+  pathLabel: string
+  pathTitle: string
+}
+
+export type EditorHeaderOpenFileState = {
+  canOpen: boolean
+}
+
+/** Whether the panel shows its own path header; virtual tabs name the document themselves. */
+export function shouldShowEditorPanelHeader(file: OpenFile, isCombinedDiff: boolean): boolean {
+  return !isCombinedDiff && !isVirtualEditorFile(file)
+}
+
+export function getEditorHeaderCopyState(
+  file: OpenFile,
+  t: Translate = translate
+): EditorHeaderCopyState {
+  if (file.mode === 'conflict-review') {
+    return {
+      copyText: file.filePath,
+      copyToastLabel: t(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
+      pathLabel: t('auto.components.editor.editorLabels.conflictReview', 'Conflict Review'),
+      pathTitle: file.filePath
+    }
+  }
+
+  if (file.mode === 'git-graph') {
+    return {
+      copyText: null,
+      copyToastLabel: '',
+      pathLabel: t('gitGraph.title', 'Git Graph'),
+      pathTitle: t('gitGraph.title', 'Git Graph')
+    }
+  }
+  if (file.mode === 'check-details') {
+    const label =
+      file.checkRunDetails?.check.name ??
+      t('auto.components.editor.editorHeader.checkDetails', 'Check details')
+    return {
+      copyText: null,
+      copyToastLabel: t(
+        'auto.components.editor.editorHeader.checkDetailsCopied',
+        'Check details copied'
+      ),
+      pathLabel: label,
+      pathTitle: label
+    }
+  }
+
+  const isCombinedDiff =
+    file.mode === 'diff' &&
+    (file.diffSource === 'combined-all' ||
+      file.diffSource === 'combined-uncommitted' ||
+      file.diffSource === 'combined-branch' ||
+      file.diffSource === 'combined-commit')
+
+  if (isCombinedDiff) {
+    return {
+      copyText: file.filePath,
+      copyToastLabel: t(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
+      pathLabel: file.relativePath,
+      pathTitle: file.filePath
+    }
+  }
+
+  const displayLabel = getEditorDisplayLabel(file, 'fullPath', t)
+
+  return {
+    copyText: file.filePath,
+    copyToastLabel: t('auto.components.editor.editorHeader.filePathCopied', 'File path copied'),
+    pathLabel: displayLabel,
+    pathTitle: displayLabel
+  }
+}
+
+export function getEditorHeaderOpenFileState(
+  file: OpenFile,
+  worktreeEntry?: GitStatusEntry | null,
+  branchEntry?: GitBranchChangeEntry | null
+): EditorHeaderOpenFileState {
+  const isSingleDiff =
+    file.mode === 'diff' &&
+    file.diffSource !== undefined &&
+    file.diffSource !== 'combined-all' &&
+    file.diffSource !== 'combined-uncommitted' &&
+    file.diffSource !== 'combined-branch' &&
+    file.diffSource !== 'combined-commit'
+
+  if (!isSingleDiff) {
+    return { canOpen: false }
+  }
+
+  if (file.diffSource === 'branch') {
+    return { canOpen: branchEntry?.status !== 'deleted' || !branchEntry }
+  }
+  if (file.diffSource === 'commit') {
+    return { canOpen: false }
+  }
+
+  // Diff snapshots outlive status rows; missing live entries must not hide an otherwise valid open-file action.
+  if (!worktreeEntry) {
+    return { canOpen: true }
+  }
+
+  return { canOpen: worktreeEntry.status !== 'deleted' }
+}

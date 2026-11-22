@@ -5,7 +5,14 @@ import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_HOOK_DEFAULT_DEADLINE_MS, PLUGIN_HOOK_SPECS } from '../events/plugin-hook-payloads'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
-import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
+import {
+  PLUGIN_HOST_API,
+  PLUGIN_HOST_API_MINOR,
+  PLUGIN_HOST_METHOD_NAMES,
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
+  type PluginHostMethodSpec
+} from './plugin-host-api'
+import { PLUGIN_HOST_API_MINOR_SINCE, PLUGIN_HOST_HAS_SINCE } from './plugin-host-api-releases'
 import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
 function signature(params: z.ZodType, result: z.ZodType): string {
@@ -37,9 +44,22 @@ export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = 
 
 const version = (minor: number): string => `${PLUGIN_HOST_API_MAJOR}.${minor}`
 
+/** `workspace:create` (+`agent:launch` for `agent`): a passed param can need a second capability. */
+function capabilityCell(spec: PluginHostMethodSpec): string {
+  const base = spec.capability === null ? 'none' : `\`${spec.capability}\``
+  const extra = Object.entries(spec.paramCapabilities ?? {}).map(
+    ([param, kind]) => ` (+\`${kind}\` for \`${param}\`)`
+  )
+  return `${base}${extra.join('')}`
+}
+
 /** Author reference for the host API, rendered from the typed spec table. */
 export function renderPluginHostApiReference(): string {
-  const specs = PLUGIN_HOST_METHOD_NAMES.map((name) => ({ name, ...PLUGIN_HOST_API[name] }))
+  const specs = PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => ({
+    name,
+    ...PLUGIN_HOST_API[name]
+  }))
+  const proposed = PLUGIN_HOST_METHOD_NAMES.filter((name) => PLUGIN_HOST_API[name].proposed)
   const lines = [
     '# Orca plugin host API reference',
     '',
@@ -57,7 +77,13 @@ export function renderPluginHostApiReference(): string {
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${spec.capability === null ? 'none' : `\`${spec.capability}\``} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${Object.entries(
+          spec.paramsSince ?? {}
+        )
+          .map(([param, minor]) => ` (\`${param}\`: ${version(minor)})`)
+          .join(
+            ''
+          )}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {
@@ -71,6 +97,27 @@ export function renderPluginHostApiReference(): string {
       signature(spec.params, spec.result),
       '```'
     )
+  }
+  if (proposed.length > 0) {
+    lines.push(
+      '',
+      '## Proposed',
+      '',
+      'Methods still being designed. Only development plugins (`orca plugin dev`) may call them; any other plugin gets `not_permitted`. They are not frozen: they may change or disappear in any release, they count toward no `api.minor`, and `orca/host` typings omit them.'
+    )
+    for (const name of proposed) {
+      const spec = PLUGIN_HOST_API[name]
+      lines.push(
+        '',
+        `### \`${name}\``,
+        '',
+        `${spec.summary} Capability: ${capabilityCell(spec)}; surfaces: ${spec.surfaces.join(', ')}.`,
+        '',
+        '```ts',
+        signature(spec.params, spec.result),
+        '```'
+      )
+    }
   }
   lines.push(
     '',
@@ -122,7 +169,14 @@ export function renderPluginHostApiReference(): string {
     `- **Host API ${PLUGIN_HOST_API_MAJOR} is frozen.** Within \`pluginApi\` ${PLUGIN_HOST_API_MAJOR}, methods, params and results only grow: a new method or a new optional param arrives with a higher \`Since\` minor, and nothing listed here is removed, renamed or narrowed.`,
     '- **Deprecation.** A method to be retired is marked deprecated in this table and keeps working for the rest of the major.',
     '- **New majors.** A breaking change ships as a new `pluginApi` major beside the old one. Orca refuses a manifest whose `pluginApi` names a major it does not implement, with "update Orca", instead of loading it against the wrong API.',
-    '- **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.'
+    '- **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.',
+    `- **Checked at publish.** \`orca plugin validate\` and \`pnpm validate:plugin\` read the literal method names your worker, panel and editor code passes to \`orca.host.call\` (comments ignored), and the Orca plugin directory runs them against the latest Orca release. A method that release does not have fails the check unless the plugin calls \`orca.host.has\` anywhere, and a proposed one fails unless the plugin checks that name with a literal \`orca.host.has(name)\`; either is then a warning (guards need \`engines.orca\` ${PLUGIN_HOST_HAS_SINCE} or later). A method newer than your \`engines.orca\` or one the surface cannot call is a warning, since a text scan cannot see guards or which code a surface runs; \`orca.host.has(name)\` anywhere in the plugin silences the \`engines.orca\` warning. A deprecated method is a warning that starts \`deprecated host method <name>\`.`,
+    '',
+    'The first Orca release with each minor, which is what `engines.orca` must reach for a method of that minor. A few worker methods reached panels and editors in a later minor; the check uses that one for frame code:',
+    '',
+    '| Minor | Orca |',
+    '| --- | --- |',
+    ...PLUGIN_HOST_API_MINOR_SINCE.map((release, minor) => `| ${version(minor)} | ${release} |`)
   )
   return `${lines.join('\n')}\n`
 }

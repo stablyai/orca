@@ -1,7 +1,7 @@
-import type { Project } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Project } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 export type WslMoverProfileSide = 'source' | 'destination'

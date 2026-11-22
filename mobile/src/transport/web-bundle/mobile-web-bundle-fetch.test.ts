@@ -1,6 +1,9 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+import { createFakeGenerationFileSystem } from '../../mobile-web-shell/generations/generation-file-system-fake'
+import { createGenerationStore } from '../../mobile-web-shell/generations/generation-store'
+import { deriveHostCacheKey } from '../../mobile-web-shell/generations/host-cache-key'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 
@@ -159,17 +162,32 @@ describe('fetchMobileWebBundle', () => {
     expect(await refusalOf(failed)).toBe('asset-checksum-mismatch')
   })
 
-  it('leaves language-catalog chunks on the desktop and fetches the rest', async () => {
+  it('reads only what a failed fetch of the same build did not verify', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeGenerationFileSystem() })
+    const hostKey = deriveHostCacheKey('host-a')
+    let linkUp = false
     const host = bundleHost(
-      { 'index.html': 'abcdef', 'assets/de.js': 'catalog' },
-      { catalogs: ['assets/de.js'] }
+      { 'a.txt': 'aaaaaaaa', 'b.txt': 'bb' },
+      {
+        intercept: (call) =>
+          !linkUp && paramField(call.params, 'path') === 'b.txt' ? new Error('link cut') : undefined
+      }
     )
+    const fetchBuild = async () =>
+      fetchMobileWebBundle({
+        client: host.client,
+        reusable: await store.openReusableAssets(hostKey, host.manifest)
+      })
 
-    const fetched = await fetchMobileWebBundle({ client: host.client })
+    await expect(fetchBuild()).rejects.toThrow('link cut')
+    linkUp = true
+    host.calls.length = 0
+    const fetched = await fetchBuild()
 
-    expect([...fetched.assets.keys()]).toEqual(['index.html'])
-    expect(host.calls.some((call) => paramField(call.params, 'path') === 'assets/de.js')).toBe(
-      false
-    )
+    expect(fetched.reused).toEqual(['a.txt'])
+    expect(host.calls.map((call) => paramField(call.params, 'path') ?? call.method)).toEqual([
+      'mobileWeb.bundle.manifest',
+      'b.txt'
+    ])
   })
 })

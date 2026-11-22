@@ -1,25 +1,28 @@
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { githubProjectIdentityKey } from '../../../../../shared/github/project-identity'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { GetProjectViewTableArgs } from '../../../../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import { githubProjectIdentityKey } from '../../../../../shared/github/projects/project-identity'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { GetProjectViewTableArgs } from '../../../../../shared/github/projects/project-request-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   composeRepoCacheKey,
   getGitHubRepoCacheKey,
   repoCacheKeyHostId,
   type RuntimeFocusSettings
-} from '../../../../../shared/github/github-cache-key'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/github/cache/github-cache-key'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CacheEntry } from './cache-model'
 
 function queryOverrideKeyPart(queryOverride: string | undefined): string {
@@ -91,6 +94,15 @@ export function workItemsInflightRequestKey(
   return `${cacheKey}::${targetPart}`
 }
 
+export function issueCacheSuffix(
+  issueNumber: number | string,
+  ownerRepo?: GitHubOwnerRepo
+): string {
+  return ownerRepo
+    ? `issue::${githubRepoIdentityKey(ownerRepo)}::${issueNumber}`
+    : String(issueNumber)
+}
+
 export function issueCacheKey(
   repoPath: string,
   repoId: string | undefined,
@@ -98,12 +110,13 @@ export function issueCacheKey(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   connectionId?: string | null,
   executionHostId?: string | null,
-  hasRepoOwner = false
+  hasRepoOwner = false,
+  ownerRepo?: GitHubOwnerRepo
 ): string {
   return getGitHubRepoCacheKey(
     repoPath,
     repoId,
-    String(issueNumber),
+    issueCacheSuffix(issueNumber, ownerRepo),
     settings,
     connectionId,
     executionHostId,

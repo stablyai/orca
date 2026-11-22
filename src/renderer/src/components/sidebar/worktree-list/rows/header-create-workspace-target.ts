@@ -1,11 +1,11 @@
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoHostIdentity,
   getRepoRegistrationHostIds
-} from '../../../../../../shared/repo-host-identity'
+} from '../../../../../../shared/repository/repo-host-identity'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { useAppStore } from '@/store'
 import {
   getRepoWorkspaceCreationTargetHint,

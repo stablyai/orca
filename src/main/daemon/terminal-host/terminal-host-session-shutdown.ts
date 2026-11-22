@@ -27,7 +27,7 @@ export async function shutdownOwnedTerminalProcess(owner: {
     await killWithDescendantSweep(owner.pid, () => {}, {
       ownsRoot: owner.isAlive,
       terminateOwnedTree: owner.terminateOwnedTree,
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) => terminateShutdownDescendants(snapshot, false),
       awaitEscalation: true
     })
   } finally {

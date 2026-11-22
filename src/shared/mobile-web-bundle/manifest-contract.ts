@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { sha256 } from '../sha256'
+import { sha256 } from '../hashing/sha256'
 
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const

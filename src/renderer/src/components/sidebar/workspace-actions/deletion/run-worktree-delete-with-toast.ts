@@ -6,7 +6,7 @@ import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost
 } from '@/lib/workspace/ownership/worktree-operation-route'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'

@@ -1,4 +1,4 @@
-import { WorkerThreadRequestQueue } from '../../worker-threads/worker-thread-request-queue'
+import { UsageScanRequestScheduler } from '../usage-scan-request-scheduler'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
 import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude-usage/types'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
@@ -7,9 +7,7 @@ import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
-  UsageScanWorkerRequest,
   UsageScanWorkerRequestBody,
-  UsageScanWorkerResponse,
   UsageScanWorkerScanBody,
   UsageScanWorkerValue
 } from './usage-scan-worker-protocol'
@@ -18,10 +16,9 @@ import type {
   UsageCacheSplitResult,
   UsageSourceCacheRef
 } from '../cache/usage-source-cache-file'
-import { isUsageScanWorkerProgress } from './usage-scan-worker-protocol'
 import { createUsageScanWorkerTransport } from './usage-scan-worker-cache-cleanup'
 
-// #20940: serialize provider scans with WorkerThreadRequestQueue; LazyWorkerThreadHost owns thread lifetime and the spawn module owns layout/singleton.
+// Provider-local ordering shares one worker; LazyWorkerThreadHost owns its lifetime.
 
 // Cold corpora can exceed any total deadline; time only gaps between progress reports. A huge rollout is one gap, so keep the window generous.
 export const USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS = 10 * 60_000
@@ -39,23 +36,24 @@ type ProviderScanResult<TSession, TDaily> = {
 
 /** Unavailable, timed-out or crashed workers reject; stores retain their previous projection instead of parsing on main. */
 export class UsageScanWorkerClient {
-  private readonly queue: WorkerThreadRequestQueue<UsageScanWorkerRequest, UsageScanWorkerResponse>
+  private readonly queue: UsageScanRequestScheduler
 
   constructor(options: { workerFactory: WorkerThreadFactory; log?: (message: string) => void }) {
     const log = options.log ?? ((message: string) => console.warn(message))
-    this.queue = new WorkerThreadRequestQueue({
+    this.queue = new UsageScanRequestScheduler({
       factory: () => createUsageScanWorkerTransport(options.workerFactory),
       idleTeardownMs: IDLE_TEARDOWN_MS,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
-      isProgress: isUsageScanWorkerProgress,
-      describeTimeout: (timeoutMs) => `Usage scan worker reported no progress for ${timeoutMs}ms`,
-      describeExit: (code) => `Usage scan worker exited with code ${code}`,
-      describeCrashLoop: (lastError) => `Usage scan worker crashed repeatedly (${lastError})`,
       // Missing/resource-starved workers must fail closed; main-thread scanning would reintroduce event-loop blocking.
       onUnavailable: (err) =>
         log(`[usage-scan] worker unavailable; usage scans will report an error. ${message(err)}`)
     })
+  }
+
+  async dispose(): Promise<void> {
+    this.queue.dispose()
+    await this.queue.retired()
   }
 
   /** sourceCache identifies provider records that stay on the worker. */
@@ -79,10 +77,7 @@ export class UsageScanWorkerClient {
   }
 
   private async dispatch(body: UsageScanWorkerRequestBody): Promise<UsageScanWorkerValue> {
-    const response = await this.queue.dispatch(
-      (id) => ({ ...body, id }),
-      USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS
-    )
+    const response = await this.queue.dispatch(body, USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS)
     if (!response.ok) {
       throw new Error(response.error)
     }

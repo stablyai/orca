@@ -1,7 +1,8 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 import { closeSync } from 'node:fs'
 import { spawnProcess } from '@orca/process-host'
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
+import { psLocaleEnvironment } from '../../shared/process-observation/tables/ps-locale-environment'
 import { DarwinNetstatListeners } from './darwin-netstat-listeners'
 import { openDarwinPortScanLock } from './darwin-port-scan-lock'
 import {
@@ -62,7 +63,8 @@ export async function runPortScanCommandInProcess(
         {
           timeout: PORT_SCAN_COMMAND_TIMEOUT_MS,
           maxBuffer: 2 * 1024 * 1024,
-          windowsHide: true
+          windowsHide: true,
+          env: psLocaleEnvironment()
         },
         (error, stdout, stderr) => {
           if (error) {
@@ -141,7 +143,12 @@ async function runDarwinPortScanCommand(
   let child: ChildProcess
   const startedAt = Date.now()
   try {
-    child = spawnProcess({ program: command, args, stdio: [fd, 'pipe', 'pipe'] })
+    child = spawnProcess({
+      program: command,
+      args,
+      env: psLocaleEnvironment(),
+      stdio: [fd, 'pipe', 'pipe']
+    })
   } finally {
     closeSync(fd)
   }

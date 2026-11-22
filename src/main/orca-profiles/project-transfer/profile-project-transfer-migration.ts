@@ -1,4 +1,4 @@
-import { migrateProfileStateToSqlite } from '../../persistence/profile-state/profile-state-migration'
+import { migrateProfileStateToSqlite } from '../../persistence/profile-state/startup/profile-state-migration'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import type { ReadProfileStateResult } from './profile-project-state-file'
 import {

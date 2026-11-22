@@ -1,4 +1,6 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
@@ -9,6 +11,7 @@ export type PersistedUIWriteBaseline = {
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
   rightSidebarWidth: number
+  activityBarPosition: ActivityBarPosition
   markdownTocPanelWidth: number
   combinedDiffFileTreeWidth: number
   groupBy: PersistedUIState['groupBy']
@@ -25,6 +28,7 @@ export type PersistedUIWriteBaseline = {
   alwaysShowDefaultBranchWorkspace: boolean
   explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
+  notificationsMutedByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
@@ -40,6 +44,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarTab: true,
   rightSidebarExplorerView: true,
   rightSidebarWidth: true,
+  activityBarPosition: true,
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
   groupBy: true,
@@ -56,6 +61,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   alwaysShowDefaultBranchWorkspace: true,
   explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
+  notificationsMutedByWorktree: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
@@ -98,7 +104,8 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 /** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'gitGraphFiltersByWorktree') {
-    return a === b || JSON.stringify(a) === JSON.stringify(b)
+    // Same equality as hydration, so a key-order-only difference is never unsaved.
+    return persistedUIValuesEqual(a, b)
   }
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
@@ -109,6 +116,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   if (
     field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
+    field === 'notificationsMutedByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||
     field === 'manuallyUnreadTurnsByPaneKey'

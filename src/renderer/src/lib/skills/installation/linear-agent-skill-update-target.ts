@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   hasInstalledAgentSkill

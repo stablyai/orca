@@ -7,11 +7,6 @@ import {
   structuredAgentSessionHandingOver
 } from '../delivery/structured-agent-session-handing-over'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  holdUnsentSends,
-  type UnsentSendHold
-} from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import {
   snapshotBeforeStructuredAgentSessionStop,
   StructuredAgentSessionEvictionError
@@ -24,10 +19,8 @@ import type {
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit-record'
-import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
-import { markStructuredQueueReopen } from '../delivery/structured-agent-session-queued-pause'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   recordStructuredAgentSessionShutdownCut,
   runningRootTurnItemId
@@ -39,6 +32,12 @@ import {
   stopEndsWork,
   type StructuredAgentSessionStopEnding
 } from './structured-agent-session-host-stop-event'
+
+export {
+  holdClosedStructuredAgentSessionSends,
+  holdRestartedStructuredAgentSessionSends
+} from '../delivery/structured-agent-session-queued-pause'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
@@ -54,64 +53,8 @@ export type StructuredAgentSessionLifetimeContext = {
     exit: StructuredAgentSessionChildExit
   ) => Promise<void>
   restartWitness?: {
-    beforeStop: (sessionId: string) => void
+    beforeStop: (sessionId: string) => void | Promise<void>
     stopped: (sessionId: string) => void
-  }
-}
-
-type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
-  store: Pick<StructuredAgentSessionHostDeps['store'], 'getConversation'>
-}
-
-/** Keep personal unsent text as cards and mark reopen before close; quit leaves recovery to next open.
- * Partial-close rechecks mark only settled sends; failures report and return false. */
-export async function holdClosedStructuredAgentSessionSends(
-  deps: ConversationCloseDeps,
-  sessionId: string,
-  journal: StructuredAgentSessionHostSession['journal'],
-  close: {
-    mark: 'always' | 'settled'
-    which?: (submission: AgentJournalSubmission) => boolean
-    unrun?: (submission: AgentJournalSubmission) => boolean
-  },
-  cause: UnsentSendHold['cause'] = 'chatClosed'
-): Promise<boolean> {
-  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
-  const { which } = close
-  const settled = await holdUnsentSends(journal, {
-    fence,
-    ...(close.unrun ? { unrun: close.unrun } : {}),
-    hold: { cause, ...(which ? { which } : {}) }
-  }).then(
-    (newest) => ({ ok: true, newest }),
-    (error: unknown) => {
-      deps.logger.warn('settling queued messages of a closed chat failed', {
-        scope: 'queued-abandon',
-        sessionId,
-        error
-      })
-      return { ok: false, newest: null }
-    }
-  )
-  if (close.mark === 'always') {
-    await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
-  } else if (settled.newest !== null) {
-    // Start the mark at settled sends so a later wake-up send is not held.
-    await markStructuredQueueReopen(sessionId, journal, fence, deps.logger, settled.newest + 1)
-  }
-  return settled.ok
-}
-
-/** Retry failed open recovery without handing over earlier-process sends; failures propagate. */
-export async function holdRestartedStructuredAgentSessionSends(
-  logger: StructuredAgentSessionHostDeps['logger'],
-  sessionId: string,
-  journal: StructuredAgentSessionHostSession['journal'],
-  fence: number
-): Promise<void> {
-  const settled = await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
-  if (settled !== null) {
-    await markStructuredQueueReopen(sessionId, journal, fence, logger, settled + 1)
   }
 }
 
@@ -149,7 +92,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     )
   }
   const { close } = child
-  const quitCuts = 'quit' in ending && ending.quit ? runningRootTurnItemId(session.journal) : null
+  session.workChanged?.()
+  const quitCuts =
+    'quit' in ending && ending.quit ? await runningRootTurnItemId(session.journal) : null
   try {
     if (context.restartWitness) {
       await snapshotBeforeStructuredAgentSessionStop(
@@ -203,18 +148,20 @@ export type StructuredAgentSessionCloseCause = Extract<
 >
 
 /** Idle cache eviction also retains waiting cards so unseen closes cannot introduce reopen pauses. */
-export function structuredAgentSessionConversationClosable(
+export async function structuredAgentSessionConversationClosable(
   session: StructuredAgentSessionHostSession,
   atRest = false
-): boolean {
+): Promise<boolean> {
   return (
     session.child === null &&
     ![...structuredAgentSessionHandingOver(session.journal).keys()].some((id) =>
       finalizingStructuredAgentSessionInput(session.journal, id)
     ) &&
-    !session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission) &&
-    session.journal.pendingSubmissions().length === 0 &&
-    !(atRest && session.journal.queuedMessages.awaitReopenMark())
+    !(await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
+      isQueuedAgentJournalSubmission
+    ) &&
+    (await session.journal.reads.pendingSubmissions()).length === 0 &&
+    !(atRest && (await awaitsReopen(session.journal)))
   )
 }
 
@@ -227,7 +174,7 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
   atRest = false
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
-  if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
+  if (!session || !(await structuredAgentSessionConversationClosable(session, atRest))) {
     return false
   }
   context.sessions.delete(sessionId)
@@ -264,7 +211,8 @@ export function beginFinalizedStructuredAgentSessionClose(
             context.sessions.get(sessionId) === session &&
             !session.child &&
             session.lastEndedChild === ended &&
-            !session.journal.inputOrder.acceptedAfter(acceptedBy)
+            !(await session.journal.reads.input({ kind: 'accepted-after', sequence: acceptedBy }))
+              .answer
           ) {
             await context.closeConversation(sessionId)
           }
@@ -312,4 +260,12 @@ export async function evictOwnedStructuredAgentSessions(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
+}
+
+async function awaitsReopen(journal: SqlAgentSessionJournal): Promise<boolean> {
+  const result = await journal.reads.queue({
+    kind: 'reopen-mark',
+    facts: journal.queuedMessages.facts()
+  })
+  return result.kind === 'reopen-mark' && result.awaits
 }

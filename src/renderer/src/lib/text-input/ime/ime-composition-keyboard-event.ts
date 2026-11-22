@@ -24,110 +24,35 @@ export function isEnterOrUnknownCode(code: string | undefined): boolean {
   return !code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter'
 }
 
-type ImeEnterGestureEvent = Pick<
-  ReactKeyboardEvent,
-  'key' | 'keyCode' | 'nativeEvent' | 'preventDefault' | 'shiftKey'
-> & { altKey?: boolean; code?: string; ctrlKey?: boolean; metaKey?: boolean }
+type ImeEnterGestureEvent = Pick<ReactKeyboardEvent, 'key' | 'keyCode' | 'nativeEvent'> & {
+  code?: string
+}
 
-// Hangul has no candidate step, so the Enter that commits it is the user's own Enter.
-const HANGUL_ONLY = /^\p{Script=Hangul}+$/u
-
-/** Carry confirmation through the next frame: Windows/Linux redispatch bare Enter before keyup, macOS after. Scope expiry by gesture identity so older frames cannot clear newer carry. */
+/** Enter belongs to the IME only while it composes. The bare Enter that can follow compositionend
+ * from the same keypress (Hangul, Vietnamese) is the user's own Enter; candidate IMEs send none. */
 export function useImeEnterGestureOwnership(): {
   isComposing: () => boolean
   ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
-  onKeyUp: (event: ImeEnterGestureEvent) => void
-  onCompositionEnd: (committedText?: string) => void
   reset: () => void
-  setComposing: (active: boolean, committedText?: string) => void
+  setComposing: (active: boolean) => void
 } {
-  const stateRef = useRef<{ composing: boolean; pendingEnter: object | null }>({
-    composing: false,
-    pendingEnter: null
-  })
+  const composingRef = useRef(false)
 
-  return useMemo(() => {
-    const reset = (): void => {
-      stateRef.current = { composing: false, pendingEnter: null }
-    }
-    const expirePendingEnter = (): void => {
-      const pendingEnter = stateRef.current.pendingEnter
-      if (pendingEnter) {
-        requestAnimationFrame(() => {
-          if (stateRef.current.pendingEnter === pendingEnter) {
-            stateRef.current.pendingEnter = null
-          }
-        })
+  return useMemo(
+    () => ({
+      isComposing: () => composingRef.current,
+      ownsKeyDown: (event: ImeEnterGestureEvent): boolean =>
+        (event.key === 'Enter' || (event.key === 'Process' && isEnterOrUnknownCode(event.code))) &&
+        (composingRef.current || isImeOwnedKeyboardEvent(event)),
+      reset: () => {
+        composingRef.current = false
+      },
+      setComposing: (active: boolean) => {
+        composingRef.current = active
       }
-    }
-    // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
-    const isPlainEnter = (event: ImeEnterGestureEvent): boolean =>
-      event.key === 'Enter' && event.keyCode === 13 && !event.shiftKey
-    // Chorded Enter is deliberate submit, not bare IME redispatch; arm carry but do not swallow the chord.
-    const hasChordModifier = (event: ImeEnterGestureEvent): boolean =>
-      Boolean(event.altKey || event.ctrlKey || event.metaKey)
-    // Process/229 also reports IME mode keys like Hankaku/Zenkaku, which may never send keyup (#39289).
-    const isProcessedEnterKey = (event: ImeEnterGestureEvent): boolean =>
-      event.key === 'Process' && event.keyCode === 229 && isEnterOrUnknownCode(event.code)
-    return {
-      isComposing: () => stateRef.current.composing,
-      ownsKeyDown: (event: ImeEnterGestureEvent): boolean => {
-        const markedEnter =
-          (isImeOwnedKeyboardEvent(event) || stateRef.current.composing) &&
-          (isPlainEnter(event) ||
-            (event.key === 'Enter' && event.keyCode === 229) ||
-            isProcessedEnterKey(event))
-        if (markedEnter) {
-          stateRef.current.pendingEnter = {}
-          return true
-        }
-        // Continued typing ends the confirmation even when hidden renderers delay the frame.
-        if (
-          !stateRef.current.composing &&
-          !isImeOwnedKeyboardEvent(event) &&
-          !['Enter', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key)
-        ) {
-          stateRef.current.pendingEnter = null
-        }
-        if (
-          stateRef.current.pendingEnter &&
-          isPlainEnter(event) &&
-          !event.nativeEvent.isComposing
-        ) {
-          // Spend carry for either outcome; swallow only bare Enter, never the user’s chorded submit.
-          stateRef.current.pendingEnter = null
-          if (hasChordModifier(event)) {
-            return false
-          }
-          event.preventDefault()
-          return true
-        }
-        return false
-      },
-      onKeyUp: (): void => {
-        // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
-        expirePendingEnter()
-      },
-      onCompositionEnd: (committedText = '') => {
-        const compositionWasActive = stateRef.current.composing
-        stateRef.current.composing = false
-        if (HANGUL_ONLY.test(committedText)) {
-          stateRef.current.pendingEnter = null
-        } else if (compositionWasActive && !stateRef.current.pendingEnter) {
-          // IBus can finish composition before its only unmarked confirming Enter.
-          stateRef.current.pendingEnter = {}
-          expirePendingEnter()
-        }
-      },
-      reset,
-      setComposing: (active: boolean, committedText = '') => {
-        stateRef.current.composing = active
-        if (!active && HANGUL_ONLY.test(committedText)) {
-          stateRef.current.pendingEnter = null
-        }
-      }
-    }
-  }, [])
+    }),
+    []
+  )
 }
 
 /** Ignore candidate-confirming Enter in commit inputs; isComposing covers most browsers and keyCode 229 covers IMEs missing that flag. */

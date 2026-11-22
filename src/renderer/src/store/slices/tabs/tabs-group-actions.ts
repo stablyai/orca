@@ -1,17 +1,20 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type {
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   buildSplitNode,
   collapseGroupLayout,
   replaceLeaf
-} from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
-import { replaceRecordEntries } from '../../keyed-record-transitions'
+import { replaceRecordEntries } from '../../record-transitions/keyed-record-transitions'
 
 type SplitGroupState = Pick<
   TabsSlice,

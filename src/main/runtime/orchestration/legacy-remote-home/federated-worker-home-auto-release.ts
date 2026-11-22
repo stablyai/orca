@@ -1,5 +1,5 @@
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
-import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { releaseFederatedWorker } from './federated-worker-release'
 
 /** The home's deadline for a host that did not arm its own; the host's takeover and ownership checks still refuse it. */
@@ -15,7 +15,7 @@ export async function releaseFederatedWorkerAtHomeDeadline(
   // A thrown or unknown attempt keeps the deadline the claim postponed, so it runs again.
   const receipt = await releaseFederatedWorker({
     runtime,
-    server: resolvePinnedFederatedServer(runtime, federated),
+    server: await resolvePinnedFederatedServer(runtime, federated),
     federated,
     dispatchId,
     requestId: `home_auto_release_${dispatchId}_${Date.now()}`,

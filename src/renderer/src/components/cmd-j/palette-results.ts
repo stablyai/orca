@@ -5,7 +5,7 @@ import type {
   SettingsNavSection
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 import {
   cmdJPaletteTokenScore,
   isCmdJPaletteQueryOverTokenLimit,

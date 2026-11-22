@@ -5,8 +5,8 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs
 import { SignJWT, exportJWK, generateKeyPair, importJWK, type JWK } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
+import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client'
+import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/transports/relay-transport'
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 

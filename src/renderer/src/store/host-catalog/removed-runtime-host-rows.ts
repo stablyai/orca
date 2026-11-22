@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** Match only explicitly removed runtime IDs; serving-local runtime stamps may never have belonged to this instance’s saved list, so absence cannot prove removal. */
 export function isRemovedRuntimeHostId(

@@ -1,4 +1,4 @@
-import type { AgentTokenCounts } from '../../../../shared/telemetry-agent-token-usage-schema'
+import type { AgentTokenCounts } from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { ClaudeUsageSession } from '../../../claude-usage/types'
 import type { CodexUsageSession } from '../../../codex-usage/types'
 import type { OpenCodeUsageSession } from '../../../opencode-usage/types'

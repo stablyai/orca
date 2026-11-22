@@ -1,8 +1,8 @@
-import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
+import { SparsePresetValidationError } from '../../../shared/worktree/creation/sparse-preset-failure'
 import {
   InvalidSparseDirectoryError,
   normalizeSparseDirectories
-} from '../sparse-checkout-directories'
+} from './sparse-checkout-directories'
 
 export function normalizeSparsePresetName(name: string): string {
   const trimmed = name.trim()

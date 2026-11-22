@@ -2,7 +2,7 @@
 import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type {
   SshManagedServerRelayReason,
   SshManagedServerLinkedProject,
@@ -10,7 +10,7 @@ import type {
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving'
 import {
   checkManagedServerUpdate,
@@ -22,7 +22,7 @@ import { deferred, setupFailed } from './ssh-host-server-setup-outcome'
 import {
   classifyOrcadHostUnavailable,
   ORCAD_TUNNEL_UNAVAILABLE_REASON
-} from '../../orcad/orcad-host-unavailable'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
 import {
   decidedEvent,
   reportHostServerConversion,
@@ -73,7 +73,7 @@ export type HostServerTerminalVerdict = {
 }
 
 export type HostServerOnConnectDeps = {
-  managedEnvironmentId: (target: SshTarget) => string | null
+  managedEnvironmentId: (target: SshTarget) => string | null | Promise<string | null>
   ensureTunnel: (environmentId: string) => Promise<void>
   /** Wake only on proven stopped activation, then verify serving behind the tunnel. */
   ensureServing: (environmentId: string) => Promise<OrcadManagedServing>
@@ -125,7 +125,7 @@ async function decide(
   if (target.orcadFence?.sourceChangedAt) {
     return { route: 'unserved', reason: 'source_changed' }
   }
-  const existing = deps.managedEnvironmentId(target)
+  const existing = await deps.managedEnvironmentId(target)
   if (existing) {
     trace.path = 'existing'
     deps.progress(target, 'connecting')

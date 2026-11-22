@@ -2,7 +2,7 @@ import {
   DICTATION_SAMPLE_RATE,
   MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES,
   PCM_BYTES_PER_SAMPLE
-} from '../../../src/shared/rpc-contract/speech-params'
+} from '../../../src/shared/rpc-contract/speech/speech-params'
 
 export const MOBILE_DICTATION_PCM_SAMPLE_RATE = DICTATION_SAMPLE_RATE
 

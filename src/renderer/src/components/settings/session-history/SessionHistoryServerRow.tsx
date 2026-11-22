@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'

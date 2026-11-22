@@ -5,7 +5,7 @@ import {
   type RipgrepMatchMessage
 } from '../ripgrep/ripgrep-dense-match-json'
 import { normalizeSearchResult } from './search-match-count'
-import { escapeRegex } from '../string-utils'
+import { escapeRegex } from '../text/regex-escaping'
 import type { SearchFileResult, SearchOptions, SearchResult } from './code-search-types'
 import { pushSearchMatch } from './text-search-match-accumulator'
 import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'

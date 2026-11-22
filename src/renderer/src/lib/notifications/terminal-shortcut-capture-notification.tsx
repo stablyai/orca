@@ -1,6 +1,6 @@
 import { Keyboard } from 'lucide-react'
 import { toast } from 'sonner'
-import '../../../../shared/keybindings'
+
 import { formatKeybindingList } from '../../../../shared/keybindings/formatting'
 import {
   getEffectiveKeybindingsForAction,

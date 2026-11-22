@@ -9,7 +9,7 @@ import {
   accountOwnerFor,
   type AccountOwner
 } from './wsl-host-account-owner'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useActiveWorkspaceOwnerTarget } from '../../rpc/targets/use-worktree-runtime-target'
 
 /** Who owns the focused workspace's provider accounts (see {@link resolveAccountOwner}). */

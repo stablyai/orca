@@ -1,6 +1,6 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserCookieImportResult } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileClearDefaultCookiesResult
@@ -14,13 +14,24 @@ import {
   retainCookieImportExecutionHost
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { importSshPageCookies } from './browser-ssh-page-cookie-import'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
+    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, sshRoute?) => {
+      if (sshRoute) {
+        return importSshPageCookies(get, sshRoute, () =>
+          window.api.browser.sessionImportFromBrowser({
+            profileId,
+            browserFamily,
+            browserProfile,
+            sshTargetId: sshRoute.sshTargetId
+          })
+        )
+      }
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)

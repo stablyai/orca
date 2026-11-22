@@ -1,6 +1,6 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalResolvePane } from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalResolvePane } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import {
@@ -10,7 +10,7 @@ import {
   readStablePaneResolutionFailure
 } from '../evidence/web-session-terminal-orphan-recovery-cache'
 import { latestTerminalRetirementProof } from '../surfaces/web-session-terminal-orphan-recovery-surface-index'
-import { hostSnapshotAffirmsWorktreeContents } from '../../../web-session-tabs-sync/hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type {
   RecoverySurface,
   UnresolvedRecoverySurface

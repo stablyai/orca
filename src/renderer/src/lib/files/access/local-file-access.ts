@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile } from '../../workspace/ownership/connection-context'

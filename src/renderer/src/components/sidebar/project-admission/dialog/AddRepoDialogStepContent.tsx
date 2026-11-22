@@ -7,8 +7,11 @@ import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from '../nested-import/AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { GitAvailability } from '../create/create-project-defaults'
 import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
 
@@ -24,6 +27,7 @@ type AddRepoDialogStepContentProps = {
   serverPath: string
   /** The path came from Windows' picker or an Explorer drop, so the host's browser is skipped. */
   serverPathPrefilled?: boolean
+  directEntry?: boolean
   isAddingServerPath: boolean
   cloneUrl: string
   cloneDestination: string
@@ -91,6 +95,7 @@ export function AddRepoDialogStepContent({
   nestedScanId,
   serverPath,
   serverPathPrefilled = false,
+  directEntry = false,
   isAddingServerPath,
   cloneUrl,
   cloneDestination,
@@ -184,6 +189,7 @@ export function AddRepoDialogStepContent({
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
         initialBrowsing={!(serverPathPrefilled && serverPath.trim())}
+        directEntry={directEntry}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}

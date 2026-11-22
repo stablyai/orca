@@ -1,4 +1,4 @@
-import type { SkillSharePreview } from '../../../../../shared/skill-sharing-contract'
+import type { SkillSharePreview } from '../../../../../shared/skills/sharing/skill-sharing-contract'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

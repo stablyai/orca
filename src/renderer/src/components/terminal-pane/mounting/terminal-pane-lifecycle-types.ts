@@ -1,11 +1,11 @@
 import type { HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
-import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import type { PanePtyBinding } from '../pty-connection/pane-pty-binding'
 import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneExternalDropHandler,
@@ -37,6 +37,7 @@ export type UseTerminalPaneLifecycleDeps = {
   startup?: TerminalPaneStartup | null
   /** Split pane runs the repo's issue-automation command with the issue number interpolated. */
   issueCommandSplit?: TerminalPaneIssueCommandSplit | null
+  consumeTabIssueCommandSplit: (tabId: string) => void
   isActive: boolean
   isVisible: boolean
   systemPrefersDark: boolean
@@ -48,6 +49,7 @@ export type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
+  clearedScrollbackLeafIdsRef?: React.RefObject<Set<string>>
   managerRef: React.RefObject<PaneManager | null>
   getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -78,7 +80,12 @@ export type UseTerminalPaneLifecycleDeps = {
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
-  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setRuntimePaneTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    options?: { alsoTabTitle?: boolean }
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']
@@ -120,4 +127,8 @@ export type UseTerminalPaneLifecycleDeps = {
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
   detachPaneToNewTab?: DetachTerminalPaneToNewTab
+}
+
+export type MountedTerminalPaneLifecycleDeps = UseTerminalPaneLifecycleDeps & {
+  mountedManager: PaneManager | null
 }

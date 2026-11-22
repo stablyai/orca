@@ -2,8 +2,8 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
-import type { Tab } from '../../../../shared/tab-types'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 
@@ -86,6 +86,11 @@ export function activateTabNumberShortcut(index: number): boolean {
     }
     store.setActiveBrowserTab(target.entityId)
     store.setActiveTabType('browser', worktreeId)
+    return true
+  }
+
+  if (target.contentType === 'room') {
+    store.setActiveTabType('agent-session', worktreeId)
     return true
   }
 

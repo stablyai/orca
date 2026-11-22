@@ -3,8 +3,8 @@ import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-hos
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { AppState } from '../../types'
 
 export async function persistVisibilityAwareSettings(args: {

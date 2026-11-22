@@ -127,10 +127,7 @@ export function RepositoryHookScriptSetting({
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
   return (
-    <div
-      className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
-      id={sectionId}
-    >
+    <div className="space-y-3" id={sectionId}>
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">{field.label}</h5>
         <p className="text-xs text-muted-foreground">{field.description}</p>

@@ -1,6 +1,6 @@
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
@@ -8,6 +8,8 @@ import {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpRequestPresentation } from '../acp-dialects/acp-dialect'
 import { AcpRpcError } from '../transport/acp-errors'
+import { ACP_FORM_ELICITATION_METHOD } from './acp-form-elicitation'
+import { acpUrlElicitationPresentation, isAcpUrlElicitation } from './acp-url-elicitation'
 import type { AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
 
@@ -38,6 +40,15 @@ export class AcpStructuredPrompts {
 
   handle(method: string, params: unknown, context: AcpRequestContext): Promise<unknown> {
     const lane = this.lane()
+    // No session can show a sign-in page yet; cancelling lets the agent report that sign-in is needed.
+    if (
+      !lane &&
+      context.id !== null &&
+      method === ACP_FORM_ELICITATION_METHOD &&
+      isAcpUrlElicitation(params)
+    ) {
+      return Promise.resolve(acpUrlElicitationPresentation(params).reply(null))
+    }
     if (!lane || context.id === null) {
       throw new AcpRpcError(-32603, 'ACP request arrived with no session to show it')
     }
@@ -70,11 +81,13 @@ export class AcpStructuredPrompts {
         settle: (reply) => {
           if (this.open.get(key) === entry) {
             this.open.delete(key)
+            this.lane()?.agentTurn.awaitRequests(this.open.size > 0)
           }
           resolve(reply)
         }
       }
       this.open.set(key, entry)
+      lane.agentTurn.awaitRequests(true)
       // Unclaimed requests withdraw immediately; claimed answers finish their commit.
       context.signal.addEventListener(
         'abort',
@@ -117,7 +130,12 @@ export class AcpStructuredPrompts {
     }
     entry.settle(reply)
     // Release the timeline's hold; withdrawal keeps the committed answer.
-    this.lane()?.apply([{ type: 'request.withdrawn', request: entry.key }])
+    const lane = this.lane()
+    lane?.apply([
+      { type: 'request.withdrawn', request: entry.key },
+      // A URL request's completion that arrived before the answer was saved applies now.
+      ...lane.translator.elicitations.answered(entry.key)
+    ])
     if (entry.permission && entry.signal.aborted) {
       // Protocol cancellation already replied while the permission answer was being saved.
       throw new Error(`the agent stopped waiting for the answer to ${input.itemId}`)
@@ -142,6 +160,7 @@ export class AcpStructuredPrompts {
 
   clear(): void {
     this.open.clear()
+    this.lane()?.agentTurn.awaitRequests(false)
   }
 
   private find(itemId: string): OpenRequest | null {

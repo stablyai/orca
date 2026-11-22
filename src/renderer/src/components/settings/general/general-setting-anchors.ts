@@ -6,10 +6,12 @@ export const GENERAL_SETTING_ANCHORS = {
   nesting: 'general-workspace-nesting',
   worktrees: 'general-global-worktree-visibility',
   openIn: 'general-open-in-apps',
+  cliSkill: 'general-cli-skill',
   autoSave: 'general-auto-save',
   autoSaveDelay: 'general-editor-auto-save-delay',
   formatOnSave: 'general-editor-format-on-save',
   finalNewline: 'general-editor-final-newline',
+  endOfLine: 'general-editor-end-of-line',
   fontFamily: 'general-editor-font-family',
   fontSize: 'general-editor-font-size',
   fontWeight: 'general-editor-font-weight',
@@ -18,6 +20,7 @@ export const GENERAL_SETTING_ANCHORS = {
   fontSmoothing: 'general-editor-font-smoothing',
   editorWrap: 'general-editor-word-wrap',
   minimap: 'general-editor-minimap',
+  inlineBlame: 'general-editor-inline-blame',
   diffView: 'general-editor-diff-view',
   diffWhitespace: 'general-editor-diff-whitespace',
   collapseUnchanged: 'general-editor-collapse-unchanged',
@@ -28,6 +31,14 @@ export const GENERAL_SETTING_ANCHORS = {
   reviewNotes: 'general-editor-review-notes'
 } as const
 
+// A search result for a General sub-page opens that page at this row.
+export const GENERAL_SUB_PAGE_ENTRY_ANCHORS: readonly (readonly [GeneralSubPage, string])[] = [
+  ['folder', GENERAL_SETTING_ANCHORS.folder],
+  ['worktrees', GENERAL_SETTING_ANCHORS.worktrees],
+  ['open-in', GENERAL_SETTING_ANCHORS.openIn],
+  ['editor', GENERAL_SETTING_ANCHORS.autoSaveDelay]
+]
+
 export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | null>> = {
   [GENERAL_SETTING_ANCHORS.folder]: 'folder',
   [GENERAL_SETTING_ANCHORS.nesting]: 'folder',
@@ -37,6 +48,7 @@ export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | nu
   [GENERAL_SETTING_ANCHORS.autoSaveDelay]: 'editor',
   [GENERAL_SETTING_ANCHORS.formatOnSave]: 'editor',
   [GENERAL_SETTING_ANCHORS.finalNewline]: 'editor',
+  [GENERAL_SETTING_ANCHORS.endOfLine]: 'editor',
   [GENERAL_SETTING_ANCHORS.fontFamily]: 'editor',
   [GENERAL_SETTING_ANCHORS.fontSize]: 'editor',
   [GENERAL_SETTING_ANCHORS.fontWeight]: 'editor',

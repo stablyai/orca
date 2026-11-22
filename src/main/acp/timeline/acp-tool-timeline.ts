@@ -1,5 +1,4 @@
 import type { AcpItemOwnership } from './acp-item-ownership'
-import type { AcpOwnershipReader } from '../journal/acp-ownership-reader'
 import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -13,11 +12,17 @@ import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
+import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import { nativeChatToolImageReadPath } from '../../../shared/native-chat/tools/native-chat-tool-viewed-images'
+import { acpToolImagePaths } from './acp-tool-images'
 
 const rawStreamsSchema = z.object({ stdout: z.string().optional(), stderr: z.string().optional() })
 const rawExitCodeSchema = z.looseObject({ exitCode: z.number().int().safe() })
+const commandInputSchema = z.looseObject({ command: z.string().trim().min(1) })
+const BACKGROUND_REPORT_MAX_CHARS = 500
 
 function outputText(update: ToolCallUpdate): string | undefined {
   const text = update.content?.flatMap((block) =>
@@ -41,28 +46,6 @@ function outputText(update: ToolCallUpdate): string | undefined {
   return JSON.stringify(update.rawOutput) ?? ''
 }
 
-// Whole-file replacement avoids expensive diffs for large unrelated files.
-function replacementPatch(path: string, oldText: string, newText: string): string {
-  const lines = (text: string, prefix: string): { count: number; text: string } => {
-    if (!text) {
-      return { count: 0, text: '' }
-    }
-    const entries = text.split('\n')
-    if (entries.at(-1) === '') {
-      entries.pop()
-    }
-    return {
-      count: entries.length,
-      text:
-        entries.map((line) => `${prefix}${line}\n`).join('') +
-        (text.endsWith('\n') ? '' : '\\ No newline at end of file\n')
-    }
-  }
-  const oldLines = lines(oldText, '-')
-  const newLines = lines(newText, '+')
-  return `--- ${path}\n+++ ${path}\n@@ -${oldLines.count ? 1 : 0},${oldLines.count} +${newLines.count ? 1 : 0},${newLines.count} @@\n${oldLines.text}${newLines.text}`
-}
-
 function boundedDiffPatch(path: string, oldText: string, newText: string): string {
   const patch =
     oldText.length + newText.length <= 256 * 1024
@@ -71,26 +54,109 @@ function boundedDiffPatch(path: string, oldText: string, newText: string): strin
   return patch ?? replacementPatch(path, oldText, newText)
 }
 
-type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string }
+// A pending call is waiting to start, often on a person's approval.
+type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string; pending?: true }
 
 // Keep partial-update context until completion or the owning turn ends.
 export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
+  // Kept after the task settles: its row is still Orca's inference, and settled reports latch.
+  private readonly backgrounded = new BoundedMap<string, AcpBackgroundTaskUpdate | true>({
+    maxEntries: 128
+  })
+  // Ownership remembers only the latest ended turn; late updates may name older calls.
+  private readonly endedCalls = new BoundedMap<string, true>({ maxEntries: 512 })
 
-  constructor(
-    private readonly owners: AcpItemOwnership,
-    private readonly read?: AcpOwnershipReader
-  ) {}
+  private storeImages = true
+
+  constructor(private readonly owners: AcpItemOwnership) {}
+
+  skipImageStore(): void {
+    this.storeImages = false
+  }
+
+  /** Close the turn's running calls as launched; each continues as a background task. The call
+   *  row reads completed because the call itself returned (agy answers it with "running as a
+   *  background task"), and a settled call row cannot be revised; the task row carries the run's
+   *  outcome. */
+  background(
+    turn: string,
+    join: ProviderTimelineJoin
+  ): { events: ProviderTimelineEvent[]; tasks: AcpBackgroundTaskUpdate[] } {
+    const events: ProviderTimelineEvent[] = []
+    const tasks: AcpBackgroundTaskUpdate[] = []
+    for (const [callId, snapshot] of this.tools) {
+      if (snapshot.turn !== turn || snapshot.pending) {
+        continue
+      }
+      const input = this.whole.get(callId)?.input ?? snapshot.body.input
+      this.tools.delete(callId)
+      this.whole.delete(callId)
+      this.backgrounded.set(callId, true)
+      const command = commandInputSchema.safeParse(input).data?.command
+      events.push({
+        type: 'item.close',
+        item: `tool:${callId}`,
+        body: { ...snapshot.body, input, state: 'completed' },
+        join: { ...join, scopeItems: [`tool:${callId}`] }
+      })
+      tasks.push({
+        taskId: callId,
+        state: 'working',
+        parentToolUseId: callId,
+        fallbackLabel: command ?? snapshot.body.name,
+        fallbackKind: command ? 'command' : 'unknown'
+      })
+    }
+    return { events, tasks }
+  }
+
+  /** Orca inferred this task from a call still running at its turn's end. */
+  backgrounds(toolCallId: string): boolean {
+    return this.backgrounded.has(toolCallId)
+  }
+
+  /** The call belongs to a turn that already ended. */
+  ended(toolCallId: string): boolean {
+    return (
+      this.backgrounded.has(toolCallId) ||
+      this.endedCalls.has(toolCallId) ||
+      this.turn(toolCallId) !== undefined
+    )
+  }
+
+  /** A backgrounded call's later updates report its task instead of the closed call. */
+  backgroundTask(
+    raw: ToolCallUpdate,
+    dialect: AcpDialect,
+    at: number
+  ): AcpBackgroundTaskUpdate | undefined {
+    const held = this.backgrounded.get(raw.toolCallId)
+    if (held !== true) {
+      return held
+    }
+    const update = dialect.normalizeToolUpdate?.(raw) ?? raw
+    if (update.status !== 'completed' && update.status !== 'failed') {
+      return { taskId: update.toolCallId, state: 'working' }
+    }
+    const exitCode = rawExitCodeSchema.safeParse(update.rawOutput).data?.exitCode
+    const failed = update.status === 'failed' || (exitCode !== undefined && exitCode !== 0)
+    const report = outputText(update)?.trim().slice(-BACKGROUND_REPORT_MAX_CHARS)
+    const settled: AcpBackgroundTaskUpdate = {
+      taskId: update.toolCallId,
+      state: failed ? 'blocked' : 'done',
+      settledAt: at,
+      ...(report ? (failed ? { error: report } : { summary: report }) : {})
+    }
+    this.backgrounded.set(update.toolCallId, settled)
+    return settled
+  }
 
   join(toolCallId: string): ProviderTimelineJoin {
     const turn = this.turn(toolCallId)
-    if (turn !== undefined) {
-      return { turn }
-    }
-    const scope = this.read?.tool(toolCallId)
-    return scope ? { scope } : {}
+    return { ...(turn === undefined ? {} : { turn }), scopeItems: [`tool:${toolCallId}`] }
   }
 
   translate(
@@ -98,7 +164,7 @@ export class AcpToolTimeline {
     dialect: AcpDialect,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] {
-    join = join.turn === undefined ? { ...join, ...this.join(raw.toolCallId) } : join
+    join = { ...join, ...this.join(raw.toolCallId), ...(join.turn ? { turn: join.turn } : {}) }
     const turn = join.turn
     // Thread-scoped calls have no owning turn to end them, so they keep context until completion.
     const retain =
@@ -156,10 +222,28 @@ export class AcpToolTimeline {
                 : journalToolPayload(output, state === 'running')
           })
     }
+    // Content replaces the call's snapshot; an update without it keeps the images it had.
+    // A read's file already previews by its path.
+    const imagePaths =
+      update.content == null
+        ? previous?.body.outputImagePaths
+        : this.storeImages && nativeChatToolImageReadPath(body) === null
+          ? acpToolImagePaths(update.content)
+          : undefined
+    if (imagePaths?.length) {
+      body.outputImagePaths = imagePaths
+    }
     if (turn !== undefined) {
       this.owners.remember(`tool:${update.toolCallId}`, turn)
     }
-    const snapshot = { body, ...(turn === undefined ? {} : { turn }) }
+    const snapshot = {
+      body,
+      ...(turn === undefined ? {} : { turn }),
+      // Status-less partial updates keep the call's approval wait.
+      ...(update.status === 'pending' || (update.status == null && previous?.pending)
+        ? { pending: true as const }
+        : {})
+    }
     if (state === 'running' && retain) {
       this.tools.set(update.toolCallId, snapshot)
     } else {
@@ -187,7 +271,10 @@ export class AcpToolTimeline {
           },
           join
         })
-      } else if (content.type === 'terminal' || content.content.type !== 'text') {
+      } else if (
+        content.type === 'terminal' ||
+        (content.content.type !== 'text' && content.content.type !== 'image')
+      ) {
         events.push({
           type: 'provider.frame',
           frameKind: `tool-content:${content.type}`,
@@ -199,6 +286,15 @@ export class AcpToolTimeline {
     return events
   }
 
+  running(turn: string): boolean {
+    for (const snapshot of this.tools.values()) {
+      if (snapshot.turn === turn) {
+        return true
+      }
+    }
+    return false
+  }
+
   turn(toolCallId: string): string | undefined {
     return this.tools.get(toolCallId)?.turn ?? this.owners.get(`tool:${toolCallId}`)?.turn
   }
@@ -208,6 +304,7 @@ export class AcpToolTimeline {
       if (key.startsWith('tool:')) {
         this.tools.delete(key.slice(5))
         this.whole.delete(key.slice(5))
+        this.endedCalls.set(key.slice(5), true)
       }
     }
   }
@@ -215,5 +312,7 @@ export class AcpToolTimeline {
   dispose(): void {
     this.tools.clear()
     this.whole.clear()
+    this.backgrounded.clear()
+    this.endedCalls.clear()
   }
 }

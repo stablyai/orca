@@ -3,7 +3,7 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import type { PRRefreshUpstreamErrorType } from '../../../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshErrorType as PRRefreshUpstreamErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

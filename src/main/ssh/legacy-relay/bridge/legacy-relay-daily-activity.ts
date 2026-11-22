@@ -1,5 +1,5 @@
 /** Report active bridging once per target per UTC day to measure relay retirement. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
-import type { EventProps } from '../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 
 type TerminalsBucket = EventProps<'ssh_host_server_legacy_relay_bridge'>['terminals']
 type ActivityReport = (targetId: string, phase: 'active', terminals: number) => void

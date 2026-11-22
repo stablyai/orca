@@ -6,7 +6,7 @@ import type {
   PullRequestGenerationFields
 } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../../source-control/ai/text-generation-defaults'
 

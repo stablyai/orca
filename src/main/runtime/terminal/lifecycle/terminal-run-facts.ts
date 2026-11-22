@@ -1,7 +1,7 @@
 import {
   spawnCommitBindingOrigin,
   type PtySpawnCommitOrigin
-} from '../../../persistence/loading-store/pty-binding-span'
+} from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
 import { isUntypedTerminalInput } from '../../../../shared/terminal/input/terminal-untyped-input'
 import {
   isDrivingInputKind,

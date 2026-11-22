@@ -1,9 +1,9 @@
-import type { BundledSkillLocation } from '../../../../../shared/bundled-skill-locations'
-import type { BundledSkillOutcome } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillLocation } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import type { BundledSkillOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillOutcomeText,
   type BundledSkillPlanSkillSummary
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
 import {

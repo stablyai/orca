@@ -1,34 +1,37 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import {
+  getDefaultPersistedState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
 import {
   normalizeProjectHostSetupRows,
   normalizeProjectRows
-} from '../../../shared/project-catalog-row-normalization'
-import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Project, ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/catalog/project-catalog-row-normalization'
+import { carryProjectStateThroughIdentityChange } from '../../../shared/project/catalog/project-identity-succession'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
-import type { RetiredNameRegistry } from '../../../shared/worktree/retired-name-registry'
+import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import '../profile-index-store'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import {
   importProfileStateJson,
   profileStateJsonMatchesAcceptance,
   readProfileStateSnapshot
-} from '../../persistence/profile-state/profile-state-documents'
-import { readProfileStateRevision } from '../../persistence/profile-state/profile-state-revision'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { readProfileStateRevision } from '../../persistence/profile-state/database/profile-state-revision'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../../persistence/profile-state/profile-state-database'
-import { parseProfileStateRoot } from '../../persistence/profile-state/profile-state-document-validation'
-import { assertProfileStateCanInitialize } from '../../persistence/profile-state/profile-state-recovery-required'
-import { hasProfileStateDatabaseFiles } from '../../persistence/profile-state/profile-state-storage-classification'
-import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/profile-state-authority-marker'
+} from '../../persistence/profile-state/database/profile-state-database'
+import { parseProfileStateRoot } from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { assertProfileStateCanInitialize } from '../../persistence/profile-state/recovery/profile-state-recovery-required'
+import { hasProfileStateDatabaseFiles } from '../../persistence/profile-state/database/profile-state-storage-classification'
+import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/database/profile-state-authority-marker'
 
 export type ReadProfileStateResult = {
   state: PersistedState
@@ -118,6 +121,7 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
   const {
     uiLanguagePortugueseMigrationApplied: _migrationApplied,
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
     artifactSharingEnabled: _artifactSharingEnabled,
     ...settingsDefaults
   } = defaults.settings

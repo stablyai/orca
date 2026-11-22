@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { useAppStore } from '../../../store/index'
@@ -7,23 +7,25 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField } from '../form-controls/SettingsFormControls'
+import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
-import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
+import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
+import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
-import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
+import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
 } from '@/lib/agent-session/hibernation/agent-hibernation-planner'
+import { trackWorktreeCardStyleChanged } from '@/components/sidebar/workspace-card/template/worktree-card-style-telemetry'
 
 const MS_PER_MINUTE = 60 * 1000
 
 type ExperimentalPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
 }
@@ -48,8 +50,8 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showAppRail = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().appRail])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
-  const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -208,12 +210,12 @@ export function ExperimentalPane({
         {showNewWorktreeCardStyle ? (
           <SearchableSetting
             title={t(
-              'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-              'New card style'
+              'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+              'Card style'
             )}
             description={t(
-              'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
-              'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+              'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+              'Choose how workspace cards look in the sidebar.'
             )}
             keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
             className="space-y-3 py-3"
@@ -223,31 +225,67 @@ export function ExperimentalPane({
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
                   {t(
-                    'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-                    'New card style'
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+                    'Card style'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {t(
-                    'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                    'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+                    'Choose how workspace cards look in the sidebar.'
                   )}
                 </p>
               </div>
-              <Switch
-                checked={newWorktreeCardStyleEnabled}
-                aria-label={t(
-                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
-                  'Toggle new card style'
-                )}
-                onCheckedChange={() =>
-                  updateSettings({
-                    experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
-                  })
+              <SettingsSegmentedControl<'classic' | 'experimental'>
+                size="sm"
+                value={
+                  settings.experimentalNewWorktreeCardStyle === true ? 'experimental' : 'classic'
                 }
+                onChange={(style) => {
+                  const experimental = style === 'experimental'
+                  void Promise.resolve(
+                    updateSettings({ experimentalNewWorktreeCardStyle: experimental })
+                  ).then(() => {
+                    const state = useAppStore.getState()
+                    if (
+                      (state.settings?.experimentalNewWorktreeCardStyle === true) !==
+                      experimental
+                    ) {
+                      return
+                    }
+                    state.setWorktreeCardsIntroChoice(null)
+                    if (experimental !== (settings.experimentalNewWorktreeCardStyle === true)) {
+                      trackWorktreeCardStyleChanged(experimental, 'settings')
+                    }
+                  })
+                }}
+                ariaLabel={t(
+                  'auto.components.settings.ExperimentalPane.worktreeCardStyle.ariaLabel',
+                  'Card style'
+                )}
+                options={[
+                  {
+                    value: 'classic',
+                    label: t(
+                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
+                      'Classic'
+                    )
+                  },
+                  {
+                    value: 'experimental',
+                    label: t(
+                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
+                      'Experimental'
+                    )
+                  }
+                ]}
               />
             </div>
           </SearchableSetting>
+        ) : null}
+
+        {showAppRail ? (
+          <AppRailExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

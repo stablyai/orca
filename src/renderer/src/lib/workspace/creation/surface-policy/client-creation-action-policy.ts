@@ -1,14 +1,16 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import '../../../../../../shared/protocol-version'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
+import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { isPairedWebClientWindow } from '../../../../app-shell/chrome/desktop-window-chrome'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../ownership/worktree-runtime-owner'
 import { expectsBrowserClientHosting } from '../../../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import { getOrcadSshDeployment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export const MANAGED_BROWSER_UNAVAILABLE_MESSAGE =
   "Managed browser tabs are unavailable because this web client's paired runtime does not support browser streaming."
@@ -68,38 +70,44 @@ export function resolveClientCreationActionPolicy(args: {
   }
 }
 
+/** Render paths pass the statuses their hook read; actions default to the owner's current map. */
 export function getClientCreationActionPolicy(
   state: AppState,
-  worktreeId: string | null
+  worktreeId: string | null,
+  statuses: RuntimeStatuses = readAppRuntimeStatuses()
 ): ClientCreationActionPolicy {
   return worktreeId
-    ? getWorkspaceClientCreationActionPolicy(state, worktreeId)
+    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, statuses)
     : creationPolicyForRuntime(
         state,
         state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
-        false
+        false,
+        statuses
       )
 }
 
 export function getWorkspaceClientCreationActionPolicy(
   state: AppState,
-  worktreeId: string
+  worktreeId: string,
+  statuses: RuntimeStatuses = readAppRuntimeStatuses()
 ): ClientCreationActionPolicy {
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   return creationPolicyForRuntime(
     state,
     floatingWorkspace ? null : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
-    floatingWorkspace
+    floatingWorkspace,
+    statuses
   )
 }
 
 function creationPolicyForRuntime(
   state: AppState,
   runtimeEnvironmentId: string | null,
-  floatingWorkspace: boolean
+  floatingWorkspace: boolean,
+  statuses: RuntimeStatuses
 ): ClientCreationActionPolicy {
   const runtimeStatus = runtimeEnvironmentId
-    ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)
+    ? (statuses.get(runtimeEnvironmentId)?.status ?? null)
     : null
 
   return resolveClientCreationActionPolicy({
@@ -107,15 +115,17 @@ function creationPolicyForRuntime(
     runtimeStatus,
     floatingWorkspace,
     runtimeHostsPagesOnThisDesktop:
-      runtimeEnvironmentId !== null && runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId)
+      runtimeEnvironmentId !== null &&
+      runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId, statuses)
   })
 }
 
+type RuntimeBrowserHostingStatuses = ReadonlyMap<
+  string,
+  { status: Pick<RuntimeStatus, 'capabilities' | 'deviceScope'> | null }
+>
+
 export type RuntimeBrowserHostingState = {
-  runtimeStatusByEnvironmentId?: ReadonlyMap<
-    string,
-    { status: Pick<RuntimeStatus, 'capabilities' | 'deviceScope'> | null }
-  >
   runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'orcadDeployment'>[]
   settings?: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'> | null
 }
@@ -123,7 +133,8 @@ export type RuntimeBrowserHostingState = {
 /** Host orcad browser pages on this desktop through runtime tunnels; managed SSH deployments retain the SSH browser route. */
 export function runtimeHostsPagesOnThisDesktop(
   state: RuntimeBrowserHostingState,
-  runtimeEnvironmentId: string
+  runtimeEnvironmentId: string,
+  statuses: RuntimeBrowserHostingStatuses = readAppRuntimeStatuses()
 ): boolean {
   if (isPairedWebClientWindow()) {
     return false
@@ -132,7 +143,7 @@ export function runtimeHostsPagesOnThisDesktop(
   if (environment && getOrcadSshDeployment(environment)) {
     return false
   }
-  const status = state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status
+  const status = statuses.get(runtimeEnvironmentId)?.status
   return expectsBrowserClientHosting({
     enabled: state.settings?.browserClientHostedRemoteEnabled !== false,
     preference: undefined,
@@ -156,11 +167,11 @@ export function assertRuntimeManagedBrowserCreationAvailable(
   state: RuntimeBrowserHostingState,
   runtimeEnvironmentId: string
 ): void {
-  const capabilities =
-    state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status?.capabilities
+  const statuses = readAppRuntimeStatuses()
+  const capabilities = statuses.get(runtimeEnvironmentId)?.status?.capabilities
   if (
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
-    !runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId)
+    !runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId, statuses)
   ) {
     throw new Error(RUNTIME_BROWSER_UNAVAILABLE_MESSAGE)
   }

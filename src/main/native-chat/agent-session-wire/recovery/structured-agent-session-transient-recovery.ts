@@ -31,7 +31,9 @@ type RecoveryDeps = TransientRecoveryPolicy & {
   onCompleted?: (
     listener: (sessionId: string, turnId: string, outcome: string) => void
   ) => () => void
-  snapshot: (sessionId: string) => TransientRecoverySnapshot | null
+  snapshot: (sessionId: string) => Promise<TransientRecoverySnapshot | null>
+  /** Synchronous re-check of the snapshot's journal position, for the acceptance lock. */
+  unchanged: (sessionId: string, expected: TransientRecoverySnapshot) => boolean
   /** beforeRun is checked inside the session's existing serial acceptance lock. */
   send: (sessionId: string, operationId: string, beforeRun: () => void) => Promise<boolean>
   logger: StructuredAgentSessionLogger
@@ -40,6 +42,7 @@ type RecoveryDeps = TransientRecoveryPolicy & {
 /** Host-owned, live-only retries: restarting or reopening a chat never replays a historical error. */
 export class StructuredAgentSessionTransientRecovery {
   private readonly recoveries = new Map<string, Recovery>()
+  private cancellations = 0
   private disposed = false
   private readonly stopWatching?: () => void
   private readonly stopCompletions?: () => void
@@ -50,11 +53,24 @@ export class StructuredAgentSessionTransientRecovery {
   }
 
   completed(sessionId: string, turnId: string, outcome: string): void {
-    const previous = this.recoveries.get(sessionId)
-    if (previous?.turnId === turnId) {
+    void this.observeCompletion(sessionId, turnId, outcome)
+  }
+
+  private async observeCompletion(
+    sessionId: string,
+    turnId: string,
+    outcome: string
+  ): Promise<void> {
+    if (this.recoveries.get(sessionId)?.turnId === turnId) {
       return
     }
-    const snapshot = this.deps.snapshot(sessionId)
+    const cancellations = this.cancellations
+    const snapshot = await this.deps.snapshot(sessionId)
+    // A cancel during the journal read wins: whatever it withdrew must not come back.
+    if (cancellations !== this.cancellations) {
+      return
+    }
+    const previous = this.recoveries.get(sessionId)
     if (
       this.disposed ||
       !this.deps.enabled() ||
@@ -90,6 +106,7 @@ export class StructuredAgentSessionTransientRecovery {
     if (recovery?.timer) {
       clearTimeout(recovery.timer)
     }
+    this.cancellations++
     this.recoveries.delete(sessionId)
   }
 
@@ -109,27 +126,33 @@ export class StructuredAgentSessionTransientRecovery {
   }
 
   private cancelAll(): void {
+    this.cancellations++
     for (const sessionId of this.recoveries.keys()) {
       this.cancel(sessionId)
     }
   }
 
-  private stillWanted(
+  private registered(sessionId: string, recovery: Recovery): boolean {
+    return !this.disposed && this.deps.enabled() && this.recoveries.get(sessionId) === recovery
+  }
+
+  private async stillWanted(
     sessionId: string,
     recovery: Recovery,
     expected: TransientRecoverySnapshot
-  ): boolean {
-    if (this.disposed || !this.deps.enabled() || this.recoveries.get(sessionId) !== recovery) {
+  ): Promise<boolean> {
+    if (!this.registered(sessionId, recovery)) {
       return false
     }
-    const current = this.deps.snapshot(sessionId)
+    const current = await this.deps.snapshot(sessionId)
     return (
       current !== null &&
       current.turnId === expected.turnId &&
       current.error === expected.error &&
       current.fence === expected.fence &&
       current.epoch === expected.epoch &&
-      current.sequence === expected.sequence
+      current.sequence === expected.sequence &&
+      this.registered(sessionId, recovery)
     )
   }
 
@@ -138,7 +161,7 @@ export class StructuredAgentSessionTransientRecovery {
     recovery: Recovery,
     expected: TransientRecoverySnapshot
   ): Promise<void> {
-    if (!this.stillWanted(sessionId, recovery, expected)) {
+    if (!(await this.stillWanted(sessionId, recovery, expected))) {
       return
     }
     const operationId = `${this.deps.now?.() ?? Date.now()}-${randomBytes(16).toString('hex')}`
@@ -146,7 +169,7 @@ export class StructuredAgentSessionTransientRecovery {
     recovery.automaticUserItemId = agentJournalSubmissionKey(operationId)
     try {
       await this.deps.send(sessionId, operationId, () => {
-        if (!this.stillWanted(sessionId, recovery, expected)) {
+        if (!this.registered(sessionId, recovery) || !this.deps.unchanged(sessionId, expected)) {
           throw new AgentSessionPreDispatchError('agent_session_transient_recovery_superseded')
         }
       })

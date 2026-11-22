@@ -296,16 +296,12 @@ export default function RichMarkdownEditor({
     handleLinkSave,
     handleLinkRemove,
     handleLinkEditCancel,
-    handleLinkOpen,
     handleLinkCopy,
-    toggleLinkFromToolbar
-  } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink, {
-    sourceFilePath: filePath,
-    worktreeId,
-    worktreeRoot,
-    runtimeEnvironmentId,
-    htmlSuperscriptLinkContext
-  })
+    toggleLinkFromToolbar,
+    cancelHoverBubble,
+    onBubblePointerEnter,
+    onBubblePointerLeave
+  } = useLinkBubble(editor, rootRef, linkBubble, isEditingLink, setLinkBubble, setIsEditingLink)
 
   useEffect(() => {
     return window.api.ui.onRichMarkdownContextCommand((payload) => {
@@ -383,14 +379,16 @@ export default function RichMarkdownEditor({
       linkBubbleOwnerId={codec.transport.key}
       linkBubbleActions={{
         dismissLinkBubble: () => {
+          cancelHoverBubble()
           setLinkBubble(null)
           setIsEditingLink(false)
         },
         handleLinkSave,
         handleLinkRemove,
         handleLinkEditCancel,
-        handleLinkOpen,
         handleLinkCopy,
+        onBubblePointerEnter,
+        onBubblePointerLeave,
         setIsEditingLink
       }}
       onToggleLink={toggleLinkFromToolbar}

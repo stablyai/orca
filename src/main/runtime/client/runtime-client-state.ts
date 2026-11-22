@@ -9,20 +9,22 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 
 import {
   type ExecutionHostId,
+  getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId
-} from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+} from '../../../shared/execution-host/execution-host'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
-import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
+import type { MemorySnapshot, StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import { isDeepStrictEqual } from 'node:util'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   AgentListPublication,
+  AgentListVerdictUpdate,
   AgentPaneActivityChange
 } from '../../../shared/agent-status/presentation/agent-list-status'
-import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import { AgentListVerdictMirror, type AgentListChangeListener } from './agent-list-verdict-mirror'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
@@ -196,18 +198,34 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
   }
 
   /** The live desktop window's Agents-list verdicts; null with no window, so worktree.ps claims none. */
-  private agentListPublication: AgentListPublication | null = null
+  private readonly agentList = new AgentListVerdictMirror(() =>
+    this.emitClientEvent({ type: 'agentListChanged' })
+  )
 
   readAgentListPublication(): AgentListPublication | null {
-    return this.agentListPublication
+    return this.agentList.read()
   }
 
   setAgentListPublication(next: AgentListPublication | null): void {
-    const changed = !isDeepStrictEqual(this.agentListPublication?.verdicts, next?.verdicts)
-    this.agentListPublication = next
-    if (changed) {
-      this.emitClientEvent({ type: 'agentListChanged' })
-    }
+    this.agentList.set(next)
+  }
+
+  applyAgentListUpdate(update: AgentListVerdictUpdate | null): void {
+    this.agentList.apply(update)
+  }
+
+  /** Hides the list while the window reloads; a cancelled reload restores it. */
+  withholdAgentList(): void {
+    this.agentList.withhold()
+  }
+
+  restoreAgentList(): void {
+    this.agentList.restore()
+  }
+
+  /** In-process readers that re-project only the panes whose verdicts changed. */
+  onAgentListChanged(listener: AgentListChangeListener): () => void {
+    return this.agentList.subscribe(listener)
   }
 
   /** Applies through the window's own Activity actions and keeps the verdicts it answers with, so the next worktree.ps already shows them. */
@@ -235,6 +253,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
     return this.clientSettings.getTerminalQuickCommands()
+  }
+
+  /** The "New projects open on" host, which desktop's Linear and Jira pages read from. */
+  getClientDefaultScopeHost(): ExecutionHostId {
+    return getSettingsFocusedExecutionHostId(this.store?.getSettings?.())
   }
 
   getClientAgentLaunchSettings() {

@@ -9,7 +9,7 @@ import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-li
 import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import { resolveParkRevealLiveTuiLeafIds } from '../parking/lifecycle/park-reveal-live-tui-leaves'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { mapRestoredPaneTitlesByPaneId } from '../titles/restored-pane-titles'
 import { replayLayoutWithOneShotParkIntent } from '../parking/one-shot-park-replay'
 
@@ -59,9 +59,18 @@ export function restoreTerminalPaneLayout(args: {
   ) {
     const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
     delete layoutWithoutRestoredBuffers.buffersByLeafId
-    if (hasScrollbackRefs) {
-      initialLayoutRef.current = layoutWithoutRestoredBuffers
-    }
+    const retainedInline = Object.fromEntries(
+      Object.entries(restoredBuffers).filter(
+        ([leafId]) =>
+          restoredPaneByLeafId.has(leafId) &&
+          initialLayoutRef.current.scrollbackRefsByLeafId?.[leafId] === undefined &&
+          !deps.clearedScrollbackLeafIdsRef?.current.has(leafId)
+      )
+    )
+    initialLayoutRef.current =
+      Object.keys(retainedInline).length > 0
+        ? { ...layoutWithoutRestoredBuffers, buffersByLeafId: retainedInline }
+        : layoutWithoutRestoredBuffers
     if (initialLayoutHadBuffers) {
       useAppStore.getState().setTabLayout(tabId, layoutWithoutRestoredBuffers)
     }

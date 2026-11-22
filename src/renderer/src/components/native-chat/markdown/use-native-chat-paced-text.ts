@@ -1,5 +1,5 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
 import {
   nativeChatTextAppended,
@@ -8,7 +8,7 @@ import {
   startNativeChatTextReveal,
   type NativeChatTextReveal,
   type NativeChatTextRevealFrames
-} from '../../../../../shared/native-chat/transcript/native-chat-text-reveal'
+} from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 
 const WORD_FADE_MS = 300
 

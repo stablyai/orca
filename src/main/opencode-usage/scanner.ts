@@ -1,4 +1,4 @@
-import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../shared/concurrency/event-loop-yield'
 import Database from '../sqlite/sync-database'
 import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
 import {

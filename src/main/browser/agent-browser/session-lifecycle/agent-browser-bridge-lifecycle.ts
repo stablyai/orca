@@ -13,20 +13,14 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const owningWorktreeId = browserPageId
       ? this.browserManager.getWorktreeIdForTab(browserPageId)
       : undefined
-    let nextWorktreeActiveWebContentsId: number | null = null
-    if (
-      owningWorktreeId &&
-      this.activeWebContentsPerWorktree.get(owningWorktreeId) === webContentsId
-    ) {
-      nextWorktreeActiveWebContentsId = this.selectFallbackActiveWebContents(
-        owningWorktreeId,
-        webContentsId
-      )
-    }
-    if (this.activeWebContentsId === webContentsId) {
-      this.activeWebContentsId = nextWorktreeActiveWebContentsId
-    }
     if (browserPageId) {
+      let nextWorktreePageId: string | null = null
+      if (owningWorktreeId && this.routedPagePerWorktree.get(owningWorktreeId) === browserPageId) {
+        nextWorktreePageId = this.selectFallbackRoutedPage(owningWorktreeId, browserPageId)
+      }
+      if (this.routedPageId === browserPageId) {
+        this.setRoutedPageId(undefined, nextWorktreePageId)
+      }
       await this.onPageClosed(browserPageId)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
@@ -34,28 +28,37 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
   /** Offscreen backends unregister guests before cleanup, so close by page ID. */
   async onPageClosed(browserPageId: string): Promise<void> {
+    // Routes outlive a freed guest but not a closed page.
+    this.retargetRouting(browserPageId, null)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     await this.destroySession(sessionName)
     this.pendingInterceptRestore.delete(sessionName)
   }
 
-  async onProcessSwap(
-    browserPageId: string,
-    newWebContentsId: number,
-    previousWebContentsId?: number
-  ): Promise<void> {
-    // Process swaps preserve page IDs but replace the guest and its session.
+  /** The agent routed requests or is capturing HAR on this page; freeing the page would drop both. */
+  holdsPageNetworkState(browserPageId: string): boolean {
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     const session = this.sessions.get(sessionName)
-    const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
+    return (
+      session?.activeCapture === true ||
+      (session?.activeInterceptPatterns.length ?? 0) > 0 ||
+      this.pendingInterceptRestore.has(sessionName)
+    )
+  }
+
+  async onProcessSwap(
+    browserPageId: string,
+    _newWebContentsId: number,
+    _previousWebContentsId?: number
+  ): Promise<void> {
+    // Process swaps preserve page IDs, and so routes, but replace the guest and its session.
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    const session = this.sessions.get(sessionName)
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
     if (session && session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
     await this.destroySession(sessionName)
-    if (oldWebContentsId != null) {
-      this.retargetRouting(oldWebContentsId, newWebContentsId)
-    }
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
   // A closed popup ends its session and hands the agent back to its opener, not the first listed tab.
@@ -71,13 +74,10 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     this.watchedPopupWebContentsIds.add(webContentsId)
     contents.once('destroyed', () => {
       this.watchedPopupWebContentsIds.delete(webContentsId)
-      const openerWebContentsId = this.browserManager.getGuestWebContentsId(
-        popup.openerBrowserPageId
-      )
       // A person's tab pick held while the agent drove the popup must keep waiting on the opener.
       if (
-        openerWebContentsId !== null &&
-        this.retargetRouting(webContentsId, openerWebContentsId)
+        this.browserManager.getGuestWebContentsId(popup.openerBrowserPageId) !== null &&
+        this.retargetRouting(popup.browserPageId, popup.openerBrowserPageId)
       ) {
         this.browserManager.handOverAgentActivity(popup.browserPageId, popup.openerBrowserPageId)
       }

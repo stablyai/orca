@@ -3,7 +3,7 @@ import {
   GitCommitAction,
   GitSequencer,
   GitCreateBranch
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({

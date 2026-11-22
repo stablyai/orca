@@ -1,10 +1,10 @@
 // Share host completion/prompt edges per target without snapshots, buffers or reconnect catch-up. Status feed retains state; this feed intentionally loses outage edges. Retention would create unread obligations with nothing to retire them and relight already-read work.
 
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
-import type { AgentSessionAttentionEdge } from '../../../../../shared/agent-session/agent-session-attention'
-import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-attention-capabilities'
+import type { AgentSessionAttentionEdge } from '../../../../../shared/agent-session/view/agent-session-attention'
+import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/view/agent-session-attention-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from '../requests/structured-agent-session-subscriptions'
 
 export type StructuredAgentSessionTurnCompletionListener = (edge: AgentSessionAttentionEdge) => void
@@ -223,10 +223,6 @@ export function getStructuredAgentSessionTurnCompletionFeed(
     activate: () => acquire().activate(),
     subscribe: (listener) => acquire().subscribe(listener)
   }
-}
-
-export function structuredAgentSessionTurnCompletionFeedCountForTests(): number {
-  return owners.size
 }
 
 export function resetStructuredAgentSessionTurnCompletionFeedsForTests(): void {

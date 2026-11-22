@@ -1,7 +1,11 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import {
+  formatScheduleRefusal,
+  type AutomationScheduleRefusalHints
+} from './automation-schedule-refusal'
 
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import {
   DAY_NAMES,
   MONTH_NAMES,
@@ -17,6 +21,8 @@ export type ParsedRrule = {
   byDay: string[]
   byHour: number
   byMinute: number
+  /** First part the scheduler drops; stored rules still run without it. */
+  ignoredPart: string | null
 }
 
 export type ParsedCron = {
@@ -35,18 +41,51 @@ export type { CronParseOptions }
 
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
+const RRULE_PARTS_BY_FREQ = {
+  HOURLY: ['FREQ', 'BYMINUTE'],
+  DAILY: ['FREQ', 'BYHOUR', 'BYMINUTE'],
+  WEEKLY: ['FREQ', 'BYDAY', 'BYHOUR', 'BYMINUTE']
+} as const
+// Parts that match what the scheduler already does, so dropping them changes nothing.
+const NO_OP_RRULE_PARTS = new Set([
+  'INTERVAL=1',
+  'BYSECOND=0',
+  ...DAY_CODES.map((day) => `WKST=${day}`)
+])
 
 function parseRrule(rrule: string): ParsedRrule {
   const entries = new Map<string, string>()
+  let ignoredPart: string | null = null
   for (const part of rrule.split(';')) {
-    const [key, value] = part.split('=')
-    if (key && value) {
-      entries.set(key.toUpperCase(), value)
+    if (!part) {
+      continue
+    }
+    const [key, value, extra] = part.split('=')
+    const upperKey = key?.toUpperCase()
+    if (!upperKey || !value || extra !== undefined) {
+      ignoredPart ??= part
+    }
+    if (upperKey && value) {
+      // A repeated key overwrites the earlier one, so the earlier part is the one dropped.
+      const earlier = entries.get(upperKey)
+      if (earlier !== undefined) {
+        ignoredPart ??= `${upperKey}=${earlier}`
+      }
+      entries.set(upperKey, value)
     }
   }
   const freq = entries.get('FREQ')
   if (freq !== 'HOURLY' && freq !== 'DAILY' && freq !== 'WEEKLY') {
     throw new Error('Unsupported automation recurrence.')
+  }
+  if (ignoredPart === null) {
+    const supported: readonly string[] = RRULE_PARTS_BY_FREQ[freq]
+    for (const [key, value] of entries) {
+      if (!supported.includes(key) && !NO_OP_RRULE_PARTS.has(`${key}=${value}`)) {
+        ignoredPart = `${key}=${value}`
+        break
+      }
+    }
   }
   const byHour = Number(entries.get('BYHOUR') ?? '9')
   const byMinute = Number(entries.get('BYMINUTE') ?? '0')
@@ -64,7 +103,7 @@ function parseRrule(rrule: string): ParsedRrule {
   ) {
     throw new Error('Invalid recurrence day.')
   }
-  return { kind: 'rrule', freq, byDay, byHour, byMinute }
+  return { kind: 'rrule', freq, byDay, byHour, byMinute, ignoredPart }
 }
 
 export function parseCronExpression(
@@ -183,9 +222,50 @@ function cronScheduleRuns(schedule: string, options: CronParseOptions): boolean 
   }
 }
 
-/** Accepts a schedule as new input, oversized-step refusal included (#15895). */
+/** Why new input is refused, naming what is accepted; null when accepted. */
+export function getAutomationScheduleInputError(
+  schedule: string,
+  label = 'Invalid automation trigger.',
+  hints: AutomationScheduleRefusalHints = {}
+): string | null {
+  let ignoredPart: string | null = null
+  try {
+    const parsed = parseSchedule(schedule, { rejectOversizedStep: true })
+    if (
+      parsed.kind === 'cron'
+        ? cronHasPossibleOccurrence(parsed, Date.now())
+        : parsed.ignoredPart === null
+    ) {
+      return null
+    }
+    ignoredPart = parsed.kind === 'rrule' ? parsed.ignoredPart : null
+  } catch {
+    // Unparseable input gets the same refusal, without a named part.
+  }
+  return formatScheduleRefusal(schedule, label, ignoredPart, hints)
+}
+
+/** Accepts a schedule as new input, oversized-step (#15895) and ignored-part (#45519) refusals included. */
 export function isValidAutomationSchedule(schedule: string): boolean {
-  return scheduleRuns(schedule, { rejectOversizedStep: true })
+  return getAutomationScheduleInputError(schedule) === null
+}
+
+/** Rebuilds a stored RRULE from the cadence that runs, so new-input checks accept it. */
+export function withoutIgnoredRruleParts(schedule: string): string {
+  try {
+    const rule = parseSchedule(schedule)
+    if (rule.kind === 'cron' || rule.ignoredPart === null) {
+      return schedule
+    }
+    return [
+      `FREQ=${rule.freq}`,
+      ...(rule.freq === 'WEEKLY' ? [`BYDAY=${rule.byDay.join(',')}`] : []),
+      ...(rule.freq === 'HOURLY' ? [] : [`BYHOUR=${rule.byHour}`]),
+      `BYMINUTE=${rule.byMinute}`
+    ].join(';')
+  } catch {
+    return schedule
+  }
 }
 
 export function isValidAutomationCronSchedule(schedule: string): boolean {

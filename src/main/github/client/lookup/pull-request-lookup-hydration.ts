@@ -1,7 +1,7 @@
-import type { OwnerRepo } from '../../gh-utils'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
-import { mapPRState } from '../../mappers'
+import { mapPRState } from '../../api/github-read-response'
 import {
   normalizePullRequestLookupData,
   type PullRequestLookupData

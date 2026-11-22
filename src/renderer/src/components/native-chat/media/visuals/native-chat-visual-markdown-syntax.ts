@@ -10,12 +10,13 @@ import type {
   State,
   TokenizeContext
 } from 'micromark-util-types'
-import type { Processor } from 'unified'
+import type { Processor, PluggableList } from 'unified'
 import {
   NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../../../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
+import { nativeChatBotDirectiveCardOf } from '../../../../../../shared/native-chat/bot-cards/native-chat-bot-card-kind'
 
 const TOKEN_TYPE = 'nativeChatVisual'
 const COLON = 58
@@ -26,16 +27,37 @@ const VIRTUAL_SPACE = -1
 const NONCE_PROPERTY = 'dataOrcaVisual'
 const FILE_PROPERTY = 'dataOrcaVisualFile'
 const TITLE_PROPERTY = 'dataOrcaVisualTitle'
+const HOOK_PROPERTY = 'dataOrcaVisualHook'
 export const NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES = [
   NONCE_PROPERTY,
   FILE_PROPERTY,
-  TITLE_PROPERTY
+  TITLE_PROPERTY,
+  HOOK_PROPERTY
 ] as const
+
+function parseDirectiveLine(
+  line: string
+): { file: string; title: string | null; hookId: null } | { hookId: string } | null {
+  const visual = parseNativeChatVisualDirectiveLine(line)
+  if (visual) {
+    return { ...visual, hookId: null }
+  }
+  const card = nativeChatBotDirectiveCardOf(line)
+  if (!card) {
+    return null
+  }
+  switch (card.kind) {
+    case 'webhook':
+      return { hookId: card.value.hookId }
+  }
+}
 
 export type NativeChatVisualNode = Node & {
   type: 'nativeChatVisual'
   file: string
   title: string | null
+  /** Set for a webhook card line, whose file and title stay empty. */
+  hookId: string | null
   /** The line as written, for a directive shown as text instead. */
   source: string
   data?: { hName?: string; hProperties?: Record<string, string> }
@@ -61,7 +83,7 @@ function tokenizeVisualLine(this: TokenizeContext, effects: Effects, ok: State, 
     // EOF, or a line ending (the negative codes below the tab/virtual-space codes).
     if (code === null || code < HORIZONTAL_TAB) {
       effects.exit(TOKEN_TYPE)
-      return parseNativeChatVisualDirectiveLine(line) ? ok(code) : nok(code)
+      return parseDirectiveLine(line) ? ok(code) : nok(code)
     }
     if (line.length >= NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH) {
       return nok(code)
@@ -85,17 +107,24 @@ const visualMicromarkExtension: MicromarkExtension = { flow: { [COLON]: visualLi
 const visualFromMarkdown: FromMarkdownExtension = {
   enter: {
     [TOKEN_TYPE](token) {
-      this.enter({ type: 'nativeChatVisual', file: '', title: null, source: '' }, token)
+      this.enter(
+        { type: 'nativeChatVisual', file: '', title: null, hookId: null, source: '' },
+        token
+      )
     }
   },
   exit: {
     [TOKEN_TYPE](token) {
       const node = this.stack.at(-1)
       const source = this.sliceSerialize(token)
-      const directive = parseNativeChatVisualDirectiveLine(source)
+      const directive = parseDirectiveLine(source)
       if (node?.type === 'nativeChatVisual' && directive) {
-        node.file = directive.file
-        node.title = directive.title
+        if (directive.hookId === null) {
+          node.file = directive.file
+          node.title = directive.title
+        } else {
+          node.hookId = directive.hookId
+        }
         node.source = source
       }
       this.exit(token)
@@ -130,8 +159,12 @@ function placeVisuals(
         hName: 'div',
         hProperties: {
           [NONCE_PROPERTY]: nonce,
-          [FILE_PROPERTY]: child.file,
-          ...(child.title ? { [TITLE_PROPERTY]: child.title } : {})
+          ...(child.hookId
+            ? { [HOOK_PROPERTY]: child.hookId }
+            : {
+                [FILE_PROPERTY]: child.file,
+                ...(child.title ? { [TITLE_PROPERTY]: child.title } : {})
+              })
         }
       }
       return child
@@ -149,4 +182,8 @@ export function remarkNativeChatVisuals(this: Processor, nonce: string): (tree: 
   data.micromarkExtensions = [...(data.micromarkExtensions ?? []), visualMicromarkExtension]
   data.fromMarkdownExtensions = [...(data.fromMarkdownExtensions ?? []), visualFromMarkdown]
   return (tree) => placeVisuals(tree, true, nonce, { count: 0 })
+}
+
+export function nativeChatVisualRemarkPlugins(nonce: string): PluggableList {
+  return [[remarkNativeChatVisuals, nonce]]
 }

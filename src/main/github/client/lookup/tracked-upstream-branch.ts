@@ -2,9 +2,9 @@ import {
   readGitReviewBranchSources,
   type GitReviewBranchSource
 } from '../../../../shared/git/remotes/git-review-branch-source'
-import { gitExecFileAsync } from '../../gh-utils'
-import { readLocalGitConfigSignature } from '../../local-git-config-signature'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
+import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
   trackedUpstreamSnapshotCache,
@@ -21,7 +21,7 @@ import {
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,

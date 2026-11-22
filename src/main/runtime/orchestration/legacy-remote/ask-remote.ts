@@ -3,7 +3,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorkerDispatchState } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
-import type { AskParams } from '../../../../shared/rpc-contract/orchestration-params'
+import type { AskParams } from '../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { assertWorkerCanReport } from '../workers/reports/worker-report-admission'
 import {
   askedQuestionReceipt,

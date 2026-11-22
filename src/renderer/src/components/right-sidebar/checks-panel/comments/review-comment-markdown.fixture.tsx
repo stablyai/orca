@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 

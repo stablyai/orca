@@ -11,16 +11,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { resolveGitHubPRMergeMethods } from '../../../../../../shared/github/pull-request-merge-methods'
+import { resolveGitHubPRMergeMethods } from '../../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
 import {
   isGitHubPRStackMergeQueueRequired,
   resolveGitHubPRStackMergeDecision
-} from '../../../../../../shared/github/pull-request-stack-merge'
+} from '../../../../../../shared/github/pull-requests/merge/pull-request-stack-merge'
 import { runWorktreeDelete } from '../../../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../../../sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'

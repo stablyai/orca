@@ -1,4 +1,4 @@
-import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { hasExactTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 
 type Claim = RuntimeTerminalOrphanAdoptionRequest['claims'][number]

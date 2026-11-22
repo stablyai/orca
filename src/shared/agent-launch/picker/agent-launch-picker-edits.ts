@@ -173,7 +173,10 @@ export function applyAgentPickerEdit(
   }
   const patch: AgentChoicePatch =
     edit.kind === 'choice'
-      ? edit.patch
+      ? edit.patch.options?.effort === TEXT_ACTION_DEFAULT_MODEL
+        ? // The Default level delegates effort, so the launch sends none and the agent picks.
+          { ...edit.patch, options: { ...edit.patch.options, effort: null } }
+        : edit.patch
       : edit.kind === 'permission'
         ? { permissionMode: edit.value }
         : edit.kind === 'speed'

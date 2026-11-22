@@ -1,0 +1,3 @@
+# Legacy synchronous crypto uses per file; counts may only go DOWN.
+# Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.
+3 src/main/browser/cookies/sources/browser-cookie-key.ts

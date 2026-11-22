@@ -1,9 +1,9 @@
 // Read-only runtime layout copy (design 3.3); the owner switch derives store slices from it.
 
-import { stableJson } from '../../../../shared/workspace-layout/workspace-layout-load-report'
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
-import { applyWorkspaceLayoutRecordChange } from '../../../../shared/workspace-layout/workspace-layout-records'
-import type { WorkspaceLayoutChangeFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../../shared/workspace-layout/published-layout/workspace-layout-records'
+import type { WorkspaceLayoutChangeFrame } from '../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLayout>>
 

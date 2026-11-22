@@ -1,4 +1,4 @@
-import { textLeftAfterSubmission } from '../../../../../shared/submitted-draft-text'
+import { textLeftAfterSubmission } from '../../../../../shared/native-chat/input/drafts/submitted-draft-text'
 import type { JSONContent } from '@tiptap/react'
 import {
   promptTextContent,

@@ -1,5 +1,5 @@
 import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
-import { ORCAD_CATALOG_COMMIT_DOMAINS } from './orcad-catalog-commit-domains'
+import { ORCAD_CATALOG_COMMIT_DOMAINS } from './catalog-commit/orcad-catalog-commit-domains'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationCatalogAbortResult,
@@ -18,17 +18,18 @@ import type {
   OrcadMigrationBlobChunkResult,
   OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { RepoLifecycleOperations } from '../loading-store/repo-lifecycle-operations'
+import type { RepoLifecycleOperations } from '../loading-store/project-catalog/repo-lifecycle-operations'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
-import type { WriteSchedulingOperations } from '../loading-store/write-scheduling'
-import { scheduleSave } from '../loading-store/write-scheduling'
+
+import { scheduleSave } from '../loading-store/profile-writing/write-scheduling'
+import type { WriteSchedulingOperations } from '../loading-store/profile-writing/write-scheduling'
 import {
   applyPreparedOrcadMigrationCatalog,
   assertOrcadMigrationReceiptMatchesManifest,
   assertSameOrcadMigrationManifest,
   prepareOrcadMigrationCatalog,
   type PreparedOrcadMigrationCatalog
-} from './orcad-catalog-records'
+} from './catalog-commit/orcad-catalog-records'
 import {
   expireOrcadMigrationStages,
   findOrcadMigrationImportReceipt,
@@ -36,7 +37,7 @@ import {
   recordOrcadMigrationCommitWriteGeneration,
   recordOrcadMigrationImportReceipt,
   type OrcadMigrationCommitGenerationRuntime
-} from './orcad-catalog-receipt-ledger'
+} from './catalog-commit/orcad-catalog-receipt-ledger'
 import {
   abortOrcadMigrationSnapshots,
   assertOrcadMigrationSnapshotsReady,
@@ -44,7 +45,7 @@ import {
   inspectOrcadMigrationSnapshotUploads,
   pruneOrcadMigrationSnapshotStaging,
   stageOrcadMigrationSnapshotChunk
-} from './orcad-scrollback-snapshot-transfer'
+} from './terminal-history/orcad-scrollback-snapshot-transfer'
 import {
   abortOrcadMigrationBlobs,
   assertOrcadMigrationBlobSetMatches,
@@ -53,14 +54,14 @@ import {
   inspectOrcadMigrationBlobUploads,
   pruneOrcadMigrationBlobStaging,
   stageOrcadMigrationBlobChunk
-} from './orcad-migration-blob-staging'
-import { withStagedAutomationRunHistory } from './orcad-staged-automation-run-history'
-import { assertOrcadMigrationBlobContentsValid } from './orcad-migration-blob-installers'
+} from './blob-transfer/orcad-migration-blob-staging'
+import { withStagedAutomationRunHistory } from './catalog-commit/orcad-staged-automation-run-history'
+import { assertOrcadMigrationBlobContentsValid } from './blob-transfer/orcad-migration-blob-installers'
 import {
   abortOrcadMigrationCatalogByReference,
   committedMigrations,
   stagedManifests
-} from './orcad-catalog-reference-abort'
+} from './catalog-commit/orcad-catalog-reference-abort'
 
 type OrcadCatalogImportRuntime = OrcadMigrationCommitGenerationRuntime &
   Pick<StoreRuntimeState, 'state' | 'terminalScrollbackSnapshotStorage' | 'orcadMigrationBlobRoot'>

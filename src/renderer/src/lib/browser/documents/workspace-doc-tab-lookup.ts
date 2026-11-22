@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
-import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { browserPageDocLocationsEqual } from '../../../../../shared/browser/workspaces/browser-page-doc-location'
 
 /** The tab a document is already open in, found by every PAGE's docLocation and not just the
  *  workspace mirror — a mixed workspace whose doc page is inactive mirrors null. */

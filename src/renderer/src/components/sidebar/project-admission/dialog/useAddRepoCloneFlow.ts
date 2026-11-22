@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getCloneDestinationAutoFill } from '../create/clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
@@ -12,7 +12,7 @@ import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   useCloneFolderOverride,
   type CloneFolderOverride

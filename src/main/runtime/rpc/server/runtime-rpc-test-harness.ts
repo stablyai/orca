@@ -1,6 +1,6 @@
 import { createConnection, type Socket } from 'node:net'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 

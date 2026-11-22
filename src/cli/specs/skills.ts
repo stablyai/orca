@@ -1,5 +1,6 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 export const SKILL_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -70,7 +71,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca skills install [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
       '[--local] [--force] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime, ' +
         'and needs no network, Node, Git or npx.',
@@ -102,7 +103,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca skills update [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
       '[--local] [--force] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
       'Runs the same planner as `orca skills install`, but only at locations that already ' +
         'hold the skill; it never adds a skill, or an existing skill for another agent.',

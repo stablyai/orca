@@ -1,8 +1,8 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { OrcadDeltaMovePreview } from '../../../../../../shared/orcad-managed-runtime'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { OrcadDeltaMovePreview } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
@@ -155,7 +155,7 @@ export function SshHostDeltaMoveDialog({
             disabled={running || !preview || preview.added.length === 0 || blocked}
           >
             {running ? <Loader2 className="animate-spin" /> : null}
-            {t('auto.components.settings.deltaMove.confirm', 'Move the new projects')}
+            {t('auto.components.settings.deltaMove.confirm', 'Move new projects')}
           </Button>
         </DialogFooter>
       </DialogContent>

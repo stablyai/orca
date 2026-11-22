@@ -1,6 +1,11 @@
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from '../providers/structured-agent-session-adapter'
-import { holdUnsentSends } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
+import type { JournalWriterSettled } from '../../agent-session-journal/journal-sql-failure'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
+import {
+  structuredAgentSessionHandingOver,
+  finalizingStructuredAgentSessionInput
+} from '../delivery/structured-agent-session-handing-over'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,
@@ -62,11 +67,21 @@ export class StructuredAgentSessionEventRecovery {
       holdUnrunSends: async (sessionId, fence, cause) => {
         const journal = this.context.sessions.get(sessionId)?.journal
         if (journal) {
-          await holdUnsentSends(journal, {
+          const commit = await journal.write({
+            kind: 'hold-unsent',
             fence,
             hold: { cause },
-            unrun: (s) => !finalizingStructuredAgentSessionInput(journal, s.clientMessageId)
+            unrun: {
+              except: [...structuredAgentSessionHandingOver(journal).keys()].filter((id) =>
+                finalizingStructuredAgentSessionInput(journal, id)
+              )
+            }
           })
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hold-unsent returns a settled sequence or serialized writer failure.
+          const result = commit.value as JournalWriterSettled<number | null>
+          if ('failure' in result) {
+            throw restoreJournalSqlFailure(result.failure)
+          }
         }
       },
       route: {
@@ -110,6 +125,7 @@ export class StructuredAgentSessionEventRecovery {
           reason,
           failure
         }
+        session.workChanged?.()
         const stopped = stop && (await stopAgentSessionProviderRoot(() => stop(sessionId)))
         if (!stopped) {
           return
@@ -148,8 +164,8 @@ export class StructuredAgentSessionEventRecovery {
         child.generation === event.acquisitionGeneration &&
         !child.close
       ) {
-        const stopped = session.journal.stopMarks.personStopDecides(
-          session.journal.runningTurn()?.turnId ?? null,
+        const stopped = await session.journal.stopMarks.personStopDecides(
+          (await session.journal.reads.runningTurn())?.turnId ?? null,
           event.observedAt
         )
         // Input joins the existing proof barrier; this records neither Stop nor root death.
@@ -160,6 +176,7 @@ export class StructuredAgentSessionEventRecovery {
           recorded: Promise.resolve(null),
           requestedAt: session.journal.cursor()
         }
+        session.workChanged?.()
       }
       return
     }
@@ -169,4 +186,3 @@ export class StructuredAgentSessionEventRecovery {
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }
 }
-import { finalizingStructuredAgentSessionInput } from '../delivery/structured-agent-session-handing-over'

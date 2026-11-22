@@ -6,7 +6,7 @@ import {
 } from './git-configured-branch-target'
 import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from '../refs/git-rev-list-output'
-import { iterateProcessOutputLines } from '../../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../process-observation/process-output-field-scanner'
 import { createGitConfigSnapshotRunner } from '../commands/git-config-snapshot-runner'
 import { getGitCurrentBranchName } from '../refs/git-current-branch'
 
@@ -25,10 +25,6 @@ export type EffectiveGitUpstream =
       branchName: string
       isConfiguredUpstream: false
     }
-
-function hasMultipleSlashSegments(refName: string): boolean {
-  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
-}
 
 export async function splitRemoteBranchNameByKnownRemote(
   runGit: GitCommandRunner,
@@ -64,24 +60,28 @@ async function getConfiguredUpstream(
   runGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
   try {
-    const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])
-    const upstreamName = stdout.trim()
+    // Why: --abbrev-ref prints remotes/origin/main when a local branch or tag is named origin/main,
+    // so split the full ref and keep Git's unambiguous short name for revision arguments.
+    const { stdout } = await runGit([
+      'rev-parse',
+      '--symbolic-full-name',
+      'HEAD@{u}',
+      '--abbrev-ref',
+      'HEAD@{u}'
+    ])
+    const [fullName = '', upstreamName = ''] = stdout.split(/\r?\n/).map((line) => line.trim())
     if (!upstreamName) {
       return null
     }
-    const parsed = splitRemoteBranchName(upstreamName)
-    if (!parsed) {
-      return {
-        upstreamName,
-        remoteName: null,
-        branchName: upstreamName,
-        isConfiguredUpstream: true
-      }
-    }
+    const localBranchName = stripRefPrefix(fullName, 'refs/heads/')
+    const parsed =
+      localBranchName === null
+        ? splitRemoteBranchName(stripRefPrefix(fullName, 'refs/remotes/') ?? upstreamName)
+        : null
     return {
       upstreamName,
-      remoteName: parsed.remoteName,
-      branchName: parsed.branchName,
+      remoteName: parsed?.remoteName ?? null,
+      branchName: parsed?.branchName ?? localBranchName ?? upstreamName,
       isConfiguredUpstream: true
     }
   } catch (error) {
@@ -90,6 +90,10 @@ async function getConfiguredUpstream(
     }
     throw error
   }
+}
+
+function stripRefPrefix(refName: string, prefix: string): string | null {
+  return refName.startsWith(prefix) ? refName.slice(prefix.length) : null
 }
 
 async function remoteTrackingRefExists(
@@ -116,9 +120,12 @@ async function resolveEffectiveGitUpstreamForBranch(
       currentBranchName &&
       configured.remoteName === 'origin' &&
       configured.branchName !== currentBranchName &&
-      hasMultipleSlashSegments(configured.upstreamName)
+      configured.branchName.includes('/')
     ) {
-      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+      const parsed = await splitRemoteBranchNameByKnownRemote(
+        runGit,
+        `${configured.remoteName}/${configured.branchName}`
+      )
       if (parsed) {
         configured = { ...configured, ...parsed }
       }

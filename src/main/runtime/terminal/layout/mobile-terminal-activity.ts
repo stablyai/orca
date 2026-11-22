@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithMarkPtyLivenessUnverifiable } from './terminal-input-floor'
 import type { ApplyLayoutResult } from './terminal-layout-state'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
 
 export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivenessUnverifiable {

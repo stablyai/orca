@@ -28,13 +28,14 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -71,7 +72,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const allRepos = useAppStore((s) => s.repos)
+  const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
   const addRepo = useAppStore((s) => s.addRepo)
 
   const [open, setOpen] = useState(false)

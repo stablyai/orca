@@ -1,7 +1,7 @@
 import {
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
 import type { ManagedHookDetectionSettings } from '../installation/managed-hook-detection-commands'
 import type { installRemoteManagedAgentHooks } from '../installation/remote-managed-hook-installers'
@@ -10,7 +10,7 @@ import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { REINSTALL_MIN_INTERVAL_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import type { SshChannelMultiplexer } from '../../ssh/protocol/ssh-channel-multiplexer'
 import { openCodePluginSettingsKey } from '../installation/opencode-plugin-settings'
-import type { PluginSources } from '../../../wsl-guest/plugin-sources'
+import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
 
 type GuestInstallDeps = {
   installHooks: typeof installRemoteManagedAgentHooks

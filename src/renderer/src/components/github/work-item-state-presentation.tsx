@@ -1,9 +1,9 @@
 import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/task-page-github-work-item-status'
+import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/listing/task-page-github-work-item-status'
 import type { Translate } from '@/i18n/use-translate'
 
 export function formatRelativeTime(input: string, intlLocale?: string): string {

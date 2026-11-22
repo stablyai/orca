@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown, LoaderCircle, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 const checkIcon = (

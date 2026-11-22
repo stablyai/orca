@@ -1,20 +1,20 @@
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { AutomationService } from '../automations/service'
-import { createScopedExternalAutomations } from '../automations/external-manager'
+import type { AutomationService } from '../automations/automation-service'
+import { createScopedExternalAutomations } from '../automations/external-managers/scoped-external-automations'
 import {
   ExternalAutomationManagerCache,
   type ExternalAutomationManagerCacheEntry
-} from '../automations/external-automation-manager-cache'
-import { ExternalAutomationProbeScheduler } from '../automations/external-automation-probe-scheduler'
+} from '../automations/external-managers/external-automation-manager-cache'
+import { ExternalAutomationProbeScheduler } from '../automations/external-managers/external-automation-probe-scheduler'
 import { ownerKey } from '../../shared/automations/ownership/automation-owner-key'
 import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../shared/external-automation-scope'
+} from '../../shared/automations/external/external-automation-scope'
 
 /** Refuse uncaptured owners instead of using the active host; malformed input remains a plain Error, not an ownership conflict. */
 function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(

@@ -2,6 +2,20 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { translate } from '@/i18n/i18n'
 
+export type AutomationRunWorkspaceRecord = Pick<
+  AutomationRun,
+  | 'workspaceId'
+  | 'workspaceDisplayName'
+  | 'runContext'
+  | 'sessionKind'
+  | 'chatSessionId'
+  | 'terminalPaneKey'
+  | 'terminalPtyId'
+  | 'dispatchedAt'
+  | 'handledInTurn'
+> &
+  Partial<Pick<AutomationRun, 'outputSnapshot'>>
+
 export type AutomationRunViewAvailability =
   | 'chat'
   | 'terminal'
@@ -61,7 +75,7 @@ export function getAutomationRunViewState({
   terminalTargetExists,
   terminalOnPairedServer = false
 }: {
-  run: AutomationRun
+  run: AutomationRunWorkspaceRecord
   workspaceExists: boolean
   terminalTargetExists: boolean
   /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
@@ -71,7 +85,12 @@ export function getAutomationRunViewState({
     return {
       availability: 'chat',
       actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
-      statusLabel: translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
+      statusLabel: run.handledInTurn
+        ? translate(
+            'auto.components.automations.runViewState.handledInTurn',
+            'Answered in the bot’s conversation'
+          )
+        : translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
       canOpen: true
     }
   }

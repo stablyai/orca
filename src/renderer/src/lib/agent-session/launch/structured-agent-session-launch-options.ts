@@ -1,17 +1,17 @@
 import { createLegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import type { LegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import { structuredAgentSessionOptionPicks } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import type { StructuredAgentSessionOptionState } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   getStructuredLaunchStateBySessionId,
   subscribeStructuredAgentLaunchStatus,
@@ -26,13 +26,13 @@ import type { AgentSessionWriteFailure } from '../../../../../shared/agent-sessi
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */

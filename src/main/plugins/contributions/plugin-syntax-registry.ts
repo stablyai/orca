@@ -11,10 +11,10 @@ import {
   type PluginSyntaxMetadata,
   type PluginSyntaxPayload
 } from '../../../shared/plugins/artifacts/plugin-syntax-artifact'
-import { readContainedPluginArtifactText } from '../plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 
 type SyntaxEntry = PluginSyntaxMetadata & {
   scopeName: string

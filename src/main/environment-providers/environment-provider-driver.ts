@@ -1,6 +1,9 @@
 // One lifecycle seam for VM-backed workspaces: every environment provider answers the same calls,
 // and capability flags (not provider ids) decide what the UI offers.
-import type { EphemeralVmRecipeResult, JsonValue } from '../../shared/ephemeral-vm-recipes'
+import type {
+  EphemeralVmRecipeResult,
+  JsonValue
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 
 export type EnvironmentProviderCapabilities = Readonly<{
   /** Suspend keeps memory and processes; false means suspend/resume is a reboot from disk. */

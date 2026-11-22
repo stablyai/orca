@@ -1,4 +1,3 @@
-import { completeAutomationSave } from './automation-save-completion'
 import {
   recordedAutomationRunContext,
   isSameAutomationWorkspace
@@ -16,8 +15,7 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { ensureHooksApproved } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
@@ -28,7 +26,7 @@ import {
 import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
-import { reconfirmSkippedSetup } from './automation-setup-review'
+import { confirmAutomationSaveSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -36,6 +34,7 @@ import {
   saveExistingAutomation
 } from './automation-orca-save-operations'
 import type { AutomationSaveContext } from './automation-save-context'
+import { completeAutomationSave } from './automation-save-completion'
 
 /** Saves an Orca automation, including destination validation and host moves. */
 export async function saveOrcaAutomation(
@@ -135,14 +134,17 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
-  const trust =
-    setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
-      ? await ensureHooksApproved(useAppStore.getState(), draft.projectId, 'setup', setupHostId)
-      : null
-  // Stored with `run` so later runs execute only this content.
-  const setupTrustHash =
-    trust?.approvedContentHash ??
-    (await reconfirmSkippedSetup(context, trust, setupDecision, currentAutomation, setupHostId))
+  const { trust, setupTrustHash } = await confirmAutomationSaveSetup(context, {
+    // Confirm setup on the base this automation will use.
+    prompt:
+      setupDecision === 'run' &&
+      ((targetEdited && !recordedContext) || edited('setupDecision') || edited('baseBranch')),
+    repoId: draft.projectId,
+    hostId: setupHostId,
+    baseBranch: edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch,
+    setupDecision,
+    automation: currentAutomation
+  })
   if (trust?.decision === 'skip') {
     setupDecision = 'skip'
   }
@@ -205,7 +207,7 @@ export async function saveOrcaAutomation(
         }
       : {}),
     ...(edited('baseBranch') ? { baseBranch: draft.baseBranch.trim() || null } : {}),
-    ...(edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
+    ...(trust || edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
       ? { setupDecision }
       : {}),
     ...(setupTrustHash ? { setupTrustHash } : {}),
@@ -230,7 +232,7 @@ export async function saveOrcaAutomation(
     workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
     baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
     setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
-    setupTrustHash: currentAutomation ? currentAutomation.setupTrustHash : setupTrustHash,
+    setupTrustHash: 'setupDecision' in updates ? setupTrustHash : currentAutomation?.setupTrustHash,
     reuseSession: currentAutomation
       ? currentAutomation.reuseSession
       : draft.workspaceMode === 'existing' && draft.reuseSession,

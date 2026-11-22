@@ -1,8 +1,8 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { structuredAgentTurnAnchors } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { structuredAgentTurnAnchors } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
   latestStructuredAgentSessionRequest,
   latestStructuredAgentSessionUserItem
@@ -15,7 +15,7 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { structuredAgentSessionMutationDelegates } from '../host/structured-agent-session-host-mutation-wiring'
 import type { StructuredConversationCommandController } from '../operations/structured-conversation-command-controller'
-import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { rewindStructuredAgentSession } from '../rewind/structured-agent-session-rewind'
 
 export const TRANSIENT_RECOVERY_CALLER = 'trusted-local:transient-error-continuation'
@@ -45,7 +45,7 @@ export function wireTransientRecovery(
         }
       })
     },
-    snapshot: (sessionId) => {
+    snapshot: async (sessionId) => {
       const session = sessions.get(sessionId)
       const record = host.deps.store.getRecord(sessionId)
       if (
@@ -57,18 +57,32 @@ export function wireTransientRecovery(
       ) {
         return null
       }
-      const { items } = session.journal.snapshot()
-      const request = latestStructuredAgentSessionRequest(items, session.journal.submissions())
+      const { items, submissions, cursor } = await session.journal.reads.generation()
+      const request = latestStructuredAgentSessionRequest(items, submissions)
       if (request?.kind !== 'turn' || request.turnState === 'running') {
         return null
       }
       return {
         turnId: request.id,
         fence: record.lease.runtimeFence,
-        ...session.journal.cursor(),
+        ...cursor,
         userItemId: latestStructuredAgentSessionUserItem(items)?.itemId ?? null,
         error: codexTransientTurnError(items, request.id)
       }
+    },
+    // Journal reads are async; the acceptance lock admits only this synchronous position check.
+    unchanged: (sessionId, expected) => {
+      const session = sessions.get(sessionId)
+      const record = host.deps.store.getRecord(sessionId)
+      if (!session || !record) {
+        return false
+      }
+      const cursor = session.journal.cursor()
+      return (
+        record.lease.runtimeFence === expected.fence &&
+        cursor.epoch === expected.epoch &&
+        cursor.sequence === expected.sequence
+      )
     },
     send: async (sessionId, operationId, beforeRun) => {
       const record = host.deps.store.getRecord(sessionId)
@@ -76,8 +90,7 @@ export function wireTransientRecovery(
       if (!record || !session) {
         return false
       }
-      const { items } = session.journal.snapshot()
-      const submissions = session.journal.submissions()
+      const { items, submissions } = await session.journal.reads.generation()
       const request = latestStructuredAgentSessionRequest(items, submissions)
       const turn = items.find((item) => readAgentJournalTurn(item.body)?.turnId === request?.id)
       const opener = turn && structuredAgentTurnAnchors(items, submissions).get(turn.itemId)

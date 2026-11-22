@@ -2,7 +2,7 @@ import {
   canLaunchSourceControlSectionAgentInPlace,
   showSourceControlAgentStartedIn
 } from './section-agent-placement'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
@@ -18,7 +18,7 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   ensureDetectedAgentsForWorktree,

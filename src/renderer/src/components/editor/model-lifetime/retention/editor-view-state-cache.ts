@@ -31,8 +31,14 @@ export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
-// Persist playback seconds across media-tab unmounts so return does not restart the clip.
-export const mediaPlaybackPositionCache = new Map<string, number>()
+// Persist per-clip position and speed across media-tab unmounts so return does not restart the clip.
+export const mediaPlaybackStateCache = new Map<
+  string,
+  { currentTime: number; playbackRate: number }
+>()
+
+// One volume/mute choice shared by every media preview so new previews open at the user's last level.
+export const mediaVolumePreference = { volume: 1, muted: false }
 
 // Monaco diff view state includes both cursors/selections and model state; preserve that context beyond numeric scrolling, as VS Code does.
 export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()

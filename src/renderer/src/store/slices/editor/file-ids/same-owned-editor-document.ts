@@ -2,7 +2,7 @@
 
 import type { OpenFile } from '../types/open-file'
 import { isSameEditorOwner } from './editor-file-ids'
-import { authorityKey } from '../../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 
 function isSameDocumentOwner(candidate: OpenFile, closedFile: OpenFile): boolean {
   const expectedRoute = closedFile.operationProvenance?.generation.route

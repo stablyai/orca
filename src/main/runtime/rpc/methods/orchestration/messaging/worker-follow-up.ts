@@ -1,7 +1,7 @@
 import {
   planSemanticWorkerFollowUp,
   workerFollowUpArguments
-} from '../worker/worker-follow-up-admission'
+} from '../worker/follow-up/worker-follow-up-admission'
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
@@ -17,11 +17,11 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { RpcContext } from '../../../core'
-import { startWorker } from '../worker/workers'
+import { startWorker } from '../worker/worker-start-method'
 import {
   chooseWorkerFollowUpPlacement,
   type WorkerFollowUpDelivery
-} from '../worker/worker-follow-up-choice'
+} from '../worker/follow-up/worker-follow-up-choice'
 
 export type WorkerFollowUpPlan =
   | { kind: 'steer'; dispatchId: string }

@@ -34,7 +34,11 @@ beforeEach(() => {
       return vi.fn()
     },
     enabled: () => enabled,
-    snapshot: () => snapshot,
+    snapshot: async () => snapshot,
+    unchanged: (_sessionId, expected) =>
+      snapshot.fence === expected.fence &&
+      snapshot.epoch === expected.epoch &&
+      snapshot.sequence === expected.sequence,
     send,
     logger: { warn: vi.fn(), error: vi.fn() }
   })
@@ -46,6 +50,7 @@ afterEach(() => {
 
 it('does not revive an old scheduled attempt after switching off and back on', async () => {
   controller.completed('session', 'turn-1', 'failure')
+  await vi.advanceTimersByTimeAsync(0)
   enabled = false
   disable()
   enabled = true
@@ -80,6 +85,7 @@ it.each(['disabled', 'cancelled', 'changed-journal', 'changed-fence', 'disposed'
   'cancels pending recovery when %s',
   async (reason) => {
     controller.completed('session', 'turn-1', 'failure')
+    await vi.advanceTimersByTimeAsync(0)
     if (reason === 'disabled') {
       enabled = false
     }

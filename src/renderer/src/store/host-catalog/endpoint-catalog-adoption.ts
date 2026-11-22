@@ -1,19 +1,19 @@
 // Stamp endpoint ownership once: paired server rows use runtime:E, local-app rows retain their named hosts; per-kind arms select owner fields.
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   adoptEndpointProjectHostSetup,
   adoptEndpointRepo
-} from '../../../../shared/endpoint-catalog-adoption'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+} from '../../../../shared/project/catalog/endpoint-catalog-adoption'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 
 export type FetchedRepo = { kind: 'repo'; row: Repo }

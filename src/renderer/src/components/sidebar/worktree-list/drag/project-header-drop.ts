@@ -1,11 +1,11 @@
 import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
-import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
+import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project/groups/project-groups'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import { getHeaderDragRepo, type Row } from '../../../../../../shared/sidebar-list/row-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
 

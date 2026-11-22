@@ -6,27 +6,32 @@ import {
 } from '../expand/expanded-pane-layout'
 import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useTerminalPaneActivityIsolation({
   activityIsolationSnapshotRef,
   containerRef,
   isolatedPaneKey,
   managerRef,
+  terminalManager,
   paneCount,
   pendingPaneSizeRefreshFrameIdsRef,
   tabId
 }: Pick<
-  TerminalPaneCloseController,
+  TerminalPaneMountedController,
   | 'activityIsolationSnapshotRef'
   | 'containerRef'
   | 'isolatedPaneKey'
   | 'managerRef'
+  | 'terminalManager'
   | 'paneCount'
   | 'pendingPaneSizeRefreshFrameIdsRef'
   | 'tabId'
 >): void {
   useLayoutEffect(() => {
+    if (!terminalManager || managerRef.current !== terminalManager) {
+      return
+    }
     const snapshots = activityIsolationSnapshotRef.current
     const scheduleRefit = (): number =>
       requestAnimationFrame(() => {
@@ -66,7 +71,15 @@ export function useTerminalPaneActivityIsolation({
     }
     const frame = scheduleRefit()
     return () => cancelAnimationFrame(frame)
-  }, [isolatedPaneKey, paneCount, tabId, activityIsolationSnapshotRef, containerRef, managerRef])
+  }, [
+    isolatedPaneKey,
+    paneCount,
+    tabId,
+    activityIsolationSnapshotRef,
+    containerRef,
+    managerRef,
+    terminalManager
+  ])
 
   useEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current

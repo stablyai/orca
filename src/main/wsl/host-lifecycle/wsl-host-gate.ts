@@ -7,12 +7,15 @@ import {
   publishWslHostsGateState,
   resolveWslHostsGateState,
   type WslHostsGateState
-} from '../../../shared/wsl-host-internal-gate'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
-import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../../shared/wsl-hosts-policy'
+import type {
+  WslHostsMovedProjects,
+  WslHostsPolicyState
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 
-export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are not available in this build.'
+export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are turned off for this launch of Orca.'
 
 // Fixed for the run once main reads the disk; nothing can create a host or a move while not open.
 let promoted: { hasSavedWslHost: boolean; hasWslMoveCutover: boolean } | null = null
@@ -24,9 +27,9 @@ let policyState: WslHostsPolicyState | null = null
 let movedProjects: WslHostsMovedProjects = 'keep'
 
 // Unreadable state counts as absent: today's closed behavior.
-function readFact(fact: () => boolean): boolean {
+async function readFact(fact: () => boolean | Promise<boolean>): Promise<boolean> {
   try {
-    return fact()
+    return await fact()
   } catch {
     return false
   }
@@ -65,33 +68,24 @@ function notePolicy(
  * Startup, before any gate check. A cached remote policy block closes an open internal gate, and a
  * closed gate with saved WSL work becomes `serve-only`, so blocking never strands a moved project.
  */
-export function configureWslHostsGate(facts: {
-  hasSavedWslHost: () => boolean
-  hasWslMoveCutover: () => boolean
+export async function configureWslHostsGate(facts: {
+  hasSavedWslHost: () => boolean | Promise<boolean>
+  hasWslMoveCutover: () => boolean | Promise<boolean>
   policy?: () => WslHostsPolicyState
   /** Read only when the policy blocks. */
   movedProjects?: () => WslHostsMovedProjects
-}): void {
+}): Promise<void> {
   notePolicy(readPolicy(facts.policy), facts.movedProjects)
   promoted = wslHostsGateOpen()
     ? null
     : {
-        hasSavedWslHost: readFact(facts.hasSavedWslHost),
-        hasWslMoveCutover: readFact(facts.hasWslMoveCutover)
+        hasSavedWslHost: await readFact(facts.hasSavedWslHost),
+        hasWslMoveCutover: await readFact(facts.hasWslMoveCutover)
       }
   const state = wslHostsGateState()
   noteWslHostsServeOnly(state === 'serve-only')
   // Children inherit ORCA_INTERNAL_WSL_HOSTS even when a block closed it; this tells them the truth.
   publishWslHostsGateState(process.env, state)
-}
-
-export function resetWslHostsGateForTests(): void {
-  promoted = null
-  noteWslHostsServeOnly(false)
-  notePolicy(null, undefined)
-  publishWslHostsGateState(process.env, null)
-  liveBlockNoted = false
-  newWorkListeners.clear()
 }
 
 export function wslHostsGateState(): WslHostsGateState {

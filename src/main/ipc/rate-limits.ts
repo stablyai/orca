@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexAccountService } from '../codex-accounts/service'
 
 export function registerRateLimitHandlers(

@@ -45,6 +45,7 @@ import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store
 import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
 import { useAiVaultPanelQuery } from '../scope/use-ai-vault-panel-query'
+import { useAiVaultGroupRoomRows } from './use-ai-vault-group-room-rows'
 import {
   aiVaultPanelKeyboardRootProps,
   type AiVaultSessionListKeyboard
@@ -231,7 +232,9 @@ export default function AiVaultPanel({
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
+    hideEmptySessions,
+    // A group room's member rows list once, in the group's home.
+    roomRows: useAiVaultGroupRoomRows()
   })
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
@@ -367,7 +370,7 @@ export default function AiVaultPanel({
           />
         )}
       </AiVaultPanelSearch>
-      {launchActions.continuationRequest && (
+      {launchActions.continuationOpen && (
         <AgentSessionContinuationDialog
           open
           request={launchActions.continuationRequest}

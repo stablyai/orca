@@ -1,4 +1,4 @@
-import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

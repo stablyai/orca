@@ -4,7 +4,7 @@ import type {
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isTerminalLeafId } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { readSplitRatio } from '@/lib/pane-manager/pane-layout/pane-split-ratio'
-import { SPLIT_RATIO_TOLERANCE } from '../../../../../shared/workspace-layout/terminal-pane-tree'
+import { SPLIT_RATIO_TOLERANCE } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function getLayoutChildNodes(split: HTMLElement): HTMLElement[] {
   return Array.from(split.children).filter(

@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import type { WatchedRoot } from './filesystem-watcher-wsl'

@@ -17,7 +17,10 @@ export function sessionSearchWorkerFactory() {
   if (!existsSync(path)) {
     throw new Error(`Session search worker entry not found: ${path}`)
   }
-  return spawnWorkerThread(path, { resourceLimits: { maxOldGenerationSizeMb: 256 } })
+  return spawnWorkerThread(path, {
+    name: 'orca-session-search',
+    resourceLimits: { maxOldGenerationSizeMb: 256 }
+  })
 }
 
 export class SessionSearchOperationError extends Error {}

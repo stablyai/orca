@@ -1,5 +1,5 @@
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRuntimeTarget } from '../lifecycle/orcad-runtime-target'
@@ -34,7 +34,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { detectRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform-detection'
-import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { rememberSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
 
 /** Default SSH generic retains compatibility with lifecycle consumers requiring SSH-only fields. */

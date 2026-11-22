@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type {
   TerminalQuickCommand,
@@ -9,7 +9,7 @@ import type {
 } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { getCachedTerminalGroupIdForWorktree } from '../controller/tab-state/terminal-unified-tab-lookup'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TerminalPaneStoreController } from '../controller/use-terminal-pane-store-bindings'
 
 export function useTerminalQuickCommandEditor({

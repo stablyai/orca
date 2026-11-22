@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { normalizeWorkspaceStatuses } from '../../../../../shared/workspace-statuses'
+import { normalizeWorkspaceStatuses } from '../../../../../shared/workspace/status/workspace-statuses'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 

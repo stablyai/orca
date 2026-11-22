@@ -1,18 +1,19 @@
 import { lstat } from 'node:fs/promises'
-import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-no-prompt-env'
+import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { removeHostTree } from '../../../filesystem/host-tree-removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { withSpan } from '../../../observability/tracer'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
-import type { RemoveWorktreeOptions } from '../worktree-operation-options'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
+
 import {
+  type RemoveWorktreeOptions,
   getErrorCode,
   gitExecOptions,
   normalizeLocalBranchRef
@@ -25,7 +26,7 @@ import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -36,7 +37,17 @@ export async function removeWorktree(
   // Reserve forceBranchDelete for failed-creation rollback so user deletes preserve unmerged commits.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
   try {
     // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
@@ -45,6 +56,7 @@ export async function removeWorktree(
       )
     )
   } finally {
+    await Promise.all(writers)
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
@@ -71,11 +83,14 @@ async function performRemoveWorktree(
 
   // Avoid default deadlines during large deletes; preserve Windows long-path support used at creation.
   const longPathArgs = windowsLongPathGitArgs(repoPath)
-  const execOptions = {
+  const finalizationOptions = {
     ...gitExecOptions(repoPath, options),
-    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
     ...gitEnvWithoutYesNoPrompt(),
     admissionExempt: true as const
+  }
+  const execOptions = {
+    ...finalizationOptions,
+    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {})
   }
   const args = [...longPathArgs, 'worktree', 'remove']
   if (force) {
@@ -83,6 +98,8 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    // Inside the slot: a checkout swapped in while this request queued must still be refused.
+    await options.beforeCheckoutDelete?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,
@@ -101,7 +118,7 @@ async function performRemoveWorktree(
         }
         await gitExecFileAsync(
           [...longPathArgs, 'worktree', 'remove', '--force', '--', worktreePath],
-          execOptions
+          finalizationOptions
         )
       }
     } else {
@@ -142,12 +159,26 @@ export async function finishUnregisteredWorktreeRemoval(
   assertCheckoutGone: () => Promise<void>,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
-  await assertCheckoutGone()
-  await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
-    console.warn(`[git] worktree prune failed in ${repoPath}`, error)
-  )
-  return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
+  try {
+    await assertCheckoutGone()
+    await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
+      console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+    )
+    return await deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+  } finally {
+    await Promise.all(writers)
+  }
 }
 
 /** Clean up an unregistered checkout's branch using normal preservation rules, without deleting files. */
@@ -157,7 +188,17 @@ export async function deleteBranchOfUnregisteredWorktree(
   branch: { name: string; head: string } | null,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
-  options = removalWorkerOptions(options)
+  const writers: Promise<void>[] = []
+  const observe = options.observeChildTermination
+  options = removalWorkerOptions({
+    ...options,
+    observeChildTermination: (terminated, writes) => {
+      observe?.(terminated, writes)
+      if (writes) {
+        writers.push(terminated)
+      }
+    }
+  })
   try {
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
@@ -166,6 +207,7 @@ export async function deleteBranchOfUnregisteredWorktree(
       deleteBranchOfRemovedWorktree(repoPath, branch.name, branch.head, options)
     )
   } finally {
+    await Promise.all(writers)
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
@@ -176,7 +218,7 @@ function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOpt
   return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
 }
 
-async function localBranchExists(
+export async function localBranchExists(
   repoPath: string,
   branchName: string,
   options: RemoveWorktreeOptions
@@ -192,7 +234,7 @@ async function localBranchExists(
   }
 }
 
-// Git for Windows can exit 0 leaving junctions and parent directories; finish that accepted delete.
+// Git can exit 0 leaving the emptied checkout directory; finish that accepted delete.
 async function removeCheckoutLeftByGit(
   worktreePath: string,
   options: RemoveWorktreeOptions
@@ -209,6 +251,9 @@ async function removeCheckoutLeftByGit(
     }
     throw error
   }
-  console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
-  await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })
+  // Git removed the accepted checkout; files here now cannot be told from a folder recreated in place.
+  await removeUnregisteredHostCheckout(worktreePath, options.checkoutDeleteSignal, {
+    forbidAnyMarker: true,
+    requireMarker: true
+  })
 }

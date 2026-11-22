@@ -3,7 +3,7 @@ import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION
 } from '../../daemon/protocol/daemon-protocol-version'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 export type OrcadDaemonProtocolFacts = {
   protocolVersion: number
@@ -33,7 +33,7 @@ export type OrcadLiveDaemonCrossing =
 
 /** A counted census of live terminals from a host that predates the protocol set, so it cannot name mixed generations. */
 export function censusNeedsHostDaemonProtocols(census: OrcadTerminalCensus): boolean {
-  // An uncounted census may hide in-process terminals no daemon answer can vouch for.
+  // An uncounted census is not crossed here: only force passes it, once the candidate proves no daemon alive.
   return (
     census.liveSessions !== null &&
     census.liveSessions > 0 &&

@@ -5,7 +5,7 @@ import {
   EMPTY_PROJECT_GROUP_KEY,
   isIterationCurrent,
   type ProjectGroup
-} from '../../../../shared/github/project-group-sort'
+} from '../../../../shared/github/projects/project-group-sort'
 import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {

@@ -6,7 +6,7 @@ import {
   type OrcadActivationRecord
 } from '../activation/orcad-activation-record'
 import { ORCAD_ACTIVATION_TRANSACTION_SCHEMA_VERSION } from '../activation/orcad-activation-transaction-schema'
-import type { OrcadManagedStopRequest } from '../../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 export type OrcadDecommissionTransaction = {
   schemaVersion: typeof ORCAD_ACTIVATION_TRANSACTION_SCHEMA_VERSION

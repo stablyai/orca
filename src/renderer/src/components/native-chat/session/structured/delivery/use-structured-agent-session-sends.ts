@@ -3,12 +3,12 @@ import type {
   StructuredAgentSessionAttachment
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
   type StructuredAgentSessionQueueDelivery
@@ -27,6 +27,7 @@ import {
 import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
 import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
 import { pendingSendsOutsideQueuedCards } from '../../../queue/structured-agent-session-sending-queued-cards'
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 
 /** The open chat's view of its sends: they live in the sender, which works without this view. */
 export function useStructuredAgentSessionSends(args: {
@@ -71,6 +72,8 @@ export function useStructuredAgentSessionSends(args: {
     (listener: () => void) => subscribeToStructuredAgentSessionPendingSends(sessionId, listener),
     [sessionId]
   )
+  // Retain recorded echoes until history catches up, including while Activity disconnects the view.
+  useNativeChatPaneLifetimeEffect(useCallback(() => subscribe(() => {}), [subscribe]))
   const pending = useSyncExternalStore(subscribe, () =>
     getStructuredAgentSessionPendingSends(sessionId)
   )

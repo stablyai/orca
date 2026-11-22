@@ -3,7 +3,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { mintBrowserScreencastSubscriptionId } from './browser-screencast-subscription-id'
 import {
   cancelScreencastSubscriberFrameRetry,
@@ -19,7 +19,7 @@ import {
   screencastSubscriberIsGhost
 } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastSession } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
@@ -35,12 +35,13 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
 
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow'>,
+    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserCommandTarget' | 'resolveBrowserPageWebContents'
@@ -65,7 +66,9 @@ export class RuntimeBrowserScreencasts {
         'Client-hosted browser pages do not support server screencast.'
       )
     }
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const target = await this.targets.resolveBrowserCommandTarget(params, {
+      waitForFirstLoad: false
+    })
     const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
@@ -95,8 +98,11 @@ export class RuntimeBrowserScreencasts {
         appliedBudget: budget
       }
       // Hidden host compositors stop producing guest frames when throttled.
-      const win = this.host.getAvailableAuthoritativeWindow()
-      const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      const windowId = this.host.getAvailableAuthoritativeWindowId()
+      const releaseThrottle =
+        windowId !== null
+          ? (getRuntimeDesktopSurface().holdRendererPublication?.(windowId) ?? (() => {}))
+          : () => {}
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {

@@ -1,6 +1,6 @@
 import React from 'react'
 import { MessageSquare } from 'lucide-react'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/class-names'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'

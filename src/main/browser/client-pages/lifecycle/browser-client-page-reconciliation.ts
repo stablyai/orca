@@ -154,7 +154,6 @@ async function closeReconciledPage(
   const page = context.pages.get(event.browserPageId)
   if (
     !page ||
-    page.retiring ||
     page.reconciling ||
     event.pageHostGeneration !== event.command.targetAuthority.pageHostGeneration ||
     !sameBrowserClientPageAuthority(page.inventory, event.command.targetAuthority)
@@ -203,15 +202,14 @@ async function failClosedRekeyedPage(
   previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>
 ): Promise<never> {
   page.reconciling = false
-  page.retiring ??= context.cleanupPage(page, previousRendererPage)
+  page.retiring = context.cleanupPage(page, previousRendererPage)
   try {
     await page.retiring
     if (context.pages.get(page.inventory.browserPageId) === page) {
       context.pages.delete(page.inventory.browserPageId)
     }
   } catch (cleanupError) {
-    context.pages.delete(page.inventory.browserPageId)
-    context.failedPages.set(page.inventory.browserPageId, page.inventory)
+    page.inventory = Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
     throw new BrowserClientPageCommandError('browser_client_page_cleanup_failed', {
       cause: new AggregateError([error, cleanupError], 'Browser page reclaim failed')
     })

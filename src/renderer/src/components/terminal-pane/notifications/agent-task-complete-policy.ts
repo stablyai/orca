@@ -1,11 +1,12 @@
 /** Keep live, parked-watcher and side-effect completion policy aligned without importing pane/xterm dependencies. */
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
-/** Delay BEL/completion banners so richer same-burst agent detail can win. */
-export const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
-/** Hard cap on waiting for hook detail before dispatching a completion. */
-export const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
+// Shared with the windowless host, which times its own phone pushes the same way.
+export {
+  AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
+  AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
+} from '../../../../../shared/notifications/terminal-notification-timing'
 export const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 
 type NotificationSettingsState = {

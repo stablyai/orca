@@ -1,18 +1,19 @@
 import type { ProfileSaveDomains } from '../profile-save-domains'
 import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   ProjectGroup,
   ProjectGroupMutation,
+  ProjectGroupParentMove,
   ProjectGroupUpdate
-} from '../../../shared/project-group-types'
+} from '../../../shared/project/groups/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
-} from '../../../shared/project-groups'
-import { getNextRootProjectOrder } from '../../../shared/root-project-order'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+} from '../../../shared/project/groups/project-groups'
+import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
@@ -100,6 +101,35 @@ export class ProjectGroupPersistenceOperations {
     return updated
   }
 
+  /** Moves nested groups under other groups in order, skipping unknown groups and moves that would form a cycle. */
+  setProjectGroupParents(moves: readonly ProjectGroupParentMove[]): ProjectGroup[] {
+    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    const moved: ProjectGroup[] = []
+    for (const { groupId, parentGroupId } of moves) {
+      const group = byId.get(groupId)
+      if (!group || !byId.has(parentGroupId) || group.parentGroupId === parentGroupId) {
+        continue
+      }
+      // A cycle exists if the group is the new parent or one of its ancestors.
+      const visited = new Set<string>()
+      let ancestor = byId.get(parentGroupId)
+      while (ancestor && ancestor.id !== groupId && !visited.has(ancestor.id)) {
+        visited.add(ancestor.id)
+        ancestor = ancestor.parentGroupId ? byId.get(ancestor.parentGroupId) : undefined
+      }
+      if (ancestor?.id === groupId) {
+        continue
+      }
+      group.parentGroupId = parentGroupId
+      group.updatedAt = Date.now()
+      moved.push(group)
+    }
+    if (moved.length > 0) {
+      this.scheduleSave(['projectGroups'])
+    }
+    return moved
+  }
+
   private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
@@ -120,6 +150,9 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (updates.hookSettings !== undefined) {
+      group.hookSettings = updates.hookSettings
     }
     group.updatedAt = Date.now()
   }
