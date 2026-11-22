@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
+import { guardPromptCardAgainstTyping } from './native-chat-prompt-typing-guard'
 
 const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
 const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
@@ -8,7 +9,8 @@ const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
 function focusPromptCard(card: HTMLElement): void {
   const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
   if (target) {
-    // A no-options card's answer field: show the ring even when a mouse click opened the card.
+    // A no-options card's answer field or an approval's default: show the ring even after a click.
+    guardPromptCardAgainstTyping(card)
     target.focus({ focusVisible: true })
     return
   }

@@ -1,7 +1,8 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef } from 'react'
-import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
+import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
+import { NativeChatApprovalOption } from './NativeChatApprovalOption'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -18,6 +19,7 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { isTypedIntoPromptCard } from './native-chat-prompt-typing-guard'
 import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
@@ -151,6 +153,10 @@ export function NativeChatApprovalCard({
               aria-label={title}
               tabIndex={-1}
               onKeyDown={(event) => {
+                if (isTypedIntoPromptCard(event.currentTarget, event.nativeEvent)) {
+                  event.preventDefault()
+                  return
+                }
                 if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
                   event.preventDefault()
                   event.stopPropagation()
@@ -351,41 +357,23 @@ export function NativeChatApprovalCard({
                 {approval.options.map((opt, i) => {
                   const opensUrl = url !== null && opt.send === URL_APPROVAL_OPEN_OPTION_ID
                   return (
-                    <button
+                    <NativeChatApprovalOption
                       key={`${opt.label}-${i}`}
-                      type="button"
+                      label={optionLabel(opt)}
+                      primary={i === 0 && !approval.neutralOptions}
+                      urlRequest={url !== null}
+                      quiet={quiet}
                       disabled={
                         newerSubject || isSubmitting || (opensUrl && readApprovalUrl(url) === null)
                       }
+                      sending={isSubmitting && opt.send === submittingOption}
                       onClick={() => {
                         if (opensUrl) {
                           openUrlRequestPage(url)
                         }
                         onChoose(opt.send)
                       }}
-                      className={cn(
-                        'rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                        quiet
-                          ? 'h-6 px-2.5 text-xs font-medium'
-                          : 'px-4 py-1.5 text-sm font-semibold',
-                        i === 0 && !approval.neutralOptions
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                          : url !== null
-                            ? 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                            : quiet
-                              ? 'bg-chat-foreground/5 text-chat-foreground hover:bg-chat-foreground/10'
-                              : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      {isSubmitting && opt.send === submittingOption ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                          {optionLabel(opt)}
-                        </span>
-                      ) : (
-                        optionLabel(opt)
-                      )}
-                    </button>
+                    />
                   )
                 })}
                 {approval.options.length === 0 && onOpenTerminal ? (
