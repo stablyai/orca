@@ -189,7 +189,9 @@ export class LocalPtyProvider implements IPtyProvider {
       id,
       options?.steadyState !== true,
       options?.ignoreDetached === true,
-      steadyPollJudgesByJobMembership(options, foregroundProcess)
+      // This provider never proves a shell idle, so the pane re-checks anyway; keep the cheap job-only read.
+      options?.jobMembershipOnly === true ||
+        steadyPollJudgesByJobMembership(options, foregroundProcess)
     )
     // Neither asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
