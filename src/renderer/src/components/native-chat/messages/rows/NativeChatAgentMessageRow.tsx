@@ -184,8 +184,9 @@ export function NativeChatAgentMessageRow({
             content,
             // The first line gives way first, down to a few words or to the room a name and an item
             // need to keep a few letters each. It never shrinks, since any shrink at all cuts its last
-            // letters for an ellipsis; past its cap the name, then its items, cut short.
-            'flex min-w-0 max-w-[max(100cqw-16rem,12rem)] shrink-0 items-center gap-1 font-medium whitespace-nowrap text-chat-foreground',
+            // letters for an ellipsis; past its cap the name, then its items, cut short. Several items
+            // can need more than the cap, so it clips sideways only, keeping focus rings whole.
+            'flex min-w-0 max-w-[max(100cqw-16rem,12rem)] shrink-0 items-center overflow-x-clip gap-1 font-medium whitespace-nowrap text-chat-foreground',
             '@max-[360px]/agent-row:max-w-fit @max-[360px]/agent-row:shrink @max-[360px]/agent-row:grow @max-[360px]/agent-row:basis-0'
           )}
         >

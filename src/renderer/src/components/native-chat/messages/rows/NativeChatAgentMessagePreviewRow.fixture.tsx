@@ -172,7 +172,8 @@ const startedLongForItem: NativeChatMessage = {
   ...startedLong,
   id: 'preview-started-long-item',
   agentStartItems: [
-    { uid: 'item-31', number: 31, title: 'Switch usage and continue', status: 'working' }
+    { uid: 'item-31', number: 31, title: 'Switch usage and continue', status: 'working' },
+    { uid: 'item-32', number: 32, title: 'Usage meter after a switch', status: 'planned' }
   ]
 }
 const workers: OrchestrationSessionWorker[] = [
