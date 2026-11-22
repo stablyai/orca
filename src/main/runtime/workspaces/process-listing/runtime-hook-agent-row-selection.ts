@@ -96,6 +96,10 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
   return best
 }
 
+function reportedAt(row: AgentStatusIpcPayload): number {
+  return row.evidenceObservedAt ?? row.receivedAt
+}
+
 /** The terminal's latest reported hook row of any age, ended agents' included: a turn end stays true
  *  until the agent's next report. Restored rows cannot prove a running agent; resume rows carry no status. */
 export function selectLatestReportedAgentStatusRow(
@@ -115,7 +119,8 @@ export function selectLatestReportedAgentStatusRow(
     ) {
       continue
     }
-    if (!latest || row.receivedAt > latest.receivedAt) {
+    // By evidence time: a replay is restamped on receipt but says what the agent reported then.
+    if (!latest || reportedAt(row) > reportedAt(latest)) {
       latest = row
     }
   }
