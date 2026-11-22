@@ -18,7 +18,7 @@ const MAX_OPENER_NAME = 80
 export function conversationOpener(asker: ConnectorAsker): ExternalConversationOpener {
   const name = asker.name?.slice(0, MAX_OPENER_NAME)
   return {
-    role: asker.role,
+    role: asker.app ? 'member' : asker.role,
     ...(name ? { name } : {}),
     ...(asker.place.kind === 'direct_message' ? { dm: true as const } : {})
   }
@@ -99,7 +99,7 @@ const SLACK_ID = /^[A-Z0-9]+$/
 const SLACK_TS = /^\d+(?:\.\d+)?$/
 
 /** A Slack conversation's team, channel and thread from its external id (`T:C:ts:UBOT` for a
- *  thread, `T:D:UBOT` for a DM); null for an id this build can't read. Group DMs never arrive: the
+ *  thread, `T:D:D:UBOT` for a DM); null for an id this build can't read. Group DMs never arrive: the
  *  app has no mpim scope. */
 export function slackPlaceOf(externalId: string): SlackPlace | null {
   const parts = externalId.split(':')

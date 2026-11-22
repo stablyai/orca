@@ -54,9 +54,7 @@ async function realFolderContextTarget(cwd: string, path: string): Promise<strin
 /** What the folder already holds there; a file the user owns stays theirs. */
 async function readExistingFolderContextFile(
   target: string
-): Promise<
-  { kind: 'missing' } | { kind: 'untouched' } | { kind: 'file'; text: string; mode: number }
-> {
+): Promise<{ kind: 'missing' } | { kind: 'untouched' } | { kind: 'file'; text: string }> {
   const info = await lstat(target).catch(() => null)
   if (!info) {
     return { kind: 'missing' }
@@ -66,21 +64,19 @@ async function readExistingFolderContextFile(
     return { kind: 'untouched' }
   }
   try {
-    return { kind: 'file', text: await readFile(target, 'utf8'), mode: info.mode & 0o777 }
+    return { kind: 'file', text: await readFile(target, 'utf8') }
   } catch {
     return { kind: 'untouched' }
   }
 }
 
-/** Replaced whole, so the agent never reads a half-written file. */
-async function writeFolderContextText(
-  target: string,
-  content: string,
-  mode: number
-): Promise<void> {
+/** Replaced whole, so the agent never reads a half-written file; only this host's user may read
+ *  the result, a file the user wrote included, since it now carries the bot's instructions. An
+ *  inheritable ACL the user set on the folder still applies on top of that. */
+async function writeFolderContextText(target: string, content: string): Promise<void> {
   const staged = `${target}.${randomUUID()}`
   try {
-    await writeFile(staged, content, { mode })
+    await writeFile(staged, content, { mode: 0o600 })
     await rename(staged, target)
   } catch (error) {
     await rm(staged, { force: true }).catch(() => undefined)
@@ -110,8 +106,7 @@ export async function writeFolderContextFile(
   }
   await writeFolderContextText(
     target,
-    withOrcaText(existing.kind === 'file' ? existing.text : null, text, agentName),
-    existing.kind === 'file' ? existing.mode : 0o600
+    withOrcaText(existing.kind === 'file' ? existing.text : null, text, agentName)
   )
   return true
 }
@@ -146,5 +141,5 @@ export async function removeFolderContextBlock(
     await rm(target, { force: true })
     return
   }
-  await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`, existing.mode)
+  await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`)
 }

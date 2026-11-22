@@ -145,7 +145,7 @@ export function groupRow(
   const faces = botGroupMemberBots(group, bots).map((bot) => ({
     id: bot.id,
     name: bot.name,
-    avatar: mobileBotAvatarSource(bot, undefined)
+    avatar: mobileBotAvatarSource(bot)
   }))
   const line = botGroupRowLine(group, faces, translate('bots.groups.you', 'You'))
   return {
@@ -210,7 +210,7 @@ export function keptRows(
       faces: botGroupMemberBots(group, bots).map((bot) => ({
         id: bot.id,
         name: bot.name,
-        avatar: mobileBotAvatarSource(bot, undefined)
+        avatar: mobileBotAvatarSource(bot)
       })),
       dot: null
     }))

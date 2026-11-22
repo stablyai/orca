@@ -9,7 +9,6 @@ import {
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
-  resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
 import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
@@ -220,15 +219,6 @@ export function startPreGoneCrashSampling(
   preGoneSampleTimer = setInterval(() => samplePreGoneProcessMetrics(), intervalMs)
   preGoneSampleTimer.unref?.()
   startPreGoneSystemMemorySampling(systemMemoryIntervalMs)
-}
-
-export function resetPreGoneCrashSamplingForTest(): void {
-  if (preGoneSampleTimer) {
-    clearInterval(preGoneSampleTimer)
-  }
-  preGoneSampleTimer = null
-  preGoneSample = null
-  resetPreGoneSystemMemorySamplingForTest()
 }
 
 const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'

@@ -185,8 +185,3 @@ export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSi
   }
   return attributions
 }
-
-export function resetProcessGoneSiblingCorrelationForTest(): void {
-  childDeaths = []
-  pendingRendererReports = []
-}

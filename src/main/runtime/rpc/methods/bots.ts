@@ -101,9 +101,8 @@ async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   ) {
     throw new InvalidArgumentError('Only the bot’s owner can start a new Home Chat.')
   }
+  // Mail its old Chat never read is not carried over (dropped by the reset).
   const sessionId = await runtimeBotChats(runtime).reset(bot.id)
-  // Mail its old Chat never read is not carried over.
-  await dropUnreadBotRequests(runtime, bot.id, 'new-chat', bot.chatSessionId ?? undefined)
   return { sessionId }
 }
 
@@ -165,7 +164,10 @@ export const BOT_METHODS = [
       // A paired client reads each server itself, so only a host's own callers fan out.
       const paired =
         params.allComputers && context.pairedDeviceId === undefined
-          ? readPairedBotRosters(runtime)
+          ? readPairedBotRosters(runtime).then((rosters) => {
+              runtime.pairedBotRosters.remember(rosters, { complete: true })
+              return rosters
+            })
           : null
       const own = await Promise.all(
         (await runtime.bots.roster()).map(async (rosterEntry) => {

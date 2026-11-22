@@ -44,7 +44,7 @@ export type TerminalReadinessCreation = Pick<
 >
 
 /** The PTY this creation spawned for `handle`; a reattached or adopted pane launched nothing new. */
-function freshLaunchPtyId(
+export function freshLaunchPtyId(
   handle: string,
   creation: TerminalReadinessCreation | undefined
 ): string | null {
@@ -217,19 +217,21 @@ export async function waitForWorkerAgentReady(
     reusesTerminal: boolean
     timeoutMs: number
     creation?: TerminalReadinessCreation
+    signal?: AbortSignal
   }
 ): Promise<RuntimeTerminalWait> {
   const { agent } = args
   try {
     const result = await (agent && !args.reusesTerminal
-      ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, undefined, (signal) =>
+      ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, args.signal, (signal) =>
           waitForWorkerStartComposer(runtime, handle, agent, args.timeoutMs, signal)
         )
       : // A reused pane's agent queues or steers a task sent mid-turn, as it does mail.
         runtime.waitForTerminal(handle, {
           condition: 'tui-idle',
           timeoutMs: args.timeoutMs,
-          acceptsMidTurnInput: true
+          acceptsMidTurnInput: true,
+          ...(args.signal ? { signal: args.signal } : {})
         }))
     return args.reusesTerminal
       ? result

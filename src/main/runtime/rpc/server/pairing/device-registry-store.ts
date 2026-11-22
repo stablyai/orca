@@ -3,7 +3,8 @@ import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { withoutEphemeralRows } from './ephemeral-device-rows'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
-import type { DeviceEntry } from './device-entry'
+import { isPairedMobileDevice, type DeviceEntry } from './device-entry'
+import { usesLegacyE2EE } from './device-sighting'
 
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -18,6 +19,8 @@ export class DeviceRegistryStore {
   private corruptFilePending = false
   protected pendingLastSeenFlush: NodeJS.Timeout | null = null
   private readonly writer: DeviceRegistryWriter
+  private onPairedDevicesChanged: (() => void) | null = null
+  private pairedDevicesKey = ''
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
@@ -27,6 +30,11 @@ export class DeviceRegistryStore {
       minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
     })
     this.load()
+  }
+
+  /** Fires when a save adds, removes, relabels or flips usesLegacyE2EE on a listed phone; lastSeen-only saves stay silent. */
+  setOnPairedDevicesChanged(listener: (() => void) | null): void {
+    this.onPairedDevicesChanged = listener
   }
 
   protected saveOrLog(
@@ -67,6 +75,7 @@ export class DeviceRegistryStore {
     if (this.devices.length !== read.devices.length) {
       this.saveOrLog({ durable: true }, 'drop session-only devices after restart', read.devices)
     }
+    this.pairedDevicesKey = pairedDevicesKeyOf(this.devices)
   }
 
   // Persist before memory swap so failed writes cannot diverge authorization state.
@@ -105,6 +114,23 @@ export class DeviceRegistryStore {
     const written = this.writer.write(before, devices, options)
     // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
+    const pairedDevicesKey = pairedDevicesKeyOf(written)
+    if (pairedDevicesKey !== this.pairedDevicesKey) {
+      this.pairedDevicesKey = pairedDevicesKey
+      try {
+        this.onPairedDevicesChanged?.()
+      } catch (error) {
+        // The write already landed; a failing listener must not stop callers from taking it.
+        console.error('[runtime] Paired device change listener failed:', error)
+      }
+    }
     return written
   }
+}
+
+// Leaves out lastSeenAt: reconnect bookkeeping saves must not push a renderer refetch.
+function pairedDevicesKeyOf(devices: readonly DeviceEntry[]): string {
+  return JSON.stringify(
+    devices.filter(isPairedMobileDevice).map((d) => [d.deviceId, d.name, usesLegacyE2EE(d)])
+  )
 }

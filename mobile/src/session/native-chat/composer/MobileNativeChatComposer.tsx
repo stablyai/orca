@@ -10,6 +10,7 @@ import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComp
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
+import { triggerSelection } from '../../../platform/haptics/haptics'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
@@ -82,6 +83,7 @@ export function MobileNativeChatComposer({
   filePaths = NO_FILE_PATHS,
   roomMentions,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   stop = null,
@@ -148,6 +150,7 @@ export function MobileNativeChatComposer({
     filePaths,
     roomMentions,
     onNeedFiles,
+    fileReference,
     skillDiscovery,
     onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
@@ -208,6 +211,7 @@ export function MobileNativeChatComposer({
     }
     sendingRef.current = true
     setSending(true)
+    triggerSelection()
     const sendSurfaceGeneration = sendSurfaceGenerationRef.current
     const sendCompletionGeneration = getSendCompletionGeneration()
     const composerEditGeneration = getComposerEditGeneration()
@@ -343,6 +347,7 @@ export function MobileNativeChatComposer({
             {editSession ? (
               <MobileNativeChatEditActions
                 canSave={canSend}
+                saving={sending}
                 onCancel={editSession.cancel}
                 onSave={() => void handleSend()}
               />
@@ -357,6 +362,7 @@ export function MobileNativeChatComposer({
                   agent,
                   followUp,
                   canSend,
+                  sending,
                   stop
                 }}
                 snapshot={sessionOptions?.controller.snapshot}
