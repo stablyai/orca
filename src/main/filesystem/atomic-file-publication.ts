@@ -297,7 +297,7 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   }
 }
 
-// No hard links: rename in only if no entry (lstat: a dangling symlink counts) is there; the gap is lstat-to-rename.
+// No hard links and no no-replace rename in Node: a save landing between this lstat and the rename is still replaced; the window is only that pair.
 function publishHeldFile(sourcePath: string, targetPath: string): boolean {
   try {
     return publishFileWithoutOverwrite(sourcePath, targetPath)
