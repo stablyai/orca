@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { z } from 'zod'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
@@ -112,6 +112,7 @@ export function useBotSidebarComputerView(
   const locale = useIntlLocale()
   const available = !isPairedWebClientWindow()
   const [view, setView] = useState(() => readView(DEFAULT_VIEW))
+  const unsavedView = useRef<ComputerView | null>(null)
   const enabled = available && view.enabled
   const hostIds = useAppStore(
     useShallow((state) =>
@@ -143,7 +144,7 @@ export function useBotSidebarComputerView(
       return
     }
     const onStorage = (event: StorageEvent): void => {
-      if (event.key === STORAGE_KEY || event.key === null) {
+      if ((event.key === STORAGE_KEY || event.key === null) && unsavedView.current === null) {
         setView(readView(DEFAULT_VIEW))
       }
     }
@@ -152,14 +153,16 @@ export function useBotSidebarComputerView(
   }, [available])
   const update = useCallback(
     (change: (current: ComputerView) => ComputerView): void => {
-      const current = readView(view)
+      const current = unsavedView.current ?? readView(view)
       const next = change(current)
       if (next === current) {
         return
       }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        unsavedView.current = null
       } catch (error) {
+        unsavedView.current = next
         console.error('Could not save the Bots computer view', error)
       }
       setView(next)
