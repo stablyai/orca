@@ -26,9 +26,6 @@ export function resolveMarkdownPreviewAnchorId(
   hasId: (id: string) => boolean
 ): string | null {
   const decoded = decodeMarkdownPreviewAnchor(rawAnchor)
-  if (!decoded) {
-    return null
-  }
   if (hasId(decoded)) {
     return decoded
   }
@@ -42,9 +39,6 @@ export function findMarkdownPreviewAnchorElement(
   rawAnchor: string
 ): HTMLElement | null {
   const decoded = decodeMarkdownPreviewAnchor(rawAnchor)
-  if (!decoded) {
-    return null
-  }
   const prefixed = `${MARKDOWN_PREVIEW_HTML_ID_PREFIX}${decoded}`
   // Why: exact ids (heading slugs) win over the sanitizer-prefixed id, so stop at the first exact match.
   let prefixedMatch: HTMLElement | null = null
