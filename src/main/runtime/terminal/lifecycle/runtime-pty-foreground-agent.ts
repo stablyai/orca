@@ -20,6 +20,8 @@ type Dependencies = {
 }
 
 const NATIVE_CLAUDE_VERSION_NAME = /^\d+\.\d+\.\d+$/
+// Main attaches 4 surviving sessions at a time; past this a stuck attach no longer delays the scan.
+const PENDING_ATTACH_WAIT_MS = 10_000
 
 export class RuntimePtyForegroundAgent {
   private readonly refreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -229,7 +231,10 @@ export class RuntimePtyForegroundAgent {
     const epoch = this.foregroundEpochs.get(ptyId) ?? {}
     this.foregroundEpochs.set(ptyId, epoch)
     // A surviving session's attach restores the agent Orca launched in it, which then needs no scan.
-    await this.deps.pendingAttach(ptyId)
+    const attach = this.deps.pendingAttach(ptyId)
+    if (attach) {
+      await withTimeoutResult(attach, PENDING_ATTACH_WAIT_MS)
+    }
     if (this.deps.getPty(ptyId)?.launchAgent === 'claude') {
       return { agent: 'claude', superseded: this.foregroundEpochs.get(ptyId) !== epoch }
     }
