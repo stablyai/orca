@@ -206,7 +206,6 @@ export class JournalCheckpointOwner {
         return
       }
     }
-    // Also ends a stuck truncate's outage, which never handed checkpoints back.
     this.worker.recovered()
     try {
       if (message.type === 'truncate-request' && Number.isSafeInteger(message.truncateId)) {
@@ -319,19 +318,15 @@ export class JournalCheckpointOwner {
 
   private async finishClose(): Promise<void> {
     this.closing = true
-    // A truncate the worker is inside holds SQLite's write lock: parked writes wait for its exit.
-    const truncating = this.truncate?.acknowledged === true && this.worker.revokeTruncate()
     this.reset(true)
-    // Timers stop first, so no restart or deadline lands while admission is handed back.
+    // Timers stop first; a truncate the worker is inside keeps writes waiting until its thread exits.
     const retired = this.worker.close()
     retired.catch(() => undefined)
     try {
       // Hand admission back before termination: close can arrive while the drain is waiting.
       this.restore()
     } finally {
-      if (!truncating) {
-        this.wake()
-      }
+      this.wake()
     }
     try {
       await retired

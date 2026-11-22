@@ -197,14 +197,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     const attached = this.current
     this.current = undefined
     if (attached) {
-      // A retired worker inside a truncate holds SQLite's write lock until its thread exits.
-      if (revokeJournalTruncate(attached.liveness)) {
-        this.draining = true
-        void attached.exited.then(() => {
-          this.draining = false
-          this.host.drained()
-        })
-      }
+      this.drainIfTruncating(attached)
       this.failedStarts = this.now() - attached.spawnedAt >= RESTART_MAX_MS ? 0 : this.failedStarts
       // Terminating can't stop a native call; the next worker starts only after this one exits.
       this.retiring = attached.exited
@@ -217,7 +210,6 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.scheduleRestart()
   }
 
-  /** A write waits at the WAL ceiling for a late worker: reported now, not only once it is saved. */
   /** The writer took checkpoints from a late worker: an outage until it answers, without a warning. */
   handedBack(): void {
     if (!this.permanent) {
@@ -241,8 +233,22 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
       this.outages.end(false)
+      if (this.current) {
+        this.drainIfTruncating(this.current)
+      }
     }
     return this.retire()
+  }
+
+  /** A retired worker inside a truncate holds SQLite's write lock until its thread exits. */
+  private drainIfTruncating(attached: Attached): void {
+    if (revokeJournalTruncate(attached.liveness)) {
+      this.draining = true
+      void attached.exited.then(() => {
+        this.draining = false
+        this.host.drained()
+      })
+    }
   }
 
   private async retire(): Promise<void> {

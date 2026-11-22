@@ -8,7 +8,11 @@ import Database from '../../../sqlite/sync-database'
 import { JournalSqlBatch } from '../journal-sql-batch'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
-import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
+import {
+  JOURNAL_CHECKPOINT_TRUNCATE,
+  JOURNAL_TRUNCATE_RUNNING,
+  journalCheckpointWorkerSource
+} from './journal-checkpoint-worker-source'
 
 const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => {
@@ -155,6 +159,41 @@ it('does not admit a send from a stale checkpoint, and close hands back admissio
   worker.emit('message', { type: 'truncate-request', truncateId: 99 })
   worker.exited()
   await close
+})
+
+it('keeps a write queued at close waiting until a running truncate has exited, then saves it', async () => {
+  const { filename, writer } = fixture()
+  const worker = new ControlledCheckpoint()
+  let liveness!: Int32Array
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    factory: (workerData) => {
+      liveness = new Int32Array(workerData.liveness)
+      return worker
+    }
+  })
+  worker.ready()
+  worker.emit('message', { type: 'truncate-request', truncateId: 5, generation: 1 })
+  // The worker is inside TRUNCATE, holding SQLite's write lock.
+  Atomics.store(liveness, JOURNAL_CHECKPOINT_TRUNCATE, JOURNAL_TRUNCATE_RUNNING)
+  const close = owner.close()
+  cleanup.push(() => close)
+  let admitted = false
+  const queued = new JournalSqlBatch(writer, owner).run(
+    [1],
+    (id) => {
+      admitted = true
+      writer.prepare("INSERT INTO writes VALUES(?, 'queued')").run(id)
+    },
+    'normal',
+    true
+  )
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve()
+  }
+  expect(admitted).toBe(false)
+  worker.exited()
+  await Promise.all([queued, close])
+  expect(writer.prepare('SELECT body FROM writes WHERE id=1').get()).toEqual({ body: 'queued' })
 })
 
 it('hands pending sends back to autocheckpoint when the checkpoint worker fails', async () => {
