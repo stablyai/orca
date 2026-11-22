@@ -19,7 +19,7 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
-import { composerHoldsText, handleApprovalCardKeyDown } from './native-chat-approval-card-keys'
+import { handleApprovalCardKeyDown, useComposerHoldsText } from './native-chat-approval-card-keys'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
@@ -92,7 +92,7 @@ export function NativeChatApprovalCard({
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
   // Someone may still be typing into the box this card just replaced: a space or Enter must not approve.
-  const [answerFocusHeld] = useState(() => composerHoldsText(composerDraftScopeKey))
+  const answerFocusHeld = useComposerHoldsText(composerDraftScopeKey)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailClamped, setDetailClamped] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -349,6 +349,7 @@ export function NativeChatApprovalCard({
                     <button
                       key={`${opt.label}-${i}`}
                       type="button"
+                      data-native-chat-approval-answer=""
                       // The first answer opens focused, so Enter takes it and Tab moves to the next.
                       data-native-chat-prompt-card-focus-target={
                         (i === 0 && !answerFocusHeld) || undefined

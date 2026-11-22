@@ -1,8 +1,22 @@
-import type { KeyboardEvent } from 'react'
-import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
+import { useCallback, useSyncExternalStore, type KeyboardEvent } from 'react'
+import {
+  readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraft
+} from '../drafts/native-chat-composer-draft-store'
 
-export function composerHoldsText(scopeKey: string | undefined): boolean {
-  return scopeKey !== undefined && readNativeChatComposerDraft(scopeKey).text !== ''
+const ANSWER_SELECTOR = '[data-native-chat-approval-answer]:not(:disabled)'
+
+/** Live, so a card kept mounted while folded sees text typed before it is reopened. */
+export function useComposerHoldsText(scopeKey: string | undefined): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      scopeKey === undefined ? () => {} : subscribeToNativeChatComposerDraft(scopeKey, listener),
+    [scopeKey]
+  )
+  return useSyncExternalStore(
+    subscribe,
+    () => scopeKey !== undefined && readNativeChatComposerDraft(scopeKey).text !== ''
+  )
 }
 
 /** ←/→ step between the card's answers, wrapping; from the card itself, Tab and ←/→ enter on the first. */
@@ -11,9 +25,7 @@ function stepAnswerFocus(
   event: KeyboardEvent<HTMLElement>,
   delta: 1 | -1
 ): boolean {
-  const answers = Array.from(
-    actions?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []
-  )
+  const answers = Array.from(actions?.querySelectorAll<HTMLButtonElement>(ANSWER_SELECTOR) ?? [])
   if (event.target === event.currentTarget) {
     answers[0]?.focus()
     return answers.length > 0
