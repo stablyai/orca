@@ -4,11 +4,9 @@ import type { Session } from '../sessions/session'
 import { rememberIdleShellProof } from './terminal-host-idle-shell-proof'
 
 function shellSession(): Session {
-  return {
-    pid: 100,
-    shellIsRootChild: false,
-    getForegroundProcess: () => 'zsh'
-  } as unknown as Session
+  const fields = { pid: 100, shellIsRootChild: false, getForegroundProcess: () => 'zsh' }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proof reads only these three session fields.
+  return fields as unknown as Session
 }
 
 const shell: ProcessTableRow = {
