@@ -213,6 +213,12 @@ function createFacePictures(): BotGroupFacePictures {
       }
     },
     retain: (members) => {
+      // A folded face's handle has no picture behind it; one for a bot no longer shown at that version goes.
+      for (const [key, known] of handles) {
+        if (members.get(key) !== known.version && !pictures.get(key)?.faces.size) {
+          handles.delete(key)
+        }
+      }
       for (const [key, picture] of pictures) {
         if (members.get(key) !== picture.version && picture.faces.size === 0) {
           pictures.delete(key)

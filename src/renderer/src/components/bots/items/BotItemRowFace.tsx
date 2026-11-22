@@ -6,6 +6,7 @@ import { BotAvatar, BotAvatarTile } from '../BotAvatar'
 import { botMascotSrc } from '../bot-mascot-color'
 import {
   BotGroupFacePicturesContext,
+  BotItemFaceFolded,
   type BotGroupFacePicture,
   type BotGroupFacePictures
 } from './bot-group-face-pictures'

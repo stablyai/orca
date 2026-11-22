@@ -17,7 +17,6 @@ import {
   mixedGeometry,
   NO_ROW_SIZES_KNOWN,
   readMissingRowSizes,
-  rowKinds,
   uniformGeometry
 } from './bot-item-rows-geometry'
 import { focusFellToNothing } from '../use-needs-you-focus'
@@ -94,7 +93,6 @@ export function BotItemRowsWindow({
   )
   const [sizes, setSizes] = useState(DEFAULT_ROW_SIZES)
   const sizesKnown = useRef(NO_ROW_SIZES_KNOWN)
-  const kinds = useMemo(() => rowKinds(tallKey), [tallKey])
   const geometry = useMemo(
     () =>
       tallKey.includes('1')
@@ -159,15 +157,15 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    // Each kind of row the group has is read once (tried again as the range moves while one isn't drawn),
-    // and again only when the group's height stops matching (font size).
+    // Each kind of row is read once, when one is first drawn, and again only when the group's height
+    // stops matching (font size).
     const moved = next.start !== windowRange.start || next.end !== windowRange.end
     if (rect !== null && Math.abs(rect.height - geometry.total) > 1) {
       sizesKnown.current = NO_ROW_SIZES_KNOWN
     }
     const found =
       element && next.end > next.start
-        ? readMissingRowSizes(element, sizes, sizesKnown.current, kinds, moved)
+        ? readMissingRowSizes(element, sizes, sizesKnown.current, tallKey, windowRange)
         : { sizes, known: sizesKnown.current }
     const read = found.sizes
     sizesKnown.current = found.known
