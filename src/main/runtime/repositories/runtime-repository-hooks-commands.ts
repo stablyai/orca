@@ -120,7 +120,7 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     }
     return {
       status: 'ok' as const,
-      ...(await inspectWorkspaceHooks(repo))
+      ...(await inspectWorkspaceHooks(repo, options.background))
     }
   }
 

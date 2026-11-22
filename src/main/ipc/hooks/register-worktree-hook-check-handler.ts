@@ -87,7 +87,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
 
       return {
         status: 'ok',
-        ...(await inspectWorkspaceHooks(repo))
+        ...(await inspectWorkspaceHooks(repo, args.background))
       }
     }
   )

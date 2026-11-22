@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import { scopeHooksToRepoKind } from '../../shared/folder-workspaces/folder-workspace-hooks'
@@ -147,8 +148,15 @@ function hasUnrecognizedOrcaYamlKeys(content: string): boolean {
   return false
 }
 
-export async function inspectWorkspaceHooks(repo: Pick<WorkspaceHookOwner, 'path' | 'kind'>) {
+// Settings checks multiple repos at once. Keep libuv workers free for unrelated I/O.
+const hookInspectionSlots = new PrioritySemaphore(2)
+
+export async function inspectWorkspaceHooks(
+  repo: Pick<WorkspaceHookOwner, 'path' | 'kind'>,
+  background?: boolean
+) {
   const yamlPath = orcaYamlPath(repo.path)
+  const release = await hookInspectionSlots.acquire(background ? 1 : 0)
   let content: string
   try {
     const { buffer } = await readNodeFileWithinLimit(yamlPath, MAX_ORCA_YAML_BYTES, {
@@ -163,6 +171,8 @@ export async function inspectWorkspaceHooks(repo: Pick<WorkspaceHookOwner, 'path
         () => false
       ))
     return { hasHooks, hooks: null, mayNeedUpdate: false }
+  } finally {
+    release()
   }
 
   const hooks = scopeHooksToRepoKind(repo, parseOrcaYaml(content))
