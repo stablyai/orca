@@ -20,6 +20,7 @@ import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { getCodexStatusRuntimeKey } from './status-bar-runtime-targets'
+import { scopeCodexAuthFailure } from './status-bar-codex-accounts'
 
 export function CodexSwitcherMenu({
   codex,
@@ -73,19 +74,11 @@ export function CodexSwitcherMenu({
     authFailureAccount.accountId === activeTarget.id &&
     getCodexStatusRuntimeKey(authFailureAccount) ===
       getCodexStatusRuntimeKey(activeTarget.runtimeTarget)
-  // Settings can expose a new selection before usage clears the outgoing account's result.
-  const outdatedAuthFailure = signInRequired && authFailureAccount && !authFailureMatchesActive
-  const displayedCodex: ProviderRateLimits = outdatedAuthFailure
-    ? {
-        provider: 'codex',
-        session: null,
-        weekly: null,
-        updatedAt: 0,
-        status: 'fetching',
-        error: null
-      }
-    : codex
-  const activeSignInRequired = signInRequired && !outdatedAuthFailure
+  const displayedCodex = scopeCodexAuthFailure(
+    codex,
+    authFailureMatchesActive ? authFailureAccount.accountId : null
+  )
+  const activeSignInRequired = signInRequired && displayedCodex === codex
   const canSignInLocally = !hasActiveRuntimeEnvironment && authFailureMatchesActive
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
@@ -237,7 +230,9 @@ export function CodexSwitcherMenu({
           : {})}
       />
       {/* Why: restarting sessions onto a login that needs signing in again would break them. */}
-      {open && !signInRequired ? <CodexRestartStatusPrompt /> : null}
+      {open && !signInRequired && displayedCodex.status !== 'fetching' ? (
+        <CodexRestartStatusPrompt />
+      ) : null}
       {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
       {rosterKnown ? (
         <AccountSwitchSection

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
@@ -40,10 +40,12 @@ export function useCodexResetAction(
   } | null>(null)
   const [confirmedScope, setConfirmedScope] = useState<CodexResetCreditExpectedScope | null>(null)
   const mountedRef = useRef(true)
+  const resetConfirmationRevision = useRef(0)
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const consumeLocalResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
-  const signInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
+  const resetBlocked =
+    codex.status === 'fetching' || (codex.status === 'error' && isCodexUsageSignInRequired(codex))
 
   // Why: scope the host's spend to the account and offer this menu shows.
   const hostScope =
@@ -61,12 +63,13 @@ export function useCodexResetAction(
     }
   }, [])
 
-  useEffect(() => {
-    if (signInRequired) {
+  useLayoutEffect(() => {
+    if (resetBlocked) {
+      resetConfirmationRevision.current += 1
       setResetConfirmOpen(false)
       setSkipFutureResetConfirm(false)
     }
-  }, [signInRequired])
+  }, [resetBlocked])
 
   useEffect(() => {
     if (!menuOpen || !hostEnvironmentId) {
@@ -86,7 +89,7 @@ export function useCodexResetAction(
   }, [menuOpen, hostEnvironmentId])
 
   const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
-    if (signInRequired || isRedeemingReset) {
+    if (resetBlocked || isRedeemingReset) {
       return
     }
     setIsRedeemingReset(true)
@@ -101,7 +104,7 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
-    if (signInRequired) {
+    if (resetBlocked) {
       return
     }
     if (
@@ -118,15 +121,19 @@ export function useCodexResetAction(
   }
 
   const handleConfirmReset = async (): Promise<void> => {
-    if (signInRequired || isRedeemingReset) {
+    if (resetBlocked || isRedeemingReset) {
       return
     }
+    const revision = resetConfirmationRevision.current
     if (skipFutureResetConfirm) {
       try {
         await updateSettings({ skipCodexRateLimitResetConfirm: true })
       } catch (error) {
         console.error('Failed to save Codex reset confirmation preference:', error)
       }
+    }
+    if (!mountedRef.current || revision !== resetConfirmationRevision.current) {
+      return
     }
     await redeem(confirmedScope)
     if (mountedRef.current) {
@@ -147,7 +154,7 @@ export function useCodexResetAction(
     handleConfirmReset,
     handleResetMenuSelect,
     isRedeemingReset,
-    resetConfirmOpen: resetConfirmOpen && !signInRequired,
+    resetConfirmOpen: resetConfirmOpen && !resetBlocked,
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm

@@ -12,7 +12,10 @@ import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { useAppStore } from '@/store'
 import { Toaster } from '@/components/ui/sonner'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import {
+  useAccountOwnerUsage,
+  type OwnerUsageRateLimits
+} from '../usage/use-owner-usage-rate-limits'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,16 +151,11 @@ function managed(account: SampleAccount): CodexManagedAccount {
 
 function FixtureSwitcher(props: React.ComponentProps<typeof CodexSwitcherMenu>) {
   const rateLimits = useAppStore((state) => state.rateLimits)
-  if (props.ownerUsage.owner.target.kind !== 'local' || !rateLimits?.codex) {
+  const local = useAccountOwnerUsage({ target: { kind: 'local' }, wslHostDistro: null }, rateLimits)
+  if (props.ownerUsage.owner.target.kind !== 'local' || !local.rateLimits.codex) {
     return <CodexSwitcherMenu {...props} />
   }
-  return (
-    <CodexSwitcherMenu
-      {...props}
-      codex={rateLimits.codex}
-      ownerUsage={{ ...props.ownerUsage, rateLimits }}
-    />
-  )
+  return <CodexSwitcherMenu {...props} codex={local.rateLimits.codex} ownerUsage={local} />
 }
 
 function switcherFixture(

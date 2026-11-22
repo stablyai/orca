@@ -235,7 +235,7 @@ async function readCodexRateLimits(
   const homeRefusal =
     isWslHome && options?.codexHomePath ? await stoppedWslHomeRefusal(options.codexHomePath) : null
   if (homeRefusal) {
-    return homeRefusal
+    return wslBackendResult ?? homeRefusal
   }
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
@@ -272,7 +272,10 @@ async function readCodexRateLimits(
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
     }
     if (isCodexAuthError(rpcResult.error)) {
-      return await classifyCodexApiKeyUsageRejection(rpcResult, options)
+      const rejection = await classifyCodexApiKeyUsageRejection(rpcResult, options)
+      return rejection.usageMetadata?.failureKind === 'usage-unavailable'
+        ? rejection
+        : (wslBackendResult ?? rejection)
     }
     rpcFailure = rpcResult
   } catch {
