@@ -168,7 +168,6 @@ export function botGroupNeedsYouOutside(counts: {
   return counts.scoped && counts.loaded ? Math.max(0, counts.whole - counts.shown) : 0
 }
 
-/** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
 // Each read's seen marks by bot id, built the first time a list asks (so not while an item is open).
 const seenIndexes = new WeakMap<readonly MemberRead[], Map<string, string | null>>()
 function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
@@ -180,6 +179,7 @@ function seenIndexOf(reads: readonly MemberRead[]): Map<string, string | null> {
   return index
 }
 
+/** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
 function memberClosed(read: MemberRead): {
   closed: BotItem[]
   more: boolean

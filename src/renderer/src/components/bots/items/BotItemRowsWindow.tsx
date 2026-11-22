@@ -30,6 +30,8 @@ import {
 import {
   focusBotItemBackRow,
   rowFocusControl,
+  endEntryTarget,
+  groupFocusLeft,
   plainTab,
   rowTabTarget,
   type BotItemRowEdge
@@ -396,12 +398,9 @@ export function BotItemRowsWindow({
         onKeyDown={onKeyDown}
         onFocus={() => setFocusWithin(true)}
         onBlur={(event) => {
-          const within =
-            event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)
-          setFocusWithin(within)
-          // Focus moving elsewhere on the page (or to nothing, as a menu closed by the pointer leaves it,
-          // while Orca keeps focus): Tab back in enters at the first row, as in a plain list.
-          if (!within && (event.relatedTarget !== null || document.hasFocus())) {
+          const left = groupFocusLeft(event)
+          setFocusWithin(left === 'within')
+          if (left === 'page') {
             setStop(null)
           }
         }}
@@ -465,7 +464,7 @@ export function BotItemRowsWindow({
         <div
           className="-mt-0.5"
           tabIndex={focusWithin ? -1 : 0}
-          onFocus={() => setTarget({ uid: items[count - 1]!.uid, at: count - 1, edge: 'last' })}
+          onFocus={(event) => setTarget(endEntryTarget(event, items, tabStop))}
         />
       )}
     </>

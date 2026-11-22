@@ -61,6 +61,11 @@ function installGlobalListeners(): void {
     capture: true,
     passive: true
   })
+  // A trackpad scroll after wake sends only wheel events; a hidden window gets none.
+  document.addEventListener('wheel', onUserInteractionWithDocument, {
+    capture: true,
+    passive: true
+  })
   window.addEventListener('focus', onUserInteractionWithDocument)
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
 }
@@ -72,6 +77,7 @@ function removeGlobalListeners(): void {
   globalListenersInstalled = false
   document.removeEventListener('keydown', onUserInteractionWithDocument, { capture: true })
   document.removeEventListener('pointerdown', onUserInteractionWithDocument, { capture: true })
+  document.removeEventListener('wheel', onUserInteractionWithDocument, { capture: true })
   window.removeEventListener('focus', onUserInteractionWithDocument)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
 }

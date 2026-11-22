@@ -17,7 +17,6 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
-import { isDocumentVisibilityProvenStale } from '../../terminal-pane/viewport/visibility/stale-document-visibility'
 import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
 
 type Picture = {
@@ -57,9 +56,6 @@ export type BotGroupFacePictures = {
 }
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
-
-// After macOS display wake Chromium can keep the window marked hidden while it scrolls and takes input.
-const windowShown = (): boolean => getWindowParkVisible() || isDocumentVisibilityProvenStale()
 
 const hostOffline = (picture: Picture): boolean =>
   readBotHostState(picture.bot.hostId) === 'offline'
@@ -135,7 +131,7 @@ function createFacePictures(): BotGroupFacePictures {
       return
     }
     const offline = hostOffline(picture)
-    if (offline || !windowShown()) {
+    if (offline || !getWindowParkVisible()) {
       wait(picture, offline)
       return
     }
@@ -178,7 +174,7 @@ function createFacePictures(): BotGroupFacePictures {
   }
 
   function onVisibility(): void {
-    if (!windowShown()) {
+    if (!getWindowParkVisible()) {
       return
     }
     eachWaiting(admit)
