@@ -3,6 +3,7 @@ import { botLaunchWithPicks } from '../../shared/bots/bot-launch'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import type { BotController } from './bot-controller'
 import { botOfSession } from './bot-session-tabs'
+import { confirmsListedEffortAtSend } from '../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 type SessionLookup = Parameters<typeof botOfSession>[2]
 
@@ -28,13 +29,17 @@ export async function keepSessionPicksOnBot(
   if (bot.agent !== mutation.agent) {
     return true
   }
-  if (sameLaunch(botLaunchWithPicks(bot.launch, mutation.picks), bot.launch)) {
+  // A bot runs unattended, so an effort the listing can't confirm stays in the chat it was picked in.
+  const picks = confirmsListedEffortAtSend(mutation.agent)
+    ? mutation.picks.filter((pick) => pick.optionId !== 'effort')
+    : mutation.picks
+  if (sameLaunch(botLaunchWithPicks(bot.launch, picks), bot.launch)) {
     return true
   }
   await bots
     .update(bot.id, (current) =>
       current.agent === mutation.agent
-        ? { launch: botLaunchWithPicks(current.launch, mutation.picks) ?? null }
+        ? { launch: botLaunchWithPicks(current.launch, picks) ?? null }
         : {}
     )
     .catch((error: unknown) => {
