@@ -3,13 +3,8 @@ import { botLaunchWithPicks } from '../../shared/bots/bot-launch'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import type { BotController } from './bot-controller'
 import { botOfSession } from './bot-session-tabs'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service-contract'
-import { confirmsListedEffortAtSend } from '../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
-type SessionLookup = NonNullable<Parameters<typeof botOfSession>[2]> & {
-  deps?: { modelCatalog?: Pick<AgentModelCatalogService, 'peek'> }
-}
+type SessionLookup = Parameters<typeof botOfSession>[2]
 
 /**
  * Keeps picks made in a bot's conversation (its Chat, a look-around, an automation run) as that
@@ -25,8 +20,7 @@ export async function keepSessionPicksOnBot(
   if (mutation.type !== 'apply-picks' || !mutation.sessionId || !bots.enabled()) {
     return false
   }
-  const lookup = host ?? getStructuredAgentSessionHost()
-  const bot = botOfSession(bots, mutation.sessionId, lookup)
+  const bot = botOfSession(bots, mutation.sessionId, host)
   if (!bot) {
     return false
   }
@@ -34,23 +28,13 @@ export async function keepSessionPicksOnBot(
   if (bot.agent !== mutation.agent) {
     return true
   }
-  // A bot runs unattended, so an effort no chat has confirmed stays in the chat it was picked in.
-  const models = confirmsListedEffortAtSend(mutation.agent)
-    ? (lookup?.deps?.modelCatalog?.peek(mutation.sessionId)?.models ?? [])
-    : null
-  const picks = mutation.picks.filter(
-    (pick) =>
-      !models ||
-      pick.optionId !== 'effort' ||
-      models.some((model) => model.id === pick.modelId && model.effortsKnown !== false)
-  )
-  if (sameLaunch(botLaunchWithPicks(bot.launch, picks), bot.launch)) {
+  if (sameLaunch(botLaunchWithPicks(bot.launch, mutation.picks), bot.launch)) {
     return true
   }
   await bots
     .update(bot.id, (current) =>
       current.agent === mutation.agent
-        ? { launch: botLaunchWithPicks(current.launch, picks) ?? null }
+        ? { launch: botLaunchWithPicks(current.launch, mutation.picks) ?? null }
         : {}
     )
     .catch((error: unknown) => {

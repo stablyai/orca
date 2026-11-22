@@ -40,8 +40,9 @@ export function parseKiroModelListing(stdout: string): AgentSessionModelOption[]
     label: labelFromModelId(model.model_id),
     ...(model.description ? { description: model.description } : {}),
     isDefault: model.model_id === defaultModel,
-    // Kiro reports a model's efforts only once a session runs it, so these are checked at send.
-    efforts: model.model_id === KIRO_AUTO_MODEL ? [] : KIRO_UNCONFIRMED_EFFORTS,
+    efforts: [],
+    // Kiro reports a model's efforts only once a chat runs it, so these are chat-only and checked at send.
+    ...(model.model_id === KIRO_AUTO_MODEL ? {} : { chatEfforts: KIRO_UNCONFIRMED_EFFORTS }),
     effortsKnown: false
   }))
 }
