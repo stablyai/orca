@@ -57,12 +57,18 @@ export const ConnectorBotSlackStateResponseSchema = ConnectorBotSlackStateSchema
   z.object({ teams: z.array(ConnectorBotSlackStateSchema).optional() })
 )
 
-// Full members of the bot's workspace, by name; guests, bots and other companies' people are
-// left out. complete is false when the workspace is too large to read whole, so someone may be missing.
+// The people of the bot's workspace who may be on Who can ask, and other Slack apps, by name.
+// complete is false when the workspace is too large to read whole, so someone may be missing.
 // avatarUrl is Slack's picture of them; left out when they have none, or by an older cloud.
+// app: another Slack app's bot user (its name already says "(app)"), never Slackbot or an Orca bot.
 export const ConnectorBotSlackMembersResponseSchema = z.object({
   members: z.array(
-    z.object({ id: z.string(), name: z.string(), avatarUrl: z.string().optional() })
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      avatarUrl: z.string().optional(),
+      app: z.literal(true).optional()
+    })
   ),
   complete: z.boolean()
 })

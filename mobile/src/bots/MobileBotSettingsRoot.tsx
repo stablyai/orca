@@ -22,6 +22,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection as Section } from '../settings/settings-screen-frame'
 import type { SheetBot } from './bot-sheet-operations'
+import type { ConnectorPage } from './connectors/connector-pages'
 import { lookAroundLine, tidyUpLine, whoCanAskLine } from './bot-settings-lines'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -42,6 +43,9 @@ export type SettingsRootPage =
   | 'who-can-ask'
   | 'tools'
   | 'skills'
+
+/** A Settings page to open on from outside Settings: one the list opens, or one of Connectors' pages. */
+export type BotSettingsTarget = SettingsRootPage | ConnectorPage
 
 function staleLabel(t: ReturnType<typeof useMobileTranslation>, stale: BotItemsStale) {
   return stale === 'never'

@@ -554,7 +554,8 @@
         "serverRepaired": "Во время импорта было выполнено повторное сопряжение с этим сервером. Повторите попытку.",
         "fileNoValidCookies_few": "Не найдено корректных файлов cookie. Пропущены {{count}} записи из-за отсутствующих или некорректных полей.",
         "fileNoValidCookies_many": "Не найдено корректных файлов cookie. Пропущено {{count}} записей из-за отсутствующих или некорректных полей.",
-        "macFullDiskAccess": "macOS запретила доступ к файлам cookie {{browser}}. Предоставьте Orca полный доступ к диску в разделе Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску, затем перезапустите Orca."
+        "macFullDiskAccess": "macOS запретила доступ к файлам cookie {{browser}}. Предоставьте Orca полный доступ к диску в разделе Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску, затем перезапустите Orca.",
+        "sshHostDisconnected": "Эта страница больше не подключена через свой SSH-хост. Подключитесь снова и повторите попытку."
       },
       "notice": {
         "importedMore_one": "Импортирован {{count}} файл cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать его.",
@@ -566,6 +567,13 @@
         "importedMore_many": "Импортировано {{count}} файлов cookie для {{domains}} и ещё {{more}}. Перезагрузите страницу, чтобы использовать их.",
         "imported_few": "Импортировано {{count}} файла cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их.",
         "imported_many": "Импортировано {{count}} файлов cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их."
+      },
+      "sshPage": {
+        "label": "Браузеры на этом устройстве",
+        "destination": "Импорт в браузер для {{host}}.",
+        "hostAgents": "Агенты на {{host}} могут использовать эти входы, но не могут читать файлы cookie.",
+        "stored": "Сохранено в браузере для {{host}}.",
+        "googleCookiesSkipped": "Файлы cookie Google не импортированы. Откройте страницу, которая работает через {{host}}, и войдите в Google."
       }
     },
     "passwords": {
@@ -18161,11 +18169,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Запусков пока нет.",
-          "13988187b3": "Токены",
           "86a248187e": "Расходы",
           "149c0b49c7": "Рабочее пространство",
           "8faaa00726": "Запуск",
-          "a00e38d1a3": "—",
           "historyUnavailable": "История запусков на этом сервере недоступна. Это не означает, что автоматизация завершилась с ошибкой или не запускалась."
         },
         "AutomationSchedulePicker": {
@@ -18235,7 +18241,6 @@
           "missingWorkspace": "Рабочее пространство не найдено",
           "usageUnavailable": "Данные об использовании недоступны",
           "noRunUsageYet": "Данных об использовании запусков пока нет",
-          "noWorkspace": "Нет рабочего пространства",
           "latestSavedOutput": "Последний сохранённый вывод",
           "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
           "retryFullOutput": "Повторить",
@@ -18510,7 +18515,6 @@
           "failed7d": "Неуспешно · 7 дн",
           "automation": "Автоматизация",
           "triggered": "Запущено",
-          "trigger": "Триггер",
           "loading": "Загрузка запусков…",
           "noRuns": "Запусков пока нет",
           "emptyDescription": "После срабатывания автоматизации её запуски появятся здесь.",
@@ -18595,7 +18599,12 @@
           "tokensAndCost_few": "{{tokens}} токена · {{cost}}",
           "tokensAndCost_many": "{{tokens}} токенов · {{cost}}",
           "tokensAndCost_other": "{{tokens}} токена · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "Потрачено {{spend}}",
+          "tokens_one": "{{tokens}} токен",
+          "tokens_few": "{{tokens}} токена",
+          "tokens_many": "{{tokens}} токенов",
+          "tokens_other": "{{tokens}} токена"
         },
         "externalDisplay": {
           "sshHost": "SSH-сервер",
@@ -21022,9 +21031,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Проверить очистку alpha"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"

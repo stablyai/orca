@@ -500,7 +500,8 @@
         "safariFullDiskAccess": "macOS, Safari çerezlerine erişimi reddetti. System Settings → Privacy & Security → Full Disk Access bölümünde Orca'ya Tam Disk Erişimi izni verin.",
         "connectionEnded": "İçe aktarma sırasında bu sunucuyla bağlantı kesildi. Yeniden bağlanıp tekrar deneyin.",
         "serverRepaired": "Bu sunucu içe aktarma sırasında yeniden eşleştirildi. Tekrar deneyin.",
-        "macFullDiskAccess": "macOS, {{browser}} çerezlerine erişimi reddetti. Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi bölümünden Orca’ya Tam Disk Erişimi verin, ardından Orca’yı yeniden başlatın."
+        "macFullDiskAccess": "macOS, {{browser}} çerezlerine erişimi reddetti. Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi bölümünden Orca’ya Tam Disk Erişimi verin, ardından Orca’yı yeniden başlatın.",
+        "sshHostDisconnected": "Bu sayfa artık SSH ana bilgisayarı üzerinden bağlı değil. Yeniden bağlanıp tekrar deneyin."
       },
       "notice": {
         "importedMore_one": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
@@ -508,6 +509,13 @@
         "imported_one": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Bu cihazdaki tarayıcılar",
+        "destination": "{{host}} tarayıcısına içe aktarır.",
+        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
+        "stored": "{{host}} tarayıcısında saklandı.",
+        "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
       }
     },
     "passwords": {
@@ -17792,11 +17800,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Henüz çalıştırma yok.",
-          "13988187b3": "Token",
           "86a248187e": "Harcama",
           "149c0b49c7": "Çalışma alanı",
           "8faaa00726": "Çalıştırma",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Çalıştırma geçmişi bu sunucudan alınamıyor. Bu, otomasyonun başarısız olduğu veya hiç çalıştırılmadığı anlamına gelmez."
         },
         "AutomationSchedulePicker": {
@@ -17866,7 +17872,6 @@
           "missingWorkspace": "Eksik çalışma alanı",
           "usageUnavailable": "Kullanım bilgisi yok",
           "noRunUsageYet": "Henüz çalıştırma kullanımı yok",
-          "noWorkspace": "Çalışma alanı yok",
           "latestSavedOutput": "En son kaydedilen çıktı",
           "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
           "retryFullOutput": "Yeniden dene",
@@ -18135,7 +18140,6 @@
           "failed7d": "Başarısız · 7g",
           "automation": "Otomasyon",
           "triggered": "Tetiklendi",
-          "trigger": "Tetikleyici",
           "loading": "Çalıştırmalar yükleniyor…",
           "noRuns": "Henüz çalıştırma yok",
           "emptyDescription": "Bir otomasyon tetiklendikten sonra çalıştırmalar burada görünür.",
@@ -18210,7 +18214,10 @@
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} harcandı",
+          "tokens_other": "{{tokens}} token",
+          "tokens_one": "{{tokens}} token"
         },
         "externalDisplay": {
           "sshHost": "SSH sunucusu",
@@ -20474,9 +20481,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Alpha temizliğini incele"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
