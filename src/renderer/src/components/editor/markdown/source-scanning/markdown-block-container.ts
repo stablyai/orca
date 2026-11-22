@@ -135,7 +135,8 @@ export function detectContainerLine(
   text: string,
   columns: number,
   offset: number,
-  baseIndent: number
+  baseIndent: number,
+  originColumn: number
 ): MarkdownContainerLine | null {
   if (columns > baseIndent + 3) {
     return null
@@ -163,8 +164,9 @@ export function detectContainerLine(
     return { contentIndent: columns + markerWidth + 1, remainder, startsIndentedCode: false }
   }
   let col = columns + markerWidth
+  // Tab stops are absolute; the returned indent stays relative to the quote content.
   for (let i = 0; i < ws.length; i += 1) {
-    col += ws.charCodeAt(i) === 9 ? 4 - (col % 4) : 1
+    col += ws.charCodeAt(i) === 9 ? 4 - ((originColumn + col) % 4) : 1
   }
   const wsCols = col - (columns + markerWidth)
   const startsIndentedCode = wsCols >= 5
@@ -248,7 +250,7 @@ export function advanceContainerStackForLine(
   const baseIndent = top && top.quoteDepth === quoteDepth ? top.indent : 0
   const container =
     !isBlank && columns <= baseIndent + 3
-      ? detectContainerLine(lineWithoutQuote, columns, offset, baseIndent)
+      ? detectContainerLine(lineWithoutQuote, columns, offset, baseIndent, column - virtualSpaces)
       : null
   if (container && container.contentIndent > baseIndent) {
     containers.push({ quoteDepth, indent: container.contentIndent })
