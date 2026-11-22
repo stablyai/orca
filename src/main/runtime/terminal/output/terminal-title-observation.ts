@@ -165,6 +165,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+        pty.lastAgentStatusEndedTurn = prevStatus === 'working' || prevStatus === 'permission'
         if (agentStatus === 'working') {
           pty.lastAgentStatusWorkingStartedAtEpochMs = observedAtEpochMs
         }
@@ -301,6 +302,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
       pty.lastAgentStatusWorkingStartedAtEpochMs = null
+      pty.lastAgentStatusEndedTurn = false
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.providerGenerationResetAtEpochMs = pty.lastAgentStatusRichInvalidatedAtEpochMs
       pty.managementTitle = null

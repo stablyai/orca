@@ -277,6 +277,8 @@ export function buildRuntimeMobileAgentStatus(
     state === 'done'
       ? restatedShownDone(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
       : null
+  // Why: a title Done that no working status ended is an agent starting or leaving at rest; clients never announce a boundary.
+  const atRest = state === 'done' && !restatedDone && pty?.lastAgentStatusEndedTurn !== true
   return {
     agentStatus: {
       state,
@@ -284,6 +286,7 @@ export function buildRuntimeMobileAgentStatus(
       updatedAt: pty ? ptyStatusEvidenceAt(pty, evidenceAt) : evidenceAt,
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
       ...restatedDone,
+      ...(atRest ? { sessionBoundary: true } : {}),
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(agentType ? { agentType } : {}),

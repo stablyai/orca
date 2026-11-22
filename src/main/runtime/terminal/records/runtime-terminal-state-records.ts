@@ -123,6 +123,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastAgentStatusStartedAtEpochMs: number | null
   /** When lastAgentStatus last turned working: a later title turn starts after an earlier Done. */
   lastAgentStatusWorkingStartedAtEpochMs?: number | null
+  /** Whether lastAgentStatus began as a working or blocked status ended, not as an agent starting at rest. */
+  lastAgentStatusEndedTurn?: boolean
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
   permissionWaitHookedAfterEpochMs?: number
