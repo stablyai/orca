@@ -9,6 +9,7 @@ import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
 import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
@@ -47,9 +48,10 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
-  const showSharedCodexServers = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().sharedCodexServers
-  ])
+  // Only this computer's chats read the switch, so a web client (always on a remote host) hides it.
+  const showSharedCodexServers =
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().sharedCodexServers])
   const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
@@ -236,7 +238,7 @@ export function ExperimentalPane({
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'auto.components.settings.ExperimentalPane.sharedCodexServers.copy',
-                    'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats started after you change it.'
+                    'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.'
                   )}
                 </p>
               </div>
