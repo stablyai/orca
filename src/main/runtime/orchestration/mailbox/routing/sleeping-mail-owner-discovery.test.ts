@@ -98,7 +98,7 @@ it.each([10, 100])(
         }
         expect(
           work.plans.some((detail) =>
-            /SEARCH messages USING (?:COVERING )?INDEX idx_messages_mail_wake_candidate \(to_handle=\?\)/.test(
+            /SEARCH messages (?:EXISTS )?USING (?:COVERING )?INDEX idx_messages_mail_wake_candidate \(to_handle=\?\)/.test(
               detail
             )
           )
