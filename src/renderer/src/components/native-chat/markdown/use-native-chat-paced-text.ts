@@ -27,6 +27,9 @@ const WORD_FADE_MS = 300
  *  its last words; one element per word across thousands of words would make each step slower. */
 const FADE_MAX_CHARS = 1500
 
+/** Reduced motion still steps on the clock, so slow replies back off, but each step shows all it has. */
+const REDUCED_MOTION_REVEAL_MS = 1
+
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly (one long document) leaves most of the thread to typing and scrolling. */
@@ -53,6 +56,7 @@ export function useNativeChatPacedText(
   root: React.RefObject<HTMLElement | null>
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
+  const revealMs = reducedMotion ? REDUCED_MOTION_REVEAL_MS : undefined
   const reveals = useContext(NativeChatReplyRevealsContext)
   const [initial] = useState<NativeChatTextReveal>(() =>
     startNativeChatTextReveal(
@@ -60,7 +64,8 @@ export function useNativeChatPacedText(
       streaming,
       reveals?.drawn.get(rowKey),
       reveals?.begun.has(rowKey) === true,
-      performance.now()
+      performance.now(),
+      revealMs
     )
   )
   const pace = useRef(initial)
@@ -117,18 +122,19 @@ export function useNativeChatPacedText(
       previous,
       text,
       streaming,
-      reducedMotion || caughtUp,
-      performance.now()
+      caughtUp,
+      performance.now(),
+      revealMs
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
     const plain = caughtUp || pace.current.savePaced === true
-    if (reducedMotion || plain || pace.current.shown >= text.length) {
+    if (plain || pace.current.shown >= text.length) {
       setShown(pace.current.shown, plain)
     }
     reveals?.drawn.set(rowKey, pace.current)
-  }, [text, streaming, reducedMotion, reveals, rowKey, setShown, heldTextSession])
+  }, [text, streaming, revealMs, reveals, rowKey, setShown, heldTextSession])
 
-  const behind = !reducedMotion && !savePaced && shown < text.length
+  const behind = !savePaced && shown < text.length
   useEffect(() => {
     if (!behind) {
       if (!streaming) {
@@ -152,9 +158,10 @@ export function useNativeChatPacedText(
           setShown(pace.current.shown, true)
         }
       },
-      frames
+      frames,
+      revealMs
     )
-  }, [behind, text, reveals, rowKey, streaming, setShown, frames])
+  }, [behind, text, reveals, rowKey, streaming, setShown, frames, revealMs])
   // Held-back text still shows once the reply has waited its longest step, even if no more arrives.
   useEffect(() => {
     const due = savePaced && streaming ? savePacedNativeChatTextDue(pace.current, text) : undefined
@@ -207,7 +214,7 @@ export function useNativeChatPacedText(
   const fading = !reducedMotion && (revealing || lingering)
   useEffect(() => (fading ? watchDocumentRange() : undefined), [fading])
   return {
-    text: reducedMotion ? text : text.slice(0, Math.min(shown, text.length)),
+    text: text.slice(0, Math.min(shown, text.length)),
     revealing,
     fading,
     fadeFrom: fading ? fadeFrom : undefined,

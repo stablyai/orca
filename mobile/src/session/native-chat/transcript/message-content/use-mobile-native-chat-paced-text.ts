@@ -20,6 +20,8 @@ import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-cha
 
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180
+/** Reduced motion still steps on the clock, so slow replies back off, but each step shows all it has. */
+const REDUCED_MOTION_REVEAL_MS = 1
 const STEP_MS = 1000 / 30
 /** A slow-drawing reply leaves most of the JS thread to scrolling and input. */
 const REVEAL_BUSY_SHARE = 1 / 10
@@ -36,7 +38,9 @@ export function useMobileNativeChatPacedText(
   const growth = useContext(MobileNativeChatGrowthHoldContext)
   const held = useSyncExternalStore(growth.subscribe, growth.held, growth.held)
   const list = paced ? (chat ?? undefined) : undefined
-  const immediate = list === undefined || list.reducedMotion
+  const immediate = list === undefined
+  const reducedMotion = list?.reducedMotion === true
+  const revealMs = reducedMotion ? REDUCED_MOTION_REVEAL_MS : REVEAL_MS
   const [frames] = useState(() => nativeChatRevealStepFrames(STEP_MS, REVEAL_BUSY_SHARE))
   const [initial] = useState(() =>
     startNativeChatTextReveal(
@@ -45,7 +49,7 @@ export function useMobileNativeChatPacedText(
       list?.drawn.get(rowKey),
       list?.begun.has(rowKey) === true,
       frames.now(),
-      REVEAL_MS
+      revealMs
     )
   )
   const pace = useRef(initial)
@@ -60,7 +64,7 @@ export function useMobileNativeChatPacedText(
       streaming,
       immediate,
       frames.now(),
-      REVEAL_MS
+      revealMs
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
     if (immediate || pace.current.savePaced || pace.current.shown >= text.length) {
@@ -68,7 +72,7 @@ export function useMobileNativeChatPacedText(
     }
     list?.drawn.set(rowKey, pace.current)
     list?.begun.delete(rowKey)
-  }, [text, streaming, immediate, list, rowKey, frames])
+  }, [text, streaming, immediate, list, rowKey, frames, revealMs])
 
   // A step's cost runs from the step to its commit.
   const stepStartedAt = useRef<number | null>(null)
@@ -96,9 +100,9 @@ export function useMobileNativeChatPacedText(
         renderRevealStep(() => setShown(next.shown))
       },
       frames,
-      REVEAL_MS
+      revealMs
     )
-  }, [behind, text, list, rowKey, streaming, held, frames])
+  }, [behind, text, list, rowKey, streaming, held, frames, revealMs])
   useLayoutEffect(() => {
     onScreen.current = shown
     if (stepStartedAt.current !== null) {
@@ -128,7 +132,7 @@ export function useMobileNativeChatPacedText(
           false,
           // A timer can fire a little early; at its deadline the held text is due.
           Math.max(frames.now(), due),
-          REVEAL_MS
+          revealMs
         )
         list?.drawn.set(rowKey, pace.current)
         setShown(pace.current.shown)
@@ -136,12 +140,12 @@ export function useMobileNativeChatPacedText(
       Math.max(0, Math.ceil(due - frames.now()))
     )
     return () => clearTimeout(timer)
-  }, [savePaced, streaming, text, list, rowKey, frames])
+  }, [savePaced, streaming, text, list, rowKey, frames, revealMs])
 
   return immediate
     ? { text, revealing: false }
     : {
         text: text.slice(0, Math.min(shown, text.length)),
-        revealing: !savePaced && (streaming || behind)
+        revealing: !reducedMotion && !savePaced && (streaming || behind)
       }
 }
