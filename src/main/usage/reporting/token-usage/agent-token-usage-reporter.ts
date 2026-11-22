@@ -141,21 +141,30 @@ export class AgentTokenUsageReporter {
   private async load(): Promise<{ state: State; fresh: boolean }> {
     const [current, legacy] = await Promise.all([
       readIfExists(this.file),
-      readIfExists(this.legacyFile)
+      // The older build's file is only a hint; an unreadable one must not stop reporting.
+      readIfExists(this.legacyFile).catch(() => null)
     ])
     const legacyBaselines = legacy ? this.parseLegacy(legacy.content) : null
-    const parsed = current ? stateSchema.safeParse(parseJson(current.content)) : null
+    const raw = current ? parseJson(current.content) : undefined
+    if (isNewerSchema(raw)) {
+      // A newer build owns this file; leave it intact and report nothing here.
+      throw new Error('Agent token usage state was written by a newer build')
+    }
+    const parsed = current ? stateSchema.safeParse(raw) : null
     if (parsed?.success) {
       const state = { baselines: new Map(parsed.data.baselines), days: parsed.data.days }
-      // An older build ran since our last save and already reported its growth.
+      // An older build ran since our last save and already reported up to its own totals.
       if (legacy && legacyBaselines && current && legacy.mtimeMs > current.mtimeMs) {
         for (const [id, counts] of legacyBaselines) {
-          state.baselines.set(id, maxCounts(state.baselines.get(id), counts))
+          state.baselines.set(id, counts)
         }
       }
       return { state, fresh: false }
     }
-    // Unreadable state restarts from today rather than stopping reports for good.
+    if (current) {
+      // Unreadable state restarts from this scan rather than stopping reports for good.
+      console.warn('[agent-token-usage] Unreadable token usage state; starting from this scan')
+    }
     if (current || !legacyBaselines) {
       return { state: { baselines: new Map(), days: [] }, fresh: true }
     }
@@ -191,8 +200,14 @@ function parseJson(content: string): unknown {
   }
 }
 
-function maxCounts(a: AgentTokenCounts | undefined, b: AgentTokenCounts): AgentTokenCounts {
-  return a ? countsOf(Object.fromEntries(COUNT_KEYS.map((k) => [k, Math.max(a[k], b[k])]))) : b
+function isNewerSchema(raw: unknown): boolean {
+  return (
+    raw !== null &&
+    typeof raw === 'object' &&
+    'schemaVersion' in raw &&
+    typeof raw.schemaVersion === 'number' &&
+    raw.schemaVersion > 2
+  )
 }
 
 function countsOf(source: Partial<AgentTokenCounts>): AgentTokenCounts {
