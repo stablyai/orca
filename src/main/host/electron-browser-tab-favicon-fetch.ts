@@ -17,9 +17,9 @@ async function resolvePublicDestination(
   if (isIP(hostname) !== 0) {
     return null
   }
-  // A proxy-only route resolves the name on its far side; a lookup here would leave by this host's network.
-  const routes = (await session.resolveProxy(url)).split(';')
-  if (!routes.some((route) => route.trim() === 'DIRECT')) {
+  // Proxy lists are ordered: a leading proxy resolves the name on its far side, so only a leading DIRECT is pinned here.
+  const [firstRoute] = (await session.resolveProxy(url)).split(';')
+  if (firstRoute.trim() !== 'DIRECT') {
     return null
   }
   const { endpoints } = await session.resolveHost(hostname)

@@ -36,32 +36,41 @@ export function fetchWithPinnedAddresses(
       target,
       { agent: false, lookup: pinnedLookup(endpoints), ...(signal ? { signal } : {}) },
       (response) => {
-        const headers = new Headers()
-        for (const [key, value] of Object.entries(response.headers)) {
-          if (value !== undefined) {
-            headers.set(key, Array.isArray(value) ? value.join(', ') : value)
-          }
-        }
-        const status = response.statusCode ?? 0
-        if (status >= 300 && status < 400) {
+        try {
+          resolve(toResponse(response, request))
+        } catch (error) {
           response.destroy()
-          resolve(new Response(null, { headers, status }))
-          return
+          request.destroy()
+          reject(error)
         }
-        const body = new ReadableStream<Uint8Array>({
-          start(controller) {
-            response.on('data', (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)))
-            response.on('end', () => controller.close())
-            response.on('error', (error) => controller.error(error))
-          },
-          cancel: () => {
-            response.destroy()
-            request.destroy()
-          }
-        })
-        resolve(new Response([204, 205, 304].includes(status) ? null : body, { headers, status }))
       }
     )
     request.on('error', reject)
   })
+}
+
+function toResponse(response: http.IncomingMessage, request: http.ClientRequest): Response {
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(response.headers)) {
+    if (value !== undefined) {
+      headers.set(key, Array.isArray(value) ? value.join(', ') : value)
+    }
+  }
+  const status = response.statusCode ?? 0
+  if (status >= 300 && status < 400) {
+    response.destroy()
+    return new Response(null, { headers, status })
+  }
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      response.on('data', (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)))
+      response.on('end', () => controller.close())
+      response.on('error', (error) => controller.error(error))
+    },
+    cancel: () => {
+      response.destroy()
+      request.destroy()
+    }
+  })
+  return new Response([204, 205, 304].includes(status) ? null : body, { headers, status })
 }
