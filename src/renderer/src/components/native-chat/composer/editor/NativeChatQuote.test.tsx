@@ -91,9 +91,9 @@ describe('quote chips in the composer', () => {
     })
     expect(input.value).toBe('> q\n\nhello')
     expect(editor.state.doc.childCount).toBe(1)
-    // The chip keeps its name; the comment is plain text after it.
+    // The chip keeps its spoken name and its shown text; the comment is plain text after it.
     await waitFor(() =>
-      expect(container.querySelector('.ProseMirror > p')?.textContent).toBe('Quote: qhello')
+      expect(container.querySelector('.ProseMirror > p')?.textContent).toBe('Quote: qqhello')
     )
     act(() => {
       editor.commands.setTextSelection(1)
