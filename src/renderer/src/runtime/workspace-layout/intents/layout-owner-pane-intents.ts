@@ -118,10 +118,3 @@ export function dropMovedTabSelection(intent: MovedTabSelection): void {
     movedTabSelections.delete(intent.tabId)
   }
 }
-
-export function _resetLayoutOwnerPaneIntentsForTests(): void {
-  closing.clear()
-  unfocused.clear()
-  rowFields.clear()
-  movedTabSelections.clear()
-}

@@ -159,14 +159,6 @@ async function wslHomeDirs(load: () => Promise<string[]>): Promise<string[]> {
   return inflightWslHomeDirs
 }
 
-export function resetHostReadableTranscriptPathCacheForTests(): void {
-  cachedWslHomeDirs = null
-  cachedWslHomeDirsExpiresAt = 0
-  inflightWslHomeDirs = null
-  getAdditionalCodexHomePaths = undefined
-  guestRealDirs.clear()
-}
-
 /** UNC twin of a guest path whose directory is a symlink (e.g. a Claude profile's `projects`). */
 async function guestSymlinkTarget(
   guestPath: string,

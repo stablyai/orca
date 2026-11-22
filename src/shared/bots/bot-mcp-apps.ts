@@ -3,6 +3,17 @@
 
 export type BotAppCategory = 'coding' | 'chat' | 'monitoring' | 'docs' | 'mail' | 'sales' | 'design'
 
+/** Add to <bot>'s category order; a category shows only while it lists an app. */
+export const BOT_APP_CATEGORIES: readonly BotAppCategory[] = [
+  'coding',
+  'chat',
+  'monitoring',
+  'docs',
+  'mail',
+  'sales',
+  'design'
+]
+
 export type BotMcpApp = {
   /** The tool's name on the bot. */
   id: string

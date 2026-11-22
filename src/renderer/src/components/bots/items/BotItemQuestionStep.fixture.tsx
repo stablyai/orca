@@ -34,7 +34,9 @@ function Reopened({ held }: { held: string }): React.JSX.Element {
     current: 0,
     lines: [0, 1],
     go: () => {},
-    answer: () => {}
+    answer: () => {},
+    heldCount: 1,
+    sendHeld: () => {}
   }
   return (
     <div className="bg-card px-4 py-3">

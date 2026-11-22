@@ -1,4 +1,4 @@
-import { useContext, type RefObject } from 'react'
+import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
   ALargeSmall,
@@ -17,7 +17,6 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { mobileWorktreeForkAction } from './native-chat/history/mobile-native-chat-worktree-fork-action'
-import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
@@ -60,7 +59,6 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     undefined,
     'subagent'
   )
-  const botActions = useContext(MobileSessionBotActionsContext)
   const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
@@ -183,7 +181,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     <PullDownMenu
       visible={showHeaderMoreActions}
       anchorRef={anchorRef}
-      groups={botActions.length > 0 ? [botActions, panels, view, tabs] : [panels, view, tabs]}
+      groups={[panels, view, tabs]}
       onClose={() => setShowHeaderMoreActions(false)}
     />
   )

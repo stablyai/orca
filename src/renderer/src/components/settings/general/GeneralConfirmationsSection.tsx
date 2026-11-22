@@ -47,6 +47,11 @@ export function GeneralConfirmationsSection({
         updateSettings({ skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm })
     },
     {
+      ...entries.chat,
+      checked: !settings.skipDeleteChatConfirm,
+      onChange: () => updateSettings({ skipDeleteChatConfirm: !settings.skipDeleteChatConfirm })
+    },
+    {
       ...entries.artifact,
       checked: !settings.skipDeleteArtifactConfirm,
       onChange: () =>

@@ -19,7 +19,6 @@
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
 2 src/main/antigravity/native-credential-backend.ts
@@ -529,7 +528,7 @@
 1 src/main/windows/windows-process-table.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
 3 src/main/worker-threads/worker-large-send-log.ts
-4 src/main/workspace-hooks/hooks.ts
+3 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts
 2 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
