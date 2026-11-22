@@ -327,13 +327,14 @@ export function edgeMoveOwnControlAsk(
   )
 }
 
-// Whether this ask may also move a host past unleased counters on a reserve-mode cell
-// (moveOwnControl 'drain-stale'): the same asks as edgeMoveOwnControlAsk.
+// Whether this ask may also move a host past stale counters on a reserve-mode cell (moveOwnControl
+// 'drain-stale'): any ask but a region correction. Unlike taking a live own control, a stale move
+// cuts nothing live, so it need not wait for a reconnect ask; older desktops never send one.
 export function edgeMoveStaleUnitsAsk(
   flags: EdgeControlFlags,
   ask: { reconnect?: boolean; regionCorrection?: unknown }
 ): boolean {
-  return flags.moveOwnControl === 'drain-stale' && edgeMoveOwnControlAsk(flags, ask)
+  return flags.moveOwnControl === 'drain-stale' && ask.regionCorrection === undefined
 }
 
 // Effective rollout for hosts asking for `region`: its regional value, else the global rollout
