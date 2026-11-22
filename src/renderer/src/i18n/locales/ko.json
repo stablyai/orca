@@ -4244,7 +4244,7 @@
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "디스크 공간 분석기",
             "ae20d0ffc2": "닫기",
-            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 왼쪽 아래 도구 상자 메뉴에서 디스크 공간 분석기를 선택해 열 수도 있습니다."
+            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 왼쪽 아래 도구 상자 메뉴에서 저장 공간을 선택해 열 수도 있습니다."
           },
           "zcode": {
             "missing": {
@@ -26953,10 +26953,10 @@
       "access": "접근 권한을 요청했습니다",
       "review": "검토",
       "openHome": "{{name}}의 Home 열기",
-      "needsYouHeading_other": "{{count}}건에 대응이 필요합니다",
+      "needsYouHeading_other": "확인 필요 {{count}}개",
       "moreAsks_other": "요청 {{count}}건 더 있음",
       "itemsNeedYou_other": "사용자님을 위해 표시한 항목 {{count}}개",
-      "needsYouHeading_one": "1건에 대응이 필요합니다",
+      "needsYouHeading_one": "확인 필요 1개",
       "moreAsks_one": "+{{count}}건의 추가 요청",
       "itemsNeedYou_one": "사용자님을 위해 표시한 항목 {{count}}개"
     },
