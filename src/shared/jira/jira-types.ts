@@ -129,6 +129,10 @@ export type JiraIssue = {
   createdAt: string
 }
 
+export type JiraSelectedIssueFields = Pick<JiraIssue, 'key' | 'url' | 'siteId'> & {
+  fields: Record<string, unknown>
+}
+
 export type JiraComment = {
   id: string
   body: string

@@ -50,7 +50,7 @@ export function getMatchingJiraSites(
 export function isResolvedJiraIssueMatch(
   parsed: ParsedJiraIssueUrl,
   site: JiraSite,
-  issue: JiraIssue
+  issue: Pick<JiraIssue, 'key' | 'url' | 'siteId'>
 ): boolean {
   const canonical = parseJiraIssueUrl(issue.url)
   return (

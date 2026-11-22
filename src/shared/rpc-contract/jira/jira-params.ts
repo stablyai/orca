@@ -52,6 +52,12 @@ export const IssueKey = z.object({
   mediaFormat: z.literal('reference').optional()
 })
 
+export const SelectedIssueFields = z.object({
+  key: requiredString('Issue key is required'),
+  siteId: requiredString('Site ID is required'),
+  fields: z.array(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/)).min(1)
+})
+
 export const AttachmentImage = z.object({
   reference: z.string().uuid(),
   transferId: z.string().uuid()
