@@ -30,7 +30,7 @@ const BOT: Bot = {
 
 vi.mock('./use-bot-items', () => ({
   useBotChatItems: () => ({ read: null, failed: false, retry: vi.fn(), readMore: vi.fn() }),
-  readMoreBotItems: vi.fn(),
+  readMoreBotItems: vi.fn()
 }))
 vi.mock('../AddConnectorDialog', () => ({ manageConnectors: vi.fn() }))
 vi.mock('../bot-automation-open', () => ({ openBotAutomation: vi.fn() }))
@@ -101,7 +101,9 @@ function Section({
 }
 
 it('lists Orca’s asks while items load and after', () => {
-  const { rerender } = render(<Section read={null} state="loading" asks={SIGN_IN} />, { wrapper: TooltipProvider })
+  const { rerender } = render(<Section read={null} state="loading" asks={SIGN_IN} />, {
+    wrapper: TooltipProvider
+  })
 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
   const loading = screen.getByRole('status')

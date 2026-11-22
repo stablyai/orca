@@ -148,12 +148,11 @@ export function MobileBotPanel(props: {
     workers: props.routeBot.activity?.workers,
     items: items.read?.items,
     // A first read that failed counts no items, as nothing was read; the bot list's count stands in until one lands.
-    itemCount:
-      items.read
-        ? botItemsNeedingOwner(items.read.items, staleDays, now)
-        : items.error !== null
-          ? 0
-          : props.listNeedsYou
+    itemCount: items.read
+      ? botItemsNeedingOwner(items.read.items, staleDays, now)
+      : items.error !== null
+        ? 0
+        : props.listNeedsYou
   })
 
   const seenAtOpen = useBotItemsSeenAtOpen(visible, items.read, props.client, bot.id)

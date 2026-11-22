@@ -185,11 +185,7 @@ export function MobileBotItemsTab({
   } else if (shown.length === 0) {
     body = (
       <MobileNoMatchState
-        message={
-          filter.needsYou
-            ? t('bots.items.empty.needsYou', 'Nothing needs you.')
-            : t('bots.items.empty.filtered', 'No items match.')
-        }
+        message={t('bots.items.empty.needsYou', 'Nothing needs you.')}
         onClear={onClearFilter}
         clearLabel={t('bots.items.filter.clear', 'Clear filter')}
       />

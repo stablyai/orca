@@ -26,8 +26,6 @@ export type PhoneAsk = {
   number: number | null
   /** The tool an approval asks to run, when its chat's or worker's status says. */
   tool: { name: string; input: string | null } | null
-  /** The chat it belongs to, for the chat filter; null for an access request, which is no chat's. */
-  chatId: string | null
   /** What a tap opens; null when the phone can't reach it. */
   open:
     | { chat: BotChatTreeChat }
@@ -62,7 +60,6 @@ export function phoneNeedsYouAsks(
         worker: null,
         number: null,
         tool: approval ? { name: approval.tool, input: approval.input ?? null } : null,
-        chatId: chat.chatId,
         open: { chat }
       })
     }
@@ -79,7 +76,6 @@ export function phoneNeedsYouAsks(
         worker: item ? worker.title : null,
         number: item?.number ?? null,
         tool: seen?.tool ?? null,
-        chatId: chat.chatId,
         // A handed agent with no Dispatch opens only where the tree placed it.
         open: worker.dispatchId || worker.worktreeId ? { worker } : null
       })
@@ -93,7 +89,6 @@ export function phoneNeedsYouAsks(
       worker: null,
       number: null,
       tool: null,
-      chatId: null,
       open: { access: request }
     })
   }
