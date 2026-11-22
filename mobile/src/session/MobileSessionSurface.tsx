@@ -7,7 +7,6 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
-import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
 import { MobileTerminalFileTapSheet } from './MobileTerminalFileTapSheet'
 import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
 import { BotChatOpenContext, BotItemOpenContext } from '../bots/bot-item-open'
@@ -84,9 +83,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        <MobileSessionBotActionsContext.Provider value={controller.botMoreActions}>
-          <MobileSessionHeader controller={controller} details={details} />
-        </MobileSessionBotActionsContext.Provider>
+        <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
         {/* A chat's item chips open the item's page in the bot panel. */}
         <BotItemOpenContext.Provider value={openItem}>

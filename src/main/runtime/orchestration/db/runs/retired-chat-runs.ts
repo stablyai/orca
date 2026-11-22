@@ -18,8 +18,8 @@ export function retireCoordinatorChatRuns(db: OrchestrationDb, sessionId: string
   })
 }
 
-/** A bot's replaced Chat; the new Chat stands even when its old one's Runs can't be retired. */
-export function retireReplacedChat(
+/** A replaced or deleted chat; the replacement or delete stands even when its Runs can't be retired. */
+export function retireChatRuns(
   runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>,
   sessionId: string | null | undefined
 ): void {
@@ -29,6 +29,6 @@ export function retireReplacedChat(
   try {
     retireCoordinatorChatRuns(runtime.getOrchestrationDb(), sessionId)
   } catch (error) {
-    console.warn('[bots] could not retire a replaced Chat from its Runs', error)
+    console.warn('[orchestration] could not retire a closed chat from its Runs', error)
   }
 }

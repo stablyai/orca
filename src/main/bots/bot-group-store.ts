@@ -25,7 +25,7 @@ export class BotGroupStore {
   /** False when this open couldn't index older posts' questions, so their mail must wait. */
   readonly remoteAsksIndexed: boolean
 
-  constructor(private readonly db: Database) {
+  constructor(readonly db: Database) {
     this.remoteAsksIndexed = createBotGroupTables(db)
   }
 

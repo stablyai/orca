@@ -45,6 +45,8 @@ export function useMobileNativeChatComposerMenu(input: {
   /** Set in a room: `@` lists these members instead of files. */
   roomMentions?: readonly ComposerRoomMention[]
   onNeedFiles?: (query: string) => void
+  /** How a picked file is written when the chat runs in a workspace sub-folder. */
+  fileReference?: (path: string) => string | undefined
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void
   /** The `/` menu opened; the session's list may have changed since it was read. */
@@ -235,7 +237,7 @@ export function useMobileNativeChatComposerMenu(input: {
     if (row.kind === 'file' || row.kind === 'member') {
       const next =
         row.kind === 'file'
-          ? applyMentionSuggestion(value, cursor, row.path)
+          ? applyMentionSuggestion(value, cursor, row.path, input.fileReference?.(row.path))
           : applyMentionSuggestion(value, cursor, row.name, `@${row.name}`)
       setDraft(next.draft)
       placeCaret(next.caret)
