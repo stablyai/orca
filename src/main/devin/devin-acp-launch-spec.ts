@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { DEVIN_ACP_DIALECT } from '../acp/acp-dialects/devin-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverDevinInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -45,6 +46,9 @@ export const DEVIN_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   // Session discovery deletes its listing session.
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  botToolsOff: "Devin doesn't load the tools Orca passes to its chats",
+  instructions: deliverDevinInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   transcriptImport: null,
   sessionHistory: DEVIN_SESSION_HISTORY
