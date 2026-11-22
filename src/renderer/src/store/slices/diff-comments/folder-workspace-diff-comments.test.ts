@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import {
+  applyDiffCommentWrite,
+  type DiffCommentBaseMutation
+} from '../../../../../shared/file-review/diff-comment-mutation'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
@@ -170,6 +174,10 @@ describe('folder workspace diff comments', () => {
         side: 'modified'
       })
       await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledOnce())
+      expect(folderWorkspacesUpdate.mock.calls[0][0].updates).toEqual({
+        diffComments: [expect.objectContaining({ body: 'local note' })],
+        diffCommentsBase: []
+      })
 
       store.setState({ activeWorkspaceExecutionHostId: 'runtime:env-owner' })
       const runtimeAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
@@ -187,7 +195,8 @@ describe('folder workspace diff comments', () => {
             method: 'folderWorkspace.update',
             params: expect.objectContaining({
               updates: {
-                diffComments: [expect.objectContaining({ body: 'runtime note' })]
+                diffComments: [expect.objectContaining({ body: 'runtime note' })],
+                diffCommentsBase: []
               }
             })
           })
@@ -257,6 +266,32 @@ describe('folder workspace diff comment rollback convergence', () => {
 
     await Promise.all([addA, addE])
     expect(bodies(store, key)).toEqual(['hydrated'])
+  })
+
+  it('replaces the whole list after a failed save that still landed', async () => {
+    const store = createTestStore()
+    const folderWorkspace = seedLocalFolderWorkspace(store)
+    const key = folderWorkspaceKey(folderWorkspace.id)
+    let held: DiffComment[] = []
+    const save = (updates: Partial<FolderWorkspace> & DiffCommentBaseMutation): FolderWorkspace => {
+      held = applyDiffCommentWrite(held, updates) ?? held
+      return { ...folderWorkspace, diffComments: held }
+    }
+    folderWorkspacesUpdate.mockImplementation(async ({ updates }) => save(updates))
+    const owner = capturedOwner(store, key)
+    const kept = await addNote(store, key, 'kept', 1)
+    const deleted = await addNote(store, key, 'deleted', 2)
+    folderWorkspacesUpdate.mockImplementationOnce(async ({ updates }) => {
+      save(updates)
+      throw new Error('timed out')
+    })
+    await store.getState().deleteDiffComment(owner, deleted!.id)
+    expect(bodies(store, key)).toEqual(['kept', 'deleted'])
+
+    expect(await store.getState().updateDiffComment(owner, kept!.id, 'edited')).toBe(true)
+
+    // Why: the host must end up holding what this copy shows, not the stale floor's merge.
+    expect(held.map((note) => note.body)).toEqual(['edited', 'deleted'])
   })
 })
 

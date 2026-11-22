@@ -1,16 +1,13 @@
 // Item changes in a bot chat: the desktop's quiet line (its words from the shared note lines), with the
 // phone's wrap: several items list one chip per line, a long lead on its own line above them. Chips open
 // the item where the screen can open one; the owner's comment is their own message under the item's chip.
-import { createContext, useContext, useState } from 'react'
+import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ListTodo, MessageSquare } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../../../../../../src/shared/native-chat/native-chat-orca-card'
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
-import {
-  isBotItemMail,
-  type BotItemNoteJoin
-} from '../../../../../../src/shared/bots/bot-item-note-runs'
+import { isBotItemMail } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import type {
   BotItemNoteItem,
   BotItemNoteView
@@ -31,6 +28,10 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { Prose } from '../message-content/MobileNativeChatProse'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
+import {
+  MobileNativeChatActivityJoinContext,
+  mobileNativeChatActivityJoinMargins
+} from './mobile-native-chat-activity-join'
 import { scaledType, styles as messageStyles } from './mobile-native-chat-message-styles'
 
 /** Chips a bulk line shows before "+N more", as on the desktop. */
@@ -118,7 +119,7 @@ function ChatChip({
   )
 }
 
-/** The words before the items' chips: the lead, and the acting chat's chip with its words. */
+/** The words before the items' chips: the lead, the acting chat's chip with its words, and a linked worker. */
 function Lead({
   line,
   type,
@@ -128,12 +129,14 @@ function Lead({
   type: ReturnType<typeof scaledType>
   fontScale: number
 }): React.JSX.Element {
-  const { lead, chat } = line
+  const { chat } = line
+  const before = chat ? chat.after : line.lead
+  const words = [before, line.link?.name, line.link?.after].filter(Boolean).join(' ')
   return (
     <>
-      {lead ? <Text style={[styles.text, type]}>{lead}</Text> : null}
+      {chat && line.lead ? <Text style={[styles.text, type]}>{line.lead}</Text> : null}
       {chat ? <ChatChip chat={chat} fontScale={fontScale} /> : null}
-      {chat?.after ? <Text style={[styles.text, type]}>{chat.after}</Text> : null}
+      {words ? <Text style={[styles.text, type]}>{words}</Text> : null}
     </>
   )
 }
@@ -143,8 +146,12 @@ function lineEnd(line: BotItemNoteLine & { kind: 'line' }): string {
   return [line.tail, line.detail].filter(Boolean).join(': ')
 }
 
-function leadLength({ lead, chat }: BotItemNoteLine & { kind: 'line' }): number {
-  return lead.length + (chat ? chat.name.length + chat.after.length + 2 : 0)
+function leadLength({ lead, chat, link }: BotItemNoteLine & { kind: 'line' }): number {
+  return (
+    lead.length +
+    (chat ? chat.name.length + chat.after.length + 2 : 0) +
+    (link ? link.name.length + link.after.length + 2 : 0)
+  )
 }
 
 function QuietLine({
@@ -174,11 +181,7 @@ function QuietLine({
       <View style={styles.line}>
         {icon}
         <View style={styles.flow}>
-          {line.chat ? (
-            <Lead line={line} type={type} fontScale={fontScale} />
-          ) : line.lead ? (
-            <Text style={[styles.text, type]}>{line.lead}</Text>
-          ) : null}
+          <Lead line={line} type={type} fontScale={fontScale} />
           <View style={styles.flowChip}>
             <ItemChip item={line.items[0]!} fontScale={fontScale} open={open} />
             {glued ? <Text style={[styles.text, styles.lead, type]}>{glued}</Text> : null}
@@ -192,7 +195,7 @@ function QuietLine({
     <View style={styles.line}>
       {icon}
       <View style={leadLength(line) > LEAD_BESIDE_CHIPS_MAX ? styles.stacked : styles.beside}>
-        {line.chat ? (
+        {line.chat || line.link ? (
           <View style={styles.flow}>
             <Lead line={line} type={type} fontScale={fontScale} />
           </View>
@@ -224,10 +227,12 @@ function QuietLine({
 
 function CommentLine({
   line,
-  fontScale
+  fontScale,
+  belowAnother
 }: {
   line: BotItemNoteLine & { kind: 'comment' }
   fontScale: number
+  belowAnother: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -235,7 +240,8 @@ function CommentLine({
   // The comment's images go with its mail, so the [Image #N] its send wrote go, as on desktop.
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    <View style={[messageStyles.userBubble, styles.comment]}>
+    // A message, so a row gap below what the note drew above it, not the lines' 2 pt.
+    <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
       <View style={styles.commentOn}>
         <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
         <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
@@ -252,11 +258,6 @@ function noteLines(note: BotItemNoteView, t: Translate): BotItemNoteLine[] {
   return note.run ? [botItemNoteRunLine(note.run, t)] : botItemNoteLines(note, t)
 }
 
-/** The sides where a row's item note touches another, set where rows are laid out. */
-export const MobileNativeChatItemNoteJoinContext = createContext<BotItemNoteJoin | undefined>(
-  undefined
-)
-
 export function MobileNativeChatBotItemNoteRow({
   note,
   rowId,
@@ -267,17 +268,18 @@ export function MobileNativeChatBotItemNoteRow({
   fontScale: number
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  // 1 + 1 pt where two touch, so their lines sit 2 pt apart, as inside one note.
-  const join = useContext(MobileNativeChatItemNoteJoinContext)
-  const edges = {
-    ...(join === 'above' || join === 'both' ? { paddingTop: spacing.xxs / 2 } : {}),
-    ...(join === 'below' || join === 'both' ? { paddingBottom: spacing.xxs / 2 } : {})
-  }
+  const join = useContext(MobileNativeChatActivityJoinContext)
+  const edges = mobileNativeChatActivityJoinMargins(join, spacing.xs)
   return (
     <View style={[styles.row, edges]} testID={mobileNativeChatRowId(rowId)}>
-      {noteLines(note, t).map((line) =>
+      {noteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
-          <CommentLine key={`comment:${line.item.uid}`} line={line} fontScale={fontScale} />
+          <CommentLine
+            key={`comment:${line.item.uid}`}
+            line={line}
+            fontScale={fontScale}
+            belowAnother={index > 0}
+          />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} fontScale={fontScale} />
         )
@@ -382,6 +384,8 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-end',
     gap: spacing.xs
   },
+  // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
+  belowAnother: { marginTop: spacing.md - spacing.xxs },
   commentOn: {
     flexDirection: 'row',
     alignItems: 'center',

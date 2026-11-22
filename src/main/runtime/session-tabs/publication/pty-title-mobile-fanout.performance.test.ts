@@ -87,6 +87,7 @@ describe('PTY title fanout to mobile session snapshots', () => {
     })
     runtime.mobileSessionTabsByWorktree.set(WORKTREE_ID, terminalSnapshot(WORKTREE_ID, PTY_ID))
 
+    runtime.onMobileSessionTabsChanged(() => {})
     let fleetTabReads = 0
     let fleetSize = 0
     let title = 0
@@ -103,6 +104,7 @@ describe('PTY title fanout to mobile session snapshots', () => {
       const at = T0 + ++title * 1_000
       vi.setSystemTime(at)
       runtime.onPtyData(PTY_ID, `\x1b]0;Task ${title}\x07`, at)
+      vi.advanceTimersByTime(1_000)
 
       expect({
         fleetTabReads,

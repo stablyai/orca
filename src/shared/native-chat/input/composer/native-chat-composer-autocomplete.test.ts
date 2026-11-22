@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyMentionSuggestion,
   deriveComposerAutocomplete,
   isSkillPickerTriggered
 } from './native-chat-composer-autocomplete'
+import { botGroupMentions } from '../../../bots/bot-group-mentions'
+import { nativeChatRoomNameMatches } from '../native-chat-room-mentions'
 import type { SlashCommandSuggestion } from '../commands/native-chat-slash-commands'
 
 import type { DiscoveredSkill } from '../../../skills/discovery/skills'
@@ -164,5 +167,140 @@ describe('command aliases', () => {
   it('ranks an agent command named like the alias ahead of the aliased row', () => {
     const withSession = [...commands, { name: 'session', description: '会话信息' }]
     expect(tokens(withSession, 'sess')).toEqual(['/session', '/resume'])
+  })
+})
+
+describe('room @ queries with spaces', () => {
+  const members = [
+    { name: 'Eng - Neil' },
+    { name: 'Atlas-Map' },
+    { name: 'Eng - Perf' },
+    { name: 'Marketing - X-Manager', unavailable: 'Paused' }
+  ]
+  const names = (query: string) => nativeChatRoomNameMatches(members, query)
+  const derive = (draft: string) =>
+    deriveComposerAutocomplete(
+      draft,
+      draft.length,
+      COMMANDS,
+      [],
+      null,
+      undefined,
+      null,
+      undefined,
+      undefined,
+      names
+    )
+
+  it('keeps the menu open across a space while a pickable name matches', () => {
+    expect(derive('ask @eng n')).toEqual({ mode: 'mention', query: 'eng n', triggerKey: '@:4' })
+  })
+
+  it('keeps unfinished multi-word queries open and lets a completed name send', () => {
+    expect(derive('ping @eng n ').mode).toBe('mention')
+    expect(derive('ping @eng - neil ').mode).toBe('none')
+    expect(derive('ping @eng ')).toEqual({ mode: 'mention', query: 'eng ', triggerKey: '@:5' })
+  })
+
+  it('keeps a group pick available until the draft names the intended member', () => {
+    const member = { id: 'atlas', name: 'Atlas-Map' }
+    const draft = 'Please check @atlas map '
+    expect(derive(draft).mode).toBe('mention')
+    const picked = applyMentionSuggestion(draft, draft.length, member.name, '@Atlas-Map', names)
+    expect(picked.draft).toBe('Please check @Atlas-Map ')
+    expect(botGroupMentions(picked.draft, [member], [member.id])[0]?.ids).toEqual(['atlas'])
+    expect(derive(picked.draft).mode).toBe('none')
+  })
+
+  it('stays closed once the words stop matching a name, or match only a paused bot', () => {
+    expect(derive('@neil please').mode).toBe('none')
+    expect(derive('@marketing x').mode).toBe('none')
+    expect(derive('notify @eng - neil please').mode).toBe('none')
+  })
+
+  it('hands a new command or skill token to its own menu when the agent has one', () => {
+    const withProfile = (draft: string, agent: 'claude' | 'codex') =>
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [skill({ name: 'typescript' })],
+        getNativeChatAgentProfile(agent),
+        undefined,
+        null,
+        undefined,
+        undefined,
+        names
+      )
+    expect(withProfile('ask @eng /', 'claude')).toMatchObject({ mode: 'slash', prefix: '/' })
+    expect(withProfile('ask @eng $', 'codex')).toMatchObject({ mode: 'slash', prefix: '$' })
+  })
+
+  it('closes autocomplete when that command menu is dismissed, without reopening the mention', () => {
+    // The spaced name still matches, so without the dismissal the mention list would return.
+    const draft = 'ask @eng /'
+    const open = deriveComposerAutocomplete(
+      draft,
+      draft.length,
+      COMMANDS,
+      [],
+      getNativeChatAgentProfile('claude'),
+      undefined,
+      null,
+      undefined,
+      undefined,
+      names
+    )
+    expect(open).toMatchObject({ mode: 'slash', prefix: '/' })
+    const dismissed = open.mode === 'slash' ? open.triggerKey : ''
+    expect(
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [],
+        getNativeChatAgentProfile('claude'),
+        undefined,
+        dismissed,
+        undefined,
+        undefined,
+        names
+      )
+    ).toEqual({ mode: 'none' })
+  })
+
+  it('keeps a `/` or `$` word in a name when no menu takes it', () => {
+    const costs = [{ name: 'Costs $ team' }]
+    const draft = 'ask @costs $'
+    expect(
+      deriveComposerAutocomplete(
+        draft,
+        draft.length,
+        COMMANDS,
+        [],
+        null,
+        undefined,
+        null,
+        undefined,
+        undefined,
+        (query) => nativeChatRoomNameMatches(costs, query)
+      )
+    ).toEqual({ mode: 'mention', query: 'costs $', triggerKey: '@:4' })
+  })
+
+  it('needs whitespace before the @ and a word after it', () => {
+    expect(derive('a@eng - n').mode).toBe('none')
+    expect(derive('@- x').mode).toBe('none')
+  })
+
+  it('stops at a space outside a room', () => {
+    expect(deriveComposerAutocomplete('ask @eng n', 10, COMMANDS).mode).toBe('none')
+  })
+
+  it('replaces the whole spaced query when a bot is picked', () => {
+    expect(applyMentionSuggestion('ask @eng n', 10, 'Eng - Neil', '@Eng - Neil', names)).toEqual({
+      draft: 'ask @Eng - Neil ',
+      caret: 16
+    })
   })
 })

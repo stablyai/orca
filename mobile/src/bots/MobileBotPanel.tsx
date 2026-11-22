@@ -2,17 +2,15 @@
 // Tabs Items · Chats · Files, Items first; the gear pushes the bot's settings and an item opens as a page
 // with its comment box docked. Its own toast sits over the sheet, just above the home indicator, or just
 // above the comment box on an item's page. (An older host keeps MobileBotSheet.)
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
-  botItemChats,
   botItemStaleDays,
   botItemsNeedingOwner,
   type BotItemFilter
 } from '../../../src/shared/bots/bot-item-groups'
 import { usePhoneNeedsYouAsks } from './items/phone-needs-you-asks'
-import { phoneBotItemFilterLabel } from './items/phone-bot-item-filter-label'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
@@ -122,18 +120,11 @@ export function MobileBotPanel(props: {
   const items = usePhoneBotItems({
     client: props.client,
     botId: bot.id,
-    chatIds: filter.chatIds,
+    chatIds: null,
     showing: visible,
     reads: props.routeBot.itemReads
   })
   const walk = usePhoneBotItemWalk({ items, pager, showToast, opened: props.open })
-  const allItems = usePhoneBotItems({
-    client: props.client,
-    botId: bot.id,
-    chatIds: null,
-    showing: visible && filter.chatIds !== null,
-    reads: props.routeBot.itemReads
-  })
   const selectedItems = [...(items.read?.items ?? []), ...items.items].filter((item) =>
     selected.has(item.uid)
   )
@@ -150,20 +141,18 @@ export function MobileBotPanel(props: {
     reads: props.routeBot.reads
   })
   const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
-  const { shown: asks, count: needsYou } = usePhoneNeedsYouAsks({
+  const { asks, count: needsYou } = usePhoneNeedsYouAsks({
     client: visible ? props.client : null,
     access: props.accessRequests,
     chats: tree.kind === 'tree' ? tree.chats : null,
     workers: props.routeBot.activity?.workers,
-    items: (filter.chatIds === null ? items.read : allItems.read)?.items,
-    filter,
+    items: items.read?.items,
     // A first read that failed counts no items, as nothing was read; the bot list's count stands in until one lands.
-    itemCount:
-      items.read && filter.chatIds === null
-        ? botItemsNeedingOwner(items.read.items, staleDays, now)
-        : items.error !== null && !items.read
-          ? 0
-          : props.listNeedsYou
+    itemCount: items.read
+      ? botItemsNeedingOwner(items.read.items, staleDays, now)
+      : items.error !== null
+        ? 0
+        : props.listNeedsYou
   })
 
   const seenAtOpen = useBotItemsSeenAtOpen(visible, items.read, props.client, bot.id)
@@ -187,15 +176,7 @@ export function MobileBotPanel(props: {
     return ok
   }
 
-  const chats = useMemo(
-    () =>
-      botItemChats(
-        (allItems.read ?? items.read)?.items ?? [],
-        tree.kind === 'tree' ? tree.chats : []
-      ),
-    [allItems.read, items.read, tree]
-  )
-  const filterLabel = phoneBotItemFilterLabel(filter, chats, t)
+  const filterLabel = filter.needsYou ? t('bots.items.filter.needsYou', 'Needs you only') : null
 
   const openWorker = (worker: BotChatTreeWorker) =>
     openBotItemWorker(worker, {
@@ -357,6 +338,7 @@ export function MobileBotPanel(props: {
         {...shownItem}
         client={props.client}
         hostKey={props.hostKey}
+        hostId={props.hostId}
         bot={bot}
         showToast={showToast}
         reads={props.routeBot.itemReads}
@@ -401,7 +383,6 @@ export function MobileBotPanel(props: {
       <MobileBotItemsFilterSheet
         visible={filtering}
         onClose={() => setFiltering(false)}
-        chats={chats}
         filter={filter}
         onFilter={changeFilter}
       />

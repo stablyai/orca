@@ -263,7 +263,7 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         expandedTurnKeys: new Set(),
         liveReasoningId: undefined,
         turnDiffs
-      }).itemNoteJoins
+      }).activityJoins
       return null
     }
     // The turn-diff map has an entry for every turn's last row, undefined when nothing changed.

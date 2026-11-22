@@ -311,6 +311,7 @@ export function MobileBotGroupItems({
       <MobileBotItemPage
         client={client}
         hostKey={hostBotsKey(hostId)}
+        hostId={hostId}
         bot={itemBot}
         uid={itemUid}
         stepper={null}

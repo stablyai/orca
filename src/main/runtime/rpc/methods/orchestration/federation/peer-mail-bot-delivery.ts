@@ -75,13 +75,14 @@ export async function deliverPeerMailToBot(
         sender,
         routing: { run: undefined },
         messageId: params.messageId,
-        senderSnapshot
+        senderSnapshot,
+        // Its reply and any notice go back over this conversation, linked before the bot is woken.
+        onAdmitted: link
       }
     )
     if (!('receipt' in routed)) {
       return routed
     }
-    // Its reply and any notice go back over this conversation.
     link()
     return 'delivered'
   } finally {

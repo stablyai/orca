@@ -19,7 +19,6 @@ import {
   RANGER_THREAD,
   sessionsOf,
   setupBotMail,
-  startBotSession,
   withChat
 } from './bot-recipient.test-fixture'
 
@@ -46,8 +45,6 @@ vi.mock('./recipient-routing', async (importOriginal) =>
 )
 
 const THREE_CHAT = '88888888-8888-4888-8888-888888888881'
-const THREE_REQUEST = '88888888-8888-4888-8888-888888888882'
-const THREE_REQUEST_2 = '88888888-8888-4888-8888-888888888885'
 const FOUR_CHAT = '88888888-8888-4888-8888-888888888883'
 const DANA = { id: 'U_DANA', name: 'Dana', source: 'slack' as const, workspaceId: 'T1' }
 
@@ -92,7 +89,7 @@ describe('a bot request chain', () => {
       makeTestBot({ id: 'three', name: 'Three', members: [DANA] }),
       makeTestBot({ id: 'four', name: 'Four' })
     )
-    sessionsOf.three = [THREE_CHAT, THREE_REQUEST, THREE_REQUEST_2]
+    sessionsOf.three = [THREE_CHAT]
     sessionsOf.four = [FOUR_CHAT]
     withChat.mockImplementation((botId: string, work: (sessionId: string) => unknown) =>
       work(sessionsOf[botId]![0]!)
@@ -111,20 +108,23 @@ describe('a bot request chain', () => {
     it(`carries the teammate the chain started for along every hop (${type}, 3 hops)`, async () => {
       // Dana may ask Docs and Three, not Ranger.
       journals[DOCS_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
-      startBotSession.mockResolvedValueOnce(THREE_REQUEST)
       const toThree = await sent(DOCS_THREAD, {
         to: 'bot:Three',
         type,
         payload: JSON.stringify({ botRequest: { for: 'your owner', depth: 0 } })
       })
-      expect(sessionOf(toThree)).toBe(THREE_REQUEST)
+      // A teammate's request lands in Three's Home Chat; its record still says who asked.
+      expect(sessionOf(toThree)).toBe(THREE_CHAT)
       expect(record(toThree)).toMatchObject({ depth: 1, askers: [{ userId: 'U_DANA' }] })
-      wake(THREE_REQUEST, toThree.message.id)
-      // Even from a conversation Orca recorded for the owner, the request's person goes on with it.
-      db.recordBotConversationActsFor(THREE_REQUEST, { actsFor: [{ kind: 'owner' }] })
+      wake(THREE_CHAT, toThree.message.id)
+      // From the owner's Home Chat, the request's person goes on with it beside the owner.
+      db.recordBotConversationActsFor(THREE_CHAT, { actsFor: [{ kind: 'owner' }] })
       for (const onward of ['question', 'handoff', 'status']) {
-        const toRanger = await sent(THREE_REQUEST, { to: 'bot:Ranger', type: onward })
-        expect(record(toRanger)).toMatchObject({ depth: 2, askers: [{ userId: 'U_DANA' }] })
+        const toRanger = await sent(THREE_CHAT, { to: 'bot:Ranger', type: onward })
+        expect(record(toRanger)).toMatchObject({
+          depth: 2,
+          askers: [{ kind: 'owner' }, { kind: 'person', userId: 'U_DANA' }]
+        })
       }
     })
   }
@@ -168,24 +168,22 @@ describe('a bot request chain', () => {
   it('delivers a new request to a bot the chain already reached, and drops only the same send again', async () => {
     // Dana may ask Docs and Three: Docs asks Three, Three asks Docs back, Docs asks Three something new.
     journals[DOCS_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
-    startBotSession.mockResolvedValueOnce(THREE_REQUEST)
     const first = await sent(DOCS_THREAD, { to: 'bot:Three', type: 'question', subject: 'q1' })
-    wake(THREE_REQUEST, first.message.id)
-    const back = await sent(THREE_REQUEST, { to: 'bot:Docs', type: 'question', subject: 'back' })
+    wake(THREE_CHAT, first.message.id)
+    const back = await sent(THREE_CHAT, { to: 'bot:Docs', type: 'question', subject: 'back' })
     expect(back.duplicate).toBeUndefined()
     wake(sessionOf(back), back.message.id)
-    startBotSession.mockResolvedValueOnce(THREE_REQUEST_2)
     const again = { to: 'bot:Three', type: 'question', subject: 'q2', body: 'a new question' }
     const second = await sent(sessionOf(back), again)
     expect(second.duplicate).toBeUndefined()
-    expect(sessionOf(second)).toBe(THREE_REQUEST_2)
+    expect(sessionOf(second)).toBe(THREE_CHAT)
     expect(record(second)).toMatchObject({ depth: 3, rootKey: record(first).rootKey })
     // A retry of that very send is the same request.
     expect(await sent(sessionOf(back), again)).toMatchObject({
       duplicate: true,
       message: { id: second.message.id }
     })
-    expect(db.getAllMessagesForHandle(`orca_session_id:${THREE_REQUEST_2}`)).toHaveLength(1)
+    expect(db.getAllMessagesForHandle(`orca_session_id:${THREE_CHAT}`)).toHaveLength(2)
   })
 
   it('carries a chain on past its fourth hop, counting each hop', async () => {

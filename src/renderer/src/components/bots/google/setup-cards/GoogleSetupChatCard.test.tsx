@@ -305,22 +305,33 @@ describe('a Google setup card in the chat', () => {
       }
     )
 
-    it('saves the key found when the host never answers', async () => {
+    it("doesn't import over a key the host may hold when the host never answers", async () => {
       mocks.findKey.mockResolvedValue(KEY)
       mocks.refresh.mockReturnValue(new Promise(() => {}))
       vi.useFakeTimers()
       try {
         keyStep()
         await vi.advanceTimersByTimeAsync(3000)
-        expect(mocks.importApp).toHaveBeenCalledWith(expect.anything(), 'KEY')
         expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
           'done',
           'client'
         ])
+        expect(mocks.importApp).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }
     })
+
+    it.each([{ status: 'failed', error: 'offline' }, { status: 'update-server' }])(
+      "doesn't import when the host's saved key can't be read ($status)",
+      async (view) => {
+        mocks.findKey.mockResolvedValue(KEY)
+        mocks.refresh.mockResolvedValue(view)
+        keyStep()
+        await answered()
+        expect(mocks.importApp).not.toHaveBeenCalled()
+      }
+    )
   })
 
   it('shows the three links on the links step only, and no Take over on the policy box', () => {

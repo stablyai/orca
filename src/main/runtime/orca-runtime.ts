@@ -1,3 +1,4 @@
+import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -15,11 +16,8 @@ import {
   publishWorkspaceViewChanges
 } from './client/settings/runtime-workspace-view-change-events'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
-import {
-  OrcaRuntimeWithSidebarTemporal,
-  sidebarFactsRuntime
-} from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentTransitions } from './construction/orca-runtime-agent-transitions'
+import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
+import { OrcaRuntimeWithAgentQuestions } from './construction/orca-runtime-agent-questions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -74,12 +72,8 @@ import {
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithAgentTransitions
-
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -204,7 +198,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentQuestions>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
@@ -216,6 +210,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
+    this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
   }
 
@@ -303,6 +298,9 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
     botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
+    this.startQuestionReconciler(db, (taker, ids, chat) =>
+      agentQuestionNotices(this, taker, ids, chat)
+    )
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */

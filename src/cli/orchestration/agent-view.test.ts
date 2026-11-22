@@ -151,6 +151,21 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('frames a start still waiting on its agent as a live worker, not a failure to retry', async () => {
+    const { stderr } = await run('worker-start', [['task', 'task_1']], {
+      ...OLDER_RUNTIME_START,
+      state: 'starting',
+      stage: 'awaiting_agent',
+      readyBy: '2026-11-22T00:30:00.000Z',
+      next: 'Worker term_agent (Dispatch ctx_1) is live, but its agent is not ready yet.'
+    })
+
+    expect(stderr).toBe(
+      "warning: agent_not_ready: worker ctx_1 is live; its agent isn't ready yet. Don't start this task again."
+    )
+    expect(process.exitCode).toBe(0)
+  })
+
   it('keeps a deeply nested payload as its original string in text and JSON', async () => {
     const payload = `${'{"a":'.repeat(20_000)}1${'}'.repeat(20_000)}`
     const result = {
