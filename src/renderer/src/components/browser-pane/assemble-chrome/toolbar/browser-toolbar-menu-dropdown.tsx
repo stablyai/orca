@@ -63,9 +63,9 @@ type BrowserToolbarMenuDropdownProps = {
   browserPageId: string
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
-  /** Null where the page's session isn't one of this desktop's profiles. */
+  /** The page's host's profiles; null where that host can't switch this page. */
   profile: BrowserToolbarProfileSubProps | null
-  /** Null where the page's session isn't one of this desktop's profiles, so import can't reach it. */
+  /** Null on streamed pages, whose jar is the server's and takes no import from this desktop. */
   cookieImport: BrowserToolbarImportCookiesSubProps | null
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu; null where the page's session runs no extensions. */

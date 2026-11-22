@@ -126,6 +126,7 @@ export function BrowserToolbarMenu({
       ) === true
   )
   const serverPageId = streamedPage ? streamedPage.remotePageId : browserPageId
+  const showsProfileSub = !profileEnvironmentId || Boolean(serverSwitchesProfiles && serverPageId)
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
@@ -181,7 +182,7 @@ export function BrowserToolbarMenu({
       showSiteDisplay(siteDisplaySource.read())
     }
     // A failed listing lands as [], since a real one always has Default.
-    if (open && !listedProfiles?.length) {
+    if (open && showsProfileSub && !listedProfiles?.length) {
       void fetchBrowserSessionProfiles(profileHostId)
     }
     setMenuOpen(open)
@@ -366,7 +367,7 @@ export function BrowserToolbarMenu({
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
         profile={
-          !profileEnvironmentId || (serverSwitchesProfiles && serverPageId)
+          showsProfileSub
             ? {
                 browserPageId,
                 allProfiles,
