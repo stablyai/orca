@@ -246,7 +246,11 @@ export const CandidateRow = React.memo(function CandidateRow({
                     data-workspace-cleanup-git-slot
                     role="group"
                     aria-label={gitSlotText ?? undefined}
-                    className="inline-flex h-5 min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
+                    className={cn(
+                      'inline-flex h-5 flex-1 items-center gap-1.5 overflow-hidden',
+                      // Why: reserve room for the +N chip so a status is never silently squeezed out.
+                      gitStatusPillsOrdered.length > 0 && !deletionPhase ? 'min-w-8' : 'min-w-0'
+                    )}
                   >
                     {deletionPhase ? (
                       <StatusPill tone="destructive">
