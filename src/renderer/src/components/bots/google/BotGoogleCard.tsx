@@ -14,6 +14,19 @@ import { botTarget } from '@/lib/bot-hosts'
 import { googleServiceLabel } from './google-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { setBotGoogle, useGoogleHost } from './google-connect-client'
+import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
+import { GOOGLE_SERVICE_CHOICES } from '../../../../../shared/google/google-scopes'
+import { googleAccountChoices } from './google-account-readiness'
+import { GoogleSignInWaiting } from './GoogleSignInWaiting'
+import { useGoogleSignIn } from './use-google-sign-in'
+
+/** Settings › Bots, where each computer lists its Google accounts and default. */
+function openGoogleSettings(): void {
+  const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
+  openSettingsTarget({ pane: 'bots', repoId: null })
+  openSettingsPage()
+}
 
 /**
  * Settings › Bots › Connectors › Google, once Google is added to the bot (Add a connector). It lets
@@ -34,12 +47,16 @@ export function BotGoogleCard({
   const view = useGoogleHost(botTarget(bot))
   const confirm = useConfirmationDialog()
   const host = useBotHostLabel(bot.hostId)
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   if (view.status !== 'ready' || bot.google !== true) {
     return null
   }
   const accounts = view.google.accounts
   const connected = accounts.length > 0
-  const emails = accounts.map((account) => account.email).join(', ')
+  // A host too old to keep a default reports none; the row then lists every account as before.
+  const defaultAccount = view.google.defaultAccount
+  const fallback = accounts.find((account) => account.email === defaultAccount)
+  const others = accounts.filter((account) => account !== fallback).map((entry) => entry.email)
   const ready = [
     ...new Set(
       accounts.flatMap((account) =>
@@ -86,7 +103,7 @@ export function BotGoogleCard({
       defaultOpen={defaultOpen}
       description={
         connected
-          ? emails
+          ? (fallback?.email ?? accounts.map((account) => account.email).join(', '))
           : host
             ? t('bots.google.bot.signedOutOnHost', 'Not connected on {{host}}', { host })
             : t('bots.google.bot.signedOut', 'Not connected on this computer')
@@ -94,14 +111,61 @@ export function BotGoogleCard({
       status={null}
       fix={connected ? null : { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }}
       actions={{
+        ...(connected && defaultAccount !== undefined
+          ? {
+              addAccount: {
+                label: t('bots.google.addAccount', 'Add another Google account'),
+                onClick: () =>
+                  void signIn.connect(
+                    fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES
+                  )
+              }
+            }
+          : {}),
         remove: {
           label: t('bots.google.bot.remove', 'Remove Google…'),
           onSelect: () => void remove()
         }
       }}
     >
+      {signIn.state.kind === 'waiting' ? (
+        <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
+      ) : signIn.state.kind === 'failed' ? (
+        <p role="alert" className="text-sm text-destructive">
+          {signIn.state.error}
+        </p>
+      ) : null}
       <BotConnectorDetails
         rows={[
+          ...(fallback
+            ? [
+                {
+                  label: t('bots.google.bot.account', 'Account'),
+                  value: (
+                    <>
+                      <span className="block truncate">{fallback.email}</span>
+                      <span className="text-muted-foreground">
+                        {host
+                          ? t('bots.google.bot.hostDefault', '{{host}}’s default', { host })
+                          : t('bots.google.bot.computerDefault', 'This computer’s default')}
+                        {' · '}
+                      </span>
+                      <Button variant="link" size="inlineText" onClick={openGoogleSettings}>
+                        {t('bots.google.bot.changeInSettings', 'Change in Settings')}
+                      </Button>
+                    </>
+                  )
+                }
+              ]
+            : []),
+          ...(fallback && others.length > 0
+            ? [
+                {
+                  label: t('bots.google.bot.alsoConnected', 'Also connected'),
+                  value: others.join(', ')
+                }
+              ]
+            : []),
           {
             label: t('bots.google.bot.uses', 'What it can use'),
             value:

@@ -1606,12 +1606,6 @@
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
       "repositoryCount_other": "{{count}} repositories in {{accounts}}"
     },
-    "google": {
-      "headline": {
-        "toFix_one": "Almost there: 1 thing to fix",
-        "toFix_other": "Almost there: {{count}} things to fix"
-      }
-    },
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",

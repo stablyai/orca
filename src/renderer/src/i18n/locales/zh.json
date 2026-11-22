@@ -28091,7 +28091,6 @@
         "signedOutOnHost": "{{host}} 上未连接"
       },
       "copied": "已复制。请发送给你的 Google 管理员",
-      "checksAgain": "Orca 会自动重新检查",
       "share": {
         "saved": "已保存。请将文件发送给你的队友",
         "failed": "无法保存文件，请重试"

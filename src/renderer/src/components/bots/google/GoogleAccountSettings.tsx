@@ -1,16 +1,9 @@
 import React, { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
 import { GoogleIcon } from '@/components/icons/GoogleIcon'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useHostBots } from '@/lib/bot-catalog'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -19,18 +12,17 @@ import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import type {
-  GoogleAccountView,
-  GoogleStatusView
-} from '../../../../../shared/google/google-connect-types'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
+import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
+import {
+  GOOGLE_SERVICE_CHOICES,
+  type GoogleServiceChoice
+} from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { GoogleAccountReadiness, googleAccountChoices } from './GoogleAccountReadiness'
-import { GoogleAddServiceDialog } from './GoogleAddServiceDialog'
+import { googleAccountChoices } from './google-account-readiness'
+import { GoogleAccountRow } from './GoogleAccountRow'
 import { GoogleServicePicker } from './GoogleServicePicker'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import {
-  disconnectGoogle,
   importGoogleApp,
   refreshGoogle,
   shareGoogleApp,
@@ -164,58 +156,43 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
   )
 }
 
-function AccountPanel({
+/** The accounts as rows, then Add another Google account and Share setup under them. */
+function AccountList({
   target,
   google,
-  account
+  host
 }: {
   target: RuntimeClientTarget
   google: GoogleStatusView
-  account: GoogleAccountView
+  host: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const signIn = useGoogleSignIn(target)
-  const confirm = useConfirmationDialog()
-  const [adding, setAdding] = useState(false)
   const client = google.client
-  const choices = googleAccountChoices(account)
-
-  const disconnect = async (revoke: boolean): Promise<void> => {
-    const confirmed = await confirm({
-      title: t('bots.google.disconnect.title', 'Disconnect {{email}}?', {
-        email: account.email
-      }),
-      description: revoke
-        ? t(
-            'bots.google.disconnect.revokeNote',
-            'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
-          )
-        : t(
-            'bots.google.disconnect.removeNote',
-            'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-          ),
-      confirmLabel: t('bots.google.disconnect.confirm', 'Disconnect'),
-      confirmVariant: 'destructive'
-    })
-    if (confirmed) {
-      await disconnectGoogle(target, account.email, revoke).catch((error: unknown) =>
-        toast.error(errorText(error))
-      )
-    }
-  }
-
+  // Absent from a host too old to keep a default, where a second account would break its calls.
+  const defaultAccount = google.defaultAccount
+  const canAdd = defaultAccount !== undefined
+  const fallback = google.accounts.find((account) => account.email === defaultAccount)
+  const nextDefault = google.accounts.find((account) => account.email !== defaultAccount)
+  const connect = (services: readonly GoogleServiceChoice[], account?: string): void =>
+    void signIn.connect(services, account)
   return (
-    <div className="space-y-3 rounded-md border border-border p-3">
-      <p className="truncate text-xs text-muted-foreground">
-        {t('bots.google.account', 'Google · {{email}}', { email: account.email })}
-      </p>
-      <GoogleAccountReadiness
-        target={target}
-        account={account}
-        clientId={client?.clientId ?? null}
-        projectId={client?.projectId ?? null}
-        onAllowAgain={(services) => void signIn.connect(services, account.email)}
-      />
+    <div className="space-y-3">
+      <div className="divide-y divide-border rounded-md border border-border">
+        {google.accounts.map((account) => (
+          <GoogleAccountRow
+            key={account.email}
+            target={target}
+            google={google}
+            account={account}
+            isDefault={account.email === defaultAccount}
+            nextDefault={nextDefault?.email ?? null}
+            canSetDefault={canAdd}
+            signIn={connect}
+          />
+        ))}
+      </div>
       {signIn.state.kind === 'waiting' ? (
         <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
       ) : signIn.state.kind === 'failed' ? (
@@ -224,15 +201,19 @@ function AccountPanel({
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        {account.status === 'reconnect' ? (
-          <Button size="sm" onClick={() => void signIn.connect(choices, account.email)}>
-            {t('bots.google.reconnect', 'Reconnect')}
+        {canAdd ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={signIn.state.kind === 'waiting'}
+            onClick={() =>
+              connect(fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES)
+            }
+          >
+            <Plus />
+            {t('bots.google.addAccount', 'Add another Google account')}
           </Button>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-            {t('bots.google.addService', 'Add a service')}
-          </Button>
-        )}
+        ) : null}
         {client ? (
           <Button
             size="sm"
@@ -242,34 +223,23 @@ function AccountPanel({
             {t('bots.google.shareButton', 'Share setup')}
           </Button>
         ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="ghost" className="ml-auto">
-              {t('bots.google.disconnectMenu', 'Disconnect')}
-              <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => void disconnect(false)}>
-              {t('bots.google.disconnect.remove', 'Remove from this computer')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void disconnect(true)}>
-              {t('bots.google.disconnect.revoke', 'Remove and revoke at Google')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
-      <GoogleAddServiceDialog
-        open={adding}
-        onOpenChange={setAdding}
-        have={choices}
-        projectId={client?.projectId}
-        account={account.email}
-        onSignIn={(services) => {
-          setAdding(false)
-          void signIn.connect(services, account.email)
-        }}
-      />
+      {canAdd ? null : (
+        <p className="text-xs text-muted-foreground">
+          {t('bots.google.updateToAdd', 'Update Orca on {{host}} to add another Google account.', {
+            host
+          })}
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {google.bots.length > 0
+          ? t('bots.google.onFor', 'On for {{bots}}.', {
+              bots: new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
+                google.bots.map((bot) => bot.name)
+              )
+            })
+          : t('bots.google.turnOnForBot', 'Turn Google on for a bot from the bot’s Connectors.')}
+      </p>
     </div>
   )
 }
@@ -294,7 +264,6 @@ export function GoogleAccountSettings({
   target: RuntimeClientTarget
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const view = useGoogleHost(target)
   const host = useHostLabel(target)
   const file = useGoogleClientFile(async (text) => {
@@ -346,23 +315,7 @@ export function GoogleAccountSettings({
   } else if (view.google.accounts.length === 0) {
     body = <ConnectPanel target={target} />
   } else {
-    const { google } = view
-    body = (
-      <div className="space-y-3">
-        {google.accounts.map((account) => (
-          <AccountPanel key={account.email} target={target} google={google} account={account} />
-        ))}
-        <p className="text-xs text-muted-foreground">
-          {google.bots.length > 0
-            ? t('bots.google.onFor', 'On for {{bots}}.', {
-                bots: new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
-                  google.bots.map((bot) => bot.name)
-                )
-              })
-            : t('bots.google.turnOnForBot', 'Turn Google on for a bot from the bot’s Connectors.')}
-        </p>
-      </div>
-    )
+    body = <AccountList target={target} google={view.google} host={host} />
   }
   return (
     <section

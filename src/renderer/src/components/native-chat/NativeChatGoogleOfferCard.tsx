@@ -1,0 +1,150 @@
+// The Google Connect card: with an account already on the bot's host, use it (the host's default) or
+// sign in to another through Google's account chooser; once on, add another account.
+import { Button } from '@/components/ui/button'
+import { useTranslate } from '@/i18n/use-translate'
+import { botTarget } from '@/lib/bot-hosts'
+import { connectorDescription } from '../bots/AddConnectorDialog'
+import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
+import { BOT_CONNECTORS } from '../bots/bot-connectors'
+import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
+import { useGoogleHost } from '../bots/google/google-connect-client'
+import { googleAccountChoices } from '../bots/google/google-account-readiness'
+import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
+import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
+import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
+import type { Bot } from '../../../../shared/bot-types'
+import { GOOGLE_SERVICE_CHOICES } from '../../../../shared/google/google-scopes'
+import {
+  NativeChatCardActions,
+  NativeChatCardFrame,
+  NativeChatCardStatus
+} from './NativeChatCardFrame'
+import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
+import { googleOfferFace } from './google-offer-face'
+
+export function NativeChatGoogleOfferCard({
+  bot,
+  messageId
+}: {
+  bot: Bot
+  messageId: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const answering = useNativeChatOffer(bot.id, messageId)
+  const setup = useConnectorSetup(bot)
+  const turnOnGoogle = useTurnOnBotGoogle()
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const view = useGoogleHost(botTarget(bot))
+  const google = view.status === 'ready' ? view.google : null
+  const face = google ? googleOfferFace(google, bot.google === true) : { kind: 'connect' as const }
+  const defaultAccount = face.kind === 'connect' ? null : face.defaultAccount
+  const fallback = google?.accounts.find((account) => account.email === defaultAccount)
+  const choices = fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES
+  // The account this card connected, when it isn't the default; the bot is told to name it.
+  const added = answering.sent?.[0] ?? null
+  const shown = added ?? defaultAccount
+
+  const signInThenTurnOn = async (account?: string): Promise<void> => {
+    const connected = await signIn.connect(choices, account)
+    if (!connected || (bot.google !== true && !(await turnOnGoogle(bot)))) {
+      return
+    }
+    if (connected.email !== defaultAccount) {
+      answering.send(
+        t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
+          email: connected.email
+        }),
+        [connected.email]
+      )
+    }
+  }
+
+  const waiting = signIn.state.kind === 'waiting'
+  const footer = waiting ? undefined : face.kind === 'connected' ? (
+    face.canAdd ? (
+      <NativeChatCardActions>
+        <Button type="button" variant="outline" size="sm" onClick={() => void signInThenTurnOn()}>
+          {t('bots.google.addAccount', 'Add another Google account')}
+        </Button>
+      </NativeChatCardActions>
+    ) : undefined
+  ) : face.kind === 'choose' ? (
+    <NativeChatOfferActions
+      offer={answering}
+      start={
+        <Button type="button" variant="ghost" size="sm" onClick={() => void signInThenTurnOn()}>
+          {t('components.native-chat.googleOffer.useAnother', 'Use another account')}
+        </Button>
+      }
+    >
+      {face.reconnect ? (
+        <Button type="button" size="sm" onClick={() => void signInThenTurnOn(face.defaultAccount)}>
+          {t('components.native-chat.googleOffer.reconnect', 'Reconnect {{email}}', {
+            email: face.defaultAccount
+          })}
+        </Button>
+      ) : (
+        <Button type="button" size="sm" onClick={() => setup.start('google')}>
+          {t('components.native-chat.googleOffer.use', 'Use {{email}}', {
+            email: face.defaultAccount
+          })}
+        </Button>
+      )}
+    </NativeChatOfferActions>
+  ) : (
+    <NativeChatOfferActions offer={answering}>
+      <Button type="button" size="sm" onClick={() => setup.start('google')}>
+        {t('components.native-chat.connectorOffer.connectService', 'Connect {{service}}', {
+          service: 'Google'
+        })}
+      </Button>
+    </NativeChatOfferActions>
+  )
+  const connector = BOT_CONNECTORS.find((entry) => entry.id === 'google')
+  const label = connector?.label
+  return (
+    <NativeChatCardFrame
+      avatar={
+        <span className="mt-0.5">
+          <BotAppBrandLogo app={connector ?? { id: 'google' }} />
+        </span>
+      }
+      heading={t('components.native-chat.connectorOffer.heading', 'Connect a service')}
+      status={
+        face.kind === 'connected' ? (
+          <NativeChatCardStatus tone="success">
+            {t('components.native-chat.connectorOffer.connected', 'Connected')}
+          </NativeChatCardStatus>
+        ) : null
+      }
+      title={
+        face.kind === 'connected' && shown
+          ? t('bots.google.account', 'Google · {{email}}', { email: shown })
+          : label
+      }
+      footer={footer}
+    >
+      {face.kind === 'connected' ? (
+        added && defaultAccount && added !== defaultAccount ? (
+          <p className="text-xs text-muted-foreground">
+            {t('components.native-chat.googleOffer.staysDefault', '{{email}} stays the default', {
+              email: defaultAccount
+            })}
+          </p>
+        ) : null
+      ) : (
+        <p className="mt-0.5">{connectorDescription('google')}</p>
+      )}
+      {signIn.state.kind === 'waiting' ? (
+        <div className="mt-2">
+          <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
+        </div>
+      ) : signIn.state.kind === 'failed' ? (
+        <p role="alert" className="mt-0.5 text-sm text-destructive">
+          {signIn.state.error}
+        </p>
+      ) : null}
+      {setup.dialogs}
+    </NativeChatCardFrame>
+  )
+}
