@@ -1683,6 +1683,7 @@
         "groupMessage": "{{source}} group DM",
         "you": "You",
         "someone": "Someone",
+        "anApp": "An app",
         "label": "{{name}} in {{place}}",
         "open": "Open in {{source}}",
         "noAccess": "no access",
@@ -5360,11 +5361,8 @@
       "workspaceDeleted": "This chat’s workspace was deleted on {{name}}."
     },
     "activity": {
-      "readFailed": "Couldn’t load activity.",
       "loading": "Loading activity…",
       "unavailable": "Activity is unavailable on this host.",
-      "retry": "Retry",
-      "lastRead": "Showing the last activity read.",
       "readFailedTitle": "Couldn’t load activity",
       "unavailableTitle": "Activity unavailable"
     },
@@ -5460,10 +5458,8 @@
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
-      "activity": "Activity",
       "automations": "Automations",
-      "settings": "Settings",
-      "hint": "Activity, automations and settings"
+      "settings": "Settings"
     },
     "events": {
       "slack": {
@@ -5590,7 +5586,9 @@
     "section": {
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "newBot": "New bot"
+      "newBot": "New bot",
+      "reorderTitle": "Reorder bots",
+      "reorder": "Reorder…"
     },
     "groups": {
       "manageMembers": "Manage members",
@@ -5859,7 +5857,6 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "all": "All chats",
         "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
         "clearAll": "Clear filters",

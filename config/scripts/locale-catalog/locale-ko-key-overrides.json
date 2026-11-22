@@ -3968,9 +3968,6 @@
   "auto.components.taskSourceContextSummary.sourceUnavailable": {
     "ko": "{{value0}} 소스를 사용할 수 없음: {{value1}}"
   },
-  "auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title": {
-    "ko": "이 agent를 중지할까요?"
-  },
   "auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d": {
     "ko": "삽입"
   },
@@ -3999,7 +3996,7 @@
     "ko": "Hex"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
-    "ko": "워크스페이스 안전성 확인 중"
+    "ko": "워크스페이스 스캔 중"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."

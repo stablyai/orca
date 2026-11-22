@@ -162,7 +162,7 @@ export function MobileBotGroupRoom({
   }
   const memberFaces = (group?.members ?? []).flatMap((member) => {
     const bot = bots.find((bot) => bot.id === member.botId)
-    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot, undefined) }] : []
+    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
   })
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>

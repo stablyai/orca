@@ -222,7 +222,7 @@ function BotSidebarSearchPanel({
       data-bot-sidebar-search={entries.length <= 1 ? 'single-row' : 'multiple-rows'}
     >
       {/* Insets match the list's and a row's, so the field's glyph sits over the bots' pictures.
-          The gap below clears the focus ring off the first row. */}
+          The gap below separates the field from the first row. */}
       <div className="relative shrink-0 px-2 pt-1 pb-1.5">
         <Search className="pointer-events-none absolute top-1/2 left-[22px] size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input

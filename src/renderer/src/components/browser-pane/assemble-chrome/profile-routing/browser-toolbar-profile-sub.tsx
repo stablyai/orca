@@ -19,6 +19,7 @@ export type BrowserToolbarProfileSubProps = {
   browserPageId: string
   allProfiles: BrowserSessionProfile[]
   effectiveProfileId: string
+  canRefreshFromChrome: boolean
   onSwitchProfile: (profileId: string | null) => void
   onNewProfile: () => void
 }
@@ -28,6 +29,7 @@ export function BrowserToolbarProfileSub({
   browserPageId,
   allProfiles,
   effectiveProfileId,
+  canRefreshFromChrome,
   onSwitchProfile,
   onNewProfile
 }: BrowserToolbarProfileSubProps): React.JSX.Element {
@@ -82,7 +84,7 @@ export function BrowserToolbarProfileSub({
             <Plus className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
           </DropdownMenuItem>
-          {localProfile?.source?.chromeProfile && (
+          {canRefreshFromChrome && localProfile?.source?.chromeProfile && (
             <DropdownMenuItem
               disabled={isImporting}
               onSelect={() =>

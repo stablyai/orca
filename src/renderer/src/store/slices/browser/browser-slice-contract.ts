@@ -118,6 +118,12 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   executionRemoteEnvironment: boolean
 }
 
+/** A page browsing through an SSH host keeps cookies in that host's jar, not the profile's. */
+export type BrowserSshPageCookieImportRoute = {
+  sshTargetId: string
+  hostLabel: string
+}
+
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
@@ -272,7 +278,10 @@ export type BrowserSlice = {
   deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
   /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
   managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
+  importCookiesToProfile: (
+    profileId: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
+  ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -287,7 +296,8 @@ export type BrowserSlice = {
   importCookiesFromBrowser: (
     profileId: string,
     source: string | { refreshSourceId: string; hostId: ExecutionHostId },
-    browserProfile?: string
+    browserProfile?: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]

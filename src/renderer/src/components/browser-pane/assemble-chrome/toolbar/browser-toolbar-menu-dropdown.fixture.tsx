@@ -87,6 +87,7 @@ function Toolbar(): React.JSX.Element {
               browserPageId: 'fixture-page',
               allProfiles: PROFILES,
               effectiveProfileId: 'default',
+              canRefreshFromChrome: true,
               onSwitchProfile: noop,
               onNewProfile: noop
             }}
@@ -96,6 +97,7 @@ function Toolbar(): React.JSX.Element {
               detectedBrowsers: DETECTED_BROWSERS,
               onFetchDetectedBrowsers: noop,
               browserSessionImportState: null,
+              sshRoute: null,
               onImportFromBrowser: noop,
               onImportFromFile: noop
             }}

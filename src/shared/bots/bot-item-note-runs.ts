@@ -7,7 +7,6 @@ import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../native-chat/native-chat-orca-card'
 import { nativeChatRowRendersContent } from '../native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatRowRendersProse } from '../native-chat/transcript/folding/native-chat-trailing-run'
-import { botItemNoteIsQuiet } from './bot-item-note-lines'
 import type { BotItemNoteItem, BotItemNoteView } from './bot-item-note'
 
 /** The sender item mail names. */
@@ -227,36 +226,4 @@ function foldBotTurnNotes(
       lead = -1
     }
   }
-}
-
-export type BotItemNoteJoin = 'above' | 'below' | 'both'
-
-/** Which sides of each quiet item-note row touch another quiet note, so the two sit close: the
- *  nearest row that draws, past folded and hidden ones (`hidden`: what this surface folded away).
- *  `drawsBelow`: the row carries something under its note (a turn's diff), which keeps them apart. */
-export function botItemNoteJoins(
-  messages: readonly NativeChatMessage[],
-  hidden: (index: number) => boolean,
-  drawsBelow: (index: number) => boolean = () => false
-): Map<number, BotItemNoteJoin> {
-  const drawn = messages.flatMap((message, index) =>
-    hidden(index) || rowDrawsNothing(message) ? [] : [index]
-  )
-  const quiet = (index: number | undefined) => {
-    const note = index === undefined ? undefined : messages[index]!.botItemNote
-    return note !== undefined && botItemNoteIsQuiet(note)
-  }
-  const joins = new Map<number, BotItemNoteJoin>()
-  drawn.forEach((index, at) => {
-    if (!quiet(index)) {
-      return
-    }
-    const previous = drawn[at - 1]
-    const above = quiet(previous) && !drawsBelow(previous!)
-    const below = quiet(drawn[at + 1]) && !drawsBelow(index)
-    if (above || below) {
-      joins.set(index, above && below ? 'both' : above ? 'above' : 'below')
-    }
-  })
-  return joins
 }

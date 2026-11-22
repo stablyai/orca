@@ -35,7 +35,9 @@ export const BROWSER_COOKIE_IMPORT_FAILURE_COPY = {
     'macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.',
   connectionEnded:
     'The connection to this server ended during the import. Reconnect and try again.',
-  serverRepaired: 'This server was re-paired during the import. Try again.'
+  serverRepaired: 'This server was re-paired during the import. Try again.',
+  sshHostDisconnected:
+    'This page is no longer connected through its SSH host. Reconnect and try again.'
 } as const
 
 export type BrowserCookieImportFailureCode = keyof typeof BROWSER_COOKIE_IMPORT_FAILURE_COPY
