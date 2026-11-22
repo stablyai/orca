@@ -60,6 +60,35 @@ describe('OrcaRuntimeService', () => {
     expect(read.tail.join('\n')).not.toContain('Stale Ready screen')
   })
 
+  async function readScreenAfterMirrorDrop(frameKeepsUp: boolean) {
+    let frameSeq = 0
+    const { runtime, handle } = await createProviderSnapshotRuntime(async () => ({
+      data: 'Idle pane prompt',
+      cols: 80,
+      rows: 24,
+      seq: frameSeq,
+      source: 'headless',
+      alternateScreen: false
+    }))
+    frameSeq = runtime.getPtyOutputSequence('pty-1')
+    expect((await runtime.readTerminal(handle, { screen: true })).source).toBe('screen')
+    runtime.notePtyDataGap('pty-1', 64)
+    if (frameKeepsUp) {
+      frameSeq = runtime.getPtyOutputSequence('pty-1')
+    }
+    return runtime.readTerminal(handle, { screen: true })
+  }
+
+  it('reads the provider frame for a main-screen pane whose mirror was dropped', async () => {
+    const read = await readScreenAfterMirrorDrop(true)
+    expect(read).toMatchObject({ source: 'screen', tail: ['Idle pane prompt'] })
+  })
+
+  it('keeps the screen unavailable when that provider frame predates live output', async () => {
+    const read = await readScreenAfterMirrorDrop(false)
+    expect(read.source).toBe('screen-unavailable')
+  })
+
   it('discards a provider frame when the PTY generation resets during capture', async () => {
     type Snapshot = {
       data: string

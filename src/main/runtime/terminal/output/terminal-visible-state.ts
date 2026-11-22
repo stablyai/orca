@@ -73,14 +73,14 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
     if (trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
+      if (headlessState) {
+        return { ...headlessState, isAlternateScreen: false }
+      }
+      // Why: a stream gap drops the mirror and an idle pane never rebuilds it; the provider still has the frame.
+      const providerState = await this.captureProviderVisibleState(ptyId)
+      return providerState && !providerState.isAlternateScreen
+        ? providerState
+        : { lines: [], isAlternateScreen: false, sequence: outputSequence, generation }
     }
     return this.captureProviderVisibleState(ptyId)
   }
