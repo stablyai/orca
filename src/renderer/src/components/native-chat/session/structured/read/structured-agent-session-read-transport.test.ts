@@ -123,7 +123,7 @@ describe('structured agent-session read transport generations', () => {
           promptSuggestions: 1,
           textAppend: 1,
           toolOutputAppend: 1,
-          liveTextViewer: { id: expect.any(String), shown: true }
+          liveTextViewer: { id: expect.any(String), shown: true, seq: 1 }
         }
       },
       'env-new': { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },

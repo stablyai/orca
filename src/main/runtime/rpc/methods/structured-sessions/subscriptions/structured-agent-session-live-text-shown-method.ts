@@ -12,7 +12,11 @@ export const STRUCTURED_AGENT_SESSION_LIVE_TEXT_SHOWN_METHOD = defineMethod({
   permission: 'workspace',
   params: LiveTextShownParams,
   handler: (params) => {
-    setLiveTextViewerShown(liveTextViewerKey(params.sessionId, params.viewerId), params.shown)
+    setLiveTextViewerShown(
+      liveTextViewerKey(params.sessionId, params.viewerId),
+      params.shown,
+      params.seq
+    )
     return { ok: true as const }
   }
 })

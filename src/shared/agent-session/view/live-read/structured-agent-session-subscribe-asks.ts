@@ -10,7 +10,7 @@ export type StructuredAgentSessionSubscribeCapabilities =
     /** This reader shows prompt suggestions, so the host keeps generating them while it reads. */
     promptSuggestions?: 1
     /** This reader takes live text only while it says it is shown; this is whether it is now. */
-    liveTextViewer?: { id: string; shown: boolean }
+    liveTextViewer?: { id: string; shown: boolean; seq: number }
   }
 
 type StructuredAgentSessionSubscribeAsk = {
@@ -38,11 +38,11 @@ export function createStructuredAgentSessionSubscribeAsks(asks: {
     promptSuggestions: boolean,
     liveTextViewer: boolean
   ): StructuredAgentSessionSubscribeAsk => {
-    const shown = viewer.opening(liveTextViewer)
+    const opened = viewer.opening(liveTextViewer)
     const capabilities: StructuredAgentSessionSubscribeCapabilities = {
       ...textAppend,
       ...(promptSuggestions ? { promptSuggestions: 1 } : {}),
-      ...(shown !== undefined ? { liveTextViewer: { id: viewer.id, shown } } : {})
+      ...(opened ? { liveTextViewer: { id: viewer.id, ...opened } } : {})
     }
     sent = Object.keys(capabilities).length > 0
     return { textAppend, ...(sent ? { capabilities } : {}) }

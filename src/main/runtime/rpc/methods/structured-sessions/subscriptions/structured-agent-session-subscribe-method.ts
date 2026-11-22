@@ -83,7 +83,11 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
             liveTextViewer: viewer,
             liveTextShown: capabilities?.liveTextViewer?.shown === true,
             onLiveTextShown: (set: (shown: boolean) => void) => {
-              releaseViewer = registerLiveTextViewer(viewer, set)
+              releaseViewer = registerLiveTextViewer(
+                viewer,
+                capabilities?.liveTextViewer?.seq ?? 0,
+                set
+              )
             }
           }
         : {}),

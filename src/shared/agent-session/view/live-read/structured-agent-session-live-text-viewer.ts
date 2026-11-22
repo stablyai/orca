@@ -5,8 +5,9 @@ export type StructuredAgentSessionLiveTextViewer = {
   shown: () => boolean
   /** Calls `changed` whenever `shown` may have changed; returns what stops listening. */
   subscribeShown: (changed: () => void) => () => void
-  /** Tells the host, naming this read's viewer: one connection can carry several windows. */
-  setShown: (viewerId: string, shown: boolean) => Promise<unknown>
+  /** Tells the host, naming this read's viewer (one connection can carry several windows) and
+   *  numbering the report, since reports can arrive out of order. */
+  setShown: (viewerId: string, shown: boolean, seq: number) => Promise<unknown>
 }
 
 /** Keeps the host told whether this read's viewer is shown. An open carries the state in its
@@ -35,6 +36,7 @@ export function createLiveTextViewerReport(
   const id = `${(viewers++).toString(36)}-${randomViewerPart()}`
   let told: boolean | null = null
   let opened: boolean | null = null
+  let seq = 0
   let retry: { timer: ReturnType<typeof setTimeout> | null; left: number } = {
     timer: null,
     left: REPORT_RETRIES
@@ -58,7 +60,7 @@ export function createLiveTextViewerReport(
     }
     told = shown
     const attempt = retry
-    viewer.setShown(id, shown).catch(() => {
+    viewer.setShown(id, shown, ++seq).catch(() => {
       // Unconfirmed, so the host may still hold the old state: say it again, a bounded number of times.
       if (attempt !== retry || told !== shown || attempt.left === 0) {
         return
@@ -76,11 +78,11 @@ export function createLiveTextViewerReport(
   return {
     id,
     /** The `shown` state for an open that asks for the viewer, or undefined for one that doesn't. */
-    opening: (asksViewer: boolean): boolean | undefined => {
+    opening: (asksViewer: boolean): { shown: boolean; seq: number } | undefined => {
       cancelRetry()
       told = null
       opened = asksViewer && viewer ? viewer.shown() : null
-      return opened ?? undefined
+      return opened === null ? undefined : { shown: opened, seq: ++seq }
     },
     registered: (): void => {
       if (opened !== null) {

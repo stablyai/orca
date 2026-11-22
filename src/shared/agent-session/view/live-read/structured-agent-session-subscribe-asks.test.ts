@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStructuredAgentSessionSubscribeAsks } from './structured-agent-session-subscribe-asks'
 
 function viewer(supported: Promise<boolean> | boolean, shown: boolean) {
-  const calls: { viewerId: string; shown: boolean }[] = []
+  const calls: { viewerId: string; shown: boolean; seq: number }[] = []
   const listeners = new Set<() => void>()
   const state = { shown }
   return {
@@ -18,8 +18,8 @@ function viewer(supported: Promise<boolean> | boolean, shown: boolean) {
         listeners.add(changed)
         return () => listeners.delete(changed)
       },
-      setShown: async (viewerId: string, next: boolean) => {
-        calls.push({ viewerId, shown: next })
+      setShown: async (viewerId: string, next: boolean, seq: number) => {
+        calls.push({ viewerId, shown: next, seq })
       }
     }
   }
@@ -34,19 +34,24 @@ describe('a live-text viewer', () => {
       throw new Error('a local viewer opens in the same turn')
     }
     const id = ask.capabilities?.liveTextViewer?.id
-    expect(ask.capabilities?.liveTextViewer).toEqual({ id: expect.any(String), shown: false })
+    expect(ask.capabilities?.liveTextViewer).toEqual({
+      id: expect.any(String),
+      shown: false,
+      seq: 1
+    })
 
     // Shown before the host registered the stream: sent once it is.
     reader.show(true)
     expect(reader.calls).toEqual([])
     asks.registered()
-    expect(reader.calls).toEqual([{ viewerId: id, shown: true }])
+    // Each report numbers after the open's, so the host can drop one that arrives late.
+    expect(reader.calls).toEqual([{ viewerId: id, shown: true, seq: 2 }])
 
     reader.show(true)
     reader.show(false)
     expect(reader.calls).toEqual([
-      { viewerId: id, shown: true },
-      { viewerId: id, shown: false }
+      { viewerId: id, shown: true, seq: 2 },
+      { viewerId: id, shown: false, seq: 3 }
     ])
 
     asks.dispose()

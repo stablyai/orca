@@ -184,8 +184,8 @@ export function useMobileStructuredAgentState(args: {
       },
       textAppend: advertised.then(hostTextAppends),
       // Live text only while the app is in front; in the background, saves, then the newest on return.
-      liveTextViewer: mobileAppLiveTextViewer(viewer, (viewerId, shown) =>
-        callAgentSession(client, 'agentSession.liveTextShown', { sessionId, viewerId, shown })
+      liveTextViewer: mobileAppLiveTextViewer(viewer, (viewerId, shown, seq) =>
+        callAgentSession(client, 'agentSession.liveTextShown', { sessionId, viewerId, shown, seq })
       ),
       subscribeRetryNow: subscribeConnectionRevival
     })

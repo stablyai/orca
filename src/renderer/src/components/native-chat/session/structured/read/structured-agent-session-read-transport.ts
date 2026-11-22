@@ -61,11 +61,12 @@ export function startStructuredAgentSessionReadTransport(
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
-    liveTextViewer: documentLiveTextViewer(viewer, (viewerId, shown) =>
+    liveTextViewer: documentLiveTextViewer(viewer, (viewerId, shown, seq) =>
       callStructuredAgentSession(target, 'agentSession.liveTextShown', {
         sessionId: read.sessionId,
         viewerId,
-        shown
+        shown,
+        seq
       })
     ),
     readCurrentRequests: (request) =>
