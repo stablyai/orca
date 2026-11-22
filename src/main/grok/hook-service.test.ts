@@ -35,6 +35,9 @@ function registersManagedGrokScript(command: string): boolean {
   return command.includes(GROK_SCRIPT_FILE_NAME) || WINDOWS_POWERSHELL_LAUNCHER.test(command)
 }
 
+// Windows file symlinks need elevation, and a junction can only link a directory.
+const itFileLinks = it.skipIf(process.platform === 'win32')
+
 describe('GrokHookService', () => {
   let homeDir: string
 
@@ -94,7 +97,7 @@ describe('GrokHookService', () => {
     expect(service.getStatus().managedHooksPresent).toBe(true)
   })
 
-  it('respects an empty user-managed symlink as an opt-out', () => {
+  itFileLinks('respects an empty user-managed symlink as an opt-out', () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
@@ -109,7 +112,7 @@ describe('GrokHookService', () => {
     expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
   })
 
-  it('writes through a symlinked config on the sync remove path too', () => {
+  itFileLinks('writes through a symlinked config on the sync remove path too', () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
@@ -127,7 +130,7 @@ describe('GrokHookService', () => {
   })
 
   // Identify Orca's prior emptying separately from a deliberate user opt-out after restart.
-  it('reinstalls into a symlinked config on the launch after a quit', async () => {
+  itFileLinks('reinstalls into a symlinked config on the launch after a quit', async () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
