@@ -2,7 +2,10 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-terminal-foreground-render-settle'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { isElementInVisiblePaneManager } from '../pane-manager-registry'
-import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '../../window-activity/window-park-visibility'
 import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
@@ -159,9 +162,8 @@ function rebuildDueAtlases(): void {
     return
   }
   if (!getWindowParkVisible()) {
-    // Nothing on screen to recreate; wait an interval rather than drop every context of a hidden window.
-    lastAttemptAt = now
-    scheduleRebuild()
+    // Nothing on screen to recreate: sleep until the window is shown instead of dropping every context or polling.
+    resumeWhenWindowShown()
     return
   }
   const shown = shownPaneFilter()
@@ -225,6 +227,21 @@ function rebuildDueAtlases(): void {
     reattached: reattach.size,
     reason: 'atlas-memory',
     durationMs: Math.round(performance.now() - startedAt)
+  })
+}
+
+let stopWatchingWindow: (() => void) | null = null
+
+function resumeWhenWindowShown(): void {
+  if (stopWatchingWindow) {
+    return
+  }
+  stopWatchingWindow = subscribeWindowParkVisibility(() => {
+    if (getWindowParkVisible() && stopWatchingWindow) {
+      stopWatchingWindow()
+      stopWatchingWindow = null
+      scheduleRebuild()
+    }
   })
 }
 

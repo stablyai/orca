@@ -88,62 +88,84 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
 const SYNC_WAIT_FRAMES = 120
 const SYNC_WAIT_SLOW_MS = 250
 
+// One queue for every rebuild, so overlapping batches still recreate at most one context per frame; weak, so a pane closed while queued is never kept alive.
+const rebuildQueue: WeakRef<ManagedPaneInternal>[] = []
+const queuedPanes = new WeakSet<ManagedPaneInternal>()
+let queueVerdict: (pane: ManagedPaneInternal) => DeferredReattachVerdict = () => 'skip'
+let queueRunning = false
+
+function nextQueuedPane(): ManagedPaneInternal | undefined {
+  while (rebuildQueue.length > 0) {
+    const pane = rebuildQueue[0].deref()
+    // The pane may have closed, lost its renderer or its DOM since it was queued.
+    if (
+      pane?.webglAddon &&
+      !pane.webglDisabledAfterContextLoss &&
+      pane.container.isConnected &&
+      !isXtermInstanceDisposed(pane.terminal)
+    ) {
+      return pane
+    }
+    if (pane) {
+      queuedPanes.delete(pane)
+    }
+    rebuildQueue.shift()
+  }
+  return undefined
+}
+
 /** One pane per frame, so no frame pays for more than one context; user input holds the rest, which keep rendering on their old context meanwhile. */
-function rebuildAcrossFrames(
-  steps: ManagedPaneInternal[],
-  verdictOf: (pane: ManagedPaneInternal) => DeferredReattachVerdict,
-  waitedFrames = 0
-): void {
-  const [pane, ...rest] = steps
+function runRebuildQueue(waitedFrames = 0): void {
+  const pane = nextQueuedPane()
   if (!pane) {
+    queueRunning = false
     return
   }
   const hold = terminalWebglAtlasInteractionHoldMs()
   if (hold > 0) {
-    setTimeout(
-      () => requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames)),
-      hold
-    )
+    setTimeout(() => requestAnimationFrame(() => runRebuildQueue(waitedFrames)), hold)
     return
   }
-  // The pane may have closed, lost its renderer or its DOM since the rebuild started.
-  if (
-    pane.webglAddon &&
-    !pane.webglDisabledAfterContextLoss &&
-    pane.container.isConnected &&
-    !isXtermInstanceDisposed(pane.terminal)
-  ) {
-    // Decided on its own frame: a tab revealed or a chat cover closed since the rebuild started gets a new context, not a dropped one.
-    const verdict = verdictOf(pane)
-    if (verdict === 'wait') {
-      // Never painted mid-frame: past the frame budget it keeps checking, more slowly, on its old context.
-      if (waitedFrames < SYNC_WAIT_FRAMES) {
-        requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames + 1))
-      } else {
-        setTimeout(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames), SYNC_WAIT_SLOW_MS)
-      }
-      return
-    }
-    if (verdict === 'skip') {
-      // Off screen or chat-covered: drop its context now; reveal, fit, resume or the cover closing gives it a new one.
-      disposeWebgl(pane)
+  // Decided on its own frame: a tab revealed or a chat cover closed since the rebuild started gets a new context, not a dropped one.
+  const verdict = queueVerdict(pane)
+  if (verdict === 'wait') {
+    // Never painted mid-frame: past the frame budget it keeps checking, more slowly, on its old context.
+    if (waitedFrames < SYNC_WAIT_FRAMES) {
+      requestAnimationFrame(() => runRebuildQueue(waitedFrames + 1))
     } else {
-      // Dispose and attach in one task, so the pane never shows the DOM renderer.
-      rebuildAttachedWebgl(pane)
-      if (pane.webglAddon) {
-        paintReplacementCanvasNow(pane.terminal)
-      }
+      setTimeout(() => runRebuildQueue(waitedFrames), SYNC_WAIT_SLOW_MS)
+    }
+    return
+  }
+  rebuildQueue.shift()
+  queuedPanes.delete(pane)
+  if (verdict === 'skip') {
+    // Off screen or chat-covered: drop its context now; reveal, fit, resume or the cover closing gives it a new one.
+    disposeWebgl(pane)
+  } else {
+    // Dispose and attach in one task, so the pane never shows the DOM renderer.
+    rebuildAttachedWebgl(pane)
+    if (pane.webglAddon) {
+      paintReplacementCanvasNow(pane.terminal)
     }
   }
-  if (rest.length > 0) {
-    requestAnimationFrame(() => rebuildAcrossFrames(rest, verdictOf))
-  }
+  requestAnimationFrame(() => runRebuildQueue())
 }
 
 setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
-  // Shown panes first; the atlas module already cleared each atlas in place, so every recreated context joins a small one.
+  queueVerdict = verdictOnItsFrame
+  // Shown panes first; the atlas module already emptied each atlas in place, so every recreated context joins a small one.
   const steps = panes
     .filter((pane) => pane.webglAddon && !pane.webglDisabledAfterContextLoss)
     .sort((a, b) => Number(shouldReattach(b)) - Number(shouldReattach(a)))
-  rebuildAcrossFrames(steps, verdictOnItsFrame)
+  for (const pane of steps) {
+    if (!queuedPanes.has(pane)) {
+      queuedPanes.add(pane)
+      rebuildQueue.push(new WeakRef(pane))
+    }
+  }
+  if (!queueRunning) {
+    queueRunning = true
+    runRebuildQueue()
+  }
 })

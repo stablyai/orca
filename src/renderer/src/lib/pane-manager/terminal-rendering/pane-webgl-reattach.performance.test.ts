@@ -156,6 +156,18 @@ describe('atlas-rebuild context recreation', () => {
     expect(attaches.count).toBe(2)
   })
 
+  it('runs overlapping rebuilds through one queue: still one context per frame', async () => {
+    const first = Array.from({ length: 3 }, fakePane)
+    const second = Array.from({ length: 3 }, fakePane)
+    run(first)
+    run(second)
+    expect(attaches.count).toBe(1)
+    for (let frame = 2; frame <= 6; frame++) {
+      await vi.advanceTimersByTimeAsync(16)
+      expect(attaches.count).toBe(frame)
+    }
+  })
+
   it('skips a pane that closed or lost its renderer before its frame', async () => {
     const [first, closed, lost] = Array.from({ length: 3 }, fakePane)
     run([first, closed, lost])
