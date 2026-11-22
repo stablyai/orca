@@ -78,9 +78,10 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'Writes the copy this Orca build ships into the shared .agents/skills folder and ' +
         'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +
         'Update skills does.',
-      'Only copies Orca wrote and nobody changed are updated. A copy you changed, or a ' +
-        'different skill with the same name, is skipped and is reported; --force replaces ' +
-        'it after moving it to a backup under ~/.agents/.orca-skill-backups.',
+      'Only copies that match what Orca ships are updated. A copy that differs from ' +
+        'Orca\u2019s, or a different skill with the same name, is skipped and is reported; ' +
+        '--force replaces it after moving the current copy, including any extra files, to a ' +
+        'backup. The result prints where each backup went.',
       'Installs globally (all projects) by default. Use --local to install into the ' +
         'current project; it links only into agent folders the project already has.',
       'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +
@@ -108,7 +109,8 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'Runs the same planner as `orca skills install`, but only at locations that already ' +
         'hold the skill; it never adds a skill, or an existing skill for another agent.',
       'Updates each untouched copy where it is; other copies are skipped unless you ' +
-        'pass --force. Use `orca skills install` to add a skill for a newly detected agent.',
+        'pass --force, which moves each one, including any extra files, to a backup first. ' +
+        'Use `orca skills install` to add a skill for a newly detected agent.',
       'Updates the global install by default. Use --local to update the current project.',
       'Use --dry-run to print what would change and the plan digest without writing.',
       'With --json, both dry runs and real runs print the plan, and real runs the result.',
