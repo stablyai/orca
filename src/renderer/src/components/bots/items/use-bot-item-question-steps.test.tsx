@@ -55,7 +55,9 @@ it('posts a typed answer held for one line with the next answer that carries an 
   expect(send).toHaveBeenCalledExactlyOnceWith(
     'Fix Datadog with a site picker? → what do other products do\nVercel: test it or hide it? → [Image #1] vercel sign in works',
     ['/shot.png'],
-    'e1'
+    'e1',
+    undefined,
+    []
   )
 })
 
@@ -73,7 +75,8 @@ it('sends a comment whose reply mark was closed as plain, and a named one as the
     'which one is the paired server?',
     [],
     undefined,
-    true
+    true,
+    undefined
   )
 
   const single: BotItemEvent[] = [
@@ -90,8 +93,8 @@ it('sends a comment whose reply mark was closed as plain, and a named one as the
   )
   send.mockClear()
   act(() => oneResult.current.fromBox('yes', [], 'q1'))
-  expect(send).toHaveBeenCalledExactlyOnceWith('yes', [], undefined, false)
+  expect(send).toHaveBeenCalledExactlyOnceWith('yes', [], undefined, false, undefined)
   send.mockClear()
   act(() => oneResult.current.fromBox('a note', [], null))
-  expect(send).toHaveBeenCalledExactlyOnceWith('a note', [], undefined, true)
+  expect(send).toHaveBeenCalledExactlyOnceWith('a note', [], undefined, true, undefined)
 })
