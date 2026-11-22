@@ -46,7 +46,7 @@ export function useSortableTabRename({
     setIsEditing(false)
   }, [renameValue, onSetCustomTitle, tabId])
 
-  useBlurSaveOnUnmount(isEditing, commitRename)
+  useBlurSaveOnUnmount(() => isEditing && !committedOrCancelledRef.current, commitRename)
 
   const cancelRename = useCallback(() => {
     committedOrCancelledRef.current = true

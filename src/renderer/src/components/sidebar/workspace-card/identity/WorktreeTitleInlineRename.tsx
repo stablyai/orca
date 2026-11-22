@@ -214,16 +214,15 @@ export function WorktreeTitleInlineRename({
         setEditingMode(false)
       }
     } catch (err) {
-      if (mountedRef.current) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate(
-                'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
-                'Failed to rename workspace.'
-              )
-        )
-      }
+      // Toast even when unmounted: a save from useBlurSaveOnUnmount has no field left to show the old name.
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
+              'Failed to rename workspace.'
+            )
+      )
     } finally {
       savingRef.current = false
       if (mountedRef.current) {
@@ -231,7 +230,7 @@ export function WorktreeTitleInlineRename({
       }
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
-  useBlurSaveOnUnmount(editing, commitRename)
+  useBlurSaveOnUnmount(() => editingRef.current, commitRename)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {

@@ -42,7 +42,7 @@ export function BotNameInlineEdit({
     }
     setValue(null)
   }
-  useBlurSaveOnUnmount(value !== null, save)
+  useBlurSaveOnUnmount(() => value !== null && !cancelled.current, save)
 
   if (value === null) {
     return (
