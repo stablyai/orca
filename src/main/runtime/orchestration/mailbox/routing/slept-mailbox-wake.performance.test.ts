@@ -128,3 +128,67 @@ it.each([100, 1_000])(
     }
   }
 )
+
+it.each([1_000, 10_000])(
+  'an orchestration change that names nothing reads no owner of %i stranded mailboxes',
+  async (stranded) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const record = { ...sleeper(0, 'folder:0'), restoreOnTabOpenOnly: false }
+    const run = db.createRun({
+      objective: 'finished',
+      coordinatorHandle: null,
+      coordinatorPaneKey: 'tab:00000000-2222-4222-8222-222222222222'
+    })
+    for (let index = 0; index < stranded; index += 1) {
+      db.insertMessage({
+        runId: run.id,
+        from: 'worker',
+        to: `dispatch:gone-${index}`,
+        subject: 'x'
+      })
+    }
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    const resumeSleepingAgents = async () => true
+    const members: Partial<RuntimeNotifier> = { resumeSleepingAgents }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass under test calls only resumeSleepingAgents; every other member is a no-op.
+    const notifier = new Proxy(members, {
+      get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
+    }) as RuntimeNotifier
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(2_000)
+      const reads = [
+        vi.spyOn(db, 'getRun'),
+        vi.spyOn(db, 'getDispatchContextById'),
+        vi.spyOn(db, 'getRemoteDispatchAttachment')
+      ]
+      const prepare = vi.spyOn(db.db, 'prepare')
+
+      for (let tick = 0; tick < 10; tick += 1) {
+        db.crewChanges.notify(new Set(['traffic']))
+        db.crewChanges.notify()
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+
+      expect(reads.map((read) => read.mock.calls.length)).toEqual([0, 0, 0])
+      expect(prepare.mock.calls.filter(([sql]) => sql.includes('mail_wake_candidate'))).toEqual([])
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
+  }
+)

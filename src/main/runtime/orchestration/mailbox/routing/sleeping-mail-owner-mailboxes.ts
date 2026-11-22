@@ -47,9 +47,14 @@ export function sleepingMailOwnerMailboxes(
   const found: string[] = []
   for (const branch of branches) {
     const prefix = branch.table === 'runs' ? 'run:' : 'dispatch:'
+    // One statement per owner kind: the mail check runs inside SQLite, not once per owner row here.
     const rows = db.db
       .prepare(`SELECT '${prefix}' || ${branch.id} AS mailbox, ${branch.owner} AS owner
-      FROM ${branch.table} INDEXED BY ${branch.index} WHERE ${branch.key} = ? AND ${branch.live}`)
+      FROM ${branch.table} INDEXED BY ${branch.index} WHERE ${branch.key} = ? AND ${branch.live}
+        AND EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_mail_wake_candidate
+          WHERE to_handle = '${prefix}' || ${branch.table}.${branch.id} AND read = 0
+            AND delivered_at IS NULL AND pointer_enter_pending = 0
+            AND delivery_contract = 'current_delivery')`)
       .all(suffix)
     for (const row of rows) {
       if (
@@ -61,17 +66,7 @@ export function sleepingMailOwnerMailboxes(
         continue
       }
       visited.add(row.mailbox)
-      if (
-        db.db
-          .prepare(`SELECT EXISTS (
-        SELECT 1 FROM messages INDEXED BY idx_messages_mail_wake_candidate
-        WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
-          AND delivery_contract = 'current_delivery'
-      ) AS eligible`)
-          .get(row.mailbox)?.eligible === 1
-      ) {
-        found.push(row.mailbox)
-      }
+      found.push(row.mailbox)
     }
   }
   return found

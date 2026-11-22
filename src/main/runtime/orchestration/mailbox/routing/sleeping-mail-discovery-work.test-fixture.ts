@@ -22,12 +22,14 @@ export function countDiscoveryRows(db: OrchestrationDb) {
     if (!owner && !exists) {
       return prepare(sql)
     }
-    const instrumented = owner
-      ? sql.replace(
-          ' WHERE ',
-          ` WHERE r4_owner_row(${owner[1] === 'remote_dispatch_attachments' ? 'dispatch_id' : 'id'}) AND `
-        )
-      : sql.replace('WHERE to_handle', 'WHERE r4_message_row(to_handle) AND to_handle')
+    const instrumented = (
+      owner
+        ? sql.replace(
+            ' WHERE ',
+            ` WHERE r4_owner_row(${owner[1] === 'remote_dispatch_attachments' ? 'dispatch_id' : 'id'}) AND `
+          )
+        : sql
+    ).replace('WHERE to_handle', 'WHERE r4_message_row(to_handle) AND to_handle')
     const statement = prepare(instrumented)
     return {
       ...statement,

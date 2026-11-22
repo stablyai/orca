@@ -137,9 +137,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       { consumesTerminalSideEffects: false }
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
+    // A change that names nothing moves no sleeper's mail on its own: arriving or rerouted mail
+    // requests its mailbox's wake, and availability edges re-check everything.
     const changed = (facets: CrewInvalidation) => {
-      if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
-        this.publishSleepingMail(sleepingMailChangeScope(facets))
+      const scope = sleepingMailChangeScope(facets)
+      if (scope && (facets.has('traffic') || facets.has('topology') || facets.has('records'))) {
+        this.publishSleepingMail(scope)
       }
     }
     // Idle: this reader reads no names, so crew writes skip their names comparison for it.

@@ -81,7 +81,8 @@ it.each([10, 100])(
         ).flat()
         expect(found).toEqual(relevant.slice(0, k).flatMap((owner) => owner.mailboxes))
         expect(work.owners).toHaveLength(5 * k)
-        expect(work.probes).toHaveLength(4 * k)
+        // The inbox check runs inside each owner statement, never as a query per owner row.
+        expect(work.probes).toHaveLength(0)
         expect(work.messages).toHaveLength(3 * k)
         expect(
           work.plans.filter((detail) => /SCAN (?!CONSTANT ROW)|MATERIALIZE/.test(detail))
