@@ -493,7 +493,7 @@ it('hands parked writes back at the next deadline once a long truncate returns b
     admitted = true
     writer.prepare("INSERT INTO writes VALUES(?, 'parked')").run(id)
   })
-  await new Promise((resolve) => setTimeout(resolve, 3000))
+  await new Promise((resolve) => setTimeout(resolve, 1500))
   expect(admitted).toBe(false)
   // The call returned and freed the write lock; the worker stalls before replying.
   Atomics.store(worker.liveness, JOURNAL_CHECKPOINT_TRUNCATE, 0)

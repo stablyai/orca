@@ -332,10 +332,11 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     }
     // Inside a native call it can't answer; it is kept and watched, less often the longer it stays busy.
     // A truncate holding writes is watched at the normal pace, so they resume soon after its call returns.
-    this.host.late()
-    const timeout = this.options.timeoutMs ?? HEALTH_TIMEOUT_MS
+    // Read before late(): a truncate that returns in between was still running when late() kept writes.
     const truncating =
       Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_TRUNCATE) === JOURNAL_TRUNCATE_RUNNING
+    this.host.late()
+    const timeout = this.options.timeoutMs ?? HEALTH_TIMEOUT_MS
     const backoff = Math.min(timeout * 2 ** attached.busyDeadlines++, RESTART_MAX_MS)
     this.watch(progress, truncating ? timeout : backoff)
   }
