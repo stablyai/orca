@@ -26767,7 +26767,8 @@
     "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
-    "openConnectors": "Open connectors"
+    "openConnectors": "Open connectors",
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
   },
   "codeHost": {
     "errors": {
@@ -29858,6 +29859,7 @@
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
+    "devinProduct": "Devin CLI",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
