@@ -1,7 +1,5 @@
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import type { AcpListingSession } from '../acp/discovery/acp-model-discovery-policy'
 import { HERMES_ACP_DIALECT } from '../acp/acp-dialects/hermes-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from '../acp/launch/acp-account-binding'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -47,22 +45,6 @@ function hermesAccountBinding(): AcpAccountBinding {
   }
 }
 
-async function discardHermesListingSession({
-  sessionId,
-  accountHomePath
-}: AcpListingSession): Promise<void> {
-  try {
-    const db = new DatabaseSync(join(accountHomePath, 'state.db'))
-    try {
-      db.prepare("DELETE FROM sessions WHERE id = ? AND source = 'acp'").run(sessionId)
-    } finally {
-      db.close()
-    }
-  } catch {
-    // Missing or unreadable state.db means no listing session needs cleanup.
-  }
-}
-
 export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'hermes',
   command: 'hermes',
@@ -86,13 +68,16 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
     values: { ask: 'ask', 'accept-edits': 'workspace_session', 'full-access': 'session' },
     fullAccessAnswersRequests: true
   },
-  // Hermes lacks ACP session/delete, so delete the temporary listing row from state.db after exit.
+  // Only a session lists models, and Hermes stores it at session/new without an ACP delete, so its
+  // own CLI deletes the listing session once the process exits.
   modelDiscovery: {
     kind: 'session',
     listingNamesConfiguredModel: false,
     inPrivateFolder: true,
     listsOnDemand: true,
-    discardSession: discardHermesListingSession
+    discardSession: async ({ sessionId, runAgent }) => {
+      await runAgent(['sessions', 'delete', '--yes', sessionId])
+    }
   },
   instructions: deliverHermesInstructions,
   instructionsInWorkspace: true,
