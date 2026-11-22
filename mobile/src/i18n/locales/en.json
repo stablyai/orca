@@ -4126,6 +4126,12 @@
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
+    },
+    "pairedServerAsk": {
+      "title": "{{from}} wants to message {{to}} on this computer",
+      "once": "Allow once",
+      "always": "Always allow {{server}}",
+      "deny": "Deny"
     }
   },
   "sourceControl": {

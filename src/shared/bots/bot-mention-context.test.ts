@@ -4,6 +4,7 @@ import {
   botMentionContext,
   botMentionToken,
   mentionedBots,
+  mentionedClientBots,
   mentionedServerBots,
   splitBotMentions
 } from './bot-mention-context'
@@ -122,4 +123,33 @@ it("names a paired computer's bot by its installation, and never reads it as thi
   ])
   expect(mentionedBots(token, [PERF])).toEqual([])
   expect(mentionedServerBots(token)).toEqual([])
+})
+
+it("tells the agent how to message a paired computer's bot with --on-client, naming the computer while it is connected", () => {
+  const token = botClientMentionToken({ id: 'perf-id', name: 'Perf bot' }, 'install-a')
+  expect(mentionedClientBots(`ask ${token} and ${token}`)).toEqual([
+    { id: 'perf-id', name: 'Perf bot', client: 'install-a' }
+  ])
+  expect(
+    botMentionContext([
+      {
+        id: 'perf-id',
+        name: 'Perf bot',
+        purpose: null,
+        client: { installationId: 'install-a', name: "Alice's Mac" }
+      }
+    ])
+  ).toBe(
+    `<orca_context>Perf bot is an agent on "Alice's Mac", a computer paired to this one. To message it, run \`orca orchestration send --on-client install-a --to "bot:Perf bot" --type question|handoff --subject … --body-file …\`; a person on that computer approves it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.</orca_context>`
+  )
+  expect(
+    botMentionContext([
+      {
+        id: 'perf-id',
+        name: 'Perf bot',
+        purpose: null,
+        client: { installationId: 'install-a', name: null }
+      }
+    ])
+  ).toContain('Perf bot is an agent on a computer paired to this one. To message it')
 })

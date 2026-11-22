@@ -22609,6 +22609,12 @@
         "once": "Allow once",
         "title": "{{from}} wants to message {{to}} on this computer",
         "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
+      },
+      "clientAsk": {
+        "declined": "Declined",
+        "notConnected": "{{computer}} isn’t connected",
+        "waitingForYou": "Waiting for you",
+        "waitingOn": "Waiting on {{computer}}"
       }
     },
     "tab": {

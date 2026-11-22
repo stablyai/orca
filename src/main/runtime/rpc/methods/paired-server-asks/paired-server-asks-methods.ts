@@ -71,28 +71,34 @@ export const PAIRED_SERVER_ASKS_METHODS = [
     name: 'pairedServerAsks.list',
     permission: 'workspace',
     params: PairedServerAskListParams,
-    handler: (params, ctx) => ({
-      cards: listPairedServerAsks(ctx.runtime.getOrchestrationDb(), { state: 'card' })
-        .filter((row) => params.botId === undefined || row.bot_id === params.botId)
-        .flatMap((row) => {
-          const ask = ClientAskPayload.safeParse(JSON.parse(row.payload))
-          if (!ask.success) {
-            return []
-          }
-          return [
-            {
-              messageId: row.message_id,
-              environmentId: row.environment_id,
-              botId: row.bot_id,
-              rootSession: row.root_session,
-              from: { label: ask.data.senderLabel, sender: ask.data.sender ?? null },
-              subject: ask.data.subject,
-              body: ask.data.body ?? '',
-              createdAt: row.created_at
+    handler: (params, ctx) => {
+      // The agent's Home chat, where a phone shows its cards inline.
+      const botOf = new Map(ctx.runtime.bots.list().map((bot) => [bot.id, bot]))
+      return {
+        cards: listPairedServerAsks(ctx.runtime.getOrchestrationDb(), { state: 'card' })
+          .filter((row) => params.botId === undefined || row.bot_id === params.botId)
+          .flatMap((row) => {
+            const ask = ClientAskPayload.safeParse(JSON.parse(row.payload))
+            if (!ask.success) {
+              return []
             }
-          ]
-        })
-    })
+            return [
+              {
+                messageId: row.message_id,
+                environmentId: row.environment_id,
+                botId: row.bot_id,
+                botName: botOf.get(row.bot_id)?.name ?? null,
+                botChatSessionId: botOf.get(row.bot_id)?.chatSessionId ?? null,
+                rootSession: row.root_session,
+                from: { label: ask.data.senderLabel, sender: ask.data.sender ?? null },
+                subject: ask.data.subject,
+                body: ask.data.body ?? '',
+                createdAt: row.created_at
+              }
+            ]
+          })
+      }
+    }
   }),
   defineMethod({
     name: 'pairedServerAsks.decide',

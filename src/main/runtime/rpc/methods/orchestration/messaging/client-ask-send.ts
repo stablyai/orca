@@ -25,6 +25,7 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
+import { clientAskCard } from './client-ask-card'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -70,7 +71,23 @@ export function sendClientAsk(args: {
     )
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
-  const client = requireListeningClient(runtime, params.onClient, 'Nothing was sent.')
+  const cardFor = (computer: { installationId: string; computer: string }) =>
+    clientAskCard({
+      asker: caller.address,
+      to,
+      type: params.type,
+      subject: params.subject,
+      client: computer
+    })
+  let client: ReturnType<typeof requireListeningClient>
+  try {
+    client = requireListeningClient(runtime, params.onClient, 'Nothing was sent.')
+  } catch (error) {
+    // Offline: the asking chat's card says it wasn't sent.
+    cardFor({ installationId: params.onClient, computer: params.onClient }).refused(error)
+    throw error
+  }
+  const card = cardFor({ installationId: client.installationId, computer: client.name })
   const db = runtime.getOrchestrationDb()
   const environmentId = clientEnvironmentId(client.deviceId, client.installationId)
   const conversation = db.openHomePeerMailConversation({
@@ -112,8 +129,10 @@ export function sendClientAsk(args: {
     })
   } catch (error) {
     forgetPeerQuestionOut(db, id)
+    card.refused(error)
     throw error
   }
+  card.write({ messageId: id })
   // That computer can't take uploads from here, so files never travel this way.
   const warnings: SendRecipientWarning[] = params.files?.length
     ? [

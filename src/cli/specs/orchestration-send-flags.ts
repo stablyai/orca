@@ -1,4 +1,4 @@
-// `orchestration send` flags; `on-client` stays out of its usage until paired computers take those asks.
+// `orchestration send` flags.
 export const ORCHESTRATION_SEND_FLAGS = [
   'to',
   'chat',
