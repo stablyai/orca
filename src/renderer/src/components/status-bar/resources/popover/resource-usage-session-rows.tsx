@@ -33,6 +33,7 @@ export function RuntimePaneTitlesProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
+  // oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- one selection serves every live-titled label in the open panel; a change re-renders only those labels.
   const titles = useAppStore((s) => s.runtimePaneTitlesByTabId)
   return (
     <RuntimePaneTitlesContext.Provider value={titles}>{children}</RuntimePaneTitlesContext.Provider>
