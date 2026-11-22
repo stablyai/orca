@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createBotTurnContext } from './bot-turn-context'
 import { botSessionInstructions } from './bot-session-instructions'
-import { botRulesBlock } from './bot-preamble'
+import { botNameLine, botRulesBlock } from './bot-preamble'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionStoreState } from '../runtime/agent-session/records/agent-session-store-state'
@@ -13,7 +13,8 @@ import { commitAgentSessionRewindCompletion } from '../runtime/agent-session/rec
 const FOLDER = '/home/me/.orca/bots/scout'
 const BLOCK = '## Tools\n\n- new tool\n\n## Rules\n\n- new rule'
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
-const keyOf = (text: string): string => sha256(`v2\n${text}`)
+const keyOf = (block: string, name = 'Scout'): string =>
+  sha256(`v2\n${botNameLine(name)}\n\n${block}`)
 const say: AgentJournalMessageItem = { kind: 'message', role: 'user', blocks: [] }
 
 function chat(launch: { delivered: boolean; recorded: string | null }) {
@@ -29,6 +30,7 @@ function chat(launch: { delivered: boolean; recorded: string | null }) {
   const context = createBotTurnContext(fs)
   context.launched('s1', 'bot-1', FOLDER, { soul: 'Be brief.', memory: '- a fact' }, true, {
     block: BLOCK,
+    name: 'Scout',
     rebuilt: false,
     ...launch
   })
