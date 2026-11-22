@@ -14,6 +14,13 @@ import { Slider } from '../../../ui/slider'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { getChatBackgroundEntriesByKey } from './chat-appearance-search'
+import {
+  initialSliderDraft,
+  sliderDraftAfterCommit,
+  sliderDraftAfterDrag,
+  sliderDraftAfterSettle,
+  sliderDraftWithSavedValue
+} from './chat-percent-slider-draft'
 
 type ChatBackgroundControlsProps = {
   appearance: Required<NativeChatAppearanceSettings>
@@ -194,10 +201,17 @@ function ChatPercentSlider({
   /** Resolves false when the value was not saved, so the thumb returns to the saved one. */
   onCommit: (value: number) => Promise<boolean>
 }): React.JSX.Element {
-  const [draft, setDraft] = useState({ saved: value, value })
+  const [draft, setDraft] = useState(() => initialSliderDraft(value))
   // Keep the thumb mounted so committed keyboard changes retain focus.
   if (draft.saved !== value) {
-    setDraft({ saved: value, value })
+    setDraft(sliderDraftWithSavedValue(draft, value))
+  }
+  const commit = (next: number): void => {
+    const owner = {}
+    setDraft((current) => sliderDraftAfterCommit(current, next, owner))
+    void onCommit(next).then((saved) =>
+      setDraft((current) => sliderDraftAfterSettle(current, owner, next, saved))
+    )
   }
   return (
     <div className="flex items-center gap-2">
@@ -209,15 +223,8 @@ function ChatPercentSlider({
           step={1}
           value={[draft.value]}
           thumbLabels={[label]}
-          onValueChange={([next]) => setDraft({ saved: value, value: next })}
-          onValueCommit={([next]) =>
-            void onCommit(next).then((saved) => {
-              // Only while the thumb still shows the value that failed; a newer drag keeps its own.
-              if (!saved) {
-                setDraft((current) => (current.value === next ? { saved: value, value } : current))
-              }
-            })
-          }
+          onValueChange={([next]) => setDraft((current) => sliderDraftAfterDrag(current, next))}
+          onValueCommit={([next]) => commit(next)}
         />
       </div>
       <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
