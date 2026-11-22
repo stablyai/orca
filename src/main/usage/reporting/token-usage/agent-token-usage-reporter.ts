@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   agentTokenCountsSchema,
   type AgentTokenCounts,
-  type AgentTokenUsage
+  type AgentTokenProvider
 } from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageTelemetryHost } from '../../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
@@ -73,7 +73,7 @@ export class AgentTokenUsageReporter {
   constructor(
     private readonly file: string,
     private readonly legacyFile: string,
-    private readonly provider: AgentTokenUsage['provider'],
+    private readonly provider: AgentTokenProvider,
     private readonly telemetry: UsageTelemetryHost,
     private readonly now: () => Date = () => new Date()
   ) {
@@ -138,8 +138,11 @@ export class AgentTokenUsageReporter {
   private async load(today: string): Promise<State> {
     const [current, legacy] = await Promise.all([
       readIfExists(this.file),
-      // The older build's file only says it ran; an unreadable one must not stop reporting.
-      readIfExists(this.legacyFile).catch(() => null)
+      // Only the older build's write time matters; an unreadable file must not stop reporting.
+      stat(this.legacyFile).then(
+        (info) => ({ mtimeMs: info.mtimeMs }),
+        () => null
+      )
     ])
     const raw = current ? parseJson(current.content) : undefined
     if (isNewerSchema(raw)) {
