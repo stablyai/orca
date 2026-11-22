@@ -12,6 +12,10 @@ jobs:
   ratchets:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # Read the merged PR behind a lint failure so the summary can name it.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/install-node-dependencies
@@ -22,3 +26,11 @@ jobs:
       - name: Enforce synchronous launches
         if: '!cancelled()'
         run: node config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs
+      # PR checks lint against an older main, so lint what each push changed and name the PR that crossed a limit.
+      - name: Lint files this push changed
+        if: '!cancelled()'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          PUSH_FORCED: ${{ github.event.forced }}
+          GH_TOKEN: ${{ github.token }}
+        run: node config/scripts/ci/main-push-lint/ci-main-push-changed-lint.mjs
