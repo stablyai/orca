@@ -44,6 +44,8 @@ const BROWSER_COMMAND_NAMES = [
   'browserSiteDisplay',
   'browserSetSiteColorScheme',
   'browserStop',
+  'browserFindInPage',
+  'browserStopFindInPage',
   'browserScreenshot',
   'browserScreencast',
   'browserEval',

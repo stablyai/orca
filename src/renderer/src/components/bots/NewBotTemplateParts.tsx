@@ -115,13 +115,17 @@ export function NewBotTemplateParts({
   template: BotTemplate
   /** The picked computer applies template packages (`bots.templates.v2`). */
   packages: boolean
-  hostLabel: string
+  /** Omitted when the Computer field already explains the block. */
+  hostLabel?: string
   kept: ReadonlySet<BotTemplateSkill>
   onKeptChange: (skill: BotTemplateSkill, on: boolean) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [row, setRow] = useState<HTMLDivElement | null>(null)
   if (!packages) {
+    if (!hostLabel) {
+      return null
+    }
     const note = t(
       'bots.new.parts.olderHost',
       '{{host}} needs an Orca update to add skills and schedules',
