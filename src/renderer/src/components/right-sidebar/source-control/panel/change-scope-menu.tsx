@@ -241,7 +241,7 @@ export function SourceControlChangeScopeMenuContent({
             )}
           </span>
           <DropdownMenuItem
-            className="shrink-0 text-theme-accent focus:text-theme-accent focus:underline"
+            className="shrink-0"
             onSelect={(event) => {
               // Retry in place; closing the menu would hide the result it fetches.
               event.preventDefault()

@@ -22,13 +22,7 @@ export function commitScopeFilesStatus(
             "Couldn't load files."
           )}
         </span>
-        <Button
-          type="button"
-          variant="link"
-          size="inlineText"
-          className="text-theme-accent"
-          onClick={onRetry}
-        >
+        <Button type="button" variant="link" size="inlineText" onClick={onRetry}>
           {t('auto.components.right.sidebar.SourceControl.scopeRetryCommits', 'Retry')}
         </Button>
       </div>
