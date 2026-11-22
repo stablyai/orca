@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { findKeybindingConflicts } from '../../shared/keybindings/formatting'
-import { getKeybindingDefinition, isKeybindingActionId } from '../../shared/keybindings/definitions'
+import {
+  getKeybindingDefinition,
+  isKeybindingActionId,
+  isRetiredKeybindingActionId
+} from '../../shared/keybindings/definitions'
 import {
   keybindingFileDiagnostic,
   keybindingValidationFailure,
@@ -154,6 +158,9 @@ export function parseBindingSection(
   const overrides: KeybindingOverrides = {}
   for (const [actionId, rawBinding] of Object.entries(value)) {
     if (options.skipRootKeys && ROOT_KEYS.has(actionId)) {
+      continue
+    }
+    if (isRetiredKeybindingActionId(actionId)) {
       continue
     }
     if (!isKeybindingActionId(actionId)) {
