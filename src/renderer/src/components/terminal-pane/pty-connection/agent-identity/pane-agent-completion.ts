@@ -15,6 +15,7 @@ import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/age
 import { isAgentTaskCompleteTrackingEnabled } from '../notifications/agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../../agent-completion/process-inspection/agent-process-inspection-cost'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
+import { shouldSuppressAlreadyDoneAgentProcessBoundary } from './already-done-process-boundary'
 import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -43,6 +44,10 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
         return true
       }
       const currentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
+      // Why: quitting or replacing an agent whose turn already finished is not a new completion (#46569).
+      if (shouldSuppressAlreadyDoneAgentProcessBoundary(currentStatus, exited.agent)) {
+        return true
+      }
       const currentAgentForReplacement = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         replacement.agent
@@ -58,6 +63,10 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
         return true
       }
       const currentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
+      // Why: an idle quit must not mark a read workspace unread when the row is already done (#46569).
+      if (shouldSuppressAlreadyDoneAgentProcessBoundary(currentStatus, exited.agent)) {
+        return true
+      }
       const currentAgentForExited = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         exited.agent
