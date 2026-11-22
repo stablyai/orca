@@ -1,5 +1,4 @@
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
-import { isWorkerRestartOffered } from '../../db/worker-dispatch/worker-restart-resume'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
@@ -11,13 +10,11 @@ import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
 } from '../../../push/notifications/terminal-agent-turn-news'
-import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
   workerTurnStopDispatchId,
   type WorkerRequestError,
-  type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
@@ -28,6 +25,10 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import { claudeStopFailureFact } from '../../../../claude/structured/journal/claude-usage-limits'
 import { failureRequestError } from './chat-worker-error-words'
 import { redactFailure } from './worker-turn-stop-wording'
+import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import { WorkerBackgroundWaits } from './worker-background-waits'
+import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
+export { resolveTerminalWorkerDispatch }
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
@@ -46,8 +47,11 @@ type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mai
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
+  /** Turns held open only by their own background tasks, terminal or chat: rests of their own. */
+  readonly backgroundWaits: WorkerBackgroundWaits
 
   constructor(private readonly deps: TerminalWorkerTurnStopsDeps) {
+    this.backgroundWaits = new WorkerBackgroundWaits(deps)
     this.news = new TerminalAgentTurnNews({
       readHookRow: deps.readHookRow,
       // The Dispatch the stop belongs to is the one active when the stop was seen.
@@ -71,12 +75,15 @@ export class TerminalWorkerTurnStops {
 
   observe(change: AgentPaneChange): void {
     this.news.observe(change)
+    this.backgroundWaits.observe(change)
     // A turn starting is the worker's own news: once per edge, not per hook post.
     const working =
       change.kind === 'moved'
         ? change.to === 'working'
         : change.kind === 'seeded' && change.phase === 'working'
-    if (working && !this.deps.readHookRow(change.paneKey)?.structuredHost) {
+    const row = working ? this.deps.readHookRow(change.paneKey) : null
+    // A turn held open only by its background tasks is a rest, which those waits record.
+    if (working && !row?.structuredHost && !(row && agentBackgroundWait(row))) {
       const resolved = this.resolve(change.paneKey)
       if (resolved) {
         observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
@@ -235,37 +242,4 @@ function terminalRequestError(row: AgentStatusIpcPayload): WorkerRequestError | 
       ...(detail ? { detail } : {})
     }
   }
-}
-
-/** The Dispatch a pane's worker runs now: its active local one, or the current remote attachment. */
-export function resolveTerminalWorkerDispatch(
-  deps: Pick<TerminalWorkerTurnStopsDeps, 'getDb' | 'getHandle' | 'getProcessIncarnation'>,
-  paneKey: string
-): {
-  db: OrchestrationDb
-  handle: string
-  target: WorkerTurnStopDispatch
-} | null {
-  const db = deps.getDb()
-  const handle = db ? deps.getHandle(paneKey) : null
-  if (!db || !handle) {
-    return null
-  }
-  const dispatch = db.getActiveDispatchForTerminal(handle, paneKey)
-  if (dispatch) {
-    // Its resume waits on a person, as a cut chat's does: nothing tells its coordinator until they act.
-    return isWorkerRestartOffered(db, dispatch.id)
-      ? null
-      : { db, handle, target: { kind: 'local', dispatch } }
-  }
-  // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
-  const attachment = db.findActiveRemoteAttachmentForPane(paneKey)
-  return attachment &&
-    db.isRemoteAttachmentProcessCurrent({
-      dispatchId: attachment.dispatch_id,
-      paneKey,
-      processIncarnation: deps.getProcessIncarnation(handle)
-    })
-    ? { db, handle, target: { kind: 'remote', attachment } }
-    : null
 }

@@ -27435,6 +27435,7 @@
       "idle": "Idle",
       "needsYou": "Needs you",
       "askedCoordinator": "Asked {{name}} a question",
+      "waitsOnBackground": "Waiting on its background task",
       "chat": "Chat"
     },
     "workspaces": {
