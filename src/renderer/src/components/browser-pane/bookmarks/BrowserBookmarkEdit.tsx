@@ -38,7 +38,7 @@ export function BrowserBookmarkEdit({
       <PopoverContent
         align="end"
         aria-label={label}
-        className="w-72 max-w-[var(--radix-popover-content-available-width)]"
+        className="w-80 max-w-(--radix-popover-content-available-width)"
       >
         {open ? (
           <BrowserBookmarkForm bookmark={bookmark} scope={scope} onClose={() => setOpen(false)} />
@@ -72,7 +72,7 @@ function BrowserBookmarkForm({
 
   return (
     <form
-      className="flex flex-col gap-3"
+      className="flex flex-col gap-3 p-3"
       onSubmit={async (event) => {
         event.preventDefault()
         const api = window.api.browser.bookmarks
