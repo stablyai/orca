@@ -95,6 +95,8 @@ export function RemoteBrowserPagePane({
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
   const stagedPage = remotePageHandle?.staged === true
+  const remotePageId =
+    remotePageHandle?.environmentId === runtimeEnvironmentId ? remotePageHandle.remotePageId : null
   // Older hosts publish canGoBack/canGoForward as always false; keep both arrows enabled for them.
   const historyStateKnown = useRuntimeEnvironmentCapability(
     runtimeEnvironmentId,
@@ -247,10 +249,7 @@ export function RemoteBrowserPagePane({
     imageRef,
     remoteViewportRef,
     runtimeEnvironmentId,
-    remotePageId:
-      remotePageHandle?.environmentId === runtimeEnvironmentId
-        ? remotePageHandle.remotePageId
-        : null,
+    remotePageId,
     runtimeTarget,
     runtimeWorktree,
     lifecycle,
