@@ -89,7 +89,15 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  const quietDetail = useNativeChatApprovalQuietDetail(
+  const {
+    text: quietDetailText,
+    otherArguments: quietOtherArguments,
+    textRef: quietDetailRef,
+    otherArgumentsRef: quietOtherArgumentsRef,
+    open: quietDetailOpen,
+    setOpen: setQuietDetailOpen,
+    showsToggle: showsQuietDetailToggle
+  } = useNativeChatApprovalQuietDetail(
     quiet ? (approval.detail ?? null) : null,
     approval.toolName,
     approval.description
@@ -294,28 +302,28 @@ export function NativeChatApprovalCard({
                     </div>
                   ) : url !== null ? (
                     <NativeChatUrlTarget url={url} />
-                  ) : quietDetail.text !== null ? (
+                  ) : quietDetailText !== null ? (
                     <>
                       <div
-                        ref={quietDetail.textRef}
+                        ref={quietDetailRef}
                         data-native-chat-approval-detail="true"
                         data-native-chat-code-content
                         className={cn(
                           'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
-                          !quietDetail.open && 'line-clamp-3'
+                          !quietDetailOpen && 'line-clamp-3'
                         )}
                       >
-                        {quietDetail.text}
+                        {quietDetailText}
                       </div>
-                      {quietDetail.otherArguments !== null ? (
+                      {quietOtherArguments !== null ? (
                         <div
-                          ref={quietDetail.otherArgumentsRef}
+                          ref={quietOtherArgumentsRef}
                           className={cn(
                             'break-words font-mono text-chat-code',
-                            !quietDetail.open && 'line-clamp-2'
+                            !quietDetailOpen && 'line-clamp-2'
                           )}
                         >
-                          {quietDetail.otherArguments}
+                          {quietOtherArguments}
                         </div>
                       ) : null}
                     </>
@@ -392,16 +400,16 @@ export function NativeChatApprovalCard({
                     {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
                   </button>
                 ) : null}
-                {quietDetail.showsToggle ? (
+                {showsQuietDetailToggle ? (
                   <button
                     type="button"
-                    aria-expanded={quietDetail.open}
-                    onClick={() => quietDetail.setOpen(!quietDetail.open)}
+                    aria-expanded={quietDetailOpen}
+                    onClick={() => setQuietDetailOpen(!quietDetailOpen)}
                     className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown
-                      className={cn('size-3.5', quietDetail.open && 'rotate-180')}
+                      className={cn('size-3.5', quietDetailOpen && 'rotate-180')}
                       aria-hidden
                     />
                   </button>
