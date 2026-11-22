@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
-import { mobileBotRowLine, mobileBotRowLineText } from './mobile-bot-row-line'
+import { mobileBotRowLine, mobileBotRowLineText, mobileBotRowNeedsYou } from './mobile-bot-row-line'
 import { colors, feedback, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
@@ -40,6 +40,8 @@ export function MobileBotHomeRow({
   const bot = view.botFacts!
   // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works.
   const line = mobileBotRowLine(bot, item.agents ?? [], now)
+  // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
+  const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
   const down = bot.host?.word !== undefined
   const asking = !down && line?.kind === 'needYouElsewhere'
@@ -84,7 +86,7 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {bot.needsYou ? <MobileBotNeedsYouCount count={bot.needsYou} /> : null}
+          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
           {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
               down host's bot is its row alone. */}

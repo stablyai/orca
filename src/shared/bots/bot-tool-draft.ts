@@ -1,10 +1,12 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+// A tool's editor draft: the desktop's Edit tool dialog and the phone's Edit page fill and save it alike.
+import { createNonSecureContextUuid as createUuid } from '../identifiers/non-secure-context-uuid'
 import {
   botToolInputError,
+  botToolUrlOrigin,
   type BotToolInput,
   type BotToolDetails,
   type BotToolServer
-} from '../../../../shared/bot-tools'
+} from '../bot-tools'
 
 export type SecretDraft = { id: string; key: string; value: string; configured: boolean }
 export type BotToolDraft = {
@@ -31,9 +33,9 @@ export function draftFromServer(server: BotToolServer | BotToolDetails['server']
     values: Record<string, string> | { key: string; configured: boolean }[] | undefined
   ): SecretDraft[] =>
     Array.isArray(values)
-      ? values.map((row) => ({ ...row, id: createBrowserUuid(), value: '' }))
+      ? values.map((row) => ({ ...row, id: createUuid(), value: '' }))
       : Object.entries(values ?? {}).map(([key, value]) => ({
-          id: createBrowserUuid(),
+          id: createUuid(),
           key,
           value,
           configured: false
@@ -44,7 +46,7 @@ export function draftFromServer(server: BotToolServer | BotToolDetails['server']
         ...draft,
         mode: 'command',
         command: server.command,
-        args: server.args.map((value) => ({ id: createBrowserUuid(), value })),
+        args: server.args.map((value) => ({ id: createUuid(), value })),
         env: rows(server.env)
       }
 }
@@ -76,7 +78,7 @@ export function botToolDraftError(
   if (saved && rows.some((row) => row.configured && !row.value)) {
     const previous = saved.server
     const unchanged = remote
-      ? 'url' in previous && new URL(previous.url).origin === new URL(draft.url).origin
+      ? 'url' in previous && botToolUrlOrigin(previous.url) === botToolUrlOrigin(draft.url)
       : 'command' in previous && previous.command === draft.command
     if (!unchanged) {
       return 'The credential destination changed. Re-enter saved values or remove their rows.'

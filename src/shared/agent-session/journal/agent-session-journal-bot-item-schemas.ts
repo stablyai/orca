@@ -29,6 +29,8 @@ export const BOT_JOURNAL_ITEM_BODIES = [
     kind: z.literal('automation-run-not-started'),
     run: z.object({ runId: z.string().min(1), automation: AutomationRef }),
     error: z.string(),
+    // Read against its code where it is drawn; a newer host's refusal reads as none.
+    refusal: z.unknown().optional(),
     text: z.string(),
     at: z.number().finite()
   }),

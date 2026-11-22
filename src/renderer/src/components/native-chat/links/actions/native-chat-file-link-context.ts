@@ -1,4 +1,4 @@
-import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
+import { nativeChatPathBase } from '../../../../../../shared/native-chat/file-access/native-chat-path-base'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '../../../../store/types'
 import type { WorktreeRuntimeOwnerState } from '../../../../lib/workspace/ownership/worktree-runtime-owner-state'
@@ -116,10 +116,10 @@ export function resolveNativeChatFileLinkContextForOwner(
     return null
   }
 
-  const sessionFolder = resolveNativeChatSessionFolder(state, terminalTabId, worktreeId)
-  // Only a folder inside the workspace as written; files are addressed relative to worktreePath.
-  const pathBase =
-    sessionFolder && relativePathInsideRoot(worktreePath, sessionFolder) ? sessionFolder : null
+  const pathBase = nativeChatPathBase(
+    worktreePath,
+    resolveNativeChatSessionFolder(state, terminalTabId, worktreeId)
+  )
   return {
     worktreeId,
     worktreePath,

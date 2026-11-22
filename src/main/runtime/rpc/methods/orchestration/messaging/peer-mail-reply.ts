@@ -140,7 +140,7 @@ export async function replyOverPeerMail(args: {
     localParty: conversation.local_party ?? '',
     localPaneKey: conversation.local_pane_key
   })
-  await deliverPeerMail(runtime, server, current, {
+  const held = await deliverPeerMail(runtime, server, current, {
     id,
     to: route.remote_party,
     senderLabel,
@@ -152,7 +152,12 @@ export async function replyOverPeerMail(args: {
   db.markAsRead([original.id], { kind: 'reply' })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
-    { message: { id, subject }, to: original.from_handle, server: server.name },
+    {
+      message: { id, subject },
+      to: original.from_handle,
+      server: server.name,
+      ...(held.length > 0 ? { warnings: held } : {})
+    },
     () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
     { kind: 'federation', environmentId: server.environmentId }
   )

@@ -8,7 +8,8 @@ import { prepareSessionRecipient } from '../messaging/session-recipient'
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 
 /** Stores peer mail for an agent that is no bot (or a reply to one) as this Orca's own mail, once.
- *  `landedAgain` reads whether a copy landed while the recipient was being prepared. */
+ *  `landedAgain` reads whether a copy landed while the recipient was being prepared; `received`
+ *  makes the answer for a stored copy from its mailbox and whether a waiter takes it. */
 export async function storePeerMailForAgent<R>(
   runtime: OrcaRuntimeService,
   params: Pick<
@@ -24,13 +25,14 @@ export async function storePeerMailForAgent<R>(
     /** Whether the resolved recipient may take it; otherwise it is dropped with a warning. */
     admits?: (to: string) => boolean
   },
-  landedAgain: () => R | null
+  landedAgain: () => R | null | Promise<R | null>,
+  received?: (to: string, takenByWaiter: boolean) => R | Promise<R>
 ): Promise<R | null> {
   const db = runtime.getOrchestrationDb()
   const { to } = params
   const terminalRecipient = await prepareSessionRecipient(runtime, to)
   // Read again after the wait: a copy of this delivery may have landed meanwhile.
-  const landed = landedAgain()
+  const landed = await landedAgain()
   if (landed) {
     return landed
   }
@@ -62,6 +64,8 @@ export async function storePeerMailForAgent<R>(
       NOTHING_DELIVERED
     )
   }
+  // Before storing, as a local send does: a waiter the arrival resolves is gone by the time the receipt reads.
+  const takenByWaiter = runtime.hasMessageWaiterFor(recipient.to, params.type ?? 'status')
   const stored = db.insertPeerMailMessage({
     conversationId: params.conversationId,
     peerFingerprint: params.peerFingerprint,
@@ -83,5 +87,5 @@ export async function storePeerMailForAgent<R>(
   if (!stored.duplicate) {
     runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
   }
-  return null
+  return received ? received(recipient.to, takenByWaiter) : null
 }
