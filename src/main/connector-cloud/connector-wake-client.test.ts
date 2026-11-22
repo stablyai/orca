@@ -79,9 +79,9 @@ describe('connector wake client', () => {
     h.wake.dialed[0].wake()
     await settle()
     h.fake.holdBefore.add(CONNECTOR_PATHS.acks)
+    const before = polls().length
     h.poll([{ ...base, deliveryId: 'd1', kind: 'send', text: 'more' }])
     await settle()
-    const before = polls().length
     // Sent but not yet taken: no poll yet.
     expect(h.fake.requestsTo(CONNECTOR_PATHS.acks)).toHaveLength(1)
     expect(polls()).toHaveLength(before)
