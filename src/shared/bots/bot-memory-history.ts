@@ -9,7 +9,7 @@ const BotMemoryLineSchema = z.object({
   after: z.string().nullable(),
   position: z
     .object({
-      index: z.number().int().nonnegative(),
+      index: z.number().int().nonnegative().nullable(),
       lineCount: z.number().int().positive(),
       eol: z.enum(['\n', '\r\n'])
     })

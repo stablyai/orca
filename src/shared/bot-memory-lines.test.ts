@@ -12,6 +12,12 @@ import {
 describe('a fact whose spacing is part of its value', () => {
   const TWO = '# M\n- sep is a  b\n- sep is a b\n'
 
+  it('inherits a source through respacing when there is no exact match', () => {
+    const before = '- a\tb\n- a  b · from: Slack\n'
+    expect(tagBotMemoryChanges(before, '- a b\n', null)).toBe('- a b · from: Slack\n')
+    expect(tagBotMemoryChanges(before, '* a\tb\n', 'Webhook')).toBe('* a\tb\n')
+  })
+
   it('is a different fact from the same words spaced otherwise', () => {
     const { text, dropped } = dropBotMemoryFact(TWO, 'sep is a  b')
     expect([text, dropped]).toEqual(['# M\n- sep is a b\n', 1])
