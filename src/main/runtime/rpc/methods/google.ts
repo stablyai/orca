@@ -5,6 +5,7 @@ import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../shared/google/google-who-can-ask-warning'
@@ -172,7 +173,7 @@ export const GOOGLE_METHODS = [
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
       const bot = await ctx.runtime.bots.update(botId, (current) => {
-        if (on && confirmedAskers && !sameAskers(confirmedAskers, botOtherAskers(current))) {
+        if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
           throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
         }
         return { google: on }

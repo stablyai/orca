@@ -155,10 +155,16 @@ describe('google.* owner-only changes', () => {
         OWNER
       )
     ).toMatchObject({ ok: false })
+    expect(
+      await dispatcher.dispatch(
+        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: ['slack::U9'] }),
+        OWNER
+      )
+    ).toMatchObject({ ok: false })
     expect(bots[0]?.google).not.toBe(true)
     expect(
       await dispatcher.dispatch(
-        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: ['Nora'] }),
+        request('google.bot.set', { botId: 'b1', on: true, confirmedAskers: ['slack::U2'] }),
         OWNER
       )
     ).toMatchObject({ ok: true, result: { bot: { google: true } } })
