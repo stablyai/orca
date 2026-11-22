@@ -17,10 +17,10 @@ import {
 } from '../../issues/issue-work-item-details'
 import {
   fetchIssueWorkItem,
-  fetchWorkItemPreview,
   fetchPullRequestWorkItem,
   fetchPullRequestWorkItemFromCandidates
 } from './work-item-fetch'
+import { fetchWorkItemPreview } from './work-item-preview'
 
 export async function getWorkItem(
   repoPath: string,
