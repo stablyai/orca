@@ -163,7 +163,8 @@ export function ManagedRuntimeInstallRow(props: {
     parts.push({ key: 'note', fixed: true, node: view.note })
   }
   // Each part draws its "·" in a left gutter. The parts sit one gutter to the left of the clipped
-  // line, so whichever part starts a line loses its dot: no line starts or ends with one.
+  // line, so whichever part starts a line loses its dot: no line starts or ends with one. The dot's
+  // empty alt text (`'·' / ''`) keeps it out of the accessibility tree, clipped or not.
   const line = (
     <div
       role="status"
@@ -183,7 +184,7 @@ export function ManagedRuntimeInstallRow(props: {
             className={cn(
               'relative flex items-center pl-3',
               dot !== false &&
-                "before:absolute before:inset-y-0 before:left-0 before:w-3 before:text-center before:content-['·']",
+                "before:absolute before:inset-y-0 before:left-0 before:w-3 before:text-center before:content-['·'_/_'']",
               fixed ? 'shrink-0 whitespace-nowrap' : 'min-w-0',
               className
             )}

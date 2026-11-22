@@ -248,7 +248,8 @@ export function managedRuntimeInstallPending(snapshot: ManagedRuntimeInstallSnap
     return false
   }
   const view = managedRuntimeInstallView(snapshot, '')
-  // A working external copy needs nothing unless Orca's own install is running or failed.
+  // A working external copy needs nothing unless Orca's own install is running, or a Remove is
+  // running or failed. A failed install isn't shown here (see settledView), so it doesn't count.
   if (snapshot.state.source === 'external') {
     return view.action?.kind === 'cancel' || view.removing || view.error !== null
   }
