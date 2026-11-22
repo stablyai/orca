@@ -177,7 +177,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const back = createBridgeHostBack({
     send,
     deliverable,
-    onClaim: (claimed) => options.onPageBackClaim(claimed),
+    report: options,
     ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
 
@@ -194,7 +194,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
-    onBackClaim: back.readClaim,
+    back,
     onTerminalKeyRailClaim: reportRailClaim
   })
 
@@ -340,6 +340,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       }
     },
     sendBack: back.send,
+    sendHeaderAction: back.sendHeaderAction,
     readSessionBack: () => ({
       ...back.read(),
       ...pageReaders.retained(),

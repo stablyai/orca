@@ -5,6 +5,7 @@ import type {
   BridgeTerminalKeyRail
 } from '../bridge/native-capabilities/bridge-terminal-key'
 import type { BridgePageGeometry } from '../bridge/page-geometry/bridge-page-geometry'
+import type { BridgePageHeader } from '../bridge/native-capabilities/bridge-page-header'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
@@ -67,6 +68,8 @@ export type MobileWebShellBridgeView = {
   readonly publishTerminalKeyRail: (keys: BridgeTerminalKeyRail) => void
   /** Hands the page one rail press. False with no host, or a page not granted the rail. */
   readonly sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => boolean
+  /** Hands the page one press on its shell-drawn header. False with no host or no header claim. */
+  readonly sendHeaderAction: (actionId: string) => boolean
   /**
    * Hands the mounted host one Back press. False when there is no host, or when the document it
    * serves never said it takes one — the caller then leaves the key to the navigator.
@@ -119,6 +122,8 @@ export type MobileWebShellBridgeArgs = {
     inputOwner?: string,
     toolbar?: BridgeTerminalToolbar
   ) => void
+  /** The header the page asks the shell to draw; null on each new document and when the page draws its own. */
+  onPageHeader: (header: BridgePageHeader | null) => void
   /** The page applied a one-shot route param and asks for it to be erased (ruling 34). */
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   onRouteRefused: (issue: string) => void
@@ -331,6 +336,11 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
         )
       },
       [buildId, client, sessionId, snapshot]
+    ),
+    sendHeaderAction: useCallback(
+      (actionId: string) =>
+        hostRef.current?.sessionId === sessionId && hostRef.current.host.sendHeaderAction(actionId),
+      [sessionId]
     ),
     // Fenced on the session the way inbound frames are, and answering false rather than throwing
     // when there is no host: the caller is a hardware key handler, and a press it cannot forward

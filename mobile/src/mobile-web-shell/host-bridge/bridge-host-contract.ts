@@ -6,6 +6,7 @@ import type {
   BridgeTerminalKeyRail
 } from '../bridge/native-capabilities/bridge-terminal-key'
 import type { BridgePageGeometry } from '../bridge/page-geometry/bridge-page-geometry'
+import type { BridgePageHeader } from '../bridge/native-capabilities/bridge-page-header'
 import type {
   TerminalBacklogEnd,
   TerminalBacklogTimers
@@ -133,6 +134,9 @@ export type BridgeHostOptions = {
     inputOwner?: string,
     toolbar?: BridgeTerminalToolbar
   ) => void
+  /** The header the page asks the shell to draw, or null to draw its own; null also arrives each
+   *  time a document starts or ends, and the page claims again on the `init` that follows. */
+  onPageHeader?: (header: BridgePageHeader | null) => void
   /**
    * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
    * the value it applied. The holder of that param compares before it clears: a tap that has moved
@@ -169,6 +173,8 @@ export type BridgeHost = {
    * which is every page older than it, or when no document holds the view.
    */
   sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => boolean
+  /** Hands the page one press on its shell-drawn header. False while no document holds a header claim. */
+  sendHeaderAction: (actionId: string) => boolean
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.

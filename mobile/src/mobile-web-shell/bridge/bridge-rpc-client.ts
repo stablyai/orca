@@ -40,6 +40,7 @@ import {
 import { createBridgeInboundFrameReader } from './client-state/bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './client-state/bridge-client-notifications'
 import { createBridgeClientTerminalKeys } from './client-state/bridge-client-terminal-keys'
+import { createBridgeClientPageHeader } from './client-state/bridge-client-page-header'
 import { createPageBackConsumers } from './page-lifecycle/page-back-consumers'
 import { BridgeClientRequests } from './client-state/bridge-client-requests'
 import {
@@ -149,6 +150,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       shellSession.accept(message)
       back.reassert()
       terminalKeys.reassert()
+      pageHeader.reassert()
     },
     acceptState: (connection) => acceptState(cache.apply(connection)),
     acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
@@ -172,7 +174,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         )
       notifications.notifySwapSafe(safe, round)
     },
-    acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
+    acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner),
+    acceptHeaderAction: (actionId) => pageHeader.accept(actionId)
   })
 
   function receive(json: string): void {
@@ -280,6 +283,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     hasGrant
   })
   const terminalKeys = createBridgeClientTerminalKeys(notifications.notifyTerminalKeyRailClaim)
+  const pageHeader = createBridgeClientPageHeader(notifications.notifyPageHeader)
 
   const unsubscribeFromMessages = options.onMessage(receive)
   handshake.start()
@@ -329,6 +333,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     close,
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,
+    claimPageHeader: pageHeader.claim,
     getShellSession: shellSession.current,
     nativeRequestRoom: () => bridgePendingRequestCap(true) - requests.size,
     clearRouteParam: (param, value) => posted(routeParamClearFrame(param, value))

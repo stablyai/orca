@@ -23,6 +23,7 @@ import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { PageDialogLayer, usePageDialogs } from '../platform/page-dialogs/PageDialogLayer'
+import { PageHeaderLayer, useShellPageHeader } from './page-header/PageHeaderLayer'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
@@ -137,12 +138,15 @@ export function MobileWebShellScreen({
     banner !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
   // Edge-to-edge disables adjustResize and zeroes WebView IME insets, so visualViewport never shrinks; publish native keyboard height to the page.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
+  const readySessionId = state.kind === 'ready' ? state.sessionId : null
+  const pageHeader = useShellPageHeader(overlay ? null : readySessionId, backClaimed)
+  const headerShown = pageHeader.header !== null
   const pageFold = usePageFoldDivision()
+  // The stack header and the banner each take the status-bar strip from the page.
   const pageInsets = pageSafeAreaInsets({
     insets: pageFold.safeAreaInsets,
-    topCovered: noticeShown
+    topCovered: noticeShown || headerShown
   })
-  const readySessionId = state.kind === 'ready' ? state.sessionId : null
   const keyRail = useShellKeyRail({ sessionId: readySessionId, overlay, routeGrants })
   const {
     snapshot,
@@ -272,6 +276,7 @@ export function MobileWebShellScreen({
     // A newer build swaps in only on a resume where the page has nothing to lose (no draft, upload or open sheet).
     onPageSwapSafe: reportSwapSafe,
     onTerminalKeyRailClaim: keyRail.reportClaim,
+    onPageHeader: pageHeader.report,
     onRouteParamClear: openTarget.onRouteParamClear,
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
@@ -288,13 +293,13 @@ export function MobileWebShellScreen({
         documentFailed: () => reportShellFailure('document-load-failed')
       })
     },
-    onNavigate: openPageRoute,
+    onNavigate: pageHeader.leaving(openPageRoute),
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.
     onHaptic: playPageHaptic,
     // The page has one history entry; only the native stack can handle Back.
-    onNavigateBack: popShellStack,
+    onNavigateBack: pageHeader.leaving(popShellStack),
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
@@ -337,20 +342,24 @@ export function MobileWebShellScreen({
   if (overlay && state.kind !== 'ready') {
     return null
   }
+  const headerLayer = <PageHeaderLayer state={pageHeader} bridge={bridge} />
   if (state.kind !== 'ready') {
     return (
-      <ShellStateScreen
-        hostId={hostId}
-        state={state}
-        onRetry={() => {
-          if (unreadable) {
-            retryHostSnapshot()
-          }
-          retry()
-        }}
-        downloadProgress={downloadProgress}
-        host={snapshot?.host ?? null}
-      />
+      <>
+        {headerLayer}
+        <ShellStateScreen
+          hostId={hostId}
+          state={state}
+          onRetry={() => {
+            if (unreadable) {
+              retryHostSnapshot()
+            }
+            retry()
+          }}
+          downloadProgress={downloadProgress}
+          host={snapshot?.host ?? null}
+        />
+      </>
     )
   }
   return (
@@ -360,7 +369,7 @@ export function MobileWebShellScreen({
       style={[
         styles.shellRoot,
         // The page pads system bars from init insets; a visible banner owns the status-bar strip.
-        { paddingTop: noticeShown ? insets.top : 0 },
+        { paddingTop: noticeShown && !headerShown ? insets.top : 0 },
         overlay && { backgroundColor: 'transparent' }
       ]}
       testID="mobile-web-shell-ready"
@@ -415,6 +424,7 @@ export function MobileWebShellScreen({
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
       <PageDialogLayer queue={pageDialogs} />
+      {overlay ? null : headerLayer}
     </View>
   )
 }

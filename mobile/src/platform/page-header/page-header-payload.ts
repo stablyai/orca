@@ -1,0 +1,96 @@
+import type { AppIcon } from '../../components/icons/app-icon-types'
+import {
+  isMenuSubmenu,
+  visibleMenuGroups,
+  type MenuItem
+} from '../../components/menu/native-menu-items'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
+import { isMenuAction, type ScreenHeaderAction } from '../../components/nav-bar/screen-header-props'
+import {
+  BRIDGE_PAGE_HEADER_BACK_ID,
+  BridgePageHeaderSchema,
+  type BridgePageHeader,
+  type BridgePageHeaderMenuItem
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-page-header'
+
+/** What a page asks the shell to draw: ScreenHeader's model, plus whether the title shows yet. */
+export type PageHeaderRequest = {
+  title: string
+  /** False while the page's own title still shows in its content. */
+  titleVisible?: boolean
+  onBack?: () => void
+  actions?: readonly ScreenHeaderAction[]
+}
+
+export type PageHeaderPayload = {
+  header: BridgePageHeader
+  /** The press each id the shell may send back stands for. */
+  handlers: ReadonlyMap<string, () => void>
+}
+
+// Lucide's component name; the shell maps it to the same symbols native screens draw.
+function iconName(icon: AppIcon | undefined): string | undefined {
+  return icon?.displayName || undefined
+}
+
+/**
+ * The header as data for the shell, or null when it holds something the shell can't draw. Menu
+ * ids come from the item's own id or label, not its position, so a press on a menu the page has
+ * since changed reaches the item that was pressed or nothing.
+ */
+export function pageHeaderPayload(request: PageHeaderRequest): PageHeaderPayload | null {
+  const handlers = new Map<string, () => void>()
+  const register = (base: string, onPress: () => void): string => {
+    let id = base
+    for (let copy = 2; handlers.has(id); copy += 1) {
+      id = `${base}#${copy}`
+    }
+    handlers.set(id, onPress)
+    return id
+  }
+  if (request.onBack) {
+    handlers.set(BRIDGE_PAGE_HEADER_BACK_ID, request.onBack)
+  }
+  const menuAction = (prefix: string, item: ActionSheetAction) => ({
+    id: register(`${prefix}/${item.id ?? item.label}`, item.onPress),
+    label: item.label,
+    icon: iconName(item.icon),
+    ...(item.destructive ? { destructive: true } : {}),
+    ...(item.disabled || item.loading ? { disabled: true } : {}),
+    ...(item.checked === undefined ? {} : { isOn: item.checked })
+  })
+  const menuItem = (prefix: string, item: MenuItem): BridgePageHeaderMenuItem =>
+    isMenuSubmenu(item)
+      ? {
+          label: item.label,
+          icon: iconName(item.icon),
+          submenu: item.actions.map((action) => menuAction(`${prefix}/${item.label}`, action))
+        }
+      : menuAction(prefix, item)
+  const header: BridgePageHeader = {
+    title: request.title,
+    titleVisible: request.titleVisible ?? true,
+    back: request.onBack !== undefined,
+    actions: (request.actions ?? []).map((action) =>
+      isMenuAction(action)
+        ? {
+            kind: 'menu' as const,
+            id: action.id,
+            label: action.label,
+            icon: iconName(action.icon),
+            menu: visibleMenuGroups(action.menu).map((group) =>
+              group.map((item) => menuItem(action.id, item))
+            )
+          }
+        : {
+            kind: 'button' as const,
+            id: register(action.id, action.onPress),
+            label: action.label,
+            icon: iconName(action.icon),
+            ...(action.disabled ? { disabled: true } : {})
+          }
+    )
+  }
+  const parsed = BridgePageHeaderSchema.safeParse(header)
+  return parsed.success ? { header: parsed.data, handlers } : null
+}

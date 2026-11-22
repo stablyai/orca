@@ -22,6 +22,10 @@ import {
   BridgeTerminalKeyIdSchema,
   BridgeTerminalKeyRailSchema
 } from '../native-capabilities/bridge-terminal-key'
+import {
+  BRIDGE_PAGE_HEADER_ACTION_FRAME,
+  BridgePageHeaderIdSchema
+} from '../native-capabilities/bridge-page-header'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 import {
@@ -245,6 +249,13 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal(BRIDGE_TERMINAL_KEY_FRAME),
     key: BridgeTerminalKeyIdSchema,
     inputOwner: z.string().min(1).max(128).optional()
+  }),
+  // One press on the shell-drawn header. Sent only to a page holding a header claim, which knows the frame.
+  z.object({
+    v: versionSchema,
+    type: z.literal(BRIDGE_PAGE_HEADER_ACTION_FRAME),
+    // Not `id`: that names an exchange, which a refused frame's salvage would try to settle.
+    actionId: BridgePageHeaderIdSchema
   }),
   z.object({
     v: versionSchema,

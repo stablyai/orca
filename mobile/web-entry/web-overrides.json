@@ -252,6 +252,10 @@
     {
       "file": "src/platform/page-dialogs/shell-dialogs.web.ts",
       "reason": "A drawn sheet in the WebView is not the system alert, text prompt or pick-one list the rest of the app shows, so the page asks the shell to present those through native.dialog.act; an older shell or an ungranted route keeps the drawn sheet."
+    },
+    {
+      "file": "src/platform/page-header/page-header-claim.web.ts",
+      "reason": "A bar drawn in the WebView is not the iOS navigation bar or Material top app bar, nor its system menus, that native screens get, so the page asks the shell to draw its header through the nativeHeader grant and runs the presses the shell hands back; an older shell or an ungranted route keeps the drawn bar."
     }
   ]
 }
