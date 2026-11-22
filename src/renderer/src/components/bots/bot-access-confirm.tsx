@@ -163,7 +163,7 @@ function rowWords(
   }
 }
 
-/** One warning line, which describes the dialog, then what they reach, one line each. */
+/** The dialog warning, followed by what they can reach. */
 function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element {
   const t = useTranslate()
   const place = useBotAccessPlace(grant.details.bot.hostId)
@@ -183,12 +183,15 @@ function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element 
         {rows.map((row) => {
           const { text, Icon, warn } = rowWords(t, grant, row)
           return (
-            <li key={row.kind} className="flex min-w-0 items-center gap-2.5">
+            <li key={row.kind} className="flex min-w-0 items-start gap-2.5">
               <Icon
-                className={cn('size-4 shrink-0', warn ? TONE.high.icon : 'text-muted-foreground')}
+                className={cn(
+                  'mt-0.5 size-4 shrink-0',
+                  warn ? TONE.high.icon : 'text-muted-foreground'
+                )}
                 aria-hidden
               />
-              <span className="min-w-0 truncate" title={text}>
+              <span className="min-w-0 [overflow-wrap:anywhere]" title={text}>
                 {text}
               </span>
             </li>
