@@ -90,7 +90,7 @@ function describeAftermath(aftermath: AgentPromptAftermath, enteredAt: number): 
   const report = aftermath.lastReport
   const last = report
     ? `its last status report was ${REPORT_WORDS[report.status]}, ${seconds(Math.abs(report.at - enteredAt))} ${report.at < enteredAt ? 'before' : 'after'} the Enter`
-    : 'it has sent no status report'
+    : 'Orca has seen no status report from it'
   return `Since the Enter, ${seen}; ${last}.`
 }
 

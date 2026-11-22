@@ -130,7 +130,7 @@ export abstract class OrcaRuntimeWithAgentPromptWriteGuards extends OrcaRuntimeW
     briefDrafts: readonly string[],
     pastedAt: number
   ): RuntimeTerminalPromptSubmitHold | null {
-    const typedAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const typedAt = this.terminalRunFacts.readLastTypedInputAt(ptyId)
     if (typedAt !== null && typedAt >= pastedAt) {
       return 'terminal-input'
     }

@@ -6,20 +6,30 @@ const COMPOSER = '\x1b[?2004h\x1b[?1049h› Ask Codex to do anything\r\n'
 const DIALOG =
   '\x1b[2J\x1b[HCodex found new hooks in this project.\r\n› 1. Trust and run them\r\n  2. Skip\r\nPress enter to continue\r\n\x1b[?25h'
 
+// Codex turns on any-motion mouse tracking, so a hover over its pane sends this as the user's input.
+const HOVER_REPORT = '\x1b[<35;40;12M'
+
 it.each([
-  { dialog: false, enter: true },
-  { dialog: true, enter: false }
+  { dialog: false, input: null, enter: true },
+  { dialog: true, input: null, enter: false },
+  { dialog: false, input: HOVER_REPORT, enter: true },
+  { dialog: false, input: 'x', enter: false }
 ])(
-  'a worker brief never presses Enter into a dialog (dialog=$dialog)',
-  async ({ dialog, enter }) => {
+  'a worker brief presses Enter only into its own composer (dialog=$dialog, input=$input)',
+  async ({ dialog, input, enter }) => {
     const runtime = new OrcaRuntimeService()
     const writes: string[] = []
     let seq = 1
     runtime.setPtyController({
       write: (_ptyId: string, data: string) => {
         writes.push(data)
-        if (dialog && data.startsWith('\x1b[200~')) {
-          queueMicrotask(() => runtime.onPtyData('pty-1', DIALOG, ++seq))
+        if (data.startsWith('\x1b[200~')) {
+          if (dialog) {
+            queueMicrotask(() => runtime.onPtyData('pty-1', DIALOG, ++seq))
+          }
+          if (input !== null) {
+            runtime.terminalRunFacts.recordInput('pty-1', 'driving', input, Date.now() + 1)
+          }
         }
         return true
       },
@@ -52,7 +62,9 @@ it.each([
       )
       expect(writes.includes('\r')).toBe(enter)
       expect(sent.prompt?.submit).toMatchObject(
-        enter ? { enteredAt: expect.any(Number) } : { withheldFor: 'agent-interactive-prompt' }
+        enter
+          ? { enteredAt: expect.any(Number) }
+          : { withheldFor: dialog ? 'agent-interactive-prompt' : 'terminal-input' }
       )
     } finally {
       await runtime.onPtyExit('pty-1', 0)
