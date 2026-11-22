@@ -9,9 +9,9 @@ import type { Session } from '../sessions/session'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 
 // Perf contract (#46511): every steady poll of a pane running a known agent read the whole machine's process table.
-const native = vi.hoisted(() => ({
-  addon: null as LibprocAddon | null,
-  reads: [] as LibprocQuery[]
+const native = vi.hoisted((): { addon: LibprocAddon | null; reads: LibprocQuery[] } => ({
+  addon: null,
+  reads: []
 }))
 const tables = vi.hoisted((): { strict: Mock; cheap: Mock } => ({
   strict: vi.fn(),
