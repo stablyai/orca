@@ -126,6 +126,8 @@ const askerSchema = z
   .transform(({ url, avatarUrl, name, noAccess, messageRef, ...asker }): ConnectorMessageAsker => {
     return {
       ...asker,
+      // Another Slack app is never the owner, whatever role came with it.
+      ...(asker.app ? { role: 'member' as const } : {}),
       ...(name ? { name } : {}),
       ...(noAccess.length > 0 ? { noAccess } : {}),
       ...(url && isConnectorAskerLink(asker.source, url) ? { url } : {}),

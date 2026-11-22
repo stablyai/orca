@@ -60,7 +60,7 @@ export function connectorAskerTagView(
   asker: ConnectorMessageAsker,
   t: Translate
 ): ConnectorAskerTagView {
-  const own = asker.role === 'owner'
+  const own = asker.role === 'owner' && !asker.app
   // Another Slack app on Who can ask reads by its own name, never as a person.
   const unnamed = asker.app
     ? t('components.native-chat.connectorAsker.anApp', 'An app')

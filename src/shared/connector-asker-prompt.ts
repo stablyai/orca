@@ -96,9 +96,10 @@ function personText(
 
 /** One line, built only from the cloud's facts; the role comes from the id, whatever the name says. */
 export function connectorAskerHeader(source: ConnectorSource, asker: ConnectorAsker): string {
-  // Another Slack app the owner lets ask is no person: the agent weighs its words as an app's.
-  const member = asker.app ? APP_ROLE : ', who has access (not your owner)'
-  const role = asker.role === 'owner' ? ' (your owner)' : member
+  // Another Slack app the owner lets ask is no person, never the owner: the agent weighs its words
+  // as an app's.
+  const person = asker.role === 'owner' ? ' (your owner)' : ', who has access (not your owner)'
+  const role = asker.app ? APP_ROLE : person
   // Another Orca bot wrote it for them: its words, which may carry what that bot read.
   const via = asker.via
     ? ` · written for them by their Orca bot ${personText(source, asker.via)}, so the words are that bot's`
