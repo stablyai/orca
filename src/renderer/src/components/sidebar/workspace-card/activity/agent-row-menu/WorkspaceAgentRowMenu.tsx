@@ -36,14 +36,10 @@ export type WorkspaceAgentRowMenuHandle = {
   close: () => void
   /** Spread on the row's root. */
   rowProps: {
-    onPointerDownCapture: () => void
     onContextMenu: (event: React.MouseEvent<HTMLElement>) => void
     'data-agent-row-menu-open': 'true' | undefined
   }
 }
-
-/** Longest press-to-menu gap of a pointer opening (a touch long press is the slow one). */
-const POINTER_OPEN_AFTER_PRESS_MS = 2_000
 
 /** What a row's click does: open its agent (a worker opens its spawning parent's pane). */
 export function activateAgentRow(
@@ -65,10 +61,6 @@ export function isEventInsideRowElement(event: React.SyntheticEvent<HTMLElement>
 /** A row's Agent menu state; nothing is mounted until the row is right-clicked. */
 export function useWorkspaceAgentRowMenu(): WorkspaceAgentRowMenuHandle {
   const [menu, setMenu] = useState<WorkspaceAgentRowMenuState | null>(null)
-  const pressedAtRef = useRef<number | null>(null)
-  const onPointerDownCapture = useCallback(() => {
-    pressedAtRef.current = Date.now()
-  }, [])
   const onContextMenu = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (shouldUseNativeContextMenu(event.target)) {
       return
@@ -78,11 +70,11 @@ export function useWorkspaceAgentRowMenu(): WorkspaceAgentRowMenuHandle {
     event.stopPropagation()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
     const bounds = event.currentTarget.getBoundingClientRect()
-    // A pointer opening follows a press on the row: macOS opens on the press, Windows on the
-    // release, touch after a long press. The menu key and Shift+F10 press nothing, and their
-    // event coordinates are not reliable, so that opening is anchored under the row's start.
-    const pressedAt = pressedAtRef.current
-    const fromKeyboard = pressedAt === null || Date.now() - pressedAt > POINTER_OPEN_AFTER_PRESS_MS
+    const { nativeEvent } = event
+    const pointerType = 'pointerType' in nativeEvent ? nativeEvent.pointerType : ''
+    // Chromium can report a mouse pointer type for the keyboard gesture, with no button.
+    const fromKeyboard =
+      event.button <= 0 && !event.ctrlKey && (pointerType === '' || pointerType === 'mouse')
     const active = document.activeElement
     setMenu({
       point: fromKeyboard
@@ -99,7 +91,6 @@ export function useWorkspaceAgentRowMenu(): WorkspaceAgentRowMenuHandle {
     menu,
     close,
     rowProps: {
-      onPointerDownCapture,
       onContextMenu,
       'data-agent-row-menu-open': menu ? 'true' : undefined
     }

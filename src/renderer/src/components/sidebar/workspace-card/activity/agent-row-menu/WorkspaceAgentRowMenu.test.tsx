@@ -82,8 +82,7 @@ describe('WorkspaceAgentRowMenu', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
-    fireEvent.pointerDown(screen.getByTestId('row'), { button: 2 })
-    fireEvent.contextMenu(screen.getByTestId('row'), { clientX: 40, clientY: 10 })
+    fireEvent.contextMenu(screen.getByTestId('row'), { button: 2, clientX: 40, clientY: 10 })
     const open = item('Open')
     fireEvent.pointerUp(open, { button: 2 })
     fireEvent.click(open)
@@ -140,8 +139,7 @@ describe('WorkspaceAgentRowMenu', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
-    fireEvent.pointerDown(screen.getByTestId('row'), { button: 2 })
-    fireEvent.contextMenu(screen.getByTestId('row'), { clientX: 40, clientY: 10 })
+    fireEvent.contextMenu(screen.getByTestId('row'), { button: 2, clientX: 40, clientY: 10 })
     fireEvent.keyDown(item('Open'), { key: 'Enter' })
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
@@ -151,15 +149,11 @@ describe('WorkspaceAgentRowMenu', () => {
     vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
     const row = screen.getByTestId('row')
-    fireEvent.pointerDown(row, { button: 2 })
-    fireEvent.contextMenu(row, { clientX: 40, clientY: 10 })
+    fireEvent.contextMenu(row, { button: 2, clientX: 40, clientY: 10 })
     // A left press inside the menu ends the first opening's guard.
     fireEvent.pointerDown(item('Copy Title'), { button: 0 })
     vi.setSystemTime(1_792_983_602_000)
-    act(() => {
-      fireEvent.pointerDown(row, { button: 2 })
-      fireEvent.contextMenu(row, { clientX: 50, clientY: 12 })
-    })
+    fireEvent.contextMenu(row, { button: 2, clientX: 50, clientY: 12 })
     const open = item('Open')
     fireEvent.pointerUp(open, { button: 2 })
     fireEvent.click(open)
@@ -243,23 +237,43 @@ describe('WorkspaceAgentRowMenu', () => {
     expect(item('Copy Title').hasAttribute('data-disabled')).toBe(true)
   })
 
-  it('anchors a keyboard opening under the row whatever coordinates it reports', () => {
+  it('anchors a keyboard opening under the row after a primary click', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
     const control = screen.getByTestId('row-control')
+    fireEvent.pointerDown(control, { button: 0, pointerType: 'mouse' })
     control.focus()
-    // Chromium can place a keyboard context menu at the focused control.
-    fireEvent.contextMenu(control, { clientX: 31, clientY: 17 })
+    fireEvent.pointerUp(control, { button: 0, pointerType: 'mouse' })
+    fireEvent.click(control)
+    fireEvent(
+      control,
+      new PointerEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: -1,
+        pointerType: 'mouse',
+        clientX: 31,
+        clientY: 17
+      })
+    )
     const anchor = screen.getByTestId('row').querySelector('button[aria-hidden]')
     expect(anchor?.getAttribute('style')).toContain('left: 8px')
+    expect(fireEvent.mouseUp(item('Open'))).toBe(true)
   })
 
-  it('anchors a pointer opening at the pointer, even at the window origin', () => {
+  it('anchors a delayed right-click at the window origin and suppresses its opening release', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
     const row = screen.getByTestId('row')
     fireEvent.pointerDown(row, { button: 2 })
-    fireEvent.contextMenu(row, { clientX: 0, clientY: 0 })
+    vi.setSystemTime(1_792_983_603_000)
+    fireEvent.contextMenu(row, { button: 2, clientX: 0, clientY: 0 })
     const anchor = row.querySelector('button[aria-hidden]')
     expect(anchor?.getAttribute('style')).toContain('left: 0px')
+    fireEvent.click(item('Open'))
+    expect(onOpen).not.toHaveBeenCalled()
   })
 
   it('closes when another menu asks every menu to close', () => {
