@@ -1,14 +1,15 @@
-import { basename, dirname, join, posix, win32 } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { extractString } from '../../../../shared/text/trimmed-string'
 import { isCursorAcpSessionStorePath } from '../../../../shared/ai-vault/session-display/cursor-acp-session-path'
-import { readJsonObjectIfExists } from '../../discovery/session-json-file'
+import {
+  cursorAcpSessionMetaPath,
+  readCursorAcpSessionMeta
+} from './session-scanner-cursor-acp-meta'
 import { discoverFiles } from '../../discovery/session-scanner-discovery'
 import { createAccumulator, finalizeSession } from '../../parsing/session-scanner-accumulator'
-import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 import type {
   AiVaultScanOptions,
@@ -53,23 +54,6 @@ export function cursorAcpDiscoveries(
       signal: options.signal
     })
   )
-}
-
-function cursorAcpSessionMetaPath(storePath: string): string {
-  return join(dirname(storePath), 'meta.json')
-}
-
-export async function readCursorAcpSessionMeta(
-  storePath: string,
-  signal?: AbortSignal
-): Promise<{ cwd: string; title: string | null } | null> {
-  const record = await readJsonObjectIfExists(cursorAcpSessionMetaPath(storePath), signal)
-  const cwd = extractString(record?.cwd)
-  // Cursor skips a session whose meta.json has no cwd; it records an absolute one.
-  if (!cwd || !(posix.isAbsolute(cwd) || win32.isAbsolute(cwd))) {
-    return null
-  }
-  return { cwd, title: normalizeTitleText(extractString(record?.title) ?? '') }
 }
 
 /** A listing row only: the owning chat opens the conversation. */

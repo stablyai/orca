@@ -28,7 +28,7 @@ import {
   cursorChatMetaUnavailable,
   readCursorChatMeta
 } from '../scanners/cursor/session-scanner-cursor-chat-meta'
-import { readCursorAcpSessionMeta } from '../scanners/cursor/session-scanner-cursor-acp-sessions'
+import { readCursorAcpSessionMeta } from '../scanners/cursor/session-scanner-cursor-acp-meta'
 import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { rovoSessionCwd } from '../scanners/session-scanner-rovo-metadata'
 import { grokSessionCwd } from '../scanners/grok/session-scanner-grok-parser'
