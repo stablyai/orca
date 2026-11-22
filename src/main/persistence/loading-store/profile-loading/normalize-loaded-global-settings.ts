@@ -1,6 +1,7 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { normalizeUsageLimitAutoContinueDefaultOn } from '../../../../shared/native-chat/settings/native-chat-usage-limit-auto-continue'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeNativeChatMarkdownImageSize } from '../../../../shared/native-chat/settings/native-chat-markdown-image-size'
 import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
@@ -176,6 +177,9 @@ export function normalizeLoadedGlobalSettings(
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
       parsed.settings?.nativeChatShellEnvironmentVariables
+    ),
+    nativeChatMarkdownImageSize: normalizeNativeChatMarkdownImageSize(
+      parsed.settings?.nativeChatMarkdownImageSize
     ),
     // Old clients identify hosts with per-chat permissions through this valid value.
     nativeChatPermissionMode: publishedLegacyChatPermissionMode({

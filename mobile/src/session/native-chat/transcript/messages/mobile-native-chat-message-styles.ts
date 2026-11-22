@@ -107,12 +107,11 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: TEXT_SIZE
   },
-  imageThumb: {
-    width: 200,
-    height: 150,
+  imageChrome: {
     borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden'
   }
 }))
