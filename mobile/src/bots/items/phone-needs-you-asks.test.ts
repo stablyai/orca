@@ -62,15 +62,13 @@ describe('phoneNeedsYouAsks', () => {
       ]
     )
 
-    expect(
-      asks.map((ask) => [ask.title, ask.number, ask.worker, ask.chatId, ask.approval])
-    ).toEqual([
-      ['side', null, null, 'side', true],
-      ['Wake the item’s chat', 35, 'Webhook wake-up', 'side', true],
-      ['home', null, null, 'home', false],
-      ['Asks a question', null, null, 'home', false],
-      ['Handed agent', null, null, 'side', false],
-      ['Ama Owusu', null, null, null, false]
+    expect(asks.map((ask) => [ask.title, ask.number, ask.worker, ask.approval])).toEqual([
+      ['side', null, null, true],
+      ['Wake the item’s chat', 35, 'Webhook wake-up', true],
+      ['home', null, null, false],
+      ['Asks a question', null, null, false],
+      ['Handed agent', null, null, false],
+      ['Ama Owusu', null, null, false]
     ])
     expect(asks[0]!.tool).toEqual({ name: 'Edit', input: 'src/a.ts' })
     expect(asks[1]!.tool).toEqual({ name: 'Bash', input: 'git push' })

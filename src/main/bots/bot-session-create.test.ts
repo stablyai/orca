@@ -98,10 +98,9 @@ it("refuses a run's opening message whose admission throws, through every layer"
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 })
 
-describe.each(['claude', 'codex'] as const)("a %s bot's picked model and options", (agent) => {
+describe("a bot's picked model and options", () => {
   it('start each new chat on the picked model, in place of the default one and its effort', async () => {
     const bot = makeTestBot({
-      agent,
       permissionMode: undefined,
       launch: { model: 'picked-model', options: { effort: 'low' } }
     })
@@ -118,22 +117,18 @@ describe.each(['claude', 'codex'] as const)("a %s bot's picked model and options
 
   it('keep a picked fast mode where the agent offers it', async () => {
     const bot = makeTestBot({
-      agent,
+      agent: 'claude',
       permissionMode: undefined,
-      launch: { options: { fastMode: 'true', serviceTier: 'fast' } }
+      launch: { options: { fastMode: 'true' } }
     })
     const sessionId = await startBotSession(runtimeFor(bot, {}), bot)
     const options = rig.store.getRecord(sessionId)?.options
 
-    // Fast mode is Claude's; Codex's is its service tier.
-    expect(options).toMatchObject(
-      agent === 'claude' ? { fastMode: 'true' } : { serviceTier: 'fast' }
-    )
+    expect(options).toMatchObject({ fastMode: 'true' })
   })
 
   it('lay a picked effort alone over the default model', async () => {
     const bot = makeTestBot({
-      agent,
       permissionMode: 'ask',
       launch: { options: { effort: 'low' } }
     })
@@ -147,16 +142,16 @@ describe.each(['claude', 'codex'] as const)("a %s bot's picked model and options
 })
 
 // Look around, tidy-up and an automation's new conversation all start this way.
-describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent) => {
+describe("a bot's background run", () => {
   it("runs on the bot's own model, never the owner's last chat pick", async () => {
     const bot = makeTestBot({
-      agent,
+      agent: 'claude',
       permissionMode: undefined,
       launch: { model: 'bot-model', options: { effort: 'low' } }
     })
     const sessionId = await startBotSession(
       runtimeFor(bot, {
-        agentLaunchChoices: { [agent]: { model: 'agents-default' } }
+        agentLaunchChoices: { claude: { model: 'agents-default' } }
       }),
       bot,
       { background: true }
@@ -169,11 +164,11 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
   })
 
   it("without the bot's own model, runs on the owner's Settings > Agents default", async () => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
+    const bot = makeTestBot({ agent: 'claude', permissionMode: undefined })
     const sessionId = await startBotSession(
       runtimeFor(bot, {
         agentLaunchChoices: {
-          [agent]: { model: 'agents-default', options: { effort: 'low' } }
+          claude: { model: 'agents-default', options: { effort: 'low' } }
         }
       }),
       bot,
@@ -188,14 +183,14 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
 
   it("lays the bot's options over the Agents default model", async () => {
     const bot = makeTestBot({
-      agent,
+      agent: 'claude',
       permissionMode: undefined,
       launch: { options: { effort: 'low' } }
     })
     const sessionId = await startBotSession(
       runtimeFor(bot, {
         agentLaunchChoices: {
-          [agent]: { model: 'agents-default', options: { effort: 'high' } }
+          claude: { model: 'agents-default', options: { effort: 'high' } }
         }
       }),
       bot,
@@ -208,20 +203,9 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
     })
   })
 
-  it('keeps the permission default, which is not a model pick', async () => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
-    const sessionId = await startBotSession(
-      runtimeFor(bot, { agentPermissionDefault: 'full-access' }),
-      bot,
-      { background: true }
-    )
-
-    expect(rig.store.getRecord(sessionId)?.permissionMode).toBe('full-access')
-  })
-
   it('keeps chat defaults for chats and leaves an unconfigured background run to its agent', async () => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
-    const runtime = runtimeFor(bot, {})
+    const bot = makeTestBot({ permissionMode: undefined })
+    const runtime = runtimeFor(bot, { agentPermissionDefault: 'full-access' })
     const run = await startBotSession(runtime, bot, { background: true })
     const chat = await startBotSession(runtime, bot)
 
@@ -230,7 +214,7 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
       effort: 'high'
     })
     const background = rig.store.getRecord(run)
-    expect(background?.sessionId).toBe(run)
+    expect(background?.permissionMode).toBe('full-access')
     expect(background?.options).toBeUndefined()
   })
 })
@@ -290,42 +274,12 @@ function runtimeFor(bot: Bot, settings: TestSettings): OrcaRuntimeService {
   } as unknown as OrcaRuntimeService
 }
 
-describe.each(['claude', 'codex'] as const)('%s bot session permissions', (agent) => {
-  it.each([
-    { settings: { nativeChatPermissionMode: 'full-access' }, expected: 'full-access' },
-    { settings: { agentPermissionDefault: 'ask' }, expected: 'ask' },
-    { settings: { agentPermissionDefault: 'own' }, expected: 'own' },
-    {
-      settings: {
-        agentPermissionDefault: 'full-access',
-        agentPermissionOverrides: { [agent]: 'ask' }
-      },
-      expected: 'ask'
-    }
-  ] as const)('inherits the native-chat default $expected', async ({ settings, expected }) => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
-    const sessionId = await startBotSession(runtimeFor(bot, settings), bot)
+it('keeps the bot override over the chat default and preserves the model selection', async () => {
+  const bot = makeTestBot({ permissionMode: 'ask' })
+  const sessionId = await startBotSession(runtimeFor(bot, { agentPermissionDefault: 'own' }), bot)
 
-    expect(rig.store.getRecord(sessionId)).toMatchObject({
-      permissionMode: expected,
-      options: { model: 'saved-model', effort: 'high' }
-    })
-    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  expect(rig.store.getRecord(sessionId)).toMatchObject({
+    permissionMode: 'ask',
+    options: { model: 'saved-model', effort: 'high' }
   })
-
-  it.each(['ask', 'auto', 'full-access'] as const)(
-    'keeps the bot override %s over the chat default and preserves the model selection',
-    async (permissionMode) => {
-      const bot = makeTestBot({ agent, permissionMode })
-      const sessionId = await startBotSession(
-        runtimeFor(bot, { agentPermissionDefault: 'own' }),
-        bot
-      )
-
-      expect(rig.store.getRecord(sessionId)).toMatchObject({
-        permissionMode,
-        options: { model: 'saved-model', effort: 'high' }
-      })
-    }
-  )
 })

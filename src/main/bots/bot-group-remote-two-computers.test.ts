@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { BotGroupRemoteAsk } from '../../shared/bots/bot-group'
@@ -15,6 +15,8 @@ import type { RpcContext } from '../runtime/rpc/core'
 import { ORCHESTRATION_METHODS } from '../runtime/rpc/methods/orchestration/orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../runtime/rpc/methods/orchestration/messaging/reply-method'
 import { dropUnreadBotRequests } from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
+import { botQuestionNotices } from '../runtime/rpc/methods/orchestration/messaging/bot-question-notices'
+import { startRestingQuestionReconciler } from '../runtime/orchestration/mailbox/questions/question-reconciler.test-fixture'
 import type * as RecipientRouting from '../runtime/rpc/methods/orchestration/messaging/recipient-routing'
 import {
   DOCS_CHAT,
@@ -223,6 +225,10 @@ describe('a group on one computer with a bot on another', () => {
   })
 
   it("shows B's notice when Docs won't answer, then the answer that follows it", async () => {
+    const questions = startRestingQuestionReconciler(b.db, (taker, ids) =>
+      botQuestionNotices(b.runtime, taker, ids)
+    )
+    onTestFinished(questions.stop)
     const group = await crew()
     const message = await post(group, '@Docs check the guide')
     await dropUnreadBotRequests(b.runtime, 'docs', 'paused')

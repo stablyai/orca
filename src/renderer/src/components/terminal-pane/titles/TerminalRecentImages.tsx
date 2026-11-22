@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useState,
-  useSyncExternalStore,
-  type MouseEvent
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,7 +11,7 @@ import {
   getRevealInFileManagerLabel,
   revealInFileManager
 } from '@/lib/files/os-open/reveal-in-file-manager'
-import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
+import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { basename } from '@/lib/path'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { filesystemPathToFileUri } from '../../../../../shared/file-links/file-uri-path'
@@ -31,11 +24,6 @@ import {
 } from '../input/recent-terminal-images'
 
 type ImageLocation = { worktreeId: string; worktreePath: string; sourceTabId: string }
-
-const keepFocusProps = {
-  [KEEPS_FOCUS_ATTRIBUTE]: '',
-  onMouseDown: (event: MouseEvent) => event.preventDefault()
-}
 
 export function TerminalPaneRecentImages({
   pane,
@@ -181,7 +169,7 @@ function TerminalImagePreview({
           type="button"
           variant="ghost"
           size="sm"
-          {...keepFocusProps}
+          {...keepFocusPressProps}
           onClick={() => void window.api.ui.writeClipboardText(image.path)}
         >
           {t('terminal.recentImages.copyPath', 'Copy path')}
@@ -190,7 +178,7 @@ function TerminalImagePreview({
           type="button"
           variant="ghost"
           size="sm"
-          {...keepFocusProps}
+          {...keepFocusPressProps}
           onClick={() => void revealInFileManager(image.path, getLocalPathOpenOwnerForRoute({}))}
         >
           {getRevealInFileManagerLabel(t)}

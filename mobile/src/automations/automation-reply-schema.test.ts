@@ -26,4 +26,13 @@ describe('a runs page', () => {
     expect(page.unreadableRuns).toBe(0)
     expect(page.runs[0]?.event).toBeUndefined()
   })
+
+  it("keeps a run whose starting source this build can't read, with its event", () => {
+    const page = runsPageSchema.parse({
+      runs: [{ ...run, triggeredBy: { source: 7 }, event: { source: 'slack' } }]
+    })
+    expect(page.unreadableRuns).toBe(0)
+    expect(page.runs[0]?.triggeredBy).toBeUndefined()
+    expect(page.runs[0]?.event).toEqual({ source: 'slack' })
+  })
 })

@@ -17,7 +17,7 @@ import {
   journalDomainMessageEditHeld
 } from './journal-domain-edit-leases'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
-import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
+import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies-read'
 import {
   applyJournalDomainQueueCommand,
   type JournalDomainQueueOperation

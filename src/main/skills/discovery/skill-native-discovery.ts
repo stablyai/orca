@@ -1,5 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { realpath, stat } from 'node:fs/promises'
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -34,6 +34,7 @@ import {
   discoverClaudePluginSkillInstalls
 } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
+import { skillRootExists } from './skill-root-unreadable'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import {
   isSkillRootUnavailableError,
@@ -100,20 +101,15 @@ function readLastKnownRootScan(key: string): ScannedSkill[] {
   return retained.skills
 }
 
-async function pathExists(pathValue: string): Promise<boolean> {
-  try {
-    await stat(pathValue)
-    return true
-  } catch {
-    return false
-  }
-}
-
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
+async function scanRoot(
+  root: SkillScanRoot,
+  signal: AbortSignal,
+  rejectUnreadableRoot: boolean
+): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
-  const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, { rejectUnreadableRoot })
   // Bound per-package metadata fan-out so one large root cannot occupy every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
@@ -164,8 +160,10 @@ async function scanRootShared(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
       async (signal) => {
-        const exists = await pathExists(root.path)
-        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+        // Why: only a root still serving retained skills reads strictly, so a permanently unreadable root cannot leave install checks unverifiable.
+        const strict = readLastKnownRootScan(key).length > 0
+        const exists = await skillRootExists(root.path, strict)
+        return { exists, skills: exists ? await scanRoot(root, signal, strict) : [] }
       }
     )
     recordLastKnownRootScan(key, outcome.value)

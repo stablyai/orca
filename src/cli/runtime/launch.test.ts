@@ -1,8 +1,9 @@
 import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { EventEmitter } from 'node:events'
-import { rm } from 'node:fs/promises'
-import 'node:os'
-import { resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -95,6 +96,7 @@ describe('serveOrcaApp', () => {
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
@@ -131,5 +133,30 @@ describe('serveOrcaApp', () => {
     await expect(result).resolves.toBe(0)
 
     expect(stdoutSpy).toHaveBeenCalledWith(`${unicodeRecipeJson}\n`)
+  })
+
+  async function spawnedServeCwd(): Promise<unknown> {
+    const { child, result } = startRecipeJsonServer()
+    queueMicrotask(() => child.stdout.emit('data', `${RECIPE_JSON}\n`))
+    await expect(result).resolves.toBe(0)
+    return spawnMock.mock.calls[0]?.[2]?.cwd
+  }
+
+  it('runs packaged serve from the profile, not the replaceable app bundle', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-serve-cwd-'))
+    temporaryDirectories.push(directory)
+    const profile = join(directory, 'fresh-profile')
+    process.env.ORCA_USER_DATA_PATH = profile
+    process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT =
+      '/Applications/Orca.app/Contents/Resources/app.asar.unpacked'
+
+    await expect(spawnedServeCwd()).resolves.toBe(profile)
+    expect(existsSync(profile)).toBe(true)
+  })
+
+  it('keeps the app root as cwd for dev serve', async () => {
+    process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT = '/src/orca'
+
+    await expect(spawnedServeCwd()).resolves.toBe('/src/orca')
   })
 })

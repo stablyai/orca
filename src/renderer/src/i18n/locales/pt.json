@@ -21113,7 +21113,17 @@
         "skip": "Pular",
         "sending": "Enviando…",
         "terminalRequired": "Responda a esta pergunta do OMP no terminal.",
-        "openTerminal": "Responder no terminal"
+        "openTerminal": "Responder no terminal",
+        "recommended": "Recomendado",
+        "stepAnswered": "{{value0}}, respondida",
+        "stepOf": "{{value0}} de {{value1}}",
+        "answered": "Respondida",
+        "title": "Pergunta",
+        "previous": "Pergunta anterior",
+        "nextQuestion": "Próxima pergunta",
+        "back": "Voltar",
+        "skipAndSubmit": "Pular e enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",
@@ -21506,7 +21516,6 @@
         "listLabel": "Mensagens na fila",
         "alreadySent": "Esta mensagem já foi enviada.",
         "withdrawnHold": "Interrompida antes do envio",
-        "pausedSendFailed": "Não foi possível enviar — pressione Enviar para tentar novamente.",
         "paused": "Pausada",
         "resume": "Retomar",
         "fromSender": "De",
@@ -21528,7 +21537,11 @@
         "reorderHint": "Arraste para reordenar ou use as teclas de seta para cima e para baixo.",
         "reorderMessage": "Reordenar mensagem",
         "editReturned": "Sua edição está na caixa de bate-papo.",
-        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila."
+        "commandsUnsupported": "Comandos não podem ser salvos em uma mensagem na fila.",
+        "couldNotSend": "Não foi possível enviar",
+        "retry": "Tentar novamente",
+        "showLessRows": "Mostrar menos",
+        "moreRows": "+{{value0}} mais"
       },
       "thought": "Raciocínio",
       "thoughtForDuration": "Pensou por {{duration}}",
@@ -21808,6 +21821,9 @@
           "noCredit": "Não há créditos de redefinição do Codex nesta conta.",
           "alreadyRedeemed": "Esse crédito de redefinição já foi usado."
         }
+      },
+      "dock": {
+        "label": "Caixa de mensagem e solicitações"
       },
       "automationSaved": {
         "openFullPage": "Abrir página"

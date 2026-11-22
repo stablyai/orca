@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { owedPage } from './connector-reply-journal.test-fixture'
 import { z } from 'zod'
 import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connectors/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
@@ -233,6 +234,7 @@ describe('ConnectorTurnEvents', () => {
         const events = new ConnectorTurnEvents(userDataPath, 'ada', undefined, {
           journal: () => ({
             read: async () => rows,
+            readOwed: async (account, after, limit) => owedPage(rows, account, after, limit),
             fillOutcomes: async () => false,
             sent: async () => {}
           }),
@@ -436,6 +438,7 @@ describe('Slack-bound words in events', () => {
     const events = new ConnectorTurnEvents(userDataPath, 'ada', undefined, {
       journal: () => ({
         read: async () => rows,
+        readOwed: async (account, after, limit) => owedPage(rows, account, after, limit),
         fillOutcomes: async () => false,
         sent: async () => {}
       }),
@@ -457,6 +460,7 @@ describe('Slack-bound words in events', () => {
     const outbox = new ConnectorTurnEvents(userDataPath, 'ada', undefined, {
       journal: () => ({
         read: async () => rows,
+        readOwed: async (account, after, limit) => owedPage(rows, account, after, limit),
         fillOutcomes: async () => false,
         sent: async () => {}
       }),

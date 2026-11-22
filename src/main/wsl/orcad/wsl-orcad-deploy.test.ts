@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => ({
   localVersion: vi.fn(),
   readRecord: vi.fn(),
   removeFailed: vi.fn(),
+  launchMode: vi.fn(() => 'wsl-host'),
+  moveUnderway: vi.fn(() => false),
+  stopIdle: vi.fn(),
   transaction: vi.fn(async (): Promise<unknown> => null)
 }))
 vi.mock('./wsl-orcad-failed-install-removal', () => ({
@@ -64,8 +67,15 @@ vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({
     readiness: await mocks.probe(...args),
-    pid: 4242
+    pid: 4242,
+    launch: mocks.launchMode()
   })
+}))
+vi.mock('../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves', () => ({
+  isWslMoveUnderwayOnHost: mocks.moveUnderway
+}))
+vi.mock('../../managed-server/lifecycle/orcad-idle-restart-stop', () => ({
+  stopIdleOrcadForRestart: mocks.stopIdle
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-version-gc', () => ({
   provenLiveDaemonVersion: () => null,
@@ -82,8 +92,12 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-runtime-context', async (i
 
 import { deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
 import { resetOrcadUpdateFailuresForTests } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
+import { forgetWslHostRelaunchesForTests } from './wsl-orcad-host-relaunch'
 
-beforeEach(() => resetOrcadUpdateFailuresForTests())
+beforeEach(() => {
+  resetOrcadUpdateFailuresForTests()
+  forgetWslHostRelaunchesForTests()
+})
 
 const host = getRemoteHostPlatform('linux-x64')
 const READINESS = {
@@ -197,5 +211,105 @@ describe('deployAndLaunchWslOrcad', () => {
     mocks.probe.mockRejectedValueOnce(refused)
     await expect(launch()).rejects.toBe(refused)
     expect(mocks.wake).toHaveBeenCalledTimes(3)
+  })
+
+  // #43632: an orcad an SSH host started serves the distro without the WSL host marker.
+  function sshStartedServer(liveSessions: number) {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    mocks.incumbent.mockResolvedValueOnce({
+      census: { liveSessions, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+      readiness: READINESS,
+      recount: vi.fn(),
+      releaseAdmission: vi.fn()
+    })
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'retired', version: '1.5.0+ab' })
+  }
+
+  it('restarts an SSH-started server as a WSL host when no terminal runs on it', async () => {
+    sshStartedServer(0)
+    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: READINESS })
+    const launched = await launch()
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+    // The wake after the stop starts it over the WSL transport, then the probe reads it again.
+    expect(mocks.wake).toHaveBeenCalledTimes(2)
+    expect(mocks.probe).toHaveBeenCalledTimes(2)
+    expect(launched).toMatchObject({ outcome: 'ready' })
+    expect(launched).not.toHaveProperty('deferredUpdate')
+  })
+
+  it('leaves an SSH-started server with live terminals running and offers the restart', async () => {
+    sshStartedServer(2)
+    const launched = await launch()
+    expect(mocks.stopIdle).not.toHaveBeenCalled()
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
+    expect(launched).toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host', forceable: false }
+    })
+  })
+
+  it('offers the restart when an SSH host wakes the server first, and never stops it twice', async () => {
+    sshStartedServer(0)
+    // The SSH client's wake holds the fence; the probe after it still finds no marker.
+    mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+    })
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+
+    // A later connect this session only offers the restart: no count, no second stop.
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+    })
+    expect(mocks.incumbent).toHaveBeenCalledOnce()
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+  })
+
+  it('does not report a server ready when its restart stop was held', async () => {
+    sshStartedServer(0)
+    mocks.stopIdle.mockReset()
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'kept', reason: 'held', mayBeStopping: true })
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'deferred',
+      code: 'orcad_not_started_as_wsl_host'
+    })
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves with the restart offer when the stop was kept without being sent', async () => {
+    sshStartedServer(0)
+    mocks.stopIdle.mockReset()
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'kept', reason: 'An update holds this host' })
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host', reason: 'An update holds this host' }
+    })
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('neither counts nor stops while a project moves to the host', async () => {
+    sshStartedServer(0)
+    mocks.moveUnderway.mockReturnValue(true)
+    try {
+      await expect(launch()).resolves.toMatchObject({
+        outcome: 'ready',
+        deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+      })
+    } finally {
+      mocks.moveUnderway.mockReturnValue(false)
+    }
+    expect(mocks.incumbent).not.toHaveBeenCalled()
+    expect(mocks.stopIdle).not.toHaveBeenCalled()
+    // Drop the count and stop the helper queued but nothing used.
+    mocks.incumbent.mockReset()
+    mocks.stopIdle.mockReset()
   })
 })

@@ -85,6 +85,42 @@ beforeEach(() => {
 })
 
 describe('sidebar PR query', () => {
+  it('keeps each linked review and an absent review distinct in one reply', async () => {
+    exec.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            pr0: fields,
+            pr1: {
+              ...fields,
+              number: 43,
+              title: 'Another attached review',
+              url: 'https://github.com/acme/widgets/pull/43',
+              commits: commits([{ __typename: 'StatusContext', state: 'FAILURE' }])
+            },
+            pr2: null
+          }
+        },
+        errors: [{ type: 'NOT_FOUND', path: ['repository', 'pr2'] }]
+      })
+    })
+
+    const [first, second, missing] = await Promise.all(
+      [42, 43, 44].map((number) =>
+        getPRByNumber(repository, number, options, 'local:host', undefined, {
+          includeStackSummary: true,
+          batchSidebar: true
+        })
+      )
+    )
+
+    expect(first).toMatchObject({ number: 42, title: 'Keep sidebar metadata together' })
+    expect(deriveCheckStatus(first?.statusCheckRollup)).toBe('success')
+    expect(second).toMatchObject({ number: 43, title: 'Another attached review' })
+    expect(deriveCheckStatus(second?.statusCheckRollup)).toBe('failure')
+    expect(missing).toBeNull()
+  })
+
   it('rejects a deleted fork from the parsed number query when head identity is unknown', async () => {
     exec.mockResolvedValueOnce(
       response({ ...fields, isCrossRepository: true, headRepository: null })

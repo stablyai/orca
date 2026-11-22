@@ -1,8 +1,11 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { DeletedChats } from '../../native-chat/chat-deletion/deleted-chats'
 import { projectStructuredAiVaultSessions } from './structured-session-ownership'
 import { historySession, PROVIDER_SESSION } from './structured-session-ownership.test-support'
+
+// The host is process-wide: a shared test runner must not hand this partial one to the next file.
+afterEach(() => setStructuredAgentSessionHost(null))
 
 it("never lists a deleted chat's conversation in Session History, keeping every other row", () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection reads only `deps.store.conversationsKeyedBy` and `deletedChats`.

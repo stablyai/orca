@@ -14,10 +14,10 @@ const offer: WslHostOffer = {
 function pausedOnFolderConfirmation(): {
   deps: WslHostOfferDeps
   moveAddedProject: ReturnType<typeof vi.fn>
-  settle: (repo: { id: string; path: string } | null) => void
+  settle: (added: { repo: { id: string; path: string } } | null) => void
 } {
-  let settle!: (repo: { id: string; path: string } | null) => void
-  const folderAdded = new Promise<{ id: string; path: string } | null>((resolve) => {
+  let settle!: (added: { repo: { id: string; path: string } } | null) => void
+  const projectAdded = new Promise<{ repo: { id: string; path: string } } | null>((resolve) => {
     settle = resolve
   })
   const moveAddedProject = vi.fn()
@@ -28,7 +28,7 @@ function pausedOnFolderConfirmation(): {
       readWslHostsSetting: () => false,
       updateSettings: async () => {},
       addWslHost: async () => ({ ok: true, environmentId: 'env-ubuntu' }),
-      addLocalPath: async () => ({ status: 'paused', folderAdded }),
+      addLocalPath: async () => ({ status: 'paused', projectAdded }),
       moveAddedProject
     }
   }
@@ -41,7 +41,7 @@ describe('acceptWslHostOffer for a plain folder', () => {
     await expect(acceptWslHostOffer(offer, deps)).resolves.toBeNull()
     expect(moveAddedProject).not.toHaveBeenCalled()
 
-    settle({ id: 'folder-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\notes' })
+    settle({ repo: { id: 'folder-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\notes' } })
     await vi.waitFor(() => expect(moveAddedProject).toHaveBeenCalledTimes(1))
     expect(moveAddedProject).toHaveBeenCalledWith(offer, {
       repo: { id: 'folder-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\notes' }

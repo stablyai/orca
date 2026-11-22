@@ -1,16 +1,23 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, realGitExecFileAsync } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  realGitExecFileAsync: vi.fn()
 }))
 
-vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitExecFileAsync: gitExecFileAsyncMock
-}))
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => {
+  const original = await importOriginal<{ gitExecFileAsync: (...args: unknown[]) => unknown }>()
+  realGitExecFileAsync.mockImplementation(original.gitExecFileAsync)
+  return { ...original, gitExecFileAsync: gitExecFileAsyncMock }
+})
 
 import { PROBE_COALESCE_STALE_MS } from './coalesced-probe'
 import { createRemoteRefProbeCache, NEGATIVE_ENTRY_TTL_MS } from './remote-ref-probe-cache'
+import { readRemoteUrl, withSharedRemoteUrlReads } from './remote-url-probe'
 
 /** Stands in for a forge's parser: claims one host, rejects everything else. */
 function parseExampleRef(remoteUrl: string): { repo: string } | null {
@@ -61,7 +68,8 @@ describe('remote ref probe cache (P1-D)', () => {
       .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
 
     const abandoned = cache.get('/repo', 'origin')
-    vi.setSystemTime(1_000_000 + PROBE_COALESCE_STALE_MS + 1)
+    await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    vi.setSystemTime(Date.now() + PROBE_COALESCE_STALE_MS + 1)
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
 
     // Abandoned probes still answer their caller but must not overwrite newer cached state.
@@ -89,5 +97,49 @@ describe('remote ref probe cache (P1-D)', () => {
     await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     await expect(cache.get('/repo', 'origin')).resolves.toEqual({ repo: 'team/repo' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('remote ref probe cache against a real checkout', () => {
+  let repoPath: string
+
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockImplementation(realGitExecFileAsync)
+    repoPath = mkdtempSync(join(tmpdir(), 'remote-ref-probe-cache-'))
+    execFileSync('git', ['init', '-q', repoPath])
+  })
+
+  afterEach(() => {
+    rmSync(repoPath, { recursive: true, force: true })
+  })
+
+  it('resolves the new repository after origin is changed in place', async () => {
+    const cache = createRemoteRefProbeCache(parseExampleRef)
+    execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:team/old.git'], {
+      cwd: repoPath
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/old' })
+
+    execFileSync('git', ['remote', 'set-url', 'origin', 'git@example.com:team/renamed.git'], {
+      cwd: repoPath
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/renamed' })
+  })
+
+  it('does not sign a URL shared from before origin changed mid-detection', async () => {
+    const cache = createRemoteRefProbeCache(parseExampleRef)
+    execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:team/old.git'], {
+      cwd: repoPath
+    })
+    await withSharedRemoteUrlReads(async () => {
+      // An earlier provider in the same pass read origin before it changed.
+      await readRemoteUrl({ repoPath }, 'origin')
+      execFileSync('git', ['remote', 'set-url', 'origin', 'git@example.com:team/renamed.git'], {
+        cwd: repoPath
+      })
+      await cache.get(repoPath, 'origin')
+    })
+    await expect(cache.get(repoPath, 'origin')).resolves.toEqual({ repo: 'team/renamed' })
   })
 })

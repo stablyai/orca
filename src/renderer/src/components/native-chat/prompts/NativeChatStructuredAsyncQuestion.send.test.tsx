@@ -7,6 +7,7 @@ vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', (
   callStructuredAgentSession: rpc.call
 }))
 import { createRoot } from 'react-dom/client'
+import { getByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
@@ -236,6 +237,48 @@ describe('async question send ownership', () => {
     expect(enter.defaultPrevented).toBe(true)
     expect(send).toHaveBeenCalledTimes(2)
     expect(blue().getAttribute('aria-pressed')).toBe('true')
+  })
+  it('sends a pending answer once however often it is confirmed, and again after a refused send', () => {
+    let accept = false
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.(`answer-${send.mock.calls.length}`)
+      return accept
+    })
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="scope"
+          sourceKey="host/epoch"
+          sourceScope="host/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+        />
+      )
+    )
+    const blue = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )!
+    const enter = () =>
+      act(() => {
+        blue().dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+        )
+      })
+    act(() => blue().dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // The host refuses the first send: nothing is pending, so the next Enter tries again.
+    act(() => vi.advanceTimersByTime(200))
+    expect(send).toHaveBeenCalledTimes(1)
+    accept = true
+    enter()
+    expect(send).toHaveBeenCalledTimes(2)
+    // Accepted and not yet settled: further confirmations send nothing.
+    enter()
+    enter()
+    const sending = getByRole(container, 'button', { name: 'Sending…' })
+    expect(sending).toHaveProperty('disabled', true)
+    act(() => sending.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(send).toHaveBeenCalledTimes(2)
   })
 })
 

@@ -113,7 +113,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   context,
   newRowsMarker,
   newRowsMarkerBelow = false,
-  joinsNotesAbove = false
+  joinsActivityAbove = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -121,8 +121,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarker?: NativeChatNewRowsMarkerState
   /** The "New" marker opens the next row: left-side, so this row's actions keep their own height. */
   newRowsMarkerBelow?: boolean
-  /** Carries on the notes of the row above, 4 px below them (`nativeChatSlotJoinsNotesAbove`). */
-  joinsNotesAbove?: boolean
+  /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
+  joinsActivityAbove?: boolean
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
@@ -184,8 +184,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
           '-mb-3',
-        // Into the row gap (gap-5) all but the notes' own gap (gap-1).
-        joinsNotesAbove && '-mt-4'
+        // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
+        joinsActivityAbove && '-mt-4'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}

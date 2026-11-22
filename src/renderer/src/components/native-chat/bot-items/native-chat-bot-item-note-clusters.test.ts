@@ -7,9 +7,23 @@ import type {
 } from '../conversation/slots/native-chat-transcript-slots'
 import {
   MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER,
-  nativeChatBotItemNoteClusters,
-  nativeChatSlotJoinsNotesAbove
+  nativeChatBotItemNoteClusters
 } from './native-chat-bot-item-note-clusters'
+import {
+  markNativeChatActivityJoins,
+  nativeChatSlotJoinsActivityAbove
+} from '../conversation/slots/native-chat-activity-row-joins'
+import type { NativeChatRowTypography } from '../viewport/virtualization/native-chat-row-height-estimate'
+
+/** Clusters as the transcript builds them: then each slot that opens below an activity row joins it. */
+function joined(
+  slots: NativeChatTranscriptSlot[],
+  typography?: NativeChatRowTypography
+): NativeChatTranscriptSlot[] {
+  const clustered = nativeChatBotItemNoteClusters(slots, typography)
+  markNativeChatActivityJoins(clustered, typography)
+  return clustered
+}
 
 const entry: BotItemNoteEntry = {
   uid: 'a',
@@ -122,7 +136,7 @@ describe('item lines on the desktop', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER * 2 + 3 }, (_, index) =>
       note(`n${index}`, 'bot')
     )
-    const clustered = nativeChatBotItemNoteClusters(run, {
+    const clustered = joined(run, {
       lineHeightPx: 20,
       charsPerLine: 80,
       spacingScale: 1.5
@@ -131,7 +145,7 @@ describe('item lines on the desktop', () => {
     expect(
       clustered.map((entry) =>
         entry.kind === 'message'
-          ? [entry.itemNotes?.length, entry.followsNotes, entry.estimatedHeight]
+          ? [entry.itemNotes?.length, entry.followsActivity, entry.estimatedHeight]
           : null
       )
     ).toEqual([
@@ -147,20 +161,20 @@ describe('item lines on the desktop', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER }, (_, index) =>
       note(`n${index}`, 'bot')
     )
-    const [before] = nativeChatBotItemNoteClusters(run)
-    const [after, started] = nativeChatBotItemNoteClusters([...run, note('ninth', 'bot')])
+    const [before] = joined(run)
+    const [after, started] = joined([...run, note('ninth', 'bot')])
 
     // The window may hold this slot's measurement long after it scrolls away; nothing about it moves.
     expect(after).toEqual(before)
-    expect(started).toMatchObject({ itemNotes: [{ id: 'ninth' }], followsNotes: true })
+    expect(started).toMatchObject({ itemNotes: [{ id: 'ninth' }], followsActivity: true })
   })
 
   it('keeps earlier slots of a run as they were when a note arrives', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 2 }, (_, index) =>
       note(`n${index}`, 'bot')
     )
-    const before = nativeChatBotItemNoteClusters(run)
-    const after = nativeChatBotItemNoteClusters([...run, note('late', 'bot')])
+    const before = joined(run)
+    const after = joined([...run, note('late', 'bot')])
 
     expect(after.slice(0, -1)).toEqual(before.slice(0, -1))
     expect(after.at(-1)).toMatchObject({
@@ -172,11 +186,60 @@ describe('item lines on the desktop', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 1 }, (_, index) =>
       note(`n${index}`, 'bot')
     )
-    const clustered = nativeChatBotItemNoteClusters([...run, prose, note('after', 'bot')])
+    const clustered = joined([...run, prose, note('after', 'bot')])
 
     expect(
-      clustered.map((entry) => (entry.kind === 'message' ? entry.followsNotes === true : null))
+      clustered.map((entry) => (entry.kind === 'message' ? entry.followsActivity === true : null))
     ).toEqual([false, true, false, false])
+  })
+})
+
+describe('activity rows that meet across slots', () => {
+  const update = slot({
+    id: 'update',
+    role: 'user',
+    timestamp: 1,
+    source: 'transcript',
+    blocks: [{ type: 'text', text: 'Pushed the fix.' }],
+    from: { kind: 'agent', senders: [], orchestration: null }
+  })
+  const follows = (slots: NativeChatTranscriptSlot[]) =>
+    joined(slots).map((entry) =>
+      entry.kind === 'message' ? [entry.message.id, entry.followsActivity === true] : null
+    )
+
+  it('sits worker updates and item lines 4 px apart, as item lines sit', () => {
+    expect(
+      follows([update, { ...update, message: { ...update.message, id: 'u2' } }, note('a', 'bot')])
+    ).toEqual([
+      ['update', false],
+      ['u2', true],
+      ['a', true]
+    ])
+  })
+
+  it('joins your move to the lines above but keeps the row gap below your comment', () => {
+    const move: BotItemNoteEntry = { ...entry, event: 'status', from: 'planned', to: 'working' }
+    const comment: BotItemNoteEntry = { ...entry, event: 'commented', text: 'Yes, drop it' }
+    expect(
+      follows([note('a', 'bot'), note('mine', 'owner', [move, comment]), note('b', 'bot')])
+    ).toEqual([
+      ['a', false],
+      ['mine', true],
+      ['b', false]
+    ])
+    expect(follows([note('a', 'bot'), note('said', 'owner', [comment])])).toEqual([
+      ['a', false],
+      ['said', false]
+    ])
+  })
+
+  it('keeps the row gap below a turn bar drawn under an update', () => {
+    const status = { startedAt: 0, thinking: false, workedSeconds: 9 }
+    expect(follows([{ ...update, status }, note('a', 'bot')])).toEqual([
+      ['update', false],
+      ['a', false]
+    ])
   })
 })
 
@@ -184,9 +247,9 @@ describe('a slot that carries on a run of notes', () => {
   const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 1 }, (_, index) =>
     note(`n${index}`, 'bot')
   )
-  const [first, second] = messageSlots(nativeChatBotItemNoteClusters(run))
-  const joins = (overrides: Partial<Parameters<typeof nativeChatSlotJoinsNotesAbove>[0]> = {}) =>
-    nativeChatSlotJoinsNotesAbove({
+  const [first, second] = messageSlots(joined(run))
+  const joins = (overrides: Partial<Parameters<typeof nativeChatSlotJoinsActivityAbove>[0]> = {}) =>
+    nativeChatSlotJoinsActivityAbove({
       slot: second!,
       previous: first,
       timedRowsAfter: undefined,

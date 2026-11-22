@@ -8,10 +8,19 @@ import {
 
 describe("an event run's trigger", () => {
   it('names a known source and reads anything else as Event', () => {
-    expect(automationRunEventSourceKey({ source: 'webhook' })).toBe('webhook')
-    expect(automationRunEventSourceKey({ source: 'jira' })).toBe('what.other')
-    expect(automationRunEventSourceKey({ source: '__proto__' })).toBe('what.other')
-    expect(automationRunEventSourceKey(null)).toBe('what.other')
+    expect(automationRunEventSourceKey({ event: { source: 'webhook' } })).toBe('webhook')
+    expect(automationRunEventSourceKey({ event: { source: 'jira' } })).toBe('what.other')
+    expect(automationRunEventSourceKey({ event: { source: '__proto__' } })).toBe('what.other')
+    expect(automationRunEventSourceKey({ event: null })).toBe('what.other')
+  })
+
+  it('names the source that started it, not a later folded event', () => {
+    expect(
+      automationRunEventSourceKey({
+        triggeredBy: { source: 'webhook' },
+        event: { source: 'slack' }
+      })
+    ).toBe('webhook')
   })
 
   it('reads as Event in the chat row when the run carries no event', () => {
