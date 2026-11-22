@@ -25134,6 +25134,21 @@
         "title": "Claude usage polling",
         "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",
         "about": "About Claude usage polling"
+      },
+      "autoSwitch": {
+        "title": "Automatically switch account at limit",
+        "description": "When the selected Claude account reaches the threshold, Orca selects the signed-in account with the most usage left.",
+        "keyword": {
+          "limit": "limit",
+          "automatic": "automatic"
+        },
+        "needsPolling": "Turn on Claude usage polling so Orca can check your other accounts.",
+        "threshold": "Switch when usage reaches",
+        "failed": "Orca could not switch your Claude account automatically.",
+        "noAccountTitle": "{{previous}} is at {{used}}% of its Claude limit",
+        "noAccountDescription": "No other signed-in Claude account is below {{threshold}}%, so Orca kept this one.",
+        "switchedTitle": "Switched Claude to {{next}}",
+        "switchedDescription": "{{previous}} reached {{used}}% of its limit. New Claude sessions start on the new account."
       }
     },
     "managedData": {
