@@ -34,6 +34,12 @@ export type AiVaultScanOptions = {
   includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
+  /** Native Chat's Cursor sessions and the config folders they run in; resolved by the host process. */
+  cursorAcpSessions?: {
+    sessionIds: readonly string[]
+    configDirs: readonly string[]
+    inWsl: boolean
+  }
   opencodeStorageDir?: string
   opencodeDbPaths?: readonly string[]
   /** Managed account OpenCode data directories; resolved by the host process. */
