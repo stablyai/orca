@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../platform/external-links/external-link', () => ({ openExternalLink: vi.fn() }))
-import { connectorLinkTarget, GITHUB_LINK_HOSTS, GOOGLE_LINK_HOSTS } from './connector-link'
+import {
+  connectorLinkTarget,
+  GITHUB_LINK_HOSTS,
+  GOOGLE_LINK_HOSTS,
+  SLACK_LINK_HOSTS
+} from './connector-link'
 
 describe('connectorLinkTarget', () => {
   it('refuses non-https schemes and malformed URLs', () => {
@@ -30,5 +35,12 @@ describe('connectorLinkTarget', () => {
     expect(connectorLinkTarget('https://backend.composio.dev/connect?x=1')).toBe(
       'https://backend.composio.dev/connect?x=1'
     )
+  })
+
+  it('keeps Slack authorize links on slack.com', () => {
+    expect(connectorLinkTarget('https://slack.com/oauth/v2/authorize?x=1', SLACK_LINK_HOSTS)).toBe(
+      'https://slack.com/oauth/v2/authorize?x=1'
+    )
+    expect(connectorLinkTarget('https://slack.com.evil.example/oauth', SLACK_LINK_HOSTS)).toBeNull()
   })
 })

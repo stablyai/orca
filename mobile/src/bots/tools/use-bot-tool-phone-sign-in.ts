@@ -9,7 +9,7 @@ import {
 } from '../../../../src/shared/bot-tool-sign-in'
 import { BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink } from '../connectors/connector-link'
 import { readConnectionStatusProbe } from '../../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -179,7 +179,7 @@ export function useBotToolPhoneSignIn(args: {
           }
           settle(gen, view)
           if (view.state === 'waiting') {
-            openExternalLink(view.authorizationUrl)
+            openConnectorLink(view.authorizationUrl)
             void follow(gen, view)
           }
         })
@@ -196,7 +196,7 @@ export function useBotToolPhoneSignIn(args: {
           setAttempt({ url: authorizationUrl, finishing: false })
           // The CLI names this page; only a web page may open, as the desktop's shell allows.
           if (/^https?:\/\//i.test(authorizationUrl)) {
-            openExternalLink(authorizationUrl)
+            openConnectorLink(authorizationUrl)
           }
         })
     void begin
@@ -284,7 +284,7 @@ export function useBotToolPhoneSignIn(args: {
 
   const openAgain = useCallback(() => {
     if (attempt?.url) {
-      openExternalLink(attempt.url)
+      openConnectorLink(attempt.url)
     }
   }, [attempt])
 

@@ -10,6 +10,7 @@ import {
   composioLogoUrl
 } from '../../../../../../src/shared/composio/composio-apps'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { openConnectorLink } from '../../../../bots/connectors/connector-link'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { colors } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -95,7 +96,7 @@ export function MobileComposioConnectCard({
         })
       )
       rereadMobileComposio(hostKey, card.botId)
-      openExternalLink(url)
+      openConnectorLink(url)
     }).then((ok) => !ok && signIn.check(false))
   const cancel = () =>
     void run(async () => {
@@ -215,7 +216,7 @@ export function MobileComposioConnectCard({
             <MobileNativeChatNoticePill
               label={t('chat.botCards.composio.openAgain', 'Open again')}
               Icon={ExternalLink}
-              onPress={() => openExternalLink(pending.url)}
+              onPress={() => openConnectorLink(pending.url)}
             />
             <MobileNativeChatNoticePill
               label={t('chat.botCards.composio.cancel', 'Cancel')}

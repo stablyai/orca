@@ -7,6 +7,7 @@ export function openGitHubLink(url: string): boolean {
 }
 
 export const GITHUB_LINK_HOSTS = ['github.com']
+export const SLACK_LINK_HOSTS = ['slack.com']
 export const GOOGLE_LINK_HOSTS = ['google.com']
 
 /** The normalized https URL when it is on one of `hosts` (or a subdomain); any https URL when `hosts` is omitted. */

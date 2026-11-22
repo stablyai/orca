@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as z from 'zod'
 import { isOrcaCloudSignInPage } from '../../../../src/shared/orca-account-server-sign-in'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink } from '../connectors/connector-link'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -107,7 +107,7 @@ export function useHostOrcaSignIn(
       }
       if (url && !opened) {
         opened = true
-        openExternalLink(url)
+        openConnectorLink(url)
       }
       const next = await signInWait
         .request(

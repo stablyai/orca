@@ -145,11 +145,7 @@ export function MobileBotLinearPage(props: {
               (member) =>
                 botMemberSource(member) === 'linear' && member.workspaceId === workspace.workspaceId
             ),
-            {
-              linearWorkspaces: botLinearWorkspaces(bot).filter(
-                (entry) => entry.workspaceId !== workspace.workspaceId
-              )
-            }
+            { removeLinearWorkspaceId: workspace.workspaceId }
           ).then((saved) => {
             setBusy(false)
             if (saved) {
