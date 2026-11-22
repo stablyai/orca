@@ -3,14 +3,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader, MobileBotGroupTurn } from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, Ellipsis, ListChecks } from '../components/icons/app-icons'
+import { Ellipsis, ListChecks } from '../components/icons/app-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../components/nav-bar/ScreenHeader'
 import { isBotAgent } from '../../../src/shared/bot-types'
 import { BOTS_ITEMS_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import { MobileBotGroupItems } from './MobileBotGroupItems'
@@ -165,7 +164,12 @@ export function MobileBotGroupRoom({
     return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
   })
   return (
-    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top, paddingBottom: insets.bottom }
+      ]}
+    >
       {readers.map((turn) => (
         <MobileBotGroupReader
           key={turn.sessionId}
@@ -178,32 +182,27 @@ export function MobileBotGroupRoom({
           connected={connected}
         />
       ))}
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            accessibilityLabel={t('bots.groups.back', 'Back')}
-            onPress={() => router.back()}
-          />
-        }
+      <ScreenHeader
         title={anyRoomGroup?.name ?? t('bots.groups.group', 'Group')}
-        trailing={
-          <>
-            {itemsOnPhone ? (
-              <NavBarButton
-                icon={ListChecks}
-                active={itemsOpen}
-                accessibilityLabel={t('session.header.items', 'Items')}
-                onPress={() => setItemsOpen(true)}
-              />
-            ) : null}
-            <NavBarButton
-              icon={Ellipsis}
-              accessibilityLabel={t('bots.groups.groupActions', 'Group actions')}
-              onPress={() => setMenu('actions')}
-            />
-          </>
-        }
+        onBack={() => router.back()}
+        actions={[
+          ...(itemsOnPhone
+            ? [
+                {
+                  id: 'items',
+                  icon: ListChecks,
+                  label: t('session.header.items', 'Items'),
+                  onPress: () => setItemsOpen(true)
+                }
+              ]
+            : []),
+          {
+            id: 'actions',
+            icon: Ellipsis,
+            label: t('bots.groups.groupActions', 'Group actions'),
+            onPress: () => setMenu('actions')
+          }
+        ]}
       />
       {anyRoomGroup?.threads?.length || threadId ? (
         <MobileBotGroupRoomBar
