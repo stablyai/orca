@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeClaudeAccountUpdate } from '../../../shared/agent-accounts/claude/claude-account-binding'
+import { sanitizeClaudeAccountUpdate } from './claude-account-binding'
 import {
   claudeAccountBindingForWorkspace,
   type ClaudeWorkspaceBindingLookup

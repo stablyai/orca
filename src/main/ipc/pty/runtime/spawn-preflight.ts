@@ -1,4 +1,5 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { claudeBoundTerminalRoute } from '../../../claude-accounts/profiles/routing/claude-bound-terminal-route'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
@@ -100,11 +101,17 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  // A project bound to a Claude account opens its terminals on it, whatever is selected.
+  const bound = claudeBoundTerminalRoute(args.worktreeId, ctx.codexSelectionTarget)
+  args.env = bound
+    ? { ...args.env, ...bound.envPatch }
+    : withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  ctx.claudeAuth = !ctx.isClaudeLaunch
+    ? null
+    : (bound?.preparation ??
+      (ctx.deps.prepareClaudeAuth
+        ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+        : null))
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {

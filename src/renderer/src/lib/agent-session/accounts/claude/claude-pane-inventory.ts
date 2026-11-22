@@ -1,5 +1,10 @@
 /** Local terminal panes that run Claude, found from status rows, saved records, process reads or launches. */
 import {
+  claudeAccountBindingForWorkspace,
+  type ClaudeWorkspaceBindingLookup
+} from '../../../../../../shared/agent-accounts/claude/claude-workspace-account-binding'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
@@ -99,7 +104,16 @@ export function* localClaudePanes(
   target: CodexAccountSelectionTarget
 ): Generator<LocalClaudePane> {
   const isLaneInScope = getCodexAccountSwitchLaneMatcher({ owner, target })
+  const bindings: ClaudeWorkspaceBindingLookup = {
+    getRepo: (id) => state.repos.find((repo) => repo.id === id),
+    getFolderWorkspace: (id) => selectFolderWorkspaces(state).find((folder) => folder.id === id),
+    getProjectGroups: () => state.projectGroups
+  }
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    // A project bound to a Claude account keeps its terminals on it through any switch.
+    if (claudeAccountBindingForWorkspace(worktreeId, bindings)) {
+      continue
+    }
     for (const tab of tabs) {
       const boundPtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
       const leaves = Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
