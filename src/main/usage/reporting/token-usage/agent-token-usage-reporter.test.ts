@@ -1,4 +1,4 @@
-import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -86,14 +86,19 @@ describe('AgentTokenUsageReporter', () => {
     await upgraded.flush()
 
     // The older build ran after a downgrade and rewrote its own file.
-    await utimes(legacyFile, new Date(Date.now() + 60_000), new Date(Date.now() + 60_000))
+    await writeFile(legacyFile, JSON.stringify({ schemaVersion: 1, snapshots: [] }))
     at(23)
     // The daily state is intact, so the downgrade's days still count.
     const reupgraded = create()
     await reupgraded.report([
       { day: '2026-11-20', ...tokens(40) },
+      { day: '2026-11-21', ...tokens(5) },
       { day: '2026-11-22', ...tokens(10) }
     ])
-    expect(sent).toEqual([{ ...tokens(10), provider: 'claude', usage_day: '2026-11-22' }])
+    // The upgrade day is left to the older build's event; every later day is sent.
+    expect(sent).toEqual([
+      { ...tokens(5), provider: 'claude', usage_day: '2026-11-21' },
+      { ...tokens(10), provider: 'claude', usage_day: '2026-11-22' }
+    ])
   })
 })
