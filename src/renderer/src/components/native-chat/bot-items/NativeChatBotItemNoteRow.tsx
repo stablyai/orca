@@ -283,8 +283,8 @@ function CommentRow({
 }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.
-    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-4')}>
+    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.5.
+    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
@@ -321,7 +321,7 @@ export function NativeChatBotItemNoteRow({
   const t = useTranslate()
   if (!note.run) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <Lines note={note} at={note.at ?? timestamp} />
       </div>
     )
