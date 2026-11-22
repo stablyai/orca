@@ -1,5 +1,6 @@
 // Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
+import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
@@ -99,7 +100,7 @@ async function observeChatProgram(
   try {
     settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
-    const { command, env } = chatProgram.resolve(shellEnv, settings)
+    const { command, env } = await chatProgram.resolve(shellEnv, settings)
     const { delimiter, isAbsolute } = process.platform === 'win32' ? win32 : posix
     if (isAbsolute(command)) {
       return 'available'
@@ -116,8 +117,10 @@ async function observeChatProgram(
     ) {
       return 'unknown'
     }
-  } catch {
-    return 'unknown'
+  } catch (error) {
+    return isAgentSessionPreSpawnError(error) && error.reason === 'runtimeNotInstalled'
+      ? 'missing'
+      : 'unknown'
   }
   if (
     supportsLocation(HOST_LOCATION) &&

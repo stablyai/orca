@@ -103,6 +103,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html'
     },
     {
+      id: 'qwenwork',
+      label: translate('auto.lib.agent.catalog.qwenwork', 'QwenWork'),
+      cmd: 'qwenwork',
+      homepageUrl: 'https://docs.qwenwork.cn/'
+    },
+    {
       id: 'mistral-vibe',
       label: translate('auto.lib.agent.catalog.ca73055bd0', 'Mistral Vibe'),
       // mistral-vibe installs the interactive executable as vibe.

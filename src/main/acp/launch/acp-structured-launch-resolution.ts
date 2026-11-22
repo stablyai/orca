@@ -175,7 +175,9 @@ async function readAcpLaunchInvocation(
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
   Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  const invocation = spec.bundledProgram
+    ? await spec.bundledProgram(env)
+    : resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
   return {
     ...invocation,
     env,

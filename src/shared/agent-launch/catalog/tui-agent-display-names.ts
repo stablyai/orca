@@ -41,6 +41,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   kimi: 'Kimi',
   'mistral-vibe': 'Mistral Vibe',
   'qwen-code': 'Qwen Code',
+  qwenwork: 'QwenWork',
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
   openclaw: 'OpenClaw',

@@ -1,5 +1,6 @@
 /** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
+import { TUI_AGENT_CONFIG, isTuiAgent } from '../catalog/tui-agent-config'
 import { isAgentSessionHandleProvider } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { parseExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
@@ -59,6 +60,9 @@ export function nativeChatPreferenceFor(
   settings: NativeChatDefaultSettings | null | undefined,
   agent: string
 ): boolean {
+  if (isTuiAgent(agent) && TUI_AGENT_CONFIG[agent].chatOnly) {
+    return true
+  }
   const override = settings?.nativeChatProviders?.[agent]
   return typeof override === 'boolean' ? override : settings?.agentDefaultSurface === 'chat'
 }

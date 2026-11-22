@@ -1,3 +1,4 @@
+import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
@@ -131,6 +132,9 @@ export function agentLaunchSurfaceFactory(
       viewMode,
       accountEnv
     }) => {
+      if (TUI_AGENT_CONFIG[agent].chatOnly) {
+        throw new Error(`The ${agent} agent requires the chat surface.`)
+      }
       const launchPreferences = toAgentLaunchPreferences(options, agent)
       const attributedLaunchSource = callerLaunchSource(context, launchSource)
       let promptRodeLaunchCommand = false

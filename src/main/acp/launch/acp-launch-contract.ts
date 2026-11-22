@@ -26,6 +26,10 @@ import type {
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
+  /** A desktop installation provides the executable and its matching ACP entry together. */
+  bundledProgram?(
+    env: Readonly<Record<string, string>>
+  ): Promise<{ command: string; prefixArgs: string[] }>
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
   /** `model` is the chat's saved model, passed only to specs that launch with it. */

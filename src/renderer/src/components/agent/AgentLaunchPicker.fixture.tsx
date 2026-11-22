@@ -289,6 +289,26 @@ export const newTabSubmenuCodex = defineFixture({
   }
 })
 
+export const qwenWorkChat = defineFixture({
+  width: 760,
+  render: () => (
+    <NewTabMenu
+      entries={[
+        ...ENTRIES,
+        {
+          ...entry('qwenwork', 'QwenWork', ['chat']),
+          rows: [{ kind: 'chat', agent: 'qwenwork' }],
+          defaultSurface: 'chat'
+        }
+      ]}
+    />
+  ),
+  interact: async () => {
+    click('[aria-label="Configure QwenWork"]')
+    await settle()
+  }
+})
+
 /** Antigravity isn't installed, so its chat offers to install it. */
 export const newTabSetupChat = defineFixture({
   width: 320,

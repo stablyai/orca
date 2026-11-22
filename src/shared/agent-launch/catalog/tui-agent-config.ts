@@ -261,6 +261,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
   // prettier-ignore
   'qwen-code': { detectCmd: 'qwen', promptInjectionMode: 'stdin-after-start', preflightTrust: 'qwen-code', submitRetryDelayMs: 1200 },
+  // The desktop CLI manages office tools; only its bundled ACP server handles chat.
+  qwenwork: { chatOnly: true, detectCmd: 'qwenwork', promptInjectionMode: 'stdin-after-start' },
   rovo: {
     // Rovo is an acli subcommand; passing an instruction there would run one-shot.
     detectCmd: 'acli',
@@ -347,7 +349,7 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
-  return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
+  return config.chatOnly ? [] : [config.detectCmd, ...(config.detectCmdAliases ?? [])]
 }
 
 export function getTuiAgentLaunchCommand(

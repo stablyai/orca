@@ -44,3 +44,4 @@ export type TuiAgent =
   | 'prime-agent' // Prime Agent (Prime Intellect)
   | 'dsh' // DeepSeek Harness (`dsh`, launched through its `dsh-tui` terminal profile)
   | 'jcode'
+  | 'qwenwork' // QwenWork (千问办公) desktop bundled ACP engine
