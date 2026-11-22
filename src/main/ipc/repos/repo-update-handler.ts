@@ -1,3 +1,7 @@
+import {
+  sanitizeClaudeAccountUpdate,
+  type ClaudeAccountBinding
+} from '../../../shared/agent-accounts/claude/claude-account-binding'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -74,6 +78,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | null
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          claudeAccount?: ClaudeAccountBinding | null
           browserProfileId?: string | null
         }
       }
@@ -114,6 +119,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           }
         }
       }
+      sanitizeClaudeAccountUpdate(updates)
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
         const v = updates.symlinkPaths as unknown

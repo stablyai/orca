@@ -1,3 +1,4 @@
+import type { ClaudeAccountBinding } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
@@ -65,6 +66,7 @@ type RepositoryUpdates = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  claudeAccount?: ClaudeAccountBinding | null
   browserProfileId?: string | null
   /** Changes this one hook setting, keeping the rest of the saved row's. */
   setupAgentStartupPolicy?: SetupAgentStartupPolicy

@@ -1,6 +1,7 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
+import { installClaudeWorkspaceBindingLookup } from '../../claude-accounts/selection/claude-workspace-account-binding'
 import { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { CodexRuntimeHomeService } from '../../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../../codex-accounts/service'
@@ -52,6 +53,7 @@ export function createProviderAccountServices(
     options.codexAccountLifecycle
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  installClaudeWorkspaceBindingLookup(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>

@@ -7991,6 +7991,16 @@
             }
           }
         },
+        "RepositoryClaudeAccountSection": {
+          "title": "Conta do Claude",
+          "description": "Rode os chats do Claude deste projeto numa conta específica, seja qual for a conta selecionada.",
+          "longDescription": "Chats do Claude novos e retomados neste projeto usam esta conta, então chats de outros projetos podem rodar em outra conta ao mesmo tempo. Uma pasta mantém o histórico separado das suas outras contas.",
+          "selectLabel": "Conta",
+          "followSelection": "Seguir a conta selecionada",
+          "missingAccount": "Conta removida",
+          "pickFolder": "Escolher uma pasta de configuração…",
+          "saveFailed": "Não foi possível salvar a conta do Claude deste projeto."
+        },
         "RepositoryGitHubAccountSection": {
           "unsupported": "A CLI do GitHub deste runtime é muito antiga para vinculação de conta (precisa de gh ≥ 2.40).",
           "capabilityUnknown": "Não foi possível determinar se a CLI do GitHub deste runtime suporta vinculação de conta. Tente novamente.",

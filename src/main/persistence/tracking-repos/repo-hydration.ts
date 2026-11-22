@@ -1,3 +1,4 @@
+import { normalizeClaudeAccountBinding } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getDefaultRepoHookSettings } from '../../../shared/workspace-setup/repo-hook-settings-defaults'
@@ -39,6 +40,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     forkSyncMode: rawForkSyncMode,
     agentWorkspaceTrust: rawAgentWorkspaceTrust,
     ghAccount: rawGhAccount,
+    claudeAccount: rawClaudeAccount,
     defaultJiraProject: rawDefaultJiraProject,
     customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
     worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
@@ -54,6 +56,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
   const agentWorkspaceTrust = sanitizeAgentWorkspaceTrustDecision(rawAgentWorkspaceTrust)
   const ghAccount = normalizeGhAccountBinding(rawGhAccount)
+  const claudeAccount = normalizeClaudeAccountBinding(rawClaudeAccount)
   const defaultJiraProject = normalizeJiraProjectReference(rawDefaultJiraProject)
   const customWorktreeVisibilitySources = normalizeCustomWorktreeVisibilitySources(
     rawCustomWorktreeVisibilitySources
@@ -81,6 +84,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
     ...(agentWorkspaceTrust !== undefined ? { agentWorkspaceTrust } : {}),
     ...(ghAccount ? { ghAccount } : {}),
+    ...(claudeAccount ? { claudeAccount } : {}),
     ...(defaultJiraProject !== undefined ? { defaultJiraProject } : {}),
     ...(customWorktreeVisibilitySources !== undefined ? { customWorktreeVisibilitySources } : {}),
     ...(worktreeVisibilitySourcePreferences !== undefined

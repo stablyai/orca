@@ -1,4 +1,5 @@
 import type { RepoHookSettings } from '../../workspace-setup/orca-yaml-hook-types'
+import type { ClaudeAccountBinding } from '../../agent-accounts/claude/claude-account-binding'
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
@@ -6,6 +7,8 @@ export type ProjectGroup = {
   name: string
   parentPath: string | null
   hookSettings?: RepoHookSettings
+  /** Claude account the group's projects run chats on; a project's own or a nearer group's wins. */
+  claudeAccount?: ClaudeAccountBinding
   /** SSH target ID for folder-backed groups imported from a remote root. */
   connectionId?: string | null
   /** Renderer-owned host stamp for groups fetched from a runtime environment. */
@@ -22,7 +25,7 @@ export type ProjectGroup = {
 
 export type ProjectGroupUpdate = Partial<
   Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
-> & { rootProjectOrder?: number | null }
+> & { rootProjectOrder?: number | null; claudeAccount?: ClaudeAccountBinding | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 

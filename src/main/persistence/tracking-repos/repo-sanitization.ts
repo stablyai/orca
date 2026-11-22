@@ -1,3 +1,7 @@
+import {
+  sanitizeClaudeAccountUpdate,
+  type ClaudeAccountBinding
+} from '../../../shared/agent-accounts/claude/claude-account-binding'
 import type { RepoProjectHostSetupMethod } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { editorFormatterSchema } from '../../../shared/editor/formatting/editor-formatter'
@@ -88,6 +92,7 @@ export function sanitizeRepoUpdatesForPersistence<
     >
   > & {
     ghAccount?: GhAccountBinding | null
+    claudeAccount?: ClaudeAccountBinding | null
     browserProfileId?: string | null
   }
 >(updates: T): T {
@@ -183,6 +188,7 @@ export function sanitizeRepoUpdatesForPersistence<
       sanitized.ghAccount = ghAccount
     }
   }
+  sanitizeClaudeAccountUpdate(sanitized)
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources

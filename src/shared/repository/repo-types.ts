@@ -1,6 +1,7 @@
 import type { DictationTerm } from '../speech/dictation/dictation-dictionary'
 import type { RepoIcon } from './appearance/repo-icon'
 import type { GhAccountBinding } from '../github/accounts/account-binding'
+import type { ClaudeAccountBinding } from '../agent-accounts/claude/claude-account-binding'
 import type { GitHubRepositoryIdentity } from '../github/repositories/repository-identity'
 import type { RepoHookSettings } from '../workspace-setup/orca-yaml-hook-types'
 import type { ForkSyncMode } from '../git/remotes/git-fork-sync'
@@ -69,6 +70,8 @@ export type Repo = {
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */
   ghAccount?: GhAccountBinding
+  /** Claude account this project's chats run on instead of the selection; absent inherits its group's. */
+  claudeAccount?: ClaudeAccountBinding
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Whether Orca pre-trusts this repo's worktrees for agents. Absent means undecided: desktop launches ask once. */

@@ -13729,6 +13729,16 @@
           "auto": "Agent",
           "off": "Off"
         },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude account",
+          "description": "Run this project’s Claude chats on a specific account, whatever account is selected.",
+          "longDescription": "New and resumed Claude chats in this project use this account, so chats in other projects can run on another account at the same time. A folder keeps its history apart from your other accounts.",
+          "selectLabel": "Account",
+          "followSelection": "Follow the selected account",
+          "missingAccount": "Removed account",
+          "pickFolder": "Choose a config folder…",
+          "saveFailed": "Could not save the Claude account for this project."
+        },
         "RepositoryGitHubAccountSection": {
           "unsupported": "This runtime’s GitHub CLI is too old for account binding (needs gh ≥ 2.40).",
           "capabilityUnknown": "Could not determine whether this runtime’s GitHub CLI supports account binding. Retry.",

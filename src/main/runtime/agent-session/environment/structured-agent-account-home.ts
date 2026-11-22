@@ -2,7 +2,12 @@ import type { AgentSessionAccountKind } from '../../../../shared/agent-session/f
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
-import { claudeRoutedHomeAsync } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
+import {
+  claudeBoundHomeAsync,
+  claudeRoutedHomeAsync
+} from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
+import { claudeProfileMissing } from '../../../claude-accounts/profiles/routing/claude-profile-launch-errors'
+import { installedClaudeAccountBinding } from '../../../claude-accounts/selection/claude-workspace-account-binding'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import {
   resolveOrcaManagedCodexHomePath,
@@ -17,6 +22,8 @@ import { join } from 'node:path'
 export type StructuredClaudeAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
   wslDistro: string | null
+  /** The chat's workspace; its project's bound account wins over the selection. */
+  workspaceId?: string
   /** `identity` names the selected account before its folder exists; the default checks availability. */
   purpose?: 'identity'
   getClaudeConfigDirectory: (
@@ -27,6 +34,19 @@ export type StructuredClaudeAccountHomeDeps = {
 export async function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): Promise<string> {
+  const binding = installedClaudeAccountBinding(deps.workspaceId)
+  if (binding) {
+    const bound = deps.wslDistro ? undefined : getClaudeProfileRouter()
+    // Why throw: bindings name host folders, and following the selection would run another account.
+    if (!bound) {
+      throw claudeProfileMissing()
+    }
+    return claudeBoundHomeAsync(
+      bound,
+      binding,
+      deps.purpose === 'identity' ? 'identity' : 'checked'
+    )
+  }
   // Why only an account: System default keeps the launch-env and configured homes below.
   const router = deps.wslDistro ? undefined : getClaudeProfileRouter()
   const accountHome = router

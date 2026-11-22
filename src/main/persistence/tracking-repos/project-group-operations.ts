@@ -1,3 +1,4 @@
+import { normalizeClaudeAccountBinding } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import type { ProfileSaveDomains } from '../profile-save-domains'
 import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -153,6 +154,14 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.hookSettings !== undefined) {
       group.hookSettings = updates.hookSettings
+    }
+    if (updates.claudeAccount === null) {
+      delete group.claudeAccount
+    } else if (updates.claudeAccount !== undefined) {
+      const claudeAccount = normalizeClaudeAccountBinding(updates.claudeAccount)
+      if (claudeAccount) {
+        group.claudeAccount = claudeAccount
+      }
     }
     group.updatedAt = Date.now()
   }

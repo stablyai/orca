@@ -4,13 +4,14 @@ import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wi
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 import { prepareClaudeLaunchAccount } from './claude-launch-account'
 
-/** Follow the current account selection and pin its environment for this launch. */
+/** Follow the project's bound account or the current selection and pin its environment for this launch. */
 export async function resolveClaudeStructuredLaunchHome(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  workspaceId?: string
 ): Promise<string> {
-  return (await prepareClaudeLaunchAccount(router, env, recordHome)).home
+  return (await prepareClaudeLaunchAccount(router, env, recordHome, workspaceId)).home
 }
 
 async function claudeTranscriptExists(input: {

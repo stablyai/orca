@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repository/appearance/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repository/appearance/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import { sanitizeClaudeAccountUpdate } from '../../../../shared/agent-accounts/claude/claude-account-binding'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
@@ -71,6 +72,7 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
       sanitized.ghAccount = normalized
     }
   }
+  sanitizeClaudeAccountUpdate(sanitized)
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources
@@ -205,6 +207,7 @@ export function createRepoUpdateActions(
                 externalWorktreeDiscoverySuppressedAt,
                 hiddenAt,
                 ghAccount,
+                claudeAccount,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 workspaceCleanupPolicy,
@@ -253,6 +256,12 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutGhAccount
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              if (claudeAccount !== undefined) {
+                const { claudeAccount: _claudeAccount, ...repoWithoutClaudeAccount } = mergedRepo
+                mergedRepo = claudeAccount
+                  ? { ...mergedRepo, claudeAccount }
+                  : repoWithoutClaudeAccount
               }
               if (workspaceCleanupPolicy === null) {
                 const { workspaceCleanupPolicy: _policy, ...repoWithoutCleanupPolicy } = mergedRepo

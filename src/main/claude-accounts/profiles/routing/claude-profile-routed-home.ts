@@ -6,6 +6,7 @@ import {
   readClaudeFolderLoginAsync
 } from '../../sign-in/claude-account-folder'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
+import type { ClaudeAccountBinding } from '../../../../shared/agent-accounts/claude/claude-account-binding'
 
 /** `routedHome` without blocking main: chat reads run once per options read and send. */
 export async function claudeRoutedHomeAsync(
@@ -33,4 +34,25 @@ export async function claudeRoutedHomeAsync(
     throw claudeProfileMissing()
   }
   return profile.home
+}
+
+/** A project's bound folder; `identity` names it before it exists, `checked` also needs its login. */
+export async function claudeBoundHomeAsync(
+  router: Pick<ClaudeProfileRouter, 'accountHome' | 'userHome'>,
+  binding: ClaudeAccountBinding,
+  availability: 'checked' | 'identity' = 'checked'
+): Promise<string> {
+  const home =
+    binding.kind === 'managed' ? router.accountHome(binding.accountId) : binding.configDir
+  if (availability === 'identity') {
+    return home
+  }
+  const isFolder = (await lstat(home).catch(() => null))?.isDirectory()
+  const login = isFolder
+    ? await claudeStateFileAsync(home, router.userHome).then(readClaudeFolderLoginAsync)
+    : null
+  if (!login) {
+    throw claudeProfileMissing()
+  }
+  return home
 }

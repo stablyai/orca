@@ -1,3 +1,4 @@
+import { normalizeClaudeAccountBinding } from '../../agent-accounts/claude/claude-account-binding'
 import { WorkspaceHookSettingsSchema } from '../../workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 
@@ -98,7 +99,16 @@ export const ProjectGroupUpdate = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    // Why: null clears; a malformed binding is dropped so it never becomes an account selection.
+    claudeAccount: z
+      .unknown()
+      .optional()
+      .transform((value) =>
+        value === undefined || value === null
+          ? value
+          : (normalizeClaudeAccountBinding(value) ?? undefined)
+      )
   })
 })
 

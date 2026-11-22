@@ -1,3 +1,4 @@
+import type { ClaudeAccountBinding } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
@@ -127,6 +128,7 @@ export class RepoUpdatePersistenceOperations {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      claudeAccount?: ClaudeAccountBinding | null
       browserProfileId?: string | null
     }
   ): Repo | null {
@@ -206,6 +208,10 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    if ('claudeAccount' in sanitizedUpdates && sanitizedUpdates.claudeAccount == null) {
+      delete repo.claudeAccount
+      delete sanitizedUpdates.claudeAccount
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
