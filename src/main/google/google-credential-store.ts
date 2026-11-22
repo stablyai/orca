@@ -185,9 +185,11 @@ function pickGoogleDefaultAccount(emails: readonly string[], saved: string | nul
 export async function resolveGoogleDefaultAccount(): Promise<string | null> {
   return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
     const emails = (await listAccounts()).map((entry) => entry.email)
-    const saved = valueOf(await readJson(defaultAccountPath(), DefaultAccountSchema))?.email ?? null
+    const read = await readJson(defaultAccountPath(), DefaultAccountSchema)
+    const saved = valueOf(read)?.email ?? null
     const picked = pickGoogleDefaultAccount(emails, saved)
-    if (picked && picked.toLowerCase() !== saved?.toLowerCase()) {
+    // A saved pick this host can't read right now (Keychain denied) is kept for when it can.
+    if (picked && !('unreadable' in read) && picked.toLowerCase() !== saved?.toLowerCase()) {
       await writeEncryptedCredential(
         'Google',
         defaultAccountPath(),

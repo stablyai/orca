@@ -53,7 +53,8 @@ export class GoogleTriggerChecker {
   private readonly backoff = new Map<string, { until: number; failures: number }>()
   private readonly schedules = new Map<string, { builtAt: number; events: UpcomingEvent[] }>()
   private readonly seedFailedAt = new Map<string, number>()
-  private readonly timers = new Map<string, Timer>()
+  /** Each pending Calendar timer, with the rule and account it was set for. */
+  private readonly timers = new Map<string, { timer: Timer; target: string }>()
   private readonly fired = new Set<string>()
 
   constructor(private readonly deps: GoogleTriggerCheckerDeps) {}
@@ -73,7 +74,7 @@ export class GoogleTriggerChecker {
 
   stop(): void {
     this.stopped = true
-    for (const timer of this.timers.values()) {
+    for (const { timer } of this.timers.values()) {
       ;(this.deps.clearTimer ?? clearTimeout)(timer)
     }
     this.timers.clear()
@@ -90,6 +91,7 @@ export class GoogleTriggerChecker {
     const before = JSON.stringify(state)
     const now = this.deps.now()
     this.trackListeners(state, targets, now)
+    this.dropStaleTimers(targets)
     const accounts = new Set(targets.map((target) => target.account))
     // A checker runs only while a rule listens; with none, the next one starts from now.
     for (const account of Object.keys(state.accounts)) {
@@ -112,6 +114,17 @@ export class GoogleTriggerChecker {
     }
     if (JSON.stringify(state) !== before) {
       this.deps.writeState(state)
+    }
+  }
+
+  // A rule that moved to another account (its own, or the default changed) stops its old timers.
+  private dropStaleTimers(targets: GoogleRuleTarget[]): void {
+    const current = new Set(targets.map(timerTarget))
+    for (const [id, entry] of this.timers) {
+      if (!current.has(entry.target)) {
+        ;(this.deps.clearTimer ?? clearTimeout)(entry.timer)
+        this.timers.delete(id)
+      }
     }
   }
 
@@ -283,7 +296,7 @@ export class GoogleTriggerChecker {
       void this.fire(target.automationId, runEvent)
     }, dueAt - now)
     timer.unref?.()
-    this.timers.set(id, timer)
+    this.timers.set(id, { timer, target: timerTarget(target) })
   }
 
   /** False when the run path failed, so the caller keeps its cursor and the next check retries. */
@@ -307,3 +320,5 @@ export class GoogleTriggerChecker {
     }
   }
 }
+
+const timerTarget = (target: GoogleRuleTarget): string => `${target.automationId} ${target.account}`

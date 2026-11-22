@@ -83,8 +83,15 @@ function googleService(
     : host === 'connected'
       ? undefined
       : GOOGLE_HOST_GAPS[host]
-  const detail = connected
-    .map(
+  // A signed-out default stays listed: calls without --account still go to it, and fail.
+  const signedOutDefault = accounts.find(
+    (account) => account.email === defaultAccount && account.status !== 'connected'
+  )
+  const detail = [
+    ...(signedOutDefault
+      ? [`${signedOutDefault.email} (default): signed out, needs reconnecting`]
+      : []),
+    ...connected.map(
       (account) =>
         `${account.email}${account.email === defaultAccount ? ' (default)' : ''}: ${account.services
           .map(
@@ -93,7 +100,7 @@ function googleService(
           )
           .join(', ')}`
     )
-    .join('; ')
+  ].join('; ')
   return {
     source: 'google',
     tool: 'orca gmail|calendar|contacts',

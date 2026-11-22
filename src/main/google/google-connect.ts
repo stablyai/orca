@@ -79,8 +79,9 @@ export class GoogleConnect {
         if (!options) {
           throw new Error('The Google sign-in did not start.')
         }
+        // Kept before a reconnect saves a newer connectedAt, and after a first account is saved.
+        await resolveGoogleDefaultAccount()
         const record = await runGoogleSignIn(this.deps, options, channel)
-        // The first account becomes the default now, before a later sign-in could look older.
         await resolveGoogleDefaultAccount()
         return { account: googleAccountView(record) }
       },
