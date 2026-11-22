@@ -1,6 +1,14 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
+export const PeerMailMessageType = z.enum([
+  'status',
+  'handoff',
+  'question',
+  'dispatch',
+  'merge_ready'
+])
+
 const LINE = z.string().max(500)
 
 /** Who sent peer mail, from the sending Orca's own records; the receiver shows it beside `senderLabel`. */
@@ -21,13 +29,15 @@ export const PeerMailDeliverParams = z.object({
   senderLabel: requiredString('Missing sender label'),
   subject: requiredString('Missing --subject'),
   body: OptionalString,
-  type: z.enum(['status', 'handoff', 'question']).optional(),
+  type: PeerMailMessageType.optional(),
   priority: z.enum(['normal', 'high', 'urgent']).optional(),
   threadId: OptionalString,
   /** With a `bot:` address: one of that bot's chats, or `new`; resolved by the receiving Orca. */
   chat: OptionalString,
   /** With a `bot:` address: an item number of that bot's. */
   item: OptionalString,
+  /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
+  attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
   sender: PeerMailSender.optional()
 })
 
@@ -59,5 +69,7 @@ export const PeerMailRelayPayload = z.object({
   threadId: z.string().nullable(),
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
-  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional()
+  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
+  /** A notice that a request the opening Orca sent went unanswered; an older Orca ignores it. */
+  notice: z.object({ requestId: LINE }).optional()
 })

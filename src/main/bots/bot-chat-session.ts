@@ -32,9 +32,12 @@ import {
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
+import { closeReplacedBotChat } from './bot-chat-replacement'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
+import { BotSessionRefusedError } from './bot-session-refused-error'
+import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 export type BotChatHost = StructuredAgentTurnHost &
@@ -67,18 +70,19 @@ export type BotRunFields = {
   memorySource?: string
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
+  images?: readonly { path: string }[]
 }
 
 /** A message to a bot's session, as native chat sends it. */
 export function botMessageBody(
   text: string,
-  run: BotRunFields = {}
+  { memorySource, triggeredBy, automationRun, images = [] }: BotRunFields = {}
 ): StructuredAgentSessionFirstMessage['body'] {
-  const { memorySource, triggeredBy, automationRun } = run
+  const imageBlocks = images.map(({ path }) => ({ type: 'image-ref' as const, path }))
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text }],
+    blocks: [{ type: 'text', text }, ...imageBlocks],
     ...(memorySource ? { memorySource } : {}),
     ...(memorySource && triggeredBy ? { triggeredBy } : {}),
     ...(automationRun ? { origin: 'automation-run' as const, automationRun } : {})
@@ -328,7 +332,7 @@ export async function startBotSession(
   // An at-rest chat whose tab was unconfirmed still exists, and showing it publishes the tab again;
   // a first message would stay undelivered, so that start fails.
   if (!created.ok && (input.message || !(await host()).deps.store.getConversation(sessionId))) {
-    throw new Error(`bot_session_refused: ${created.refusal.message}`)
+    throw new BotSessionRefusedError(bot.agent, created.refusal)
   }
   return sessionId
 }
@@ -354,13 +358,7 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
     createChat: async (bot, sessionId) => {
       await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
     },
-    showTab: (bot, sessionId) =>
-      runtime.publishStructuredAgentSessionTab({
-        workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
-        sessionId,
-        agent: bot.agent,
-        activate: false
-      }),
-    closeChat: (sessionId) => closeBotSession(runtime, sessionId)
+    showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
+    closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId)
   })
 }

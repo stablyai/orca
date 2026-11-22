@@ -11,13 +11,13 @@ export function useBotTemplateCategoryLabel(): (category: BotTemplateCategory) =
       case 'releases':
         return t('bots.templates.category.releases', 'Releases & CI')
       case 'support':
-        return t('bots.templates.category.support', 'Support & feedback')
+        return t('bots.templates.category.support', 'Support & triage')
       case 'planning':
         return t('bots.templates.category.planning', 'Planning & docs')
       case 'ops':
         return t('bots.templates.category.ops', 'Ops')
       case 'personal':
-        return t('bots.templates.category.personal', 'Personal follow-ups')
+        return t('bots.templates.category.personal', 'Personal assistant')
     }
   }
 }

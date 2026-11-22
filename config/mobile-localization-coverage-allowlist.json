@@ -148,8 +148,8 @@
   },
   {
     "filePath": "mobile/src/new-workspace/creation/forms/NewWorkspaceSetupScriptField.tsx",
-    "kind": "jsx-expression",
-    "text": "ORCA.YAML",
+    "kind": "jsx-text",
+    "text": "orca.yaml",
     "dynamic": false,
     "count": 1
   },

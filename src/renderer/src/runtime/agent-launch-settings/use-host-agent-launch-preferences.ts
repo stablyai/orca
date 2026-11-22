@@ -5,6 +5,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   resolveAgentLaunchOwner,
   type ProspectiveWorkspace
@@ -38,9 +39,8 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
       ? {
           environmentId: host.environmentId,
           pairingRevision: getRuntimeEnvironmentRevision(host.environmentId),
-          runtimeId: lastVerifiedRuntimeStatus(
-            state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          )?.runtimeId
+          runtimeId: lastVerifiedRuntimeStatus(readRuntimeStatuses().get(host.environmentId))
+            ?.runtimeId
         }
       : null
   return { desktop, owner }

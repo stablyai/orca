@@ -18,7 +18,7 @@ export function waitForAiVaultScan<T>(promise: Promise<T>, signal?: AbortSignal)
   })
 }
 
-// RPC cannot abort in-flight work; cancellation releases its waiter while the request settles separately.
+// Releases the waiter at once even if the scanner settles later, and reports abort as the shared cancelled error.
 export function abandonRemoteSessionScanOnCancel<T>(
   promise: Promise<T>,
   signal?: AbortSignal

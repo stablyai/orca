@@ -43,17 +43,18 @@ export async function recordBundledSkillDigestWritten(
     .catch(() => undefined)
 }
 
-/** An unknown single-file copy whose bytes some Orca build on this host wrote: not a user edit. */
+/** SKILL.md bytes this build never shipped but some Orca build on this host wrote: not a user edit. */
 export async function isOtherBuildCopy(
   filesystem: BundledSkillFilesystem,
   destination: { homeDirectory: string },
-  source: { name: string },
+  source: { name: string; releasedDigests: readonly string[] },
   observed: BundledSkillObserved
 ): Promise<boolean> {
+  // Other entries are not Orca's; a known older release stays an update to ask about.
   return (
     observed.kind === 'folder' &&
-    observed.entries.length === 1 &&
     observed.skillDigest !== null &&
+    !source.releasedDigests.includes(observed.skillDigest) &&
     (await wasBundledSkillDigestWritten(
       filesystem,
       destination.homeDirectory,

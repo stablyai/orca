@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { admitSelfInitiatedTreeKill } from './own-chromium-tree-kill-guard'
 
 export type WindowsTreeKiller = (rootPid: number, deps?: { site?: string }) => Promise<void>
@@ -21,7 +22,7 @@ export function terminateWindowsProcessTree(
   const run = deps.execFileImpl ?? execFile
   return new Promise((resolve) => {
     run(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', String(rootPid), '/T', '/F'],
       {
         timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,

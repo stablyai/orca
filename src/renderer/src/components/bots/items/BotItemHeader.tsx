@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -26,14 +25,10 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import { BotItemLinkChips } from './BotItemLinkChips'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import {
-  BotItemSnoozeMenuItems,
-  formatBotItemSnoozeTime,
-  type BotItemSnoozing
-} from './BotItemSnooze'
+import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import { botItemStatusName } from './bot-item-status-name'
-
-const WHEN = { weekday: 'short', hour: 'numeric', minute: '2-digit' } as const
+import { NativeChatMessageTimestamp } from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
 
 export function BotItemHeader({
   bot,
@@ -76,12 +71,20 @@ export function BotItemHeader({
         </h2>
         <div className="flex min-w-0 items-center gap-2">
           <StatusMenu item={item} disabled={deleted} onStatus={onStatus} snoozing={snoozing} />
-          <p className="min-w-0 truncate text-xs text-muted-foreground">
-            {t('bots.items.view.sub', 'Item {{number}} · {{chat}} · {{when}}', {
-              number: item.number,
-              chat: chatTitle,
-              when: uiDateTimeFormat(WHEN).format(item.createdAt)
-            })}
+          {/* The date stays whole; the chat title truncates, and a narrow pane drops it (the title's
+              number and the Chat row already say both). */}
+          <p className="flex min-w-0 gap-1 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate @max-[360px]:hidden">
+              {t('bots.items.view.subWhere', 'Item {{number}} · {{chat}}', {
+                number: item.number,
+                chat: chatTitle
+              })}
+              {Number.isNaN(new Date(item.createdAt).getTime()) ? null : ' ·'}
+            </span>
+            <NativeChatMessageTimestamp
+              timestamp={item.createdAt}
+              className="shrink-0 text-muted-foreground"
+            />
           </p>
         </div>
         {snoozed && item.snoozedUntil !== null ? (

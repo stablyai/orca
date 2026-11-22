@@ -33,6 +33,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     onLiveInputSendFailureRef
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  const [browserCertificateTrustSupported, setBrowserCertificateTrustSupported] = useState(false)
   // Hide history entry when the host cannot serve it rather than opening a dead end.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
     null
@@ -154,6 +155,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   return {
     browserScreencastSupported,
     setBrowserScreencastSupported,
+    browserCertificateTrustSupported,
+    setBrowserCertificateTrustSupported,
     agentSessionHistorySupported,
     setAgentSessionHistorySupported,
     quickCommandsSupported,

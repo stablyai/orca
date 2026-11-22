@@ -1,19 +1,16 @@
 import { claudeBotSessionOptions } from './claude-bot-session-options'
 import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
-import { prepareClaudeLaunchAccount } from './claude-launch-account'
+import { prepareClaudeLaunchAccount, withClaudeLaunchAccountPin } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type {
-  Options as ClaudeAgentSdkOptions,
-  PermissionMode
-} from '@anthropic-ai/claude-agent-sdk'
-import type {
-  AgentChatPermissionChoice,
-  AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import {
+  claudeStructuredPermissionOptions,
+  type ClaudePermissionOptions
+} from './claude-structured-permission-options'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -46,7 +43,6 @@ import {
 } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -79,26 +75,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-const CLAUDE_PERMISSION_MODES = {
-  // Override settings defaultMode so the chat runs with its selected permission mode.
-  ask: 'default',
-  'accept-edits': 'acceptEdits',
-  auto: 'auto'
-} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
-
-/** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
-export function claudeStructuredPermissionOptions(
-  mode: AgentChatPermissionChoice
-): ClaudePermissionOptions {
-  if (mode === 'own') {
-    // An omitted mode lets the CLI apply the user's settings defaultMode.
-    return {}
-  }
-  return mode === 'full-access'
-    ? { extraArgs: { 'dangerously-skip-permissions': null } }
-    : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
-}
-
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
@@ -119,6 +95,8 @@ export type ClaudeStructuredLaunch = {
   cliFlag: ClaudeCliFlagCheck
   /** Chain identity is independent of whether a transcript exists to resume. */
   continuesChain: boolean
+  /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
+  configuredProgram?: string
   /** Chain head replaced by this rewind fork. */
   forkedFromKey?: string
 }
@@ -213,7 +191,7 @@ export function claudeStructuredLaunchPart(
       command: sources.command,
       prefixArgs: sources.prefixArgs,
       cwd,
-      env: claudeProbeEnv(sources)
+      env: await withClaudeLaunchAccountPin(router, claudeProbeEnv(sources), accountHome.path)
     }
     const launchFlags = resolveClaudeLaunchFlags(
       { ...deps, prepareVisuals: basis.visuals },
@@ -221,7 +199,7 @@ export function claudeStructuredLaunchPart(
       probeLaunch
     )
     const launchArgs = await deps.resolveLaunchArgs()
-    const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
+    const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
     const linked = await basis.linkedSkills()
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
@@ -297,7 +275,7 @@ export function claudeStructuredLaunchPart(
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
           ...discovery,
-          ...(await claudeBotSessionOptions(basis, linked.projects, tools)),
+          ...(await claudeBotSessionOptions(basis, linked.projects, tools, refused)),
           ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...discovery.extraArgs,
@@ -318,12 +296,13 @@ export function claudeStructuredLaunchPart(
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
+        ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }
           : {})
       },
       env,
-      inheritedEnvToDelete: [],
+      inheritedEnvToDelete: refused.envToDelete,
       // The agent runtime follows Orca's CLI directory on PATH so another orca cannot shadow it.
       cliRuntimeCommand: command
     }

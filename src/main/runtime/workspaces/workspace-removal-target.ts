@@ -198,11 +198,12 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
-    const preservesSameIdOwner = Boolean(
-      hostId &&
-      ((persistedHostId && persistedHostId !== hostId) ||
-        (repoId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId)))
+    const worktreeOwnedByOtherHost = Boolean(
+      hostId && persistedHostId && persistedHostId !== hostId
     )
+    const preservesSameIdOwner =
+      worktreeOwnedByOtherHost ||
+      Boolean(hostId && repoId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
     const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
     const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!options.keepArchivedMeta) {
@@ -210,11 +211,13 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     }
     // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
-    if (!preservesSameIdOwner) {
-      // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
-      const pretrustDrop = options.dropAgentTrust
+    // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
+    // Trust is keyed by this path in local files, so another host's repo copy doesn't keep it.
+    const pretrustDrop =
+      options.dropAgentTrust && !worktreeOwnedByOtherHost
         ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
         : undefined
+    if (!preservesSameIdOwner) {
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
@@ -238,9 +241,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       this.notifyMobileSessionTabsRemoved(worktreeId)
       dropRemovedWorktreeProcessState(worktreeId)
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'worktree-removal')
-      // Awaited last so the in-memory invalidations above stay synchronous.
-      await pretrustDrop
     }
+    // Awaited last so the in-memory invalidations above stay synchronous.
+    await pretrustDrop
     const snapshotDirectory = store.getProfileStorageDirectory?.()
     if (snapshotDirectory) {
       pruneRemovedWorktreeSnapshots(snapshotDirectory, worktreeId, hostId)

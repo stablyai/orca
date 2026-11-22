@@ -295,8 +295,10 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
+    // A window themes its rows; without one (a server), the host's own palette does.
+    const terminalTheme = tab.terminalTheme ?? host.hostTerminalTheme?.()
     const clientTab = buildProjectedMobileTerminalClientTab({
-      tab,
+      tab: terminalTheme ? { ...tab, terminalTheme } : tab,
       title,
       normalizedLiveTitle,
       liveTitleEvidence,

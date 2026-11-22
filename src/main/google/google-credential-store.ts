@@ -1,7 +1,8 @@
+import { inCredentialFileOrder, credentialFileExists } from '../credentials/credential-file-io'
 // This host's Google client and each Google account signed in on it, in Orca's encrypted credential
 // files (an owner-only file where the OS keyring is missing, as for Linear). Never sent to Orca Cloud,
 // a paired phone or an SSH target.
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from 'node:fs'
+import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -56,10 +57,10 @@ const accountPath = (email: string) =>
 type Read<T> = { value: T | null } | { unreadable: string }
 
 /** A file this host can't decrypt (Keychain denied, another secret store) is reported, not thrown. */
-function readJson<T>(path: string, schema: z.ZodType<T>): Read<T> {
+async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<Read<T>> {
   let raw: Buffer
   try {
-    raw = readFileSync(path)
+    raw = await readFile(path)
   } catch {
     return { value: null }
   }
@@ -75,32 +76,50 @@ function readJson<T>(path: string, schema: z.ZodType<T>): Read<T> {
 
 const valueOf = <T>(read: Read<T>): T | null => ('value' in read ? read.value : null)
 
-function removeFile(path: string): void {
+async function removeFile(path: string): Promise<void> {
   try {
-    unlinkSync(path)
+    await unlink(path)
   } catch {
     // Nothing saved.
   }
 }
 
-export function saveImportedGoogleClient(config: GoogleClientConfig): void {
-  mkdirSync(googleDir(), { recursive: true, mode: 0o700 })
-  writeEncryptedCredential('Google', clientPath(), JSON.stringify(config))
+export async function saveImportedGoogleClient(config: GoogleClientConfig): Promise<void> {
+  return inCredentialFileOrder(`${clientPath()}.mutation`, async () => {
+    await mkdir(googleDir(), { recursive: true, mode: 0o700 })
+    await writeEncryptedCredential('Google', clientPath(), JSON.stringify(config))
+  })
 }
 
 /** The client new sign-ins use: the file imported on this host (one this host can't read is none; import it again). */
-export function resolveGoogleClient(): GoogleClientConfig | null {
-  return valueOf(readJson(clientPath(), GoogleClientConfigSchema))
+export async function resolveGoogleClient(): Promise<GoogleClientConfig | null> {
+  return inCredentialFileOrder(`${clientPath()}.mutation`, async () =>
+    valueOf(await readJson(clientPath(), GoogleClientConfigSchema))
+  )
 }
 
-export function saveGoogleAccount(record: GoogleAccountRecord): void {
-  mkdirSync(accountsDir(), { recursive: true, mode: 0o700 })
-  writeEncryptedCredential('Google', accountPath(record.email), JSON.stringify(record))
+export async function saveGoogleAccount(
+  record: GoogleAccountRecord,
+  expectedRefreshToken?: string
+): Promise<void> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
+    if (
+      expectedRefreshToken !== undefined &&
+      valueOf(await readJson(accountPath(record.email), GoogleAccountRecordSchema))
+        ?.refreshToken !== expectedRefreshToken
+    ) {
+      return
+    }
+    await mkdir(accountsDir(), { recursive: true, mode: 0o700 })
+    await writeEncryptedCredential('Google', accountPath(record.email), JSON.stringify(record))
+  })
 }
 
 /** The saved account; null when there is none or this host can't read it, so a new sign-in replaces it. */
-export function readGoogleAccount(email: string): GoogleAccountRecord | null {
-  return valueOf(readJson(accountPath(email), GoogleAccountRecordSchema))
+export async function readGoogleAccount(email: string): Promise<GoogleAccountRecord | null> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () =>
+    valueOf(await readJson(accountPath(email), GoogleAccountRecordSchema))
+  )
 }
 
 /** Each saved account, or why this host can't read it (named from its file). */
@@ -108,33 +127,41 @@ export type GoogleAccountEntry =
   | { email: string; record: GoogleAccountRecord }
   | { email: string; unreadable: string }
 
-export function listGoogleAccounts(): GoogleAccountEntry[] {
-  let names: string[]
-  try {
-    names = readdirSync(accountsDir())
-  } catch {
-    return []
-  }
-  return names
-    .filter((name) => name.endsWith('.enc'))
-    .flatMap((name): GoogleAccountEntry[] => {
-      const email = Buffer.from(name.slice(0, -'.enc'.length), 'base64url').toString('utf-8')
-      const read = readJson(join(accountsDir(), name), GoogleAccountRecordSchema)
-      if ('unreadable' in read) {
-        return [{ email, unreadable: read.unreadable }]
-      }
-      return read.value ? [{ email: read.value.email, record: read.value }] : []
-    })
-    .sort((a, b) => connectedAt(a) - connectedAt(b))
+export async function listGoogleAccounts(): Promise<GoogleAccountEntry[]> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
+    let names: string[]
+    try {
+      names = await readdir(accountsDir())
+    } catch {
+      return []
+    }
+    const entries = await Promise.all(
+      names
+        .filter((name) => name.endsWith('.enc'))
+        .map(async (name): Promise<GoogleAccountEntry[]> => {
+          const email = Buffer.from(name.slice(0, -'.enc'.length), 'base64url').toString('utf-8')
+          const read = await readJson(join(accountsDir(), name), GoogleAccountRecordSchema)
+          if ('unreadable' in read) {
+            return [{ email, unreadable: read.unreadable }]
+          }
+          return read.value ? [{ email: read.value.email, record: read.value }] : []
+        })
+    )
+    return entries.flat().sort((a, b) => connectedAt(a) - connectedAt(b))
+  })
 }
 
 const connectedAt = (entry: GoogleAccountEntry) =>
   'record' in entry ? entry.record.connectedAt : Number.MAX_SAFE_INTEGER
 
-export function hasGoogleAccount(email: string): boolean {
-  return existsSync(accountPath(email))
+export async function hasGoogleAccount(email: string): Promise<boolean> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, () =>
+    credentialFileExists(accountPath(email))
+  )
 }
 
-export function removeGoogleAccount(email: string): void {
-  removeFile(accountPath(email))
+export async function removeGoogleAccount(email: string): Promise<void> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
+    await removeFile(accountPath(email))
+  })
 }

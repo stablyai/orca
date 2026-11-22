@@ -1,5 +1,6 @@
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
+import { prepareAiVaultSessionHandoffPrompts } from '../../../../ai-vault/session-handoff-prompt'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -35,6 +36,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
@@ -215,6 +217,12 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultPrepareSessionHandoffParams,
     handler: (params) => writeAiVaultSessionHandoffSnapshot(params)
+  }),
+  defineMethod({
+    name: 'aiVault.prepareSessionHandoffPrompt',
+    permission: 'workspace',
+    params: AiVaultPrepareSessionHandoffPromptParams,
+    handler: (params) => prepareAiVaultSessionHandoffPrompts(params)
   }),
   defineMethod({
     name: 'aiVault.deleteSession',

@@ -22,6 +22,33 @@ import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 
+function ConfirmationHeader({
+  options,
+  className
+}: {
+  options: ConfirmationDialogOptions | undefined
+  className?: string
+}): React.JSX.Element {
+  return (
+    <DialogHeader className={className}>
+      <DialogTitle>{options?.title}</DialogTitle>
+      {options?.subtitle ? (
+        <div className="min-w-0 text-[13px] leading-normal text-muted-foreground">
+          {options.subtitle}
+        </div>
+      ) : null}
+      {options?.description ? (
+        // Callers pass multi-line descriptions (e.g. one path per line) and their own wrapping.
+        <DialogDescription>
+          <span className={cn('block whitespace-pre-line', options.descriptionClassName)}>
+            {options.description}
+          </span>
+        </DialogDescription>
+      ) : null}
+    </DialogHeader>
+  )
+}
+
 type ConfirmationDialogRequest = {
   id: number
   options: ConfirmationDialogOptions
@@ -69,7 +96,8 @@ export function ConfirmationDialogProvider({
           : firstInputRef.current
     target?.focus()
   }, [activeRequestId, initialFocus])
-  const guarded = displayedRequest?.options.ignoresOpeningGesture === true
+  const openingGesture = displayedRequest?.options.ignoresOpeningGesture
+  const guarded = openingGesture === true || openingGesture === 'buttons'
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
   const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
     if (guarded && event.repeat) {
@@ -158,7 +186,7 @@ export function ConfirmationDialogProvider({
           surface={options?.surface}
           initialFocus={initialFocus === 'cancel' ? 'cancel' : undefined}
           onInteractOutside={(event) => {
-            if (guarded) {
+            if (openingGesture === true) {
               event.preventDefault()
             }
           }}
@@ -169,17 +197,14 @@ export function ConfirmationDialogProvider({
             }
           }}
         >
-          <DialogHeader>
-            <DialogTitle>{options?.title}</DialogTitle>
-            {options?.description ? (
-              // Callers pass multi-line descriptions (e.g. one path per line) and their own wrapping.
-              <DialogDescription>
-                <span className={cn('block whitespace-pre-line', options.descriptionClassName)}>
-                  {options.description}
-                </span>
-              </DialogDescription>
-            ) : null}
-          </DialogHeader>
+          {options?.media ? (
+            <div className="flex min-w-0 items-center gap-3">
+              {options.media}
+              <ConfirmationHeader options={options} className="min-w-0 flex-1" />
+            </div>
+          ) : (
+            <ConfirmationHeader options={options} />
+          )}
           {options?.details}
           {options?.fields ? (
             <div className="space-y-3">

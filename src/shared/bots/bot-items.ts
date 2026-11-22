@@ -1,5 +1,6 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
+import type { BotItemDecision } from './bot-item-ask'
 
 export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
@@ -18,7 +19,9 @@ export const BOT_ITEM_ERROR_CODES = [
   'not_owner',
   'items_read_only',
   'items_unavailable',
-  'item_changed'
+  'item_changed',
+  // From hosts that recorded answers (v1.4.265); this host no longer refuses with it.
+  'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'
 
@@ -40,6 +43,7 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   links: 50,
   listPage: 50,
+  /** Also the most items one list read names by uid. */
   listPageMax: 100,
   eventsPage: 50
 } as const
@@ -112,6 +116,23 @@ export type BotItemLinkView =
   | { kind: 'url'; ref: string; issue?: BotItemIssue }
   | { kind: 'file'; ref: string }
 
+/** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
+ *  chain's newest Dispatch, so all but the first are the same worker again. */
+export function botItemLinksOnePerChain(links: readonly BotItemLinkView[]): BotItemLinkView[] {
+  const chains = new Set<string>()
+  return links.filter((link) => {
+    if (link.kind !== 'dispatch') {
+      return true
+    }
+    const chain = link.latest ?? link.ref
+    if (chains.has(chain)) {
+      return false
+    }
+    chains.add(chain)
+    return true
+  })
+}
+
 export type BotItemActor =
   | { kind: 'bot'; botId: string; chatId: string }
   | { kind: 'owner'; device?: string }
@@ -128,7 +149,10 @@ export const BOT_ITEM_EVENT_KINDS = [
 ] as const
 export type BotItemEventKind = (typeof BOT_ITEM_EVENT_KINDS)[number]
 
-/** An image on an owner's comment: a committed chat attachment on the bot's host, named and sized there. */
+/** Files besides images on one comment, as `bot reply --file` takes. */
+export const BOT_ITEM_COMMENT_FILE_MAX_COUNT = 10
+
+/** An image on a comment: a committed chat attachment on the bot's host, named and sized there. */
 export type BotItemCommentImage = { path: string; name: string; bytes: number }
 
 /** A `commented` event's images, dropping any entry a newer or damaged record shaped otherwise. */
@@ -144,6 +168,24 @@ export function botItemCommentImages(data: Record<string, unknown>): BotItemComm
         'bytes' in image &&
         typeof image.bytes === 'number'
           ? [{ path: image.path, name: image.name, bytes: image.bytes }]
+          : []
+      )
+    : []
+}
+
+/** A skill the owner picked in a comment, by the file on the bot's host its agent loads it from. */
+export type BotItemCommentSkill = { name: string; path: string }
+
+export function botItemCommentSkills(data: Record<string, unknown>): BotItemCommentSkill[] {
+  return Array.isArray(data.skills)
+    ? data.skills.flatMap((skill: unknown) =>
+        typeof skill === 'object' &&
+        skill !== null &&
+        'name' in skill &&
+        typeof skill.name === 'string' &&
+        'path' in skill &&
+        typeof skill.path === 'string'
+          ? [{ name: skill.name, path: skill.path }]
           : []
       )
     : []
@@ -168,8 +210,9 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** Needs you: the bot's comment asking the owner, the row's second line. */
-  question: { eventId: string; text: string } | null
+  /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
+   *  question lines (`--ask`) and their quick replies (`--option`). */
+  question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
   closeNote: string | null
   links: BotItemLinkView[]
   version: number

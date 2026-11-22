@@ -1,4 +1,8 @@
-import { CONNECTOR_REPLY_MAX_FILES } from '../../shared/connector-action-contract'
+import {
+  CONNECTOR_REPLY_CHOICE_MAX_CHARS,
+  CONNECTOR_REPLY_MAX_CHOICES,
+  CONNECTOR_REPLY_MAX_FILES
+} from '../../shared/connector-action-contract'
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { SLACK_MARKDOWN, SLACK_MENTION, TEXT_FILE } from './slack'
@@ -90,13 +94,14 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'reply'],
     summary: 'Answer, as this bot, in the issue, pull request or thread that woke this run',
     usage:
-      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--react <emoji>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'text', 'text-file', 'note', 'file', 'react'],
-    repeatableFlags: ['note', 'file'],
+      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'text', 'text-file', 'note', 'file', 'choice', 'react'],
+    repeatableFlags: ['note', 'file', 'choice'],
     notes: [
       'For a progress note, a question, line notes or an emoji before your final message, which Orca posts there for you. Anywhere else, use `gh`, `orca linear` or `orca slack`.',
       'On a pull request, each --note posts as an inline review note (up to 30) with --text as the review, and your final message is then not posted; elsewhere notes follow the text as path:line lines.',
       `--file attaches a file (up to ${CONNECTOR_REPLY_MAX_FILES} files, each up to what Slack takes) in the Slack thread that woke you. Repeat it to send several, and put their words in the same call's --text: they post together as one message. GitHub and Linear take no files: link to it instead.`,
+      `--choice puts a button under your --text in the Slack thread that woke you (up to ${CONNECTOR_REPLY_MAX_CHOICES}, each up to ${CONNECTOR_REPLY_CHOICE_MAX_CHARS} characters). Repeat it for each option. When someone who can ask you presses one, it comes back to you as their next message in the thread, with the label as its text; the first press is the answer and the buttons close. GitHub and Linear take no buttons.`,
       '--react puts an emoji (👀 ✅, or :shortcode:) on the message that woke you.',
       TEXT_FILE,
       `In Slack: ${SLACK_MENTION} ${SLACK_MARKDOWN}`

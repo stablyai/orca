@@ -1,4 +1,5 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { retainTmuxHookWriterTopology } from './cli-writer-observation'
 import {
   pollCodexTranscriptStatus,
   readCodexTranscriptPoll,
@@ -105,11 +106,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
-    const timer = this.assistantMessageRetryTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
+    clearTimeout(this.assistantMessageRetryTimers.get(paneKey))
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
@@ -242,6 +239,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!normalized) {
       return
     }
+    // A poll's Stop is read from the hook body too, so a tmux host keeps its shared topology.
+    retainTmuxHookWriterTopology(normalized, body)
     const update = transcriptPollUpdate(source, original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {

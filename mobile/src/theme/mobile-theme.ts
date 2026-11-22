@@ -66,6 +66,7 @@ const darkColors = {
   statusPurple: '#d8b4fe',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
+  gitDecorationModified: '#e2c08d',
   // GitHub's (Primer) diff colours, Kelvin's choice for every phone diff: row ground, line-number cell over it,
   // the +/− sign, unchanged line numbers, and the blue "unchanged lines" fold band.
   diffAddedBg: 'rgba(46, 160, 67, 0.15)',
@@ -145,6 +146,7 @@ const lightColors: MobilePalette = {
   statusPurple: '#9333ea',
   gitDecorationAdded: '#587c0c',
   gitDecorationDeleted: '#ad0707',
+  gitDecorationModified: '#895503',
   diffAddedBg: '#dafbe1',
   diffDeletedBg: '#ffebe9',
   diffAddedGutter: '#aceebb',

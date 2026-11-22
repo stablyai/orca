@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto'
 import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
+  PeerMailMessageType,
   PeerMailRelayPayload,
   PeerMailSender
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
@@ -68,9 +71,9 @@ export function peerMailMessageId(
 export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
   selector: string,
-  /** The mail reaches a bot there, or asks a question, which only a newer Orca admits. */
-  toBot = false
-): Promise<OrchestrationWorkerServer> {
+  toBot = false,
+  type?: z.infer<typeof PeerMailMessageType>
+): Promise<OrchestrationWorkerServer & { takesFiles: boolean }> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
     await runtime.callOrchestrationWorkerServer(
@@ -102,7 +105,25 @@ export async function requirePeerMailServer(
       { ...NOTHING_SENT, server: server.name }
     )
   }
-  return server
+  if (
+    type &&
+    type !== 'status' &&
+    type !== 'handoff' &&
+    !status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY) &&
+    !(
+      type === 'question' &&
+      status.data.capabilities?.includes(ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY)
+    )
+  ) {
+    throw new OrchestrationError(
+      'server_mail_unsupported',
+      `Server ${server.name} runs an older Orca that cannot receive --type ${type} agent mail. Nothing was sent. Update Orca on ${server.name}, or send it again as --type status, which it accepts.`,
+      { ...NOTHING_SENT, server: server.name }
+    )
+  }
+  const takesFiles =
+    status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY) === true
+  return { ...server, takesFiles }
 }
 
 /** The pairing credential the server knows this Orca by; a re-pair starts new conversations under it. */
@@ -121,11 +142,12 @@ export async function deliverPeerMail(
     senderLabel: string
     subject: string
     body?: string
-    type?: 'status' | 'handoff' | 'question'
+    type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
     chat?: string
     item?: string
+    attachments?: readonly string[]
     sender: PeerMailSender
   }
 ): Promise<void> {
@@ -144,6 +166,7 @@ export async function deliverPeerMail(
       ...(message.threadId ? { threadId: message.threadId } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
+      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
       sender: message.sender
     },
     DELIVER_TIMEOUT_MS,

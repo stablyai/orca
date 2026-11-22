@@ -86,7 +86,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         if (!savedOrders.has(session.workspaceId)) {
           savedOrders.set(
             session.workspaceId,
-            ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()
+            ORCA_LAYOUT_OWNER_IS_MAIN || !this.hasAuthoritativeWindow()
               ? this.savedStructuredSessionTabOrder(session.workspaceId)
               : undefined
           )
@@ -124,7 +124,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     let savedOrder: MainSessionTabRows | undefined
     // Window creates retain the window's own placement decision.
     if (
-      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.hasAuthoritativeWindow()) &&
       !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
     ) {
       const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
@@ -176,7 +176,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     const savedOrder =
       'savedOrder' in input
         ? input.savedOrder
-        : (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+        : (ORCA_LAYOUT_OWNER_IS_MAIN || !this.hasAuthoritativeWindow()) &&
             !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
           ? this.savedStructuredSessionTabOrder(input.workspaceId)
           : undefined

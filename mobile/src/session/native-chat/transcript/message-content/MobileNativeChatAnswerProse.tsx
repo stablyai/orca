@@ -6,8 +6,12 @@ import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot
 import { scaledType, styles } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
 
-/** The row is in a turn an automation's row opened, which already says what ran. */
-export const MobileNativeChatAutomationTurnContext = createContext(false)
+/** Whether an automation's row opened the row's turn, and whether the turn said or did something
+ *  others see; either already accounts for a quiet result. */
+export const MobileNativeChatQuietTurnContext = createContext({
+  inAutomationTurn: false,
+  inActingTurn: false
+})
 
 /** An agent row's prose; in a bot's chat a quiet result shows as a line, not its marker, as on the desktop. */
 export function MobileNativeChatAnswerProse({
@@ -21,7 +25,7 @@ export function MobileNativeChatAnswerProse({
   const answer = quietBotAnswerBlocks(blocks, {
     botAnswer: prose.paced && bot?.botId !== undefined,
     streaming: prose.growingBlock !== undefined,
-    inAutomationTurn: useContext(MobileNativeChatAutomationTurnContext)
+    ...useContext(MobileNativeChatQuietTurnContext)
   })
   return (
     <>

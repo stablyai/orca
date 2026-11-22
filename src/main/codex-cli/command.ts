@@ -3,7 +3,10 @@ import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cl
 import { resolveGuestNativeProgram } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 import { isAbsolute } from 'node:path'
-import { managedClaudeCommand } from '../claude/managed-runtime/claude-managed-runtime'
+import {
+  managedAgentCommand,
+  type ManagedAgentCliId
+} from '../managed-agent-cli/managed-agent-cli-registry'
 
 export {
   getVersionManagerBinPaths,
@@ -32,20 +35,25 @@ export function resolveGuestNativeAgentCommand(
   )
 }
 
+/** The user's own install wins; Orca's copy serves hosts that have none. */
+function orUseManagedCopy(agent: ManagedAgentCliId, resolved: string): string {
+  return isAbsolute(resolved) && !resolved.startsWith(WINDOWS_ONLY_AGENT_CLI_DIR)
+    ? resolved
+    : (managedAgentCommand(agent) ?? resolved)
+}
+
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {
-  return resolveGuestNativeAgentCommand('codex', options)
+  return orUseManagedCopy('codex', resolveGuestNativeAgentCommand('codex', options))
 }
 
 /** Per-spawn lookup (#35565): only Windows' per-candidate stats are slow enough to move off the event loop. */
 export async function resolveCodexCommandForSpawn(): Promise<string> {
   // win32 has no WSL drive mounts, so the guest-native skip would be a no-op there.
-  return process.platform === 'win32' ? resolveCliCommandAsync('codex') : resolveCodexCommand()
+  return process.platform === 'win32'
+    ? orUseManagedCopy('codex', await resolveCliCommandAsync('codex'))
+    : resolveCodexCommand()
 }
 
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {
-  const resolved = resolveGuestNativeAgentCommand('claude', options)
-  // The user's own install wins; Orca's copy serves hosts that have none.
-  return isAbsolute(resolved) && !resolved.startsWith(WINDOWS_ONLY_AGENT_CLI_DIR)
-    ? resolved
-    : (managedClaudeCommand() ?? resolved)
+  return orUseManagedCopy('claude', resolveGuestNativeAgentCommand('claude', options))
 }

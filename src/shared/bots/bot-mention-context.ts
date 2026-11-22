@@ -76,9 +76,14 @@ export function splitBotMentions(text: string): (string | BotMention)[] {
 /** The paired servers' bots `text` names, once each, in order. */
 export function mentionedServerBots(text: string): { id: string; name: string; server: string }[] {
   const named: { id: string; name: string; server: string }[] = []
+  const seen = new Set<string>()
   for (const { id, name, server } of botMentionTokens(text)) {
-    if (server && !named.some((n) => n.id === id && n.server === server)) {
-      named.push({ id, name, server })
+    if (server) {
+      const key = `${id}\0${server}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        named.push({ id, name, server })
+      }
     }
   }
   return named
@@ -90,13 +95,23 @@ export function mentionedBots<B extends Pick<Bot, 'id' | 'paused'>>(
   text: string,
   bots: readonly B[]
 ): { bot: B; chatId: string | null }[] {
-  const named: { bot: B; chatId: string | null }[] = []
-  for (const { id, chatId = null, server } of botMentionTokens(text)) {
-    if (server) {
-      continue
+  const local = botMentionTokens(text).filter((mention) => !mention.server)
+  if (local.length === 0 || bots.length === 0) {
+    return []
+  }
+  const byId = new Map<string, B>()
+  for (const bot of bots) {
+    if (!byId.has(bot.id)) {
+      byId.set(bot.id, bot)
     }
-    const bot = bots.find((entry) => entry.id === id)
-    if (bot && !bot.paused && !named.some((n) => n.bot === bot && n.chatId === chatId)) {
+  }
+  const named: { bot: B; chatId: string | null }[] = []
+  const seen = new Set<string>()
+  for (const { id, chatId = null } of local) {
+    const bot = byId.get(id)
+    const key = `${id}\0${chatId ?? ''}`
+    if (bot && !bot.paused && !seen.has(key)) {
+      seen.add(key)
       named.push({ bot, chatId })
     }
   }

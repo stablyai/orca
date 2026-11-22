@@ -34,7 +34,8 @@ import {
   resolveKeyedFolderWorkspace,
   selectWorkspaceCandidate,
   type WorkspaceSelectorCandidate,
-  type WorkspaceSelectorOptions
+  type WorkspaceSelectorOptions,
+  WORKSPACE_SELECTOR_NOT_FOUND
 } from './catalog/workspace-selector-candidates'
 export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchContext {
   protected abstract hasFreshResolvedWorktreeCache(
@@ -88,7 +89,7 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (candidates.length > 1) {
       throw new Error('selector_ambiguous')
     }
-    throw new Error('selector_not_found')
+    throw new Error(WORKSPACE_SELECTOR_NOT_FOUND)
   }
 
   /** Every repo-backed row the selector names; duplicate registrations of one checkout count once. */
@@ -184,13 +185,19 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     selector: string,
     options: WorkspaceSelectorOptions = {}
   ): Promise<WorkspaceSelectorCandidate> {
-    const catalog = folderCatalogOf(this.store)
     const folderId = folderIdOfSelector(selector)
+    const { requiredHostId } = options
+    if (folderId === undefined && !options.matchFolders) {
+      return {
+        kind: 'worktree',
+        worktree: await this.resolveGitWorktreeSelector(selector, requiredHostId)
+      }
+    }
+    const catalog = folderCatalogOf(this.store)
     if (folderId !== undefined && options.anyFolderHost) {
       const row = catalog.folderWorkspaces.find((folder) => folder.id === folderId)
       return selectWorkspaceCandidate(selector, row ? [folderCandidate(catalog, row)] : [], catalog)
     }
-    const { requiredHostId } = options
     const keyed = resolveKeyedFolderWorkspace(catalog, selector, requiredHostId)
     if (keyed) {
       return { kind: 'folder', folder: keyed, hostId: keyed.executionHostId ?? null }

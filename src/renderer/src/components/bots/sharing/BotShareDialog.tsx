@@ -9,7 +9,8 @@ import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
-import { botShareFlagLabel, type BotShareFlagSpot } from './bot-share-flags'
+import { botShareFlagLabel } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import type { BotShareContext, BotSharePage } from './bot-share-pages'
 import { BotShareListPage } from './BotShareLists'
 import { pageTitle } from './BotShareOverview'
@@ -149,14 +150,20 @@ export function BotShareUpdatedLine({
 }
 
 /** Orca Cloud didn't answer, so whether the bot has a link is unknown; Publish waits on Retry. */
-export function BotShareOfflineRow({ onRetry }: { onRetry: () => void }): React.JSX.Element {
+export function BotShareOfflineRow({
+  error,
+  onRetry
+}: {
+  error: string | null
+  onRetry: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <SettingsInsetGroup>
       <div className="flex min-h-11 items-center gap-2.5 py-2 pr-2.5 pl-3 text-sm">
         <CloudOff className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 font-medium">
-          {t('bots.share.cantReachCloud', 'Can’t reach Orca Cloud')}
+          {error ?? t('bots.share.linkStatusUnavailable', 'Couldn’t check the share link')}
         </span>
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           {t('settings.bots.retry', 'Retry')}
@@ -211,6 +218,11 @@ export function BotShareSecretNotice({
 }
 
 /** A part's page in place of the dialog's front: Back, its title, and its items or text. */
+/** A page takes focus at its title as it opens, so nothing below (such as Cancel) looks chosen. */
+function focusOnOpen(title: HTMLDivElement | null): void {
+  title?.focus({ preventScroll: true })
+}
+
 export function BotShareDrillIn({
   page,
   backLabel,
@@ -230,8 +242,18 @@ export function BotShareDrillIn({
       <div className="flex min-h-7 items-center">
         <BotShareBack label={backLabel} onBack={onBack} />
       </div>
-      <div>
-        <div className="text-sm leading-5 font-semibold">{pageTitle(page, t)}</div>
+      <div ref={focusOnOpen} tabIndex={-1} className="outline-none">
+        <div className="flex items-baseline gap-2 text-sm leading-5 font-semibold">
+          {pageTitle(page, t)}
+          {page.kind === 'list' && page.list === 'memory' ? (
+            <span className="text-xs font-normal tabular-nums text-muted-foreground">
+              {t('bots.share.countOf', '{{picked}} of {{all}}', {
+                picked: ctx.selection.memory?.length ?? 0,
+                all: ctx.candidate.available.memory.length
+              })}
+            </span>
+          ) : null}
+        </div>
         {page.kind === 'part' && page.detail ? (
           <div className="text-xs leading-4 text-muted-foreground">{page.detail}</div>
         ) : null}
