@@ -50,9 +50,13 @@ export function useNativeChatPromptCardFocus(
   step?: number
 ): void {
   const previousStepRef = useRef(step)
+  const mountedRef = useRef(false)
   useLayoutEffect(() => {
     const stepChanged = previousStepRef.current !== step
     previousStepRef.current = step
+    // Callers key the card per prompt, so only its mount is an arrival; a tab or group coming back is a restore.
+    const arriving = !mountedRef.current
+    mountedRef.current = true
     const card = cardRef.current
     const active = document.activeElement
     // Arriving cards must not steal keys from find or queued-message edits.
@@ -63,7 +67,7 @@ export function useNativeChatPromptCardFocus(
       (active === card || !card.contains(active) || stepChanged) &&
       !active?.closest('[data-native-chat-find-bar], [data-queued-message-editor]')
     ) {
-      focusPromptCard(card, true)
+      focusPromptCard(card, arriving)
     }
   }, [cardRef, shouldFocus, step])
 }
