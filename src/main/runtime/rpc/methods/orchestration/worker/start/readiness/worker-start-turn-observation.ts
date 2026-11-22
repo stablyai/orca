@@ -46,8 +46,9 @@ export async function observeWorkerTurnStart(args: {
       verdict: 'unobserved',
       prompt: args.prompt,
       reason:
-        `Orca typed the brief but did not press Enter: the screen showed a dialog ` +
-        `(${submit.withheldFor}). Answer it in the worker's terminal, then submit the brief.`
+        submit.withheldFor === 'terminal-input'
+          ? "Orca typed the brief but did not press Enter: someone typed into the worker's terminal after the paste. Check its prompt holds only the brief, then submit it."
+          : `Orca typed the brief but did not press Enter: the screen showed a dialog (${submit.withheldFor}). Answer it in the worker's terminal, then submit the brief.`
     }
   }
   const verdict = classifyPromptDelivery(args.prompt)

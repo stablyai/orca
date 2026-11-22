@@ -1,6 +1,7 @@
 import type {
   RuntimeTerminalPromptDelivery,
-  RuntimeTerminalPromptSubmit
+  RuntimeTerminalPromptSubmit,
+  RuntimeTerminalPromptSubmitHold
 } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type {
   AgentPromptAftermath,
@@ -37,7 +38,9 @@ export const SUBMIT_WITHHELD_STAGE = 'submit_withheld'
 
 /** A withheld start reported after a restart: its delivery record is gone, its stage is not. */
 export const WITHHELD_AFTER_RESTART_EVIDENCE: UnconfirmedStartEvidence = {
-  lines: ['Orca typed the brief but did not press Enter: a dialog showed on its screen.'],
+  lines: [
+    'Orca typed the brief but did not press Enter: a dialog showed on its screen, or someone typed into its terminal.'
+  ],
   withheld: true
 }
 
@@ -56,15 +59,13 @@ export function describeUnconfirmedStartEvidence(
       // The dialog was the old process's; the new one's screen decides what Enter does now.
       return {
         lines: [
-          `${typed}, but did not press Enter: a dialog showed on its screen (${submit.withheldFor}).`,
+          `${typed}, but did not press Enter: ${describeHold(submit.withheldFor)}.`,
           describeAftermath(aftermath, submit.pastedAt)
         ]
       }
     }
     return {
-      lines: [
-        `${typed}, but did not press Enter: a dialog showed on its screen (${submit.withheldFor}).`
-      ],
+      lines: [`${typed}, but did not press Enter: ${describeHold(submit.withheldFor)}.`],
       withheld: true
     }
   }
@@ -95,4 +96,10 @@ function describeAftermath(aftermath: AgentPromptAftermath, enteredAt: number): 
 
 function seconds(ms: number): string {
   return `${(Math.max(0, ms) / 1000).toFixed(1)} s`
+}
+
+function describeHold(hold: RuntimeTerminalPromptSubmitHold): string {
+  return hold === 'terminal-input'
+    ? 'someone typed into its terminal after the paste'
+    : `a dialog showed on its screen (${hold})`
 }

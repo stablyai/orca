@@ -163,7 +163,7 @@ function describeNextStep(
       stop.startSurface === 'chat'
         ? `See where it is with your Orca CLI's \`orchestration worker-show --dispatch ${dispatchId}\`.`
         : stop.startEvidence?.withheld
-          ? `An Enter now would answer that dialog: tell the user to answer it in that terminal, then submit the brief with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
+          ? `Don't press Enter yet: it would answer that dialog or submit what was typed. Tell the user to answer or clear it in that terminal, then submit the brief with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
           : `If the brief is still in its prompt, submit it with your Orca CLI's \`terminal send --terminal ${stop.from} --enter\`.`
     return [
       check,

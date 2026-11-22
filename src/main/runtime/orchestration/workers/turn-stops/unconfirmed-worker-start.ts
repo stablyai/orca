@@ -6,6 +6,7 @@ import {
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
+import { START_BLOCKED_FENCE } from './awaiting-worker-start-report'
 import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
@@ -59,7 +60,8 @@ export function observeUnconfirmedWorkerStart(
   const seen = readWorkerPresence(db, dispatchId)
   // Any presence but this alert's own was reported as its own news; a working or resting worker
   // also proves its turn ran, and an alert is never sent twice.
-  if (seen && seen.fence !== START_UNCONFIRMED_FENCE) {
+  // A start-blocked prompt was seen before the brief went in, so it proves no turn ran.
+  if (seen && seen.fence !== START_UNCONFIRMED_FENCE && seen.fence !== START_BLOCKED_FENCE) {
     if (seen.presence !== 'gone') {
       confirmUnknownWorkerStart(db, dispatchId)
     }

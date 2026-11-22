@@ -9,9 +9,9 @@ import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-option
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalPromptSubmit,
+  RuntimeTerminalPromptSubmitHold,
   RuntimeTerminalSend
 } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
@@ -104,12 +104,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let pastedAt = 0
     let enteredAt = 0
     let renderWait: RuntimeTerminalPromptSubmit['renderWait']
-    // Why only acceptQueued: its receipt carries the withheld Enter back to a caller that reports it.
-    const mayWithhold =
-      options.withholdSubmitOnDialog === true &&
-      options.acceptQueued === true &&
-      !!options.requestId
-    let withheldFor: RuntimeTerminalWaitBlockedReason | null = null
+    let withheldFor: RuntimeTerminalPromptSubmitHold | null = null
     try {
       await beforeWrite(admissionSignal)
       assertWritable(admissionSignal)
@@ -158,23 +153,16 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
             : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
         }
-        try {
-          await beforeWrite(deliverySignal)
-        } catch (error) {
-          if (options.suffixFailureError) {
-            throw new Error(options.suffixFailureError)
-          }
-          throw error
-        }
-        // Last await before Enter, so the screen it reads is the one Enter would reach.
-        withheldFor = mayWithhold
-          ? await this.readAgentPromptSubmitHold(
-              handle,
-              ptyId,
-              permissionBaseline,
-              options.promptForSchedule
-            )
-          : null
+        const lastWrite = (): Promise<void> =>
+          beforeWrite(deliverySignal).catch((error: unknown) => {
+            throw options.suffixFailureError ? new Error(options.suffixFailureError) : error
+          })
+        withheldFor = await this.guardAgentPromptSubmit(handle, ptyId, options, {
+          permissionBaseline,
+          pastedAt,
+          signal: deliverySignal,
+          beforeWrite: lastWrite
+        })
       }
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)

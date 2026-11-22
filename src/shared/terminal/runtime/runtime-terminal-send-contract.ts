@@ -34,6 +34,9 @@ export type RuntimeTerminalPromptSubmit = {
   renderWait?: 'quiet' | 'draft' | 'cap'
 } & (
   | { enteredAt: number }
-  /** The screen showed this dialog after the paste, so Orca did not press Enter into it. */
-  | { withheldFor: RuntimeTerminalWaitBlockedReason }
+  /** What Enter would have answered or submitted after the paste, so Orca did not press it. */
+  | { withheldFor: RuntimeTerminalPromptSubmitHold }
 )
+
+/** A dialog on screen, or input someone else typed into the terminal after the paste. */
+export type RuntimeTerminalPromptSubmitHold = RuntimeTerminalWaitBlockedReason | 'terminal-input'
