@@ -13,8 +13,12 @@ type WorkspaceIdentityStateInput = Pick<
   | 'persistDraft'
   | 'selectedRepoConnectionId'
   | 'selectedRepoRuntimeEnvironmentId'
-  | 'settings'
->
+> & {
+  settings: {
+    defaultTuiAgent: NonNullable<ComposerModel['settings']>['defaultTuiAgent'] | undefined
+    disabledTuiAgents: NonNullable<ComposerModel['settings']>['disabledTuiAgents'] | undefined
+  } | null
+}
 
 import { useState, useMemo, useCallback, type SetStateAction } from 'react'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'

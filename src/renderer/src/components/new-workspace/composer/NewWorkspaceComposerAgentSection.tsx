@@ -25,7 +25,7 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   advancedLocked?: boolean
   visibleQuickAgents: React.ComponentProps<typeof AgentCombobox>['agents']
   defaultTuiAgent: React.ComponentProps<typeof AgentCombobox>['defaultAgent']
-  handleSetDefaultAgent: (
+  handleSetDefaultAgent?: (
     next: Parameters<NonNullable<React.ComponentProps<typeof AgentCombobox>['onSetDefault']>>[0]
   ) => void
 }

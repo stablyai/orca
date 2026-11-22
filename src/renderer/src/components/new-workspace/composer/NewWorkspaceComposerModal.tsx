@@ -128,7 +128,6 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const settings = useAppStore((s) => s.settings)
   const {
     cardProps,
     composerRef,
@@ -170,14 +169,20 @@ function QuickTabBody({
   const launchWorkspace =
     cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
   const offeredAgentIds = useAgentsOfferedForLaunch(launchWorkspace, cardProps.detectedAgentIds)
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget,
+    { wakeOnOpen: true }
+  )
   const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
   const choicePending = (agent: TuiAgent): boolean =>
     agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
   // Pending discovery preserves the existing catalog fallback; current facts settle the default.
   const preferredQuickAgent = pickQuickWorkspaceAgent(
-    settings?.defaultTuiAgent,
+    observation.preferences.defaultTuiAgent,
     cardProps.detectedAgentIds,
-    settings?.disabledTuiAgents,
+    observation.preferences.disabledTuiAgents,
     offeredAgentIds,
     choicePending
   )
@@ -188,7 +193,7 @@ function QuickTabBody({
     detectedAgentIds: cardProps.detectedAgentIds,
     offeredAgentIds,
     selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
-    disabledTuiAgents: settings?.disabledTuiAgents
+    disabledTuiAgents: observation.preferences.disabledTuiAgents
   })
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
     // Repair invalid picks before children render an unavailable option.
@@ -202,12 +207,6 @@ function QuickTabBody({
   const [quickAgentPick, setQuickAgentPick] = useState<
     Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
   >(modalData.recovery ?? { agent: null })
-  const observation = useAgentMenuObservation(
-    cardProps.agentRows?.target ?? null,
-    active && Boolean(cardProps.agentRows),
-    cardProps.agentRows?.detectionTarget,
-    { wakeOnOpen: true }
-  )
   const pickerDraft =
     quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
       ? quickAgentPick.draft

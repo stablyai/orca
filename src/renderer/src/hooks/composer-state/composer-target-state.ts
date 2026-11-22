@@ -14,6 +14,9 @@ import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runti
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './workspace-target/draft-target-sync'
 import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
+import { useAgentMenuLaunchFacts } from '@/components/agent/launch-menu/agent-menu-launch-facts'
+import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { resolveComposerAgentRows } from './card-projection/composer-agent-rows-target'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -87,6 +90,17 @@ export function useComposerTargetState(
     setPendingInitialWorkspaceTarget: initialTargetState.setPendingInitialWorkspaceTarget,
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
+  const agentRows = resolveComposerAgentRows({
+    ...runtimeTargetSelection,
+    selectedProjectGroup: initialTargetState.selectedProjectGroup
+  })
+  const launchFacts = useAgentMenuLaunchFacts(agentRows?.target.workspace ?? { kind: 'floating' })
+  const { settings: launchSettings } = useHostAgentMenuSettings(
+    agentRows ? launchFacts : null,
+    composerTargetStore.settings,
+    Boolean(agentRows),
+    Boolean(agentRows)
+  )
   const workspaceIdentityState = useWorkspaceIdentityState({
     initialBaseBranch: composerTargetStore.initialBaseBranch,
     initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
@@ -99,7 +113,7 @@ export function useComposerTargetState(
     persistDraft: composerTargetStore.persistDraft,
     selectedRepoConnectionId: runtimeTargetSelection.selectedRepoConnectionId,
     selectedRepoRuntimeEnvironmentId: runtimeTargetSelection.selectedRepoRuntimeEnvironmentId,
-    settings: composerTargetStore.settings
+    settings: launchSettings
   })
   const asyncComposerState = useComposerAsyncState({
     agentPrompt: sourceContextState.agentPrompt,
