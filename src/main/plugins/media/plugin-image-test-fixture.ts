@@ -16,12 +16,12 @@ export function pngImageBytes(width: number, height: number, size = 128, seed = 
   return bytes
 }
 
-export function catalogImageFixture(path: string, bytes: Buffer, width = 1600, height = 1000) {
+export function catalogImageFixture(path: string, bytes: Buffer) {
   return {
     path,
     alt: 'Plugin preview',
     sha256: createHash('sha256').update(bytes).digest('hex'),
-    width,
-    height
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20)
   }
 }

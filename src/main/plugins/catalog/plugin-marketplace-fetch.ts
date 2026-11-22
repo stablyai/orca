@@ -4,7 +4,6 @@ import {
   type CatalogLoadState
 } from './plugin-catalog-blob-reader'
 import type { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
-import { tmpdir } from 'node:os'
 import {
   PLUGIN_MARKETPLACE_FILENAME,
   pluginMarketplaceSchema,
@@ -17,58 +16,38 @@ import {
 } from '../../../shared/plugins/catalog/plugin-catalog'
 import { formatPluginSchemaIssues } from '../../../shared/plugins/manifest/plugin-schema-issues'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
-import {
-  createCatalogBufferMemo,
-  extractCatalogImages,
-  type CatalogBlobReader
-} from './plugin-catalog-image-extraction'
+import { createCatalogBufferMemo, type CatalogBlobReader } from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
-import { readPluginGitCommit } from '../installation/plugin-git-repository'
 import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
 
 const MARKETPLACE_INDEX_MAX_BYTES = 16 * 1024 * 1024
-// Why its own cap: a catalog repository may hold far more than one plugin, and only its index is read.
-const MARKETPLACE_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 export type PluginMarketplaceFetchResult = {
   marketplaceCommit: string
   marketplace: PluginMarketplace
-  /** Catalog images whose bytes matched their declared hash, size and format. */
-  images?: Buffer[]
 }
 
 /** System Git retains private-repo SSH agent and credential-helper support. */
 export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource,
   options: {
-    repositories?: Pick<PluginCatalogRepositoryStore, 'refresh'>
+    repositories: Pick<PluginCatalogRepositoryStore, 'refresh'>
     publishedCommit?: string
-  } = {}
+  }
 ): Promise<PluginMarketplaceFetchResult> {
-  const onDemand = Boolean(options.repositories) && isOnDemandCatalogSource(source.source.url)
-  const read = (repository: string, commit: string) =>
-    readMarketplaceAtCommit(repository, commit, source.source.url, onDemand)
-  const { commit, value } = options.repositories
-    ? await options.repositories.refresh(source, read, options.publishedCommit)
-    : await readPluginGitCommit(
-        {
-          url: source.source.url,
-          ref: source.source.ref,
-          workingDirectory: tmpdir(),
-          maxDownloadBytes: MARKETPLACE_DOWNLOAD_MAX_BYTES
-        },
-        read
-      )
-  return { marketplaceCommit: commit, marketplace: value.marketplace, images: value.images }
+  const { commit, value } = await options.repositories.refresh(
+    source,
+    (repository, revision) => readMarketplaceAtCommit(repository, revision, source.source.url),
+    options.publishedCommit
+  )
+  return { marketplaceCommit: commit, marketplace: value }
 }
 
-/** Reads only the catalog index blobs, so the rest of the repository is never written out.
- *  Prefers orca-catalog.json; repositories that only publish the frozen v1 file still load. */
+/** Prefers orca-catalog.json; repositories that only publish the frozen v1 file still load. */
 async function readMarketplaceAtCommit(
   repository: string,
   commit: string,
-  catalogUrl: string,
-  onDemand: boolean
-): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
+  catalogUrl: string
+): Promise<PluginMarketplace> {
   const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
   const listing = await gitExecFileAsyncBuffer(
     ['ls-tree', '-l', '-z', commit, '--', PLUGIN_CATALOG_FILENAME, PLUGIN_MARKETPLACE_FILENAME],
@@ -102,14 +81,7 @@ async function readMarketplaceAtCommit(
     failed: new Set(),
     memo: createCatalogBufferMemo()
   }
-  const batched = await extractBatchedMarketplaceImages(
-    index,
-    repository,
-    commit,
-    catalogUrl,
-    loaded,
-    onDemand
-  )
+  const batched = await fillBatchedMarketplaceImages(index, repository, commit, catalogUrl, loaded)
   if (batched) {
     return batched
   }
@@ -129,24 +101,17 @@ async function readMarketplaceAtCommit(
     await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), single)
     return single.files.get(path)?.bytes ?? null
   }
-  return extractCatalogImages(
-    index,
-    readBlob,
-    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, memo),
-    memo,
-    onDemand
-  )
+  return fillMarketplaceImages(index, catalogUrl, readBlob, memo)
 }
 
-async function extractBatchedMarketplaceImages(
+async function fillBatchedMarketplaceImages(
   index: PluginMarketplace,
   repository: string,
   commit: string,
   catalogUrl: string,
-  state: CatalogLoadState,
-  onDemand: boolean
-): Promise<{ marketplace: PluginMarketplace; images: Buffer[] } | null> {
-  // Rerun extraction until every file it asks for is loaded, so each round's misses share a few Git calls.
+  state: CatalogLoadState
+): Promise<PluginMarketplace | null> {
+  // Repeat the manifest fallback so its missing files share a Git batch.
   for (;;) {
     const missing = new Map<string, number>()
     const readBlob = async (path: string, maxBytes: number): Promise<Buffer | null> => {
@@ -157,15 +122,9 @@ async function extractBatchedMarketplaceImages(
       }
       return file?.bytes && file.size <= maxBytes ? file.bytes : null
     }
-    const extracted = await extractCatalogImages(
-      index,
-      readBlob,
-      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, state.memo),
-      state.memo,
-      onDemand
-    )
+    const filled = await fillMarketplaceImages(index, catalogUrl, readBlob, state.memo)
     if (missing.size === 0) {
-      return extracted
+      return filled
     }
     if (!(await loadCatalogFiles(repository, commit, missing, state))) {
       return null
@@ -173,22 +132,17 @@ async function extractBatchedMarketplaceImages(
   }
 }
 
-export function isOnDemandCatalogSource(url: string): boolean {
-  try {
-    const source = new URL(url)
-    return (
-      source.protocol === 'https:' &&
-      source.hostname === 'github.com' &&
-      !source.username &&
-      !source.password &&
-      !source.port &&
-      !source.search &&
-      !source.hash &&
-      /^\/[a-zA-Z0-9-]+\/[a-zA-Z0-9_.-]+\/?$/.test(source.pathname)
-    )
-  } catch {
-    return false
+async function fillMarketplaceImages(
+  marketplace: PluginMarketplace,
+  catalogUrl: string,
+  readBlob: CatalogBlobReader,
+  memo: CatalogLoadState['memo']
+): Promise<PluginMarketplace> {
+  const plugins: PluginMarketplace['plugins'] = []
+  for (const entry of marketplace.plugins) {
+    plugins.push(await fillMonorepoReleaseImages(entry, catalogUrl, readBlob, memo))
   }
+  return { ...marketplace, plugins }
 }
 
 export function parsePluginMarketplaceIndex(filename: string, bytes: Buffer): PluginMarketplace {

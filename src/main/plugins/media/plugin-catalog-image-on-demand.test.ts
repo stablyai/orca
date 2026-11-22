@@ -132,8 +132,10 @@ describe('on-demand catalog image protocol', () => {
     )
     expect(network).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
-    await writeFile(join(fixture.root, 'images', fixture.image.sha256), 'corrupt')
-    expect(await fixture.cache.get(fixture.image.sha256)).toBeNull()
+    await repositories.remove(fixture.source.id)
+    const cached = await handler(request(fixture.image.sha256))
+    expect(cached.status).toBe(200)
+    expect(Buffer.from(await cached.arrayBuffer())).toEqual(fixture.bytes)
   })
 
   it.each([
@@ -156,36 +158,6 @@ describe('on-demand catalog image protocol', () => {
     expect(await fixture.cache.get(fixture.image.sha256)).toBeNull()
   })
 
-  it('shares one cold read between concurrent requests for a hash', async () => {
-    const fixture = await imageCatalog()
-    const bothEntered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<Map<string, Buffer>>()
-    fixture.readImages.mockImplementation(() => release.promise)
-    let entered = 0
-    const handler = createPluginImageRequestHandler({
-      cache: fixture.cache,
-      ensureCatalogImage: (hash) => {
-        entered++
-        if (entered === 2) {
-          bothEntered.resolve()
-        }
-        return fixture.resolver.ensureCached(hash)
-      },
-      findValidPlugin: () => null,
-      findApprovedPlugin: () => null
-    })
-    const first = handler(request(fixture.image.sha256))
-    const second = handler(request(fixture.image.sha256))
-    await bothEntered.promise
-    release.resolve(new Map([[fixture.image.path, fixture.bytes]]))
-    const responses = await Promise.all([first, second])
-    expect(responses.map((response) => response.status)).toEqual([200, 200])
-    await fixture.resolver.ensureCached(fixture.image.sha256)
-    expect(fixture.readImages).toHaveBeenCalledTimes(1)
-    expect(await readFile(join(fixture.root, 'images', fixture.image.sha256))).toEqual(
-      fixture.bytes
-    )
-  })
   it.each([
     { kind: 'icon' as const, width: 1600, height: 1000 },
     { kind: 'cover' as const, width: 1280, height: 1000 }

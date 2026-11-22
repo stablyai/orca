@@ -4,13 +4,16 @@ import {
 } from '../../../shared/plugins/images/plugin-image-fields'
 import { pluginRelativePathSchema } from '../../../shared/plugins/manifest/plugin-manifest-fields'
 import { validateCatalogImage, type CatalogImage } from '../catalog/plugin-catalog-image-extraction'
-import { isOnDemandCatalogSource } from '../catalog/plugin-marketplace-fetch'
 import type { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-repository'
-import type { PluginMarketplaceStore } from '../catalog/plugin-marketplace-store'
+import type {
+  PluginMarketplaceCachedSnapshot,
+  PluginMarketplaceStore
+} from '../catalog/plugin-marketplace-store'
 import type { PluginImageCache } from './plugin-image-cache'
 
 const IMAGE_BATCH_SIZE = 6
 const FAILURE_RETRY_MS = 3 * 60_000
+const MAX_FAILED_LOOKUPS = 1024
 
 type ImageLocation = {
   sourceId: string
@@ -24,6 +27,10 @@ type PendingImage = { hash: string; finish: () => void; locations: ImageLocation
 export class PluginCatalogImageOnDemand {
   private readonly inFlight = new Map<string, Promise<void>>()
   private readonly failures = new Map<string, number>()
+  private readonly locations = new WeakMap<
+    PluginMarketplaceCachedSnapshot,
+    Map<string, ImageLocation[]>
+  >()
   private readonly pending: PendingImage[] = []
   private scheduled = false
   private reading = false
@@ -77,39 +84,42 @@ export class PluginCatalogImageOnDemand {
   }
 
   private async locate(jobs: PendingImage[]): Promise<void> {
-    const wanted = new Map(jobs.map((job) => [job.hash, job]))
     for (const source of await this.options.store.listSources()) {
-      if (!isOnDemandCatalogSource(source.source.url)) {
-        continue
-      }
       const snapshot = await this.options.store.readSnapshot(source.id).catch(() => null)
       if (!snapshot || !/^[0-9a-f]{40}$/.test(snapshot.marketplaceCommit)) {
         continue
       }
-      for (const entry of snapshot.marketplace.plugins) {
-        if (!('releases' in entry)) {
-          continue
-        }
-        for (const release of entry.releases ?? []) {
-          const add = (kind: PluginImageKind, image: CatalogImage | undefined): void => {
-            const job = image && wanted.get(image.sha256)
-            if (job && image && pluginRelativePathSchema.safeParse(image.path).success) {
-              job.locations.push({
-                sourceId: source.id,
-                commit: snapshot.marketplaceCommit,
-                kind,
-                image
-              })
-            }
-          }
-          add('icon', release.images?.icon)
-          add('cover', release.images?.cover)
-          for (const shot of release.images?.screenshots ?? []) {
-            add('screenshot', shot)
-          }
+      const locations = this.locations.get(snapshot) ?? this.indexSnapshot(snapshot)
+      for (const job of jobs) {
+        job.locations.push(...(locations.get(job.hash) ?? []))
+      }
+    }
+  }
+
+  private indexSnapshot(snapshot: PluginMarketplaceCachedSnapshot): Map<string, ImageLocation[]> {
+    const locations = new Map<string, ImageLocation[]>()
+    const add = (kind: PluginImageKind, image: CatalogImage | undefined): void => {
+      if (!image || !pluginRelativePathSchema.safeParse(image.path).success) {
+        return
+      }
+      const matches = locations.get(image.sha256) ?? []
+      matches.push({ sourceId: snapshot.sourceId, commit: snapshot.marketplaceCommit, kind, image })
+      locations.set(image.sha256, matches)
+    }
+    for (const entry of snapshot.marketplace.plugins) {
+      if (!('releases' in entry)) {
+        continue
+      }
+      for (const release of entry.releases ?? []) {
+        add('icon', release.images?.icon)
+        add('cover', release.images?.cover)
+        for (const shot of release.images?.screenshots ?? []) {
+          add('screenshot', shot)
         }
       }
     }
+    this.locations.set(snapshot, locations)
+    return locations
   }
 
   private async readBatch(): Promise<void> {
@@ -156,7 +166,7 @@ export class PluginCatalogImageOnDemand {
               if (
                 bytes &&
                 validateCatalogImage(bytes, use.location.image, use.location.kind) &&
-                (await this.options.cache.put(bytes))
+                (await this.options.cache.put(bytes).catch(() => null))
               ) {
                 accepted.add(use.job.hash)
               }
@@ -174,6 +184,9 @@ export class PluginCatalogImageOnDemand {
       }
       for (const job of jobs) {
         if (!accepted.has(job.hash)) {
+          if (this.failures.size >= MAX_FAILED_LOOKUPS) {
+            this.failures.delete(this.failures.keys().next().value!)
+          }
           this.failures.set(job.hash, Date.now() + FAILURE_RETRY_MS)
         }
         job.finish()

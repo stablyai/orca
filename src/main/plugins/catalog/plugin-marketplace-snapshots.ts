@@ -5,11 +5,11 @@ import type {
 } from './plugin-marketplace-store'
 
 export async function readMarketplaceSnapshots(
-  store: Pick<PluginMarketplaceStore, 'listSources' | 'readSnapshot'>
+  store: Pick<PluginMarketplaceStore, 'readSnapshot'>,
+  sources: PluginMarketplaceRegisteredSource[]
 ): Promise<
   { source: PluginMarketplaceRegisteredSource; snapshot: PluginMarketplaceCachedSnapshot }[]
 > {
-  const sources = await store.listSources()
   const snapshots = await Promise.all(
     sources.map(async (source) => ({
       source,

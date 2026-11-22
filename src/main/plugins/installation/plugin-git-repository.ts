@@ -77,12 +77,12 @@ export async function runPluginGit(
   }
 }
 
-async function directoryBytes(path: string): Promise<number> {
+export async function pluginGitRepositoryBytes(path: string): Promise<number> {
   let total = 0
   for (const entry of await readdir(path, { withFileTypes: true }).catch(() => [])) {
     const child = join(path, entry.name)
     total += entry.isDirectory()
-      ? await directoryBytes(child)
+      ? await pluginGitRepositoryBytes(child)
       : await lstat(child).then(
           (stat) => stat.size,
           () => 0
@@ -93,12 +93,14 @@ async function directoryBytes(path: string): Promise<number> {
 
 /** Git has no client-side fetch size limit, so poll the pack landing on disk and stop it.
  *  The cap is approximate: a fast link can overshoot by one poll interval of transfer. */
-async function runBoundedDownload(
+export async function runBoundedPluginGitDownload(
   args: string[],
   cwd: string,
   repository: string,
-  maxBytes: number
+  maxBytes: number,
+  existingBytes = 0
 ): Promise<void> {
+  const limit = maxBytes + existingBytes
   const controller = new AbortController()
   let exceeded = false
   let measuring = false
@@ -107,9 +109,9 @@ async function runBoundedDownload(
       return
     }
     measuring = true
-    void directoryBytes(repository)
+    void pluginGitRepositoryBytes(repository)
       .then((bytes) => {
-        if (bytes > maxBytes && !controller.signal.aborted) {
+        if (bytes > limit && !controller.signal.aborted) {
           exceeded = true
           controller.abort()
         }
@@ -128,7 +130,7 @@ async function runBoundedDownload(
   } finally {
     clearInterval(timer)
   }
-  if ((await directoryBytes(repository)) > maxBytes) {
+  if ((await pluginGitRepositoryBytes(repository)) > limit) {
     throw new Error('plugin repository exceeds the download size limit')
   }
 }
@@ -156,7 +158,7 @@ export async function readPluginGitCommit<T>(
     if (exactCommit) {
       await runPluginGit([...config, 'init', '--quiet', '--template=', repository], temporaryRoot)
       await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
-      await runBoundedDownload(
+      await runBoundedPluginGitDownload(
         [...config, ...pluginGitFetchCommitArgs(ref)],
         repository,
         repository,
@@ -164,7 +166,12 @@ export async function readPluginGitCommit<T>(
       )
     } else {
       const args = [...config, ...pluginGitCloneArgs(input.url, ref, repository)]
-      await runBoundedDownload(args, input.workingDirectory, repository, input.maxDownloadBytes)
+      await runBoundedPluginGitDownload(
+        args,
+        input.workingDirectory,
+        repository,
+        input.maxDownloadBytes
+      )
     }
     const commit = await runPluginGit(
       ['rev-parse', '--verify', `${exactCommit ? 'FETCH_HEAD' : 'HEAD'}^{commit}`],
@@ -184,122 +191,6 @@ export async function readPluginGitCommit<T>(
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true })
   }
-}
-
-/** Reuses a shallow catalog repository; the published snapshot remains pinned during refresh. */
-export async function readRetainedPluginGitCommit<T>(
-  input: {
-    url: string
-    ref: string
-    directory: string
-    maxDownloadBytes: number
-    publishedCommit?: string
-  },
-  read: (repository: string, commit: string) => Promise<T>
-): Promise<{ commit: string; value: T }> {
-  if (!isAllowedPluginGitUrl(input.url)) {
-    throw new Error('plugin Git URL must use HTTPS or SSH')
-  }
-  if (input.publishedCommit && !SHA1_COMMIT_PATTERN.test(input.publishedCommit)) {
-    throw new Error('invalid published catalog commit')
-  }
-  const repository = join(input.directory, 'repository')
-  const hooks = join(input.directory, 'no-hooks')
-  const config = pluginGitConfigArgs(hooks)
-  let reusable = false
-  const exists = await lstat(join(repository, '.git')).then(
-    (entry) => entry.isDirectory(),
-    () => false
-  )
-  if (exists) {
-    try {
-      await runPluginGit([...config, 'fsck', '--no-dangling'], repository)
-      reusable =
-        (await runPluginGit([...config, 'remote', 'get-url', 'origin'], repository)) === input.url
-      if (input.publishedCommit) {
-        await runPluginGit(
-          [...config, 'cat-file', '-e', `${input.publishedCommit}^{commit}`],
-          repository
-        )
-      }
-    } catch {
-      reusable = false
-    }
-  }
-  await mkdir(input.directory, { recursive: true })
-  const ref = input.ref.trim()
-  if (PLUGIN_COMMIT_PATTERN.test(ref) && !SHA1_COMMIT_PATTERN.test(ref)) {
-    throw new Error('SHA-256 plugin repositories are not supported')
-  }
-  const exactCommit = SHA1_COMMIT_PATTERN.test(ref)
-  if (!exactCommit) {
-    await runPluginGit([...config, 'check-ref-format', '--branch', ref], input.directory)
-  }
-  if (!reusable) {
-    await rm(input.directory, { recursive: true, force: true })
-    await mkdir(hooks, { recursive: true })
-    if (exactCommit) {
-      await mkdir(repository)
-      await runPluginGit([...config, 'init', '--quiet', '--template='], repository)
-      await runPluginGit([...config, 'remote', 'add', 'origin', input.url], repository)
-    } else {
-      await runBoundedDownload(
-        [...config, ...pluginGitCloneArgs(input.url, ref, repository)],
-        input.directory,
-        repository,
-        input.maxDownloadBytes
-      )
-    }
-    await runPluginGit(
-      [...config, 'config', '--unset-all', 'remote.origin.fetch'],
-      repository
-    ).catch(() => undefined)
-  }
-  if (reusable && input.publishedCommit) {
-    await runPluginGit(
-      [...config, 'update-ref', 'refs/orca/snapshot', input.publishedCommit],
-      repository
-    )
-    const pending = await runPluginGit(
-      ['rev-parse', '--verify', '--quiet', 'refs/orca/fetched^{commit}'],
-      repository
-    ).catch(() => null)
-    await runPluginGit([...config, 'update-ref', '-d', 'refs/orca/fetched'], repository)
-    if (pending && pending !== input.publishedCommit) {
-      await runPluginGit([...config, 'reflog', 'expire', '--expire=now', '--all'], repository)
-      await runPluginGit([...config, '-c', 'pack.threads=2', 'gc', '--prune=now'], repository)
-    }
-  }
-  if (reusable || exactCommit) {
-    await runBoundedDownload(
-      [...config, '--git-dir', join(repository, '.git'), ...pluginGitFetchCommitArgs(ref)],
-      repository,
-      repository,
-      input.maxDownloadBytes
-    )
-  }
-  const commit = await runPluginGit(
-    ['rev-parse', '--verify', `${reusable || exactCommit ? 'FETCH_HEAD' : 'HEAD'}^{commit}`],
-    repository
-  )
-  if (!SHA1_COMMIT_PATTERN.test(commit)) {
-    throw new Error('Git resolved an invalid catalog commit identity')
-  }
-  if (SHA1_COMMIT_PATTERN.test(ref) && commit !== ref) {
-    throw new Error('Git fetched a different commit than requested')
-  }
-  await runPluginGit([...config, 'update-ref', 'refs/orca/fetched', commit], repository)
-  await runPluginGit([...config, 'update-ref', '--no-deref', 'HEAD', commit], repository)
-  if (!reusable) {
-    const refs = await runPluginGit(
-      ['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/', 'refs/tags/'],
-      repository
-    )
-    for (const name of refs.split('\n').filter(Boolean)) {
-      await runPluginGit([...config, 'update-ref', '-d', name], repository)
-    }
-  }
-  return { commit, value: await read(repository, commit) }
 }
 
 /** Writes one ref's exact files into an empty destination and returns its commit. */

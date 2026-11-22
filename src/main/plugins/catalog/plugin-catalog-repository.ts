@@ -1,8 +1,13 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { pluginGitConfigArgs } from '../../../shared/plugins/installation/plugin-git-arguments'
-import { readRetainedPluginGitCommit, runPluginGit } from '../installation/plugin-git-repository'
-import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
+import {
+  pinRetainedPluginGitCommit,
+  readRetainedPluginGitCommit
+} from './plugin-catalog-git-repository'
+import {
+  PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN,
+  type PluginMarketplaceRegisteredSource
+} from './plugin-marketplace-store'
 import { readCatalogImageBlobs } from './plugin-catalog-blob-reader'
 
 const CATALOG_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
@@ -17,7 +22,7 @@ export class PluginCatalogRepositoryStore {
   }
 
   private directory(sourceId: string): string {
-    if (!/^[0-9a-f]{32}$/.test(sourceId)) {
+    if (!PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN.test(sourceId)) {
       throw new Error('invalid catalog source identity')
     }
     return join(this.root, sourceId)
@@ -56,19 +61,7 @@ export class PluginCatalogRepositoryStore {
   }
 
   publish(sourceId: string, commit: string): Promise<void> {
-    return this.serial(sourceId, async () => {
-      if (!/^[0-9a-f]{40}$/.test(commit)) {
-        throw new Error('invalid catalog commit')
-      }
-      const directory = this.directory(sourceId)
-      const hooks = join(directory, 'no-hooks')
-      const config = pluginGitConfigArgs(hooks)
-      const repository = join(directory, 'repository')
-      await runPluginGit([...config, 'update-ref', 'refs/orca/snapshot', commit], repository)
-      await runPluginGit([...config, 'update-ref', '-d', 'refs/orca/fetched'], repository)
-      await runPluginGit([...config, 'reflog', 'expire', '--expire=now', '--all'], repository)
-      await runPluginGit([...config, '-c', 'pack.threads=2', 'gc', '--prune=now'], repository)
-    })
+    return this.serial(sourceId, () => pinRetainedPluginGitCommit(this.directory(sourceId), commit))
   }
 
   readImages(

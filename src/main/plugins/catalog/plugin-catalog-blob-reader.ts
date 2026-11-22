@@ -80,11 +80,14 @@ async function listCatalogPaths(
   readOptions: { timeout: number; env?: NodeJS.ProcessEnv }
 ): Promise<void> {
   try {
-    const listing = await gitExecFileAsyncBuffer(['ls-tree', '-l', '-z', commit, '--', ...paths], {
-      cwd: repository,
-      ...readOptions,
-      maxBuffer: paths.length * 4 * 1024
-    })
+    const listing = await gitExecFileAsyncBuffer(
+      ['--literal-pathspecs', 'ls-tree', '-l', '-z', commit, '--', ...paths],
+      {
+        cwd: repository,
+        ...readOptions,
+        maxBuffer: paths.length * 4 * 1024
+      }
+    )
     const entries = new Map<string, { object: string; size: number }>()
     for (const record of listing.stdout.toString('utf8').split('\0')) {
       const match = /^100(?:644|755) blob ([0-9a-f]{40}) +([0-9]+)\t(.+)$/s.exec(record)

@@ -1,4 +1,3 @@
-import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import {
   readPluginImageHeader,
   type PluginImageInfo
@@ -9,14 +8,7 @@ import {
   type PluginCatalogImages,
   type PluginImageKind
 } from '../../../shared/plugins/images/plugin-image-fields'
-import type {
-  PluginMarketplace,
-  PluginMarketplaceEntry
-} from '../../../shared/plugins/catalog/plugin-marketplace'
 import { sha256Hex } from '../media/plugin-image-cache'
-
-// Why a catalog-wide cap: a large catalog must not turn one refresh into an unbounded download.
-const CATALOG_IMAGES_MAX_BYTES = 64 * 1024 * 1024
 
 export type CatalogImage = NonNullable<PluginCatalogImages['cover']>
 
@@ -34,99 +26,7 @@ export function createCatalogBufferMemo(): CatalogBufferMemo {
   return { digests: new WeakMap(), headers: new WeakMap(), manifests: new WeakMap() }
 }
 
-/** Gives an entry images before they are checked, with a reader for the bytes it already read. */
-export type CatalogEntryImageFill = (
-  entry: PluginMarketplaceEntry,
-  readBlob: CatalogBlobReader
-) => Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }>
-
-/** Reads every image a catalog references from the catalog repository at its commit, keeps the
- *  ones whose bytes match their hash, size and format, and drops the rest from the listing. */
-export async function extractCatalogImages(
-  marketplace: PluginMarketplace,
-  readBlob: CatalogBlobReader,
-  fill?: CatalogEntryImageFill,
-  memo?: CatalogBufferMemo,
-  onDemand = false
-): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
-  const verified = new Map<string, Buffer>()
-  const rejected = new Set<string>()
-  let budget = CATALOG_IMAGES_MAX_BYTES
-  const check = async (
-    image: CatalogImage,
-    kind: PluginImageKind,
-    read: CatalogBlobReader
-  ): Promise<boolean> => {
-    const key = `${kind}:${image.path}:${image.sha256}:${image.width}x${image.height}`
-    if (rejected.has(key)) {
-      return false
-    }
-    const cached = verified.get(image.sha256)
-    const maxBytes = Math.min(PLUGIN_IMAGE_RULES[kind].maxBytes, budget)
-    const bytes =
-      cached ?? (maxBytes > 0 ? await read(image.path, maxBytes).catch(() => null) : null)
-    if (!bytes) {
-      if (!onDemand) {
-        rejected.add(key)
-      }
-      return onDemand
-    }
-    const ok = validateCatalogImage(bytes, image, kind, {
-      info: catalogImageHeader(bytes, memo),
-      sha256: catalogImageDigest(bytes, memo)
-    })
-    if (ok && !cached) {
-      budget -= bytes.byteLength
-      verified.set(image.sha256, bytes)
-    } else if (!ok) {
-      rejected.add(key)
-    }
-    return ok
-  }
-  const keep = async (
-    images: PluginCatalogImages,
-    read: CatalogBlobReader
-  ): Promise<PluginCatalogImages> => {
-    const icon = images.icon && (await check(images.icon, 'icon', read)) ? images.icon : undefined
-    const cover =
-      images.cover && (await check(images.cover, 'cover', read)) ? images.cover : undefined
-    const screenshots: CatalogImage[] = []
-    for (const shot of images.screenshots ?? []) {
-      if (await check(shot, 'screenshot', read)) {
-        screenshots.push(shot)
-      }
-    }
-    return {
-      ...(icon ? { icon } : {}),
-      ...(cover ? { cover } : {}),
-      ...(screenshots.length ? { screenshots } : {})
-    }
-  }
-  const plugins: PluginMarketplace['plugins'] = []
-  for (const listed of marketplace.plugins) {
-    const { entry, readBlob: read } = fill
-      ? await fill(listed, readBlob)
-      : { entry: listed, readBlob }
-    if (!entry.releases) {
-      plugins.push(entry)
-      continue
-    }
-    const releases: PluginCatalogRelease[] = []
-    for (const release of entry.releases) {
-      if (!release.images) {
-        releases.push(release)
-        continue
-      }
-      const { images, ...rest } = release
-      const kept = await keep(images, read)
-      releases.push(Object.keys(kept).length ? { ...rest, images: kept } : rest)
-    }
-    plugins.push({ ...entry, releases })
-  }
-  return { marketplace: { ...marketplace, plugins }, images: [...verified.values()] }
-}
-
-/** Checks one declared use without performing reads or spending the catalog budget. */
+/** Checks one declared use against its declared hash, format, dimensions, and size. */
 export function validateCatalogImage(
   bytes: Uint8Array,
   image: Pick<CatalogImage, 'sha256' | 'width' | 'height'>,
