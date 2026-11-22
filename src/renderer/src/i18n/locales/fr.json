@@ -17524,7 +17524,7 @@
           "account": {
             "fallback": "Clé d'accès",
             "title": "Choisir une clé d'accès",
-            "description": "Choisissez le compte à utiliser avec cette clé de sécurité.",
+            "description": "Choisissez le compte à utiliser pour vous connecter.",
             "site": "Site",
             "cancel": "Annuler"
           }

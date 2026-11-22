@@ -18998,7 +18998,7 @@
           "account": {
             "fallback": "Passkey",
             "title": "Choose a passkey",
-            "description": "Choose the account to use with this security key.",
+            "description": "Choose the account to sign in with.",
             "site": "Site",
             "cancel": "Cancel"
           }

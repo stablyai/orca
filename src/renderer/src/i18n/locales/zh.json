@@ -17995,7 +17995,7 @@
           "account": {
             "fallback": "通行密钥",
             "title": "选择通行密钥",
-            "description": "选择要与此安全密钥配合使用的账户",
+            "description": "选择用于登录的账户",
             "site": "网站",
             "cancel": "取消"
           }

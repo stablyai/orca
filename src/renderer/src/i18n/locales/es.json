@@ -17256,7 +17256,7 @@
             "cancel": "Cancelar",
             "fallback": "Clave de acceso",
             "title": "Elige una clave de acceso",
-            "description": "Elige la cuenta que usarás con esta clave de seguridad.",
+            "description": "Elige la cuenta con la que iniciar sesión.",
             "site": "Sitio"
           }
         }

@@ -18057,7 +18057,7 @@
           "account": {
             "fallback": "Chave de acesso",
             "title": "Escolha uma chave de acesso",
-            "description": "Escolha a conta para usar com esta chave de segurança.",
+            "description": "Escolha a conta para entrar.",
             "site": "Site",
             "cancel": "Cancelar"
           }

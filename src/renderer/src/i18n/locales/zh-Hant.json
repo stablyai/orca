@@ -17323,7 +17323,7 @@
           "account": {
             "fallback": "通行金鑰",
             "title": "選擇通行金鑰",
-            "description": "選擇要與此安全性金鑰一起使用的帳戶。",
+            "description": "選擇要用來登入的帳戶。",
             "site": "網站",
             "cancel": "取消"
           }
