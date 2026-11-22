@@ -85,7 +85,15 @@ export function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
 /** The newest line a member's mail turn took `mailId` on: its id is `mail:<sessionId>:<ids>[#n]`. */
 function itemMailLine(groups: BotGroupRuntime, member: BotGroupMember, mailId: string) {
   const prefix = `mail:${member.sessionId}:`
-  return groups.store
-    .linesByIdPrefix(prefix, mailId)
-    .find((line) => line.id.slice(prefix.length).split('#', 1)[0]?.split(',').includes(mailId))
+  const id = groups.store.db
+    .prepare(
+      `SELECT id FROM bot_group_messages WHERE id >= ? AND id < ? AND instr(id, ?) > 0
+       ORDER BY sequence DESC`
+    )
+    .all(prefix, `${prefix}\uffff`, mailId)
+    .map((row) => String(row.id))
+    .find((candidate) =>
+      candidate.slice(prefix.length).split('#', 1)[0]?.split(',').includes(mailId)
+    )
+  return id ? groups.store.message(id) : null
 }
