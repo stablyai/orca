@@ -58,11 +58,14 @@ describe('shared Codex app-servers', () => {
     const { handlers } = servers[0]!
     handlers.onUnhandledFrame?.('frame:unclassified', { id: 'x', params: { threadId: threadA } })
     handlers.onUnhandledFrame?.('frame:invalid-json', '{"text":"words from chat A')
-    handlers.onNotification?.('item/newKind/delta', { thread_id: threadA, text: 'private' })
+    handlers.onNotification?.('item/newKind/delta', { thread_id: threadA, text: 'mine' })
+    handlers.onNotification?.('item/otherKind/delta', { text: 'private' })
 
     expect(unreadA).toEqual(['frame:unclassified'])
     expect(unreadB).toEqual([])
+    expect(a.notifications.map((n) => n.method)).toContain('item/newKind/delta')
     expect(b.notifications.map((n) => n.method)).not.toContain('item/newKind/delta')
+    expect(b.notifications.map((n) => n.method)).not.toContain('item/otherKind/delta')
   })
 
   it('starts a second server at 20 chats and never shares across account homes', async () => {

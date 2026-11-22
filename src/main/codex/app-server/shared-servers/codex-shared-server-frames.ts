@@ -32,7 +32,11 @@ export function codexSharedFrameParams(frame: CodexSharedServerFrame): unknown {
 
 /** The thread a frame belongs to; null for account- or server-wide frames. */
 export function codexFrameThreadId(params: unknown): string | null {
-  return stringOrNull(field(params, 'threadId')) ?? stringOrNull(field(params, 'thread', 'id'))
+  return (
+    stringOrNull(field(params, 'threadId')) ??
+    stringOrNull(field(params, 'thread_id')) ??
+    stringOrNull(field(params, 'thread', 'id'))
+  )
 }
 
 /** A subagent's thread belongs to the chat that owns its parent. */
