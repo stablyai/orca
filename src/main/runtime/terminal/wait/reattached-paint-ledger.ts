@@ -1,5 +1,5 @@
 // What main saw each agent terminal paint before it quit, so a restart can trust a retained frame
-// without asking a daemon that cannot repaint (WinPTY, a daemon before v60) to redraw it.
+// without asking a daemon that cannot repaint (Windows ConPTY, protocol before v60) to redraw it.
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

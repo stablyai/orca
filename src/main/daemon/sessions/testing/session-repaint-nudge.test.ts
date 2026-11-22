@@ -42,9 +42,8 @@ describe.skipIf(process.platform === 'win32')('session repaint request', () => {
   it('resizes only the PTY one row smaller and back, once at a time', async () => {
     vi.useFakeTimers()
     const { session, resizes } = createSession()
-    // The second request shares the nudge in flight: both report the program was asked.
-    expect(session.requestRepaint()).toBe(true)
-    expect(session.requestRepaint()).toBe(true)
+    session.requestRepaint()
+    session.requestRepaint()
     expect(session.getAppliedSize()).toEqual({ cols: 80, rows: 24 })
     await vi.advanceTimersByTimeAsync(250)
     expect(resizes).toEqual([
@@ -91,13 +90,11 @@ describe('session repaint nudge across hosts', () => {
     vi.useFakeTimers()
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     const resize = vi.fn()
-    expect(
-      new SessionRepaintNudge().request(
-        () => ({ cols: 80, rows: 24 }),
-        resize,
-        () => true
-      )
-    ).toBe(true)
+    new SessionRepaintNudge().request(
+      () => ({ cols: 80, rows: 24 }),
+      resize,
+      () => true
+    )
     await vi.advanceTimersByTimeAsync(250)
     expect(resize.mock.calls).toEqual([
       [80, 23],
@@ -105,21 +102,11 @@ describe('session repaint nudge across hosts', () => {
     ])
   })
 
-  it('says so on WinPTY, which redraws its own screen on a resize', () => {
+  it('leaves a WinPTY pane alone, whose resize redraws its own screen', async () => {
+    vi.useFakeTimers()
     const { session, resizes } = createSession({ resizeRedrawsOwnScreen: true })
-    expect(session.requestRepaint()).toBe(false)
+    session.requestRepaint()
+    await vi.advanceTimersByTimeAsync(250)
     expect(resizes).toEqual([])
-  })
-
-  it('says so without a grid to restore', () => {
-    const resize = vi.fn()
-    expect(
-      new SessionRepaintNudge().request(
-        () => null,
-        resize,
-        () => true
-      )
-    ).toBe(false)
-    expect(resize).not.toHaveBeenCalled()
   })
 })

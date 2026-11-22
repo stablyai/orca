@@ -17,19 +17,6 @@ export type WorkerFailureEscalation = {
 }
 
 /** Escalate terminal/chat failures through one coordinator-mail path; mail failure must never break worker failure handling. */
-/** Who a worker's failure mail goes to: its Run's coordinator, or for a legacy Run the active
- *  coordinator; null when nobody is there to read it. */
-export function workerFailureRecipient(
-  db: OrchestrationDb,
-  dispatch: Pick<DispatchContextRow, 'run_id'>,
-  mailbox?: () => string
-): string | null {
-  const owningRun = db.getRun?.(dispatch.run_id)
-  return owningRun && owningRun.legacy !== 1
-    ? (mailbox?.() ?? `run:${owningRun.id}`)
-    : (db.getActiveCoordinatorRun?.()?.coordinator_handle ?? null)
-}
-
 export function escalateWorkerFailure(
   db: OrchestrationDb,
   dispatch: Pick<DispatchContextRow, 'id' | 'run_id' | 'task_id'>,
@@ -40,7 +27,12 @@ export function escalateWorkerFailure(
     if (escalation.id && db.getMessageById?.(escalation.id)) {
       return null
     }
-    const to = workerFailureRecipient(db, dispatch, escalation.mailbox)
+    const owningRun = db.getRun?.(dispatch.run_id)
+    const active = db.getActiveCoordinatorRun?.()
+    const to =
+      owningRun && owningRun.legacy !== 1
+        ? (escalation.mailbox?.() ?? `run:${owningRun.id}`)
+        : (active?.coordinator_handle ?? null)
     if (!to) {
       return null
     }

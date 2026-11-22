@@ -17,18 +17,14 @@ export class SessionRepaintNudge {
     this.inFlight = null
   }
 
-  /** True when the program is being asked to redraw: by this nudge, or one already in flight. */
   request(
     readGrid: () => PtySize | null,
     resizePty: (cols: number, rows: number) => void,
     isLive: () => boolean
-  ): boolean {
-    if (this.inFlight) {
-      return true
-    }
+  ): void {
     const grid = readGrid()
-    if (!grid || grid.cols < 1 || grid.rows < 1) {
-      return false
+    if (this.inFlight || !grid || grid.cols < 1 || grid.rows < 1) {
+      return
     }
     const { cols, rows } = grid
     const nudge = { cols, rows }
@@ -42,6 +38,5 @@ export class SessionRepaintNudge {
         }
       }
     }, REPAINT_RESTORE_MS).unref?.()
-    return true
   }
 }

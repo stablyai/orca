@@ -22,9 +22,6 @@ import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-compo
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
-import { reportMailHeldWithoutPaint } from '../../orchestration/workers/turn-stops/held-mail-unconfirmed-prompt'
-import type { OrchestrationMailboxTerminal } from '../../orchestration/mailbox/routing/mailbox-owner'
-import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
@@ -119,7 +116,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
     // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
     this.requestReattachedRepaint(ptyId)
-    this.reportMailHeldWithoutPaint(ptyId, terminal)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
@@ -136,35 +132,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }, delay)
     timer.unref?.()
     this.deliveryRecheckTimersByPtyId.set(ptyId, timer)
-  }
-
-  /** Dispatches told their mail is held, per reattach fence; a new fence starts afresh. */
-  private readonly heldMailReported = new WeakMap<TerminalCommandPaint, Set<string>>()
-
-  /** Where nothing but the user can lift a reattach's paint fence, each Dispatch it holds mail for is
-   *  told once; any paint ends the fence first, and with it this report. */
-  private reportMailHeldWithoutPaint(ptyId: string, terminal: OrchestrationMailboxTerminal): void {
-    const pty = this.ptysById.get(ptyId)
-    const paint = pty?.commandPaint
-    const db = this._orchestrationDb
-    if (!db || !paint?.awaitsPaintNoHostCanRequest()) {
-      return
-    }
-    const reported = this.heldMailReported.get(paint) ?? new Set<string>()
-    this.heldMailReported.set(paint, reported)
-    for (const mailbox of this.orchestrationMailboxNotifications.mailboxesWithDeliverableMail(
-      terminal
-    )) {
-      const dispatchId = mailbox.startsWith('dispatch:') ? mailbox.slice('dispatch:'.length) : null
-      if (dispatchId && !reported.has(dispatchId)) {
-        // The process and the output count it reattached at name this hold: a later restart with no
-        // output since is the same hold, one after output (a delivery) is a new one.
-        const holdKey = `mail-held:${pty?.incarnationId ?? ptyId}:${this.reattachedProviderSequenceByPtyId.get(ptyId) ?? ''}`
-        if (reportMailHeldWithoutPaint(db, dispatchId, holdKey, this.workerTurnStopReportDeps)) {
-          reported.add(dispatchId)
-        }
-      }
-    }
   }
 
   /** Pointer plus Enter takes the waits' readiness ranking, plus a working verdict: agents queue or

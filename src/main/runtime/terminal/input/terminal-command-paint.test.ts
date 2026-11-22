@@ -6,6 +6,7 @@ import {
   isCurrentCommandReport,
   isCurrentCommandStatus,
   isShellInFront,
+  takeReattachedRepaintRequest,
   vouchTerminalSpawn,
   type TerminalCommandPaintRecord
 } from './terminal-command-paint'
@@ -30,47 +31,13 @@ describe('terminal command paint after a reattach', () => {
   it('allows one repaint request per reattach, and none once the program painted', () => {
     const quiet: TerminalCommandPaintRecord = {}
     awaitReattachedTerminalPaint(quiet, 1_000)
-    const request = quiet.commandPaint!
-    expect(request.beginReattachedRepaintRequest()).toBe(true)
-    // One request at a time, and once a host asked the program, none again.
-    expect(request.beginReattachedRepaintRequest()).toBe(false)
-    request.settleReattachedRepaintRequest('nudged')
-    expect(request.beginReattachedRepaintRequest()).toBe(false)
-
-    // A phone driving the grid repaints through its own layout: no request again, and no alert.
-    const phone: TerminalCommandPaintRecord = {}
-    awaitReattachedTerminalPaint(phone, 1_000)
-    phone.commandPaint?.beginReattachedRepaintRequest()
-    phone.commandPaint?.settleReattachedRepaintRequest('not-sent')
-    expect(phone.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
-    expect(phone.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
-
-    // A host that cannot repaint is not asked again for this reattach.
-    const noRepaint: TerminalCommandPaintRecord = {}
-    awaitReattachedTerminalPaint(noRepaint, 1_000)
-    noRepaint.commandPaint?.beginReattachedRepaintRequest()
-    noRepaint.commandPaint?.settleReattachedRepaintRequest('unavailable')
-    expect(noRepaint.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
-    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
-
-    // A restore still reading the quit's proof may yet lift the fence: nothing is reported meanwhile.
-    noRepaint.commandPaint?.beginRestoreProof()
-    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
-    noRepaint.commandPaint?.settleRestoreProof()
-    expect(noRepaint.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(true)
-
-    // Output lost while a request is out re-arms it: the answer must not spend the new one.
-    const gap: TerminalCommandPaintRecord = {}
-    awaitReattachedTerminalPaint(gap, 1_000)
-    gap.commandPaint?.beginReattachedRepaintRequest()
-    gap.commandPaint?.noteGap()
-    gap.commandPaint?.settleReattachedRepaintRequest('nudged')
-    expect(gap.commandPaint?.beginReattachedRepaintRequest()).toBe(true)
+    expect(takeReattachedRepaintRequest(quiet)).toBe(true)
+    expect(takeReattachedRepaintRequest(quiet)).toBe(false)
 
     const painted: TerminalCommandPaintRecord = {}
     awaitReattachedTerminalPaint(painted, 1_000)
     observeTerminalCommandPaint(painted, 'ready', 'ready', 2_000)
-    expect(painted.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
+    expect(takeReattachedRepaintRequest(painted)).toBe(false)
   })
 
   it('remembers a locally started process across reattach and lost output', () => {
@@ -80,7 +47,7 @@ describe('terminal command paint after a reattach', () => {
     awaitReattachedTerminalPaint(record, 3_000)
     expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
     expect(isCurrentCommandReport(record, null)).toBe(true)
-    expect(record.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
+    expect(takeReattachedRepaintRequest(record)).toBe(false)
 
     record.commandPaint?.noteGap()
     awaitReattachedTerminalPaint(record, 4_000)

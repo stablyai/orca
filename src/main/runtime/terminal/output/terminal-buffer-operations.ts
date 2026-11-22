@@ -19,7 +19,8 @@ import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-scree
 import {
   admitRestoredTerminalReport,
   hasCommandBoundarySinceReattach,
-  hasTerminalCommandPainted
+  hasTerminalCommandPainted,
+  takeReattachedRepaintRequest
 } from '../input/terminal-command-paint'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
@@ -265,41 +266,43 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       !pty.lastAgentStatusObservedLive &&
       !hasCommandBoundarySinceReattach(pty)
     const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
-    const paint = pty.commandPaint
-    paint?.beginRestoreProof()
     void Promise.all([
       this.ptyForegroundAgent.identifyForeground(ptyId),
       // Why: the ready-screen read needs the seeded snapshot applied.
       this.headlessTerminals.get(ptyId)?.writeChain,
       ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
-    ])
-      .then(async ([agent, , ...reports]) => {
-        const report = reports.find((candidate) => candidate !== null)
-        const turn = agent && report ? hookLeadTurnState(report) : null
-        // A host that cannot repaint (SSH, older daemons) still restores a proven frame.
-        const proven = !turn && !!agent && (await this.isRetainedFrameProven(ptyId, agent))
-        if (!isCurrent()) {
-          return
-        }
-        if (proven) {
-          pty.commandPaint?.vouchRetainedPaint()
-        }
-        if (turn) {
-          this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)
-        } else if (agent) {
-          restoreFromReattachedReadyScreen({
-            agent,
-            readScreen: () => this.readCaughtUpRuledScreen(ptyId),
-            readOutputClockAt: () => this.readOutputClockAt(ptyId),
-            hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
-            requestRepaint: () => this.requestReattachedRepaint(ptyId),
-            isCurrent,
-            applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
-          })
-        }
-      })
-      // Held mail is reported only once the quit's proof has had its say.
-      .finally(() => paint?.settleRestoreProof())
+    ]).then(async ([agent, , ...reports]) => {
+      const report = reports.find((candidate) => candidate !== null)
+      const turn = agent && report ? hookLeadTurnState(report) : null
+      // A host that cannot repaint (Windows ConPTY, older daemons) still restores a proven frame.
+      const proven = !turn && !!agent && (await this.isRetainedFrameProven(ptyId, agent))
+      if (!isCurrent()) {
+        return
+      }
+      if (proven) {
+        pty.commandPaint?.vouchRetainedPaint()
+      }
+      if (turn) {
+        this.applyReattachedAgentStatus(ptyId, turn === 'done' ? 'idle' : turn)
+      } else if (agent) {
+        restoreFromReattachedReadyScreen({
+          agent,
+          readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+          readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
+          requestRepaint: () => this.requestReattachedRepaint(ptyId),
+          isCurrent,
+          applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
+        })
+      }
+    })
+  }
+
+  /** One repaint per reattach, whether restored status or a queued wait asks first. */
+  protected requestReattachedRepaint(ptyId: string): void {
+    if (takeReattachedRepaintRequest(this.ptysById.get(ptyId))) {
+      this.ptyController?.requestRepaint?.(ptyId)
+    }
   }
 
   /** The restored report speaks for the process now running, so it counts as current. */

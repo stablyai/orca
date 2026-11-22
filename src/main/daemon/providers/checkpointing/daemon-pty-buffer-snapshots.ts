@@ -9,22 +9,9 @@ import {
 } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type {
-  PtyProviderBufferSnapshot,
-  PtyRepaintResult
-} from '../../../providers/pty/provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
-
-type RepaintReply = { nudged?: boolean } | undefined
-
-/** Daemons before v62 omit the answer; they skipped Windows and nudged everywhere else. */
-export function repaintResultOf(
-  reply: RepaintReply,
-  platform: NodeJS.Platform = process.platform
-): PtyRepaintResult {
-  return (reply?.nudged ?? platform !== 'win32') ? 'nudged' : 'unavailable'
-}
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async getBufferSnapshot(
@@ -215,13 +202,10 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     }
   }
 
-  async requestRepaint(id: string): Promise<PtyRepaintResult> {
-    if (this.protocolVersion < REPAINT_REQUEST_PROTOCOL_VERSION) {
-      return 'unavailable'
+  async requestRepaint(id: string): Promise<void> {
+    if (this.protocolVersion >= REPAINT_REQUEST_PROTOCOL_VERSION) {
+      await this.client.request('requestRepaint', { sessionId: id })
     }
-    return repaintResultOf(
-      await this.client.request<RepaintReply>('requestRepaint', { sessionId: id })
-    )
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {}
