@@ -9,7 +9,8 @@ import {
   UBUNTU,
   makeConnector
 } from '../../wsl/host-lifecycle/__tests__/wsl-host-service-test-connector'
-import { connectWslMoveHostService } from './wsl-move-host-connect'
+import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { connectWslMoveHostService, wslMoveHostServerState } from './wsl-move-host-connect'
 
 const removal = vi.hoisted(() => ({ pending: false }))
 vi.mock(
@@ -117,5 +118,28 @@ describe('the move driver reaching its WSL host', () => {
     }
     expect(connector.connect).not.toHaveBeenCalled()
     expect(connector.disconnect).not.toHaveBeenCalled()
+  })
+})
+
+describe('what a host lacking the WSL capability tells the move', () => {
+  const ready: WslHostStatus = {
+    environmentId: 'wsl:ubuntu',
+    distro: 'Ubuntu',
+    state: 'ready',
+    detail: null
+  }
+  const stateFor = (status: Partial<WslHostStatus>) =>
+    wslMoveHostServerState({ getStatuses: () => [{ ...ready, ...status }] }, 'wsl:ubuntu')
+  const deferral = (code: string) => ({ candidateVersion: '1', code, reason: '', forceable: false })
+
+  it('names the restart only for the not-started-as-WSL-host deferral', () => {
+    expect(stateFor({ deferredUpdate: deferral('orcad_not_started_as_wsl_host') })).toEqual({
+      serverState: 'restart-offered'
+    })
+    expect(stateFor({ deferredUpdate: deferral('orcad_update_terminals_running') })).toEqual({
+      serverState: 'update-pending'
+    })
+    expect(stateFor({ deferredUpdate: null })).toEqual({ serverState: 'current' })
+    expect(stateFor({ state: 'connecting' })).toEqual({})
   })
 })

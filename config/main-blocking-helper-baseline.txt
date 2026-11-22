@@ -754,8 +754,8 @@
 6 src/main/managed-server/install/orcad-remote-deploy.ts
 4 src/main/managed-server/install/orcad-remote-install.ts
 1 src/main/managed-server/install/orcad-remote-rollback.ts
+1 src/main/managed-server/lifecycle/orcad-idle-restart-stop.ts # moved from orcad-managed-launch-session.ts with the idle-restart stop (withOrcadActivationLock), now shared with the WSL host relaunch
 4 src/main/managed-server/lifecycle/orcad-managed-auto-update.ts
-1 src/main/managed-server/lifecycle/orcad-managed-launch-session.ts
 1 src/main/managed-server/lifecycle/orcad-managed-runtime-context.ts
 1 src/main/managed-server/lifecycle/orcad-managed-stale-lock-reclaim.ts
 1 src/main/managed-server/lifecycle/orcad-managed-tunnel-transport.ts

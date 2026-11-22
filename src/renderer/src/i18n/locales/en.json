@@ -14117,7 +14117,15 @@
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "restartAsWslHost": {
+            "button": "Restart as WSL host",
+            "title": "Restart as WSL host?",
+            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "cancel": "Cancel",
+            "action": "End terminals and restart"
+          }
         },
         "restartServer": {
           "action": "Restart Orca’s server…",
@@ -25803,6 +25811,8 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "hostLaunchUnproven": "The Orca server in {{distro}} runs this version of Orca but can't take these projects, so updating won't help. It may have been started outside WSL hosts, such as by an SSH host. Remove the {{distro}} host in Settings, then add it again.",
+      "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
       "exportIncompletePreview": "Some saved state in these projects can't move yet:",
