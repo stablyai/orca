@@ -119,6 +119,10 @@ async function publishRendererWorkingPane(
   })
 }
 
+async function projectTerminalTab(runtime: OrcaRuntimeService) {
+  return (await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs[0]
+}
+
 async function projectAgentStatus(
   runtime: OrcaRuntimeService
 ): Promise<Record<string, unknown> | undefined> {
@@ -281,6 +285,72 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
     runtime.onPtyData(PTY_ID, 'still building...\r\n', T0 + 120_000)
     expect(await projectAgentStatus(runtime)).toEqual(
       expect.objectContaining({ updatedAt: titleObservedAt })
+    )
+  })
+})
+
+// #46569: quitting an idle agent is no new turn end, so its Done keeps the finished turn's identity.
+describe('mobile session tabs: an agent that exits after its turn ended', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps the finished turn as the Done after the agent quits or relaunches', async () => {
+    const finishedTurn: AgentStatusIpcPayload = {
+      paneKey: PANE_KEY,
+      state: 'done',
+      prompt: 'Reply with the single word hi.',
+      agentType: 'pi',
+      connectionId: null,
+      receivedAt: T0 + 1_000,
+      stateStartedAt: T0 + 1_000,
+      turnCompletedAt: T0 + 990,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      providerSession: PROVIDER_SESSION
+    }
+    const rows = [finishedTurn]
+    const runtime = await createRuntime(rows, 'pi')
+    runtime.onPtyData(PTY_ID, '\x1b]0;\u03c0 - work\x07', T0)
+
+    // The exit retires the live row; only its resume identity stays with the pane.
+    vi.setSystemTime(T0 + 60_000)
+    rows[0] = { ...finishedTurn, prompt: '', providerSessionOnly: true }
+    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0 + 60_000)
+    expect(await projectTerminalTab(runtime)).toEqual(
+      expect.objectContaining({
+        turnCompletedAt: T0 + 990,
+        agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: T0 + 1_000 })
+      })
+    )
+
+    // The shell titles the pane with the relaunch command before the agent paints its own.
+    vi.setSystemTime(T0 + 90_000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;pi --session 01a20155\x07', T0 + 90_000)
+    expect(await projectTerminalTab(runtime)).toEqual(
+      expect.objectContaining({
+        turnCompletedAt: T0 + 990,
+        agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: T0 + 1_000 })
+      })
+    )
+
+    // A turn only the title reports is a new end, even after a replay restamps the old Done's receipt.
+    vi.setSystemTime(T0 + 100_000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;\u280b \u03c0 - work\x07', T0 + 100_000)
+    rows[0] = { ...rows[0]!, receivedAt: T0 + 120_000, evidenceObservedAt: T0 + 1_000 }
+    vi.setSystemTime(T0 + 130_000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;\u03c0 - work\x07', T0 + 130_000)
+    const titleTurn = await projectTerminalTab(runtime)
+    expect(titleTurn).not.toHaveProperty('turnCompletedAt')
+    expect(titleTurn).toEqual(
+      expect.objectContaining({
+        agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: T0 + 130_000 })
+      })
     )
   })
 })

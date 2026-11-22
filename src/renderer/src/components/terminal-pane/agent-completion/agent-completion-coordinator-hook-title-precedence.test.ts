@@ -12,7 +12,7 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('suppresses process-exit in another coordinator after a hook completion notified', async () => {
+  it('suppresses process-exit of the notified agent and of its idle relaunch (#46569)', async () => {
     const paneKey = 'tab-1:leaf-1'
     const dispatchCompletion = vi.fn()
     const hookCoordinator = createAgentCompletionCoordinator({
@@ -62,6 +62,22 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
     result = processResult('zsh', false)
     await vi.advanceTimersByTimeAsync(3_000)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    // A relaunch that starts a turn and dies before its done hook still notifies.
+    result = processResult('codex')
+    await vi.advanceTimersByTimeAsync(5_000)
+    await flushAsyncTicks()
+    hookCoordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'say OK again',
+      agentType: 'codex',
+      stateStartedAt: 1_700_000_100_000
+    })
+    result = processResult('zsh', false)
+    await vi.advanceTimersByTimeAsync(30_000)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
