@@ -1,3 +1,4 @@
+import { nextStreamedTextCheckpointLength } from '../../../../shared/agent-session/journal/streamed-text-checkpoint-growth'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -93,7 +94,7 @@ export function createClaudeStreamedTextCheckpoints(
   const persist = (key: string, text: string, force: boolean): void => {
     latestText.set(key, text)
     const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
+    const nextLength = nextStreamedTextCheckpointLength(checkpointLength)
     if (!force && checkpointLength > 0 && text.length < nextLength) {
       live.publish()
       return

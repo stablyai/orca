@@ -10,6 +10,7 @@ import {
   nativeChatRevealStepFrames,
   playNativeChatTextReveal,
   receiveNativeChatText,
+  savePacedNativeChatText,
   startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
@@ -18,8 +19,8 @@ import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-cha
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180
 const STEP_MS = 1000 / 30
-/** A slow-drawing reply leaves at least half the JS thread to scrolling and input. */
-const REVEAL_BUSY_SHARE = 1 / 2
+/** A slow-drawing reply leaves most of the JS thread to scrolling and input. */
+const REVEAL_BUSY_SHARE = 1 / 10
 
 export type MobileNativeChatPacedText = { text: string; revealing: boolean }
 
@@ -47,6 +48,8 @@ export function useMobileNativeChatPacedText(
   )
   const pace = useRef(initial)
   const [shown, setShown] = useState(initial.shown)
+  // A reply redrawn whole each step shows as saves would until it ends.
+  const [savePaced, setSavePaced] = useState(initial.savePaced === true)
 
   useLayoutEffect(() => {
     pace.current = receiveNativeChatText(
@@ -64,7 +67,7 @@ export function useMobileNativeChatPacedText(
 
   // A step's cost runs from the step to its commit.
   const stepStartedAt = useRef<number | null>(null)
-  const behind = !immediate && shown < text.length
+  const behind = !immediate && !savePaced && shown < text.length
   // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
   useEffect(() => {
     if (held) {
@@ -93,10 +96,19 @@ export function useMobileNativeChatPacedText(
     if (stepStartedAt.current !== null) {
       frames.stepCost?.(performance.now() - stepStartedAt.current)
       stepStartedAt.current = null
+      if (frames.redrawsWhole?.() && !pace.current.savePaced) {
+        pace.current = savePacedNativeChatText(pace.current)
+        list?.drawn.set(rowKey, pace.current)
+        setSavePaced(true)
+        setShown(pace.current.shown)
+      }
     }
-  }, [shown, frames])
+  }, [shown, frames, list, rowKey])
 
   return immediate
     ? { text, revealing: false }
-    : { text: text.slice(0, Math.min(shown, text.length)), revealing: streaming || behind }
+    : {
+        text: text.slice(0, Math.min(shown, text.length)),
+        revealing: !savePaced && (streaming || behind)
+      }
 }

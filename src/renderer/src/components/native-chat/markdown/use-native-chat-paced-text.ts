@@ -16,6 +16,7 @@ import {
   nativeChatTextAppended,
   playNativeChatTextReveal,
   receiveNativeChatText,
+  savePacedNativeChatText,
   startNativeChatTextReveal,
   type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
@@ -98,6 +99,8 @@ export function useNativeChatPacedText(
     [root]
   )
   const [grew, setGrew] = useState(initial.shown < text.length)
+  // A reply redrawn whole each step shows as saves would, plainly, until it ends.
+  const [savePaced, setSavePaced] = useState(initial.savePaced === true)
   const heldTextSession = useContext(NativeChatHeldTextSessionContext)
   const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
 
@@ -117,13 +120,14 @@ export function useNativeChatPacedText(
       performance.now()
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
-    if (reducedMotion || caughtUp || pace.current.shown >= text.length) {
-      setShown(pace.current.shown, caughtUp)
+    const plain = caughtUp || pace.current.savePaced === true
+    if (reducedMotion || plain || pace.current.shown >= text.length) {
+      setShown(pace.current.shown, plain)
     }
     reveals?.drawn.set(rowKey, pace.current)
   }, [text, streaming, reducedMotion, reveals, rowKey, setShown, heldTextSession])
 
-  const behind = !reducedMotion && shown < text.length
+  const behind = !reducedMotion && !savePaced && shown < text.length
   useEffect(() => {
     if (!behind) {
       if (!streaming) {
@@ -140,11 +144,17 @@ export function useNativeChatPacedText(
         const startedAt = performance.now()
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
+        if (frames.redrawsWhole?.() && !pace.current.savePaced) {
+          pace.current = savePacedNativeChatText(pace.current)
+          reveals?.drawn.set(rowKey, pace.current)
+          setSavePaced(true)
+          setShown(pace.current.shown, true)
+        }
       },
       frames
     )
   }, [behind, text, reveals, rowKey, streaming, setShown, frames])
-  const revealing = !reducedMotion && ((streaming && grew) || behind)
+  const revealing = !reducedMotion && !savePaced && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)
   useEffect(() => {
     if (revealing) {

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nativeChatRevealStepFrames } from './native-chat-text-reveal'
+import {
+  nativeChatRevealStepFrames,
+  receiveNativeChatText,
+  savePacedNativeChatText
+} from './native-chat-text-reveal'
 
 let clock = 0
 let callbacks = new Map<number, (at: number) => void>()
@@ -74,4 +78,39 @@ it('keeps a plain reply moving through one unrelated slow frame', () => {
 it('still spaces its steps out when each step is slow to draw', () => {
   const gaps = spacings(stepTimes(() => 1000 / 60, 600, 200))
   expect(Math.max(...gaps)).toBeGreaterThan(1000)
+})
+
+describe('a reply redrawn whole each step', () => {
+  it('switches to save pacing once its steps are slow, and stays there', () => {
+    const frames = nativeChatRevealStepFrames(60, 1 / 10)
+    for (const ms of [20, 20, 150]) {
+      frames.stepCost?.(ms)
+    }
+    expect(frames.redrawsWhole?.()).toBe(false)
+    frames.stepCost?.(150)
+    expect(frames.redrawsWhole?.()).toBe(true)
+    // Cheap steps later in the same reply don't switch it back.
+    for (const ms of [10, 10, 10]) {
+      frames.stepCost?.(ms)
+    }
+    expect(frames.redrawsWhole?.()).toBe(true)
+  })
+
+  it('shows what it has at the switch, then only where a save would, and all of it at its end', () => {
+    const text = (length: number) => 'w'.repeat(length)
+    const switched = savePacedNativeChatText({
+      source: text(1000),
+      shown: 400,
+      arrivals: [{ from: 400, to: 1000, at: 0 }]
+    })
+    expect(switched.shown).toBe(1000)
+    // The next save comes at an eighth more: 1,125 characters.
+    const held = receiveNativeChatText(switched, text(1124), true, false, 0)
+    expect(held.shown).toBe(1000)
+    const saved = receiveNativeChatText(held, text(1125), true, false, 0)
+    expect(saved.shown).toBe(1125)
+    expect(saved.arrivals).toEqual([])
+    const ended = receiveNativeChatText(saved, text(1130), false, false, 0)
+    expect(ended.shown).toBe(1130)
+  })
 })

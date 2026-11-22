@@ -1,3 +1,4 @@
+import { nextStreamedTextCheckpointLength } from '../../../agent-session/journal/streamed-text-checkpoint-growth'
 /** Whitespace-free script ranges used as character-sized reveal units. */
 export const SPACELESS_SCRIPT_RANGES = String.raw`\u2e80-\ud7ff\uf900-\uffef`
 const SPACELESS_SCRIPT_CHAR = new RegExp(`[${SPACELESS_SCRIPT_RANGES}]`, 'u')
@@ -15,6 +16,8 @@ export type NativeChatTextReveal = {
   source: string
   shown: number
   arrivals: TextArrival[]
+  /** Shown only as a save would show it, for the rest of the reply (see `savePacedNativeChatText`). */
+  savePaced?: true
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -24,6 +27,8 @@ export type NativeChatTextRevealFrames = {
   cancel: (frame: number) => void
   /** How long the last step took to render, timed by the surface from the step to its commit. */
   stepCost?: (ms: number) => void
+  /** Whether this reply's steps have been slow enough to show it redrawn whole each step. */
+  redrawsWhole?: () => boolean
 }
 
 /** Until the display's own frames are measured, assume 60 Hz. */
@@ -51,6 +56,9 @@ function medianStepCost(costs: readonly number[]): number {
   const sorted = [...costs].sort((a, b) => a - b)
   return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0
 }
+/** A step this slow redraws the whole reply (footnotes, reference links, raw HTML re-parse it all),
+ *  so it costs more than the update a save would make, and stepping it only lengthens each wait. */
+export const NATIVE_CHAT_WHOLE_REDRAW_STEP_MS = 100
 /** However slowly the reply renders, it still moves at least this often. */
 const MAX_STEP_MS = 6000
 /** A wait longer than this many frames sleeps on a timer instead of asking for every frame. */
@@ -69,6 +77,7 @@ export function nativeChatRevealStepFrames(
   let steppedAt = -Infinity
   let spacing = stepMs
   const stepCosts: number[] = []
+  let redrawsWhole = false
   let lastFrame: number | undefined
   const gaps: number[] = []
   let period = FRAME_MS
@@ -93,7 +102,12 @@ export function nativeChatRevealStepFrames(
       if (stepCosts.length > STEP_COST_SAMPLES) {
         stepCosts.shift()
       }
+      // Once over the line the reply stays there, so it doesn't switch back and forth.
+      redrawsWhole ||=
+        stepCosts.length === STEP_COST_SAMPLES &&
+        medianStepCost(stepCosts) > NATIVE_CHAT_WHOLE_REDRAW_STEP_MS
     },
+    redrawsWhole: () => redrawsWhole,
     request: (step) => {
       const id = ++nextId
       const fire = (at: number): void => {
@@ -224,6 +238,9 @@ export function startNativeChatTextReveal(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
+  if (remembered?.savePaced) {
+    return receiveNativeChatText(remembered, text, streaming, false, now, revealMs)
+  }
   // Text received while unmounted has no arrival timestamp: show it without adding latency.
   if (remembered?.source === text && streaming) {
     return advanceNativeChatText(remembered, now, revealMs)
@@ -245,6 +262,9 @@ export function receiveNativeChatText(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
+  if (previous.savePaced) {
+    return receiveSavePacedText(previous, text, streaming)
+  }
   const immediate =
     reducedMotion ||
     (!streaming &&
@@ -253,6 +273,28 @@ export function receiveNativeChatText(
   return immediate
     ? { source: text, shown: text.length, arrivals: [] }
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
+}
+
+/** A reply shown only where a save would show it: everything received so far now, then the newest
+ *  text each time it grows past the next save's length, and all of it at its end. No reveal runs. */
+export function savePacedNativeChatText(previous: NativeChatTextReveal): NativeChatTextReveal {
+  return { source: previous.source, shown: previous.source.length, arrivals: [], savePaced: true }
+}
+
+function receiveSavePacedText(
+  previous: NativeChatTextReveal,
+  text: string,
+  streaming: boolean
+): NativeChatTextReveal {
+  const saved = previous.source.length
+  const due =
+    !streaming ||
+    !text.startsWith(previous.source) ||
+    saved === 0 ||
+    text.length >= nextStreamedTextCheckpointLength(saved)
+  return due && text !== previous.source
+    ? { source: text, shown: text.length, arrivals: [], savePaced: true }
+    : previous
 }
 
 /** Step on the frame clock until complete and return cancellation. The clock spaces the steps. */
