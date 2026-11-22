@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,11 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
+import { useAppStore } from '@/store/index'
+import { isTerminalPaneCloseChord } from '../../input/keyboard/terminal-shortcut-policy'
 
 export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
@@ -65,6 +69,33 @@ export default function CloseTerminalDialog({
     }
   }
 
+  // Confirm on a second close chord while open; register first so workspace/terminal close handlers cannot preempt the dialog.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.isComposing) {
+        return
+      }
+      if (
+        !isTerminalPaneCloseChord(event, getShortcutPlatform(), useAppStore.getState().keybindings)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      if (event.repeat) {
+        return
+      }
+      skipReturnFocus()
+      onConfirm(dontAskAgain)
+    }
+    addAppKeyListener('keydown', onKeyDown, { first: true })
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [open, dontAskAgain, onConfirm, skipReturnFocus])
+
   return (
     <Dialog
       open={open}
@@ -74,7 +105,12 @@ export default function CloseTerminalDialog({
         }
       }}
     >
-      <DialogContent size="confirm" initialFocus="cancel" onOpenAutoFocus={captureReturnFocus}>
+      <DialogContent
+        size="confirm"
+        initialFocus="cancel"
+        onOpenAutoFocus={captureReturnFocus}
+        data-close-terminal-dialog="true"
+      >
         <CloseTerminalDialogBody
           copyKind={copyKind}
           workspaceName={workspaceName}
