@@ -18,7 +18,10 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function idleChat(cancelConfirms: boolean) {
+async function idleChat(
+  cancelConfirms: boolean,
+  duringCancel?: (connection: FakeConnection) => void
+) {
   const settlements: Settlement[] = []
   let connection!: FakeConnection
   const claude = fakeClaude({
@@ -26,6 +29,7 @@ async function idleChat(cancelConfirms: boolean) {
     routes: {
       // As captured from 2.1.280: Claude reports the withdrawn send cancelled before it answers.
       cancel_async_message: (params) => {
+        duringCancel?.(connection)
         if (cancelConfirms) {
           lifecycle(connection, String(params?.uuid), 'cancelled')
         }
@@ -163,4 +167,16 @@ it('releases the send as in doubt when Claude does not confirm the withdrawal', 
     }
   ])
   expect(adapter.heldSends('session-1')).toEqual(new Set())
+})
+
+it('keeps an unconfirmed send held when Claude starts working during the withdrawal', async () => {
+  const { adapter, connection, settlements } = await idleChat(false, (live) =>
+    state(live, 'running')
+  )
+  await send(adapter, connection, 'mail-1')
+  await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
+
+  expect(withdrawals(connection)).toHaveLength(1)
+  expect(settlements).toEqual([])
+  expect(adapter.heldSends('session-1')).toEqual(new Set(['mail-1']))
 })

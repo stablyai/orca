@@ -117,7 +117,9 @@ export class ClaudeUnstartedSendWatch {
       if (
         !this.live() ||
         !session.dispatchWaiters.includes(waiter) ||
-        waiter.commandLifecycle === 'started'
+        waiter.commandLifecycle === 'started' ||
+        // Unconfirmed, and Claude is working again: its next idle rearms the grace.
+        (!withdrawn && !this.idle)
       ) {
         continue
       }
