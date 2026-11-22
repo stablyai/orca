@@ -3691,6 +3691,7 @@
       "open": "開啟 {{name}}",
       "row": {
         "started": "已開始",
+        "forItems": "針對",
         "reopened": "已重新開啟",
         "followedUp": "已傳送後續訊息給",
         "handedOff": "已轉交給",
@@ -5589,7 +5590,9 @@
     "section": {
       "title": "機器人",
       "summary": "{{title}}，{{total}} 個機器人，{{attention}} 個需要你處理，{{unread}} 則未讀，{{working}} 個執行中",
-      "newBot": "新增機器人"
+      "newBot": "新增機器人",
+      "reorderTitle": "重新排序機器人",
+      "reorder": "重新排序…"
     },
     "groups": {
       "manageMembers": "管理成員",
@@ -5661,7 +5664,8 @@
       },
       "newThreadTab": "建立討論串",
       "newThreadHint": "重新開始",
-      "newThread": "在 {{name}} 中建立討論串"
+      "newThread": "在 {{name}} 中建立討論串",
+      "peerReadItems": "{{bot}} 已讀取其項目的更新"
     },
     "templates": {
       "title": "機器人範本",

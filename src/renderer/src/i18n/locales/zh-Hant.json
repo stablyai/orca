@@ -1332,7 +1332,8 @@
         "automationHelp": "其執行歷史紀錄也會一併刪除",
         "automation": "刪除自動化",
         "title": "確認",
-        "running": "關閉執行中的聊天或終端機"
+        "running": "關閉執行中的聊天或終端機",
+        "chat": "刪除聊天"
       },
       "pages": {
         "folder": "工作區資料夾",
@@ -8410,6 +8411,8 @@
           "running": "執行中",
           "stopped": "已停止",
           "title": "新增 WSL 發行版",
+          "descriptionMoveFromSidebar": "Orca 會在該發行版內執行伺服器，因此 Git、檔案與終端機會以原生 Linux 方式運作。你透過 \\\\wsl.localhost 開啟的此發行版中的專案，在從側邊欄選單移動前會留在這台電腦上。Windows 磁碟機上的專案（/mnt/…）也會留在這裡。你可以隨時從側邊欄將已移動的專案移回。",
+          "descriptionAutoMove": "Orca 會在該發行版內執行伺服器，因此 Git、檔案與終端機會以原生 Linux 方式運作。你透過 \\\\wsl.localhost 開啟的此發行版中的專案，在終端機閒置後會自動移到此主機。Windows 磁碟機上的專案（/mnt/…）會留在這台電腦上。你可以隨時從側邊欄將已移動的專案移回。",
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
@@ -13862,7 +13865,8 @@
             "updateOrcaOnHost": "更新此主機上的 Orca",
             "updateAnyway": "仍要更新",
             "notNow": "暫時不要",
-            "forceUpdate": "此主機上有終端機正在執行。更新期間會持續執行，Orca 伺服器重新啟動後，終端機窗格會重新連線。"
+            "forceUpdate": "此主機上有終端機正在執行。更新期間會持續執行，Orca 伺服器重新啟動後，終端機窗格會重新連線。",
+            "forceUpdateUncounted": "Orca 無法計算此主機上的終端機數量。僅在該處沒有終端機守護程式執行時才會繼續更新，且 Orca 伺服器自行啟動的任何終端機都會結束。"
           },
           "description": "Orca 會在空白的 SSH 主機上自行安裝，並自動保持最新版本。",
           "deploy": {
@@ -14113,7 +14117,15 @@
           "connect": "連線",
           "forceUpdate": "強制更新",
           "turnOn": "在實驗性中開啟",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "此主機的伺服器並非由 WSL 主機啟動，而是由 SSH 主機啟動，因此無法將專案移到此處。請重新以 WSL 主機方式啟動以修正。",
+          "restartAsWslHost": {
+            "button": "以 WSL 主機重新啟動",
+            "title": "要以 WSL 主機重新啟動嗎？",
+            "description": "這會結束在 {{host}} 上執行的所有終端機與代理程式，包含由 SSH 主機在此處開啟的項目。之後 Orca 會以 WSL 主機身分重新啟動其伺服器，專案才能移到此處。",
+            "cancel": "取消",
+            "action": "結束終端機並重新啟動"
+          }
         },
         "restartServer": {
           "action": "重新啟動 Orca 伺服器…",
@@ -21163,6 +21175,12 @@
         "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
         "loadingFiles": "正在載入檔案...",
         "noFiles": "沒有符合的檔案",
+        "noBots": "沒有機器人",
+        "noBotsMatch": "沒有符合「{{query}}」的機器人",
+        "botCount_one": "{{count}} 個機器人",
+        "botCount_other": "{{count}} 個機器人",
+        "fileCount_one": "{{count}} 個檔案",
+        "fileCount_other": "{{count}} 個檔案",
         "filesLoadFailed": "無法載入檔案",
         "attach": "附加檔案",
         "startDictation": "開始聽寫",
@@ -21278,6 +21296,7 @@
         "imageUnavailable": "無法預覽",
         "botFor": "給：{{detail}}",
         "agents": "代理程式",
+        "recent": "最近使用",
         "bots": "機器人",
         "files": "檔案",
         "skillPillLabel": "技能：{{name}}",
@@ -21718,6 +21737,7 @@
         "open": "開啟 {{name}}",
         "row": {
           "started": "開始",
+          "forItems": "針對",
           "reopened": "重新開啟",
           "followedUp": "已傳送後續訊息給",
           "handedOff": "已交接給",
@@ -21811,6 +21831,8 @@
         "editReturned": "你編輯的內容已放入聊天輸入框。",
         "commandsUnsupported": "排隊的訊息中無法儲存命令。",
         "imageCount": "{{count}} 張圖片",
+        "queuedCount_one": "已排入 {{count}} 則",
+        "queuedCount_other": "已排入 {{count}} 則",
         "couldNotSend": "無法傳送",
         "retry": "重試",
         "showLessRows": "收合",
@@ -25805,6 +25827,8 @@
       "destinationChanged": "先前來自 {{distro}} 的專案已移至另一個 WSL 主機。請連線該主機以移動更多專案。",
       "hostUnavailable": "{{distro}} 主機未連線。請在設定中連線，然後再試一次。",
       "hostUpdateRequired": "{{distro}} 主機執行的是舊版 Orca。請在設定中更新，然後再試一次。",
+      "hostLaunchUnproven": "{{distro}} 中的 Orca 伺服器執行的是此版本的 Orca，但無法接收這些專案，因此更新也無幫助。它可能是在 WSL 主機以外的方式啟動，例如由 SSH 主機啟動。請在設定中移除 {{distro}} 主機，然後重新新增。",
+      "hostNotWslLaunched": "{{distro}} 中的 Orca 伺服器並非以 WSL 主機方式啟動（通常是由該發行版的 SSH 主機啟動），因此無法接收這些專案。更新無效。請在設定中對 {{distro}} 主機選擇「以 WSL 主機重新啟動」，再試一次。",
       "terminalsBlocked": "這些專案中的部分終端機、代理程式或自動化正在忙碌。未移動任何內容。",
       "exportIncomplete": "這些專案中的部分已儲存狀態目前還無法移動，因此未移動任何內容：",
       "exportIncompletePreview": "這些專案中的部分已儲存狀態目前還無法移動：",
@@ -27208,6 +27232,13 @@
         "linkUntil": "（僅可使用一次，直到 {{time}}）。",
         "linkOnce": "（僅可使用一次）。",
         "tryIt": "在任何頻道或私訊中試試看",
+        "preview": {
+          "label": "在 Slack 中提及 @{{name}} 即可向它提問。",
+          "now": "剛剛",
+          "you": "你",
+          "ask": "<mention/> 摘要這個討論串",
+          "reply": "收到。"
+        },
         "connectAnother": "連線另一個 Slack 工作區",
         "connect": "連線 Slack",
         "openInSlack": "在 Slack 中傳訊息給它",
@@ -27605,6 +27636,13 @@
         "added": "已從 GitHub 新增：{{names}}。",
         "pushesOnHost": "{{name}} 使用其 git 登入從 {{host}} 推送程式碼。",
         "tryIt": "在任何 issue 或 PR 上試試看",
+        "preview": {
+          "label": "在議題或 Pull Request 中提及 {{command}} 即可詢問 {{name}}。例如「{{command}} {{ask}}」，{{name}} 會回覆「{{reply}}」。",
+          "commented": "已評論於剛剛",
+          "ask": "請審閱這個 PR",
+          "bot": "機器人",
+          "reply": "收到。"
+        },
         "connectTitle": "連線 GitHub",
         "manage": "管理"
       },
@@ -28109,6 +28147,7 @@
       "peerAsked": "{{from}} 詢問 {{to}}",
       "peerTold": "{{from}} 告訴 {{to}}",
       "peerFollowedUp": "{{bot}} 後續追問",
+      "peerReadItems": "{{bot}} 已讀取其項目的更新",
       "handoffsPaused": "已在 {{count}} 次移交後暫停。回覆即可繼續。",
       "peerReplyRead": "{{reader}} 讀了 {{peer}} 的回覆",
       "deleteTitle": "要刪除 {{name}} 嗎？",
@@ -29161,7 +29200,10 @@
       "workers": "工作者",
       "waitingCount": "{{count}} 個等待中",
       "loading": "正在載入聊天…",
-      "readFailed": "無法讀取這個機器人的聊天。"
+      "readFailed": "無法讀取這個機器人的聊天。",
+      "delete": "刪除聊天",
+      "open": "開啟",
+      "actions": "聊天操作"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "只依照排程執行：登出 Orca 時，其事件會暫停",
@@ -29329,6 +29371,8 @@
         "replyOrPick": "用自己的話回覆，或選擇一個選項",
         "replyingTo": "回覆：",
         "hideReplyingTo": "隱藏",
+        "replyingToShow": "正在回覆：{{question}}。顯示問題",
+        "showQuestion": "顯示問題",
         "replyTo": "回覆 {{name}}…"
       },
       "empty": {
@@ -29420,7 +29464,8 @@
         "firstItem": "第一個項目",
         "lastItem": "最後一個項目",
         "deleted": "此項目已刪除。",
-        "moreLinks": "還有 {{count}} 個連結"
+        "moreLinks": "還有 {{count}} 個連結",
+        "loading": "正在載入項目…"
       },
       "loading": "正在載入項目…",
       "readFailed": "無法讀取項目。",
@@ -29445,8 +29490,11 @@
         "pickCustom": "選擇日期與時間"
       },
       "ask": {
+        "heldCount_one": "還有 {{count}} 則回覆尚未送出",
+        "heldCount_other": "還有 {{count}} 則回覆尚未送出",
         "next": "下一題",
         "notSentYet": "尚未傳送",
+        "sendHeld": "立即送出",
         "previous": "上一題",
         "recommended": "建議",
         "step": "第 {{n}} 題，共 {{total}} 題",
@@ -29843,5 +29891,18 @@
     "toolsLabel": "應用程式工具",
     "workspaces": "工作區",
     "more": "更多"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "請更新 {{host}} 以刪除聊天",
+      "failed": "無法刪除該聊天",
+      "undone": "此動作無法復原。",
+      "title": "要刪除這個聊天嗎？",
+      "descriptionHost": "將從 {{host}} 上永久刪除，無法復原。",
+      "action": "刪除",
+      "groupRoom": "無法刪除群組聊天室的聊天",
+      "workerOwed": "仍有協作任務在等待此聊天",
+      "home": "無法刪除受管理代理程式的主聊天室"
+    }
   }
 }
