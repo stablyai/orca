@@ -38,6 +38,8 @@ export type PublishSharedToolProcessSessionEnv = (input: {
   providerSessionId: string
   /** `null` unsets a name the shared process inherited. */
   values: Readonly<Record<string, string | null>>
+  /** False once the child ended: a write still waiting must not land. */
+  live: () => boolean
 }) => Promise<() => Promise<void>>
 
 /** A sealed child's caller identity, and the environment a shared process gives that session's

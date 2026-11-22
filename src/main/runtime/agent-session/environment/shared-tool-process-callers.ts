@@ -58,12 +58,15 @@ export class SharedToolProcessSession {
       return
     }
     const publish = this.publishSessionEnv
-    this.withdraw = publish({ env: this.sealed, providerSessionId, values: this.tools }).catch(
-      (error: unknown) => {
-        console.warn('[agent-session] Could not give a shared tool process its session', error)
-        return null
-      }
-    )
+    this.withdraw = publish({
+      env: this.sealed,
+      providerSessionId,
+      values: this.tools,
+      live: () => !this.ended
+    }).catch((error: unknown) => {
+      console.warn('[agent-session] Could not give a shared tool process its session', error)
+      return null
+    })
     await this.withdraw
   }
 
