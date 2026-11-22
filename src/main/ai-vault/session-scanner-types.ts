@@ -36,9 +36,9 @@ export type AiVaultScanOptions = {
   cursorProjectsDir?: string
   /** Native Chat's Cursor sessions and the config folders they run in; resolved by the host process. */
   cursorAcpSessions?: {
-    sessionIds: readonly string[]
-    configDirs: readonly string[]
-    inWsl: boolean
+    folders: readonly { configDir: string; sessionIds: readonly string[] }[]
+    /** Looked for under each WSL home's default `.cursor`. */
+    wslSessionIds: readonly string[]
   }
   opencodeStorageDir?: string
   opencodeDbPaths?: readonly string[]

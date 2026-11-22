@@ -14,24 +14,38 @@ export function cursorChatAcpSessions(): AiVaultScanOptions['cursorAcpSessions']
   if (!store) {
     return undefined
   }
-  const sessionIds = new Set<string>()
-  const configDirs = new Set<string>()
-  let inWsl = false
+  const idsByConfigDir = new Map<string, Set<string>>()
+  const wslSessionIds = new Set<string>()
   for (const provider of historyRowOwners('cursor')) {
     const history = structuredAgentRuntimeMetadata(provider)?.sessionHistory
     for (const chat of history ? store.conversationsKeyedBy(providerKeys, provider) : []) {
-      for (const link of chat.providerHandleChain) {
-        sessionIds.add(history!.rowSessionId(link))
-      }
-      if (chat.location.wslDistro) {
-        inWsl = true
-      } else if (isLegacyAgentSessionAccountHome(chat.accountHome)) {
-        // The chat pins CURSOR_CONFIG_DIR to this folder, where Cursor writes acp-sessions.
-        configDirs.add(chat.accountHome.path)
+      // The chat pins CURSOR_CONFIG_DIR to its account folder, where Cursor writes acp-sessions.
+      const ids = chat.location.wslDistro
+        ? wslSessionIds
+        : isLegacyAgentSessionAccountHome(chat.accountHome)
+          ? idsInFolder(idsByConfigDir, chat.accountHome.path)
+          : null
+      for (const link of ids ? chat.providerHandleChain : []) {
+        ids!.add(history!.rowSessionId(link))
       }
     }
   }
-  return sessionIds.size > 0
-    ? { sessionIds: [...sessionIds], configDirs: [...configDirs], inWsl }
+  return idsByConfigDir.size > 0 || wslSessionIds.size > 0
+    ? {
+        folders: [...idsByConfigDir].map(([configDir, ids]) => ({
+          configDir,
+          sessionIds: [...ids]
+        })),
+        wslSessionIds: [...wslSessionIds]
+      }
     : undefined
+}
+
+function idsInFolder(byFolder: Map<string, Set<string>>, configDir: string): Set<string> {
+  let ids = byFolder.get(configDir)
+  if (!ids) {
+    ids = new Set()
+    byFolder.set(configDir, ids)
+  }
+  return ids
 }
