@@ -5,7 +5,7 @@ import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-contr
 
 const REPO_REF_CACHE_MAX_ENTRIES = 512
 
-// Expire negatives so newly added remotes appear without restart, including on SSH/WSL without config watchers.
+// Expire negatives and unsigned (WSL) answers so remote changes appear without restart or config watchers.
 export const NEGATIVE_ENTRY_TTL_MS = 5 * 60_000
 
 type CachedRepoRef<Ref> = { value: Ref | null; expiresAt: number; configSignature?: string }
@@ -40,7 +40,7 @@ export function createRemoteRefProbeCache<Ref>(
         value !== null && configSignature !== undefined
           ? Number.POSITIVE_INFINITY
           : Date.now() + NEGATIVE_ENTRY_TTL_MS,
-      ...(configSignature !== undefined ? { configSignature } : {})
+      configSignature
     })
     while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
       const oldestKey = repoRefCache.keys().next().value
@@ -82,7 +82,7 @@ export function createRemoteRefProbeCache<Ref>(
         return null
       }
       const result = parseRemoteUrl(read.url)
-      // Sign with the URL's own signature: a URL shared earlier in a detection pass may predate ours.
+      // A URL shared earlier in the pass may predate our signature.
       publish(result, read.configSignature)
       return result
     } catch (error) {
