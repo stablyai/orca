@@ -1,4 +1,8 @@
-import { agentSessionAccountHomePath } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import {
+  agentSessionAccountHomePath,
+  type AgentSessionAccountHome
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { createUsageLimitAccountLogin } from './usage-limit-account-login'
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -92,7 +96,9 @@ export type UsageLimitAccountSourceDeps = {
 export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
   accountWitness: (provider: string) => string
   accountUsage: AccountUsageReader
+  accountLogin: (provider: string, accountHome: AgentSessionAccountHome) => Promise<string | null>
 } {
+  const login = createUsageLimitAccountLogin()
   const ids = new WeakMap<WitnessedSource, number>()
   let nextId = 0
   const idOf = (source: WitnessedSource | null | undefined): number => {
@@ -111,6 +117,10 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
       ? deps.rateLimits()?.usageReadingAccount(provider)
       : null
   return {
+    accountLogin: async (provider, accountHome) => {
+      const path = agentSessionAccountHomePath(accountHome)
+      return path ? login(provider, path) : null
+    },
     accountWitness: (provider) =>
       `${idOf(deps.settings())}:${deps.shellEnvironmentRevision()}:${idOf(readingSource(provider))}`,
     accountUsage: async (provider, accountHome) => {

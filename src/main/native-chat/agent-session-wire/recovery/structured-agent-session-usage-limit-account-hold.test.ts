@@ -81,18 +81,11 @@ it("a person's Stop withdraws the continue a switch gives an unknown-reset cut",
 })
 
 const WEEKLY_RESET = ENDED + 4 * 86_400_000
-const weekly = (usedPercent: number, updatedAt: number): ProviderRateLimits => ({
-  provider: 'codex',
-  session: null,
-  weekly: { usedPercent, resetsAt: WEEKLY_RESET, windowMinutes: 10_080, resetDescription: null },
-  updatedAt,
-  error: null,
-  status: 'ok'
-})
 
-async function sameFolder(readings: ProviderRateLimits[]) {
-  let current = readings[0]!
+/** One chat whose cut hit HIT, attributed once per login in `logins`, a pass apart. */
+async function sameFolder(logins: string[], reading: () => ProviderRateLimits | null) {
   const holds = new UsageLimitAccountHolds()
+  let login = logins[0]!
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
   const host = {
     store: {
@@ -104,27 +97,37 @@ async function sameFolder(readings: ProviderRateLimits[]) {
     },
     launchAccountHome: async () => HIT,
     usageLimitAutoContinue: {
+      accountLogin: async () => login,
       accountUsage: async () => ({
         scope: HIT.path,
-        account: { key: HIT.path, read: () => current, refresh: () => true }
+        account: { key: HIT.path, read: reading, refresh: () => true }
       })
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
   const cut = { ...CUT, resetsAt: WEEKLY_RESET }
-  await holds.attribute('chat', host, cut, SWITCHED)
-  for (const next of readings) {
-    current = next
-    holds.verdict('chat', cut, next.updatedAt)
+  for (const [pass, next] of logins.entries()) {
+    login = next
+    holds.beginPass()
+    await holds.attribute('chat', host, cut, SWITCHED + pass * 10_000)
   }
   return { holds, cut }
 }
 
-it('continues before the reset once the same folder, seen spent, reads with room (a new login)', async () => {
-  const { holds, cut } = await sameFolder([weekly(100, SWITCHED), weekly(5, SWITCHED + 60_000)])
-  expect(holds.ready('chat', cut, SWITCHED + 90_000)).toBe(true)
+it('continues before the reset once another login is in the folder the cut hit', async () => {
+  // The old login's spent reading predates the new login, so it no longer speaks for the folder.
+  const old = { ...reading({ usedPercent: 100, resetsAt: WEEKLY_RESET }), updatedAt: SWITCHED }
+  const { holds, cut } = await sameFolder(['a', 'b'], () => old)
+  const switched = holds.withSwitchReset('chat', cut)
+  expect(holds.ready('chat', switched, SWITCHED + 10_000 + 20_000)).toBe(false)
+  // No fresh reading arrives: after the wait it goes anyway, and a still-spent account stops again.
+  expect(holds.ready('chat', switched, SWITCHED + 10_000 + 200_000)).toBe(true)
 })
 
-it('keeps the reset when the folder was never seen spent: room alone may not cover the limit hit', async () => {
-  const { holds, cut } = await sameFolder([weekly(5, SWITCHED), weekly(5, SWITCHED + 60_000)])
-  expect(holds.ready('chat', cut, SWITCHED + 90_000)).toBe(false)
+it('waits for the reset while the same login stays in the folder', async () => {
+  const room = {
+    ...reading({ usedPercent: 5, resetsAt: WEEKLY_RESET }),
+    updatedAt: SWITCHED + 15_000
+  }
+  const { holds, cut } = await sameFolder(['a', 'a'], () => room)
+  expect(holds.ready('chat', cut, SWITCHED + 200_000)).toBe(false)
 })

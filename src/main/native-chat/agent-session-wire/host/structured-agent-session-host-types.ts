@@ -204,6 +204,11 @@ export type StructuredAgentSessionHostDeps = {
     ) => Promise<UsageLimitAccountScope | undefined>
     /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
+    /** Who is signed in at `home` now; null when unknown. A new login there is a switch too. */
+    accountLogin?: (
+      provider: AgentSessionRecord['provider'],
+      home: AgentSessionAccountHome
+    ) => Promise<string | null>
   }
   assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>

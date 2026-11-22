@@ -1,6 +1,7 @@
 /** Durable account binding: existing single-directory records or OpenCode's data context. */
 
 import type { AgentSessionStoredAgent } from '../records/agent-session-stored-agent'
+import { normalizeRuntimePathForComparison } from '../../../file-access/cross-platform-path'
 
 /** Account root the chat was created or adopted under, where its history was first written. An agent
  *  whose launch follows the selection starts under the account selected now instead. */
@@ -65,6 +66,18 @@ export function agentSessionAccountHomesEqual(
     )
   }
   return right.locator.kind === 'unmanaged'
+}
+
+/** As agentSessionAccountHomesEqual, with folder paths compared as the platform spells them. */
+export function sameAgentSessionAccountFolder(
+  left: AgentSessionAccountHome,
+  right: AgentSessionAccountHome
+): boolean {
+  return isLegacyAgentSessionAccountHome(left) && isLegacyAgentSessionAccountHome(right)
+    ? left.variable === right.variable &&
+        normalizeRuntimePathForComparison(left.path) ===
+          normalizeRuntimePathForComparison(right.path)
+    : agentSessionAccountHomesEqual(left, right)
 }
 
 /** The account home of `agent` at `path`. */
