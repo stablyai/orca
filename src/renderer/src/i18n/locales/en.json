@@ -14303,6 +14303,7 @@
           "setUp": "Set up",
           "overYourSsh": "Over your SSH connection",
           "newerThanApp": "Newer than this app (v{{version}})",
+          "copySettings": "Copy settings…",
           "installViaSsh": "Install via SSH"
         },
         "sshBulkRemove": {
@@ -14876,6 +14877,26 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "settingsCopy": {
+          "thisComputer": "this computer",
+          "title": "Copy settings with {{name}}",
+          "description": "Copies preferences such as appearance, terminal, editor and diff settings. Accounts, keys and projects are not copied.",
+          "directionLabel": "Copy direction",
+          "send": "Send from this computer",
+          "receive": "Bring to this computer",
+          "retry": "Try again",
+          "apply": "Copy to {{target}}",
+          "checking": "Checking what would change…",
+          "unsupported": "Orca on {{name}} can’t copy settings yet. Update Orca there and try again.",
+          "failed": "Couldn’t copy settings: {{message}}",
+          "nothingToChange": "Nothing to change on {{target}}.",
+          "alreadyMatch": "Settings on {{target}} already match.",
+          "changedHeading": "Changed on {{target}} ({{total}}):",
+          "willChangeHeading": "Will change on {{target}} ({{total}}):",
+          "notSent": "Not sent from {{source}}: {{keys}}",
+          "notCopied": "Not copied by {{target}}: {{keys}}",
+          "pairingChanged": "{{name}} was paired again after the check, so nothing was copied. Try again to see what would change."
         }
       },
       "right": {
