@@ -30,7 +30,8 @@ import {
   type SamplePlacement
 } from './resource-sample-placement'
 import {
-  sampleRowsFor,
+  buildChatRowGroups,
+  chatRowGroupsFor,
   type ResourceMergeCache,
   type SampleChatRows
 } from './resource-chat-row-groups'
@@ -106,25 +107,30 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 1: sampled workspaces. Chat-only rows come pre-grouped per sample; terminal rows are rebuilt.
+  // ── Step 1: sampled workspaces. Terminal rows are rebuilt; chat-only rows are grouped once per sample.
   const nextSamples = new Map<string, SampleChatRows>()
   const inputs = placementInputs(ctx)
-  const local = snapshot
-    ? sampleRowsFor(cache, nextSamples, LOCAL_SAMPLE, snapshot.worktrees, inputs, (wt) =>
-        localSamplePlacement(ctx, wt, true)
-      )
-    : null
-  if (cache) {
-    cache.bySample = nextSamples
-  }
-  for (const part of local?.groups ?? []) {
-    groups.addChatRowGroup(part)
-  }
+  const source = snapshot?.worktrees ?? []
+  const cached = chatRowGroupsFor(cache, LOCAL_SAMPLE, source, inputs)
+  // A changed sample is classified in this one pass. Its terminal rows are listed once it has chats,
+  // so a later merge of the same sample never visits its chat rows.
+  const chatOnly: WorktreeMemory[] = []
+  let terminalSamples: WorktreeMemory[] | undefined
   const shownLocally = new Set<string>()
-  // Local chat rows were added first, so a same-id row in the project is this machine's.
+  // A same-id row already in the project is this machine's.
   const isShownLocally = (worktreeId: string, repoId: string): boolean =>
     shownLocally.has(worktreeId) || groups.hasRow(repoId, worktreeId)
-  for (const wt of local?.terminalSamples ?? []) {
+  const ingestSource = cached ? (cached.terminalSamples ?? source) : source
+  for (let i = 0; i < ingestSource.length; i++) {
+    const wt = ingestSource[i]
+    if (!cached) {
+      if (wt.sessions.length === 0) {
+        terminalSamples ??= source.slice(0, i)
+        chatOnly.push(wt)
+        continue
+      }
+      terminalSamples?.push(wt)
+    }
     const placement = localSamplePlacement(ctx, wt, false)
     if (placement) {
       shownLocally.add(placement.worktreeId)
@@ -138,6 +144,21 @@ export function mergeSnapshotAndSessions(
       }
     }
   }
+  const localGroups =
+    cached?.groups ?? buildChatRowGroups(chatOnly, (wt) => localSamplePlacement(ctx, wt, true))
+  if (snapshot) {
+    nextSamples.set(
+      LOCAL_SAMPLE,
+      cached ?? { source, inputs, groups: localGroups, terminalSamples }
+    )
+  }
+  if (cache) {
+    cache.bySample = nextSamples
+  }
+  for (const part of localGroups) {
+    groups.addChatRowGroup(part)
+  }
+
   // This machine's live terminals come before paired samples, so a same-id paired sample is host-qualified.
   for (const session of daemonSessions) {
     if (seenSessionIds.has(session.id)) {

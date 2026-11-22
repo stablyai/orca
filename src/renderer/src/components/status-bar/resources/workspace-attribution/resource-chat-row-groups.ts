@@ -14,8 +14,8 @@ export type SampleChatRows = {
   source: readonly WorktreeMemory[]
   inputs: readonly unknown[]
   groups: ChatRowGroup[]
-  /** The sample's workspaces with terminals, whose rows are rebuilt every merge. */
-  terminalSamples: readonly WorktreeMemory[]
+  /** Set only when the sample has chat-only rows: its terminal rows, so a repeat merge skips the chats. */
+  terminalSamples?: readonly WorktreeMemory[]
 }
 
 /** Lives while the panel is open; samples are keyed by owner (this machine or a paired host). */
@@ -25,15 +25,11 @@ export function createResourceMergeCache(): ResourceMergeCache {
   return { bySample: new Map() }
 }
 
-export function isChatOnlySample(wt: WorktreeMemory): boolean {
-  return wt.sessions.length === 0
-}
-
 function sameInputs(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((value, i) => value === b[i])
 }
 
-function buildChatRowGroups(
+export function buildChatRowGroups(
   chatOnly: readonly WorktreeMemory[],
   place: (wt: WorktreeMemory) => SamplePlacement | null
 ): ChatRowGroup[] {
@@ -84,30 +80,13 @@ function buildChatRowGroups(
   return [...byRepo.values()]
 }
 
-/** The sample's chat-only groups and terminal samples, rebuilt only when the sample or the catalog it is placed by changes. */
-export function sampleRowsFor(
+/** The sample's cached rows, while the sample and the catalog it is placed by are unchanged. */
+export function chatRowGroupsFor(
   cache: ResourceMergeCache | undefined,
-  next: Map<string, SampleChatRows>,
   owner: string,
   source: readonly WorktreeMemory[],
-  inputs: readonly unknown[],
-  place: (wt: WorktreeMemory) => SamplePlacement | null
-): SampleChatRows {
+  inputs: readonly unknown[]
+): SampleChatRows | undefined {
   const prior = cache?.bySample.get(owner)
-  const entry = prior && prior.source === source && sameInputs(prior.inputs, inputs) ? prior : null
-  if (entry) {
-    next.set(owner, entry)
-    return entry
-  }
-  // A sample without chat-only workspaces goes to the terminal ingest as it is, after one check per row.
-  const built: SampleChatRows = source.some(isChatOnlySample)
-    ? {
-        source,
-        inputs,
-        groups: buildChatRowGroups(source.filter(isChatOnlySample), place),
-        terminalSamples: source.filter((wt) => !isChatOnlySample(wt))
-      }
-    : { source, inputs, groups: [], terminalSamples: source }
-  next.set(owner, built)
-  return built
+  return prior && prior.source === source && sameInputs(prior.inputs, inputs) ? prior : undefined
 }

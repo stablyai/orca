@@ -90,7 +90,9 @@ describe('Resource Manager chat row reuse', () => {
     const counter = countReads(chats)
     const [second] = mergeSnapshotAndSessions(snapshot, [], context([], {}), undefined, cache)
     expect(counter.reads).toBe(0)
-    expect(second.worktrees[0]).toBe(first.worktrees[0])
+    const chatRow = (rows: typeof first.worktrees) =>
+      rows.find((row) => row.worktreeId === 'repo::/a')
+    expect(chatRow(second.worktrees)).toBe(chatRow(first.worktrees))
     expect(second.memory).toBe(35)
   })
 

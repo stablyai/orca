@@ -127,6 +127,7 @@ export function useResourceUsageActions({
       navigateResourceSessionToTab(tabId, paneKey, {
         // Read at click time, so a tab title change doesn't replace this callback and redraw every row.
         tabsByWorktree: useAppStore.getState().tabsByWorktree,
+        terminalLayoutsByTabId: useAppStore.getState().terminalLayoutsByTabId,
         setActiveView,
         activateAndRevealWorktree: navigateToWorktree,
         activateTabAndFocusPane
@@ -138,9 +139,11 @@ export function useResourceUsageActions({
   // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.
   const openChat = useCallback(
     (worktreeId: string, agentSessionId: string, runtimeHostId?: string): void => {
+      // Close first: an open panel keeps focus, so the chat's composer couldn't take it.
+      setOpen(false)
       openResourceChat(worktreeId, agentSessionId, runtimeHostId)
     },
-    []
+    [setOpen]
   )
 
   const deleteWorktree = useCallback(

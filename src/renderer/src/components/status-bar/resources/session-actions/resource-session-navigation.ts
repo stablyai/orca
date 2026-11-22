@@ -1,4 +1,6 @@
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
@@ -8,6 +10,8 @@ type TabLookup = Record<string, { id: string }[]>
 
 export type ResourceSessionNavigationDeps = {
   tabsByWorktree: TabLookup
+  /** Current pane layouts; a restored terminal's recorded pane may no longer exist in its tab. */
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
   setActiveView: (view: 'terminal') => void
   activateAndRevealWorktree: (worktreeId: string) => unknown
   activateTabAndFocusPane: (
@@ -36,9 +40,14 @@ export function navigateResourceSessionToTab(
   // Always reveal terminal view because stale tab mappings can bypass the workspace navigation that normally switches it.
   deps.setActiveView('terminal')
 
-  // Stable leaf UUIDs identify panes; legacy numeric keys fall back to tab activation instead of guessing.
+  // Stable leaf UUIDs identify panes; legacy numeric keys, and a pane the tab no longer has, fall back to tab activation.
   const parsed = paneKey ? parsePaneKey(paneKey) : null
-  deps.activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null, {
+  const leafId =
+    parsed?.tabId === tabId &&
+    collectLeafIds(deps.terminalLayoutsByTabId[tabId]?.root).includes(parsed.leafId)
+      ? parsed.leafId
+      : null
+  deps.activateTabAndFocusPane(tabId, leafId, {
     flashFocusedPane: true,
     scrollToBottomIfOutputSinceLastView: true
   })
