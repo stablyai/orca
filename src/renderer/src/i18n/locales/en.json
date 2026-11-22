@@ -1958,6 +1958,16 @@
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Manage in browser",
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage your team in your browser."
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
@@ -21750,6 +21760,13 @@
           "task": "Task from",
           "update": "Update from",
           "message": "Message from"
+        },
+        "kind": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Follow-up",
+          "handedOff": "Handed off",
+          "task": "Task"
         }
       },
       "goal": {
@@ -26764,7 +26781,8 @@
     "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
-    "openConnectors": "Open connectors"
+    "openConnectors": "Open connectors",
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
   },
   "codeHost": {
     "errors": {
@@ -29024,14 +29042,15 @@
     },
     "upcoming": {
       "empty": "Ask {{name}} in chat to run something on a schedule or when something happens.",
-      "every2h": "every 2 hours",
-      "every4h": "every 4 hours",
+      "every2hWindow": "{{from}} to {{to}}, every 2 hours",
+      "every4hWindow": "{{from}} to {{to}}, every 4 hours",
       "lookFirst": "After your first chat · then {{every}}",
-      "mornings": "each morning",
+      "morningsAt": "each morning at {{time}}",
       "tidyUp": "Tidy memory",
       "today": "Today at {{time}}",
       "tomorrow": "Tomorrow at {{time}}",
-      "twiceDaily": "twice a day",
+      "twiceDailyAt": "twice a day, {{first}} and {{second}}",
+      "weekdays": "weekdays, {{schedule}}",
       "tidyNightAfter": "Each night after {{from}}, or once this computer is awake",
       "tidyWeekAfter": "Once a week after {{from}}, or once this computer is awake",
       "lastNeededSignIn": "Its last run stopped for a sign-in",
@@ -29868,6 +29887,8 @@
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

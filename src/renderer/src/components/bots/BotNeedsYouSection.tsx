@@ -11,7 +11,6 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity-model'
-import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
 import { approvalDetailPreview } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { manageConnectors } from './AddConnectorDialog'
@@ -28,7 +27,7 @@ import type { BotNeedView } from './use-bot-now'
 import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-fold'
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
-import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
+import { NeedRow, NeedRowBot, StoppedForSignInRow, type StoppedForSignIn } from './BotNeedRow'
 import { PairedAskNeedRow } from './BotPairedAskNeedRow'
 import { connectorNeed } from './bot-connector-need'
 import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
@@ -41,7 +40,7 @@ export type BotNeedsYouAsks = {
   /** What needs the owner, as `botNow` reads it and the filter keeps. */
   needs: readonly BotNeedView[]
   /** Runs a sign-in stopped: listed after the asks as context, never counted. */
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   /** The item a worker's Dispatch is linked to, whose title its ask takes. */
   itemOf: (dispatchId: string) => BotItem | null
 }
@@ -127,7 +126,7 @@ function paneOpener(row: BotSessionActivityRow, bot: BotOnHost): (() => void) | 
     case 'worker':
       return botWorkerRowOpener(row, botTarget(bot))
     case 'run':
-      return () => openBotAutomation(row.automationId, row.runId)
+      return () => openBotAutomation(bot.hostId, row.automationId, row.runId)
     case 'thread':
       return null
   }
@@ -290,7 +289,7 @@ function MemberNeedItem(props: React.ComponentProps<typeof NeedItem>): React.JSX
 
 type GroupRow =
   | { key: string; approval: boolean; need: BotNeedView }
-  | { key: string; approval: false; stopped: BotAutomationRow }
+  | { key: string; approval: false; stopped: StoppedForSignIn }
   | { key: string; approval: false; item: BotItem }
 
 /** A worker's own dot says it waits on a permission; a chat's prompt says so once read; a paired

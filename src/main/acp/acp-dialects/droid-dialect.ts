@@ -45,6 +45,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const DROID_ACP_DIALECT: AcpDialect = {
+  clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   // Droid's commands are all skills: its own, the user's and the project's.
   skillDescription: ({ description }) => description

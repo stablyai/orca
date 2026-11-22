@@ -37,8 +37,6 @@ export type MobileBotRowFacts = {
   foldLive: ReturnType<typeof botFoldLiveStatus>
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
-  /** Its Needs you items that aren't stale; a down host's row keeps the last count, greyed. */
-  needsYou?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
   line: Omit<BotRowLineInput<never>, 'paused' | 'rows' | 'now' | 'startingSessionIds'>
   /** The first person asking for access, whom the Needs you line names. */

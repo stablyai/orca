@@ -1,6 +1,7 @@
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
+import { storedRefusalReference } from './durable-rows/journal-storage-refusal-schema'
 
 const text = z.string().optional()
 
@@ -195,6 +196,7 @@ export const storedAutomationRunNotStarted = {
     })
   ),
   error: z.string(),
+  refusal: storedRefusalReference.optional(),
   text: z.string(),
   at: z.number()
 }

@@ -99,7 +99,7 @@ export async function sendPeerMail(args: {
     })
   }
   try {
-    await deliverPeerMail(runtime, server, conversation, {
+    const held = await deliverPeerMail(runtime, server, conversation, {
       id,
       to,
       senderLabel: peerMailSenderLabel(runtime, caller.address),
@@ -113,6 +113,7 @@ export async function sendPeerMail(args: {
       attachments,
       sender: peerMailSender(runtime, caller.address)
     })
+    warnings.push(...held)
   } catch (error) {
     if (type === 'question') {
       forgetPeerQuestionOut(db, id)
