@@ -48,7 +48,7 @@ describe('readHostBotListing', () => {
       key: 'old\nlocal',
       relaysCreate: true
     } as const
-    await readHostBotListing(target, new Map(), false)
+    await readHostBotListing(target, false)
     expect(methods).not.toContain('worktree.lineageList')
   })
 
@@ -57,11 +57,7 @@ describe('readHostBotListing', () => {
     const on = host(capabilities).client
     const off = host(capabilities, { ...LISTING, botsEnabled: false }).client
     const read = (client: RpcClient, key: string, relaysCreate = true) =>
-      readHostBotListing(
-        { hostId: 'local', hostLabel: 'Mac', client, key, relaysCreate },
-        new Map(),
-        false
-      )
+      readHostBotListing({ hostId: 'local', hostLabel: 'Mac', client, key, relaysCreate }, false)
     expect(await read(on, 'create-on\nlocal')).not.toHaveProperty('createRefusal')
     expect(await read(off, 'create-off\nlocal')).toMatchObject({ createRefusal: 'bots-off' })
     // A host whose build predates bots.create from a phone, the paired desktop included.

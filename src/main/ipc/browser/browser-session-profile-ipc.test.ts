@@ -7,14 +7,22 @@ const {
   createProfileMock,
   routeIdentityMock,
   detectBrowsersMock,
-  setBrowserIdentityModeMock
+  setBrowserIdentityModeMock,
+  getProfileMock,
+  sshPartitionMock,
+  importCookieFileMock,
+  pickCookieFileMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   createProfileMock: vi.fn(),
   routeIdentityMock: vi.fn(),
   detectBrowsersMock: vi.fn(() => []),
-  setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true }))
+  setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true })),
+  getProfileMock: vi.fn(),
+  sshPartitionMock: vi.fn(),
+  importCookieFileMock: vi.fn(),
+  pickCookieFileMock: vi.fn()
 }))
 
 vi.mock('../../browser/identity/mode/browser-identity-mode-store', () => ({
@@ -44,8 +52,16 @@ vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
 
 vi.mock('../../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
-    createProfile: createProfileMock
+    createProfile: createProfileMock,
+    getProfile: getProfileMock,
+    updateProfileSource: vi.fn()
   }
+}))
+vi.mock('../../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
+  preparedLocalSshBrowserPartition: sshPartitionMock
+}))
+vi.mock('../../browser/cookies/session-restore/browser-session-cookie-restore', () => ({
+  restoreBrowserRoutePartitionSessionCookies: vi.fn(async () => {})
 }))
 
 vi.mock('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
@@ -60,10 +76,10 @@ vi.mock('../../browser/cookies/browser-cookie-import', () => ({
   importCookiesFromBrowser: vi.fn()
 }))
 vi.mock('../../browser/cookies/imports/import-cookie-file', () => ({
-  importCookiesFromFile: vi.fn()
+  importCookiesFromFile: importCookieFileMock
 }))
 vi.mock('../../browser/cookies/imports/cookie-file-picker', () => ({
-  pickCookieFile: vi.fn()
+  pickCookieFile: pickCookieFileMock
 }))
 
 import { registerBrowserHandlers } from './browser'
@@ -79,6 +95,10 @@ describe('browser session profile IPC', () => {
     detectBrowsersMock.mockReturnValue([])
     setBrowserIdentityModeMock.mockReset()
     setBrowserIdentityModeMock.mockResolvedValue({ ok: true })
+    getProfileMock.mockReset()
+    sshPartitionMock.mockReset()
+    importCookieFileMock.mockReset()
+    pickCookieFileMock.mockReset()
     setTrustedBrowserRendererWebContentsId(91)
   })
 
@@ -144,5 +164,61 @@ describe('browser session profile IPC', () => {
       }
     ])
     expect(routeIdentityMock).toHaveBeenCalledWith('env-1')
+  })
+
+  function importCookieFileHandler(): (
+    event: { sender: Electron.WebContents },
+    args: { profileId: string; sshTargetId?: string }
+  ) => Promise<{ ok: boolean; reasonCode?: string }> {
+    registerBrowserHandlers({ getSettings: vi.fn() })
+    return handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importCookies'
+    )?.[1]
+  }
+
+  // An SSH page browses on its host's jar; importing into the profile's own jar left it signed out.
+  it('imports an SSH page’s cookies into that host’s jar, not the profile’s', async () => {
+    getProfileMock.mockReturnValue({
+      id: 'default',
+      label: 'Default',
+      partition: 'persist:orca-browser'
+    })
+    sshPartitionMock.mockReturnValue('persist:orca-browser-v1-ssh-jar')
+    pickCookieFileMock.mockResolvedValue('/tmp/cookies.json')
+    importCookieFileMock.mockResolvedValue({ ok: true, profileId: 'default', summary: {} })
+
+    const result = await importCookieFileHandler()(
+      { sender: trustedSender() },
+      { profileId: 'default', sshTargetId: 'ssh-1' }
+    )
+
+    expect(result.ok).toBe(true)
+    expect(sshPartitionMock).toHaveBeenCalledWith('ssh-1', 'default')
+    expect(importCookieFileMock).toHaveBeenCalledWith(
+      '/tmp/cookies.json',
+      'persist:orca-browser-v1-ssh-jar'
+    )
+  })
+
+  it('refuses when the SSH route goes away during the import', async () => {
+    getProfileMock.mockReturnValue({
+      id: 'default',
+      label: 'Default',
+      partition: 'persist:orca-browser'
+    })
+    sshPartitionMock.mockReturnValue('persist:orca-browser-v1-ssh-jar')
+    pickCookieFileMock.mockResolvedValue('/tmp/cookies.json')
+    importCookieFileMock.mockImplementation(async () => {
+      // The host disconnects while the cookies are being written.
+      sshPartitionMock.mockReturnValue(null)
+      return { ok: true, profileId: 'default', summary: {} }
+    })
+
+    const result = await importCookieFileHandler()(
+      { sender: trustedSender() },
+      { profileId: 'default', sshTargetId: 'ssh-1' }
+    )
+
+    expect(result).toMatchObject({ ok: false, reasonCode: 'sshHostDisconnected' })
   })
 })

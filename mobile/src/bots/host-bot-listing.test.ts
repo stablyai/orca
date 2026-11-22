@@ -13,8 +13,7 @@ function listed(hostId: ListedHostBots['hostId'], installationId?: string): List
     hideBotCreated: false,
     view: DEFAULT_BOT_SIDEBAR_VIEW,
     workspaceLineage: {},
-    worktreeLineage: {},
-    avatarUris: new Map()
+    worktreeLineage: {}
   }
 }
 

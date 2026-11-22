@@ -19935,7 +19935,17 @@
         "skip": "건너뛰기",
         "sending": "전송 중…",
         "terminalRequired": "터미널에서 이 OMP 질문에 대답하세요.",
-        "openTerminal": "터미널에서 응답"
+        "openTerminal": "터미널에서 응답",
+        "recommended": "추천",
+        "stepAnswered": "{{value0}}, 답변함",
+        "stepOf": "{{value0}}/{{value1}}",
+        "answered": "답변함",
+        "title": "질문",
+        "previous": "이전 질문",
+        "nextQuestion": "다음 질문",
+        "back": "뒤로",
+        "skipAndSubmit": "건너뛰고 제출",
+        "stepLabel": "{{value0}}, {{value1}}/{{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",
@@ -20166,7 +20176,6 @@
         "showFullMessage": "전체 메시지 보기",
         "showLess": "접기",
         "withdrawnHold": "전송 전에 중지됨",
-        "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
         "paused": "일시 중지됨",
         "resume": "재개",
         "fromSender": "보낸 사람:",
@@ -20186,7 +20195,11 @@
         "moveChanged": "이동하기 전에 대기열이 변경되었습니다. 메시지를 다시 드래그해 보세요.",
         "reorderHint": "드래그하거나 위쪽 및 아래쪽 화살표 키를 사용하여 순서를 변경하세요.",
         "reorderMessage": "메시지 순서 변경",
-        "imageCount": "이미지 {{count}}개"
+        "imageCount": "이미지 {{count}}개",
+        "couldNotSend": "보내지 못함",
+        "retry": "다시 시도",
+        "showLessRows": "간단히 보기",
+        "moreRows": "+{{value0}}개 더"
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
@@ -20456,6 +20469,9 @@
       },
       "splitRight": "오른쪽으로 분할",
       "splitDown": "아래로 분할",
+      "dock": {
+        "label": "메시지 상자와 프롬프트"
+      },
       "automationSaved": {
         "openFullPage": "페이지 열기"
       },
@@ -21630,7 +21646,8 @@
         "safariFullDiskAccess": "macOS에서 Safari 쿠키에 대한 접근을 거부했습니다. 시스템 설정 → 개인 정보 보호 및 보안 → 전체 디스크 접근 권한에서 Orca에 전체 디스크 접근 권한을 부여하세요.",
         "connectionEnded": "가져오는 동안 이 서버와의 연결이 끊어졌습니다. 다시 연결한 후 재시도하세요.",
         "serverRepaired": "가져오는 동안 이 서버가 다시 페어링되었습니다. 다시 시도하세요.",
-        "macFullDiskAccess": "macOS가 {{browser}} 쿠키 접근을 거부했습니다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근에서 Orca에 접근을 허용한 후 Orca를 다시 시작하세요."
+        "macFullDiskAccess": "macOS가 {{browser}} 쿠키 접근을 거부했습니다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근에서 Orca에 접근을 허용한 후 Orca를 다시 시작하세요.",
+        "sshHostDisconnected": "이 페이지는 더 이상 SSH 호스트를 통해 연결되어 있지 않습니다. 다시 연결한 후 다시 시도하세요."
       },
       "notice": {
         "importedMore_one": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
@@ -21638,6 +21655,13 @@
         "imported_one": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
         "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
+      },
+      "sshPage": {
+        "label": "이 기기의 브라우저",
+        "destination": "{{host}}용 브라우저로 가져옵니다.",
+        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
+        "stored": "{{host}}용 브라우저에 저장했습니다.",
+        "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       }
     },
     "passwords": {

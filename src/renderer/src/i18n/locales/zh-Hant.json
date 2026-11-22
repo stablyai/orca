@@ -473,12 +473,20 @@
         "safariFullDiskAccess": "macOS 拒絕存取 Safari 的 Cookie。請在「系統設定」→「隱私權與安全性」→「完全磁碟存取權限」中授予 Orca 完全磁碟存取權限。",
         "connectionEnded": "匯入期間與此伺服器的連線已中斷。請重新連線後再試一次。",
         "serverRepaired": "此伺服器已在匯入期間重新配對。請再試一次。",
-        "macFullDiskAccess": "macOS 拒絕存取 {{browser}} Cookie。請在「系統設定」→「隱私權與安全性」→「完整磁碟存取權限」中授予 Orca 權限，然後重新啟動 Orca。"
+        "macFullDiskAccess": "macOS 拒絕存取 {{browser}} Cookie。請在「系統設定」→「隱私權與安全性」→「完整磁碟存取權限」中授予 Orca 權限，然後重新啟動 Orca。",
+        "sshHostDisconnected": "此頁面已不再透過其 SSH 主機連線。請重新連線後再試一次。"
       },
       "notice": {
         "importedMore_other": "已為 {{domains}} 及其他 {{more}} 個網域匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
+      },
+      "sshPage": {
+        "label": "此裝置上的瀏覽器",
+        "destination": "匯入到 {{host}} 的瀏覽器。",
+        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
+        "stored": "已儲存到 {{host}} 的瀏覽器。",
+        "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
       }
     },
     "passwords": {
@@ -19536,7 +19544,17 @@
         "skip": "跳過",
         "sending": "正在傳送…",
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
-        "openTerminal": "在終端機中回答"
+        "openTerminal": "在終端機中回答",
+        "recommended": "推薦",
+        "stepAnswered": "{{value0}}，已回答",
+        "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
+        "answered": "已回答",
+        "title": "問題",
+        "previous": "上一個問題",
+        "nextQuestion": "下一個問題",
+        "back": "返回",
+        "skipAndSubmit": "略過並提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",
@@ -19680,7 +19698,6 @@
         "listLabel": "排隊的訊息",
         "alreadySent": "此訊息已傳送。",
         "withdrawnHold": "在傳送前已停止",
-        "pausedSendFailed": "無法傳送。點按傳送以重試。",
         "paused": "已暫停",
         "resume": "繼續",
         "fromSender": "來自",
@@ -19696,7 +19713,11 @@
         "imageCount_one": "{{count}} 張圖片",
         "imageCount_other": "{{count}} 張圖片",
         "queued": "已排隊",
-        "clearAll": "全部清除"
+        "clearAll": "全部清除",
+        "couldNotSend": "無法傳送",
+        "retry": "重試",
+        "showLessRows": "收合",
+        "moreRows": "還有 {{value0}} 則"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19931,6 +19952,9 @@
       },
       "splitRight": "向右分割",
       "splitDown": "向下分割",
+      "dock": {
+        "label": "訊息框和提示"
+      },
       "automationSaved": {
         "openFullPage": "開啟頁面"
       },

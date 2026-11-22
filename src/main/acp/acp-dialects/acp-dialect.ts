@@ -60,6 +60,8 @@ export type AcpSubagentUpdate = {
   /** Spawning provider turn. */
   turn?: string
   result?: string
+  /** Why a failed subagent failed. */
+  error?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
   /** The provider started this subagent again; reopens it after an ending. */
@@ -78,6 +80,8 @@ export type AcpChildSessionReport = {
   state?: NativeChatSubagentState
   /** The child began an execution. */
   started?: true
+  /** Why a failed child failed. */
+  error?: string
   update?: SessionNotification
 }
 

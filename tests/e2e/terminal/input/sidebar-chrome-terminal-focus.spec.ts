@@ -104,3 +104,55 @@ test('keyboard activation of the Agents tab still focuses its search', async ({ 
   await orcaPage.keyboard.press('Enter')
   await expect(orcaPage.getByRole('textbox', { name: 'Search sessions' })).toBeFocused()
 })
+
+test('toggling the left sidebar with the mouse keeps terminal input', async ({ orcaPage }) => {
+  const { tabId } = await focusActiveTerminal(orcaPage)
+  const toggle = orcaPage.getByRole('button', { name: 'Toggle sidebar', exact: true })
+  await toggle.click()
+  await expect(terminalHelper(orcaPage, tabId)).toBeFocused()
+  await toggle.click()
+  await expect(terminalHelper(orcaPage, tabId)).toBeFocused()
+
+  await orcaPage.keyboard.type('left-sidebar-toggle')
+  await expectTerminalAccessibilityText(orcaPage, tabId, 'left-sidebar-toggle')
+})
+
+for (const position of ['top', 'side'] as const) {
+  test(`toggling the right sidebar with the mouse keeps terminal input with the ${position} activity bar`, async ({
+    orcaPage
+  }) => {
+    await orcaPage.evaluate((position) => {
+      const state = window.__store!.getState()
+      state.setActivityBarPosition(position)
+      state.setRightSidebarTab('explorer')
+      state.setRightSidebarOpen(false)
+    }, position)
+    const { tabId } = await focusActiveTerminal(orcaPage)
+    // The titlebar opens it and the sidebar header closes it; only one is rendered at a time.
+    const toggle = orcaPage.getByRole('button', { name: 'Toggle right sidebar', exact: true })
+    await toggle.click()
+    await expect(orcaPage.getByRole('textbox', { name: 'Find files' })).toBeVisible()
+    await expect(terminalHelper(orcaPage, tabId)).toBeFocused()
+    await toggle.click()
+    await expect(orcaPage.getByRole('textbox', { name: 'Find files' })).toHaveCount(0)
+    await expect(terminalHelper(orcaPage, tabId)).toBeFocused()
+
+    const marker = `right-sidebar-toggle-${position}`
+    await orcaPage.keyboard.type(marker)
+    await expectTerminalAccessibilityText(orcaPage, tabId, marker)
+  })
+}
+
+test('collapsing the left sidebar mid-rename still saves the name', async ({ orcaPage }) => {
+  const sidebar = orcaPage.locator('#workspace-list-region')
+  await sidebar.getByText('e2e-secondary', { exact: true }).first().dblclick()
+  const input = orcaPage.getByRole('textbox', { name: 'Rename workspace' })
+  await expect(input).toBeFocused()
+  await input.fill('renamed-before-collapse')
+
+  const toggle = orcaPage.getByRole('button', { name: 'Toggle sidebar', exact: true })
+  await toggle.click()
+  await expect(input).toHaveCount(0)
+  await toggle.click()
+  await expect(sidebar.getByText('renamed-before-collapse', { exact: true })).toBeVisible()
+})

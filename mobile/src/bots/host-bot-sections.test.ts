@@ -70,7 +70,6 @@ function listing(overrides: Partial<Extract<HostBotListing, { kind: 'listed' }>>
     view: DEFAULT_BOT_SIDEBAR_VIEW,
     workspaceLineage: { 'worktree:wt-flaky': workerLink },
     worktreeLineage: {},
-    avatarUris: new Map(),
     ...overrides
   }
 }

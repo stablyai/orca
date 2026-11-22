@@ -16,10 +16,18 @@ import {
 // ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons with a build from build-serialize-addon-at-ref.mjs.
 // SERIALIZE_TRANSCRIPT_DIR adds local captures (<name>.txt + .meta.json); SERIALIZE_TRANSCRIPT_SEEDS defaults to 2.
 
-const FIXTURE_DIRS = [
-  join(__dirname, '../../../runtime/__fixtures__'),
-  join(__dirname, '../../__fixtures__/pty-transcripts')
+const RUNTIME_FIXTURES = join(__dirname, '../../../runtime/__fixtures__')
+const DAEMON_FIXTURES = join(__dirname, '../../__fixtures__/pty-transcripts')
+const RUNTIME_REGRESSIONS = [
+  'codex-fullscreen-multiline-early-input.txt',
+  'dsb-6-9-0-folder.txt',
+  'freebuff-lifecycle.txt',
+  'hermes-tui-ready.txt',
+  'opencode-2-0-21-timed-narrow-pane.txt',
+  'pi-1-6-composer-draft-wrapped.txt',
+  'pwsh-7-6-psreadline-history-prediction-conpty.txt'
 ]
+const DAEMON_REGRESSIONS = ['opencode-run.txt', 'vim.txt']
 const EXTRA_DIR = process.env.SERIALIZE_TRANSCRIPT_DIR
 const OLD_ADDON_PATH = process.env.ORCA_OLD_SERIALIZE_ADDON
 const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
@@ -121,21 +129,22 @@ type Transcript = { name: string; data: string; cols: number; rows: number }
 type Schedule = 'none' | 'shrink' | 'shrink-grow' | 'jitter'
 const SCHEDULES: readonly Schedule[] = ['none', 'shrink', 'shrink-grow', 'jitter']
 
-function readTranscripts(dir: string): Transcript[] {
-  return readdirSync(dir)
-    .filter((file) => file.endsWith('.txt'))
-    .map((file) => {
-      const metaPath = join(dir, file.replace(/\.txt$/, '.meta.json'))
-      const meta: { cols?: number; rows?: number } = existsSync(metaPath)
-        ? JSON.parse(readFileSync(metaPath, 'utf8'))
-        : {}
-      return {
-        name: basename(file, '.txt'),
-        data: readFileSync(join(dir, file), 'utf8'),
-        cols: meta.cols ?? 120,
-        rows: meta.rows ?? 40
-      }
-    })
+function readTranscripts(
+  dir: string,
+  files = readdirSync(dir).filter((file) => file.endsWith('.txt'))
+): Transcript[] {
+  return files.map((file) => {
+    const metaPath = join(dir, file.replace(/\.txt$/, '.meta.json'))
+    const meta: { cols?: number; rows?: number } = existsSync(metaPath)
+      ? JSON.parse(readFileSync(metaPath, 'utf8'))
+      : {}
+    return {
+      name: basename(file, '.txt'),
+      data: readFileSync(join(dir, file), 'utf8'),
+      cols: meta.cols ?? 120,
+      rows: meta.rows ?? 40
+    }
+  })
 }
 
 // Preserve surrogate pairs to match decoded PTY chunks.
@@ -195,8 +204,10 @@ function buildReplayCase(
 }
 
 describe('serialize round trip over captured PTY transcripts', () => {
+  // Keep representative screen, resize, Unicode, and ConPTY captures in the unit run.
   const transcripts = [
-    ...FIXTURE_DIRS.flatMap(readTranscripts),
+    ...readTranscripts(RUNTIME_FIXTURES, OLD_ADDON_PATH ? undefined : RUNTIME_REGRESSIONS),
+    ...readTranscripts(DAEMON_FIXTURES, OLD_ADDON_PATH ? undefined : DAEMON_REGRESSIONS),
     ...(EXTRA_DIR ? readTranscripts(EXTRA_DIR) : [])
   ]
   const serializers = OLD_ADDON_PATH
