@@ -2,11 +2,13 @@ import type { RuntimeTerminalWait } from '../../../../../../../../shared/termina
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { agentStartupBlockedMessage } from '../../../../../../terminal/wait/agent-startup-blocked-message'
 import { waitForWorkerAgentReady } from '../../../../../../terminal/wait/launched-agent-composer-readiness'
+import { watchSetupEnd, type SetupEndWatch } from './worker-setup-end-watch'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 import { persistWorkerSetupWaitOutcome, type WorkerSetupStageArgs } from './worker-setup-gate'
 import { continueWorkerStartInBackground } from './awaiting-worker-start-receipt'
 import {
   readinessStillPending,
+  workerPanePtyId,
   type WorkerReadinessWaitArgs
 } from './worker-start-background-readiness'
 import {
@@ -39,11 +41,19 @@ export async function handOverWhenReady(
     fail: (error: unknown, failedStage?: string) => Promise<unknown>
   }
 ): Promise<unknown> {
-  const pending = await awaitPlacedWorkerReadiness(args)
+  const { setupStage } = args
+  const setupEnd = watchLaunchSetupEnd(args)
+  let pending: Awaited<ReturnType<typeof awaitPlacedWorkerReadiness>>
+  try {
+    pending = await awaitPlacedWorkerReadiness(args)
+  } catch (error) {
+    setupEnd?.dispose()
+    throw error
+  }
   if (!pending) {
+    setupEnd?.dispose()
     return args.handOver()
   }
-  const { setupStage } = args
   return continueWorkerStartInBackground({
     ...args.receipt,
     runtime: args.runtime,
@@ -55,6 +65,7 @@ export async function handOverWhenReady(
     effects: setupStage.effects,
     timeoutMs: args.timeoutMs,
     launchedAt: args.launchedAt,
+    setupEnd,
     blockedReason: pending.blockedReason,
     handOver: async (ready) => {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait: ready })
@@ -65,6 +76,22 @@ export async function handOverWhenReady(
       await args.fail(error, failedStage)
     }
   })
+}
+
+/** A launch held behind a wait-for-setup Setup, watched from now so the line its wrapper prints when
+ *  Setup ends is seen however much the agent prints after it. */
+function watchLaunchSetupEnd(args: PlacedWorkerReadiness): SetupEndWatch | null {
+  const { setup, terminalHandle } = args.setupStage
+  if (
+    args.structuredSession ||
+    args.workerChat ||
+    setup.startupPolicy !== 'wait-for-setup' ||
+    setup.state !== 'running'
+  ) {
+    return null
+  }
+  const ptyId = workerPanePtyId(args.runtime, terminalHandle, args.readiness)
+  return ptyId ? watchSetupEnd(args.runtime, ptyId) : null
 }
 
 /** Waits, within the caller's budget, for the placed worker to take its brief. Null: it can now. Else
