@@ -22,11 +22,19 @@ import type {
 } from './agent-session-journal-types'
 import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
+const ImageRef = z.object({
+  type: z.literal('image-ref'),
+  path: z.string().optional(),
+  url: z.string().optional(),
+  alt: z.string().optional()
+})
+
 const ToolMetadata = {
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
   exitCode: z.number().int().optional(),
   durationMs: z.number().nonnegative().optional(),
-  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
+  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional(),
+  outputImages: z.array(ImageRef).optional()
 }
 
 /** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
@@ -57,12 +65,7 @@ const Block = openDiscriminatedUnion(
       output: z.string(),
       isError: z.boolean().optional()
     }),
-    z.object({
-      type: z.literal('image-ref'),
-      path: z.string().optional(),
-      url: z.string().optional(),
-      alt: z.string().optional()
-    }),
+    ImageRef,
     z.object({
       type: z.literal('subagent-group'),
       groupId: z.string(),

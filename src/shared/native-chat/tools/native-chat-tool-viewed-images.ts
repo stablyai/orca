@@ -27,21 +27,46 @@ function imageReadPath(call: NativeChatToolCallBlock): string | null {
   return path !== null && isRuntimePathAbsolute(path) && isRasterImagePath(path) ? path : null
 }
 
-/** Image files a run's tools read; their results hold only the bytes, so each call's path names its image. */
+/** Prefer captured output per call; older reads still preview the image at their absolute path. */
 export function nativeChatToolRunViewedImages(
   blocks: readonly NativeChatBlock[]
 ): NativeChatImageRefBlock[] {
   // Most runs read no images, so they skip pairing.
-  if (!blocks.some((block) => isToolCallBlock(block) && imageReadPath(block) !== null)) {
+  if (
+    !blocks.some(
+      (block) =>
+        isToolCallBlock(block) &&
+        ((block.outputImages?.length ?? 0) > 0 || imageReadPath(block) !== null)
+    )
+  ) {
     return NO_IMAGES
   }
   const paths = new Set<string>()
+  const images: NativeChatImageRefBlock[] = []
   for (const { call, result } of pairToolBlocks(blocks)) {
-    const path = call ? imageReadPath(call) : null
+    if (!call) {
+      continue
+    }
+    // Publication appends an ellipsis to clipped strings; a data-URI prefix is not an image.
+    const output = call.outputImages?.map((image): NativeChatImageRefBlock =>
+      image.url?.startsWith('data:') && image.url.endsWith('…')
+        ? { type: 'image-ref', alt: image.alt ?? 'Image preview unavailable' }
+        : image
+    )
+    if (output?.some((image) => image.url || image.path)) {
+      images.push(...output)
+      continue
+    }
+    const path = imageReadPath(call)
     // Only a read that finished without error showed the agent its image.
-    if (call && path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
-      paths.add(path)
+    if (path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
+      if (!paths.has(path)) {
+        paths.add(path)
+        images.push({ type: 'image-ref', path })
+      }
+    } else if (output?.length) {
+      images.push(...output)
     }
   }
-  return Array.from(paths, (path) => ({ type: 'image-ref', path }))
+  return images
 }

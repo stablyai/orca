@@ -1,4 +1,5 @@
 import { formatNativeChatDuration } from '../transcript/turns/native-chat-turn-status'
+import type { NativeChatImageRefBlock } from '../native-chat-types'
 
 export type NativeChatWebSearchResult = { title: string; url: string }
 
@@ -9,6 +10,8 @@ export type NativeChatToolMetadata = {
   exitCode?: number
   durationMs?: number
   webSearchResults?: NativeChatWebSearchResult[]
+  /** Captured tool output; absent or empty keeps the legacy file-path preview. */
+  outputImages?: NativeChatImageRefBlock[]
 }
 
 export function toolExecutionMetadata(item: Record<string, unknown>): NativeChatToolMetadata {

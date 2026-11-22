@@ -16,6 +16,7 @@ import { replacementPatch } from '../../native-chat/agent-session-timeline/provi
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import { acpToolOutputImages } from './acp-tool-image-timeline'
 
 const rawStreamsSchema = z.object({ stdout: z.string().optional(), stderr: z.string().optional() })
 const rawExitCodeSchema = z.looseObject({ exitCode: z.number().int().safe() })
@@ -165,6 +166,7 @@ export class AcpToolTimeline {
         : this.owners.isLive(turn)
     const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     const previous = this.tools.get(update.toolCallId)
+    const outputImages = acpToolOutputImages(update) ?? previous?.body.outputImages
     const held = this.whole.get(update.toolCallId)
     const input = update.rawInput === undefined ? held?.input : update.rawInput
     const suppliedOutput = outputText(update)
@@ -202,6 +204,7 @@ export class AcpToolTimeline {
               : boundToolInput(input, JOURNAL_RUNNING_PREVIEW_LIMITS)
             : input,
       state,
+      ...(outputImages === undefined ? {} : { outputImages }),
       ...(exitCode === undefined ? {} : { exitCode }),
       ...(output === undefined
         ? previous?.body.output
@@ -252,7 +255,10 @@ export class AcpToolTimeline {
           },
           join
         })
-      } else if (content.type === 'terminal' || content.content.type !== 'text') {
+      } else if (
+        content.type === 'terminal' ||
+        (content.content.type !== 'text' && content.content.type !== 'image')
+      ) {
         events.push({
           type: 'provider.frame',
           frameKind: `tool-content:${content.type}`,
