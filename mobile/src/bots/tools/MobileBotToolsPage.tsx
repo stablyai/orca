@@ -55,7 +55,7 @@ export function MobileBotToolsRow(props: {
   const t = useMobileTranslation()
   const { client } = props
   const botId = props.bot.id
-  const [tools, setTools] = useState<PhoneBotTools | null>(null)
+  const [tools, setTools] = useState<PhoneBotTools | 'failed' | null>(null)
   useEffect(() => {
     if (!client) {
       return
@@ -69,7 +69,11 @@ export function MobileBotToolsRow(props: {
           setTools({ own: read.own ?? [], inherited: read.inherited ?? [] })
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (live) {
+          setTools('failed')
+        }
+      })
     return () => {
       live = false
     }
@@ -77,7 +81,11 @@ export function MobileBotToolsRow(props: {
   return (
     <DrillRow
       label={t('bots.tools.title', 'Tools')}
-      value={toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? ''}
+      value={
+        tools === 'failed'
+          ? t('bots.settings.readFailed', 'Couldn’t load')
+          : (toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? '')
+      }
       detail
       disabled={!props.online}
       onPress={props.onOpen}
