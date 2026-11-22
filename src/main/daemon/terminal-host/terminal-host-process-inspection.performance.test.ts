@@ -165,7 +165,7 @@ it('keeps a resting agent from per-pid reads alone, and captures once it exits',
 })
 
 it('confirms N resting agents polled together with one native read', async () => {
-  async function steadyRoundNativeReads(panes: number): Promise<number> {
+  async function steadyRoundNativeReads(panes: number): Promise<string[]> {
     const fleet = Array.from({ length: panes }, (_, i) => agentPane(i))
     native.addon = agentAddon(() => fleet.map((pane) => pane.agent))
     tables.strict.mockReset().mockImplementation(async () => ({
@@ -181,9 +181,10 @@ it('confirms N resting agents polled together with one native read', async () =>
     const results = await pollRound(sessions, 1)
     expect(results.every((result) => result.foregroundProcess === 'claude')).toBe(true)
     expect(tables.strict.mock.calls.length + tables.cheap.mock.calls.length).toBe(0)
-    return native.reads.length
+    return native.reads.map((query) => (query.pids ? `${query.pids.length} pids` : 'whole table'))
   }
-  expect(await steadyRoundNativeReads(10)).toBe(1)
-  expect(await steadyRoundNativeReads(100)).toBe(1)
-  expect(await steadyRoundNativeReads(1_000)).toBe(1)
+  expect(await steadyRoundNativeReads(10)).toEqual(['10 pids'])
+  expect(await steadyRoundNativeReads(100)).toEqual(['100 pids'])
+  // Past 256 named pids one kinfo-only table read is cheaper, by design; still one read per round, not one per pane.
+  expect(await steadyRoundNativeReads(1_000)).toEqual(['whole table'])
 })
