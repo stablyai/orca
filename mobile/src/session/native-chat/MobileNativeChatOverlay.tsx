@@ -30,6 +30,7 @@ import { useMobileNativeChatMarkdownLinks } from './links/use-mobile-native-chat
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileNativeChatAgentNotice } from './status/mobile-native-chat-agent-presence-copy'
 
 type Props = {
   controller: MobileNativeChatController
@@ -120,6 +121,7 @@ function MobileNativeChatOverlayContent({
 }: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
+  const agentNotice = useMobileNativeChatAgentNotice(controller, activeSessionTabId, sessionId)
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
@@ -373,6 +375,7 @@ function MobileNativeChatOverlayContent({
                       onMicPressOut={onMicPressOut}
                       inputLockReason={inputLockReason}
                       hostOutage={hostOutage}
+                      agentNotice={agentNotice}
                       sendErrorMessage={
                         continueFailed
                           ? t(

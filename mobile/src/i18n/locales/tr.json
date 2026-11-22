@@ -739,6 +739,11 @@
         "failed": "Başarısız: {{count}}"
       },
       "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} artık bu terminalde çalışmıyor. Kabuğa bir şey yazılmaması için gönderme duraklatıldı.",
+      "restartedNewSession": "{{agent}} yeni bir oturumda yeniden başladı. Önceki mesajlar bağlamının parçası değil.",
+      "runningAgain": "{{agent}} yeniden çalışıyor."
     }
   },
   "common": {

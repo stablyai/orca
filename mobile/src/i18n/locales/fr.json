@@ -776,6 +776,11 @@
         "needsAuth_many": "{{count}} connexions requises"
       },
       "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} ne s'exécute plus dans ce terminal. L'envoi est en pause pour que rien ne soit tapé dans le shell.",
+      "restartedNewSession": "{{agent}} a redémarré dans une nouvelle session. Les messages précédents ne font pas partie de son contexte.",
+      "runningAgain": "{{agent}} s'exécute à nouveau."
     }
   },
   "common": {

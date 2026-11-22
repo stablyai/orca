@@ -198,7 +198,7 @@ export function useMobileNativeChatOfflineQueue(args: {
     ready,
     lockReason,
     composerLock: {
-      disabled: lockReason === 'waiting',
+      disabled: lockReason === 'waiting' || lockReason === 'agent-exited',
       offline: lockReason === 'disconnected'
     },
     send: queueSend,

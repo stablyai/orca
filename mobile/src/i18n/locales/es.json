@@ -776,6 +776,11 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} ya no se está ejecutando en este terminal. El envío está en pausa para que no se escriba nada en la shell.",
+      "restartedNewSession": "{{agent}} se reinició en una sesión nueva. Los mensajes anteriores no forman parte de su contexto.",
+      "runningAgain": "{{agent}} se está ejecutando de nuevo."
     }
   },
   "common": {

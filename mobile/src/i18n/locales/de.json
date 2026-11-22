@@ -739,6 +739,11 @@
         "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} läuft in diesem Terminal nicht mehr. Senden ist pausiert, damit nichts in die Shell getippt wird.",
+      "restartedNewSession": "{{agent}} wurde in einer neuen Sitzung neu gestartet. Frühere Nachrichten gehören nicht zu ihrem Kontext.",
+      "runningAgain": "{{agent}} läuft wieder."
     }
   },
   "common": {

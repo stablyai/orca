@@ -795,6 +795,11 @@
         "needsAuth_many": "{{count}} precisam de login"
       },
       "pasteHint": "Quando o navegador chegar a uma página que não carrega, copie o endereço e cole aqui."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} não está mais em execução neste terminal. O envio está pausado para que nada seja digitado no shell.",
+      "restartedNewSession": "{{agent}} reiniciou em uma nova sessão. As mensagens anteriores não fazem parte do contexto dela.",
+      "runningAgain": "{{agent}} está em execução novamente."
     }
   },
   "common": {

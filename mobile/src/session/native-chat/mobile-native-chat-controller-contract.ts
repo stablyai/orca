@@ -39,6 +39,7 @@ import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-v
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
 import type { MobileNativeChatUsageLimit } from './status/use-mobile-native-chat-usage-limit'
+import type { MobileNativeChatAgentPresence } from './status/use-mobile-native-chat-agent-presence'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -142,4 +143,6 @@ export type MobileNativeChatController = {
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
   /** Rows whose failure no later successful turn resolved. */
   nativeChatUnresolvedFailureRows: ReadonlySet<string>
+  /** Whether a terminal chat's agent still runs in its pane; absent where nothing reads it. */
+  nativeChatAgentPresence?: MobileNativeChatAgentPresence
 }

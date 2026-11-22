@@ -22625,6 +22625,14 @@
       },
       "dock": {
         "label": "Message box and prompts"
+      },
+      "agentPresence": {
+        "exited": "{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.",
+        "exitedWithCode": "{{agent}} exited (exit {{code}}). Sending is paused so nothing is typed into the shell.",
+        "stoppedBySignal": "{{agent}} was stopped by {{signal}} (exit {{code}}). Sending is paused so nothing is typed into the shell.",
+        "killed": "{{agent}} was killed (exit {{code}}, often out of memory). Sending is paused so nothing is typed into the shell.",
+        "restartedNewSession": "{{agent}} restarted in a new session. Earlier messages are not part of its context.",
+        "runningAgain": "{{agent}} is running again."
       }
     },
     "tab": {

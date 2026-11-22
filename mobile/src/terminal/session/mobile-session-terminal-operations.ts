@@ -1,6 +1,7 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import {
+  terminalAgentRunningSchema,
   terminalComposerDraftSchema,
   terminalSendAcceptedSchema
 } from '../host-operations/terminal-reply-schema'
@@ -14,6 +15,17 @@ export const nativeChatTerminalDraftRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-composer-draft', terminalComposerDraftSchema)
+  })
+)
+
+// The host's own answer to whether an agent, not a bare shell, runs in a chat's terminal.
+export const nativeChatTerminalAgentRunningRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.native-chat-agent-running',
+    method: 'terminal.agentStatus',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-agent-running', terminalAgentRunningSchema)
   })
 )
 

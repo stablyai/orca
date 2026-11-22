@@ -4127,6 +4127,11 @@
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
+    },
+    "agentPresence": {
+      "exited": "{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.",
+      "restartedNewSession": "{{agent}} restarted in a new session. Earlier messages are not part of its context.",
+      "runningAgain": "{{agent}} is running again."
     }
   },
   "sourceControl": {

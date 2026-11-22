@@ -137,6 +137,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       executionHostId: session.executionHostId
     })
   }
+  // The 133;D code of the command that handed the foreground back; only the next publish carries it.
+  let finishedExitCode: number | null = null
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
@@ -150,7 +152,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         : window.api.pty.confirmForegroundProcess(id),
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
-    publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
+    publish: (entry) => {
+      const exitCode = entry.shellForeground ? finishedExitCode : null
+      finishedExitCode = null
+      useAppStore
+        .getState()
+        .setPaneForegroundAgent(
+          session.cacheKey,
+          exitCode === null ? entry : { ...entry, exitCode }
+        )
+    },
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
     // Why lazy: the completion coordinator is installed after this tracker.
     onAgentProcessRead: (process) =>
@@ -179,6 +190,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   })
   // Bytes and main facts share command-finished policy to preserve drop/interrupt semantics across authority modes.
   session.handleCommandFinished = (bestEffortExitCode: number | null): void => {
+    finishedExitCode = bestEffortExitCode
     session.clearCommandInferredPaneAgentAfterPtySideEffects()
     session.visibleForegroundSamplePending = false
     const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()

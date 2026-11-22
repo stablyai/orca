@@ -786,6 +786,11 @@
     },
     "messageTime": {
       "yesterday": "昨天 {{time}}"
+    },
+    "agentPresence": {
+      "exited": "{{agent}} 已不在此终端中运行。已暂停发送，以免内容被输入到 Shell 中。",
+      "restartedNewSession": "{{agent}} 已在新会话中重新启动。之前的消息不在其上下文中。",
+      "runningAgain": "{{agent}} 已重新运行。"
     }
   },
   "common": {

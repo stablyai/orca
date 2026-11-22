@@ -35,3 +35,8 @@ export const terminalAutoRestoreFitSchema = z.looseObject({ ms: z.number().nulla
 export const terminalBufferClearedSchema = z
   .looseObject({ clear: z.looseObject({ cleared: z.boolean() }) })
   .transform((reply) => reply.clear.cleared)
+
+// Only an exact boolean answers; a malformed reply leaves the chat's last verdict standing.
+export const terminalAgentRunningSchema = z
+  .looseObject({ agentStatus: z.looseObject({ isRunningAgent: z.boolean() }) })
+  .transform((reply) => reply.agentStatus.isRunningAgent)
