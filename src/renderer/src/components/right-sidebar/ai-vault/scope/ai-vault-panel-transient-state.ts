@@ -37,8 +37,11 @@ function setCollapsedGroupKeys(
       next.add(key)
     }
   }
+  if (!collapsed) {
+    return next
+  }
   // Why: a listing longer than the cap must still fold whole.
-  const limit = collapsed ? Math.max(MAX_COLLAPSED_GROUPS, keys.length) : MAX_COLLAPSED_GROUPS
+  const limit = Math.max(MAX_COLLAPSED_GROUPS, keys.length)
   for (const oldest of next) {
     if (next.size <= limit) {
       break

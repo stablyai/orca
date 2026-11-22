@@ -11,6 +11,12 @@ const projectGroups: AiVaultSessionListGroup[] = [
   { key: 'project:docs', label: 'docs', sessions: [] }
 ]
 
+const manyGroups: AiVaultSessionListGroup[] = Array.from({ length: 600 }, (_, index) => ({
+  key: `folder:${index}`,
+  label: `folder ${index}`,
+  sessions: []
+}))
+
 function renderPanel(groups: AiVaultSessionListGroup[]) {
   return renderHook(() => {
     const panel = useAiVaultPanelTransientState(true)
@@ -49,14 +55,18 @@ describe('useAiVaultCollapseAll', () => {
   })
 
   it('collapses every listed group even when they outnumber the remembered-fold cap', () => {
-    const manyGroups = Array.from({ length: 600 }, (_, index) => ({
-      key: `folder:${index}`,
-      label: `folder ${index}`,
-      sessions: []
-    }))
     const { result } = renderPanel(manyGroups)
     act(() => result.current.collapseAll?.toggle())
     expect(result.current.collapseAll?.allCollapsed).toBe(true)
+  })
+
+  it('keeps every other fold when expanding one group after folding more than the cap', () => {
+    const { result } = renderPanel(manyGroups)
+    act(() => result.current.collapseAll?.toggle())
+    act(() => result.current.panel.setGroupsCollapsed(['folder:0'], false))
+    const collapsed = result.current.panel.collapsedGroups
+    expect(collapsed.has('folder:0')).toBe(false)
+    expect(manyGroups.slice(1).filter((group) => !collapsed.has(group.key))).toEqual([])
   })
 
   it('offers no toggle for search results, which have no group headers', () => {
