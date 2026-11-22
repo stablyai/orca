@@ -15,7 +15,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { keepFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
+import {
+  keepFocusPressProps,
+  keepOutsideFocusPressProps
+} from '@/lib/overlay-interaction/focus-keeping-press'
+
+export const RIGHT_SIDEBAR_ATTRIBUTE = 'data-right-sidebar'
+/** Keeps the terminal's focus, but a field inside the sidebar blurs (and saves) before its panel swaps or closes. */
+export const rightSidebarControlPressProps = keepOutsideFocusPressProps((pressed) =>
+  pressed.closest(`[${RIGHT_SIDEBAR_ATTRIBUTE}]`)
+)
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -237,7 +246,7 @@ export function ActivityBarButton({
       )}
       // Enter and Space fire click with detail 0.
       onClick={(event) => onClick(event.detail === 0)}
-      {...keepFocusPressProps}
+      {...rightSidebarControlPressProps}
       data-workspace-board-dismiss=""
       data-activity-plugin-key={item.pluginKey}
       aria-label={activityItemAriaLabel(item, effectiveStatus, t)}

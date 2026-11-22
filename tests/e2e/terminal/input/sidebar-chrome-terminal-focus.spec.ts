@@ -142,3 +142,17 @@ for (const position of ['top', 'side'] as const) {
     await expectTerminalAccessibilityText(orcaPage, tabId, marker)
   })
 }
+
+test('collapsing the left sidebar mid-rename still saves the name', async ({ orcaPage }) => {
+  const sidebar = orcaPage.locator('#workspace-list-region')
+  await sidebar.getByText('e2e-secondary', { exact: true }).first().dblclick()
+  const input = orcaPage.getByRole('textbox', { name: 'Rename workspace' })
+  await expect(input).toBeFocused()
+  await input.fill('renamed-before-collapse')
+
+  const toggle = orcaPage.getByRole('button', { name: 'Toggle sidebar', exact: true })
+  await toggle.click()
+  await expect(input).toHaveCount(0)
+  await toggle.click()
+  await expect(sidebar.getByText('renamed-before-collapse', { exact: true })).toBeVisible()
+})

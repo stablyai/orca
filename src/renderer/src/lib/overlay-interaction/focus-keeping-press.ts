@@ -9,6 +9,21 @@ export const keepFocusPressProps = {
   onMouseDown: (event: MouseEvent) => event.preventDefault()
 }
 
+/**
+ * keepFocusPressProps for a control that closes or swaps `region`: focus inside it moves to the
+ * control as before, so a field there blurs and saves instead of unmounting with unsaved input.
+ */
+export function keepOutsideFocusPressProps(region: (pressed: HTMLElement) => Element | null) {
+  return {
+    [KEEPS_FOCUS_ATTRIBUTE]: '',
+    onMouseDown: (event: MouseEvent<HTMLElement>) => {
+      if (!region(event.currentTarget)?.contains(document.activeElement)) {
+        event.preventDefault()
+      }
+    }
+  }
+}
+
 export function isFocusKeepingPress(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(`[${KEEPS_FOCUS_ATTRIBUTE}]`) !== null
 }
