@@ -48,6 +48,7 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
     },
     {
       supportsGoogleCookieClear: () => provider?.supportsGoogleCookieClear?.() === true,
+      identity: () => provider?.identity?.() ?? null,
       headless: true,
       clientHostingWithoutEngine: true,
       isAvailable: engineAvailable

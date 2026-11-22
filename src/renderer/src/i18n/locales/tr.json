@@ -24058,7 +24058,19 @@
       "noChatAgents": "Bu bilgisayarda kullanılabilir sohbet ajanı yok.",
       "pictureColor": "Arka plan rengi",
       "pictureColorCustom": "Özel renk",
-      "useChatDefaults": "Sohbet varsayılanlarını kullan"
+      "useChatDefaults": "Sohbet varsayılanlarını kullan",
+      "name": "Ad",
+      "validation": {
+        "addName": "Bir ad ekleyin",
+        "botsUnavailable": "Botlar kullanılamıyor",
+        "computerOffline": "Çevrimdışı",
+        "findingAgents": "Ajanlar aranıyor…",
+        "identityTooLong": "Çok uzun",
+        "noAgents": "Ajan yok",
+        "noAgentsAvailable": "Kullanılabilir ajan yok",
+        "pictureLoading": "Görsel yükleniyor…",
+        "updateOrca": "Orca’yı güncelleyin"
+      }
     },
     "apps": {
       "paste": {
