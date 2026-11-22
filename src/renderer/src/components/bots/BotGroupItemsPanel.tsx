@@ -18,7 +18,7 @@ import {
   sameChats,
   type BotItemFilterScope
 } from './items/BotItemsFilter'
-import { BotGroupItemsAllClear } from './items/BotItemsAllClear'
+import { renderBotGroupItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
 import {
   BotGroupFacePicturesContext,
@@ -262,8 +262,8 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
             }
           />
           <fieldset disabled={merged.offline} className="contents">
-            {allClear ? <BotGroupItemsAllClear members={members} /> : null}
             <BotItemsList
+              allClear={allClear ? renderBotGroupItemsAllClear(members) : null}
               bot={{
                 foldKey: `group:${group.id}`,
                 botOf: merged.botOf,

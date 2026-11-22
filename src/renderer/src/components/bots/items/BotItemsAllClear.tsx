@@ -20,11 +20,7 @@ export function BotItemsAllClear({ picture }: { picture: React.ReactNode }): Rea
   )
 }
 
-export function BotGroupItemsAllClear({
-  members
-}: {
-  members: readonly Bot[]
-}): React.JSX.Element | null {
+export function renderBotGroupItemsAllClear(members: readonly Bot[]): React.JSX.Element | null {
   if (members.every((bot) => bot.paused)) {
     return null
   }

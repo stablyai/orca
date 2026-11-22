@@ -55,7 +55,13 @@ const OPEN = 600
 const ROW_PX = 30
 const PANEL_PX = 400
 
-function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
+function Panel({
+  items,
+  allClear = false
+}: {
+  items: readonly BotItem[]
+  allClear?: boolean
+}): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null)
   const groups = useMemo(() => groupBotItems(items, null, NOW, 'e10'), [items])
   return (
@@ -66,6 +72,7 @@ function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
       style={{ height: PANEL_PX, overflowY: 'auto' }}
     >
       <BotItemsList
+        allClear={allClear ? <div role="status" /> : null}
         bot={BOT}
         groups={groups}
         seenEventId="e10"
@@ -151,3 +158,29 @@ it.each([
     expect(rowRenders.at).toEqual(renders)
   }
 )
+
+it('keeps the expanded window aligned as the all-clear appears and disappears', async () => {
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (
+    this: HTMLElement
+  ) {
+    if (this.getAttribute('role') === 'grid') {
+      const top = document.querySelector('[role=status]') ? 120 : 0
+      return new DOMRect(0, top, 320, OPEN * ROW_PX)
+    }
+    return new DOMRect(0, 0, 320, this.dataset.testid === 'scroller' ? PANEL_PX : ROW_PX)
+  })
+  const items = hostAnswer(null)
+  const view = await showWholePlannedGroup(items)
+  const grid = screen.getByRole('grid')
+  const lastRow = () =>
+    Number(
+      Array.from(grid.querySelectorAll('[aria-rowindex]')).at(-1)?.getAttribute('aria-rowindex')
+    )
+  const initialEnd = lastRow()
+
+  await act(async () => view.rerender(<Panel items={items} allClear />))
+  expect(initialEnd - lastRow()).toBe(4)
+
+  await act(async () => view.rerender(<Panel items={items} />))
+  expect(lastRow()).toBe(initialEnd)
+})

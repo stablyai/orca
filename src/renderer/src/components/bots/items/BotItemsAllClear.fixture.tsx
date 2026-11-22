@@ -6,7 +6,11 @@ import { groupBotItems } from '../../../../../shared/bots/bot-item-groups'
 import { botGroupFaces } from '../../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar } from '../BotAvatar'
 import { BotGroupFaces } from '../BotGroupFaces'
-import { ALL_CLEAR_PICTURE, BotGroupItemsAllClear, BotItemsAllClear } from './BotItemsAllClear'
+import {
+  ALL_CLEAR_PICTURE,
+  renderBotGroupItemsAllClear,
+  BotItemsAllClear
+} from './BotItemsAllClear'
 import { BotItemsList } from './BotItemsList'
 
 const now = Date.now()
@@ -67,19 +71,21 @@ function Panel({ bot, group }: { bot: Bot; group?: readonly Bot[] }): React.JSX.
           <div className="truncate text-xs leading-4 text-muted-foreground">Idle</div>
         </div>
       </div>
-      {group ? (
-        <BotGroupItemsAllClear members={group} />
-      ) : (
-        <BotItemsAllClear
-          picture={
-            <BotAvatar
-              bot={bot}
-              className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
-            />
-          }
-        />
-      )}
       <BotItemsList
+        allClear={
+          group ? (
+            renderBotGroupItemsAllClear(group)
+          ) : (
+            <BotItemsAllClear
+              picture={
+                <BotAvatar
+                  bot={bot}
+                  className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
+                />
+              }
+            />
+          )
+        }
         bot={bot}
         groups={groupBotItems(items, null, now, 'e10')}
         seenEventId="e10"

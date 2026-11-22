@@ -123,18 +123,20 @@ export function BotItemsSection({
     groups.working.length === 0
   return (
     <>
-      {allClear ? (
-        <BotItemsAllClear
-          picture={
-            <BotAvatar
-              bot={bot}
-              className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
-            />
-          }
-        />
-      ) : null}
       {/* Mounted in every read state, so an ask keeps its place and focus as items arrive. */}
       <BotItemsList
+        allClear={
+          allClear ? (
+            <BotItemsAllClear
+              picture={
+                <BotAvatar
+                  bot={bot}
+                  className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
+                />
+              }
+            />
+          ) : null
+        }
         bot={bot}
         groups={groups}
         seenEventId={seenEventId ?? ''}
