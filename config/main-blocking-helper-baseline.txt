@@ -622,7 +622,6 @@
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.ts
 1 src/main/ipc/filesystem/watchers/wsl-watcher-spawn.ts
-3 src/main/ipc/hooks/register-worktree-hook-check-handler.ts
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
 1 src/main/ipc/linear/register-handlers.ts
 7 src/main/ipc/notebook.ts
@@ -684,7 +683,7 @@
 1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
-3 src/main/ipc/worktrees.ts
+2 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
@@ -1222,7 +1221,7 @@
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
 1 src/main/runtime/repositories/runtime-project-host-setup-controller.ts
 2 src/main/runtime/repositories/runtime-repository-clone-controller.ts
-6 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
+3 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
 2 src/main/runtime/repositories/runtime-repository-issue-command.ts
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
