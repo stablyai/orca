@@ -23,16 +23,20 @@ import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-
 import { settleRestartCutStart } from '../workers/turn-stops/awaiting-worker-start-report'
 import {
   observeUnconfirmedWorkerStart,
+  observeWithheldRestartContinue,
   type UnconfirmedWorkerStart
 } from '../workers/turn-stops/unconfirmed-worker-start'
+import { readWorkerPresence } from '../db/worker-presence/worker-presence-store'
 import { redactWorkerTerminalView } from './views/worker-terminal-redaction'
 import {
   describeUnconfirmedStartEvidence,
+  describeWithheldContinue,
   SUBMIT_WITHHELD_STAGE,
   WITHHELD_AFTER_RESTART_EVIDENCE,
   type UnconfirmedStartDelivery
 } from '../workers/turn-stops/unconfirmed-start-evidence'
 import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
+import type { RuntimeTerminalPromptSubmitHold } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
@@ -180,15 +184,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       handle && isTerminalHandle(handle) && !isStructuredWorkerHandle(handle)
         ? {
             surface: 'terminal',
-            screen: await this.readTerminal(handle, { screen: true, limit: 15 })
-              .then((view) => {
-                const { tail, draft } = redactWorkerTerminalView(view)
-                // A held paste shows as a bare prompt; the composer's draft says what waits there.
-                return [...tail, ...(draft ? [`Text waiting in its prompt: ${draft}`] : [])].join(
-                  '\n'
-                )
-              })
-              .catch(() => undefined),
+            screen: await this.readUnsubmittedWorkerScreen(handle),
             ...(delivery
               ? {
                   evidence: describeUnconfirmedStartEvidence(
@@ -204,6 +200,42 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
           }
         : { surface: 'chat' }
     observeUnconfirmedWorkerStart(db, dispatchId, start, this.workerTurnStopReportDeps)
+  }
+
+  /** Tells the coordinator once that a resumed worker's continue prompt waits unsent behind a
+   *  dialog or someone's typing, as a start's withheld brief is told. */
+  async reportWithheldRestartContinue(
+    dispatchId: string,
+    handle: string,
+    hold: RuntimeTerminalPromptSubmitHold
+  ): Promise<void> {
+    const db = this.getExistingOrchestrationDb()
+    if (!db) {
+      return
+    }
+    const before = readWorkerPresence(db, dispatchId)
+    const screen = await this.readUnsubmittedWorkerScreen(handle)
+    const after = readWorkerPresence(db, dispatchId)
+    // Submitted and seen to work or rest during the read: the alert would be stale.
+    if (after?.presence !== before?.presence || after?.generation !== before?.generation) {
+      return
+    }
+    observeWithheldRestartContinue(
+      db,
+      dispatchId,
+      { screen, evidence: describeWithheldContinue(hold) },
+      this.workerTurnStopReportDeps
+    )
+  }
+
+  private readUnsubmittedWorkerScreen(handle: string): Promise<string | undefined> {
+    return this.readTerminal(handle, { screen: true, limit: 15 })
+      .then((view) => {
+        const { tail, draft } = redactWorkerTerminalView(view)
+        // A held paste shows as a bare prompt; the composer's draft says what waits there.
+        return [...tail, ...(draft ? [`Text waiting in its prompt: ${draft}`] : [])].join('\n')
+      })
+      .catch(() => undefined)
   }
 
   protected holdLostWorkerForRestartResume(

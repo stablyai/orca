@@ -1196,6 +1196,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} reset available · not in WSL yet",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} resets available · not in WSL yet",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },
@@ -2198,6 +2200,7 @@
         "noCookies": "No cookies found in {{browser}}.",
         "noValidCookies": "No valid cookies found in {{browser}}.",
         "notAuthorized": "Not authorized",
+        "pageChanged": "This page closed or changed profile during the import. Try again.",
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",

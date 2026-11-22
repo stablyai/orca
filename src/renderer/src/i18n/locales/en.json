@@ -557,7 +557,8 @@
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
         "serverRepaired": "This server was re-paired during the import. Try again.",
-        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again.",
+        "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -5782,6 +5783,8 @@
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
             "zcodeUsageMenu": "ZCode Usage",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} reset available · not in WSL yet",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} resets available · not in WSL yet",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
             "signedOutAccounts": "Signed out",
@@ -6018,7 +6021,8 @@
             "updatedAgo": "Updated {{time}}",
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "unsupportedOwner": "Usage unavailable for {{server}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -6036,6 +6040,7 @@
             "gotIt": "Got it"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "WSL usage isn't shown yet",
             "title": "Usage",
             "openDetails": "Open usage details",
             "notSignedIn": "not signed in",
@@ -25174,7 +25179,9 @@
         "title": "Claude usage polling",
         "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",
         "about": "About Claude usage polling"
-      }
+      },
+      "organizationSuffix": "Organization ···{{suffix}}",
+      "personalOrganization": "Personal"
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
