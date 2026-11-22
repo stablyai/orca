@@ -245,11 +245,15 @@ export function useBotGroupItems(
     () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
   )
-  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range.
-  const seenById = useMemo(
-    () => new Map(shownReads.map((read) => [read.bot.id, read.seenEventId])),
-    [shownReads]
-  )
+  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range:
+  // indexed on the first ask of each read, so nothing is built while no list asks (an item open).
+  const seenOf = useMemo(() => {
+    let byId: Map<string, string | null> | null = null
+    return (item: BotItem): string => {
+      byId ??= new Map(shownReads.map((read) => [read.bot.id, read.seenEventId]))
+      return byId.get(item.owner.botId) ?? ''
+    }
+  }, [shownReads])
   const ready =
     shownReads.length === members.filter((bot) => filter.botIds?.includes(bot.id) ?? true).length &&
     shownReads.every((read) => read.list.read !== null && read.seenEventId !== null)
@@ -370,7 +374,7 @@ export function useBotGroupItems(
       const owner = pagedOwners.current.get(uid)
       return botByUid.get(uid) ?? (owner ? (botById.get(owner) ?? null) : null)
     },
-    seenOf: (item) => seenById.get(item.owner.botId) ?? '',
+    seenOf,
     // Only a list of some chats leaves asks out; the whole-bot count minus what it shows.
     outside: botGroupNeedsYouOutside({
       scoped: filter.chatIds !== null,
