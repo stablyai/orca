@@ -4244,7 +4244,7 @@
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "디스크 공간 분석기",
             "ae20d0ffc2": "닫기",
-            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 왼쪽 아래 도구 상자 메뉴에서 Space Analyzer를 선택해 열 수도 있습니다."
+            "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 왼쪽 아래 도구 상자 메뉴에서 디스크 공간 분석기를 선택해 열 수도 있습니다."
           },
           "zcode": {
             "missing": {
@@ -4909,7 +4909,7 @@
             "f4d2651498": "스캔됨",
             "6a5dc3c61a": "리뷰",
             "c361440dc0": "베타",
-            "8ff597593d": "Space",
+            "8ff597593d": "저장 공간",
             "0582df6d2e": "스캔",
             "f5e1a84d79": "새로고침",
             "2af2174d6d": "취소",
@@ -4982,8 +4982,8 @@
             "0990a63160": "아직 스캔된 워크스페이스 크기가 없습니다.",
             "977bdf9a36": "표시할 최상위 항목이 없습니다.",
             "0d1c78d749": "{{value0}} 선택",
-            "removedFromSpace_one": "워크스페이스 {{count}}개를 Space에서 제거했습니다.",
-            "removedFromSpace_other": "워크스페이스 {{count}}개를 Space에서 제거했습니다.",
+            "removedFromSpace_one": "워크스페이스 {{count}}개를 저장 공간에서 제거했습니다.",
+            "removedFromSpace_other": "워크스페이스 {{count}}개를 저장 공간에서 제거했습니다.",
             "topLevelItems_one": "최상위 항목 {{formattedCount}}개",
             "topLevelItems_other": "최상위 항목 {{formattedCount}}개",
             "selectedCount_one": "{{count}}개 선택됨",
@@ -5153,7 +5153,7 @@
                 "copy": {
                   "terminalSessionCount_one": "터미널 세션 {{count}}개",
                   "terminalSessionCount_other": "터미널 세션 {{count}}개",
-                  "spaceScanReady": "Space 스캔 준비됨",
+                  "spaceScanReady": "저장 공간 스캔 준비됨",
                   "sessionsGroupedByWorkspace": "터미널 세션은 워크스페이스별로 그룹화됩니다.",
                   "noTerminalSessions": "아직 터미널 세션이 없습니다.",
                   "ariaLabel": "리소스 관리자, {{sessions}}",
@@ -6987,7 +6987,7 @@
         "delete": {
           "worktree": {
             "flow": {
-              "b81b4e40ca": "Space를 새로고침하고 워크스페이스 목록이 오래된 것처럼 보이면 다시 시도하세요.",
+              "b81b4e40ca": "워크스페이스 목록이 오래된 것 같으면 저장 공간을 새로 고친 뒤 다시 시도하세요.",
               "7243145cd6": "삭제 가능한 워크스페이스가 선택되지 않았습니다.",
               "ae57cbf6e4": "워크스페이스를 삭제하지 못했습니다.",
               "7488ed8711": "보기",
@@ -25435,7 +25435,7 @@
       "conflict": "충돌",
       "staged": "스테이징됨",
       "unavailable": "워크스페이스 소유자는 더 이상 사용할 수 없습니다.",
-      "stale": "이 파일은 더 이상 커밋되지 않은 변경 사항에 포함되지 않습니다. 목록을 업데이트하려면 Space를 새로고침하세요.",
+      "stale": "이 파일은 더 이상 커밋되지 않은 변경 사항에 없습니다. 목록을 업데이트하려면 저장 공간을 새로 고치세요.",
       "description": "커밋되지 않은 파일 · Orca에서 변경 사항을 보려면 파일을 클릭하세요.",
       "unstaged": "스테이징 안 됨",
       "search": "변경된 파일 필터링",
@@ -25467,8 +25467,8 @@
       "linkedWorktrees": "연결된 작업 트리"
     },
     "window": {
-      "errorTitle": "Space에서 오류가 발생했습니다.",
-      "errorDescription": "Space를 닫았다가 다시 열어 다시 시도해 보세요."
+      "errorTitle": "저장 공간에서 오류가 발생했습니다.",
+      "errorDescription": "저장 공간을 닫았다가 다시 열어 다시 시도하세요."
     },
     "delete": {
       "pending": "삭제가 진행 중입니다.",
@@ -25900,7 +25900,7 @@
     },
     "dialog": {
       "importCookies": "쿠키 가져오기",
-      "spaceTitle": "Orca Space 베타",
+      "spaceTitle": "Orca 저장 공간 (베타)",
       "dashboardTitle": "Orca 에이전트 대시보드",
       "cookieFiles": "쿠키 파일",
       "allFiles": "모든 파일",
@@ -27348,7 +27348,7 @@
   },
   "backgroundWorkerPaused": {
     "title": "반복해서 중단된 일부 백그라운드 작업을 일시 중지했습니다",
-    "description": "Claude 채팅 복구는 다시 시도할 때까지 꺼져 있습니다. 복사, 되감기, Space 스캔은 다시 시작하면 재개됩니다.",
+    "description": "Claude 채팅 복구는 다시 시도할 때까지 꺼져 있습니다. 복사, 되감기, 저장 공간 스캔은 다시 시작하면 재개됩니다.",
     "retry": "다시 시도"
   },
   "perfNotices": {
