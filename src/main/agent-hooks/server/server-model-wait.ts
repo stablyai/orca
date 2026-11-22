@@ -122,16 +122,27 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
     // The owner the move takes the pane's state from, as the base resolves it.
     const from = this.resolvePaneKeyAlias(fromPaneKey)
     super.transferPaneAuthority(...args)
+    if (from === toPaneKey || !isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
+      return
+    }
+    if (this.batchingPanes.delete(from)) {
+      this.batchingPanes.add(toPaneKey)
+    }
     const wait = this.modelWaits.get(from)
-    if (!wait || from === toPaneKey || !isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
+    if (!wait) {
       return
     }
     this.modelWaits.delete(from)
     this.modelWaits.set(toPaneKey, wait)
     this.modelWaitTimers.move(from, toPaneKey)
-    if (this.batchingPanes.delete(from)) {
-      this.batchingPanes.add(toPaneKey)
-    }
+    // A wait whose timer already fired (its screen look still running) needs one at its new key.
+    this.modelWaitTimers.deferUnlessPending(
+      toPaneKey,
+      wait.since + TERMINAL_MODEL_WAIT_MS - Date.now(),
+      (key) => {
+        void this.modelWaitElapsed(key)
+      }
+    )
   }
 
   // A pane's row cleared mid-turn (a tmux republish) keeps its wait; its timer drops one at rest.
