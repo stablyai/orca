@@ -26,6 +26,9 @@ async function open(page: Page, fixture: string, caret: number): Promise<void> {
   })
   // Focus without a click: a click's own caret move can come after the caret the test sets.
   await page.locator('.ProseMirror').focus()
+  // ProseMirror writes its selection back to the DOM 20 ms after focus: that undoes a caret move of
+  // the browser before then. A later timer with the same delay runs after it.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 20)))
   await page.evaluate((at) => {
     document.querySelector<EditorElement>('.ProseMirror')!.editor.commands.setTextSelection(at)
   }, caret)
