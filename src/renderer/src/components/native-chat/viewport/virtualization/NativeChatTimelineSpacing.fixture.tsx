@@ -34,7 +34,12 @@ const workerUpdate = (id: string, name: string): NativeChatMessage =>
           relation: 'worker'
         }
       ],
-      orchestration: { message: 'mail-notice', mailbox: 'term_bot', dispatchId: null, messages: [] }
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'term_agent',
+        dispatchId: null,
+        messages: []
+      }
     } satisfies AgentMessageSource
   })
 
@@ -43,7 +48,7 @@ const itemMail: AgentMessageSource = {
   senders: [],
   orchestration: {
     message: 'mail-notice',
-    mailbox: 'term_bot',
+    mailbox: 'term_agent',
     dispatchId: null,
     messages: [{ messageId: 'msg_item_1', runId: 'r', from: 'orca:items' }]
   }
@@ -60,7 +65,7 @@ const note = (id: string, by: 'bot' | 'owner', entries: BotItemNoteEntry[]): Nat
   row(id, 'system', '', { botItemNote: { noteId: id, by, entries } })
 
 const commentBox = item(1, 'Item comment box: @ and / pickers in the composer', 'working')
-const send = item(2, 'send --to bot:<self> without --chat lands in Home', 'working')
+const send = item(2, 'Send without a chat lands in Home', 'working')
 const stop = item(3, 'Workers that stop (quota error or silent exit) never report', 'working')
 
 const messages: NativeChatMessage[] = [
@@ -112,7 +117,7 @@ const context: NativeChatTranscriptRowContext = {
   onRevealDiff: () => {}
 }
 
-/** A bot chat's mix: your message, replies, worker updates, item lines, and your item move with a comment. */
+/** A chat's mix: your message, replies, worker updates, item lines, and your item move with a comment. */
 export const activityMix = defineFixture({
   width: 720,
   render: () => (
