@@ -17,6 +17,7 @@ import {
   clickable,
   fillMaxWidth,
   padding,
+  selectable,
   size,
   verticalScroll
 } from '@expo/ui/jetpack-compose/modifiers'
@@ -146,7 +147,12 @@ function MaterialActionSheet({
                     : {})
                 }}
                 modifiers={[
-                  ...(inactive ? [] : [clickable(() => press(action))]),
+                  // A checkable row is a radio choice, so TalkBack announces which one is current.
+                  ...(inactive
+                    ? []
+                    : action.checked === undefined
+                      ? [clickable(() => press(action))]
+                      : [selectable(action.checked, () => press(action), 'radioButton')]),
                   ...(action.disabled ? [alpha(DISABLED_ALPHA)] : [])
                 ]}
               >

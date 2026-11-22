@@ -7,7 +7,13 @@ export type { MobileSegment, MobileSegmentedControlProps } from './DrawnSegmente
 export function MobileSegmentedControl<Value extends string>(
   props: MobileSegmentedControlProps<Value>
 ) {
+  // The native control speaks each segment's label, so a custom spoken name stays drawn.
   const native =
-    !props.scrollWhenCrowded && props.segments.every((segment) => segment.trailing === undefined)
+    !props.scrollWhenCrowded &&
+    props.segments.every(
+      (segment) =>
+        segment.trailing === undefined &&
+        (segment.accessibilityLabel === undefined || segment.accessibilityLabel === segment.label)
+    )
   return native ? <NativeSegmentedControl {...props} /> : <DrawnSegmentedControl {...props} />
 }

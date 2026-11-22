@@ -16,6 +16,7 @@ export function MobileSlider({
   onValueChange,
   onSlidingComplete,
   accessibilityLabel,
+  accessibilityValueText,
   disabled = false,
   testID
 }: MobileSliderProps) {
@@ -49,7 +50,12 @@ export function MobileSlider({
         }}
         onValueChangeFinished={() => onSlidingComplete?.(latest.current)}
         modifiers={[
-          semantics({ contentDescription: accessibilityLabel }),
+          // This semantics API has no value description, so the spoken value rides on the label.
+          semantics({
+            contentDescription: [accessibilityLabel, accessibilityValueText]
+              .filter(Boolean)
+              .join(', ')
+          }),
           ...(testID ? [testIDModifier(testID)] : [])
         ]}
       />
