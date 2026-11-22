@@ -1,21 +1,11 @@
 ---
 name: orca-cli
-description: >-
-  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
-  comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
-  "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent",
-  "ask/tell/message another agent" (including an agent on a paired Orca server), or
-  "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
-  external web page renders while working in Orca, unless the user or project names another
-  browser tool; plain HTTP or API calls (curl, fetch) do not need it. Prefer it over raw git
-  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
+description: Use when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal", "handoff"/"handover", "give this to another agent", or "Orca browser"; or to open, test, screenshot or check how a local or external page renders in Orca. Not for plain curl/HTTP calls, raw git worktree, ad hoc PTYs, or GUI control (use orca-computer-use).
 ---
 
 # Orca CLI
 
-Use `orca` when Orca's running editor/runtime is the source of truth. Use plain shell tools when Orca state does not matter.
+Use `orca` when Orca's running editor/runtime is the source of truth. Use plain shell tools when Orca state does not matter. Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is involved; use Computer Use only when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
 
 ## Start Here
 

@@ -36,32 +36,32 @@
     {
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
-      "packageDigest": "c5d6b54f0736a56d0b606f5ec45f659f4d22fb8d8e15959679cb979bb2a2a6f6",
+      "packageDigest": "b9edb301b5828ff7ddbb5bf286233d694ebc0d851a829ecec8b5b13a54592622",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3140,
+          "size": 2643,
           "executable": false,
           "classification": "text",
-          "exactSha256": "e1fb109997802515751aeb984ac011733c10432f2e2f4c9a41fc56ee1b06ad1d",
-          "textNormalizedSha256": "e1fb109997802515751aeb984ac011733c10432f2e2f4c9a41fc56ee1b06ad1d",
-          "identitySha256": "e1fb109997802515751aeb984ac011733c10432f2e2f4c9a41fc56ee1b06ad1d"
+          "exactSha256": "843263df39e8b1b34aba65e1dd3dc00eb046cc9eebe4538eab46d98d58b6a38b",
+          "textNormalizedSha256": "843263df39e8b1b34aba65e1dd3dc00eb046cc9eebe4538eab46d98d58b6a38b",
+          "identitySha256": "843263df39e8b1b34aba65e1dd3dc00eb046cc9eebe4538eab46d98d58b6a38b"
         }
       ]
     },
     {
       "name": "orca-computer-use",
       "sourcePath": "skills/orca-computer-use",
-      "packageDigest": "eadaf85ca053edf588758df090f1e88675c23ef36f31d111f1b9f631b0ab484f",
+      "packageDigest": "65beafaf6ca2452dfe492ef50b670d48fea23a5c3382c6e0a58b4c856d9d1383",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2838,
+          "size": 2679,
           "executable": false,
           "classification": "text",
-          "exactSha256": "c204e8fb3fb887772474135e5bed6143c49e0680fdd45f6d2cc2f9f8fd1acc3d",
-          "textNormalizedSha256": "c204e8fb3fb887772474135e5bed6143c49e0680fdd45f6d2cc2f9f8fd1acc3d",
-          "identitySha256": "c204e8fb3fb887772474135e5bed6143c49e0680fdd45f6d2cc2f9f8fd1acc3d"
+          "exactSha256": "9b267c669edc4dd41ef7a9c2a4af665dbd9b593df69e1d28b0924170a6689091",
+          "textNormalizedSha256": "9b267c669edc4dd41ef7a9c2a4af665dbd9b593df69e1d28b0924170a6689091",
+          "identitySha256": "9b267c669edc4dd41ef7a9c2a4af665dbd9b593df69e1d28b0924170a6689091"
         }
       ]
     },

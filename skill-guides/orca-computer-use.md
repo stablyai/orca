@@ -1,18 +1,11 @@
 ---
 name: orca-computer-use
-description: >-
-  Drives the GUI of a local app window in the background through `orca computer`,
-  without bringing it forward or taking the user's keyboard and pointer where the
-  platform allows: accessibility tree, clicks, typing, menus, dialogs, and screenshots
-  in native apps and external browser windows (Chrome, Edge, Safari) or webviews.
-  Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever
-  it can complete the task. Use only when an app window needs GUI control those
-  cannot reach. Do not use for Orca's embedded browser (`orca-cli`).
+description: "Use when a visible app window needs GUI control that a shell, filesystem, git, HTTP call or existing CLI cannot reach, through `orca computer`: accessibility tree, clicks, typing, menus, dialogs and screenshots in native apps and external browser windows (Chrome, Edge, Safari) or webviews. Runs in the background, without taking the user's keyboard or pointer. Not for Orca's embedded browser (`orca-cli`)."
 ---
 
 # Orca Computer Use
 
-Use this skill to drive an app window through `orca computer`, in the background where the platform allows, so the user can keep working. Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task; use this skill only when an app window needs GUI control those cannot reach. Do not use it for Orca's embedded browser (`orca-cli`).
+Use this skill to drive an app window through `orca computer`, in the background where the platform allows, without bringing the window forward or taking the user's keyboard and pointer, so the user can keep working. Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task; use this skill only when an app window needs GUI control those cannot reach. Do not use it for Orca's embedded browser (`orca-cli`).
 
 ## Preconditions
 
