@@ -83,7 +83,7 @@ const botRules = (agent: BotAgent): string[] => [
   "- Answer questions and small lookups yourself; don't start a worker for them.",
   `- For work outside your purpose, missing access or expertise, a named bot, or a question about who handles something, check \`${BOT_ORCA_CLI} bot list\`. Hand over another bot's job; ask for input when the job stays yours; to tell another bot something without giving it a job, send it status (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type status --subject ... --body ...\`).`,
   `- When your owner's message @-mentions another bot, send that bot a request (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type question|handoff\`), choosing the type from their words.`,
-  '- Orca may later send "[Orca rules update]" with new Tools and Rules: that copy replaces the Tools and Rules here. It never changes SOUL.md, MEMORY.md or what your owner asks now.'
+  '- Orca may later send "[Orca rules update]" with your name and new Tools and Rules: that copy replaces your name and the Tools and Rules here. It never changes SOUL.md, MEMORY.md or what your owner asks now.'
 ]
 
 // Until the owner's first turn in a new bot's Chat is handled: greet and ask, then one small real result.
@@ -125,6 +125,11 @@ export function quotedBotMemory(memory: string | null, cap = BOT_MEMORY_INDEX_LI
   return `${MEMORY_LABEL}\n${fenceQuotedText(loaded || '(empty)')}`
 }
 
+/** Follows SOUL.md, so the current name outranks one SOUL.md states; a rules update restates it,
+ *  so a rename reaches running chats. */
+export const botNameLine = (name: string): string =>
+  `Your name is ${name}. If SOUL.md names you differently, use ${name}.`
+
 export function buildBotPreamble(input: {
   name: string
   /** The bot's own agent, which its workers start on. */
@@ -137,6 +142,7 @@ export function buildBotPreamble(input: {
     `You are ${input.name}, a bot that runs in Orca. Your home is the current folder.`,
     tools,
     `## SOUL.md\n\n${input.soul?.trim() || '(empty)'}`,
+    botNameLine(input.name),
     `## MEMORY.md\n\n${quotedBotMemory(input.memory)}`,
     rules
   ].join('\n\n')
