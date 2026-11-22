@@ -55,7 +55,10 @@ const zh = JSON.parse(
 const tZh = (key: string, fallback: string, values: Record<string, unknown> = {}): string => {
   const found = key
     .split('.')
-    .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], zh)
+    .reduce<unknown>(
+      (node, part) => (node && typeof node === 'object' ? Reflect.get(node, part) : undefined),
+      zh
+    )
   const text = typeof found === 'string' ? found : fallback
   return text.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
     name in values ? String(values[name]) : match
