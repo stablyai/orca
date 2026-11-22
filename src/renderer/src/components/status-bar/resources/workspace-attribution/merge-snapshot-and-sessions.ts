@@ -32,6 +32,7 @@ import {
 import {
   buildChatRowGroups,
   chatRowGroupsFor,
+  priorChatRowGroups,
   type ResourceMergeCache,
   type SampleChatRows
 } from './resource-chat-row-groups'
@@ -121,7 +122,12 @@ export function mergeSnapshotAndSessions(
     }
   }
   const localGroups =
-    cached?.groups ?? buildChatRowGroups(chatOnly, (wt) => localSamplePlacement(ctx, wt))
+    cached?.groups ??
+    buildChatRowGroups(
+      chatOnly,
+      (wt) => localSamplePlacement(ctx, wt),
+      priorChatRowGroups(cache, LOCAL_SAMPLE, inputs)
+    )
   if (snapshot) {
     nextSamples.set(
       LOCAL_SAMPLE,

@@ -29,13 +29,64 @@ function sameInputs(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((value, i) => value === b[i])
 }
 
+function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Whether a fresh sample of a workspace renders exactly as its earlier row did. */
+function rendersSame(row: UnifiedWorktreeRow, wt: WorktreeMemory): boolean {
+  const before = row.chats ?? []
+  const after = wt.chats ?? []
+  return (
+    row.cpu === wt.cpu &&
+    row.memory === wt.memory &&
+    before.length === after.length &&
+    before.every((chat, i) => {
+      const next = after[i]
+      return (
+        chat.agentSessionId === next.agentSessionId &&
+        chat.agent === next.agent &&
+        chat.name === next.name &&
+        chat.cpu === next.cpu &&
+        chat.memory === next.memory
+      )
+    }) &&
+    sameNumbers(row.history, wt.history)
+  )
+}
+
+/**
+ * Groups a sample's chat-only rows by project. With the earlier sample's groups (placed by the same
+ * catalog), a row that renders the same keeps its object, and a group of kept rows keeps its own, so
+ * a fresh but unchanged sample redraws nothing.
+ */
 export function buildChatRowGroups(
   chatOnly: readonly WorktreeMemory[],
-  place: (wt: WorktreeMemory) => SamplePlacement | null
+  place: (wt: WorktreeMemory) => SamplePlacement | null,
+  prior?: readonly ChatRowGroup[]
 ): ChatRowGroup[] {
+  const priorRows = new Map<string, UnifiedWorktreeRow>()
+  const priorGroups = new Map<string, ChatRowGroup>()
+  for (const part of prior ?? []) {
+    priorGroups.set(part.group.repoId, part)
+    for (const row of part.group.worktrees) {
+      priorRows.set(row.worktreeId, row)
+    }
+  }
   const byRepo = new Map<
     string,
-    { group: UnifiedProjectGroup; rowIndexById: Map<string, number> }
+    { group: UnifiedProjectGroup; rowIndexById: Map<string, number>; kept: boolean }
   >()
   for (const wt of chatOnly) {
     const placement = place(wt)
@@ -43,16 +94,20 @@ export function buildChatRowGroups(
       continue
     }
     const { readOnly: _readOnly, ...rowPlacement } = placement
-    const row: UnifiedWorktreeRow = {
-      ...rowPlacement,
-      cpu: wt.cpu,
-      memory: wt.memory,
-      history: wt.history,
-      hasLocalSamples: true,
-      sessions: [],
-      chats: wt.chats,
-      browsers: []
-    }
+    const earlier = priorRows.get(rowPlacement.worktreeId)
+    const reused = earlier !== undefined && rendersSame(earlier, wt)
+    const row: UnifiedWorktreeRow = reused
+      ? earlier
+      : {
+          ...rowPlacement,
+          cpu: wt.cpu,
+          memory: wt.memory,
+          history: wt.history,
+          hasLocalSamples: true,
+          sessions: [],
+          chats: wt.chats,
+          browsers: []
+        }
     let entry = byRepo.get(row.repoId)
     if (!entry) {
       entry = {
@@ -64,7 +119,8 @@ export function buildChatRowGroups(
           hasRemoteChildren: false,
           worktrees: []
         },
-        rowIndexById: new Map()
+        rowIndexById: new Map(),
+        kept: true
       }
       byRepo.set(row.repoId, entry)
     }
@@ -72,12 +128,29 @@ export function buildChatRowGroups(
     if (!rowIndexById.has(row.worktreeId)) {
       rowIndexById.set(row.worktreeId, group.worktrees.length)
     }
+    entry.kept &&=
+      reused && priorGroups.get(row.repoId)?.group.worktrees[group.worktrees.length] === row
     group.worktrees.push(row)
     group.hasRemoteChildren ||= row.isRemote
     group.cpu = (group.cpu ?? 0) + wt.cpu
     group.memory = (group.memory ?? 0) + wt.memory
   }
-  return [...byRepo.values()]
+  return [...byRepo.values()].map(({ group, rowIndexById, kept }) => {
+    const earlier = priorGroups.get(group.repoId)
+    return kept && earlier && earlier.group.worktrees.length === group.worktrees.length
+      ? earlier
+      : { group, rowIndexById }
+  })
+}
+
+/** The owner's earlier groups, while the catalog they were placed by is unchanged. */
+export function priorChatRowGroups(
+  cache: ResourceMergeCache | undefined,
+  owner: string,
+  inputs: readonly unknown[]
+): readonly ChatRowGroup[] | undefined {
+  const prior = cache?.bySample.get(owner)
+  return prior && sameInputs(prior.inputs, inputs) ? prior.groups : undefined
 }
 
 /** The sample's cached rows, while the sample and the catalog it is placed by are unchanged. */

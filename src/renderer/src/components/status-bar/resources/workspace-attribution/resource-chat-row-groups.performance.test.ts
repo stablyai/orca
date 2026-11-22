@@ -82,6 +82,19 @@ describe('Resource Manager chat row reuse', () => {
     expect(counter.reads).toBe(0)
   })
 
+  it('keeps unchanged chat rows when a fresh sample arrives, and redraws only the one that changed', () => {
+    const cache = createResourceMergeCache()
+    const fresh = (bMemory: number) => localSnapshot([sample('/a', 10), sample('/b', bMemory)])
+    const [first] = mergeSnapshotAndSessions(fresh(20), [], context([]), undefined, cache)
+    const [same] = mergeSnapshotAndSessions(fresh(20), [], context([]), undefined, cache)
+    expect(same).toBe(first)
+
+    const [changed] = mergeSnapshotAndSessions(fresh(30), [], context([]), undefined, cache)
+    expect(changed.worktrees[0]).toBe(first.worktrees[0])
+    expect(changed.worktrees[1]).not.toBe(first.worktrees[1])
+    expect(changed.worktrees[1].memory).toBe(30)
+  })
+
   it('rebuilds only terminal rows of a mixed project when a tab title is stored', () => {
     const cache = createResourceMergeCache()
     const chats = [sample('/a', 10), sample('/b', 20)]
