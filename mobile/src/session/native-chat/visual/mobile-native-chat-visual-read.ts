@@ -161,8 +161,3 @@ export function readMobileNativeChatVisual(
   inFlight.set(key, read)
   return read
 }
-
-export function resetMobileNativeChatVisualCacheForTest(): void {
-  cache.clear()
-  inFlight.clear()
-}

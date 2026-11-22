@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -22,7 +23,8 @@ export function AppRailMoreMenu({
   includeSettings,
   settingsActive,
   onOpenSettings,
-  tabStop
+  tabStop,
+  destinations
 }: {
   help: HelpMenuController
   includeHelp: boolean
@@ -30,13 +32,24 @@ export function AppRailMoreMenu({
   settingsActive: boolean
   onOpenSettings: () => void
   tabStop: boolean
+  /** Folded destinations, in rail order: plain rows that open their page. */
+  destinations: readonly {
+    id: string
+    label: string
+    icon: React.ReactNode
+    current: boolean
+    onSelect: () => void
+  }[]
 }): React.JSX.Element {
   const t = useTranslate()
   const label = t('appRail.more', 'More')
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
-  const current = includeSettings && settingsActive ? settingsLabel : undefined
+  const current =
+    destinations.find((destination) => destination.current)?.label ??
+    (includeSettings && settingsActive ? settingsLabel : undefined)
   return (
-    <DropdownMenu modal={false} onOpenChange={help.handleMenuOpenChange}>
+    // Only a More that holds Help warms Help's feedback dialog.
+    <DropdownMenu modal={false} onOpenChange={includeHelp ? help.handleMenuOpenChange : undefined}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -54,6 +67,19 @@ export function AppRailMoreMenu({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-52">
+        {destinations.map((destination) => (
+          <DropdownMenuItem
+            key={destination.id}
+            onSelect={destination.onSelect}
+            aria-current={destination.current ? 'page' : undefined}
+          >
+            {destination.icon}
+            {destination.label}
+          </DropdownMenuItem>
+        ))}
+        {destinations.length > 0 && (includeHelp || includeSettings) ? (
+          <DropdownMenuSeparator />
+        ) : null}
         {includeHelp ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>

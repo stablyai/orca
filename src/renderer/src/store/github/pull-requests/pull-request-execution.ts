@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -86,7 +87,10 @@ export function startPullRequestLookup(args: {
         }
         return cached?.data ?? null
       }
-      const checkContract = capturePRCheckContract(get, runtimeRepo?.target ?? { kind: 'local' })
+      const checkContract = capturePRCheckContract(
+        readAppRuntimeStatuses,
+        runtimeRepo?.target ?? { kind: 'local' }
+      )
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null

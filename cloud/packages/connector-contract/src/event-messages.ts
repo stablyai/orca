@@ -130,7 +130,9 @@ export const ConnectorReplyEventSchema = z
       .optional(),
     failure: OptionalConnectorFailureSchema,
     links: OptionalWorkLinksSchema,
-    turnId: EpochMsSchema.optional()
+    turnId: EpochMsSchema.optional(),
+    // How long the answered turn ran, by the machine's clock; shown under the answer.
+    tookMs: z.number().int().positive().optional()
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))
@@ -212,7 +214,10 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     // The thread's turn state only: its answer goes as a `reply` (or through replies), never this.
     stateOnly: z.literal(true).optional(),
     // Whom a turn no delivery started acts for; its final post counts as that person on Slack.
-    turnFor: ConnectorTurnForSchema.optional()
+    turnFor: ConnectorTurnForSchema.optional(),
+    // With a usage-limit failure that has a reset: the machine continues the turn's requests by
+    // itself then. Sent only to a cloud that lists replies.paused.
+    resumes: z.literal(true).optional().catch(undefined)
   }),
   // Sent only to a cloud whose hello answer lists replies.outbox: the outcome of the admitted
   // deliveries one turn answered in one conversation. answerDeliveryId (the earliest of them) keys

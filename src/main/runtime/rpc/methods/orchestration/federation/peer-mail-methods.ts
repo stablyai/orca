@@ -126,7 +126,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       if (routed === 'delivered') {
         return { message: { id: params.messageId, to: params.to } }
       }
-      const { to } = routed
+      const { to, body = params.body } = routed
       const terminalRecipient = await prepareSessionRecipient(runtime, to)
       // Read again after the wait: a copy of this delivery may have landed meanwhile.
       const landed = delivered()
@@ -164,7 +164,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           from: params.senderLabel,
           to: recipient.to,
           subject: params.subject,
-          body: params.body,
+          body,
           type: params.type,
           priority: params.priority,
           threadId: params.threadId,

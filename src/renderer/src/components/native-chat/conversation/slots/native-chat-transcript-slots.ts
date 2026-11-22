@@ -33,6 +33,7 @@ import {
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from '../../tools/runs/native-chat-transcript-work-runs'
 import { nativeChatBotItemNoteClusters } from '../../bot-items/native-chat-bot-item-note-clusters'
+import { markNativeChatActivityJoins } from './native-chat-activity-row-joins'
 import {
   nativeChatAgentRowHasImages,
   nativeChatAgentRowWords
@@ -45,7 +46,7 @@ import {
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
-import { nativeChatShownRows } from './native-chat-quiet-turn-rows'
+import { nativeChatBotIntroTurn, nativeChatShownRows } from './native-chat-quiet-turn-rows'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -95,9 +96,9 @@ export type NativeChatMessageSlot = {
   /** This response is the newest one in the conversation. */
   latestResponse?: boolean
   /** Response controls under this row may hang into the gap below it: the row draws nothing after
-   *  its message, and what follows is the person's own right-aligned bubble or nothing. Absent when
-   *  something left-side follows (an agent's card, a notice, a task or subagent row, the turn's bar,
-   *  diff rollup or PR card), where the controls keep their own height. */
+   *  its message, and what follows opens the next turn (the person's bubble or an agent's card).
+   *  Absent when anything else follows (a notice, a task or subagent row, the turn's bar, diff
+   *  rollup or PR card), where the controls keep their own height. */
   actionsHang?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** Pull requests this row's turn opened, drawn after it. */
@@ -107,6 +108,8 @@ export type NativeChatMessageSlot = {
   workRun?: readonly NativeChatMessage[]
   /** Consecutive quiet item notes drawn close together, with message as the first. */
   itemNotes?: readonly NativeChatMessage[]
+  /** Opens on an activity row right below the slot before's: drawn 4 px below it, not a row gap below. */
+  followsActivity?: boolean
 }
 
 const NO_SUBAGENT_HEADS: readonly NativeChatSubagentHead[] = []
@@ -167,6 +170,7 @@ export function buildNativeChatTranscript(
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
+  const introTurn = nativeChatBotIntroTurn(input, messages)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -199,7 +203,7 @@ export function buildNativeChatTranscript(
     pushHeadsBefore(message)
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
-    const bar = turnKey === undefined ? undefined : bars.get(turnKey)
+    const bar = turnKey === undefined || turnKey === introTurn ? undefined : bars.get(turnKey)
     // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
     const status =
       turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
@@ -224,12 +228,7 @@ export function buildNativeChatTranscript(
         message.mergedInto === undefined &&
         (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
-    if (
-      drawsRow ||
-      status !== undefined ||
-      turnDiff !== undefined ||
-      openedPullRequests !== undefined
-    ) {
+    if (drawsRow || status || turnDiff || openedPullRequests) {
       slots.push({
         kind: 'message',
         message,
@@ -285,7 +284,7 @@ export function buildNativeChatTranscript(
       continue
     }
     slot.endsResponse = false
-    if (!slot.drawsMessage || slot.message.role !== 'assistant') {
+    if (!slot.drawsMessage || slot.message.role !== 'assistant' || slot.turnKey === introTurn) {
       continue
     }
     if (
@@ -334,6 +333,7 @@ export function buildNativeChatTranscript(
     }
   }
   markNativeChatResponseActionsHang(drawn, typography)
+  markNativeChatActivityJoins(drawn, typography)
   return {
     slots: drawn,
     quietTurnKeys: leaving.turns.size ? new Set([...quiet.turns, ...leaving.turns]) : quiet.turns,

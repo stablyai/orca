@@ -13,8 +13,7 @@ import {
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 } & (

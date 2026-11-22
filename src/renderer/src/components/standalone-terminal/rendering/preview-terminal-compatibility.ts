@@ -30,13 +30,10 @@ export function installPreviewTerminalCompatibility(
   })
   // Register Arabic joining only after RTL arrives; DOM previews need no WebGL atlas compensation.
   const disposeArabicShapingJoiner = configureLazyArabicShapingJoiner(terminal, () => false)
-  const imeAnchorHandler = installTerminalImeCandidateAnchor(terminal)
+  const disposeImeCandidateAnchor = installTerminalImeCandidateAnchor(terminal)
 
   return () => {
-    if (imeAnchorHandler && terminal.element) {
-      terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
-      terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
-    }
+    disposeImeCandidateAnchor?.()
     disposeArabicShapingJoiner()
   }
 }

@@ -3,11 +3,8 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agen
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
-import {
-  reportWorkerTurnStop,
-  type WorkerTurnStopReason,
-  type WorkerTurnStopReportDeps
-} from './worker-turn-stop-report'
+import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { observeWorker, type WorkerRest } from './worker-presence-report'
 import {
   readChatWorkerPrompt,
   type ChatWorkerPromptReader
@@ -24,8 +21,9 @@ const ADOPT_AFTER_MS = 5_000
 
 type ChatStop = {
   sessionId: string
+  /** The turn or prompt: one rest, however often it is seen. */
   stopKey: string
-  reason: WorkerTurnStopReason
+  reason: WorkerRest['reason']
   awaitsReply?: boolean
   /** A prompt event's journal item id. */
   promptId?: string
@@ -172,20 +170,24 @@ export function chatWorkerTurnStopReporter(
                 : undefined
             // A prompt Orca can't answer either way is a plain prompt: only the worker's chat can.
             const payload = candidate?.allowedActions.length ? candidate : undefined
-            reportWorkerTurnStop(
+            observeWorker(
               current,
               { kind: 'local', dispatch },
               {
-                from,
-                stopKey: stop.stopKey,
-                reason: stop.reason,
-                mailTaken: seen.get(dispatch.id),
-                // The payload names the prompt; the agent's prose before it adds nothing.
-                lastOutput: payload ? undefined : status?.lastAssistantMessage,
-                // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
-                turnStartedAt,
-                ...(stop.awaitsReply ? { awaitsReply: true } : {}),
-                ...(payload ? { approval: payload } : {})
+                presence: 'at-rest',
+                fence: stop.stopKey,
+                legacyStopKey: stop.stopKey,
+                rest: {
+                  from,
+                  reason: stop.reason,
+                  mailTaken: seen.get(dispatch.id),
+                  // The payload names the prompt; the agent's prose before it adds nothing.
+                  lastOutput: payload ? undefined : status?.lastAssistantMessage,
+                  // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
+                  turnStartedAt,
+                  ...(stop.awaitsReply ? { awaitsReply: true } : {}),
+                  ...(payload ? { approval: payload } : {})
+                }
               },
               deps
             )
@@ -243,5 +245,21 @@ export function chatWorkerTurnStopReporter(
       generations.clear()
       previousCompletionAt.clear()
     }
+  }
+}
+
+/** A chat worker's turn started: its rest, if any, is over. Called once per working edge, which follows
+ *  an edge that was not working, so each is a turn of its own even when no rest was recorded. */
+export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStopReportDeps): void {
+  try {
+    const db = deps.getDb()
+    if (!db) {
+      return
+    }
+    for (const { dispatch } of chatWorkerDispatches(sessionId, db)) {
+      observeWorker(db, { kind: 'local', dispatch }, { presence: 'working', newTurn: true }, deps)
+    }
+  } catch (error) {
+    console.warn('[orchestration] chat worker presence failed', error)
   }
 }

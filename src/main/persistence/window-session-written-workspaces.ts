@@ -52,6 +52,8 @@ const KEYED_BY = {
   activeConnectionIdsAtShutdown: 'none',
   // Main recomputes it for every row, and the Loader reads it to fold rows.
   remoteSessionIdsByTabId: 'whole',
+  desktopRelayOwnerByTabId: 'none',
+  desktopRelayAdoptionVersion: 'none',
   lastVisitedAtByWorktreeId: 'none',
   defaultTerminalTabsAppliedByWorktreeId: 'none',
   sleepingAgentSessionsByPaneKey: 'pane',

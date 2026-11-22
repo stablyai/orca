@@ -16,6 +16,7 @@ import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/A
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
 import { antigravityChatAuthMenuItems } from './antigravity-chat-auth-choices'
+import { antigravityProgramLabel } from './antigravity-auth-words'
 
 type Method = AntigravityChatAuthConfig['method']
 
@@ -38,7 +39,7 @@ export function NativeChatAntigravityAuthChip({
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
   const onAgy = auth?.backend === 'agy'
-  if (!auth || (!method && !onAgy)) {
+  if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {
     return null
   }
   // On the host's agy, agy's own login serves this chat whatever Google method is saved; another
@@ -46,11 +47,20 @@ export function NativeChatAntigravityAuthChip({
   const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc).filter(
     (item) => !onAgy || item.method !== 'oauth-personal'
   )
-  const label = onAgy
-    ? t('components.native-chat.antigravityAuth.agy', 'agy sign-in')
-    : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
+  // The host's current version; a chat started before an upgrade runs the older one until it restarts.
+  const program = antigravityProgramLabel(
+    onAgy && auth.orcasAgy ? 'orcasAgy' : auth.backend,
+    onAgy
+      ? (auth.detection?.agyVersion ?? (auth.orcasAgy ? auth.managedVersion : null))
+      : auth.managedVersion,
+    t
+  )
+  const label = onAgy ? program : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
   const project = method === 'agent-platform' ? auth.detection?.adc.project : null
   const shown = project ? `${label} · ${project}` : label
+  const signsInWith = onAgy
+    ? t('components.native-chat.antigravityAuth.agyItem', "agy's own login")
+    : shown
   const Icon = onAgy || !method ? SquareTerminal : ICONS[method]
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
@@ -64,12 +74,12 @@ export function NativeChatAntigravityAuthChip({
           aria-label={t(
             'components.native-chat.antigravityAuth.chipLabel',
             'Antigravity signs in with {{method}}. Change',
-            { method: shown }
+            { method: signsInWith }
           )}
           title={t(
             'components.native-chat.antigravityAuth.chipTitle',
             'Antigravity signs in with {{method}}',
-            { method: shown }
+            { method: signsInWith }
           )}
         >
           {auth.switching ? (
@@ -128,6 +138,9 @@ export function NativeChatAntigravityAuthChip({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        <p data-antigravity-program="" className="px-2 py-1.5 text-2xs text-muted-foreground">
+          {t('components.native-chat.antigravityAuth.runsOn', 'Runs on: {{program}}', { program })}
+        </p>
         <DropdownMenuItem onSelect={auth.openSettings}>
           <Settings2 className="size-3.5" aria-hidden />
           {t('components.native-chat.antigravityAuth.settings', 'Sign-in settings…')}

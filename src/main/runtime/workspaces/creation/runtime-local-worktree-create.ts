@@ -154,7 +154,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const [username, baseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
   if (!baseBranch) {
     throw new Error(
-      'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
+      'Could not resolve a default base ref for this repo. Pass an explicit --base-branch and try again.'
     )
   }
   const base = await resolveRuntimeLocalWorktreeCreateBase({

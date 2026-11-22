@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -92,6 +92,8 @@ type SortableTabContextMenuProps = {
   isPinned: boolean
   /** See `SortableTabProps.closable`. */
   closable?: boolean
+  /** See `SortableTabProps.canPin`. */
+  canPin?: boolean
   /** See `SortableTabProps.canContinueInTerminal`. */
   canContinueInTerminal?: boolean
   onSessionSwitchComplete?: () => void
@@ -123,6 +125,7 @@ export function SortableTabContextMenu({
   tabCount,
   isPinned,
   closable = true,
+  canPin = true,
   canContinueInTerminal = true,
   onSessionSwitchComplete,
   sessionSwitchOpening,
@@ -196,7 +199,7 @@ export function SortableTabContextMenu({
         />
       ) : null}
       <ContextMenuSeparator />
-      {closable ? (
+      {closable && (canPin || isPinned) ? (
         <ContextMenuItem onSelect={onTogglePin}>
           {isPinned ? (
             <PinOff className="size-3.5 shrink-0" />
@@ -221,7 +224,8 @@ export function SortableTabContextMenu({
         {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
-      <ContextMenuItem inset onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
+      <ContextMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
+        <CopyX className="size-3.5" />
         {t('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
@@ -233,7 +237,7 @@ export function SortableTabContextMenu({
           {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
         </ContextMenuItem>
       ) : null}
-      <div className="pt-1.5 pr-2.5 pb-1.5 pl-8">
+      <div className="px-2.5 py-1.5">
         <div className="text-2xs font-semibold text-muted-foreground mb-1.5">
           {t('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
         </div>

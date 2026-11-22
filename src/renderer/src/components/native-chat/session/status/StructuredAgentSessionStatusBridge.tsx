@@ -108,10 +108,7 @@ function installStatusProjection(): () => void {
     if (!current(input)) {
       return
     }
-    const latestDirectory =
-      member.hostKey === 'local'
-        ? member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
-        : undefined
+    const latestDirectory = member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
     if (latestDirectory !== directory) {
       return
     }
@@ -223,7 +220,7 @@ function installStatusProjection(): () => void {
             ? (getStructuredAgentSessionLaunchFailedAt(tab.entityId) ?? tab.createdAt)
             : null,
         sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
-        directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
+        directory: summary?.launchDirectory
       }
       // Launch ticks and full host ticks carry every member; skip the unchanged ones.
       if (!sameCapturedInput(burst.peek(member) ?? member.captured, input)) {
@@ -348,6 +345,10 @@ function installStatusProjection(): () => void {
       })
     }
   }
+  // Subscribed first so a closed chat's stand-in exists before the tab write retires its pane.
+  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
+    boundary(() => !disposed && reconcile(false))
+  )
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
     if (disposed) {
       return
@@ -357,9 +358,6 @@ function installStatusProjection(): () => void {
       boundary(() => reconcile(ownersChanged))
     }
   })
-  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
-    boundary(() => !disposed && reconcile(false))
-  )
   const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionIds) =>
     boundary(() => {
       if (disposed) {

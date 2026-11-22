@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { execFileCaptureToTermination } from './exec-file-capture'
 import { createWslProcessGroupTermination } from './wsl-process-group-termination'
 
+// The process worker's entry is build output absent from src/; keep Windows launches on the direct spawn.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildModule>()),
+    canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false
+  })
+)
 const stdout = Buffer.from([0, 255, 128, 10])
 const stderr = Buffer.from([128, 255, 0, 10])
 const writeBytes =
