@@ -62,6 +62,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
+import { NativeChatWorkerAutoCloseBanner } from '@/components/native-chat/worker-lifetime/NativeChatWorkerAutoCloseBanner'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -263,6 +264,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             className="[container-type:size]"
           >
             {nativeChatPaneHeader(props, ownerWorktreeId, surface.appearance.colorScheme, handOff)}
+            <NativeChatWorkerAutoCloseBanner pane={props} />
             <NativeChatDockTranscript>
               <NativeChatContextClearFade
                 // A read failure stays in view: no divider may come to end the fade.
@@ -341,7 +343,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {subagents.pairedAsks}
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
-                  tabId={props.tabId}
                   runtimeContext={imageRuntimeContext}
                   threadGoal={controller.threadGoal}
                   transport={transport}

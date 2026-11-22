@@ -1,17 +1,11 @@
 import { useMemo } from 'react'
-import { Timer } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import {
-  useWorkerAutoClose,
-  workerKeepOpenLabel
-} from '@/runtime/agent-orchestration/worker-auto-close'
+import { useWorkerAutoClose } from '@/runtime/agent-orchestration/worker-auto-close'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatWorkerAutoCloseCountdown } from '../../../../../shared/orchestration/workers/worker-auto-close'
-import { BoundWorkerTitle } from './BoundWorkerTitle'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from '../appearance/pane-top-banner/PaneTopWarningBanner'
+import { workerAutoCloseBannerProps } from './worker-auto-close-banner'
 
 /** Across a temporary orchestration worker's pane, or a terminal that closes with it: when, and Keep open. */
 export function WorkerAutoCloseBanner({
@@ -45,35 +39,6 @@ export function WorkerAutoCloseBanner({
     isVisible,
     worktreeId
   )
-  if (!state || state.kept) {
-    return null
-  }
-  const countdown =
-    state.closesAt === null ? null : formatWorkerAutoCloseCountdown(state.closesAt, nowMs)
-  const title = state.boundTo ? (
-    <BoundWorkerTitle boundTo={state.boundTo} countdown={countdown} environmentId={environmentId} />
-  ) : countdown === null ? (
-    t(
-      'components.orchestration.workerAutoClose.bannerRunning',
-      'Orchestration worker · Closes 2 minutes after it finishes'
-    )
-  ) : (
-    t(
-      'components.orchestration.workerAutoClose.bannerFinished',
-      'Orchestration worker finished · Closes in {{countdown}}',
-      { countdown }
-    )
-  )
-  return (
-    <PaneTopWarningBanner
-      tone={state.closesAt === null ? 'accent' : 'warning'}
-      icon={Timer}
-      title={title}
-      primaryAction={
-        <Button type="button" variant="default" size="xs" onClick={keepOpen}>
-          {workerKeepOpenLabel(t)}
-        </Button>
-      }
-    />
-  )
+  const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t)
+  return banner ? <PaneTopWarningBanner {...banner} /> : null
 }
