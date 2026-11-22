@@ -338,6 +338,19 @@ describe('mobile session tabs: an agent that exits after its turn ended', () => 
         agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: T0 + 1_000 })
       })
     )
+
+    // A turn only the title reports is a new end, not a restatement.
+    vi.setSystemTime(T0 + 100_000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;\u280b \u03c0 - work\x07', T0 + 100_000)
+    vi.setSystemTime(T0 + 130_000)
+    runtime.onPtyData(PTY_ID, '\x1b]0;\u03c0 - work\x07', T0 + 130_000)
+    const titleTurn = await projectTerminalTab(runtime)
+    expect(titleTurn).not.toHaveProperty('turnCompletedAt')
+    expect(titleTurn).toEqual(
+      expect.objectContaining({
+        agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: T0 + 130_000 })
+      })
+    )
   })
 })
 

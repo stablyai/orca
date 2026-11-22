@@ -271,9 +271,12 @@ export function buildRuntimeMobileAgentStatus(
       : pty?.lastAgentStatus === 'permission'
         ? 'blocked'
         : 'done'
-  // Why: title evidence after a shown Done is the agent quitting or relaunching, not a new turn
-  // end (#46569); restate that Done so clients don't announce it again.
-  const restatedDone = state === 'done' ? shownDoneSegment(shownSegment) : null
+  // Why: with no working title since the shown Done, this Done is the agent quitting or
+  // relaunching, not a new turn end (#46569); restate it so clients don't announce it again.
+  const restatedDone =
+    state === 'done'
+      ? shownDoneSegment(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
+      : null
   return {
     agentStatus: {
       state,
@@ -294,12 +297,21 @@ export function buildRuntimeMobileAgentStatus(
 }
 
 function shownDoneSegment(
-  segment: HookLiveAgentRow | RuntimeAgentRowSnapshot | AgentStatusIpcPayload | null
+  segment: HookLiveAgentRow | RuntimeAgentRowSnapshot | AgentStatusIpcPayload | null,
+  titleWorkingStartedAt: number | null
 ):
-  | (HostTurnEndFacts & { stateStartedAt: number; turnCompletedAt?: number; sessionBoundary?: true })
+  | (HostTurnEndFacts & {
+      stateStartedAt: number
+      turnCompletedAt?: number
+      sessionBoundary?: true
+    })
   | null {
   const payload = segment && 'payload' in segment ? segment.payload : segment
   if (!segment || payload?.state !== 'done') {
+    return null
+  }
+  const endedAt = payload.turnCompletedAt ?? segment.turnEndedAt ?? segment.stateStartedAt
+  if (titleWorkingStartedAt !== null && titleWorkingStartedAt > endedAt) {
     return null
   }
   return {
