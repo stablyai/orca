@@ -3,6 +3,7 @@ import type {
   BackendConnectionPurpose
 } from '../../../shared/backend/backend-service-contract'
 import type {
+  ClaudeStatsCacheHome,
   ClaudeUsageBreakdownKind,
   ClaudeUsageSnapshot
 } from '../../../shared/agent-usage/analytics/claude-usage-types'
@@ -56,7 +57,9 @@ export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKi
   ) => Promise<Snapshot['recentSessions']>
 }
 
-export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind>
+export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind> & {
+  getStatsCache: () => Promise<ClaudeStatsCacheHome[]>
+}
 
 export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreakdownKind>
 

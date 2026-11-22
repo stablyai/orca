@@ -5,6 +5,7 @@ import type { AutomationRunUsage } from '../../../shared/automations/history/aut
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import type { createUsageService } from '../../backend/usage-service'
 import { claudeProfileTranscriptDirs } from '../../claude-usage/transcript-file-discovery'
+import { listClaudeStatsCacheHomes } from '../../claude-usage/claude-stats-cache-homes'
 import { provideHostUsageAnalytics } from '../../usage/host-usage-analytics'
 import { UsageWorktreeHistory } from '../../usage/worktree-attribution/usage-worktree-history'
 import { readUsageWorktreeCatalog } from '../../usage/worktree-attribution/usage-worktree-metadata'
@@ -42,6 +43,7 @@ export function installOrcadUsageService(
         userDataPath,
         readCatalog: () => readUsageWorktreeCatalog(worktrees),
         claudeProfileDirs: async () => claudeProfileTranscriptDirs(),
+        claudeStatsCacheHomes: async () => listClaudeStatsCacheHomes(),
         // Product telemetry is reported by desktops, not by the hosts they pair with.
         telemetry: { isEnabled: async () => false, capture: async () => false }
       })

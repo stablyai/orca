@@ -125,6 +125,16 @@ export class ClaudeProfileRouter {
     return findClaudeAccount(this.args.getSettings(), accountId)
   }
 
+  savedAccountForHome(home: string): ClaudeManagedAccount | undefined {
+    return this.args.getSettings().claudeManagedAccounts.find((account) => {
+      try {
+        return this.accountHome(account.id) === home
+      } catch {
+        return false
+      }
+    })
+  }
+
   systemDefaultHome(): string {
     return resolveClaudeDefaultHome(this.userHome, this.userConfigDir())
   }

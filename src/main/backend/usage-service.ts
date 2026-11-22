@@ -5,6 +5,7 @@ import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
+import { readClaudeStatsCaches } from '../claude-usage/claude-stats-cache'
 import type { UsageProviderKey } from '../../shared/backend/backend-service-contract'
 
 const rangeSchema = z.object({
@@ -87,6 +88,11 @@ export function createUsageService(host: UsageStoreHost) {
   registerUsageQueries(handlers, 'codexUsage', stores.codexUsage)
   registerUsageQueries(handlers, 'openCodeUsage', stores.openCodeUsage)
   registerUsageQueries(handlers, 'museUsage', stores.museUsage)
+  handlers.set('claudeUsage:getStatsCache', async () =>
+    stores.claudeUsage.getScanState().enabled
+      ? readClaudeStatsCaches(await host.claudeStatsCacheHomes())
+      : []
+  )
   let accepting = true
   const active = new Set<Promise<unknown>>()
   const stop = async (): Promise<void> => {

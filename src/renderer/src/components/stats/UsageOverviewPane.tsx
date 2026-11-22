@@ -8,7 +8,8 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
 import { getRecentUsageDays } from './usage-overview-daily-series'
-import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { buildUsageOverview } from './usage-overview-model'
+import { formatCost, formatTokens } from './usage-formatters'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -269,12 +270,12 @@ export function UsageOverviewPane(): React.JSX.Element {
             <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-4">
               <StatCard
                 label={t('auto.components.stats.UsageOverviewPane.3887b94ce5', 'Total tokens')}
-                value={formatUsageTokens(overview.totalTokens, intlLocale)}
+                value={formatTokens(overview.totalTokens, intlLocale)}
                 icon={<Sparkles className="size-4" />}
               />
               <StatCard
                 label={t('auto.components.stats.UsageOverviewPane.0eaf937335', 'Est. cost')}
-                value={formatUsageCost(overview.estimatedCostUsd)}
+                value={formatCost(overview.estimatedCostUsd)}
                 icon={<Coins className="size-4" />}
               />
               <StatCard

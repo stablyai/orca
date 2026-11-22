@@ -46,7 +46,8 @@ export const UsageActionSchema = z.enum([
   'getSummary',
   'getDaily',
   'getBreakdown',
-  'getRecentSessions'
+  'getRecentSessions',
+  'getStatsCache'
 ])
 export type UsageAction = z.infer<typeof UsageActionSchema>
 /** A renderer-privileged usage call (`<provider>:<action>`); the usage service rejects anything else. */
@@ -85,6 +86,7 @@ export const BACKEND_CAPABILITIES = [
   'usage',
   'usage.catalog',
   'usage.claudeProfileDirs',
+  'usage.claudeStatsCacheHomes',
   'usage.telemetry'
 ] as const
 

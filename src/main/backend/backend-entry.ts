@@ -1,3 +1,4 @@
+import type { ClaudeStatsCacheHomeRef } from '../../shared/agent-usage/analytics/claude-usage-types'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
@@ -182,6 +183,9 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
         readCatalog: async () => (await call('usage.catalog')) as UsageWorktreeCatalog,
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private control peer returns the account owner's typed string array.
         claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
+        claudeStatsCacheHomes: async () =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private control peer returns the account owner's typed home list.
+          (await call('usage.claudeStatsCacheHomes')) as ClaudeStatsCacheHomeRef[],
         telemetry: {
           isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
           capture: async (snapshot) =>

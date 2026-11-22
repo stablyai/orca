@@ -1,3 +1,4 @@
+import type { ClaudeStatsCacheHomeRef } from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { AgentTokenUsage } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageWorktreeRef } from './worktree-attribution/usage-worktree-metadata'
 
@@ -16,5 +17,6 @@ export type UsageStoreHost = {
   userDataPath: string
   readCatalog(): Promise<UsageWorktreeCatalog>
   claudeProfileDirs(): Promise<string[]>
+  claudeStatsCacheHomes(): Promise<ClaudeStatsCacheHomeRef[]>
   telemetry: UsageTelemetryHost
 }
