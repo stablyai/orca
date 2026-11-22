@@ -76,6 +76,7 @@ export const replaceButton = defineFixture({
 
 export const featureWallReplace = defineFixture({
   width: 420,
+  store: { runtimeEnvironmentCatalogSettled: true },
   setup: () => {
     const { bundledPlan } = window.api.skills
     window.api.skills.bundledPlan = async () => {
