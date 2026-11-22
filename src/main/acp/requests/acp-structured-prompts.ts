@@ -6,7 +6,7 @@ import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
-import type { AcpRequestPresentation } from '../acp-dialects/acp-dialect'
+import type { AcpReplyContext, AcpRequestPresentation } from '../acp-dialects/acp-dialect'
 import { AcpRpcError } from '../transport/acp-errors'
 import { ACP_FORM_ELICITATION_METHOD } from './acp-form-elicitation'
 import { acpUrlElicitationPresentation, isAcpUrlElicitation } from './acp-url-elicitation'
@@ -101,18 +101,21 @@ export class AcpStructuredPrompts {
     })
   }
 
-  async answer(input: {
-    itemId: string
-    response: AgentSessionPromptResponse
-    commit: () => Promise<void>
-  }): Promise<void> {
+  async answer(
+    input: {
+      itemId: string
+      response: AgentSessionPromptResponse
+      commit: () => Promise<void>
+    },
+    context?: AcpReplyContext
+  ): Promise<void> {
     const entry = this.find(input.itemId)
     if (!entry) {
       throw new AgentSessionPromptUnavailableError(input.itemId)
     }
     let reply: unknown
     try {
-      reply = entry.presentation.reply(input.response)
+      reply = entry.presentation.reply(input.response, context)
     } catch (error) {
       throw new AgentSessionPromptAnswerRejectedError(
         error instanceof Error ? error.message : String(error)
