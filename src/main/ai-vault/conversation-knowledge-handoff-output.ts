@@ -63,8 +63,10 @@ function isSpecificClaim(entry: ConversationKnowledgeHandoffEntry): boolean {
   const subject = claim.subject.normalize('NFKC').trim()
   const object = claim.object.normalize('NFKC').trim()
   return (
-    !/^方案\s*[A-Za-z0-9]+$/u.test(subject) ||
-    !/^(?:进行|确认|同意|继续|好|好的|可以)$/u.test(object)
+    !/^\u65b9\u6848\s*[A-Za-z0-9]+$/u.test(subject) ||
+    !/^(?:\u8fdb\u884c|\u786e\u8ba4|\u540c\u610f|\u7ee7\u7eed|\u597d|\u597d\u7684|\u53ef\u4ee5)$/u.test(
+      object
+    )
   )
 }
 

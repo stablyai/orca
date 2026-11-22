@@ -10,8 +10,9 @@ export function isPotentialLegacyEmptySummary(item: ConversationKnowledgeItem): 
     ...item.knowledge.conclusions
   ].join(' ')
   return (
-    /(?:空对话|未包含任何可读取|没有任何可读取|无任何可读取|没有可读取|无可读取)/u.test(text) ||
-    /(?:no|without) (?:readable )?(?:user |assistant |conversation )?messages/i.test(text)
+    /(?:\u7a7a\u5bf9\u8bdd|\u672a\u5305\u542b\u4efb\u4f55\u53ef\u8bfb\u53d6|\u6ca1\u6709\u4efb\u4f55\u53ef\u8bfb\u53d6|\u65e0\u4efb\u4f55\u53ef\u8bfb\u53d6|\u6ca1\u6709\u53ef\u8bfb\u53d6|\u65e0\u53ef\u8bfb\u53d6)/u.test(
+      text
+    ) || /(?:no|without) (?:readable )?(?:user |assistant |conversation )?messages/i.test(text)
   )
 }
 

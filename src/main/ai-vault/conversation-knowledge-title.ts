@@ -5,7 +5,7 @@ function deriveKnowledgeTitle(sourceTitle: string, summary: string): string {
   }
   const sentence = summary
     .trim()
-    .split(/(?<=[.!?。！？])\s+/u)[0]
+    .split(/(?<=[.!?\u3002\uff01\uff1f])\s+/u)[0]
     ?.trim()
   return (sentence || 'Conversation knowledge').slice(0, 120)
 }
