@@ -100,6 +100,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
+  bqagent: null,
   // Kiro's ACP pushes its own slash commands for each session.
   kiro: null,
   // Goose reports its skills as commands, at rest too.

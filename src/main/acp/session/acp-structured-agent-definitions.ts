@@ -37,9 +37,9 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       threadGoal: false,
       contextUsage: true,
       // Narrowed by each agent's advertised startup capabilities.
-      imagePrompts: true,
+      imagePrompts: spec.imagePrompts !== false,
       steering: 'queue',
-      approvalEnforcement: 'orca'
+      approvalEnforcement: spec.autonomousTools ? 'provider' : 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     ...(isManagedAgentCli(agent) && { managedRuntime: () => managedAgentCli(agent).available() }),

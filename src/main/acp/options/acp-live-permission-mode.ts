@@ -45,6 +45,9 @@ export function applyAcpLivePermissionMode(
   mode: AgentChatPermissionChoice,
   bound: Pick<AcpOptionWriteBound, 'timeoutMs'>
 ): Promise<void> {
+  if (session.spec.autonomousTools) {
+    return Promise.resolve()
+  }
   if (!session.spec.permissionModeConfig) {
     // Orca answers this agent's permission requests, reading the mode at each request.
     if (!session.launchArgsGrantFullAccess) {

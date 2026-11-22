@@ -64,6 +64,10 @@ export type AcpLaunchSpec = {
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
   /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
+  /** This agent runs its tools without asking the client for approval. */
+  autonomousTools?: true
+  /** Text-only even before the first handshake. */
+  imagePrompts?: false
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>

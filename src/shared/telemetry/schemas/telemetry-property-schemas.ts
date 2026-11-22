@@ -40,6 +40,7 @@ export const AGENT_KIND_VALUES = [
   'cursor',
   'droid',
   'kimi',
+  'bqagent',
   'mistral-vibe',
   'qwen-code',
   'rovo',

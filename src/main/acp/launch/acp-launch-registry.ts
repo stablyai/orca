@@ -30,6 +30,7 @@ import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
+import { BQAGENT_LAUNCH_SPEC } from '../../bqagent/bqagent-acp-launch-spec'
 import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
@@ -173,6 +174,7 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   ANTIGRAVITY_LAUNCH_SPEC,
   COPILOT_LAUNCH_SPEC,
   KIMI_LAUNCH_SPEC,
+  BQAGENT_LAUNCH_SPEC,
   CURSOR_LAUNCH_SPEC,
   HERMES_LAUNCH_SPEC,
   KIRO_LAUNCH_SPEC,

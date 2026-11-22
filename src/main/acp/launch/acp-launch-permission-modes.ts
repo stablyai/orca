@@ -17,17 +17,27 @@ function acpLaunchPermissionModes(
   return fullAccess ? { 'full-access': fullAccessMode } : others
 }
 
+export function acpFullAccessForLaunch(
+  spec: Pick<AcpLaunchSpec, 'agent' | 'autonomousTools'>,
+  choice: AgentChatPermissionChoice | undefined
+): boolean {
+  if (spec.autonomousTools && choice && choice !== 'own') {
+    throw new Error(`${spec.agent} only supports its own tool permissions`)
+  }
+  return choice === 'full-access'
+}
+
 /** A launch's permission facts: Orca's session modes, the starting choice, and whether the agent's
  *  own arguments hold full access, which only a restart can take away. */
 export function acpLaunchPermission(
-  spec: Pick<AcpLaunchSpec, 'permissionModeConfig' | 'args'>,
+  spec: Pick<AcpLaunchSpec, 'permissionModeConfig' | 'args' | 'autonomousTools'>,
   fullAccess: boolean,
   permission: AgentChatPermissionChoice | undefined
 ) {
   const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDirs: [] }).join('\0')
   return {
     permissionModes: acpLaunchPermissionModes(spec, fullAccess),
-    permission: permission ?? 'ask',
+    permission: permission ?? (spec.autonomousTools ? 'own' : 'ask'),
     launchArgsGrantFullAccess: fullAccess && args(true) !== args(false)
   }
 }

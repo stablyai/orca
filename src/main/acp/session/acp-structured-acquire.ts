@@ -23,7 +23,7 @@ import {
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
+import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
@@ -31,7 +31,6 @@ import { asReattachHistory } from '../history/acp-reattach-history'
 import { reportsAcpOptions, routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
-import { RequestPermissionResponseSchema } from '../generated/acp-protocol.generated'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const MAX_EARLY_FRAMES = 2_048
@@ -107,23 +106,7 @@ export async function acquireAcpStructuredSession(input: {
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
-      onPermission: (request, context) => {
-        if (!childState.isAcpReadySession(session) || !session.turns?.acceptsRequests) {
-          // Nobody can answer during Stop, a steer or teardown.
-          return { outcome: { outcome: 'cancelled' } }
-        }
-        // Do not auto-approve questions or permissions enforced by the agent's own mode.
-        const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (session.permission === 'full-access' && acpAnswersRequests(spec) && !claimed) {
-          const allow = request.options.find((option) => option.kind === 'allow_once')
-          if (allow) {
-            return { outcome: { outcome: 'selected', optionId: allow.optionId } }
-          }
-        }
-        return prompts
-          .handle('session/request_permission', request, context)
-          .then((reply) => RequestPermissionResponseSchema.parse(reply))
-      },
+      onPermission: prompts.permissionHandler(spec, () => session?.permission),
       onRequest: (method, params, context) => prompts.handle(method, params, context),
       onExtensionNotification: (method, params) =>
         whenLane(() => {
@@ -156,7 +139,9 @@ export async function acquireAcpStructuredSession(input: {
       }
     }
   )
-  if (!spec.permissionModeConfig) {
+  if (spec.autonomousTools) {
+    options.applied.set('permissionMode', 'own')
+  } else if (!spec.permissionModeConfig) {
     options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
   }
   // From here, cancellation closes this connection even before exit is proven.

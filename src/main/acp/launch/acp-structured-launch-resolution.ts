@@ -1,3 +1,4 @@
+import { acpFullAccessForLaunch } from './acp-launch-permission-modes'
 import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
@@ -203,6 +204,7 @@ export function acpStructuredLaunchPart(
         ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
         dataDirectory: deps.dataDirectory
       })
+    const fullAccess = acpFullAccessForLaunch(spec, basis.permissionMode)
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
@@ -254,7 +256,6 @@ export function acpStructuredLaunchPart(
     )
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
-    const fullAccess = basis.permissionMode === 'full-access'
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
     const botServers = toolsOff ? [] : acpBotMcpServers(tools)
