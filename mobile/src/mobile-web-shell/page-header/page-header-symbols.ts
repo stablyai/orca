@@ -26,7 +26,12 @@ export function pageHeaderSymbol(name: string | undefined): NativeIconSymbol | u
   if (name === undefined) {
     return undefined
   }
-  const known = isNativeIconName(name) ? name : LUCIDE_RENAMES[name]
+  // Own keys only: a page-sent name like `constructor` must not reach the prototype.
+  const known = isNativeIconName(name)
+    ? name
+    : Object.hasOwn(LUCIDE_RENAMES, name)
+      ? LUCIDE_RENAMES[name]
+      : undefined
   if (known === undefined) {
     return undefined
   }
