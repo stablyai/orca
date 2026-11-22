@@ -8,7 +8,6 @@
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemsDocumentHidden, type BotItemsViewport } from './bot-items-viewport'
@@ -178,12 +177,8 @@ export function BotItemRowsWindow({
       return
     }
     // New heights re-position the rows, which measures again.
-    const apply = (): void => {
-      setSizes(read)
-      setRange({ ...next, band: bandOf(items, next.start, next.end) })
-    }
-    // Rows a scroll brings into view commit before that frame paints, so it shows no gap.
-    void (viewport.inFrame() ? flushSync(apply) : apply())
+    setSizes(read)
+    setRange({ ...next, band: bandOf(items, next.start, next.end) })
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
   useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])

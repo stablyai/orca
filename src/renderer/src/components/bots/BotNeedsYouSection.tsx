@@ -1,7 +1,7 @@
 // The rows of a bot's Needs you group: Orca's asks (approvals, then the rest, in botNow's order), then
 // the items the bot set to Needs you. Five rows, then Show N more; approvals never fold. Rows leave as
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
-import { memo, useLayoutEffect, useMemo, useState } from 'react'
+import { memo, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -32,7 +32,7 @@ import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-f
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
-import { BotItemFaceFolded } from './items/bot-group-face-pictures'
+import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
 
 type ReportApproval = (key: string, approval: boolean) => void
 
@@ -361,6 +361,8 @@ export function BotNeedsYouSection({
   )
   const focus = useNeedsYouFocus()
   const { cardRef, onFocus, onBlur } = focus
+  // Only a group panel's row faces read whether their row is folded.
+  const faces = useContext(BotGroupFacePicturesContext) !== null
   const fold = needsYouFold(rows, {
     expanded,
     focusedKey: focus.focusedKey,
@@ -385,6 +387,23 @@ export function BotNeedsYouSection({
       <NeedsYouRowCommit value={rowCommitted}>
         {fold.ordered.map((row) => {
           const folded = !shown.has(row.key)
+          const body =
+            'need' in row ? (
+              typeof bot === 'function' ? (
+                <MemberNeedItem
+                  bot={bot(row.need)}
+                  need={row.need}
+                  itemOf={itemOf}
+                  onApproval={onApproval}
+                />
+              ) : (
+                <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+              )
+            ) : 'stopped' in row ? (
+              <StoppedForSignInRow row={row.stopped} />
+            ) : (
+              renderItem?.(row.item)
+            )
           return (
             <div
               key={row.key}
@@ -392,24 +411,11 @@ export function BotNeedsYouSection({
               // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
               hidden={folded}
             >
-              <BotItemFaceFolded.Provider value={folded}>
-                {'need' in row ? (
-                  typeof bot === 'function' ? (
-                    <MemberNeedItem
-                      bot={bot(row.need)}
-                      need={row.need}
-                      itemOf={itemOf}
-                      onApproval={onApproval}
-                    />
-                  ) : (
-                    <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
-                  )
-                ) : 'stopped' in row ? (
-                  <StoppedForSignInRow row={row.stopped} />
-                ) : (
-                  renderItem?.(row.item)
-                )}
-              </BotItemFaceFolded.Provider>
+              {faces ? (
+                <BotItemFaceFolded.Provider value={folded}>{body}</BotItemFaceFolded.Provider>
+              ) : (
+                body
+              )}
             </div>
           )
         })}
