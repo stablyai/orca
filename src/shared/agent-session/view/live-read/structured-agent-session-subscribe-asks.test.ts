@@ -69,6 +69,33 @@ describe('a live-text viewer', () => {
     expect(reader.calls).toEqual([])
   })
 
+  it('sends the state shown again after a lost report, before its retry is due', async () => {
+    vi.useFakeTimers()
+    try {
+      const reader = viewer(true, true)
+      const sent: boolean[] = []
+      reader.viewer.setShown = async (_viewerId: string, next: boolean) => {
+        sent.push(next)
+        if (!next) {
+          throw new Error('response lost')
+        }
+      }
+      const asks = createStructuredAgentSessionSubscribeAsks({ liveTextViewer: reader.viewer })
+      asks.read()
+      asks.registered()
+      reader.show(false)
+      await vi.advanceTimersByTimeAsync(0)
+      // The hide may or may not have reached the host, so showing again is sent at once.
+      reader.show(true)
+      expect(sent).toEqual([false, true])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(sent).toEqual([false, true])
+      asks.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('says it again when a report fails, so the host does not keep the old state', async () => {
     vi.useFakeTimers()
     try {

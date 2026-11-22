@@ -32,9 +32,10 @@ const REPORT_RETRY_MS = 1000
 export function createLiveTextViewerReport(
   viewer: StructuredAgentSessionLiveTextViewer | undefined
 ) {
-  // What the current open's stream holds, or null before it is registered.
   const id = `${(viewers++).toString(36)}-${randomViewerPart()}`
-  let told: boolean | null = null
+  // What the current open's stream holds: null before it is registered, and 'unconfirmed' after a
+  // report failed, when the host may hold either state, so the current one is always sent.
+  let told: boolean | 'unconfirmed' | null = null
   let opened: boolean | null = null
   let seq = 0
   let retry: { timer: ReturnType<typeof setTimeout> | null; left: number } = {
@@ -61,11 +62,15 @@ export function createLiveTextViewerReport(
     told = shown
     const attempt = retry
     viewer.setShown(id, shown, ++seq).catch(() => {
-      // Unconfirmed, so the host may still hold the old state: say it again, a bounded number of times.
-      if (attempt !== retry || told !== shown || attempt.left === 0) {
+      if (attempt !== retry || told !== shown) {
         return
       }
-      told = !shown
+      // Unconfirmed, so the host may still hold either state: say it again, a bounded number of
+      // times, and send the current state on any later change.
+      told = 'unconfirmed'
+      if (attempt.left === 0) {
+        return
+      }
       const wait = REPORT_RETRY_MS * 2 ** (REPORT_RETRIES - attempt.left)
       attempt.left -= 1
       attempt.timer = setTimeout(() => {
