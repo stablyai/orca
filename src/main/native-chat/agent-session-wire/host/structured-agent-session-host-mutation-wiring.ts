@@ -121,10 +121,16 @@ export function structuredAgentSessionMutationDelegates(
     rewind: (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
       rewindStructuredAgentSession(context(), attachContext(), caller, params),
     // Only in-process readers omit client identity.
-    readOptions: (
+    readOptions: async (
       sessionId: string,
       reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER
-    ) => readStructuredAgentSessionOptions(context(), sessionId, reader),
+    ) => {
+      const record = context().deps.store.getRecord(sessionId)
+      if (record?.provider === 'opencode2' && record.providerHandleChain.length === 0) {
+        await agentStart.startStructuredAgentSessionAgentForOperation(attachContext(), sessionId)
+      }
+      return readStructuredAgentSessionOptions(context(), sessionId, reader)
+    },
     settleLateDispatch: (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
       settleStructuredAgentSessionLateDispatch(context(), input)
   }

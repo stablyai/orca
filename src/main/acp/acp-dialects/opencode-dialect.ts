@@ -199,6 +199,7 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   compactionUpdate,
   effortChangesModel: true,
   interactionModes: { default: 'build', plan: 'plan' },
+  modeSelectsAgent: true,
   linksFileMentions: true,
   normalizeToolUpdate,
   notification: openCodeChildUpdate,

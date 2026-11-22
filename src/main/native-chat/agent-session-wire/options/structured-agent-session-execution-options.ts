@@ -22,6 +22,7 @@ export function captureStructuredExecutionOptions(
       ? { ...saved, ...supplied }
       : {
           ...(saved.personality ? { personality: saved.personality } : {}),
+          ...(saved.agent ? { agent: saved.agent } : {}),
           ...(saved.interactionMode ? { interactionMode: saved.interactionMode } : {}),
           ...selection
         }
@@ -58,9 +59,10 @@ export function captureStructuredExecutionOptions(
 export function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
   options?: AgentSessionExecutionOptions
 } {
-  const { model, effort, interactionMode } = options ?? {}
+  const { model, agent, effort, interactionMode } = options ?? {}
   const captured = readAgentSessionExecutionOptions({
     ...(model ? { model, ...(effort ? { effort } : {}) } : {}),
+    ...(agent ? { agent } : {}),
     ...(interactionMode ? { interactionMode } : {})
   })
   return captured && Object.keys(captured).length > 0 ? { options: captured } : {}

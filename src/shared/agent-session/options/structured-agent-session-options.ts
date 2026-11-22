@@ -59,6 +59,9 @@ export type StructuredAgentSessionOptionState = AgentSessionChildPermissionField
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
   interactionModeSupported?: boolean
+  agents?: AgentSessionOptionsResult['agents']
+  reportedAgent?: string
+  agentIntent?: string
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
   reportedEffort?: string
@@ -201,6 +204,9 @@ export function applyStructuredAgentSessionOptions(
     ...state,
     optionsAnswerPresent: true,
     interactionModeSupported: current.interactionMode !== undefined,
+    agents: result.agents,
+    reportedAgent: current.agent,
+    agentIntent: current.agentIntent,
     sessionNeverStarted: result.sessionNeverStarted,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     fallbackModel: current.fallbackModel,
@@ -245,6 +251,12 @@ export function commitStructuredAgentSessionOption(
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     return { ...state, permissionMode: value, reportedPermissionMode: undefined }
   }
+  if (id === 'agent') {
+    return { ...state, agentIntent: value }
+  }
+  if (id === 'interactionMode' && state.agents) {
+    state = { ...state, agentIntent: undefined }
+  }
   if (!state.catalog && id !== 'interactionMode') {
     return state
   }
@@ -270,7 +282,7 @@ export function commitStructuredAgentSessionOptionValues(
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
   let next = state
-  for (const id of STRUCTURED_LAUNCH_OPTION_IDS) {
+  for (const id of [...STRUCTURED_LAUNCH_OPTION_IDS, 'agent'] as const) {
     const value = values[id]
     if (value !== undefined) {
       next = commitStructuredAgentSessionOption(next, id, value, origin)

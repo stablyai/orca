@@ -21178,6 +21178,9 @@
       },
       "composer": {
         "send": "Send",
+        "agent": "Agent",
+        "agentValue": "Agent: {{agent}}",
+        "agentSelectionPersists": "Changes apply to your next message and stay until you select another agent.",
         "planMode": "Plan",
         "moreControls": "More chat controls",
         "exitPlanMode": "Exit plan mode",

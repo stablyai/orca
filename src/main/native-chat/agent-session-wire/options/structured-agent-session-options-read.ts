@@ -169,6 +169,7 @@ export async function readStructuredAgentSessionOptions(
   const current = {
     ...selected.current,
     ...options.current,
+    ...(options.agents && saved.agent ? { agentIntent: saved.agent } : {}),
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
     // A running model's Fast says nothing about another selected model, which keeps its own default.

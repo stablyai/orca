@@ -268,6 +268,8 @@ export type AcpDialect = {
   thinkingConfigId?: string
   /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
   interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
+  /** This provider's ACP mode select identifies its internal agents. */
+  modeSelectsAgent?: boolean
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

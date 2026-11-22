@@ -24,10 +24,11 @@ import {
   type StructuredAgentSessionOptionRecord
 } from '../reconciliation/structured-agent-session-option-state'
 import { withUnlistedEffort } from '../model-catalog/structured-agent-session-unlisted-effort'
-import { unlistedModelLabel } from '../model-catalog/model-id-label'
+import { withFallbackModel } from './structured-agent-session-fallback-model'
 import { listedModelDescribing } from '../model-catalog/structured-agent-session-listed-model'
 import { structuredAgentSessionPermissionDescriptor } from '../permissions/structured-agent-session-permission-option'
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
+import { structuredAgentSessionAgentDescriptor } from './structured-agent-session-agent-descriptor'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
 
 /** Unpickable placeholder cannot become a launch selection before a real model answer. */
@@ -256,20 +257,6 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
   return snapshot.length === 0 ? [AGENT_CHOSEN_MODEL, ...shownSnapshot] : shownSnapshot
 }
 
-/** The pill and the checked row name the fallback; an unlisted one is named like the agent's listed rows. */
-function withFallbackModel(
-  option: SessionOptionDescriptor,
-  model: string,
-  agent: string
-): SessionOptionDescriptor {
-  const { kind } = option
-  if (kind.type !== 'select' || kind.choices.some((choice) => choice.value === model)) {
-    return { ...option, fallbackModel: model }
-  }
-  const choice = { value: model, label: unlistedModelLabel(agent, model), description: model }
-  return { ...option, fallbackModel: model, kind: { ...kind, choices: [...kind.choices, choice] } }
-}
-
 export function structuredAgentSessionOptionSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
@@ -282,7 +269,13 @@ export function structuredAgentSessionOptionSnapshot(
         : option
   )
   const interaction = structuredAgentSessionInteractionDescriptor(state)
-  return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
+  const agent = structuredAgentSessionAgentDescriptor(state)
+  return [
+    ...options,
+    ...(permission ? [permission] : []),
+    ...(interaction ? [interaction] : []),
+    ...(agent ? [agent] : [])
+  ]
 }
 
 /** Presentation only until a launch or fence can carry picks. */
@@ -308,12 +301,12 @@ export function canSetStructuredAgentSessionOption(
   if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
-  if (id === 'permissionMode' || id === 'interactionMode') {
+  if (id === 'permissionMode' || id === 'interactionMode' || id === 'agent') {
     const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      (value === 'own'
+      (id === 'permissionMode' && value === 'own'
         ? state.permissionOwnSupported === true
         : descriptor.kind.choices.some((choice) => choice.value === value))
     )

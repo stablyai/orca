@@ -1,4 +1,13 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import {
+  acpEffortOption,
+  acpIdSelect,
+  acpCategorySelect,
+  acpNeedsInteractionMode,
+  acpOffersEffort,
+  acpReportedPermissionMode,
+  acpToggleWrite
+} from './acp-select-choices'
+import { acpAgentInventory, acpModeWrite, acpReportedOptions } from './acp-agent-inventory'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
@@ -26,10 +35,6 @@ export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
 
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
-
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -45,6 +50,7 @@ export class AcpStructuredOptions {
       | 'fastConfigId'
       | 'thinkingConfigId'
       | 'interactionModes'
+      | 'modeSelectsAgent'
     > = {}
   ) {}
 
@@ -160,8 +166,15 @@ export class AcpStructuredOptions {
     if (!configOptions) {
       return
     }
+    const previous = this.currentValues()
     this.configOptions = configOptions
     if (this.writing === 0 && this.unsettled.size === 0) {
+      const current = this.currentValues()
+      if (previous.model && current.model && previous.model !== current.model) {
+        this.invalidateInput('model')
+      } else if (previous.effort && current.effort && previous.effort !== current.effort) {
+        this.invalidateInput('effort')
+      }
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
@@ -212,22 +225,21 @@ export class AcpStructuredOptions {
   }
 
   offersEffort(value: string): boolean {
-    const option = this.effortOption()
-    return !!(
-      option &&
-      (this.dialect.clampsUnlistedEffort ||
-        acpSelectChoices(option).some((choice) => choice.value === value))
-    )
+    return acpOffersEffort(this.effortOption(), value, this.dialect.clampsUnlistedEffort)
   }
 
   refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
 
   write(key: string, value: string): AcpOptionWrite | null {
+    if (key === 'agent' || key === 'interactionMode') {
+      return acpModeWrite(key, value, this.dialect, this.select('mode'))
+    }
     if (key === 'fastMode' || key === 'thinking') {
-      const option = this.idSelect(
-        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
+      return acpToggleWrite(
+        this.configOptions,
+        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId,
+        value
       )
-      return option ? { method: 'config', configId: option.id, value } : null
     }
     if (key === 'model') {
       const option = this.select('model')
@@ -241,30 +253,27 @@ export class AcpStructuredOptions {
       const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
-    if (key === 'interactionMode') {
-      const option = this.select('mode')
-      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
-      return option && native ? { method: 'config', configId: option.id, value: native } : null
-    }
     return null
   }
 
   /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
   needsInteractionMode(value: string): boolean {
-    const write = this.write('interactionMode', value)
-    return write?.method === 'config'
-      ? this.appliedInput.get('interactionMode') !== value ||
-          this.select('mode')?.currentValue !== write.value
-      : value === 'plan'
+    return acpNeedsInteractionMode(
+      this.dialect.interactionModes,
+      this.select('mode'),
+      this.appliedInput.get('interactionMode'),
+      value
+    )
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<
     AgentSessionOptionsResult,
-    'models' | 'current' | 'forkSupport' | 'fastModeSupport'
+    'models' | 'current' | 'forkSupport' | 'fastModeSupport' | 'agents'
   > {
     const modelOption = this.select('model')
     const effortOption = this.effortOption()
+    const agentOption = this.dialect.modeSelectsAgent ? this.select('mode') : null
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const models = acpModelMenuModels({
       dialect: this.dialect,
@@ -276,10 +285,12 @@ export class AcpStructuredOptions {
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     const menu = {
       models,
+      ...acpAgentInventory(agentOption),
       forkSupport: this.forkSupport,
       current: {
         ...(currentModel ? { model: currentModel } : {}),
         ...(effortOption ? { effort: effortOption.currentValue } : {}),
+        ...(agentOption ? { agent: agentOption.currentValue } : {}),
         confirmed
       }
     }
@@ -302,11 +313,7 @@ export class AcpStructuredOptions {
   }
 
   reported(): Readonly<Record<string, string>> {
-    const { current } = this.read()
-    return {
-      ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {})
-    }
+    return acpReportedOptions(this.read().current)
   }
 
   observedCurrent(values?: Readonly<Partial<Record<string, string>>>) {
@@ -316,13 +323,11 @@ export class AcpStructuredOptions {
   reportedPermissionMode(
     values: Readonly<Partial<Record<string, string>>> | undefined
   ): string | null {
-    if (!values) {
-      return this.applied.get('permissionMode') ?? null
-    }
-    const current = this.select('mode')?.currentValue
-    return current
-      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
-      : null
+    return acpReportedPermissionMode(
+      values,
+      this.select('mode')?.currentValue,
+      this.applied.get('permissionMode')
+    )
   }
 
   // Match the mode category rather than assuming an agent's config ID.
@@ -343,14 +348,10 @@ export class AcpStructuredOptions {
   }
 
   private idSelect(id: string | undefined): SelectOption | null {
-    const option = id ? this.configOptions.find((entry) => entry.id === id) : undefined
-    return option && isSelect(option) ? option : null
+    return acpIdSelect(this.configOptions, id)
   }
 
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option && isSelect(option) ? option : null
+    return acpCategorySelect(this.configOptions, category)
   }
 }

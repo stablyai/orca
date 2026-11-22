@@ -71,7 +71,7 @@ export function admitsStructuredAgentSessionOption(
   return !(
     !context.isCurrentContext() ||
     !context.ready ||
-    (!view.catalog && id !== 'interactionMode') ||
+    (!view.catalog && id !== 'interactionMode' && id !== 'agent') ||
     encoded === null ||
     (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
       value === 'own' &&

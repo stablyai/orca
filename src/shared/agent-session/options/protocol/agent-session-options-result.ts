@@ -11,7 +11,7 @@ import type { AgentSessionModelOption } from '../model-catalog/agent-session-mod
 
 export type AgentSessionAcceptedInputSources = Partial<
   Record<
-    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
+    'model' | 'agent' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
     'saved' | 'seeded' | 'policy'
   >
 >
@@ -41,6 +41,8 @@ export type AgentSessionOptionsResult = {
   /** This session takes image attachments. Absent = unknown (an older host). */
   acceptsImages?: boolean
   models: AgentSessionModelOption[]
+  /** Provider-advertised internal agents; absent when this session cannot list them. */
+  agents?: { id: string; label: string; description?: string }[]
   /** False means inventory is unknown; retain existing rows. Absent keeps older hosts' authoritative-list behavior. */
   modelsKnown?: false
   /** The `models` ids the agent's own finished listing names, excluding host-added rows and
@@ -52,6 +54,9 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    agent?: string
+    /** Saved agent selection for the next message, separate from the provider's current agent. */
+    agentIntent?: string
     /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
     /** The current child runs this provider fallback in place of `model`; display only, never sent. */

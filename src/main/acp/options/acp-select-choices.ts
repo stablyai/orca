@@ -10,6 +10,33 @@ import { isAgentSessionInteractionMode } from '../../../shared/agent-session/opt
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
+export function acpIdSelect(
+  options: SessionConfigOption[],
+  id: string | undefined
+): SelectOption | null {
+  const option = id ? options.find((entry) => entry.id === id) : undefined
+  return option?.type === 'select' ? option : null
+}
+
+export function acpCategorySelect(
+  options: SessionConfigOption[],
+  category: string
+): SelectOption | null {
+  const option = options.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}
+
+export function acpToggleWrite(
+  options: SessionConfigOption[],
+  id: string | undefined,
+  value: string
+): { method: 'config'; configId: string; value: string } | null {
+  const option = acpIdSelect(options, id)
+  return option ? { method: 'config', configId: option.id, value } : null
+}
+
 export function acpSelectChoices(option: SelectOption): SessionConfigSelectOption[] {
   const choices: SessionConfigSelectOption[] = []
   for (const entry of option.options) {
@@ -71,6 +98,17 @@ export function acpEffortOption(options: readonly SessionConfigOption[]): Select
   return effort
 }
 
+export function acpOffersEffort(
+  option: SelectOption | null,
+  value: string,
+  clampsUnlisted: boolean | undefined
+): boolean {
+  return !!(
+    option &&
+    (clampsUnlisted || acpSelectChoices(option).some((choice) => choice.value === value))
+  )
+}
+
 /** The agent's own mode value for Orca's interaction mode, when its mode select offers it. */
 export function acpInteractionModeValue(
   interactionModes: AcpDialect['interactionModes'],
@@ -82,5 +120,28 @@ export function acpInteractionModeValue(
     modeOption &&
     acpSelectChoices(modeOption).some((choice) => choice.value === native)
     ? native
+    : null
+}
+
+export function acpNeedsInteractionMode(
+  modes: AcpDialect['interactionModes'],
+  option: SelectOption | null,
+  applied: string | undefined,
+  value: string
+): boolean {
+  const native = acpInteractionModeValue(modes, option, value)
+  return native ? applied !== value || option?.currentValue !== native : value === 'plan'
+}
+
+export function acpReportedPermissionMode(
+  values: Readonly<Partial<Record<string, string>>> | undefined,
+  current: string | undefined,
+  applied: string | undefined
+): string | null {
+  if (!values) {
+    return applied ?? null
+  }
+  return current
+    ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
     : null
 }
