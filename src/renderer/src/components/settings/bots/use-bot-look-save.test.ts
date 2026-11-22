@@ -1,7 +1,13 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { dispatchWindowCloseRequest } from '../../../app-shell/shutdown/window-close-request-coordinator'
 import { saveBotLook, useBotLookSave, type BotLookUpdate } from './use-bot-look-save'
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('saveBotLook', () => {
   it('sends picks made behind a slow save as one save of the latest look', async () => {
@@ -76,6 +82,37 @@ describe('saveBotLook', () => {
     act(() => result.current.pick({ avatarOutfit: 'tie' }))
     window.dispatchEvent(new Event('pagehide'))
     expect(sent).toEqual([{ avatarOutfit: 'tie' }])
+  })
+
+  it('quitting waits for a pick on its way before the last checkpoint, and a save that never lands cannot hold quit', async () => {
+    vi.useFakeTimers()
+    const events: string[] = []
+    vi.stubGlobal('api', {
+      app: { awaitBeforeUnloadCheckpoint: async () => void events.push('checkpoint') },
+      ui: {
+        confirmWindowClose: () => events.push('close'),
+        cancelWindowClose: () => events.push('cancel')
+      }
+    })
+    saveBotLook('local:b7', { avatarColor: '#f4c4cf' }, () => new Promise(() => {}))
+    let land = (): void => {}
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      events.push(`send ${look.avatarOutfit}`)
+      return new Promise<void>((resolve) => {
+        land = () => resolve(void events.push('landed'))
+      })
+    }
+    const { result } = renderHook(() => useBotLookSave('local:b8', update, 500))
+    act(() => result.current.pick({ avatarOutfit: 'tie' }))
+    const closing = dispatchWindowCloseRequest({ isQuitting: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(events).toEqual(['send tie'])
+    land()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(events).toEqual(['send tie', 'landed'])
+    await vi.advanceTimersByTimeAsync(2000)
+    await closing
+    expect(events).toEqual(['send tie', 'landed', 'checkpoint', 'close'])
   })
 })
 

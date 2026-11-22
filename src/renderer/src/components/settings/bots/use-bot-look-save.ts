@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../../shared/bots/bot-avatar-color'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
@@ -12,6 +13,7 @@ type LookSaves = {
   waiting: BotLookUpdate | null
   update: (look: BotLookUpdate) => Promise<unknown>
   drained: Set<() => void>
+  finished: Promise<void>
 }
 
 /** Holds the host's re-read back until the returned release runs. */
@@ -36,11 +38,31 @@ function sendPicksOnLeave(): void {
     }
   }
 }
+// Closing or quitting waits a moment for picks on their way, so the app's last save before it goes has them.
+const CLOSE_SAVE_WAIT_MS = 2000
+async function savePicksBeforeClose(): Promise<boolean> {
+  for (const save of pausedPicks) {
+    save()
+  }
+  const running = [...lookSaves.values()].map((saves) => saves.finished.catch(() => undefined))
+  if (running.length > 0) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      Promise.all(running),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, CLOSE_SAVE_WAIT_MS)
+      })
+    ])
+    clearTimeout(timer)
+  }
+  return true
+}
 let listening = false
 function sendOnLeave(): void {
   if (!listening && typeof window !== 'undefined') {
     listening = true
     window.addEventListener('pagehide', sendPicksOnLeave)
+    registerWindowCloseGuard(savePicksBeforeClose)
   }
 }
 
@@ -64,12 +86,13 @@ export function saveBotLook(
   const saves: LookSaves = {
     waiting: look,
     update,
-    drained: new Set(onDrained ? [onDrained] : [])
+    drained: new Set(onDrained ? [onDrained] : []),
+    finished: Promise.resolve()
   }
   lookSaves.set(key, saves)
   sendOnLeave()
   const release = hold?.()
-  void (async () => {
+  saves.finished = (async () => {
     while (saves.waiting) {
       const next = saves.waiting
       saves.waiting = null
