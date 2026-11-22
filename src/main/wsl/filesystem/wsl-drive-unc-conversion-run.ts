@@ -26,6 +26,8 @@ import {
 import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import {
   collectWslDriveUncScope,
+  isLocalFolderWorkspace,
+  isLocalRepo,
   withNestedWslDriveUncProjects,
   wslDriveUncRefusedSplitBy
 } from './wsl-drive-unc-project-scope'
@@ -76,7 +78,7 @@ export async function startWslDriveUncConversion(
   } catch (error) {
     return refused([stateConflict(error)])
   }
-  const repos = state.repos.filter((repo) => repoIds.includes(repo.id))
+  const repos = state.repos.filter((repo) => repoIds.includes(repo.id) && isLocalRepo(repo))
   const gitBlockers = await windowsGitBlockers(deps, repos, request.distro)
   if (gitBlockers.length > 0) {
     return refused(gitBlockers)
@@ -106,7 +108,10 @@ export async function startWslDriveUncConversion(
     rootPaths: [
       ...repos.flatMap(wslMoveRepoPaths),
       ...state.folderWorkspaces
-        .filter((folder) => folderWorkspaceIds.includes(folder.id))
+        .filter(
+          (folder) =>
+            folderWorkspaceIds.includes(folder.id) && isLocalFolderWorkspace(state, folder)
+        )
         .map((folder) => folder.folderPath)
     ],
     phase: 'prepared',

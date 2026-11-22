@@ -11,6 +11,7 @@ import {
   startBotSession
 } from '../../../../../bots/bot-chat-session'
 import { noteInChat } from '../../../../../bots/bot-chat-status-line'
+import { showBotSessionTab } from '../../../../../bots/bot-session-tab-show'
 import {
   botRequestElsewhereNote,
   botRequestSenderName,
@@ -47,13 +48,17 @@ async function requestConversation(
 
 /** Admits a reserved request into a conversation of its own; when it goes nowhere the conversation
  *  is closed again and the reservation given back. `home`: the owner's Chat, told it went elsewhere
- *  (`chat` is null while the bot has none); null tells none. */
+ *  (`chat` is null while the bot has none); null tells none. `tab`: the conversation is a chat the
+ *  sender asked for (`--chat new`), so it gets a tab in the bot's home and lists under the bot like a
+ *  chat opened from the tab bar, whoever it acts for: the owner's Orca holds it either way. A
+ *  teammate's request Orca routed out of the Chat on its own waits in the bot's Chats, like a thread. */
 export async function admitInOwnConversation(
   runtime: OrcaRuntimeService,
   bot: Bot,
   record: BotRequestRecord,
   subject: string,
   home: { chat: string | null } | null,
+  tab: boolean,
   reservation: {
     admit: (address: string) => { sent: boolean; receipt: unknown }
     release: () => void
@@ -87,7 +92,22 @@ export async function admitInOwnConversation(
   if (home) {
     noteInChat(home.chat ?? undefined, botRequestElsewhereNote(record, title))
   }
+  if (tab) {
+    await showConversationTab(runtime, bot, sessionId)
+  }
   return admitted.receipt
+}
+
+/** The request is already delivered, so a tab that can't be shown only leaves the chat in the bot's
+ *  Chats, where it was before; reopening it from there publishes the same tab. */
+async function showConversationTab(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  sessionId: string
+): Promise<void> {
+  await showBotSessionTab(runtime, bot, sessionId).catch((error: unknown) =>
+    console.warn('[bots] could not show a new chat tab', error)
+  )
 }
 
 export function sessionAddress(sessionId: string): string {

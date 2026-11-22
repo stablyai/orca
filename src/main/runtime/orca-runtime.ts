@@ -216,6 +216,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
+    this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
   }
 

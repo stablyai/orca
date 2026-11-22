@@ -49,8 +49,18 @@ export type WslHostStatus = {
   removalPending?: boolean
 }
 
-/** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
-export type WslHostConnectIntent = 'update' | 'force'
+/**
+ * An explicit Update retries a skipped build behind the terminal census; Force also passes it.
+ * Restart-as-WSL-host ends the server's terminals, then starts it again as a WSL host.
+ */
+export type WslHostConnectIntent = WslHostUpdateIntent | 'restart-as-wsl-host'
+export type WslHostUpdateIntent = 'update' | 'force'
+
+/**
+ * The distro's server was started some other way (usually by an SSH host), without the WSL host
+ * marker, and terminals keep it from restarting on its own. It cannot take moved projects.
+ */
+export const ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE = 'orcad_not_started_as_wsl_host'
 
 /** Update anyway over an uncounted census: Update's admission, pinned to the build the user confirmed. */
 export type WslHostPastUncountedTerminals = { incumbentVersion: string | null }
