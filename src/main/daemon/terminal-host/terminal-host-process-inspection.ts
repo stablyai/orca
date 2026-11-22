@@ -43,7 +43,7 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
-  /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
+  /** A steady poll from a pane tracking no agent; a proven idle macOS shell answers from its group. */
   jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation

@@ -157,7 +157,9 @@ export function handleAgentCompletionInspectionResult(args: {
   state.commandInForeground =
     !recognized &&
     result.foregroundProcess !== null &&
-    (!isPaneShell(result.foregroundProcess) || result.childProcessEvidence === 'children')
+    (!isPaneShell(result.foregroundProcess) ||
+      result.childProcessEvidence === 'children' ||
+      (result.childProcessEvidence === undefined && result.hasChildProcesses))
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.

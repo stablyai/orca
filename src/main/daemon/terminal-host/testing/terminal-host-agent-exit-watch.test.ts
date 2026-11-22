@@ -216,4 +216,45 @@ describe('TerminalHost foreground agent exit watch', () => {
     expect(result.foregroundProcess).toBe('codex')
     await windowsHost.dispose()
   })
+
+  it('reads a Windows shell’s escaped children even when the pane asked for job membership only', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let exitWindowsShell: (code: number) => void = () => {}
+    // A Store shell is alone in its job while its child runs outside it; only the table read sees the child.
+    const inspectChildProcesses = vi.fn(
+      (_fresh?: boolean, _ignoreDetached?: boolean, jobMembershipOnly?: boolean) =>
+        jobMembershipOnly ? ('no-children' as const) : ('children' as const)
+    )
+    const windowsHost = new TerminalHost({
+      spawnSubprocess: () =>
+        ({
+          pid: 99997,
+          getForegroundProcess: () => 'pwsh.exe',
+          inspectChildProcesses,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(() => exitWindowsShell(0)),
+          terminateOwnedTree: () => 'unavailable',
+          forceKill: vi.fn(() => exitWindowsShell(137)),
+          signal: vi.fn(),
+          onData: vi.fn(),
+          onExit: (cb: (code: number) => void) => {
+            exitWindowsShell = cb
+          },
+          dispose: vi.fn()
+        }) satisfies SubprocessHandle
+    })
+    await windowsHost.createOrAttach({
+      sessionId: 'pane-store',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    const result = await windowsHost.inspectProcess('pane-store', {
+      steadyState: true,
+      jobMembershipOnly: true
+    })
+    expect(result.childProcessEvidence).toBe('children')
+    await windowsHost.dispose()
+  })
 })

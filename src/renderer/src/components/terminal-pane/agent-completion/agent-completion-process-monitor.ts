@@ -19,6 +19,7 @@ import {
   handleAgentCompletionInspectionResult,
   type RemoteInspectionState
 } from './agent-completion-inspection-result'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 export function createAgentCompletionProcessMonitor({
   options,
@@ -142,9 +143,11 @@ export function createAgentCompletionProcessMonitor({
         let inspectionSucceeded = false
         try {
           const steadyState = priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-          // Child evidence matters only while an agent is tracked; skip the Windows table read otherwise.
+          // A proven idle macOS shell answers from its group; a Windows shell-only job proves nothing (Store shells).
           const jobMembershipOnly =
-            steadyState && !(state.lastForegroundAgent && state.hasAgentRunEvidence)
+            steadyState &&
+            !isWindowsUserAgent() &&
+            !(state.lastForegroundAgent && state.hasAgentRunEvidence)
           // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
           const inspectOptions = {
             ...(expectedIncarnationIdAtRequest
