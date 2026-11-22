@@ -36,6 +36,18 @@ export async function applyAcpMessageOptions(
   for (const key of ['interactionMode', 'model', 'thinking', 'effort', 'fastMode'] as const) {
     const value = key === 'effort' ? offeredEffort(session, options.effort) : options[key]
     if (
+      key === 'effort' &&
+      value !== undefined &&
+      session.spec.dialect.confirmsEffortAtSend &&
+      session.options.refusesEffort(value)
+    ) {
+      const detail = `the selected model has no ${value} reasoning effort. Choose another effort and send again`
+      throw withProviderDiagnostic(
+        new AgentSessionOptionRejectedError(detail),
+        providerDiagnostic(detail, 'person')
+      )
+    }
+    if (
       value === undefined ||
       (key === 'interactionMode'
         ? !session.options.needsInteractionMode(value)
