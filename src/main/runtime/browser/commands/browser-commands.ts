@@ -36,6 +36,8 @@ export class RuntimeBrowserCommands {
   readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
   readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
   readonly browserStop: RuntimeBrowserNavigation['browserStop']
+  readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
+  readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -155,6 +157,8 @@ export class RuntimeBrowserCommands {
     this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
     this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
     this.browserStop = navigation.browserStop.bind(navigation)
+    this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
+    this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -244,6 +248,9 @@ export class RuntimeBrowserCommands {
       'browserSetSiteColorScheme',
       // Page admission waits for the main-frame load, the very load a stop ends.
       'browserStop',
+      // Chrome finds while a page loads; the stop must also reach a page that is still loading.
+      'browserFindInPage',
+      'browserStopFindInPage',
       'browserTabList',
       'browserTabCurrent',
       'browserTabAnnotations',

@@ -65,6 +65,7 @@ export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
 export type BrowserStopResult = { url: string; title: string }
+export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number

@@ -54,7 +54,8 @@ export function RemoteBrowserPageToolbar({
   onBack,
   onForward,
   onReload,
-  onStop
+  onStop,
+  onFind
 }: {
   page: BrowserPage
   workspaceId: string
@@ -83,6 +84,8 @@ export function RemoteBrowserPageToolbar({
   onForward: () => void
   onReload: (ignoreCache: boolean) => void
   onStop: () => void
+  /** Null on hosts that cannot search their pages. */
+  onFind: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
   const { id: browserPageId, url: pageUrl, loading } = page
@@ -196,7 +199,7 @@ export function RemoteBrowserPageToolbar({
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(pageUrl)}
           pageActions={{
-            onFind: null,
+            onFind,
             onHardReload: stopHardReloadSupported ? () => runReloadTrigger('hard-reload') : null,
             onOpenDevTools: null,
             onOpenExternal: externalUrl
