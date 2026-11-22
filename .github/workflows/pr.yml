@@ -44,6 +44,7 @@ jobs:
       managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
+      package_windows_tests: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows_tests }}
       dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
@@ -1000,7 +1001,7 @@ jobs:
   package_windows_tests:
     name: package tests (windows)
     needs: [code_paths]
-    if: needs.code_paths.outputs.package_windows == 'true'
+    if: needs.code_paths.outputs.package_windows_tests == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -1243,6 +1244,7 @@ jobs:
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
           PACKAGE_WINDOWS_TESTS: ${{ needs.package_windows_tests.result }}
+          PACKAGE_WINDOWS_TESTS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows_tests }}
           DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
           DEPENDENCY_ISOLATION_SHOULD_RUN: ${{ needs.code_paths.outputs.dependency_isolation }}
         run: |
@@ -1286,6 +1288,6 @@ jobs:
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
-          check_job package_windows_tests "$PACKAGE_WINDOWS_TESTS" "$PACKAGE_WINDOWS_SHOULD_RUN"
+          check_job package_windows_tests "$PACKAGE_WINDOWS_TESTS" "$PACKAGE_WINDOWS_TESTS_SHOULD_RUN"
           check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"
