@@ -65,9 +65,9 @@ function setUp(rule: GitLabEventRule) {
     save: async (hookId: string, secret: string) => {
       saved.set(hookId, secret)
     },
-    clear: async (hookId: string) => {
+    clear: vi.fn(async (hookId: string) => {
       saved.delete(hookId)
-    }
+    })
   }
   return {
     upkeep: new GitLabEventHooks(host, gitlab, store, secrets),
@@ -76,6 +76,7 @@ function setUp(rule: GitLabEventRule) {
     hooks,
     automations,
     saved,
+    secrets,
     rotate: () => {
       keyGeneration += 1
     }
@@ -136,14 +137,17 @@ describe('GitLabEventHooks', () => {
     expect(host.tell).toHaveBeenCalledTimes(1)
   })
 
-  it('removes the webhooks and their secret once the rule is gone', async () => {
-    const { upkeep, gitlab, hooks, automations, saved } = setUp(mentions)
+  it('removes the webhooks and their secret once the rule is gone, retrying a failed clear', async () => {
+    const { upkeep, gitlab, hooks, automations, saved, secrets } = setUp(mentions)
     await upkeep.reconcile()
     automations.length = 0
+    secrets.clear.mockRejectedValueOnce(new Error('locked'))
     await upkeep.reconcile()
-
-    expect(gitlab.remove).toHaveBeenCalledTimes(2)
     expect(hooks.size).toBe(0)
+    expect(saved.size).toBe(1)
+
+    await upkeep.reconcile()
+    expect(gitlab.remove).toHaveBeenCalledTimes(2)
     expect(saved.size).toBe(0)
   })
 

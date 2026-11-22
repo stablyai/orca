@@ -152,13 +152,19 @@ export class GitLabEventHooks {
         console.warn('[gitlab-events] could not remove a GitLab webhook', error)
       }
     }
-    await this.store.write(
-      hookId,
-      Object.keys(left).length > 0 ? { ...saved, projects: left } : null
-    )
-    if (Object.keys(left).length === 0) {
-      await this.secrets.clear(hookId)
+    if (Object.keys(left).length > 0) {
+      await this.store.write(hookId, { ...saved, projects: left })
+      return
     }
+    // The record outlives the webhooks until the secret is gone too, so a failed clear is retried.
+    try {
+      await this.secrets.clear(hookId)
+    } catch (error) {
+      console.warn('[gitlab-events] could not remove a GitLab webhook secret', error)
+      await this.store.write(hookId, { ...saved, projects: {} })
+      return
+    }
+    await this.store.write(hookId, null)
   }
 
   private async keep(hookId: string, { automationName, rule }: Wanted): Promise<void> {
