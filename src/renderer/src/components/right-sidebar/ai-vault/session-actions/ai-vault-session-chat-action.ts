@@ -28,6 +28,15 @@ export function resolveAiVaultSessionRowChatActions(args: {
   resumeInChat: AiVaultResumeInChatEligibility | null
   searchHit: AiVaultSearchHit | undefined
 }): AiVaultSessionRowChatActions {
+  if (args.session.historySource === 'cursor-acp-metadata') {
+    return {
+      canJumpToOriginalPane: false,
+      resumeDisabled: true,
+      resumeWorktreeId: null,
+      resumeInNewChatWorkspaceId: null,
+      resumeInNewCliWorktreeId: null
+    }
+  }
   const searchResumeAllowed = args.searchHit ? canResumeAiVaultSearchHit(args.searchHit) : true
   const targets = resolveAiVaultSessionSurfaceSwitchTargets(
     args.session,

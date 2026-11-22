@@ -67,9 +67,12 @@ let forcedRefreshEpoch = 0
 
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; cursorAcpSessionsDir?: string } = {}
 ): Promise<AiVaultListResult> {
-  const key = aiVaultLocalScanScopeKey(args)
+  const cursorAcpSessionsDir = options.cursorAcpSessionsDir
+  // Desktop History's metadata-only overlay must not leak into shared runtime list results.
+  const sourceKey = cursorAcpSessionsDir ? 'desktop-cursor-acp:' : ''
+  const key = sourceKey + aiVaultLocalScanScopeKey(args)
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = aiVaultLocalScanKey(args)
   const now = Date.now()
@@ -77,7 +80,9 @@ export async function listAiVaultSessions(
     clearAiVaultBackgroundRestartCircuit()
   }
   // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
-  const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
+  const fullKey = args?.scopeOnly
+    ? sourceKey + aiVaultLocalScanScopeKey({ ...args, scopeOnly: false })
+    : key
   const cachedList =
     args?.force === true ? undefined : servingCachedList([key, fullKey], depth, args, now)
   if (cachedList) {
@@ -89,7 +94,7 @@ export async function listAiVaultSessions(
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
     // Isolate invalidated scans without changing the key used by progress readers.
-    key: JSON.stringify({ scanKey, generation: startGeneration }),
+    key: JSON.stringify({ scanKey, sourceKey, generation: startGeneration }),
     force: args?.force,
     signal: options.signal,
     onCreate: (scanId) => {
@@ -112,6 +117,7 @@ export async function listAiVaultSessions(
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
           scopeOnly: args?.scopeOnly,
+          cursorAcpSessionsDir,
           ...roots
         },
         scanSignal,

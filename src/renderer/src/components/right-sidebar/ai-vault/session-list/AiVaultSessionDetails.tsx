@@ -293,7 +293,9 @@ export function SessionInlineDetails({
             <WorktreeMetadataLines worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
           </SessionReceiptSection>
         ) : null}
-        <SessionAccountSection accountLabel={accountLabel} />
+        {session.historySource !== 'cursor-acp-metadata' ? (
+          <SessionAccountSection accountLabel={accountLabel} />
+        ) : null}
       </div>
     </div>
   )

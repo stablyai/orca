@@ -139,7 +139,10 @@ export function VaultSessionRow({
           'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
           'The transcript source is unavailable.'
         )
-  const requestDelete = (): void => onRequestDelete?.(session)
+  const requestDelete =
+    session.historySource === 'cursor-acp-metadata'
+      ? undefined
+      : (): void => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
     ? t('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')

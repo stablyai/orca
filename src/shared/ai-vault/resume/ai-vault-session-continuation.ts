@@ -7,6 +7,7 @@ export function canContinueAiVaultSessionInNewSession(
   targetWorktreeId: string | null | undefined
 ): boolean {
   return Boolean(
+    session.historySource !== 'cursor-acp-metadata' &&
     targetWorktreeId &&
     // A database row's host saves its conversation when Hand Off opens, even with no preview text.
     (isAiVaultDatabaseAgent(session.agent) ||

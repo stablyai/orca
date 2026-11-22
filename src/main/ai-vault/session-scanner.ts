@@ -14,7 +14,7 @@ import {
 import { sessionCandidatesFromDiscoveries } from './discovery/session-scanner-candidates'
 import { parseSessionCandidates } from './parsing/session-scanner-candidate-parse'
 import { createSessionParseStats } from './parse-cache/session-scanner-parse-cache'
-import { recordSessionScanIssue } from './parsing/session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './parsing/session-scan-issues'
 import {
   aiVaultScanWorkload,
   noteAiVaultScanReading
@@ -27,6 +27,8 @@ import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
 } from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { scanCursorAcpMetadata } from './scanners/cursor/session-scanner-cursor-acp-metadata'
+import { mergeAiVaultListResults } from './listing/session-list-results'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
 import { scopeOnlyScan } from './scope/session-scope-cwd'
@@ -144,13 +146,40 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         span.setAttribute('bytesRead', parseStats.bytesRead)
         span.setAttribute('issues', issues.length)
 
-        return {
+        const result = {
           sessions: withAntigravityArtifactPaths(
             mergeSessions(cappedSessions, scopeSessions),
             discoveries
           ),
           issues: issues.map((issue) => ({ executionHostId, ...issue })),
           scannedAt: new Date().toISOString()
+        }
+        if (!options.cursorAcpSessionsDir) {
+          return result
+        }
+        try {
+          const cursor = await scanCursorAcpMetadata(
+            options.cursorAcpSessionsDir,
+            options,
+            options.signal
+          )
+          return cursor.sessions.length || cursor.issues.length
+            ? mergeAiVaultListResults(
+                [result, cursor],
+                options.limit,
+                options.unlimited,
+                options.scopePaths
+              )
+            : result
+        } catch (error) {
+          throwIfAiVaultScanCancelled(options.signal)
+          recordSessionScanIssue(result.issues, {
+            agent: 'cursor',
+            executionHostId,
+            path: options.cursorAcpSessionsDir,
+            ...scanIssueTextFromError(error)
+          })
+          return result
         }
       })
     )

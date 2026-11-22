@@ -16186,7 +16186,8 @@
             "queuedMessageCount_one": "{{count}} queued message",
             "queuedMessageCount_other": "{{count}} queued messages",
             "subagentTranscriptCount_one": "{{count}} subagent transcript",
-            "subagentTranscriptCount_other": "{{count}} subagent transcripts"
+            "subagentTranscriptCount_other": "{{count}} subagent transcripts",
+            "cursorAcpMetadataOnly": "Cursor Chat metadata only. This conversation cannot be previewed or resumed here."
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",

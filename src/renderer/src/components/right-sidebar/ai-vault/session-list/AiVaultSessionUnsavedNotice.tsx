@@ -17,6 +17,16 @@ export function SessionUnsavedConversationNotice({
   logAvailable: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  if (session.historySource === 'cursor-acp-metadata') {
+    return (
+      <p className="rounded-md border border-dashed border-border/70 bg-foreground/[0.04] px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+        {t(
+          'auto.components.right.sidebar.AiVaultSessionDetails.cursorAcpMetadataOnly',
+          'Cursor Chat metadata only. This conversation cannot be previewed or resumed here.'
+        )}
+      </p>
+    )
+  }
   const recoverable = isAiVaultSessionRecoverableEmpty(session)
 
   return (

@@ -54,6 +54,7 @@ const aiVaultSessionSchema = z.object({
   executionHostPlatform: nodePlatformSchema.nullable().optional(),
   agent: z.string().min(1),
   sessionId: z.string(),
+  historySource: z.literal('cursor-acp-metadata').optional().catch(undefined),
   title: z.string(),
   titleKind: z.enum(['named', 'fallback']).optional().catch(undefined),
   cwd: z.string().nullable(),

@@ -89,11 +89,13 @@ export function SessionMetadata({
                 : t('aiVault.antigravity2ToCli', '2.0 → CLI')}
           </Badge>
         ) : null}
-        <span className="shrink-0 tabular-nums">
-          {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
-            value0: session.messageCount
-          })}
-        </span>
+        {session.historySource !== 'cursor-acp-metadata' ? (
+          <span className="shrink-0 tabular-nums">
+            {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
+              value0: session.messageCount
+            })}
+          </span>
+        ) : null}
         {session.subagentTranscriptCount > 0 ? (
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>

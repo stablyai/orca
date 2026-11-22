@@ -187,11 +187,13 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
   // File viewing needs a conversation resource; Reveal/CWD retain their own path semantics.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
-  const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
+  const metadataOnly = row.type === 'session' && row.session.historySource === 'cursor-acp-metadata'
+  const searchPathAllowed = !metadataOnly && (!searchHit || hasAiVaultSearchHitPath(searchHit))
   const usesLegacyResumeCommand = row.type === 'session' && !row.session.structuredSession
   const canBuildResumeStartup =
     row.type === 'session' &&
     searchResumeAllowed &&
+    !metadataOnly &&
     usesLegacyResumeCommand &&
     (!isAntigravityReferenceSession(row.session) || !resumeGating.resumeDisabled)
   const resumeStartup = canBuildResumeStartup
@@ -257,7 +259,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }
-          resumeHidden={structuredSessionOpen}
+          resumeHidden={structuredSessionOpen || metadataOnly}
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}

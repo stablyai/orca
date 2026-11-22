@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   listAiVaultSessions as listCachedLocalAiVaultSessions,
   AiVaultLocalScanError
@@ -17,7 +19,10 @@ export async function scanLocalAiVaultSessionsAsIssue(
   signal: AbortSignal | undefined
 ): Promise<AiVaultListResult> {
   try {
-    return await listCachedLocalAiVaultSessions(args, { signal })
+    return await listCachedLocalAiVaultSessions(args, {
+      signal,
+      cursorAcpSessionsDir: join(homedir(), '.cursor', 'acp-sessions')
+    })
   } catch (error) {
     if (isAiVaultScanCancelledError(error)) {
       throw error

@@ -122,6 +122,8 @@ export type AiVaultSession = {
   executionHostPlatform?: NodeJS.Platform | null
   agent: AiVaultAgent
   sessionId: string
+  /** Cursor native-chat metadata without a transcript Orca can open or resume. */
+  historySource?: 'cursor-acp-metadata'
   title: string
   /** Claude and Codex only: whether `title` is the session's own name or a stand-in; absent means unclassified. */
   titleKind?: AiVaultSessionTitleKind

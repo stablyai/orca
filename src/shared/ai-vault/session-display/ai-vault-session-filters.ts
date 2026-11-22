@@ -87,6 +87,7 @@ export function filterAiVaultSessions(
     // Hide only truly empty sessions; retain preview-inferred turns and queued/subagent recovery content so lost conversations remain visible.
     if (
       filters.hideEmptySessions &&
+      session.historySource !== 'cursor-acp-metadata' &&
       !isAiVaultSessionResumableContent(session) &&
       !isAiVaultSessionRecoverableEmpty(session)
     ) {

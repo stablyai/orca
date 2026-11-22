@@ -57,6 +57,9 @@ export function projectStructuredAiVaultSessions(
     return result
   }
   const sessions = result.sessions.flatMap((session) => {
+    if (session.historySource === 'cursor-acp-metadata') {
+      return [session]
+    }
     const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
     if (local && deleted?.(session)) {
       return []
