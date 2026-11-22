@@ -32,6 +32,10 @@ async function openCopyIdField(page: Page) {
 const caret = (field: Locator) =>
   field.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd])
 
+// On macOS, Home and End scroll the document and leave a text field's caret where it is.
+const lineStart = process.platform === 'darwin' ? 'Meta+ArrowLeft' : 'Home'
+const lineEnd = process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End'
+
 test("an agent copy's ID keeps its prefix and copies as one string", async ({
   orcaPage: page,
   electronApp
@@ -43,7 +47,7 @@ test("an agent copy's ID keeps its prefix and copies as one string", async ({
   // A double-click selects the whole id, prefix included, and Ctrl+C copies it as one string.
   await electronApp.evaluate(({ clipboard }) => clipboard.writeText(''))
   await field.dblclick({ force: true })
-  await page.keyboard.press('Control+C')
+  await page.keyboard.press('ControlOrMeta+C')
   await expect
     .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()))
     .toBe('claude.code-mode')
@@ -53,7 +57,7 @@ test("an agent copy's ID keeps its prefix and copies as one string", async ({
   await page.keyboard.type('fast')
   await expect(field).toHaveValue('claude.fast')
   // Backspace stops at the prefix.
-  await page.keyboard.press('End')
+  await page.keyboard.press(lineEnd)
   for (let i = 0; i < 8; i++) {
     await page.keyboard.press('Backspace')
   }
@@ -62,7 +66,7 @@ test("an agent copy's ID keeps its prefix and copies as one string", async ({
 
   // A pasted whole id keeps only its suffix, and saves under the same prefix.
   await electronApp.evaluate(({ clipboard }) => clipboard.writeText('claude.pasted'))
-  await page.keyboard.press('Control+V')
+  await page.keyboard.press('ControlOrMeta+V')
   await expect(field).toHaveValue('claude.pasted')
   await page.keyboard.press('Enter')
   await expect.poll(() => savedCopyIds(page)).toEqual(['claude.pasted'])
@@ -75,7 +79,7 @@ test('typing after backspace hit the prefix of an empty suffix lands in order', 
   test.setTimeout(120_000)
   const field = await openCopyIdField(page)
   await field.click({ force: true })
-  await page.keyboard.press('End')
+  await page.keyboard.press(lineEnd)
   // Delete the whole suffix, then press Backspace into the prefix a few more times.
   for (let i = 0; i < 'code-mode'.length + 3; i++) {
     await page.keyboard.press('Backspace')
@@ -95,14 +99,14 @@ test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pas
   const field = await openCopyIdField(page)
   await field.click({ force: true })
   const moveCaretTo = async (at: number): Promise<void> => {
-    await page.keyboard.press('Home')
+    await page.keyboard.press(lineStart)
     for (let i = 0; i < at; i++) {
       await page.keyboard.press('ArrowRight')
     }
   }
 
   // Ctrl+A, then a word that starts with the prefix's first letter: every letter lands.
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('code-mode')
   await expect(field).toHaveValue('claude.code-mode')
   expect(await caret(field)).toEqual([16, 16])
@@ -117,7 +121,7 @@ test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pas
   expect(await caret(field)).toEqual([9, 9])
 
   // The same on an empty suffix.
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('Backspace')
   await expect(field).toHaveValue('claude.')
   await moveCaretTo('claude'.length)
@@ -128,7 +132,7 @@ test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pas
   expect(await caret(field)).toEqual([11, 11])
 
   // Home, then typing, starts the suffix.
-  await page.keyboard.press('Home')
+  await page.keyboard.press(lineStart)
   await page.keyboard.type('ab')
   await expect(field).toHaveValue('claude.abcode')
   expect(await caret(field)).toEqual([9, 9])
@@ -146,17 +150,17 @@ test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pas
   // A whole id pasted with the caret inside the prefix lands at the suffix start.
   await electronApp.evaluate(({ clipboard }) => clipboard.writeText('claude.xyz'))
   await moveCaretTo(3)
-  await page.keyboard.press('Control+V')
+  await page.keyboard.press('ControlOrMeta+V')
   await expect(field).toHaveValue('claude.xyzdxcode')
   expect(await caret(field)).toEqual([10, 10])
   await page.keyboard.type('-')
   await expect(field).toHaveValue('claude.xyz-dxcode')
 
   // The same into an empty suffix.
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('Backspace')
   await moveCaretTo(3)
-  await page.keyboard.press('Control+V')
+  await page.keyboard.press('ControlOrMeta+V')
   await expect(field).toHaveValue('claude.xyz')
   expect(await caret(field)).toEqual([10, 10])
 
@@ -172,7 +176,7 @@ test('the caret stays after the prefix for Delete, Home, Ctrl+A, selections, pas
   await expect(field).toHaveValue('claude.かqxyz')
 
   // And after Backspace hit the prefix of an empty suffix.
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('Backspace')
   await page.keyboard.press('Backspace')
   await page.keyboard.press('Backspace')
