@@ -19,12 +19,25 @@ const PUBLIC_REFERENCE_HOSTS = new Set([
   'dev.azure.com'
 ])
 
+// Fork: the widened forge list adds China forges (cnb/atomgit/gitee) that references don't cover;
+// this set keeps the reference providers unchanged while the lookup type grew.
+const REFERENCE_FORGE_PROVIDERS = new Set<string>([
+  'github',
+  'gitlab',
+  'gitea',
+  'bitbucket',
+  'azure-devops'
+])
+
 function referenceHostProvider(host: string): WorkspaceAttachment['provider'] | undefined {
   if (host === 'linear.app') {
     return 'linear'
   }
-  return PUBLIC_REFERENCE_HOSTS.has(host)
+  const provider = PUBLIC_REFERENCE_HOSTS.has(host)
     ? (getPublicForgeProviderForHost(host) ?? undefined)
+    : undefined
+  return provider !== undefined && REFERENCE_FORGE_PROVIDERS.has(provider)
+    ? (provider as WorkspaceAttachment['provider'])
     : undefined
 }
 

@@ -1,6 +1,14 @@
 import { foldWwwHostAlias, normalizeForgeWebHost } from './git-remote-host-alias'
 
-type PublicForgeProvider = 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'
+type PublicForgeProvider =
+  | 'github'
+  | 'gitlab'
+  | 'bitbucket'
+  | 'azure-devops'
+  | 'gitea'
+  | 'cnb'
+  | 'atomgit'
+  | 'gitee'
 
 /** Ownership only: callers retain their original endpoint and persisted host identity. */
 export function getPublicForgeProviderForHost(host: string): PublicForgeProvider | null {
@@ -21,5 +29,13 @@ export function getPublicForgeProviderForHost(host: string): PublicForgeProvider
   ) {
     return 'azure-devops'
   }
-  return hostname === 'codeberg.org' ? 'gitea' : null
+  // Fork: China-hosted forges (recognition only — clone/push never needed this). The gateway
+  // still routes their URLs through plain git, so these names only affect display and links.
+  if (hostname === 'cnb.cool' || hostname.endsWith('.cnb.cool')) {
+    return 'cnb'
+  }
+  if (hostname === 'atomgit.com') {
+    return 'atomgit'
+  }
+  return hostname === 'gitee.com' ? 'gitee' : null
 }
