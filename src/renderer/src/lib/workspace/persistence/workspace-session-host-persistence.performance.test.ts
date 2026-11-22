@@ -122,7 +122,13 @@ const MAIN_OWNED_KEY = 'main-owned-workspace'
  *  records and layout ownership do, then reports what it stored differently. */
 function normalizingMainSessionApi() {
   const sent = { writes: 0, entries: 0, bytes: 0 }
-  let stored: WorkspaceSessionState = {} as WorkspaceSessionState
+  let stored: WorkspaceSessionState = {
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {}
+  }
   const api: SessionApi = {
     get: async () => stored,
     patch: async () => {
@@ -135,16 +141,16 @@ function normalizingMainSessionApi() {
       for (const change of Object.values(patch.entries)) {
         sent.entries += Object.keys(change?.set ?? {}).length + (change?.remove.length ?? 0)
       }
-      const next: Record<string, unknown> = {
+      const next: WorkspaceSessionState = {
         ...stored,
         ...applyWorkspaceSessionEntriesPatch(stored, patch)
       }
       for (const [field, value] of Object.entries(next)) {
         if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-          next[field] = { ...value, [MAIN_OWNED_KEY]: { kept: 'by main' } }
+          Reflect.set(next, field, { ...value, [MAIN_OWNED_KEY]: { kept: 'by main' } })
         }
       }
-      stored = next as WorkspaceSessionState
+      stored = next
       const differ = storedDifferently(stored, patch)
       return {
         status: 'applied',
