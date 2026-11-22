@@ -60,7 +60,8 @@ export function WorktreeLineageToggle({
             aria-expanded={!collapsed}
             onClick={onToggle}
           >
-            <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 py-0.5">
+            {/* A status icon is 12px against the 10px text: padding beyond 1px would grow the card 2px when a child starts (#47118). */}
+            <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 py-px">
               <span className="inline-flex shrink-0 items-center gap-1">
                 <Workflow className="size-2.5" />
                 <span
