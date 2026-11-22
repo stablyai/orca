@@ -9,6 +9,25 @@ import {
   NativeChatGalleryMessageContext
 } from './native-chat-image-gallery-context'
 import { NativeChatImageGallery } from './NativeChatImageGallery'
+import { readLocalImagePreview } from '@/components/editor/document-images/local-image-src-reader'
+import {
+  invalidateLocalImageCache,
+  resetLocalImageCacheState
+} from '@/components/editor/document-images/local-image-src-cache'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+
+vi.mock('@/components/editor/document-images/local-image-src-reader', () => ({
+  readLocalImagePreview: vi.fn()
+}))
+vi.mock('@/diagnostics/crash-reporting/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: vi.fn()
+}))
+
+const LOCAL: RuntimeFileOperationArgs = {
+  target: { kind: 'local' },
+  worktreeId: 'w',
+  worktreePath: '/w'
+}
 
 beforeEach(() => {
   // No observer: every tile counts as near the viewport and shows its image.
@@ -25,6 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  resetLocalImageCacheState()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -35,7 +55,10 @@ function image(name: string, url = `https://example.invalid/${name}`) {
   return { type: 'image-ref' as const, url, alt: name }
 }
 
-type Message = { id: string | null; images: ReturnType<typeof image>[] }
+type Message = {
+  id: string | null
+  images: (ReturnType<typeof image> | { type: 'image-ref'; path: string })[]
+}
 
 const coveringView = () => document.getElementById('covering-view')
 
@@ -56,7 +79,7 @@ function Chat({
           <div inert={covered} data-native-chat-gallery-root="">
             {messages.map((message, at) => (
               <NativeChatGalleryMessageContext key={at} value={message.id}>
-                <NativeChatImageAttachments blocks={message.images} runtimeContext={null} />
+                <NativeChatImageAttachments blocks={message.images} runtimeContext={LOCAL} />
               </NativeChatGalleryMessageContext>
             ))}
           </div>
@@ -182,4 +205,36 @@ it('hands focus to a view that covers the list while the viewer has it', async (
   })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement?.id).toBe('covering-view')
+})
+
+it('tries an image again once a reread brings a new payload after one would not decode', async () => {
+  vi.mocked(readLocalImagePreview).mockResolvedValue({
+    content: 'AAAA',
+    isBinary: true,
+    mimeType: 'image/png'
+  })
+  render(
+    <Chat
+      messages={[
+        { id: 'first', images: [image('a.png')] },
+        { id: 'second', images: [{ type: 'image-ref', path: '/w/shot.png' }] }
+      ]}
+    />
+  )
+  await act(async () => {})
+  open('a.png')
+  right()
+  const first = dialog().querySelector('img')
+  if (!first) {
+    throw new Error('expected the local image to be shown')
+  }
+  fireEvent.error(first)
+  expect(screen.getByRole('status')).toBeTruthy()
+  expect(dialog().hasAttribute('data-native-chat-copy-image-src')).toBe(false)
+
+  await act(async () => invalidateLocalImageCache())
+  await act(async () => {})
+  const reread = dialog().querySelector('img')
+  expect(reread?.getAttribute('src')).not.toBe(first.getAttribute('src'))
+  expect(dialog().getAttribute('data-native-chat-copy-image-src')).toBe(reread?.getAttribute('src'))
 })

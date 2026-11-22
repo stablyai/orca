@@ -87,11 +87,11 @@ export function NativeChatImageGalleryDialog({
     : null
   // Invalidation removes every entry it will revoke, so a URL still cached here stays valid.
   const cached = cacheKey ? blobUrlCache.get(cacheKey) : undefined
-  // A source that loads but will not decode is as unusable as one that cannot be read.
-  const [undecodable, setUndecodable] = useState<string | null>(null)
-  const decoded = undecodable !== entry.key
   const readable =
     image.source.kind === 'url' ? image.source.url : read.status === 'ready' ? read.src : cached
+  // The payload that would not decode, not the image: a reread brings a new URL and another try.
+  const [undecodable, setUndecodable] = useState<string | null>(null)
+  const decoded = !readable || readable !== undecodable
   const src = decoded ? readable : undefined
   const failed = !decoded || (!readable && read.status === 'failed')
 
@@ -159,7 +159,7 @@ export function NativeChatImageGalleryDialog({
       onOpenChange={(next) => !next && onClose('user')}
       src={src}
       imageKey={entry.key}
-      onImageError={() => setUndecodable(entry.key)}
+      onImageError={() => setUndecodable(readable ?? null)}
       title={image.title}
       showTitle
       fallback={

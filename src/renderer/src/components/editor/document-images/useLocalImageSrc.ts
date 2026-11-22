@@ -9,10 +9,12 @@ import {
   getLocalImageCacheGeneration,
   inFlightBlobUrlLoads,
   isImmutableLocalImageCacheKey,
+  localImageBlobFits,
   unpinLocalImageCache,
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
+import { base64ToBlobInSlices, decodedBase64Length } from './local-image-blob-decode'
 import {
   localImageSrcStatus,
   type LocalImageSrcOutcome,
@@ -49,18 +51,6 @@ export function getLocalImageCacheKey(
     access?.kind === 'document-resource' ? access.documentPath : '',
     absolutePath
   ].join('\0')
-}
-
-function base64ToBlobUrl(base64: string, mimeType: string): { url: string; byteLength: number } {
-  const binary = atob(base64.replace(/\s/g, ''))
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return {
-    url: URL.createObjectURL(new Blob([bytes], { type: mimeType })),
-    byteLength: bytes.byteLength
-  }
 }
 
 function isExternalUrl(src: string): boolean {
@@ -287,7 +277,7 @@ export function loadLocalImageAbsolutePath(
   const superseded = () =>
     getLocalImageCacheGeneration() !== readGeneration && !isImmutableLocalImageCacheKey(cacheKey)
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
-    .then((result) => {
+    .then(async (result) => {
       if (superseded()) {
         return null
       }
@@ -295,7 +285,13 @@ export function loadLocalImageAbsolutePath(
         logLocalImageReadFailure(cacheKey, absolutePath, 'not-an-image')
         return null
       }
-      const { url, byteLength } = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
+      // Refuse before decoding: a photo the cache cannot hold would only cost a long decode.
+      if (!localImageBlobFits(cacheKey, decodedBase64Length(result.content))) {
+        return null
+      }
+      const blob = await base64ToBlobInSlices(result.content, result.mimeType ?? 'image/png')
+      const url = URL.createObjectURL(blob)
+      const byteLength = blob.size
       if (superseded()) {
         URL.revokeObjectURL(url)
         return null
