@@ -126,7 +126,11 @@ export function structuredAgentSessionMutationDelegates(
       reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER
     ) => {
       const record = context().deps.store.getRecord(sessionId)
-      if (record?.provider === 'opencode2' && record.providerHandleChain.length === 0) {
+      if (
+        record?.provider === 'opencode2' &&
+        !record.lastTurn &&
+        !context().sessions.get(sessionId)?.child
+      ) {
         await agentStart.startStructuredAgentSessionAgentForOperation(attachContext(), sessionId)
       }
       return readStructuredAgentSessionOptions(context(), sessionId, reader)

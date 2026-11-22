@@ -70,7 +70,7 @@ export function NativeChatAgentPicker({
               key={choice.value}
               value={choice.value}
               onSelect={() => {
-                if (choice.value !== currentValue && pending === null) {
+                if (pending === null) {
                   runSessionOptionSurfaceCall(choice.value, setPending, () =>
                     surface.setOption(descriptor.id, choice.value)
                   )

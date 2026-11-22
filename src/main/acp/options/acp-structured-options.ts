@@ -168,13 +168,13 @@ export class AcpStructuredOptions {
     }
     const previous = this.currentValues()
     this.configOptions = configOptions
+    const current = this.currentValues()
+    if (previous.model && current.model && previous.model !== current.model) {
+      this.invalidateInput('model')
+    } else if (previous.effort && current.effort && previous.effort !== current.effort) {
+      this.invalidateInput('effort')
+    }
     if (this.writing === 0 && this.unsettled.size === 0) {
-      const current = this.currentValues()
-      if (previous.model && current.model && previous.model !== current.model) {
-        this.invalidateInput('model')
-      } else if (previous.effort && current.effort && previous.effort !== current.effort) {
-        this.invalidateInput('effort')
-      }
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
@@ -187,9 +187,8 @@ export class AcpStructuredOptions {
       return
     }
     // A role or :level selector carries thinking too; missing values are no concrete change.
-    const now = this.currentValues()
     const drifted = (key: string) =>
-      now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
+      current[key] !== undefined && proof[key] !== undefined && current[key] !== proof[key]
     if (drifted('model') || drifted('effort')) {
       this.selectorProof = null
       this.appliedInput.delete('model')
