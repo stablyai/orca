@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
@@ -18,6 +18,8 @@ import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { dropUnreadBotRequests } from '../messaging/bot-request-outcome'
+import { botQuestionNotices } from '../messaging/bot-question-notices'
+import { startRestingQuestionReconciler } from '../../../../orchestration/mailbox/questions/question-reconciler.test-fixture'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from '../messaging/recipient-routing'
 import {
@@ -330,6 +332,10 @@ describe('mail to a bot on a paired server', () => {
   })
 
   it('tells the asker over the conversation when the bot drops the request unread', async () => {
+    const questions = startRestingQuestionReconciler(b.db, (taker, ids) =>
+      botQuestionNotices(b.runtime, taker, ids)
+    )
+    onTestFinished(questions.stop)
     await send({ type: 'question' })
     await dropUnreadBotRequests(b.runtime, 'docs', 'paused')
 

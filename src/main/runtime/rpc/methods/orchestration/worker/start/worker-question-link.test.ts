@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { getQuestionTaker } from '../../../../../orchestration/db/messages/mail-taker'
-import { linkWorkerToQuestion } from './worker-question-link'
+import { linkWorkerToQuestion, openQuestionReminder } from './worker-question-link'
 import { testOrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const caller = {
@@ -19,14 +19,14 @@ describe('worker-start --for', () => {
   })
   afterEach(() => db.close())
 
-  function question(to: string, root: string): string {
+  function question(to: string, root: string, record = '{}'): string {
     const admitted = db.admitBotRequest({
       rootKey: root,
       fromBotId: 'ranger',
       toBotId: 'docs',
       purpose: 'question',
       depth: 1,
-      record: '{}',
+      record,
       message: { from: 'orca_session_id:asker', to, subject: root, type: 'question' }
     })
     return admitted.kind === 'sent' ? admitted.message.id : ''
@@ -133,5 +133,20 @@ describe('worker-start --for', () => {
       forMessageId: id
     })
     expect(db.getDispatchContextById(started.dispatch.id)?.for_message_id).toBe(id)
+  })
+
+  it('reminds a caller that took a question it has not answered to pass --for, and no one else', () => {
+    const ranger = JSON.stringify({ fromBotName: 'Ranger', toBotName: 'Docs', purpose: 'question' })
+    const id = question('term_docs', 'open', ranger)
+    expect(openQuestionReminder(db, caller)).toBeUndefined()
+    db.markAsRead([id], { kind: 'terminal', handle: 'term_docs' })
+    expect(openQuestionReminder(db, caller)).toBe(
+      `You have an open question from Ranger (${id}). If this worker is for it, add --for ${id}.`
+    )
+    expect(
+      openQuestionReminder(db, { ...caller, address: 'term_x', terminalHandle: 'term_x' })
+    ).toBeUndefined()
+    db.recordBotAnswer(id)
+    expect(openQuestionReminder(db, caller)).toBeUndefined()
   })
 })

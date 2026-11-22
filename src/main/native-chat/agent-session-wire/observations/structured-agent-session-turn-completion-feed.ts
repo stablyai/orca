@@ -1,6 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { chatTurnRunning, type ChatStateReader } from './chat-turn-running'
 import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -35,6 +36,10 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   onState?: (state: StructuredAttentionState) => void
   /** The session closed; a turn it was running ends with no completion. */
   onClosed?: (sessionId: string) => void
+  /** Every status observation, before any filtering: whether its lead turn runs now. */
+  onObserved?: (sessionId: string, running: boolean) => void
+  /** Given a reader of a chat's status as its journal stands now (null when not loaded here). */
+  readsState?: (read: ChatStateReader) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -81,6 +86,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   subscribe(subscriber: StructuredAgentSessionTurnCompletionSubscriber): () => void {
     this.subscribers.set(subscriber.id, subscriber)
+    subscriber.readsState?.(async (id) =>
+      this.deps.sessions.has(id) ? this.deps.readStatusState(id) : null
+    )
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -145,6 +153,14 @@ export class StructuredAgentSessionTurnCompletionFeed {
     state: StructuredAgentSessionStatusState,
     options?: { historical?: boolean }
   ): void {
+    const running = chatTurnRunning(state)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onObserved?.(sessionId, running)
+      } catch {
+        // One reader's failure never costs this commit its attention edge.
+      }
+    }
     const request = state.latestRequest
     const prompts = new Set(state.pendingPromptIds)
     const baseline = this.baselines.get(sessionId)

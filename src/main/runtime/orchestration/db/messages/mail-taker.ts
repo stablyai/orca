@@ -2,6 +2,7 @@
 // row. A later read never moves it, so it names the actual taker even after mailboxes change hands.
 import type { OrchestrationDb } from '../orchestration-db'
 import { createChatOrcaSessionIdResolver } from '../../addressing/session-lineage/canonical-orca-session-id'
+import { noteQuestionEdge } from './question-edges'
 
 export type MailTaker =
   /** A chat, by its /clear lineage root. */
@@ -49,10 +50,17 @@ export function mailTakerKey(taker: MailTaker): string {
   }
 }
 
+// The third column marks the asker as owed a notice: only for a kind whose notices this build
+// decides (mailbox/questions/question-reconcile.ts), so a question taken earlier is never told late.
 const QUESTION_TAKE_TABLES = [
-  ['bot_requests', "purpose = 'question' AND "],
-  ['question_threads', ''],
-  ['remote_owned_questions', '']
+  [
+    'bot_requests',
+    "purpose = 'question' AND ",
+    `CASE WHEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o
+       WHERE o.message_id = bot_requests.message_id) THEN 1 END`
+  ],
+  ['question_threads', '', 'awaiting'],
+  ['remote_owned_questions', '', 'awaiting']
 ] as const
 
 /** Stamps the taker on these messages' question rows that have none, while the mail is still unread;
@@ -64,14 +72,19 @@ export function stampQuestionTakes(
 ): void {
   const key = mailTakerKey(taker)
   const placeholders = ids.map(() => '?').join(',')
-  for (const [table, scope] of QUESTION_TAKE_TABLES) {
-    db.db
+  let taken = false
+  for (const [table, scope, awaiting] of QUESTION_TAKE_TABLES) {
+    const changes = db.db
       .prepare(
-        `UPDATE ${table} SET taken_by = ?
+        `UPDATE ${table} SET taken_by = ?, awaiting = ${awaiting}
          WHERE ${scope}taken_by IS NULL AND message_id IN (
            SELECT id FROM messages WHERE id IN (${placeholders}) AND read = 0)`
       )
-      .run(key, ...ids)
+      .run(key, ...ids).changes
+    taken ||= changes > 0
+  }
+  if (taken) {
+    noteQuestionEdge({ kind: 'take', taker: key })
   }
 }
 

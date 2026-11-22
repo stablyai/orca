@@ -1,3 +1,4 @@
+import { noteQuestionEdge } from './messages/question-edges'
 import type Database from '../../../sqlite/sync-database'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
@@ -192,6 +193,9 @@ export function transitionLifecycleWithDb(
   }
   // A peer Run's change is queued home by trigger in this statement.
   notifyPeerMailQueued(db)
+  if (params.entity !== 'task') {
+    noteQuestionEdge({ kind: 'dispatch', id: params.id })
+  }
   return { changed: true }
 }
 

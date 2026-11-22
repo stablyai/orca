@@ -80,7 +80,8 @@ export function tellSender(
     })
   })
   if (told) {
-    runtime.notifyMessageArrived(told.to_handle, told.type)
+    // After any write this runs inside commits: the nudge routes mail in a transaction of its own.
+    queueMicrotask(() => runtime.notifyMessageArrived(told.to_handle, told.type))
   }
   return true
 }
@@ -118,7 +119,7 @@ function tellPeerSender(
     return true
   })
   if (queued) {
-    notifyPeerMailQueued(db.db)
+    queueMicrotask(() => notifyPeerMailQueued(db.db))
   }
   return true
 }
