@@ -35,7 +35,7 @@ export async function readWorkerPlacementCatalog(
         if (!response.ok) {
           return key === 'setups' &&
             ['method_not_found', 'incompatible_runtime'].includes(response.error.code)
-            ? { kind: 'unsupported' as const }
+            ? { kind: 'unsupported' as const, runtimeId: response._meta?.runtimeId }
             : { kind: 'failed' as const, reason: 'incomplete' as const }
         }
         const result = readPlacementCatalogList(response.result, key)
@@ -48,7 +48,13 @@ export async function readWorkerPlacementCatalog(
     })
   )
   const [repos, setups] = replies
-  if (setups.kind === 'unsupported') {
+  // Only the runtime that listed repos proves an old peer; a mixed pair must keep retained data.
+  if (
+    setups.kind === 'unsupported' &&
+    repos.kind === 'rows' &&
+    setups.runtimeId?.trim() &&
+    setups.runtimeId === repos.runtimeId
+  ) {
     return { kind: 'unsupported' }
   }
   const catalog =

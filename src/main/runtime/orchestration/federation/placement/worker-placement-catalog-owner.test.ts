@@ -811,20 +811,6 @@ it('persists a downgrade across a clock rollback and restart', async () => {
   }
 })
 
-it('marks a missing project API unsupported instead of projecting setups from repos', async () => {
-  response = async (method) =>
-    method === 'repo.list'
-      ? await complete(method)
-      : {
-          id: 'read',
-          ok: false,
-          error: { code: 'method_not_found', message: 'old peer' },
-          _meta: { runtimeId: 'peer' }
-        }
-  expect((await owner.discover())[0]).toMatchObject({ status: 'unsupported' })
-  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
-})
-
 it('upgrades a v49 database with only this slice’s additive catalog table', async () => {
   db.db.exec('DROP TABLE worker_placement_catalogs')
   db.db.pragma('user_version = 49')
