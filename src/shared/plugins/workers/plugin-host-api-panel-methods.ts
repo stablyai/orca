@@ -26,6 +26,12 @@ const pluginRequestParams = z.strictObject({
   timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
 })
 const pluginRequestResult = z.object({ output: z.json() })
+const pluginRequestBytesResult = z.object({
+  bytes: z
+    .custom<ArrayBuffer>((value) => value instanceof ArrayBuffer, 'bytes must be an ArrayBuffer')
+    // Names the type in the generated reference, which otherwise prints unrepresentable as JSON.
+    .meta({ type: 'ArrayBuffer' })
+})
 
 export const PLUGIN_AGENT_LIST_LIMIT = 50
 export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
@@ -79,6 +85,17 @@ export const PLUGIN_PANEL_BRIDGE_API = {
     surfaces: FRAMES_ONLY,
     params: pluginRequestParams,
     result: pluginRequestResult
+  }),
+  'plugin.requestBytes': spec({
+    summary:
+      '`plugin.request` for a handler that returns binary data (an `ArrayBuffer` or a typed array): resolves with its bytes as an `ArrayBuffer`, never base64. An answer is at most 2 MiB (`too_large` past it); get more in parts. Each call counts toward the same frame call budget as `plugin.request` (`rate_limited` past it). Desktop app only: a client that cannot carry an `ArrayBuffer` gets `not_permitted`.',
+    since: 11,
+    scope: 'plugin-private',
+    capability: null,
+    mutation: false,
+    surfaces: FRAMES_ONLY,
+    params: pluginRequestParams,
+    result: pluginRequestBytesResult
   }),
   'agents.list': spec({
     summary:
