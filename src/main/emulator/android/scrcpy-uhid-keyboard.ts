@@ -19,16 +19,22 @@ export const SCRCPY_UHID_KEYBOARD_READY_MS = 250
 const RELEASED = Buffer.alloc(8)
 const keyboardsCreated = new WeakSet<ScrcpyControlTarget>()
 
-/** Creates the session's UHID keyboard; false when it already exists (or the socket is gone). */
-export function createScrcpyUhidKeyboard(control: ScrcpyControlTarget): boolean {
+/** Claims the session's one UHID keyboard; true only for the first caller, who must create it. */
+export function claimScrcpyUhidKeyboard(control: ScrcpyControlTarget): boolean {
   if (keyboardsCreated.has(control)) {
-    return false
-  }
-  if (!control.sendControl(encodeUhidCreate(KEYBOARD_ID, KEYBOARD_REPORT_DESCRIPTOR))) {
     return false
   }
   keyboardsCreated.add(control)
   return true
+}
+
+/** Creates the claimed keyboard; a failed send gives the claim back so a later key retries. */
+export function createScrcpyUhidKeyboard(control: ScrcpyControlTarget): boolean {
+  const created = control.sendControl(encodeUhidCreate(KEYBOARD_ID, KEYBOARD_REPORT_DESCRIPTOR))
+  if (!created) {
+    keyboardsCreated.delete(control)
+  }
+  return created
 }
 
 /** Presses and releases one key on the session's UHID keyboard. */

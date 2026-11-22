@@ -3,6 +3,7 @@ import { EmulatorError } from '../emulator-errors'
 import { planEmulatorTextInput } from '../emulator-text-input-plan'
 import { sendScrcpyButton } from './scrcpy-control-input'
 import {
+  claimScrcpyUhidKeyboard,
   createScrcpyUhidKeyboard,
   pressScrcpyUhidKey,
   SCRCPY_UHID_KEYBOARD_READY_MS
@@ -192,9 +193,11 @@ export function sendScrcpyHidKey(
   if (!control.uhidKeyboard) {
     return fallback()
   }
-  if (createScrcpyUhidKeyboard(control)) {
-    // Input queued behind this, the new keyboard's first key included, waits until Android has it.
-    queueFor(control).enqueue({ kind: 'wait', ms: SCRCPY_UHID_KEYBOARD_READY_MS, done: () => {} })
+  if (claimScrcpyUhidKeyboard(control)) {
+    // Created in queue order, so earlier input lands first; input after it waits until Android has it.
+    const queue = queueFor(control)
+    queue.enqueue({ kind: 'action', send: () => createScrcpyUhidKeyboard(control), done: () => {} })
+    queue.enqueue({ kind: 'wait', ms: SCRCPY_UHID_KEYBOARD_READY_MS, done: () => {} })
   }
   return sendScrcpyInOrder(control, () => pressScrcpyUhidKey(control, key.usage, key.shift))
 }
