@@ -16,7 +16,8 @@ import {
   DEFAULT_ROW_SIZES,
   mixedGeometry,
   NO_ROW_SIZES_KNOWN,
-  readRowSizes,
+  readMissingRowSizes,
+  rowKinds,
   uniformGeometry
 } from './bot-item-rows-geometry'
 import { focusFellToNothing } from '../use-needs-you-focus'
@@ -93,6 +94,7 @@ export function BotItemRowsWindow({
   )
   const [sizes, setSizes] = useState(DEFAULT_ROW_SIZES)
   const sizesKnown = useRef(NO_ROW_SIZES_KNOWN)
+  const kinds = useMemo(() => rowKinds(tallKey), [tallKey])
   const geometry = useMemo(
     () =>
       tallKey.includes('1')
@@ -157,16 +159,16 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    // Each row kind's height is read once, again only when the group's height stops matching (font size).
+    // Each kind of row the group has is read once (tried again as the range moves while one isn't drawn),
+    // and again only when the group's height stops matching (font size).
     const moved = next.start !== windowRange.start || next.end !== windowRange.end
     if (rect !== null && Math.abs(rect.height - geometry.total) > 1) {
       sizesKnown.current = NO_ROW_SIZES_KNOWN
     }
-    const known = sizesKnown.current
     const found =
-      element && next.end > next.start && (!known.row || (!known.placed && tallKey.includes('1')))
-        ? readRowSizes(element, sizes, known)
-        : { sizes, known }
+      element && next.end > next.start
+        ? readMissingRowSizes(element, sizes, sizesKnown.current, kinds, moved)
+        : { sizes, known: sizesKnown.current }
     const read = found.sizes
     sizesKnown.current = found.known
     // An unchanged range over the same rows (most scroll frames) updates nothing.

@@ -33,7 +33,12 @@ type Picture = {
 export type BotGroupFacePicture = {
   subscribe: (notify: () => void) => () => void
   read: () => string | null
+  /** The same picture for a face in a folded row: shows it if already read, asks for nothing. */
+  folded?: BotGroupFacePicture
 }
+
+/** A face sits in a row folded out of view (Needs you keeps folded rows mounted). */
+export const BotItemFaceFolded = createContext(false)
 
 export type BotGroupFacePictures = {
   faceOf: (bot: BotRef, version: string) => BotGroupFacePicture
@@ -243,6 +248,7 @@ function createFacePictures(): BotGroupFacePictures {
           return picture?.version === version ? (picture.src ?? null) : null
         }
       }
+      handle.folded = { subscribe: () => () => {}, read: handle.read }
       handles.set(key, { version, handle })
       return handle
     }

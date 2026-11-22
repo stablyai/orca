@@ -48,9 +48,9 @@ export function mixedGeometry(tall: readonly boolean[], sizes: RowSizes): Geomet
   }
 }
 
-/** Which row kinds' heights have been read from a drawn row. */
-export type RowSizesKnown = { row: boolean; placed: boolean }
-export const NO_ROW_SIZES_KNOWN: RowSizesKnown = { row: false, placed: false }
+/** Which row kinds' heights have been read from a drawn row, and whether any read was tried since. */
+export type RowSizesKnown = { row: boolean; placed: boolean; tried: boolean }
+export const NO_ROW_SIZES_KNOWN: RowSizesKnown = { row: false, placed: false, tried: false }
 
 /** The drawn rows' heights as laid out, or `was` where no row of a kind is drawn, and which kinds are now
  *  known. */
@@ -67,6 +67,25 @@ export function readRowSizes(
   const placed = placedRead || was.placed
   return {
     sizes: row === was.row && placed === was.placed ? was : { row, placed },
-    known: { row: known.row || rowRead > 0, placed: known.placed || placedRead > 0 }
+    known: { row: known.row || rowRead > 0, placed: known.placed || placedRead > 0, tried: true }
   }
+}
+
+/** Which kinds of row a group has, from its rows' chat-line flags ('' when no row can have one). */
+export function rowKinds(tallKey: string): { row: boolean; placed: boolean } {
+  return { row: !/^1+$/.test(tallKey), placed: tallKey.includes('1') }
+}
+
+/** Heights read when a kind the group has is still unknown: first, then as the drawn range moves. */
+export function readMissingRowSizes(
+  container: HTMLElement,
+  was: RowSizes,
+  known: RowSizesKnown,
+  kinds: { row: boolean; placed: boolean },
+  moved: boolean
+): { sizes: RowSizes; known: RowSizesKnown } {
+  const missing = (kinds.row && !known.row) || (kinds.placed && !known.placed)
+  return missing && (moved || !known.tried)
+    ? readRowSizes(container, was, known)
+    : { sizes: was, known }
 }

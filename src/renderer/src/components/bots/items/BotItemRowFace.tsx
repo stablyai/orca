@@ -27,7 +27,8 @@ export function BotItemRowFace({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-/** A face whose uploaded picture the panel asks for, so rows mounting as the list scrolls read nothing. */
+/** A face whose uploaded picture the panel asks for, so rows mounting as the list scrolls read nothing;
+ *  one in a folded row asks for nothing until it shows. */
 function BotPanelFace({
   bot,
   pictures
@@ -36,7 +37,9 @@ function BotPanelFace({
   pictures: BotGroupFacePictures
 }): React.JSX.Element {
   const parsed = parseBotAvatar(bot.avatar)
-  const picture = parsed?.kind === 'upload' ? pictures.faceOf(bot, parsed.version) : NO_UPLOAD
+  const folded = useContext(BotItemFaceFolded)
+  const handle = parsed?.kind === 'upload' ? pictures.faceOf(bot, parsed.version) : NO_UPLOAD
+  const picture = folded ? (handle.folded ?? handle) : handle
   const upload = useSyncExternalStore(picture.subscribe, picture.read, picture.read)
   const src = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor) ?? upload
   return <BotAvatarTile src={src} fallback={botFallback(bot)} className={FACE_CLASS} />
