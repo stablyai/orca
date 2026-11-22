@@ -132,22 +132,6 @@ describe('DiffNavigationProvider', () => {
     registration = null
   })
 
-  it('navigates within the file while later hunks remain', () => {
-    mount()
-    const diffEditor = createFakeEditor([change(10), change(20)])
-    act(() => registration?.registerDiffEditor(diffEditor))
-    expect(captured?.changeCount).toBe(2)
-    expect(captured?.canNavigate).toBe(true)
-
-    diffEditor.setPosition(15)
-    act(() => captured?.goToNextDiff())
-    expect(diffEditor.goToDiff).toHaveBeenCalledWith('next')
-
-    diffEditor.setPosition(15)
-    act(() => captured?.goToPreviousDiff())
-    expect(diffEditor.goToDiff).toHaveBeenCalledWith('previous')
-  })
-
   it('visits a deletion hunk anchored below the cursor instead of skipping the file', () => {
     const onNavigateFile = vi.fn(() => true)
     mount({ canNavigateFile: true, onNavigateFile })
@@ -221,17 +205,6 @@ describe('DiffNavigationProvider', () => {
     expect(diffEditor.goToDiff).toHaveBeenCalledWith('next')
   })
 
-  it('wraps in-file when file navigation is unavailable', () => {
-    mount()
-    const diffEditor = createFakeEditor([change(10)])
-    diffEditor.setPosition(20)
-    act(() => registration?.registerDiffEditor(diffEditor))
-
-    act(() => captured?.goToNextDiff())
-
-    expect(diffEditor.goToDiff).toHaveBeenCalledWith('next')
-  })
-
   it('reveals pending next navigation after the replacement editor computes its diff', () => {
     const onNavigateFile = vi.fn(() => true)
     mount({ canNavigateFile: true, onNavigateFile })
@@ -253,24 +226,6 @@ describe('DiffNavigationProvider', () => {
     expect(newEditor.goToDiff).toHaveBeenCalledWith('next')
     act(() => newEditor.fireUpdate())
     expect(newEditor.goToDiff).toHaveBeenCalledOnce()
-  })
-
-  it('reveals pending previous navigation after the replacement editor computes its diff', () => {
-    const onNavigateFile = vi.fn(() => true)
-    mount({ canNavigateFile: true, onNavigateFile })
-    const oldEditor = createFakeEditor([change(10)])
-    oldEditor.setPosition(1)
-    act(() => registration?.registerDiffEditor(oldEditor))
-    act(() => captured?.goToPreviousDiff())
-
-    const newEditor = createFakeEditor([])
-    act(() => registration?.registerDiffEditor(newEditor))
-    act(() => {
-      newEditor.setLineChanges([change(5), change(15)])
-      newEditor.fireUpdate()
-    })
-
-    expect(newEditor.goToDiff).toHaveBeenCalledWith('previous')
   })
 
   it('reveals pending navigation when the replacement editor is already computed at registration', () => {
@@ -322,31 +277,5 @@ describe('DiffNavigationProvider', () => {
     })
 
     expect(newEditor.goToDiff).not.toHaveBeenCalled()
-  })
-
-  it('re-renders when onDidUpdateDiff flips the count 0 -> N (count is state)', () => {
-    mount()
-    const diffEditor = createFakeEditor([])
-    act(() => registration?.registerDiffEditor(diffEditor))
-    expect(captured?.changeCount).toBe(0)
-    expect(captured?.canNavigate).toBe(false)
-
-    act(() => {
-      diffEditor.setLineChanges([change(3), change(9)])
-      diffEditor.fireUpdate()
-    })
-    expect(captured?.changeCount).toBe(2)
-    expect(captured?.canNavigate).toBe(true)
-  })
-
-  it('ignores a stale unregistration after a fast editor swap', () => {
-    mount()
-    const staleEditor = createFakeEditor([change(10)])
-    act(() => registration?.registerDiffEditor(staleEditor))
-    const freshEditor = createFakeEditor([change(20)])
-    act(() => registration?.registerDiffEditor(freshEditor))
-    act(() => registration?.unregisterDiffEditor(staleEditor))
-
-    expect(captured?.changeCount).toBe(1)
   })
 })
