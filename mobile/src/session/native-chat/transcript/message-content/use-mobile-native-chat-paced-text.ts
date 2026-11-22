@@ -158,6 +158,7 @@ export function useMobileNativeChatPacedText(
     ? { text, revealing: false }
     : {
         text: text.slice(0, Math.min(shown, text.length)),
-        revealing: !reducedMotion && !savePaced && (streaming || behind)
+        // Still growing while save-paced, so Markdown keeps its streaming caches and repairs.
+        revealing: !reducedMotion && (streaming || behind)
       }
 }
