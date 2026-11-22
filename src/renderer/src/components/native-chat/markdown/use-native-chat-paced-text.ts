@@ -205,13 +205,14 @@ export function useNativeChatPacedText(
     }
   }, [revealing, root])
 
-  const fading = !reducedMotion && !drawsWhole && (revealing || lingering)
+  // Plain after the switch, except that selected words keep their elements until deselected.
+  const fading = !reducedMotion && (revealing || lingering) && (!drawsWhole || hold !== undefined)
   useEffect(() => (fading ? watchDocumentRange() : undefined), [fading])
   return {
     text: text.slice(0, Math.min(shown, text.length)),
     revealing,
     fading,
-    fadeFrom: fading ? fadeFrom : undefined,
+    fadeFrom: fading ? (drawsWhole ? shown : fadeFrom) : undefined,
     fadeHold: fading ? hold : undefined
   }
 }
