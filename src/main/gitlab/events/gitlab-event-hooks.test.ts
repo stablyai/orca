@@ -59,12 +59,23 @@ function setUp(rule: GitLabEventRule) {
   const store = new GitLabEventHookStore(
     join(mkdtempSync(join(tmpdir(), 'gitlab-events-')), 'hooks.json')
   )
+  const saved = new Map<string, string>()
+  const secrets = {
+    read: async (hookId: string) => saved.get(hookId) ?? null,
+    save: async (hookId: string, secret: string) => {
+      saved.set(hookId, secret)
+    },
+    clear: async (hookId: string) => {
+      saved.delete(hookId)
+    }
+  }
   return {
-    upkeep: new GitLabEventHooks(host, gitlab, store),
+    upkeep: new GitLabEventHooks(host, gitlab, store, secrets),
     gitlab,
     host,
     hooks,
     automations,
+    saved,
     rotate: () => {
       keyGeneration += 1
     }
@@ -93,30 +104,47 @@ describe('GitLabEventHooks', () => {
     ])
   })
 
-  it('points every webhook at the new URL with a new secret after the key rotates', async () => {
+  it('points every webhook at the new URL after the key rotates, on the same secret', async () => {
     const { upkeep, gitlab, host, hooks, rotate } = setUp(mentions)
     await upkeep.reconcile()
     rotate()
     await upkeep.reconcile()
 
-    expect(gitlab.create).toHaveBeenCalledTimes(2)
     expect(gitlab.update).toHaveBeenCalledTimes(2)
-    const secret = host.setSecret.mock.calls[1][1]
-    expect(secret).not.toBe(host.setSecret.mock.calls[0][1])
-    expect(hooks.get('acme/web')).toMatchObject({
-      url: `https://hooks.example/hooks/${HOOK}/key-2`,
-      signingToken: secret
-    })
+    expect(host.setSecret).toHaveBeenCalledTimes(1)
+    const secret = host.setSecret.mock.calls[0][1]
+    expect([...hooks.values()].map((hook) => [hook.url, hook.signingToken])).toEqual([
+      [`https://hooks.example/hooks/${HOOK}/key-2`, secret],
+      [`https://hooks.example/hooks/${HOOK}/key-2`, secret]
+    ])
   })
 
-  it('removes the webhooks once the rule is gone', async () => {
-    const { upkeep, gitlab, hooks, automations } = setUp(mentions)
+  it('leaves a project whose update GitLab refuses on the secret the hook still checks', async () => {
+    const { upkeep, gitlab, host, hooks, rotate } = setUp(mentions)
+    await upkeep.reconcile()
+    rotate()
+    gitlab.update.mockImplementationOnce(async (_host, project, _id, hook) => {
+      hooks.set(project, hook)
+    })
+    gitlab.update.mockRejectedValueOnce(new Error('GitLab couldn’t save the webhook on acme/web'))
+    await upkeep.reconcile()
+
+    expect(host.setSecret).toHaveBeenCalledTimes(1)
+    const secret = host.setSecret.mock.calls[0][1]
+    expect(hooks.get('acme/api')?.signingToken).toBe(secret)
+    expect(hooks.get('acme/web')?.signingToken).toBe(secret)
+    expect(host.tell).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the webhooks and their secret once the rule is gone', async () => {
+    const { upkeep, gitlab, hooks, automations, saved } = setUp(mentions)
     await upkeep.reconcile()
     automations.length = 0
     await upkeep.reconcile()
 
     expect(gitlab.remove).toHaveBeenCalledTimes(2)
     expect(hooks.size).toBe(0)
+    expect(saved.size).toBe(0)
   })
 
   it('keeps the projects GitLab accepted signed when another refuses, and tells the bot once', async () => {
@@ -128,12 +156,12 @@ describe('GitLabEventHooks', () => {
     })
     gitlab.create.mockRejectedValueOnce(refused)
     await upkeep.reconcile()
-    expect(host.setSecret.mock.calls[0][1]).toBe(hooks.get('acme/api')?.signingToken)
-
     gitlab.create.mockRejectedValueOnce(refused)
     await upkeep.reconcile()
+
     expect(gitlab.update).toHaveBeenCalledWith(undefined, 'acme/api', 100, expect.anything())
-    expect(host.setSecret.mock.calls[1][1]).toBe(hooks.get('acme/api')?.signingToken)
+    expect(host.setSecret).toHaveBeenCalledTimes(1)
+    expect(hooks.get('acme/api')?.signingToken).toBe(host.setSecret.mock.calls[0][1])
     expect(host.tell).toHaveBeenCalledTimes(1)
     expect(host.tell).toHaveBeenCalledWith(
       'bot-1',
