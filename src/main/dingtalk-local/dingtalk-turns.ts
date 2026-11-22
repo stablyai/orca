@@ -14,10 +14,12 @@ export type TurnObservation = {
   turnId: number | null
   origin?: string
   lastAssistantMessage?: string
+  /** The delivery that alone started this turn, from its turn-started event. */
+  deliveryId?: string
 }
 
 export type TurnAttribution =
-  | { kind: 'reply'; reply: ReplyRow; inboxKey: string }
+  | { kind: 'reply'; reply: ReplyRow; inboxKeys: string[] }
   | {
       kind: 'ignore'
       reason:
@@ -26,7 +28,6 @@ export type TurnAttribution =
         | 'missing_turn'
         | 'missing_text'
         | 'conversation_missing'
-        | 'ambiguous_inbox'
         | 'already_replied'
     }
 
@@ -52,13 +53,6 @@ export function attributeTurnEnded(
   if (!conversation) {
     return { kind: 'ignore', reason: 'conversation_missing' }
   }
-  const candidates = Object.entries(state.inbox).filter(
-    ([, row]) => row.externalId === event.externalId && row.state === 'delivered'
-  )
-  if (candidates.length !== 1) {
-    return { kind: 'ignore', reason: 'ambiguous_inbox' }
-  }
-  const [inboxKey] = candidates[0]!
   const replyKey = stableReplyId(conversation.externalId, event.turnId)
   // A repeated completion must not attribute a newer delivered row to an older turn's reply.
   if (state.replies[replyKey]) {
@@ -76,7 +70,38 @@ export function attributeTurnEnded(
     error: '',
     updatedAt: now
   }
-  return { kind: 'reply', reply, inboxKey }
+  return { kind: 'reply', reply, inboxKeys: answeredInboxKeys(state, event) }
+}
+
+/** The messages a turn answered: the one delivery that started it, else every message of the
+ *  conversation still in flight, since a busy chat folds those into its running turn. */
+function answeredInboxKeys(state: DingTalkLedgerState, event: TurnObservation): string[] {
+  const rows = Object.values(state.inbox).filter((row) => row.externalId === event.externalId)
+  const started = event.deliveryId && rows.find((row) => row.deliveryId === event.deliveryId)
+  if (started) {
+    return [started.key]
+  }
+  return rows
+    .filter((row) => row.state === 'delivered' || row.state === 'delivering')
+    .map((row) => row.key)
+}
+
+/** Remembers which delivery alone started each turn, until that turn ends. */
+export class DingTalkTurnDeliveries {
+  private readonly started = new Map<string, string>()
+
+  start(externalId: string, at: number, deliveryId: string | undefined): void {
+    if (deliveryId) {
+      this.started.set(`${externalId}\u0000${at}`, deliveryId)
+    }
+  }
+
+  end(externalId: string, turnId: number | null): string | undefined {
+    const key = `${externalId}\u0000${turnId}`
+    const deliveryId = this.started.get(key)
+    this.started.delete(key)
+    return deliveryId
+  }
 }
 
 export function conversationKeyFor(row: ConversationRow): {

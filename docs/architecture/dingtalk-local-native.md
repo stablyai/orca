@@ -48,7 +48,7 @@ The MCP and webhook bridge remains available as a compatibility path. It cannot 
 
 - `dws` streams can lose events during reconnects. History catch-up is a follow-up before enabling unattended replies.
 - An Orca account reset can drop seam watchers. The connector needs a reset callback before unattended use.
-- A stale turn can be ambiguous after a restart. The connector posts only when exactly one delivered turn can own the result.
+- Each delivery-started turn queues one reply, keyed by conversation and turn. When one delivery alone started the turn, `turn-started` names it, and only that message is attributed. Otherwise the turn is attributed to every message of the conversation still in flight, since a busy chat folds those into its running turn. A turn whose start predates the watch, as after a restart, has no turn ID and gets no reply.
 - Local ledger text contains group messages and replies. The store uses a private directory and mode `0600` files.
 
 ## Verification

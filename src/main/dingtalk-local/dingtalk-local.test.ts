@@ -125,14 +125,14 @@ describe('DingTalk ledger', () => {
 })
 
 describe('DingTalk turn attribution', () => {
-  it('ignores ambiguous delivered rows', async () => {
+  it('replies to a turn that answered several messages, and to the one delivery that started it', async () => {
     const ledger = new DingTalkLedger(
       join(mkdtempSync(join(tmpdir(), 'dingtalk-local-')), 'ledger.json')
     )
     await ledger.load()
     await ledger.putInbox(inbox('delivered'))
     await ledger.putInbox({
-      ...inbox('delivered'),
+      ...inbox('delivering'),
       key: 'inbox-2',
       event: { ...inbound(), messageId: schemas.MessageId.parse('message-2') },
       deliveryId: stableDeliveryId(profile, schemas.MessageId.parse('message-2'))
@@ -147,16 +147,21 @@ describe('DingTalk turn attribution', () => {
       latestMessageId: messageId,
       updatedAt: 1
     })
-    expect(
-      attributeTurnEnded(ledger.snapshot(), {
-        kind: 'turn-ended',
-        source: 'dingtalk',
-        externalId,
-        turnId: 7,
-        origin: 'delivery',
-        lastAssistantMessage: 'done'
-      })
-    ).toEqual({ kind: 'ignore', reason: 'ambiguous_inbox' })
+    const ended = {
+      kind: 'turn-ended',
+      source: 'dingtalk',
+      externalId,
+      turnId: 7,
+      origin: 'delivery',
+      lastAssistantMessage: 'done'
+    } as const
+    const folded = attributeTurnEnded(ledger.snapshot(), ended)
+    expect(folded.kind === 'reply' && folded.inboxKeys.toSorted()).toEqual(['inbox-1', 'inbox-2'])
+    const started = attributeTurnEnded(ledger.snapshot(), {
+      ...ended,
+      deliveryId: stableDeliveryId(profile, schemas.MessageId.parse('message-2'))
+    })
+    expect(started.kind === 'reply' && started.inboxKeys).toEqual(['inbox-2'])
   })
 
   it('creates one queued reply for one delivered turn', async () => {
