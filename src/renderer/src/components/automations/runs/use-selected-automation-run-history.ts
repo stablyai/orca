@@ -24,7 +24,7 @@ import {
 } from '../hosts/automation-row-action-dispatch'
 import {
   getAutomationAuthorityTarget,
-  getAutomationTargetFromHostId,
+  getAutomationListedTargetFromHostId,
   listAutomationRunsForTarget,
   type AutomationHostTarget
 } from '../hosts/automation-host-client'
@@ -102,7 +102,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     const target = captured.owner
       ? getAutomationAuthorityTarget(captured.owner.authority)
       : navigationHost
-        ? getAutomationTargetFromHostId(navigationHost)
+        ? getAutomationListedTargetFromHostId(navigationHost, useAppStore.getState())
         : (input.legacyTarget(selected) ?? { kind: 'local' as const })
     const authority: AutomationAuthorityRef =
       captured.owner?.authority ??

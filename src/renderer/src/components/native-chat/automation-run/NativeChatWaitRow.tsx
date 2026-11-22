@@ -50,7 +50,7 @@ function WaitActions({
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(automationId, null)}
+          onClick={() => openBotAutomation(bot.hostId, automationId, null)}
         >
           {label.open}
         </button>
