@@ -83,7 +83,6 @@ export function TopActivityOverflowMenu({
   const t = useTranslate()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const focusBeforeOpenRef = useRef<Element | null>(null)
-  const interactedOutsideRef = useRef(false)
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
@@ -101,7 +100,6 @@ export function TopActivityOverflowMenu({
       onOpenChange={(open) => {
         if (open) {
           focusBeforeOpenRef.current = document.activeElement
-          interactedOutsideRef.current = false
         }
       }}
     >
@@ -137,21 +135,17 @@ export function TopActivityOverflowMenu({
         align="end"
         side="bottom"
         sideOffset={6}
-        onInteractOutside={() => {
-          interactedOutsideRef.current = true
-        }}
         onCloseAutoFocus={(event) => {
           const before = focusBeforeOpenRef.current
           focusBeforeOpenRef.current = null
-          // A mouse-opened menu hands focus back to where it was (the terminal), not to More.
+          // Keep focus that moved on (e.g. into Agents search); else return it to where the menu opened from.
+          event.preventDefault()
+          const active = document.activeElement
           if (
-            !interactedOutsideRef.current &&
+            (!active || active === document.body) &&
             before instanceof HTMLElement &&
-            before !== document.body &&
-            before !== triggerRef.current &&
             before.isConnected
           ) {
-            event.preventDefault()
             before.focus({ preventScroll: true })
           }
         }}

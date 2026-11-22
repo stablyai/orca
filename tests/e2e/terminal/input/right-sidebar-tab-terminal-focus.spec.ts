@@ -70,12 +70,22 @@ test('picking a panel from the More menu with the mouse keeps terminal input', a
   })
   // Force overflow without installing plugins just to add more tabs.
   await orcaPage.locator('.right-sidebar-activity-strip').evaluate((strip) => {
-    ;(strip as HTMLElement).style.maxWidth = '100px'
+    if (strip instanceof HTMLElement) {
+      strip.style.maxWidth = '100px'
+    }
   })
   const { tabId } = await focusActiveTerminal(orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'More sidebar tabs' }).click()
+  const more = orcaPage.getByRole('button', { name: 'More sidebar tabs' })
   const menu = orcaPage.getByRole('menu')
+  // Dismissing with an outside click must not park focus on More for the next pick.
+  await more.click()
+  await expect(menu).toBeVisible()
+  await orcaPage.mouse.click(400, 400)
+  await expect(menu).toHaveCount(0)
+  await expect(terminalHelper(orcaPage, tabId)).toBeFocused()
+
+  await more.click()
   await menu.getByRole('menuitem', { name: /^Agents/ }).click()
   await expect(menu).toHaveCount(0)
   await expect(orcaPage.getByRole('textbox', { name: 'Search sessions' })).toBeVisible()
