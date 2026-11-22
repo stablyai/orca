@@ -231,7 +231,11 @@ describe("a chat's hold on another agent's mail", () => {
     const continued = await continuation()
     await rig.settleAccepted(continued, 'continued')
     await openRigTurnFor(rig, continued, 'completed', 'success')
-    expect(await handedOver(card)).not.toBe(refused)
+    await eventually(async () => {
+      const sent = await rig.handoff(card)
+      expect(sent?.clientMessageId).not.toBe(refused)
+      expect(sent?.handedOverAt).toBeDefined()
+    })
   })
 
   it('does not continue past queued mail the agent may have read after the limit', async () => {
