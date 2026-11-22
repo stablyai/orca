@@ -255,13 +255,16 @@ export function useAutomationRunPageState({
   const selectedRunTarget = selectedAutomationRunPage
     ? list.runTargetFor(selectedAutomationRunPage)
     : null
-  const canOpenSelectedAutomationRunPageWorkspace = selectedRunTarget?.viewState.canOpen ?? false
+  const viewState = selectedRunTarget?.viewState
+  const selectedAutomationRunPageWorkspaceActionLabel = viewState?.canOpen
+    ? viewState.actionLabel
+    : null
   const selectedAutomationRunPageWorkspaceName = selectedAutomationRunPage
     ? getAutomationRunDetailsWorkspaceName(
         {
           run: selectedAutomationRunPage,
           worktree: selectedRunTarget?.worktree ?? null,
-          canOpen: canOpenSelectedAutomationRunPageWorkspace,
+          actionLabel: selectedAutomationRunPageWorkspaceActionLabel,
           catalogHydrated: startupWorktreeRefreshCompleted
         },
         t
@@ -275,7 +278,7 @@ export function useAutomationRunPageState({
 
   return {
     selectedAutomationRunPageWorkspaceName,
-    canOpenSelectedAutomationRunPageWorkspace,
+    selectedAutomationRunPageWorkspaceActionLabel,
     canRerunSelectedAutomationRunPage,
     isSelectedAutomationRunPageRerunPending
   }

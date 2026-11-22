@@ -247,7 +247,7 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           hostLabel={selectedHostLabel}
           workspaceName={runPage.selectedAutomationRunPageWorkspaceName}
-          canOpenWorkspace={runPage.canOpenSelectedAutomationRunPageWorkspace}
+          workspaceActionLabel={runPage.selectedAutomationRunPageWorkspaceActionLabel}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           onRerun={() =>

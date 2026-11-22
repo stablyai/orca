@@ -4,7 +4,8 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { useAppStore } from '@/store/index'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import { resolveAutomationRunTarget } from './automation-run-open-target'
-import { getAutomationRunViewState } from './automation-run-view-state'
+import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
+import { createAutomationRunWorkspaceAction } from './automation-run-workspace-action'
 import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import { makeAutomation, makeRun, makeRunUsage } from '../automations-page-fixtures'
@@ -48,15 +49,25 @@ const noop = (): void => {}
 
 const LONG_NAME = 'Quartz Lab - Watch (nightly flaky-test sweep on main)'
 const PAIRED_ENVIRONMENT_ID = 'sample-runtime'
+const PAIRED_AUTHORITY = {
+  kind: 'runtime',
+  environmentId: PAIRED_ENVIRONMENT_ID,
+  pairingRevision: 1
+} as const
 
 type Scenario = {
   run?: Partial<AutomationRun>
   hostLabel?: string
   workspaceCatalog?: 'removed' | 'loading'
   paired?: boolean
-  canRerun?: boolean
   isRerunPending?: boolean
 }
+
+const pairedRunTarget = (run: AutomationRun) =>
+  resolveAutomationRunTarget(useAppStore.getState(), run, PAIRED_AUTHORITY)
+const openPairedWorkspace = createAutomationRunWorkspaceAction({
+  list: { runTargetFor: pairedRunTarget }
+})
 
 function renderRunPage(runId: string, scenario: Scenario = {}) {
   const listed = runs.find((candidate) => candidate.id === runId) ?? runs[0]
@@ -66,16 +77,13 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
       ? { displayName: run.workspaceDisplayName }
       : null
   const viewState = scenario.paired
-    ? resolveAutomationRunTarget(useAppStore.getState(), run, {
-        kind: 'runtime',
-        environmentId: PAIRED_ENVIRONMENT_ID,
-        pairingRevision: 1
-      }).viewState
+    ? pairedRunTarget(run).viewState
     : getAutomationRunViewState({
         run,
         workspaceExists: worktree !== null,
         terminalTargetExists: false
       })
+  const actionLabel = viewState.canOpen ? viewState.actionLabel : null
   return (
     <div className="bg-background text-foreground">
       <AutomationRunDetailsPage
@@ -89,14 +97,18 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
         workspaceName={getAutomationRunDetailsWorkspaceName({
           run,
           worktree,
-          canOpen: viewState.canOpen,
+          actionLabel,
           catalogHydrated: scenario.workspaceCatalog !== 'loading'
         })}
-        canOpenWorkspace={viewState.canOpen}
-        canRerun={scenario.canRerun ?? false}
+        workspaceActionLabel={actionLabel}
+        canRerun={canRerunAutomationRun({ automation, run })}
         isRerunPending={scenario.isRerunPending ?? false}
         onRerun={noop}
-        onOpenWorkspace={() => console.info('[fixture] open workspace')}
+        onOpenWorkspace={
+          scenario.paired
+            ? () => openPairedWorkspace(run)
+            : () => console.info('[fixture] open workspace')
+        }
         onReviewSetup={noop}
         onSelectRun={noop}
       />
@@ -104,10 +116,17 @@ function renderRunPage(runId: string, scenario: Scenario = {}) {
   )
 }
 
+const failedRun: Partial<AutomationRun> = {
+  workspaceId: 'ws-1',
+  workspaceDisplayName: LONG_NAME,
+  status: 'dispatch_failed',
+  error: 'The sample worker could not start.',
+  outputSnapshot: null
+}
+
 const scenarios = {
   longName: {
-    run: { workspaceId: 'ws-1', workspaceDisplayName: LONG_NAME },
-    canRerun: true
+    run: { workspaceId: 'ws-1', workspaceDisplayName: LONG_NAME }
   },
   longNameUsage: {
     run: {
@@ -115,8 +134,7 @@ const scenarios = {
       workspaceDisplayName: LONG_NAME,
       usage: makeRunUsage({ totalTokens: 118_400, estimatedCostUsd: 0.42 })
     },
-    hostLabel: 'build-box.example.net',
-    canRerun: true
+    hostLabel: 'build-box.example.net'
   },
   shortName: {
     run: {
@@ -124,8 +142,7 @@ const scenarios = {
       workspaceDisplayName: 'Release notes',
       trigger: 'manual',
       usage: makeRunUsage({ totalTokens: 21_000, estimatedCostUsd: 0.08 })
-    },
-    canRerun: true
+    }
   },
   notLaunched: {
     run: {
@@ -137,12 +154,11 @@ const scenarios = {
   },
   removed: {
     run: { workspaceId: 'ws-3', workspaceDisplayName: 'Docs cleanup' },
-    workspaceCatalog: 'removed',
-    canRerun: true
+    workspaceCatalog: 'removed'
   },
+  rerunAvailable: { run: failedRun },
   rerunPending: {
-    run: { workspaceId: 'ws-1', workspaceDisplayName: LONG_NAME },
-    canRerun: true,
+    run: failedRun,
     isRerunPending: true
   }
 } satisfies Record<string, Scenario>
@@ -187,6 +203,14 @@ export const removedNarrow = defineFixture({
   width: 400,
   render: () => renderRunPage('run-23', scenarios.removed)
 })
+export const rerunAvailableWide = defineFixture({
+  width: 1280,
+  render: () => renderRunPage('run-23', scenarios.rerunAvailable)
+})
+export const rerunAvailableNarrow = defineFixture({
+  width: 400,
+  render: () => renderRunPage('run-23', scenarios.rerunAvailable)
+})
 export const rerunPendingWide = defineFixture({
   width: 1280,
   render: () => renderRunPage('run-23', scenarios.rerunPending)
@@ -198,14 +222,13 @@ export const rerunPendingNarrow = defineFixture({
 
 const pairedRun: Scenario = {
   run: {
-    workspaceId: 'ws-4',
+    workspaceId: 'sample-repo::/sample/workspace',
     terminalPaneKey: makePaneKey('sample-run', '00000000-0000-4000-8000-000000000001'),
     terminalPtyId: 'sample-pty'
   },
   hostLabel: 'preview-box.example.net',
   workspaceCatalog: 'loading',
-  paired: true,
-  canRerun: true
+  paired: true
 }
 
 const pairedStore = {
@@ -216,16 +239,24 @@ const pairedStore = {
       createdAt: 1,
       updatedAt: 1,
       lastUsedAt: null,
-      runtimeId: null,
+      runtimeId: PAIRED_ENVIRONMENT_ID,
       preferredEndpointId: 'preview',
       endpoints: []
     }
   ]
 }
 
+function setupPairedWorkspace(): void {
+  window.api.runtimeEnvironments.call = async (request) => {
+    console.info('[fixture] paired workspace request', JSON.stringify(request))
+    return { id: 'preview', ok: true, result: null, _meta: { runtimeId: PAIRED_ENVIRONMENT_ID } }
+  }
+}
+
 export const pairedWorkspaceName = defineFixture({
   width: 400,
   store: pairedStore,
+  setup: setupPairedWorkspace,
   render: () =>
     renderRunPage('run-23', {
       ...pairedRun,
@@ -236,6 +267,7 @@ export const pairedWorkspaceName = defineFixture({
 export const pairedWorkspaceUnnamed = defineFixture({
   width: 400,
   store: pairedStore,
+  setup: setupPairedWorkspace,
   render: () => renderRunPage('run-23', pairedRun)
 })
 

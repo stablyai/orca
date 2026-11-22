@@ -47,7 +47,7 @@ export function AutomationRunDetailsPage({
   relativeNow,
   hostLabel,
   workspaceName,
-  canOpenWorkspace,
+  workspaceActionLabel,
   canRerun,
   isRerunPending,
   onRerun,
@@ -66,7 +66,7 @@ export function AutomationRunDetailsPage({
   relativeNow: number
   hostLabel: string
   workspaceName: string | null
-  canOpenWorkspace: boolean
+  workspaceActionLabel: string | null
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
@@ -234,11 +234,15 @@ export function AutomationRunDetailsPage({
             {workspaceName ? <span aria-hidden="true">{'\u00a0·\u00a0'}</span> : dot}
             {workspaceName ? (
               <>
-                {canOpenWorkspace ? (
+                {workspaceActionLabel ? (
                   <span
                     role="button"
                     tabIndex={0}
-                    aria-label={workspaceName}
+                    aria-label={
+                      workspaceName === workspaceActionLabel
+                        ? workspaceActionLabel
+                        : `${workspaceName}, ${workspaceActionLabel}`
+                    }
                     className="cursor-pointer rounded-sm box-decoration-clone wrap-anywhere text-foreground outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     onClick={onOpenWorkspace}
                     onKeyDown={(event) => {

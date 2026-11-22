@@ -55,12 +55,12 @@ export function getAutomationRunDetailsWorkspaceName(
   {
     run,
     worktree,
-    canOpen,
+    actionLabel,
     catalogHydrated
   }: {
     run: Pick<AutomationRun, 'workspaceId' | 'workspaceDisplayName'>
     worktree: Pick<Worktree, 'displayName'> | null
-    canOpen: boolean
+    actionLabel: string | null
     catalogHydrated: boolean
   },
   t: Translate = translate
@@ -68,13 +68,8 @@ export function getAutomationRunDetailsWorkspaceName(
   if (!run.workspaceId) {
     return null
   }
-  if (!worktree && (canOpen || !catalogHydrated)) {
-    return (
-      run.workspaceDisplayName?.trim() ||
-      (canOpen
-        ? t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')
-        : null)
-    )
+  if (!worktree && (actionLabel || !catalogHydrated)) {
+    return run.workspaceDisplayName?.trim() || actionLabel
   }
   const display = getAutomationRunWorkspaceDisplay({ run, worktree }, t)
   return display.title ?? display.detailLabel
