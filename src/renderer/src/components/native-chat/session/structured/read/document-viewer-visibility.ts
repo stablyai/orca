@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionViewerVisibility } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-coalescer'
 import type { StructuredAgentSessionLiveTextViewer } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-text-viewer'
+import type { StructuredAgentSessionReplyTextInterest } from './structured-agent-session-read-owner-contract'
 import {
   getWindowParkVisible,
   subscribeWindowParkVisibility
@@ -52,16 +53,24 @@ export function documentViewerVisibility(
 }
 
 /** A read runs only while a view of its chat is shown in a tab, so its window's visibility is
- *  whether the chat is on screen. */
+ *  whether the chat is on screen; it takes live text only while a reader draws reply text. */
 export function documentLiveTextViewer(
   supported: StructuredAgentSessionLiveTextViewer['supported'],
-  setShown: StructuredAgentSessionLiveTextViewer['setShown']
+  setShown: StructuredAgentSessionLiveTextViewer['setShown'],
+  replyText?: StructuredAgentSessionReplyTextInterest
 ): StructuredAgentSessionLiveTextViewer {
   return {
     supported,
-    shown: () => !documentHidden(),
-    subscribeShown: (changed) =>
-      typeof document === 'undefined' ? () => {} : subscribeWindowParkVisibility(changed),
+    shown: () => !documentHidden() && (replyText?.shown() ?? true),
+    subscribeShown: (changed) => {
+      const stopWindow =
+        typeof document === 'undefined' ? () => {} : subscribeWindowParkVisibility(changed)
+      const stopReaders = replyText?.subscribe(changed) ?? (() => {})
+      return () => {
+        stopWindow()
+        stopReaders()
+      }
+    },
     setShown
   }
 }

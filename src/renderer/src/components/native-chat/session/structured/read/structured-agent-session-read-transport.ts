@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionReplyTextInterest } from './structured-agent-session-read-owner-contract'
 import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
   type AgentSessionTextAppendCapabilities,
@@ -52,9 +53,11 @@ export function startStructuredAgentSessionReadTransport(
     target: RuntimeClientTarget
     /** This reader shows prompt suggestions, so the host should generate them while it reads. */
     showsPromptSuggestions?: boolean
+    /** Whether a reader draws reply text; only then does a shown window take live text. */
+    replyText?: StructuredAgentSessionReplyTextInterest
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
-  const { target, showsPromptSuggestions, ...read } = args
+  const { target, showsPromptSuggestions, replyText, ...read } = args
   const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
   const viewer = asks?.liveTextViewer ?? true
   let sendsShownTail = viewer === true
@@ -67,13 +70,16 @@ export function startStructuredAgentSessionReadTransport(
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
-    liveTextViewer: documentLiveTextViewer(viewer, (viewerId, shown, seq) =>
-      callStructuredAgentSession(target, 'agentSession.liveTextShown', {
-        sessionId: read.sessionId,
-        viewerId,
-        shown,
-        seq
-      })
+    liveTextViewer: documentLiveTextViewer(
+      viewer,
+      (viewerId, shown, seq) =>
+        callStructuredAgentSession(target, 'agentSession.liveTextShown', {
+          sessionId: read.sessionId,
+          viewerId,
+          shown,
+          seq
+        }),
+      replyText
     ),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
