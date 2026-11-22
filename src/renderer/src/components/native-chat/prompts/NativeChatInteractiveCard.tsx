@@ -16,8 +16,7 @@ export function NativeChatInteractiveCard({
   requiresTerminal = false,
   onAnswerInTerminal,
   shouldFocus = false,
-  answerInputRef,
-  composerDraftScopeKey
+  answerInputRef
 }: {
   card: NonNullable<InteractivePromptCard>
   send: NativeChatInteractiveSend
@@ -31,8 +30,6 @@ export function NativeChatInteractiveCard({
   shouldFocus?: boolean
   /** Paste target while the prompt card replaces the composer. */
   answerInputRef?: React.RefObject<HTMLTextAreaElement | null>
-  /** The message box this card replaces. */
-  composerDraftScopeKey?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
@@ -177,7 +174,6 @@ export function NativeChatInteractiveCard({
       onCollapse={onCollapse}
       onOpenTerminal={onAnswerInTerminal}
       parsedFromTerminal
-      composerDraftScopeKey={composerDraftScopeKey}
     />
   )
 }

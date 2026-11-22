@@ -17,15 +17,13 @@ export function NativeChatStructuredPromptCard({
   promptResponse,
   onCancel,
   shouldFocus,
-  answerInputRef,
-  composerDraftScopeKey
+  answerInputRef
 }: {
   prompt: PromptItem | null
   promptResponse: PromptResponse
   onCancel: () => void
   shouldFocus: boolean
   answerInputRef: RefObject<HTMLTextAreaElement | null>
-  composerDraftScopeKey?: string
 }): React.JSX.Element | null {
   const [collapsed, setCollapsed] = useState(false)
   if (prompt?.body.kind === 'approval') {
@@ -36,7 +34,6 @@ export function NativeChatStructuredPromptCard({
         isSubmitting={promptResponse.holds(prompt)}
         onCancel={onCancel}
         shouldFocus={shouldFocus}
-        composerDraftScopeKey={composerDraftScopeKey}
       />
     )
   }

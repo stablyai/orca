@@ -19,7 +19,7 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
-import { handleApprovalCardKeyDown, useComposerHoldsDraft } from './native-chat-approval-card-keys'
+import { handleApprovalCardKeyDown } from './native-chat-approval-card-keys'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
@@ -46,8 +46,6 @@ export type NativeChatApprovalCardProps = {
   placement?: 'composer' | 'stacked'
   /** Read off a terminal screen (folder trust, startup menus): keeps the full card. */
   parsedFromTerminal?: boolean
-  /** The message box this card replaces: text left in it keeps focus off the answers. */
-  composerDraftScopeKey?: string
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -63,8 +61,7 @@ export function NativeChatApprovalCard({
   worker,
   countdown,
   placement = 'composer',
-  parsedFromTerminal = false,
-  composerDraftScopeKey
+  parsedFromTerminal = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -91,8 +88,6 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  // Someone may still be typing into the box this card just replaced: a space or Enter must not approve.
-  const answerFocusHeld = useComposerHoldsDraft(composerDraftScopeKey)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailClamped, setDetailClamped] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -350,10 +345,6 @@ export function NativeChatApprovalCard({
                       key={`${opt.label}-${i}`}
                       type="button"
                       data-native-chat-approval-answer=""
-                      // The first answer opens focused, so Enter takes it and Tab moves to the next.
-                      data-native-chat-prompt-card-open-target={
-                        (i === 0 && !answerFocusHeld) || undefined
-                      }
                       disabled={
                         newerSubject || isSubmitting || (opensUrl && readApprovalUrl(url) === null)
                       }

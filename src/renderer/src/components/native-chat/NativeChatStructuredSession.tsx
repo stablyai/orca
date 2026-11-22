@@ -374,7 +374,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 onCancel={cancelPrompt}
                 shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
                 answerInputRef={questionAnswerInputRef}
-                composerDraftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
               />
               {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
               {botServerDown && hostOutage ? (
