@@ -6463,7 +6463,14 @@
         "newLink": "Get a new link",
         "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
-        "again": "Set up again"
+        "again": "Set up again",
+        "tryIt": "Try it in any channel or DM",
+        "openInSlack": "Message it in Slack",
+        "preview": {
+          "you": "You",
+          "askPlain": "@{{name}} summarize this thread",
+          "reply": "On it."
+        }
       },
       "connection": {
         "installedBy": "installed by {{installer}}",
@@ -6596,7 +6603,8 @@
       "toolName": "Composio apps"
     },
     "setup": {
-      "for": "for {{name}}"
+      "for": "for {{name}}",
+      "copyHowToAsk": "Copy {{text}}"
     },
     "share": {
       "receive": {
@@ -6856,7 +6864,10 @@
         "installing": "Waiting for the install…",
         "copied": "Link copied.",
         "connectTitle": "Connect Linear",
-        "close": "Close"
+        "close": "Close",
+        "tryIt": "Try it on any Linear issue",
+        "orLabel": "or add the label",
+        "actsOnHost": "Orca acts as that Linear user from {{host}}."
       },
       "connect": {
         "another": "Use another workspace",
@@ -6899,7 +6910,13 @@
         "install": "Install the Orca app",
         "finish": "Done",
         "connectTitle": "Connect GitHub",
-        "close": "Close"
+        "close": "Close",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "ask": "review this PR",
+          "reply": "On it."
+        },
+        "pushesOnHost": "{{name}} pushes code from {{host}} with its git login."
       },
       "connection": {
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
