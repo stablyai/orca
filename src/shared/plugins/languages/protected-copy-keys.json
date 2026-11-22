@@ -868,6 +868,7 @@
     "bots.new.title",
     "bots.new.useChatDefaults",
     "bots.new.usingChatDefault",
+    "bots.new.validation.addName",
     "bots.setup.copyHowToAsk",
     "bots.share.automations",
     "bots.share.binaryFile",
