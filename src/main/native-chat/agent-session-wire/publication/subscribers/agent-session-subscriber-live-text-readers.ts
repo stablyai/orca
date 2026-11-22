@@ -61,6 +61,22 @@ function readerTakesRow(reader: Subscriber, itemId: string): boolean {
   return !(reader.liveSent?.has(itemId) && reader.holdsTextBase?.(itemId) === false)
 }
 
+/** What a reader holds after a publication: the rows it took, plus rows skipped for want of an
+ *  append base, so those aren't sent whole again until their save restores the base. */
+export function sentRowsAfter(
+  subscriber: Subscriber,
+  before: ReadonlyMap<string, SubscriberLiveRow> | undefined,
+  rows: readonly SubscriberLiveRow[]
+): Map<string, SubscriberLiveRow> {
+  const next = new Map(rows.map((row) => [row.source.itemId, row]))
+  before?.forEach((row, itemId) => {
+    if (!next.has(itemId) && subscriber.holdsTextBase?.(itemId) === false) {
+      next.set(itemId, row)
+    }
+  })
+  return next
+}
+
 /** What one subscriber reads of the session's live text. */
 export const subscriberLiveTextReaders = (subscriber: Subscriber): LiveTextReaders =>
   liveTextReadersOf([subscriber], shownViewer(subscriber))
@@ -132,5 +148,24 @@ export class LiveTextViewerShows {
       }
       await this.deps.sendTail(subscriber, journal)
     })
+  }
+}
+
+/** A row whose stream ended is saved whole, so what was last sent of it is let go. */
+export function forgetEndedLiveRows(
+  subscriber: Subscriber,
+  live: readonly AgentJournalRenderItem[],
+  within?: ReadonlySet<string> // a save's rows; outside one, a row awaiting its base is kept
+) {
+  const sent = subscriber.liveSent
+  if (!sent || sent.size === 0) {
+    return
+  }
+  const streaming = new Set(live.map((item) => item.itemId))
+  for (const itemId of sent.keys()) {
+    const waits = within === undefined && subscriber.holdsTextBase?.(itemId) === false
+    if (!streaming.has(itemId) && within?.has(itemId) !== false && !waits) {
+      sent.delete(itemId)
+    }
   }
 }

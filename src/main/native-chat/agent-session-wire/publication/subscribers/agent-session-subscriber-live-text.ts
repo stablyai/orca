@@ -7,7 +7,9 @@ import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
 import {
+  forgetEndedLiveRows,
   noteShortenedRow,
+  sentRowsAfter,
   subscriberAtHead,
   subscriberLiveTextReaders
 } from './agent-session-subscriber-live-text-readers'
@@ -207,24 +209,6 @@ function liveTextOf(
   return port.hooks.readLiveText?.(subscriber.sessionId, { ...readers, takes: scoped }) ?? []
 }
 
-/** A row whose stream ended is saved whole, so what was last sent of it is let go. */
-function forgetEndedLiveRows(
-  subscriber: Subscriber,
-  live: readonly AgentJournalRenderItem[],
-  within?: ReadonlySet<string> // the rows the read covered; others were not read, so are kept
-) {
-  const sent = subscriber.liveSent
-  if (!sent || sent.size === 0) {
-    return
-  }
-  const streaming = new Set(live.map((item) => item.itemId))
-  for (const itemId of sent.keys()) {
-    if (!streaming.has(itemId) && within?.has(itemId) !== false) {
-      sent.delete(itemId)
-    }
-  }
-}
-
 /** A phone page is already sized to its frame and never re-split, so its live rows follow as a batch. */
 export function pageWithSubscriberLiveText(
   port: SubscriberDeliveryPort,
@@ -327,7 +311,7 @@ export async function publishSubscriberLiveText(
         freshBytes += row.bytes
       }
     }
-    subscriber.liveSent = new Map(rows.map((row) => [row.source.itemId, row]))
+    subscriber.liveSent = sentRowsAfter(subscriber, sent, rows)
     if (fresh.length === 0) {
       continue
     }
