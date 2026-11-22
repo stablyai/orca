@@ -4,6 +4,7 @@ import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-pol
 import {
   setTerminalWebglAtlasRebuilder,
   takeCoveredDetachedPane,
+  terminalWebglAtlasInteractionHoldMs,
   type DeferredReattachVerdict
 } from './terminal-webgl-atlas-memory-rebuild'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
@@ -83,64 +84,64 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
   return () => reattach.forEach(reattachDetachedWebgl)
 }
 
-// xterm's own watchdog ends a synchronized frame within a second; past this, attach anyway rather than strand a shown pane.
+// xterm's own watchdog ends a synchronized frame within a second; past this, recreate anyway rather than keep the old context.
 const MAX_SYNC_WAIT_FRAMES = 120
-// Shown panes a rebuild left on the DOM renderer until their frame; DOM cell metrics differ from WebGL's, so a grid fit meanwhile would resize the PTY twice.
-// Keyed by terminal: PTY sessions hold a public pane wrapper, not this internal pane.
-const terminalsAwaitingRebuildReattach = new WeakSet<ManagedPaneInternal['terminal']>()
 
-/** True while an atlas rebuild has this shown terminal on the DOM renderer, waiting for its frame to get WebGL back. */
-export function isTerminalAwaitingAtlasRebuildReattach(
-  terminal: ManagedPaneInternal['terminal']
-): boolean {
-  return terminalsAwaitingRebuildReattach.has(terminal)
-}
+type RebuildStep = { pane: ManagedPaneInternal; recreate: boolean }
 
-/** One context per frame: recreating every context in one task stalls the renderer for hundreds of ms. */
-function reattachAcrossFrames(
-  panes: ManagedPaneInternal[],
+/** One pane per frame, so no frame pays for more than one context; user input holds the rest, which keep rendering on their old context meanwhile. */
+function rebuildAcrossFrames(
+  steps: RebuildStep[],
   verdictOf: (pane: ManagedPaneInternal) => DeferredReattachVerdict,
   waitedFrames = 0
 ): void {
-  const [pane, ...rest] = panes
-  if (!pane) {
+  const [step, ...rest] = steps
+  if (!step) {
     return
   }
-  // The pane may have closed, been reattached by reveal or fit, or lost its DOM since the rebuild.
-  if (!pane.webglAddon && pane.container.isConnected && !isXtermInstanceDisposed(pane.terminal)) {
-    const verdict = verdictOf(pane)
+  const hold = terminalWebglAtlasInteractionHoldMs()
+  if (hold > 0) {
+    setTimeout(
+      () => requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames)),
+      hold
+    )
+    return
+  }
+  const { pane } = step
+  // The pane may have closed, lost its renderer or its DOM since the rebuild started.
+  if (
+    pane.webglAddon &&
+    !pane.webglDisabledAfterContextLoss &&
+    pane.container.isConnected &&
+    !isXtermInstanceDisposed(pane.terminal)
+  ) {
+    const verdict = step.recreate ? verdictOf(pane) : 'skip'
     if (verdict === 'wait' && waitedFrames < MAX_SYNC_WAIT_FRAMES) {
-      requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames + 1))
+      requestAnimationFrame(() => rebuildAcrossFrames(steps, verdictOf, waitedFrames + 1))
       return
     }
-    if (verdict !== 'skip') {
-      reattachDetachedWebgl(pane)
+    if (verdict === 'skip') {
+      // Off screen or chat-covered: drop its context now; reveal, fit, resume or the cover closing gives it a new one.
+      disposeWebgl(pane)
+    } else {
+      // Dispose and attach in one task, so the pane never shows the DOM renderer.
+      rebuildAttachedWebgl(pane)
       if (pane.webglAddon) {
         paintReplacementCanvasNow(pane.terminal)
       }
     }
   }
-  terminalsAwaitingRebuildReattach.delete(pane.terminal)
   if (rest.length > 0) {
-    requestAnimationFrame(() => reattachAcrossFrames(rest, verdictOf))
+    requestAnimationFrame(() => rebuildAcrossFrames(rest, verdictOf))
   }
 }
 
 setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
-  const reattach = detachPanesWebgl(panes, shouldReattach)
-  // An overdue rebuild can start while a pane is mid synchronized-output frame; only a pane outside one reattaches in this task.
-  const firstIndex = reattach.findIndex((pane) => !pane.terminal.modes.synchronizedOutputMode)
-  const first = firstIndex === -1 ? undefined : reattach[firstIndex]
-  const rest = reattach.filter((_, index) => index !== firstIndex)
-  // Waiting panes show xterm's DOM renderer until their frame; paint it now so a synchronized-output frame can't hold it blank.
-  for (const pane of rest) {
-    terminalsAwaitingRebuildReattach.add(pane.terminal)
-    paintReplacementCanvasNow(pane.terminal)
-  }
-  if (first) {
-    reattachAcrossFrames([first], () => 'now')
-  }
-  if (rest.length > 0) {
-    requestAnimationFrame(() => reattachAcrossFrames(rest, verdictOnItsFrame))
-  }
+  const steps = panes
+    .filter((pane) => pane.webglAddon && !pane.webglDisabledAfterContextLoss)
+    .map((pane) => ({ pane, recreate: shouldReattach(pane) }))
+    .sort((a, b) => Number(b.recreate) - Number(a.recreate))
+  // Clearing the shared atlas first means every recreated context joins a small atlas, and destroying each old context frees what it retained; on a quiet screen the waiting panes keep their last frame.
+  steps[0]?.pane.webglAddon?.clearTextureAtlas()
+  rebuildAcrossFrames(steps, verdictOnItsFrame)
 })

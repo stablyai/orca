@@ -1,22 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from '../pane-manager-types'
-import type * as ReattachModule from './pane-webgl-reattach'
 
-// Guards #43465: an atlas rebuild recreates at most one WebGL context per frame, so many panes can't stall one task.
+// Guards #43465: an atlas rebuild clears the shared atlas, then recreates at most one WebGL context per frame, never leaves a shown pane on the DOM renderer, and pauses while the user interacts.
 const attaches = { count: 0 }
+const interactionHold = { ms: 0 }
 type Verdict = 'now' | 'wait' | 'skip'
 let rebuilder:
   | ((
       panes: ManagedPaneInternal[],
-      shouldReattach: () => boolean,
+      shouldReattach: (pane: ManagedPaneInternal) => boolean,
       verdict: (pane: ManagedPaneInternal) => Verdict
     ) => void)
   | null = null
 
+type FakeAddon = { clears: number; clearTextureAtlas: () => void }
+const newAddon = (): FakeAddon => {
+  const addon = {
+    clears: 0,
+    clearTextureAtlas: () => {
+      addon.clears++
+    }
+  }
+  return addon
+}
+
 vi.mock('./pane-webgl-renderer', () => ({
   attachWebgl: (pane: { webglAddon: unknown }) => {
     attaches.count++
-    pane.webglAddon = {}
+    pane.webglAddon = newAddon()
   },
   disposeWebgl: (pane: { webglAddon: unknown }) => {
     pane.webglAddon = null
@@ -27,110 +38,119 @@ vi.mock('./terminal-webgl-atlas-memory-rebuild', () => ({
   setTerminalWebglAtlasRebuilder: (next: typeof rebuilder) => {
     rebuilder = next
   },
-  takeCoveredDetachedPane: () => undefined
+  takeCoveredDetachedPane: () => undefined,
+  terminalWebglAtlasInteractionHoldMs: () => interactionHold.ms
 }))
 vi.mock('./terminal-render-pause-release', () => ({ paintReplacementCanvasNow: () => {} }))
 
 type RawPane = {
-  webglAddon: object | null
+  webglAddon: FakeAddon | null
   container: { isConnected: boolean }
   terminal: { modes: { synchronizedOutputMode: boolean } }
 }
 
 function fakePane(): { pane: ManagedPaneInternal; raw: RawPane } {
   const raw = {
-    webglAddon: {},
+    webglAddon: newAddon(),
     webglDisabledAfterContextLoss: false,
     webglAttachmentDeferred: false,
     container: { isConnected: true },
     terminal: { modes: { synchronizedOutputMode: false } }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rebuilder reads only the addon, deferral and context-loss flags, the container's connection and the terminal handle, all supplied here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rebuilder reads only the addon, deferral and context-loss flags, the container's connection and the terminal's modes, all supplied here.
   const pane = raw as unknown as ManagedPaneInternal
   return { pane, raw }
 }
 
-let reattachModule: typeof ReattachModule
+const run = (
+  fakes: { pane: ManagedPaneInternal }[],
+  verdict: (pane: ManagedPaneInternal) => Verdict = () => 'now',
+  shown: (pane: ManagedPaneInternal) => boolean = () => true
+): void =>
+  rebuilder?.(
+    fakes.map((fake) => fake.pane),
+    shown,
+    verdict
+  )
 
-describe('atlas-rebuild reattachment', () => {
+describe('atlas-rebuild context recreation', () => {
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
     attaches.count = 0
+    interactionHold.ms = 0
     vi.resetModules()
-    reattachModule = await import('./pane-webgl-reattach')
+    await import('./pane-webgl-reattach')
   })
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
-  it('recreates one context per frame', async () => {
+  it('clears the shared atlas once, then recreates one context per frame without ever dropping a shown pane to DOM', async () => {
     const fakes = Array.from({ length: 6 }, fakePane)
-    rebuilder?.(
-      fakes.map((fake) => fake.pane),
-      () => true,
-      () => 'now'
-    )
+    const firstAddon = fakes[0].raw.webglAddon
+    run(fakes)
+    expect(firstAddon?.clears).toBe(1)
     expect(attaches.count).toBe(1)
+    for (let frame = 2; frame <= 6; frame++) {
+      expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
+      await vi.advanceTimersByTimeAsync(16)
+      expect(attaches.count).toBe(frame)
+    }
+  })
+
+  it('creates no context while the user types, clicks or scrolls, then resumes', async () => {
+    const fakes = Array.from({ length: 3 }, fakePane)
+    run(fakes)
+    expect(attaches.count).toBe(1)
+    interactionHold.ms = 2_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(attaches.count).toBe(1)
+    // Held panes keep their old context meanwhile.
+    expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
+    interactionHold.ms = 0
+    // The hold ends 2 s after the frame that saw it (t = 16 ms), then waits one more frame.
+    await vi.advanceTimersByTimeAsync(1_040)
+    expect(attaches.count).toBe(2)
+    await vi.advanceTimersByTimeAsync(16)
+    expect(attaches.count).toBe(3)
+  })
+
+  it('drops off-screen panes contexts in their own frame without recreating them', async () => {
+    const [shown, hidden] = Array.from({ length: 2 }, fakePane)
+    run(
+      [hidden, shown],
+      () => 'now',
+      (pane) => pane === shown.pane
+    )
+    // The shown pane goes first.
+    expect(attaches.count).toBe(1)
+    expect(hidden.raw.webglAddon).toBeTruthy()
+    await vi.advanceTimersByTimeAsync(16)
+    expect(hidden.raw.webglAddon).toBeNull()
+    expect(attaches.count).toBe(1)
+  })
+
+  it('recreates a pane mid synchronized-output frame only once its frame closes', async () => {
+    const [plain, framed] = Array.from({ length: 2 }, fakePane)
+    framed.raw.terminal.modes.synchronizedOutputMode = true
+    run([plain, framed], (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now'))
+    await vi.advanceTimersByTimeAsync(16 * 5)
+    expect(attaches.count).toBe(1)
+    // It keeps its old context while it waits.
+    expect(framed.raw.webglAddon).toBeTruthy()
+    framed.raw.terminal.modes.synchronizedOutputMode = false
     await vi.advanceTimersByTimeAsync(16)
     expect(attaches.count).toBe(2)
-    await vi.advanceTimersByTimeAsync(16 * 4)
-    expect(attaches.count).toBe(6)
-    expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
   })
 
-  it('reattaches a pane mid synchronized-output frame only once its frame closes', async () => {
-    const [framed, plain] = Array.from({ length: 2 }, fakePane)
-    const framedModes = framed.raw.terminal.modes
-    framedModes.synchronizedOutputMode = true
-    rebuilder?.(
-      [framed.pane, plain.pane],
-      () => true,
-      (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now')
-    )
-    // The pane outside a frame goes first, in this task.
-    expect(plain.raw.webglAddon).toBeTruthy()
-    expect(framed.raw.webglAddon).toBeNull()
-    await vi.advanceTimersByTimeAsync(16 * 5)
-    expect(framed.raw.webglAddon).toBeNull()
-    // Grid fits stay off while it waits on the DOM renderer.
-    expect(reattachModule.isTerminalAwaitingAtlasRebuildReattach(framed.pane.terminal)).toBe(true)
-    framedModes.synchronizedOutputMode = false
-    await vi.advanceTimersByTimeAsync(16)
-    expect(framed.raw.webglAddon).toBeTruthy()
-    expect(reattachModule.isTerminalAwaitingAtlasRebuildReattach(framed.pane.terminal)).toBe(false)
-  })
-
-  it('skips a pane that closed or got its renderer back before its frame', async () => {
-    const [first, closed, revealed] = Array.from({ length: 3 }, fakePane)
-    rebuilder?.(
-      [first.pane, closed.pane, revealed.pane],
-      () => true,
-      () => 'now'
-    )
+  it('skips a pane that closed or lost its renderer before its frame', async () => {
+    const [first, closed, lost] = Array.from({ length: 3 }, fakePane)
+    run([first, closed, lost])
     closed.raw.container.isConnected = false
-    revealed.raw.webglAddon = {}
+    lost.raw.webglAddon = null
     await vi.advanceTimersByTimeAsync(16 * 3)
     expect(attaches.count).toBe(1)
-  })
-
-  it('rechecks each waiting pane on its frame: hidden ones stay detached, mid-frame ones wait', async () => {
-    const [first, hidden, drawing] = Array.from({ length: 3 }, fakePane)
-    const verdicts = new Map<ManagedPaneInternal, Verdict>([
-      [hidden.pane, 'skip'],
-      [drawing.pane, 'wait']
-    ])
-    rebuilder?.(
-      [first.pane, hidden.pane, drawing.pane],
-      () => true,
-      (pane) => verdicts.get(pane) ?? 'now'
-    )
-    await vi.advanceTimersByTimeAsync(16 * 5)
-    expect(attaches.count).toBe(1)
-    expect(hidden.raw.webglAddon).toBeNull()
-    verdicts.set(drawing.pane, 'now')
-    await vi.advanceTimersByTimeAsync(16)
-    expect(attaches.count).toBe(2)
   })
 })
