@@ -8,7 +8,11 @@ import {
   type BotItemShowRead,
   type BotItemsListRead
 } from '../../../../src/shared/bots/bot-item-schema'
-import type { BotItem, BotItemStatus } from '../../../../src/shared/bots/bot-items'
+import type {
+  BotItem,
+  BotItemCommentSkill,
+  BotItemStatus
+} from '../../../../src/shared/bots/bot-items'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -90,7 +94,7 @@ export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or these chats'. */
+/** Open items and a page of closed items, optionally scoped to a group’s rooms. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
@@ -163,7 +167,11 @@ export function commentOnBotItem(
   client: RpcClient,
   uid: string,
   text: string,
-  extra: { images?: readonly string[]; requestId?: string } = {}
+  extra: {
+    images?: readonly string[]
+    requestId?: string
+    skills?: readonly BotItemCommentSkill[]
+  } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemComment.request(
@@ -172,7 +180,8 @@ export function commentOnBotItem(
         item: uid,
         text,
         ...(extra.images?.length ? { images: [...extra.images] } : {}),
-        ...(extra.requestId ? { requestId: extra.requestId } : {})
+        ...(extra.requestId ? { requestId: extra.requestId } : {}),
+        ...(extra.skills?.length ? { skills: [...extra.skills] } : {})
       },
       { failWhenDisconnected: true }
     )

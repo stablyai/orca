@@ -55,6 +55,7 @@ export class ConnectorReplyRecovery {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   // Until this start's own continuations of restart cuts settled, a cut may still be claimed.
   private continuationsSettled: boolean
+  private readonly startedAt = Date.now()
 
   constructor(
     private readonly deps: {
@@ -213,6 +214,7 @@ export class ConnectorReplyRecovery {
         endedCuts,
         idle,
         lastEnded,
+        startedAt: this.startedAt,
         rejectionOf: (submission) => this.rejectionOf(sessionId, submission)
       })
     const fills = left.flatMap((row) => {

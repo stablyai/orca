@@ -5,7 +5,8 @@ const DEFAULT_ON_MIGRATION_GUARDS = [
   ['terminalTuiScrollSensitivity', 'terminalTuiScrollSensitivityDefaultedToOne'],
   ['autoRenameBranchFromWork', 'autoRenameBranchFromWorkDefaultedOn'],
   ['pluginSystemEnabled', 'pluginSystemDefaultedOn'],
-  ['nestedWorkerMaxDepth', 'nestedWorkerMaxDepthDefaultedToFour']
+  ['nestedWorkerMaxDepth', 'nestedWorkerMaxDepthDefaultedToFour'],
+  ['nativeChatAutoContinueAfterUsageLimit', 'nativeChatAutoContinueAfterUsageLimitDefaultedOn']
 ] as const satisfies readonly (readonly [keyof GlobalSettings, keyof GlobalSettings])[]
 
 /** Explicit writes (or attempts to clear a guard) keep the guard set so later choices stick. */

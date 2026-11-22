@@ -156,7 +156,7 @@ export function NativeChatNoticeRow({
         <button
           type="button"
           onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
-          className="line-clamp-2 rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="truncate rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
         </button>

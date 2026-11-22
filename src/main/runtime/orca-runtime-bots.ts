@@ -17,6 +17,7 @@ import {
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
 import { botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
@@ -46,6 +47,7 @@ import { onBotToolSignInChanged } from '../bots/bot-tool-sign-in-changed'
 import { onBotToolCredentialEnded } from '../bots/bot-tool-credential-ended'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
 import type { BotChatTreeIndex } from '../bots/bot-chat-tree-index'
+import { BotChatTreeWorkerCache } from '../bots/bot-chat-tree-worker-cache'
 import { pairedBotRosterCache } from '../bots/paired-bot-rosters'
 import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -176,6 +178,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   set botSessions(hooks: BotSessionHooks) {
     this.botSessionHooks = hooks
     this.botItems.startRecovery()
+    this.botJournal.catchUp()
   }
 
   /** Each bot's looks and Up next, on this host. */
@@ -214,12 +217,17 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime)
 
+  private readonly botJournal = journaledItemsNotice(this, (scope) =>
+    this.botChangeNotices.changed(scope)
+  )
+
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
-    notify: (scope) => this.botChangeNotices.changed(scope),
+    // Closed items also go to each bot's memory/journal/.
+    notify: (scope) => this.botJournal(scope),
     sendMail: (mail) => this.botSessions.sendItemMail(mail)
   })
 
@@ -326,6 +334,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Each bot's chats-tree base between reads, kept from the record store's and database's own
    *  changes; set once the runtime is built (bot-chat-tree-host). */
   botChatTreeIndex: BotChatTreeIndex | null = null
+  /** Settled workers the chats tree read, kept until their Dispatch's rows change. */
+  readonly botChatTreeWorkers = new BotChatTreeWorkerCache()
 
   // Setup cards in every window and phone re-read the bot's Google setup run on this notice.
   protected readonly stopGoogleSetupNotices = googleSetupRuns().onChange(() =>
@@ -357,6 +367,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
+    this.botChatTreeWorkers.drop(dispatchIds)
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
     if (botIds?.length !== 0) {
       this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
@@ -364,6 +375,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   }
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    this.botChatTreeWorkers.rowChanged(dispatchId, change)
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

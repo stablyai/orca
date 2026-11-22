@@ -55,16 +55,7 @@ type RowIdentities = {
 }
 let rowCache: RowIdentities | undefined
 let cache: { inputs: unknown[]; contexts: Contexts } | undefined
-let builds = 0
-let aliasBuilds = 0
 let visits = 0
-export function visibleOrchestrationWorkForTest(): {
-  builds: number
-  aliasBuilds: number
-  visits: number
-} {
-  return { builds, aliasBuilds, visits }
-}
 const aliasKey = (host: string, key: string) => `${host}\0${key}`
 
 function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
@@ -74,7 +65,6 @@ function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
   if (rowCache && inputs.every((value, index) => value === rowCache?.inputs[index])) {
     return rowCache
   }
-  aliasBuilds++
   const aliases = new Map<string, string>()
   const worktrees = new Map<string, string>()
   const canonical = new Map<string, { key: string; host: string | null }>()
@@ -201,7 +191,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
     return cache
   }
-  builds++
   const { aliases, canonical } = rows
   const contexts: Contexts = Object.fromEntries([])
   const visibleKey = (key: string, host: string | null) => {

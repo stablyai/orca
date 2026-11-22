@@ -24,11 +24,14 @@ import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-ta
 import { isBrowserExtensionSidePanelGuest } from '../side-panel/browser-extension-side-panel-guests'
 import { canExtensionSeeTabUrl } from '../permissions/browser-extension-tab-url-access'
 import {
+  WINDOW_ID_CURRENT,
   getBrowserExtensionMainWindow,
+  getBrowserExtensionWindow,
   getLastFocusedBrowserExtensionWindowId,
   getPopoutWindowForWebContents,
   listPopoutWindowsInSession,
-  presentBrowserExtensionWindow
+  presentBrowserExtensionWindow,
+  type BrowserExtensionWindowEntry
 } from './browser-extension-window-model'
 
 /**
@@ -189,6 +192,19 @@ export function resolveCallerWindowId(caller: BrowserExtensionCaller): number | 
   }
   // Chrome: a background context's "current" window is the last focused one.
   return getLastFocusedBrowserExtensionWindowId(caller.session)
+}
+
+/** Resolves a Chrome windowId argument (WINDOW_ID_CURRENT included) or throws Chrome's error. */
+export function requireCallerWindow(
+  caller: BrowserExtensionCaller,
+  windowId: number
+): BrowserExtensionWindowEntry {
+  const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
+  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
+  if (!entry) {
+    throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
+  }
+  return entry
 }
 
 function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
