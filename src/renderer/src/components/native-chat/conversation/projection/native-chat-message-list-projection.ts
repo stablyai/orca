@@ -23,7 +23,8 @@ import { stripNoiseMessages } from '../../../../../../shared/native-chat/transcr
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   noteStreamedTextStage,
-  projectionBesideStreamedText
+  projectionBesideStreamedText,
+  rowsBesideStreamedText
 } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { reuseUnits } from './native-chat-message-list-reuse'
 import { subagentTurnKeys } from './native-chat-message-list-turns'
@@ -172,6 +173,23 @@ function retainIdentity(
   }
 }
 
+/** Whether two journals give child rows the same turns: only streamed reply text may differ. */
+function sameTurnJournalBesideStreamedText(
+  next: NativeChatTurnJournal | null | undefined,
+  prior: NativeChatTurnJournal | null | undefined
+): boolean {
+  if (next === prior || !next || !prior) {
+    return next === prior
+  }
+  return (
+    rowsBesideStreamedText(next.items) === rowsBesideStreamedText(prior.items) &&
+    next.submissions === prior.submissions &&
+    next.working === prior.working &&
+    (next.latestTurn === prior.latestTurn ||
+      JSON.stringify(next.latestTurn) === JSON.stringify(prior.latestTurn))
+  )
+}
+
 export function createNativeChatMessageListProjection(): (
   messages: NativeChatMessage[],
   journal?: NativeChatTurnJournal | null
@@ -185,7 +203,8 @@ export function createNativeChatMessageListProjection(): (
     // pull requests) keep what they built for the rows it revised.
     if (
       previous &&
-      projectionBesideStreamedText(messages) === projectionBesideStreamedText(previous.input)
+      projectionBesideStreamedText(messages) === projectionBesideStreamedText(previous.input) &&
+      sameTurnJournalBesideStreamedText(journal, previous.journal)
     ) {
       noteStreamedTextStage(state.projection.subagentRows, previous.projection.subagentRows)
     }

@@ -35,7 +35,8 @@ it("links a streaming child's rows to the rows it revised, and not across other 
     [],
     [message('parent', 'Started a helper'), message('child', 'The child so far', 'helper')]
   )
-  const base = project(first).subagentRows
+  const submissions: never[] = []
+  const base = project(first, { items: rows, submissions }).subagentRows
   let latest = base
   for (let step = 1; step <= 20; step++) {
     const text = `The child so far${' and more'.repeat(step)}`
@@ -46,10 +47,18 @@ it("links a streaming child's rows to the rows it revised, and not across other 
       [],
       [message('parent', 'Started a helper'), message('child', text, 'helper')]
     )
-    latest = project(messages).subagentRows
+    latest = project(messages, { items: next, submissions }).subagentRows
   }
   expect(latest).not.toBe(base)
   expect(stageBesideStreamedText(latest)).toBe(base)
+
+  // The same messages over a journal whose turns changed (an opener's attribution was corrected)
+  // may give child rows other turns, so the link breaks.
+  const regrouped = project(first, {
+    items: [{ ...row('The child so far'), revision: 2 }],
+    submissions
+  })
+  expect(stageBesideStreamedText(regrouped.subagentRows)).toBe(regrouped.subagentRows)
 
   // A new row is not a text-only revision; its rows stand for themselves.
   const added = project([
