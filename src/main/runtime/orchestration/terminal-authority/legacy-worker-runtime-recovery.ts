@@ -173,7 +173,12 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): boolean {
     return this.terminalWorkerRestartResume.holdForReopen(candidate.dispatchId, () => {
-      this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport)
+      // A failed close re-enters the sweep: its claim is spent, so the sweep's own retry owns it.
+      if (
+        !this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport)
+      ) {
+        void this.reconcileLegacyWorkerTerminals().catch(() => undefined)
+      }
     })
   }
 
