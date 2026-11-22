@@ -3,11 +3,13 @@ import { readClaudeBackgroundAgentTasks } from '../../agent-hook-listener/provid
 import { childWorkBackgroundCommands } from './agent-background-wait'
 
 const GITHUB_TOKEN = `ghp_${'a'.repeat(36)}`
+const FINE_GRAINED_TOKEN = `github_pat_${'b'.repeat(22)}_${'c'.repeat(59)}`
 const SECRET_COMMANDS = [
   'curl -H "Authorization: Bearer sekret123" https://api.example.com',
   'deploy --token=sekret123',
   'API_KEY=sekret123 node server.js',
-  `git clone https://${GITHUB_TOKEN}@github.com/org/repo`
+  `git clone https://${GITHUB_TOKEN}@github.com/org/repo`,
+  `gh auth login --with-token <<< ${FINE_GRAINED_TOKEN}`
 ]
 
 // Both producers feed a status row's backgroundCommands, which worker status, the CLI and the DB show.
@@ -33,6 +35,7 @@ describe('background command redaction', () => {
         expect(shown).toContain('[redacted')
         expect(shown).not.toContain('sekret123')
         expect(shown).not.toContain(GITHUB_TOKEN)
+        expect(shown).not.toContain(FINE_GRAINED_TOKEN.slice(11))
       }
       expect(read('npm run dev')).toBe('npm run dev')
     }
