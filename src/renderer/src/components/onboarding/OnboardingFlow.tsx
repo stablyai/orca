@@ -180,6 +180,7 @@ export default function OnboardingFlow({
                           { value0: progressIdx + 1, value1: stepTooltipLabel }
                         )}
                         aria-current={isActive ? 'step' : undefined}
+                        disabled={flow.locked}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
