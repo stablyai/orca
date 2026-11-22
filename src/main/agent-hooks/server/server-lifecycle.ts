@@ -108,7 +108,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
           const { durable, observed, ...reply } = this.claudeAgentViews.receive(body, {
-            sameMachine: true
+            sameMachine: this.claudeViewMayGoQuiet(body)
           })
           // Acknowledged only once saved, so a quit before the save cannot strand an idle Claude;
           // without the flag the mod registers again and keeps checking in.

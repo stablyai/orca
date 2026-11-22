@@ -73,6 +73,17 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     return bridge
   }
 
+  /** A mod may stop checking in only where a click can probe its Claude process (a local pane with a
+   *  recorded process; Windows hooks record none). Elsewhere it keeps the 5 s check-in and 15 s rule. */
+  protected claudeViewMayGoQuiet(body: unknown): boolean {
+    const paneKey =
+      body && typeof body === 'object' && 'paneKey' in body && typeof body.paneKey === 'string'
+        ? body.paneKey
+        : undefined
+    const row = paneKey && this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+    return Boolean(row && row.connectionId === null && row.agentPresence?.process)
+  }
+
   /** Whether the pane's agent can take typed input now: its process runs and isn't stopped by job
    *  control (Ctrl-Z, then another program in front). A silent idle mod proves neither. */
   async agentAcceptsInput(paneKey: string): Promise<boolean> {
