@@ -18,7 +18,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../../runtime/hosts/display/execution-host-label'
 const TASK_SEARCH_DEBOUNCE_MS = 600
 
 type Input = Pick<WorktreeJumpPaletteStoreState, 'visible' | 'repos' | 'settings'> &

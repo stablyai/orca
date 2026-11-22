@@ -11,10 +11,16 @@ const ROOTS = new Map([
     `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts`,
     ['createTerminalProviderSnapshotBoundPtyIdsSelector']
   ],
-  [`${RENDERER}components/use-terminal-watcher-effects.ts`, ['useTerminalWatcherEffects']],
-  [`${RENDERER}components/use-terminal-parking-pass.ts`, ['useTerminalParkingPass']],
   [
-    `${RENDERER}components/terminal-parking-pass-candidates.ts`,
+    `${RENDERER}components/terminal/workbench/use-terminal-watcher-effects.ts`,
+    ['useTerminalWatcherEffects']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/use-terminal-parking-pass.ts`,
+    ['useTerminalParkingPass']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/terminal-parking-pass-candidates.ts`,
     ['collectTerminalParkingPassCandidates']
   ],
   [

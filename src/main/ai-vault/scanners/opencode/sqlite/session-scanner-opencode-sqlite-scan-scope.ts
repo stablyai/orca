@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import type { WorkerThreadRequestOwner } from '../../../../worker-threads/worker-thread-request-queue'
+import type { SqliteReaderAgent } from '../reader-transport/session-scanner-opencode-sqlite-worker-protocol'
 
 export const OPENCODE_SQLITE_SCAN_BUDGET_MS = 45_000
 
@@ -68,8 +69,9 @@ export async function withOpenCodeSqliteScanScope<T>(fn: () => Promise<T>): Prom
 export function runOpenCodeSqliteScanRequest<T>(
   signal: AbortSignal | undefined,
   fn: (signal?: AbortSignal, owner?: WorkerThreadRequestOwner) => Promise<T>,
-  agent?: 'opencode2' | 'zcode' | 'native-chat'
+  agent?: SqliteReaderAgent | 'native-chat'
 ): Promise<T> {
-  const scope = agent === 'zcode' || agent === 'native-chat' ? undefined : scanScope.getStore()
+  // Only OpenCode's stores share the scan budget; ZCode and Hermes keep their own databases.
+  const scope = agent === 'opencode2' || agent === undefined ? scanScope.getStore() : undefined
   return scope ? scope.run(signal, fn) : fn(signal)
 }

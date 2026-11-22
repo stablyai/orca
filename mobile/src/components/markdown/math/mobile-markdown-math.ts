@@ -10,7 +10,7 @@ import {
   rejectsSingleDollarOpen
 } from '../../../../../src/shared/markdown/markdown-math-rules'
 
-// Desktop chat's math grammar (src/renderer/src/components/sidebar/chat-markdown-math.ts) for markdown-it.
+// Desktop chat's math grammar (src/renderer/src/components/comment-markdown/chat-markdown-math.ts) for markdown-it.
 
 /** markdown-it's env for every parse of one document. */
 export type MathEnv = {

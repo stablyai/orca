@@ -9,7 +9,7 @@ import {
   normalizeGitLabLabels,
   parseGitLabLabelDraft,
   showGitLabMutationError
-} from '../gitlab-item-dialog-parts'
+} from './gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'

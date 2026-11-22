@@ -9,7 +9,7 @@ import { useProjectHostSetupProjection } from '@/store/projects/use-project-host
 import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   COMPUTER_USE_SKILL_NAME,

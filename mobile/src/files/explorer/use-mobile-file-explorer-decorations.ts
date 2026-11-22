@@ -1,0 +1,140 @@
+import { useCallback, useMemo } from 'react'
+import * as z from 'zod'
+import type { UseQueryResult } from '@tanstack/react-query'
+import type { GitFileStatus } from '../../../../src/shared/git/status/git-status-types'
+import {
+  buildFolderStatusMap,
+  buildIgnoredSet,
+  buildStatusMap,
+  shouldShowIgnoredDecoration
+} from '../../../../src/shared/git/status/git-path-decoration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { defineHostQuery, useHostQueries, useHostQuery } from '../../query/host-query'
+import type { HostQueryTarget } from '../../query/host-query-key'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import {
+  gitStatusSummaryQuery,
+  serverGitStatusSummaryQuery
+} from '../../source-control/changes/mobile-git-status-query'
+import {
+  getDirectoryCacheState,
+  joinRelativePath,
+  shouldIncludeMobileFileExplorerEntry,
+  type DirectoryCache,
+  type FileExplorerRow
+} from './file-tree'
+
+export type MobileFileDecoration = { status: GitFileStatus | null; ignored: boolean }
+export type DecorateFileRow = (relativePath: string, isDirectory: boolean) => MobileFileDecoration
+
+// The host's git.checkIgnored cap per call. A folder is asked in slices of this size in listing order, so
+// "Show more" appends a slice and the earlier ones keep their cached answers.
+const MAX_IGNORED_QUERY_PATHS = 2000
+const NO_DECORATION: MobileFileDecoration = { status: null, ignored: false }
+
+// Desktops before mobile could ask refuse it; the tree then shows no ignored dimming.
+const gitCheckIgnoredRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.check-ignored-or-skip',
+    method: 'git.checkIgnored',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('ignored-paths', z.array(z.string()))
+  })
+)
+
+// No file name holds a slash, so a folder's listed names travel as one key-safe string.
+const NAME_SEPARATOR = '/'
+
+// One answer per listed slice of a folder, so opening a folder asks only about its own rows.
+const ignoredPathsQuery = defineHostQuery({
+  family: 'git.checkIgnored',
+  staleTime: 30_000,
+  refetchOnWindowFocus: true,
+  fetch: async (client: RpcClient, target, input: { folder: string; names: string }) => {
+    const reply = gitCheckIgnoredRead.interpret(
+      await gitCheckIgnoredRead.request(client, {
+        worktree: `id:${target.worktree ?? ''}`,
+        paths: input.names.split(NAME_SEPARATOR).map((name) => joinRelativePath(input.folder, name))
+      })
+    )
+    return reply.accepted ? reply.value : []
+  }
+})
+
+function foldersWithShownRows(rows: readonly FileExplorerRow[]): string[] {
+  const folders = new Set<string>()
+  for (const row of rows) {
+    if (row.kind === 'directory' || row.kind === 'text' || row.kind === 'binary') {
+      const slash = row.relativePath.lastIndexOf('/')
+      folders.add(slash === -1 ? '' : row.relativePath.slice(0, slash))
+    }
+  }
+  return [...folders]
+}
+
+function combineIgnored(results: UseQueryResult<string[]>[]): Set<string> {
+  return buildIgnoredSet(results.flatMap((result) => result.data ?? []))
+}
+
+/** Desktop's tree decorations: git status colours and letters, folders rolled up, ignored rows dimmed. */
+export function useMobileFileExplorerDecorations(args: {
+  host: { hostId: string; client: RpcClient | null }
+  target: HostQueryTarget & { worktree: string }
+  /** Hosts old enough to need the whole-tree fallback get no decorations. */
+  enabled: boolean
+  directoryCache: DirectoryCache
+  rows: readonly FileExplorerRow[]
+}): DecorateFileRow {
+  const { host, target, directoryCache, rows } = args
+  // Folder workspaces have no repository to read status or ignore rules from.
+  const enabled = args.enabled && !target.worktree.startsWith('folder:')
+  const { data: status } = useHostQuery(
+    target.exec === LOCAL_EXECUTION_HOST_ID ? gitStatusSummaryQuery : serverGitStatusSummaryQuery,
+    host,
+    target,
+    {},
+    { enabled }
+  )
+  const entries = status?.kind === 'ready' ? status.status.entries : undefined
+  const statusByPath = useMemo(() => buildStatusMap(entries ?? []), [entries])
+  const folderStatusByPath = useMemo(() => buildFolderStatusMap(entries ?? []), [entries])
+
+  // Only a repository answers status, and only folders with rows on screen are asked about.
+  const repository = status?.kind === 'ready' && !status.status.readError
+  const shownFolders = useMemo(
+    () => (repository ? foldersWithShownRows(rows) : []),
+    [repository, rows]
+  )
+  const ignoredInputs = useMemo(
+    () =>
+      shownFolders.flatMap((folder) => {
+        const names = (getDirectoryCacheState(directoryCache, folder)?.entries ?? [])
+          .filter(shouldIncludeMobileFileExplorerEntry)
+          .map((entry) => entry.name)
+        const slices = []
+        for (let start = 0; start < names.length; start += MAX_IGNORED_QUERY_PATHS) {
+          const slice = names.slice(start, start + MAX_IGNORED_QUERY_PATHS)
+          slices.push({ folder, names: slice.join(NAME_SEPARATOR) })
+        }
+        return slices
+      }),
+    [directoryCache, shownFolders]
+  )
+  const ignored = useHostQueries(ignoredPathsQuery, host, target, ignoredInputs, combineIgnored)
+
+  return useCallback(
+    (relativePath, isDirectory) => {
+      const rowStatus =
+        (isDirectory ? folderStatusByPath.get(relativePath) : statusByPath.get(relativePath)) ??
+        null
+      const rowIgnored = shouldShowIgnoredDecoration(rowStatus, ignored, relativePath)
+      return rowStatus === null && !rowIgnored
+        ? NO_DECORATION
+        : { status: rowStatus, ignored: rowIgnored }
+    },
+    [folderStatusByPath, ignored, statusByPath]
+  )
+}

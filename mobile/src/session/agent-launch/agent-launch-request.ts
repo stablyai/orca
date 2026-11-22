@@ -69,17 +69,20 @@ export function agentLaunchExistingParams(args: {
   prompt?: AgentLaunchPrompt
   agentArgs?: string
   surface?: 'chat' | 'terminal'
+  nativeChatDefault?: boolean
   launchSource?: string
   paneKey?: string
   sessionId?: string
   placement?: AgentLaunchPlacement
   sessionOptions?: Readonly<Record<string, string>>
   chatOptions?: Readonly<Record<string, string>>
+  cwd?: string
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.surface ? { surface: args.surface } : {}),
+    ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
@@ -88,7 +91,8 @@ export function agentLaunchExistingParams(args: {
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
     ...(args.sessionId ? { sessionId: args.sessionId } : {}),
-    ...(args.placement ? { placement: args.placement } : {})
+    ...(args.placement ? { placement: args.placement } : {}),
+    ...(args.cwd ? { cwd: args.cwd } : {})
   }
 }
 

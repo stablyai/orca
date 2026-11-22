@@ -121,38 +121,18 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.md,
+    marginBottom: 6
   },
   setupLabel: {
     fontSize: 13,
     color: colors.textSecondary
   },
-  sourceBadge: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
-  },
-  sourceBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    letterSpacing: 0.5
-  },
-  setupStack: {
-    gap: spacing.sm
-  },
-  codeBlock: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.surface,
-    paddingHorizontal: LIST_ROW_PADDING,
-    paddingVertical: spacing.md
-  },
-  code: {
+  setupSource: {
     fontSize: 13,
     lineHeight: 19,
     fontFamily: typography.monoFamily,
-    color: colors.textPrimary
+    color: colors.textMuted
   },
   actions: {
     flexDirection: 'row',
@@ -163,7 +143,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     minWidth: 160,
     alignItems: 'center'
   },
@@ -180,7 +160,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   addProjectButtonText: {

@@ -24,5 +24,13 @@ export const browserGuestDiscardApi = {
     ): void => callback(data)
     ipcRenderer.on('browser:guest-discard-protection-changed', listener)
     return () => ipcRenderer.removeListener('browser:guest-discard-protection-changed', listener)
+  },
+  onLoadStall: (callback): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0]
+    ): void => callback(data)
+    ipcRenderer.on('browser:load-stall', listener)
+    return () => ipcRenderer.removeListener('browser:load-stall', listener)
   }
 } satisfies Partial<PreloadApi['browser']>

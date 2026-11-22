@@ -3,6 +3,7 @@ import {
   type RemoteOwnedWorkerMail,
   type RemoteOwnedWorkerState
 } from '../../../../../shared/orchestration/remote-owned-wire'
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import { OrchestrationError } from '../../orchestration-error'
 import type { MessageType } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -23,6 +24,7 @@ import {
   currentRemoteAttempt,
   noteRemoteRunLinkPeerRun
 } from './remote-placements'
+import { recordMessageSenderDispatch } from '../messages/message-sender-dispatch'
 import {
   closeRemoteRunLink,
   getRemoteRunLink,
@@ -195,6 +197,14 @@ function importWorkerMail(
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })
+  if (mail.dispatchId && mail.taskId) {
+    // After the insert, so its peer-Run queue trigger never carries a server's Dispatch onward.
+    recordMessageSenderDispatch(db, mail.id, mail.dispatchId)
+  }
+  if (mail.message.type === 'question') {
+    // No one coordinates the Run here now: its worker there is told at once instead of waiting.
+    dropReaderlessRunQuestions(db, link.run_id)
+  }
   return { to, type: mail.message.type }
 }
 

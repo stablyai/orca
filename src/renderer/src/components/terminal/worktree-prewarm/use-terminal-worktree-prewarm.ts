@@ -18,7 +18,7 @@ import {
   type TerminalPrewarmNarrowing
 } from './terminal-worktree-prewarm'
 import { TERMINAL_TAB_COLD_PARK_DELAY_MS } from '../../terminal-pane/parking/retention/terminal-hidden-view-parking'
-import type { TerminalColdActivationController } from '../../terminal-cold-activation'
+import type { TerminalColdActivationController } from '../workspace-mounting/terminal-cold-activation'
 import { hasRetainedWorkspaceTerminalFrames } from './terminal-worktree-retained-frames'
 import {
   resolveReattachPtyIds,

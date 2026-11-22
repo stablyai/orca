@@ -14,12 +14,19 @@ import { selectAgentRowsUnread } from '../activity/worktree-card-agent-ack-input
 import { selectSendTargetControlInputs } from '../activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from '../activity/worktree-card-agents-expansion-state'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import { collectLineageSlotTargets, useLineageSlotSummary } from '../../worktree-card-slot-rollup'
+import {
+  collectLineageSlotTargets,
+  useLineageSlotSummary
+} from '../slots/worktree-card-slot-rollup'
 import {
   buildSlotAgentSignals,
   type SlotAgentSignals
-} from '../../worktree-card-slot-agent-signals'
-import { titleRowSlot, titleRowUnread, type SlotException } from '../../worktree-card-slot-signal'
+} from '../slots/worktree-card-slot-agent-signals'
+import {
+  titleRowSlot,
+  titleRowUnread,
+  type SlotException
+} from '../slots/worktree-card-slot-signal'
 import {
   expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
@@ -27,13 +34,13 @@ import {
   workspaceUnreadTarget,
   workspaceUnreadTargetsOutsideAgentRows,
   type SlotTarget
-} from '../../worktree-card-slot-targets'
+} from '../slots/worktree-card-slot-targets'
 import { createWorkspaceUnreadSelector } from './worktree-card-workspace-unread-selector'
 import {
   WorktreeCardSlot,
   WorktreeCardTitlePills,
   WorktreeCardTitleTime
-} from '../../WorktreeCardSlot'
+} from '../slots/WorktreeCardSlot'
 
 const NO_DESCENDANTS: readonly HostScopedWorktreeKey[] = []
 const NO_EXCEPTIONS: readonly SlotException[] = []

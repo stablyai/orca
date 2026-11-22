@@ -21,7 +21,6 @@ import {
 export function createAgentCompletionProcessMonitor({
   options,
   state,
-  identityScope,
   pendingTitle,
   establishAgentEvidence,
   clearAgentRunEvidence,
@@ -55,16 +54,6 @@ export function createAgentCompletionProcessMonitor({
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExit = null
-    const replayIdentity = identityScope.getLast()
-    if (
-      !state.lastForegroundAgent &&
-      state.processSession > 0 &&
-      !identityScope.hasUnconsumedStampedTail() &&
-      replayIdentity?.source === 'hook' &&
-      replayIdentity.agentIdentity === process.agent
-    ) {
-      identityScope.deleteLast()
-    }
     if (state.lastForegroundAgent?.agent !== process.agent) {
       if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
         if (
@@ -114,18 +103,25 @@ export function createAgentCompletionProcessMonitor({
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
+          const steadyState = priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
+          // Child evidence matters only while an agent is tracked; skip the Windows table read otherwise.
+          const jobMembershipOnly =
+            steadyState && !(state.lastForegroundAgent && state.hasAgentRunEvidence)
           // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
           const inspectOptions = {
             ...(expectedIncarnationIdAtRequest
               ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
               : {}),
-            ...(priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-              ? { steadyState: true }
-              : {})
+            ...(steadyState ? { steadyState: true } : {}),
+            ...(jobMembershipOnly ? { jobMembershipOnly: true } : {})
           }
           let result = await (Object.keys(inspectOptions).length > 0
             ? options.inspectProcess(ptyId, inspectOptions)
             : options.inspectProcess(ptyId))
+          // An agent tracked while a job-only read was in flight needs full child evidence; the next poll gets it.
+          if (jobMembershipOnly && state.lastForegroundAgent && state.hasAgentRunEvidence) {
+            return
+          }
           // A stale shell cache must not retire a live agent and disable its mouse reporting (#29996).
           if (
             options.isRemotePtyId?.(ptyId) !== true &&
@@ -172,7 +168,6 @@ export function createAgentCompletionProcessMonitor({
                 requestStartedAtMonotonic,
                 options,
                 state,
-                identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
                 scheduleNextPoll,
@@ -217,6 +212,8 @@ export function createAgentCompletionProcessMonitor({
     })
   }
 
+  let trackedPtyId: string | null = null
+
   return {
     requestInspection,
     scheduleNextPoll,
@@ -227,14 +224,19 @@ export function createAgentCompletionProcessMonitor({
       }
     },
     start: () => {
-      state.pollTrackingStarted = true
+      // A newly bound PTY polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      const ptyId = options.getPtyId()
+      if (!state.pollTrackingStarted || ptyId !== trackedPtyId) {
+        state.pollTrackingStarted = true
+        trackedPtyId = ptyId
+        state.lastPaneActivityAt = Date.now()
+      }
       scheduleNextPoll()
     },
     recordActivity: () => {
       state.lastPaneActivityAt = Date.now()
-      if (state.pollTimer === null || state.pollTimerTier === 'no-evidence') {
-        scheduleNextPoll()
-      }
+      // The scheduler replaces a slower pending timer (quiet or no-evidence) with the faster tier.
+      scheduleNextPoll()
     },
     incrementGeneration: () => {
       state.inspectionGeneration += 1

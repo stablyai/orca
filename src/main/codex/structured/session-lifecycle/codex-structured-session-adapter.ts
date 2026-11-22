@@ -103,6 +103,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     })
 
   permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)
+  runningPermissionMode = permission.codexRunningPermissionMode(this.sessions)
 
   settlePermissionTransition = permission.createCodexPermissionTransition(this.sessions, this)
 
@@ -341,6 +342,5 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session = (sessionId: string): CodexSession =>
-    requireLiveCodexSession(this.sessions, sessionId)
+  private session = (id: string): CodexSession => requireLiveCodexSession(this.sessions, id)
 }

@@ -4,8 +4,8 @@ import {
   codexRolloutHardlinkIdentity,
   canonicalCodexRolloutKey,
   codexSessionRootRank,
-  dedupeCodexRolloutCopyAliases,
-  dedupeCodexRolloutFileAliases
+  dedupeCodexRolloutFileAliases,
+  groupCodexRolloutCopyAliases
 } from '../scanners/codex/codex-session-root-dedup'
 import { antigravityHistoryPathForBrainDir } from '../scanners/antigravity/session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from '../scanners/codex/session-scanner-codex-paths'
@@ -92,14 +92,22 @@ export async function sessionCandidatesFromDiscoveries(
       }
     }
   }
-  const candidates: SessionFileChoice[] = await dedupeCodexRolloutCopyAliases(
+  const proven = await groupCodexRolloutCopyAliases(
     legacy,
     CODEX_ALIAS_ACCESSORS,
     (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
     options.signal
   )
+  const candidates: SessionFileChoice[] = proven.survivors.map((preferred) => {
+    const outrankedCopies = proven.outranked.get(preferred)
+    return outrankedCopies
+      ? { ...preferred, alternatives: [preferred], outrankedCopies }
+      : preferred
+  })
   for (const named of canonical.values()) {
     const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
+    const kept = group === named ? null : new Set(group)
+    const outrankedCopies = kept ? named.filter((candidate) => !kept.has(candidate)) : []
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||
@@ -107,7 +115,11 @@ export async function sessionCandidatesFromDiscoveries(
         Number(a.file.path.endsWith('.zst')) - Number(b.file.path.endsWith('.zst')) ||
         (a.file.path < b.file.path ? -1 : a.file.path > b.file.path ? 1 : 0)
     )
-    candidates.push(group.length === 1 ? group[0] : { ...group[0], alternatives: group })
+    if (outrankedCopies.length > 0) {
+      candidates.push({ ...group[0], alternatives: group, outrankedCopies })
+    } else {
+      candidates.push(group.length === 1 ? group[0] : { ...group[0], alternatives: group })
+    }
   }
   candidates.sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
   return prioritizeAntigravityTranscriptCandidates(

@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { FileText, Trash2 } from 'lucide-react'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog,
@@ -259,7 +259,7 @@ function BrowserHistoryDialogContent({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="xs" disabled={!hasHistory}>
                 <Trash2 />
-                {t('browser.history.clear', 'Clear browsing history')}
+                {t('browser.history.clear', 'Clear history')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top">

@@ -30,7 +30,8 @@ import type {
   WorkspaceLayoutRecords
 } from '../workspace-layout-model'
 
-function workspaceKeys(session: WorkspaceSessionState): string[] {
+/** Partition order: first appearance across the workspace-keyed maps, in this map order. */
+export function workspaceKeys(session: WorkspaceSessionState): string[] {
   return [
     ...new Set([
       ...Object.keys(session.tabsByWorktree ?? {}),
@@ -173,6 +174,22 @@ export function loadWorkspaceLayoutWithoutReport(
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): LoadedWorkspaceLayout {
+  return loadWorkspaceLayoutParts(hostId, stored, context).loaded
+}
+
+export type LoadedWorkspaceLayoutParts = {
+  loaded: LoadedWorkspaceLayout
+  /** Workspace key → its dropped rows' tab-bar twins; only keys that dropped one. */
+  subsumedByKey: Map<string, ReadonlyMap<string, string>>
+}
+
+/** `subsumedElsewhere` holds the dropped rows of workspaces a partial session leaves out, so selections still follow them. */
+export function loadWorkspaceLayoutParts(
+  hostId: ExecutionHostId,
+  stored: WorkspaceSessionState,
+  context: WorkspaceLayoutLoadContext,
+  subsumedElsewhere?: ReadonlyMap<string, string>
+): LoadedWorkspaceLayoutParts {
   // The Loader edits its own copy; the Store's object stays untouched.
   const session = structuredClone(stored)
   const desktopView: DesktopLayoutView = {
@@ -201,8 +218,18 @@ export function loadWorkspaceLayoutWithoutReport(
   const terminalHomes = resolveTerminalHomes(session)
   const layouts = new Map<string, TerminalLayoutSnapshot>()
   const recordedLeafId = createRecordedLeafReader(session)
-  const canonicalTabIdBySubsumedTabId = new Map<string, string>()
+  const canonicalTabIdBySubsumedTabId = new Map(subsumedElsewhere)
+  const subsumedByKey = new Map<string, Map<string, string>>()
+  let loadingKey = ''
+  const subsumed = {
+    set(tabId: string, canonicalTabId: string): void {
+      canonicalTabIdBySubsumedTabId.set(tabId, canonicalTabId)
+      const own = subsumedByKey.get(loadingKey) ?? new Map<string, string>()
+      subsumedByKey.set(loadingKey, own.set(tabId, canonicalTabId))
+    }
+  }
   for (const key of workspaceKeys(session)) {
+    loadingKey = key
     layout.workspaces[key] = loadWorkspace(
       {
         session,
@@ -213,7 +240,7 @@ export function loadWorkspaceLayoutWithoutReport(
         view: desktopView,
         facts,
         layouts,
-        canonicalTabIdBySubsumedTabId
+        canonicalTabIdBySubsumedTabId: subsumed
       },
       recordedLeafId
     )
@@ -234,5 +261,5 @@ export function loadWorkspaceLayoutWithoutReport(
   loadLeaves(layout, { session, layouts }, { view: desktopView, facts, carried }, context)
   unbindDuplicateTerminals(layout)
   layout = retireLoadedLegacySurfaces(layout, session, carried)
-  return { layout, desktopView, facts, carried }
+  return { loaded: { layout, desktopView, facts, carried }, subsumedByKey }
 }

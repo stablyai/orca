@@ -17,7 +17,7 @@ import {
   workspaceUnreadTarget,
   workspaceUnreadTargetsOutsideAgentRows,
   type SlotTarget
-} from '../../worktree-card-slot-targets'
+} from '../slots/worktree-card-slot-targets'
 
 /**
  * Exactly what `workspaceUnreadTargetsOutsideAgentRows` reads for this workspace, so an agent

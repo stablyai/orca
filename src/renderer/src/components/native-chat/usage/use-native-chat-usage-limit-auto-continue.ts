@@ -13,10 +13,11 @@ import {
 } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
+  nativeChatUsageLimitAutoContinueUnavailable,
   usageLimitContinueAtForCut,
   usageLimitContinueStateForCut
 } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
-import type { NativeChatUsageLimitAutoContinueState } from './NativeChatUsageLimitAutoContinue'
+import type { NativeChatUsageLimitAutoContinueState } from './native-chat-usage-limit-auto-continue-setting'
 
 const invalidatedByClock = (): (() => void) => () => {}
 
@@ -26,6 +27,9 @@ export function useNativeChatUsageLimitAutoContinue(
   cut: NativeChatUsageLimitCut | null
 ): {
   auto: NativeChatUsageLimitAutoContinueState | null
+  /** The host can't auto-continue this chat by this machine's setting: it lacks the feature, or
+   *  it's another machine whose own setting is off. */
+  unavailable: boolean
   /** When the host lets Continue apply: earlier than the cut's reset once the chat moved accounts. */
   continueAt: number | undefined
 } {
@@ -120,14 +124,18 @@ export function useNativeChatUsageLimitAutoContinue(
       ? { kind, resetsAt: continueAt, cancelDisabled: cancelling, cancel }
       : { kind }
   }, [capability, continueAt, cutState, schedulable, target.kind, cancelling, cancel])
+  const unavailable = nativeChatUsageLimitAutoContinueUnavailable(capability, cutState, {
+    localHost: target.kind === 'local'
+  })
   return useMemo(
     () => ({
       auto,
+      unavailable,
       continueAt:
         resetsAt === undefined || continueAt === undefined
           ? resetsAt
           : Math.min(resetsAt, continueAt)
     }),
-    [auto, resetsAt, continueAt]
+    [auto, unavailable, resetsAt, continueAt]
   )
 }

@@ -196,6 +196,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     setupRunPolicy: setupScript.setupRunPolicy,
     setupDecisionChoice: setupScript.setupDecisionChoice,
     runSetup: setupScript.runSetup,
+    setupWait: setupScript.waitForSetupChoice,
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
@@ -319,6 +320,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         setupRunPolicy={setupScript.setupRunPolicy}
         setupDecisionChoice={setupScript.setupDecisionChoice}
         runSetup={setupScript.runSetup}
+        waitForSetup={setupScript.waitForSetup}
         error={error}
         creating={createSubmit.creating}
         canCreate={canCreate}
@@ -340,6 +342,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onNoteChange={setNote}
         onSetupDecisionChange={setupScript.setSetupDecisionChoice}
         onRunSetupChange={setupScript.setRunSetup}
+        onWaitForSetupChange={setupScript.setWaitForSetup}
         onCreate={() => void createSubmit.create()}
       />
 

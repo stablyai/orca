@@ -105,6 +105,8 @@ export type StructuredAgentLaunchCheck = {
   ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
+  /** Arguments before `--version`. */
+  versionArgs?: readonly string[]
 }
 
 export type StructuredAgentChatProgram = {

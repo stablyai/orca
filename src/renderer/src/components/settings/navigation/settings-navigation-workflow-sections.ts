@@ -19,6 +19,7 @@ import {
   History,
   GitBranch,
   Globe,
+  Link,
   ListChecks,
   PanelsTopLeft,
   Play,
@@ -28,7 +29,7 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildWorkflowSettingsSections(
-  { isWebClient }: SettingsNavigationBuildOptions,
+  { isWebClient, botsEnabled }: SettingsNavigationBuildOptions,
   terminalPaneSearchEntries: SettingsNavSection['searchEntries'],
   t: Translate = translate
 ): SettingsNavSection[] {
@@ -70,6 +71,28 @@ export function buildWorkflowSettingsSections(
       group: 'workflows',
       badge: t('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
+    // Bots run on this computer, so their links are managed here, beside skill links.
+    ...(botsEnabled && !isWebClient
+      ? [
+          {
+            id: 'shared-links',
+            title: t('settings.sharedLinks.title', 'Shared links'),
+            description: t('settings.sharedLinks.description', "Links you've published."),
+            icon: Link,
+            searchEntries: [
+              {
+                title: t('settings.sharedLinks.title', 'Shared links'),
+                keywords: [
+                  t('settings.sharedLinks.keywordBots', 'bots'),
+                  t('settings.sharedLinks.keywordSkills', 'skills'),
+                  t('settings.sharedLinks.keywordShare', 'share')
+                ]
+              }
+            ],
+            group: 'workflows' as const
+          }
+        ]
+      : []),
     {
       id: 'session-history',
       title: t('sessionHistory.settings.title', 'Agent Session Search'),

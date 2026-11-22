@@ -9,12 +9,13 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { RefreshCw } from 'lucide-react'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WslHostDistro } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import { getWslHostServerFilesMissingLabel } from '../../wsl-host-row-status'
+import { getWslHostServerFilesMissingLabel } from './wsl-host-row-status'
 import { wslSetVersion2Command } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
+import { wslMoveAutoMovesBridgeProjects } from '../../../../../../shared/wsl-move/wsl-move-rollout-stage'
 
 export function wslDistroStateLabel(distro: WslHostDistro, t: Translate = translate): string {
   if (distro.version === 1) {
@@ -101,10 +102,15 @@ export function AddWslHostFormPanel({
           {t('auto.components.sidebar.AddWslHostFormPanel.title', 'Add WSL distro')}
         </DialogTitle>
         <DialogDescription>
-          {t(
-            'auto.components.sidebar.AddWslHostFormPanel.description',
-            'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
-          )}
+          {wslMoveAutoMovesBridgeProjects()
+            ? t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionAutoMove',
+                'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
+              )
+            : t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionMoveFromSidebar',
+                'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.'
+              )}
         </DialogDescription>
       </DialogHeader>
 

@@ -14,6 +14,8 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
       | 'upstream'
       | 'repoIcon'
       | 'gitRemoteIdentity'
+      | 'hiddenAt'
+      | 'hookSettings'
     >
   >
 
@@ -76,6 +78,8 @@ export type SetupHookDetails = {
   command: string | null
   source: string | null
   runPolicy: SetupRunPolicy
+  /** The host reported a setup script (not only default tabs) that an agent can wait for. */
+  agentCanWaitForSetup: boolean
 }
 
 export function getMobileWorkspaceRepoBadgeColor(repo: MobileWorkspaceRepo | null): string {

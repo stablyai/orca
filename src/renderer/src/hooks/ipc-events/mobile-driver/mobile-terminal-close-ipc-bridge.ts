@@ -3,7 +3,7 @@ import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout
 import { closeTerminalTab } from '@/components/terminal/tab-lifecycle/terminal-tab-actions'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
-import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
+import { createProjectMovePauseFollower } from '@/components/sidebar/workspace-actions/sleep/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'

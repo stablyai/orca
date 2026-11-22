@@ -43,6 +43,10 @@ import {
   BrowserToolbarProfileSub,
   type BrowserToolbarProfileSubProps
 } from '../profile-routing/browser-toolbar-profile-sub'
+import {
+  BrowserToolbarImportCookiesSub,
+  type BrowserToolbarImportCookiesSubProps
+} from '../profile-routing/browser-toolbar-import-cookies-sub'
 
 /** Page actions that used to be toolbar buttons or hidden behind a right-click on Reload. */
 export type BrowserToolbarPageActions = {
@@ -58,7 +62,10 @@ type BrowserToolbarMenuDropdownProps = {
   browserPageId: string
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
-  profile: BrowserToolbarProfileSubProps
+  /** Null where the page's session isn't one of this desktop's profiles. */
+  profile: BrowserToolbarProfileSubProps | null
+  /** Null where the page's session isn't one of this desktop's profiles, so import can't reach it. */
+  cookieImport: BrowserToolbarImportCookiesSubProps | null
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu; null where the page's session runs no extensions. */
   extensionsSub: React.ReactNode
@@ -76,6 +83,7 @@ export function BrowserToolbarMenuDropdown({
   menuOpen,
   onMenuOpenChange,
   profile,
+  cookieImport,
   pageActions,
   extensionsSub,
   viewportPresetId,
@@ -103,7 +111,7 @@ export function BrowserToolbarMenuDropdown({
           data-contextual-tour-target={
             extensionsSub && extensionDiscoveryTarget ? 'browser-extensions-control' : undefined
           }
-          data-browser-profile-id={profile.effectiveProfileId}
+          data-browser-profile-id={profile?.effectiveProfileId}
         >
           <Ellipsis className="size-3.5" />
         </Button>
@@ -114,6 +122,12 @@ export function BrowserToolbarMenuDropdown({
         data-browser-page-menu-id={browserPageId}
         onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
       >
+        {cookieImport ? (
+          <>
+            <BrowserToolbarImportCookiesSub {...cookieImport} />
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {overflow.annotateToolItems}
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -182,9 +196,8 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         {extensionsSub}
-        <BrowserToolbarProfileSub {...profile} />
-
-        <DropdownMenuSeparator />
+        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
+        {extensionsSub || profile ? <DropdownMenuSeparator /> : null}
 
         <DropdownMenuItem
           // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.

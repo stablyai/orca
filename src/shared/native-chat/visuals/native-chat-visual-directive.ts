@@ -2,7 +2,15 @@
 // with up to three leading spaces/trailing horizontal whitespace or CR. Attributes use lowercase keys and unescaped quoted values
 // (no quote/backslash/control characters). file is required; title optional; reject duplicate keys, ignore unknown keys for newer agents.
 
+import { WEBHOOK_HOOK_ID_PATTERN } from '../../connector-webhook-contract'
+
 export const NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER = '::orca-visual{'
+// ::orca-webhook{hook="wh_…"}: the webhook card. Only the hook id is in the line; the card reads the rest from the host.
+export const NATIVE_CHAT_WEBHOOK_DIRECTIVE_MARKER = '::orca-webhook{'
+const DIRECTIVE_MARKERS = [
+  NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
+  NATIVE_CHAT_WEBHOOK_DIRECTIVE_MARKER
+]
 
 /** Longest line the grammar considers. Bounds parsing and the streaming-tail check. */
 export const NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH = 512
@@ -19,6 +27,8 @@ export type NativeChatVisualDirective = {
   file: string
   title: string | null
 }
+
+export type NativeChatWebhookDirective = { hookId: string }
 
 const FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/
 // Why: Windows maps these base names to devices whatever the extension.
@@ -89,24 +99,28 @@ function parseAttributes(body: string): Map<string, string> | null {
   return attributes
 }
 
-/** The directive a whole line spells, or null when the line is anything else. */
-export function parseNativeChatVisualDirectiveLine(
-  rawLine: string
-): NativeChatVisualDirective | null {
+/** A whole directive line's attributes for this marker, or null when the line is anything else. */
+function directiveAttributes(rawLine: string, marker: string): Map<string, string> | null {
   const line = stripLineEnding(rawLine)
   if (line.length > NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH || /[\r\n]/.test(line)) {
     return null
   }
   const indent = leadingSpaceCount(line)
-  if (indent > 3 || !line.startsWith(NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER, indent)) {
+  if (indent > 3 || !line.startsWith(marker, indent)) {
     return null
   }
   const trimmedEnd = line.replace(/[ \t]+$/, '')
   if (!trimmedEnd.endsWith('}')) {
     return null
   }
-  const body = trimmedEnd.slice(indent + NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER.length, -1)
-  const attributes = parseAttributes(body)
+  return parseAttributes(trimmedEnd.slice(indent + marker.length, -1))
+}
+
+/** The directive a whole line spells, or null when the line is anything else. */
+export function parseNativeChatVisualDirectiveLine(
+  rawLine: string
+): NativeChatVisualDirective | null {
+  const attributes = directiveAttributes(rawLine, NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER)
   const file = attributes?.get('file')
   if (!attributes || file === undefined || !isNativeChatVisualFileName(file)) {
     return null
@@ -116,6 +130,21 @@ export function parseNativeChatVisualDirectiveLine(
     return null
   }
   return { file, title: title.length > 0 ? title : null }
+}
+
+/** The webhook card a whole line names, or null when the line is anything else. */
+export function parseNativeChatWebhookDirectiveLine(
+  rawLine: string
+): NativeChatWebhookDirective | null {
+  const hookId = directiveAttributes(rawLine, NATIVE_CHAT_WEBHOOK_DIRECTIVE_MARKER)?.get('hook')
+  return hookId !== undefined && WEBHOOK_HOOK_ID_PATTERN.test(hookId) ? { hookId } : null
+}
+
+function isDirectiveLine(line: string): boolean {
+  return (
+    parseNativeChatVisualDirectiveLine(line) !== null ||
+    parseNativeChatWebhookDirectiveLine(line) !== null
+  )
 }
 
 /** Hold possible directive tails only while streaming to avoid raw-syntax flashes; even complete-looking tails can grow. Finished replies show them. */
@@ -129,10 +158,11 @@ export function isPendingNativeChatVisualDirectiveTail(lastLine: string): boolea
     return false
   }
   const rest = line.slice(indent)
-  if (rest.length <= NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER.length) {
-    return NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER.startsWith(rest)
-  }
-  return rest.startsWith(NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER) && !/[\r\n]/.test(rest)
+  return DIRECTIVE_MARKERS.some((marker) =>
+    rest.length <= marker.length
+      ? marker.startsWith(rest)
+      : rest.startsWith(marker) && !/[\r\n]/.test(rest)
+  )
 }
 
 /** Drops a pending directive tail (see above) from streaming reply text. */
@@ -147,9 +177,42 @@ export function withoutPendingNativeChatVisualDirectiveTail(text: string): strin
 const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 
-/** Remove visual directives for plain-text previews/copy/notifications. Preserve fenced code and surrounding indentation/spacing. */
+/** The fence state after a line, and whether the line is fenced code (its fences included). */
+function fenceStep(fence: string | null, bare: string): { fence: string | null; code: boolean } {
+  if (fence) {
+    const closer = FENCE_CLOSE.exec(bare)?.[1]
+    const closes = closer !== undefined && closer[0] === fence[0] && closer.length >= fence.length
+    return { fence: closes ? null : fence, code: true }
+  }
+  const opener = FENCE_OPEN.exec(bare)?.[1]
+  return opener ? { fence: opener, code: true } : { fence: null, code: false }
+}
+
+// Bots wrote ::orca-idea{text="…"} lines in their first message until 2026-11-09; old transcripts still hold them.
+const LEGACY_IDEA_DIRECTIVE_MARKER = '::orca-idea{'
+
+/** Old transcripts' idea lines as plain list lines of their text; fenced code keeps them as written. */
+export function withLegacyNativeChatIdeasAsList(text: string): string {
+  if (!text.includes(LEGACY_IDEA_DIRECTIVE_MARKER)) {
+    return text
+  }
+  let fence: string | null = null
+  return text
+    .split('\n')
+    .map((line) => {
+      const step = fenceStep(fence, line.replace(/\r$/, ''))
+      fence = step.fence
+      const idea = step.code
+        ? undefined
+        : directiveAttributes(line, LEGACY_IDEA_DIRECTIVE_MARKER)?.get('text')?.trim()
+      return idea ? `- ${idea}` : line
+    })
+    .join('\n')
+}
+
+/** Remove visual and webhook directives for plain-text previews/copy/notifications. Preserve fenced code and surrounding indentation/spacing. */
 export function withoutNativeChatVisualDirectiveLines(text: string): string {
-  if (!text.includes(NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER)) {
+  if (!DIRECTIVE_MARKERS.some((marker) => text.includes(marker))) {
     return text
   }
   let fence: string | null = null
@@ -164,21 +227,13 @@ export function withoutNativeChatVisualDirectiveLines(text: string): string {
       continue
     }
     skipBlank = false
-    if (fence) {
-      const closer = FENCE_CLOSE.exec(bare)?.[1]
-      if (closer && closer[0] === fence[0] && closer.length >= fence.length) {
-        fence = null
-      }
+    const step = fenceStep(fence, bare)
+    fence = step.fence
+    if (step.code) {
       kept.push(line)
       continue
     }
-    const opener = FENCE_OPEN.exec(bare)?.[1]
-    if (opener) {
-      fence = opener
-      kept.push(line)
-      continue
-    }
-    if (parseNativeChatVisualDirectiveLine(line)) {
+    if (isDirectiveLine(line)) {
       // Drop one blank neighbour too, so the gap closes; every other line keeps its spacing.
       const previous = kept.at(-1)
       skipBlank = previous === undefined || previous.replace(/\r$/, '').trim().length === 0

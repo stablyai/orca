@@ -21,12 +21,7 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
   const sendGitRequest = useCallback(
     async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {
       if (!client || connState !== 'connected') {
-        throw new Error(
-          translate(
-            'sourceControl.useMobileGitRequests.waitingForDesktop',
-            'Waiting for desktop...'
-          )
-        )
+        throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
       }
       const response = await client.sendRequest(method, {
         worktree: `id:${worktreeId}`,

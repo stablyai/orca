@@ -1,5 +1,5 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
+import { retryTransientMainEvaluate } from '../../../../tests/e2e/desktop/electron-fixtures/electron-main-evaluate-retry'
 
 export type HostWork = {
   processCpuMs: number

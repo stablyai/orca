@@ -166,9 +166,14 @@ function written(
         ]
       : []
   )
+  const writtenWorkspaces = new Map(
+    applied.flatMap(({ hostId, change }) =>
+      change.workspaces ? [[hostId, change.workspaces] as const] : []
+    )
+  )
   if (sessionRestores.length === 0) {
-    return { value, persist: false }
+    return { value, persist: false, writtenWorkspaces }
   }
   const restores = [...viewRestores, ...sessionRestores]
-  return { value, rollback: () => restores.forEach((restore) => restore()) }
+  return { value, rollback: () => restores.forEach((restore) => restore()), writtenWorkspaces }
 }

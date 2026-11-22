@@ -80,12 +80,6 @@ function getIssueSearchErrorSummary(message: string, code: number | null): strin
   )
 }
 
-/** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
-export function getJiraBadRequestReason(error: unknown): string | null {
-  const status = parseJiraStatusError(getErrorMessage(error))
-  return status?.code === 400 ? status.details : null
-}
-
 export function createTaskPageJiraLoadFailureState(error: unknown): TaskPageJiraLoadFailureState {
   const message = getErrorMessage(error)
   const status = parseJiraStatusError(message)

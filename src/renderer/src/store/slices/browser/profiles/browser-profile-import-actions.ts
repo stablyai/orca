@@ -11,6 +11,7 @@ import {
   retainCookieImportExecutionHost
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { importSshPageCookies } from './browser-ssh-page-cookie-import'
 
 function remoteCookieImportUnavailable(): BrowserCookieImportResult {
   return {
@@ -30,7 +31,12 @@ export function createBrowserProfileImportActions(
   'importCookiesToProfile' | 'clearBrowserSessionImportState' | 'fetchDetectedBrowsers'
 > {
   return {
-    importCookiesToProfile: async (profileId) => {
+    importCookiesToProfile: async (profileId, sshRoute?) => {
+      if (sshRoute) {
+        return importSshPageCookies(get, sshRoute, () =>
+          window.api.browser.sessionImportCookies({ profileId, sshTargetId: sshRoute.sshTargetId })
+        )
+      }
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)

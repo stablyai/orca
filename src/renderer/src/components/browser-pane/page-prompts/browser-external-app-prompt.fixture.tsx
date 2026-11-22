@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { ConfirmationDialogProvider } from '../../confirmation-dialog'
-import { useConfirmationDialog } from '../../confirmation-dialog-context'
+import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
+import { useConfirmationDialog } from '../../dismiss/confirmation/confirmation-dialog-context'
 import { externalAppPrompt } from './browser-external-app-prompt'
 
 function AskOnMount({ appName }: { appName: string }): null {

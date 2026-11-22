@@ -1,6 +1,10 @@
 // No files move: prove rewritten paths identify the same objects before fencing anything.
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
-import { isDrvfsLinuxPath, wslUncPathToLinux } from '../../../../shared/file-access/wsl-paths'
+import { isDrvfsLinuxPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  wslMoveSourcePathToLinux,
+  type WslMappedDrive
+} from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 
 /** Read once through desktop UNC paths and once on the host. */
 export type WslMovePathFacts = {
@@ -33,11 +37,14 @@ export type WslMovePreflightResult = {
 export async function preflightWslMovePaths(
   uncPaths: readonly string[],
   distro: string,
-  probes: WslMovePreflightProbes
+  probes: WslMovePreflightProbes,
+  mappedDrives: readonly WslMappedDrive[] = []
 ): Promise<WslMovePreflightResult> {
   const refused: WslMovePreflightResult['refused'] = []
+  const toLinux = (path: string): string | null =>
+    wslMoveSourcePathToLinux(path, distro, mappedDrives)
   for (const path of uncPaths) {
-    const linux = wslUncPathToLinux(path, distro)
+    const linux = toLinux(path)
     if (linux === null) {
       refused.push({ path, reason: 'not-in-distro' })
       continue
@@ -53,7 +60,7 @@ export async function preflightWslMovePaths(
         ? 'unreadable-on-desktop'
         : host === null
           ? 'missing-on-host'
-          : identityVerdict(desktop, host, distro)
+          : identityVerdict(desktop, host, toLinux)
     if (reason) {
       refused.push({ path, reason })
     }
@@ -64,7 +71,7 @@ export async function preflightWslMovePaths(
 function identityVerdict(
   desktop: WslMovePathFacts,
   host: WslMovePathFacts,
-  distro: string
+  toLinux: (path: string) => string | null
 ): WslMovePreflightRefusal | null {
   if (desktop.marker !== null && host.marker !== null && desktop.marker !== host.marker) {
     return 'different-object'
@@ -74,7 +81,7 @@ function identityVerdict(
     return desktop.marker !== null && desktop.marker === host.marker ? null : 'identity-unproven'
   }
   const asLinux = (value: string | null): string | null =>
-    value === null ? null : (wslUncPathToLinux(value, distro) ?? value.replace(/\\/g, '/'))
+    value === null ? null : (toLinux(value) ?? value.replace(/\\/g, '/'))
   const sorted = (paths: readonly string[], map: (path: string) => string | null): string[] =>
     paths.map((path) => map(path) ?? path).sort()
   const same =

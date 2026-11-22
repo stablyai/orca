@@ -21,7 +21,7 @@ src/renderer/src/runtime/hosts/observations/use-integration-provider-status-refr
 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-option-state.ts
 
 # applyTerminalColdActivation mutates controller refs during render on the terminal hot path.
-src/renderer/src/components/use-terminal-controller.ts
+src/renderer/src/components/terminal/workbench/use-terminal-controller.ts
 
 # Caches keyed on a TanStack virtualizer, which mutates in place (hazard virtualizer-in-memo-block).
 src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-section-list.tsx

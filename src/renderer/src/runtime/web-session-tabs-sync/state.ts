@@ -44,6 +44,7 @@ export type SessionTabsListAllResult = {
 export type SnapshotFreshness = {
   publicationEpoch: string
   snapshotVersion: number
+  followApplied?: true
 }
 
 export type ReceivedSessionTabsSnapshot = SnapshotFreshness & {

@@ -1,109 +1,149 @@
-import { useEffect, useState, type JSX } from 'react'
-import { Mic, Square } from 'lucide-react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useEffect, useMemo, useState, type JSX } from 'react'
+import {
+  DictationPillElapsed,
+  DictationPillFinishButton,
+  DictationPillStatus,
+  DictationPillWords
+} from '@/components/dictation/DictationIndicator'
+import { DictationGrapes } from '@/components/dictation/DictationGrapes'
+import { DictationPillCloseButton } from '@/components/dictation/DictationPillFailure'
+import { DictationPillShell } from '@/components/dictation/DictationPillShell'
+import { NativeChatWorkingStatus } from '@/components/native-chat/conversation/turns/NativeChatWorkingStatus'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import {
+  FeatureTipChatCard,
+  FeatureTipChatComposer,
+  FeatureTipChatUserBubble
+} from './FeatureTipChatCard'
+import { FeatureTipKeycaps } from './FeatureTipKeycaps'
+import {
+  createDictationDemoTimeline,
+  DICTATION_DEMO_PLAYS,
+  DICTATION_DEMO_SLOT_GROW_MS,
+  type DictationDemoFrame
+} from './voice-dictation-feature-tip-demo'
 
-const TYPE_START_DELAY_MS = 650
-const TYPE_INTERVAL_MS = 36
-const WAVEFORM_BAR_HEIGHTS = [38, 70, 100, 58, 82]
+const DEMO_WORKED_SECONDS = 52
+const noop = (): void => {}
 
+/** The app's own listening pill, laid out in flow and driven by the demo clock. */
+function DemoDictationPill({ frame }: { frame: DictationDemoFrame }): JSX.Element {
+  const t = useTranslate()
+  return (
+    <DictationPillShell anchor={null} inline testId="feature-tip-dictation-pill">
+      <DictationPillCloseButton
+        label={t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')}
+        onClick={noop}
+      />
+      <DictationGrapes level={frame.level} active />
+      {frame.heard ? (
+        <DictationPillWords committed={frame.heard} tentative="" speechPending={false} />
+      ) : (
+        <DictationPillStatus
+          label={t('auto.components.dictation.DictationIndicator.listening', 'Listening…')}
+        />
+      )}
+      <DictationPillElapsed seconds={frame.seconds} />
+      <DictationPillFinishButton
+        label={t('auto.components.dictation.DictationIndicator.finish', 'Finish')}
+      />
+    </DictationPillShell>
+  )
+}
+
+/** A chat tab where the shortcut starts dictation and spoken words land in the composer; plays twice. */
 export function VoiceDictationFeatureTipVisual(): JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reducedMotion = usePrefersReducedMotion()
+  // No platform fallback: when dictation is unassigned the dialog asks the user to assign one, so no key is shown.
   const shortcut = useShortcutKeyDetails('voice.dictation')
-  const dictatedPrompt = t(
-    'featureTips.voice.demoPrompt',
-    'Review this diff for edge cases and add tests for anything you find.'
+  const firstPhrase = t(
+    'featureTips.voice.demoFirstPhrase',
+    'The checkout button overlaps the footer on small screens.'
   )
-  const [typedLength, setTypedLength] = useState(0)
-  const effectiveTypedLength = reducedMotion ? dictatedPrompt.length : typedLength
-  const typing = !reducedMotion && effectiveTypedLength < dictatedPrompt.length
+  const secondPhrase = t('featureTips.voice.demoSecondPhrase', 'Can you add a test?')
+  const timeline = useMemo(
+    () => createDictationDemoTimeline(firstPhrase, secondPhrase, intlLocale),
+    [firstPhrase, secondPhrase, intlLocale]
+  )
+  const [clock, setClock] = useState({ at: 0, play: 1 })
+  const finished = clock.play >= DICTATION_DEMO_PLAYS && clock.at >= timeline.endAt
+  const frame = timeline.frameAt(reducedMotion ? timeline.endAt : clock.at)
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || finished) {
       return
     }
-
-    let cancelled = false
-    let timeoutId: number | undefined
-    let nextLength = 0
-    const typeNext = (): void => {
-      if (cancelled) {
-        return
-      }
-      nextLength += 1
-      setTypedLength(nextLength)
-      if (nextLength < dictatedPrompt.length) {
-        timeoutId = window.setTimeout(typeNext, TYPE_INTERVAL_MS)
-      }
-    }
-
-    timeoutId = window.setTimeout(typeNext, TYPE_START_DELAY_MS)
-    return () => {
-      cancelled = true
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId)
-      }
-    }
-  }, [dictatedPrompt, reducedMotion])
+    const next = timeline.nextBeat(clock.at)
+    const timeoutId = window.setTimeout(
+      () =>
+        setClock(
+          next >= timeline.loopAt ? { at: 0, play: clock.play + 1 } : { at: next, play: clock.play }
+        ),
+      next - clock.at
+    )
+    return () => window.clearTimeout(timeoutId)
+  }, [clock, finished, reducedMotion, timeline])
 
   return (
+    // Inert: the pill's real buttons must not reach the app's dictation controls.
     <div
       className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
       aria-hidden="true"
+      inert
     >
-      {shortcut.keys.length > 0 ? (
-        <div className="flex items-center gap-2.5">
-          <ShortcutKeyCombo
-            keys={shortcut.keys}
-            doubleTap={shortcut.doubleTap}
-            keyCapClassName="h-7 min-w-7 bg-foreground/[0.08] px-2 font-semibold shadow-xs"
-          />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {t('featureTips.voice.startDictation', 'Start dictation')}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="relative mt-4 h-56 w-full max-w-[21rem] overflow-hidden rounded-xl border border-border/80 bg-card text-left shadow-xs">
-        <div className="flex h-10 items-center gap-2 border-b border-border px-3 text-[11px] text-muted-foreground">
-          <span className="size-2 rounded-full bg-foreground/35" />
-          <span>{t('featureTips.voice.agentPromptTitle', 'Agent prompt')}</span>
-        </div>
-
-        <div className="absolute inset-x-0 bottom-0 top-10 bg-[var(--editor-surface)] px-4 py-5 font-mono text-xs leading-relaxed">
-          <div className="flex min-w-0 gap-2.5">
-            <span className="shrink-0 text-muted-foreground">›</span>
-            <span
-              data-testid="dictated-prompt"
-              className="min-w-0 flex-1 whitespace-pre-wrap break-words text-foreground"
-            >
-              {dictatedPrompt.slice(0, effectiveTypedLength)}
-              {typing ? (
-                <span className="ml-px inline-block h-3.5 w-px translate-y-0.5 bg-foreground/75" />
-              ) : null}
-            </span>
-          </div>
-        </div>
-
-        <div className="absolute inset-x-3 bottom-3 flex h-10 items-center gap-2 rounded-lg bg-foreground/90 px-3 text-xs font-medium text-background shadow-lg">
-          <Mic className="size-4 shrink-0" />
-          <span className="flex h-4 items-center gap-0.5" aria-hidden="true">
-            {WAVEFORM_BAR_HEIGHTS.map((height, index) => (
-              <span
-                key={height}
-                className={`block w-0.5 rounded-full bg-current ${typing ? 'animate-waveform' : ''}`}
-                style={{ height: `${height}%`, animationDelay: `${index * 0.1}s` }}
+      <div className="relative w-full max-w-[22rem]">
+        <FeatureTipChatCard
+          tabTitle={t('featureTips.voice.demoTabTitle', 'Checkout footer')}
+          footer={
+            <>
+              {/* Grows in flow, so the transcript slides up as the pill appears above the composer. */}
+              <div
+                data-on={frame.listening}
+                className="h-0 shrink-0 px-4 transition-[height] ease-out data-[on=true]:h-[2.625rem]"
+                style={{ transitionDuration: `${DICTATION_DEMO_SLOT_GROW_MS}ms` }}
+              >
+                {frame.pill ? <DemoDictationPill frame={frame} /> : null}
+              </div>
+              <FeatureTipChatComposer
+                send={frame.draft ? 'ready' : 'empty'}
+                draft={
+                  frame.draft ? (
+                    <span className="whitespace-normal text-chat-foreground-strong">
+                      {frame.draft}
+                    </span>
+                  ) : null
+                }
               />
-            ))}
-          </span>
-          <span className="min-w-0 flex-1 truncate">
-            {t('featureTips.voice.listening', 'Listening...')}
-          </span>
-          <Square className="size-2.5 shrink-0 fill-current opacity-55" />
-        </div>
+            </>
+          }
+        >
+          <div className="mb-4">
+            <FeatureTipChatUserBubble>
+              {t('featureTips.voice.demoUserPrompt', 'Add payment badges')}
+            </FeatureTipChatUserBubble>
+          </div>
+          <NativeChatWorkingStatus
+            startedAt={null}
+            workedSeconds={DEMO_WORKED_SECONDS}
+            onToggleExpanded={noop}
+          />
+          <p className="mt-3 mb-2">
+            {t('featureTips.voice.demoReply', 'Added payment badges to the checkout footer.')}
+          </p>
+        </FeatureTipChatCard>
+        {/* In the empty band between the tab bar and the user's message, so the keys cover no text. */}
+        {frame.keys === 'hidden' ? null : (
+          <FeatureTipKeycaps
+            shortcut={shortcut}
+            pressed={frame.keys === 'pressed'}
+            macGlyphs
+            className="absolute top-14 left-1/2 -translate-x-1/2 transition-opacity duration-150 starting:opacity-0"
+          />
+        )}
       </div>
     </div>
   )

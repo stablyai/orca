@@ -32,21 +32,26 @@ export type OwedStoppedMessage = {
   words: string
 }
 
+/** A command or goal, or words starting with a slash command, which only work at the prompt start:
+ *  nothing may go ahead of them. */
+export function isPromptCommand(body: AgentJournalMessageItem): boolean {
+  if (body.command !== undefined || body.sentAs !== undefined) {
+    return true
+  }
+  const firstText = body.blocks.find((block) => block.type === 'text' && block.text.length > 0)
+  return firstText?.type === 'text' && firstText.text.startsWith('/')
+}
+
 /** Exclude commands/goals/agent mail and slash commands whose wording only works at the prompt start. */
 function isOrdinaryPersonMessage(
   body: AgentJournalItemBody | null | undefined
 ): body is AgentJournalMessageItem {
-  if (
-    body?.kind !== 'message' ||
-    body.role !== 'user' ||
-    body.command !== undefined ||
-    body.sentAs !== undefined ||
-    body.from !== undefined
-  ) {
-    return false
-  }
-  const firstText = body.blocks.find((block) => block.type === 'text' && block.text.length > 0)
-  return !(firstText?.type === 'text' && firstText.text.startsWith('/'))
+  return (
+    body?.kind === 'message' &&
+    body.role === 'user' &&
+    body.from === undefined &&
+    !isPromptCommand(body)
+  )
 }
 
 /** A Stop took it back where Orca proves the agent never received it. */
@@ -139,7 +144,7 @@ export function agentSessionStoppedHistoryOwed(
 }
 
 /** A message's words as an agent joins its text blocks. */
-function messageWords(body: AgentJournalMessageItem): string {
+export function messageWords(body: AgentJournalMessageItem): string {
   return body.blocks
     .flatMap((block) => (block.type === 'text' && block.text.length > 0 ? [block.text] : []))
     .join('\n')

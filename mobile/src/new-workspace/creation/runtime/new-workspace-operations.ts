@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import {
@@ -18,6 +19,17 @@ export const newWorkspaceSetupHooksRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('repo-hooks', newWorkspaceRepoHooksSchema)
+  })
+)
+
+/** Saves the repo's hook settings; the create reads its setup startup policy from them. */
+export const newWorkspaceRepoHookSettingsWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.update-hook-settings',
+    method: 'repo.update',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('repo-updated', z.unknown())
   })
 )
 

@@ -22,7 +22,7 @@ import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
-import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
+import { resolveWslMappedDrivePath } from '../host-selection/wsl-mapped-drive-path'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
   return listWslHostWindowsPathAccess(

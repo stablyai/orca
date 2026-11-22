@@ -6,7 +6,7 @@ import {
   scheduleActivationDeferredAdmission
 } from './activation-deferred-tab-admission'
 import { revealActivationDeferredTabs } from './background-terminal-worktree-mount'
-import type { TerminalColdActivationController } from '../../terminal-cold-activation'
+import type { TerminalColdActivationController } from './terminal-cold-activation'
 
 /** Warm one deferred tab per idle effect pass after reveal; mount revision schedules the next pass without blocking the switch frame. */
 export function useActivationDeferredTabAdmission(

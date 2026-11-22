@@ -50,6 +50,7 @@ export function NewWorktreeFormSheet(props: {
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
+  waitForSetup: boolean | null
   error: string
   creating: boolean
   canCreate: boolean
@@ -66,6 +67,7 @@ export function NewWorktreeFormSheet(props: {
   onNoteChange: (note: string) => void
   onSetupDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
+  onWaitForSetupChange: (wait: boolean) => void
   onCreate: () => void
 }) {
   useMobileColorScheme()
@@ -174,10 +176,12 @@ export function NewWorktreeFormSheet(props: {
             setupRunPolicy={props.setupRunPolicy}
             setupDecisionChoice={props.setupDecisionChoice}
             runSetup={props.runSetup}
+            waitForSetup={props.waitForSetup}
             onExpandedChange={props.onShowAdvancedChange}
             onNoteChange={props.onNoteChange}
             onSetupDecisionChange={props.onSetupDecisionChange}
             onRunSetupChange={props.onRunSetupChange}
+            onWaitForSetupChange={props.onWaitForSetupChange}
           />
 
           {props.error ? <Text style={styles.error}>{props.error}</Text> : null}

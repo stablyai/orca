@@ -1,16 +1,11 @@
 import React, { useCallback, useMemo } from 'react'
-import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
-import { toast } from 'sonner'
+import { LocateFixed } from 'lucide-react'
 import { useAppStore } from '@/store/index'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { ProjectChip } from '@/components/repo/project-chip'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/row-display/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
-import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { cn } from '@/lib/class-names'
 import {
   getWorktreeExecutionHostId,
@@ -18,22 +13,15 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
-import CommentMarkdown from '../../sidebar/CommentMarkdown'
-import { getTranslatedExecutionHostLabel } from '../../sidebar/execution-host-label'
-import {
-  DetailHeader,
-  MetadataActionIcon
-} from '../../sidebar/workspace-card/metadata/WorktreeCardMetadataControls'
-import {
-  WorktreeCardDetailSection,
-  WorktreeCardDetailSectionContent
-} from '../../sidebar/workspace-card/details/WorktreeCardDetailSection'
+import CommentMarkdown from '../../comment-markdown/CommentMarkdown'
+import { getTranslatedExecutionHostLabel } from '../../../runtime/hosts/display/execution-host-label'
+import { MetadataActionIcon } from '../../sidebar/workspace-card/metadata/WorktreeCardMetadataControls'
 import { EventTime, ThreadAgentStateIndicator } from '../thread-list/activity-thread-controls'
 import {
   activityThreadRowCopy,
+  activityThreadRowIdentity,
   threadAgentStateLabel
 } from '../threads/activity-thread-presentation'
-import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 
 export function ActivityThreadHoverCardSummary({
@@ -54,31 +42,31 @@ export function ActivityThreadHoverCardSummary({
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const customHostDisplayLabel = useMemo(() => {
+  // The local machine is the default; only another host is worth naming in the preview.
+  const remoteHostLabel = useMemo(() => {
+    if (!parsedHost || parsedHost.kind === 'local') {
+      return null
+    }
     const override = hostLabelOverrides.get(executionHostId)
     if (override) {
       return override
     }
-    if (parsedHost?.kind === 'runtime') {
+    if (parsedHost.kind === 'runtime') {
       const environment = runtimeEnvironments.find((entry) => entry.id === parsedHost.environmentId)
       if (environment?.name) {
         return environment.name
       }
     }
-    if (parsedHost?.kind === 'ssh') {
+    if (parsedHost.kind === 'ssh') {
       const target = sshTargetLabels.get(parsedHost.targetId)
       if (target) {
         return target
       }
     }
-    return null
+    return getTranslatedExecutionHostLabel(executionHostId)
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
-  const hostDisplayLabel =
-    customHostDisplayLabel ?? getTranslatedExecutionHostLabel(executionHostId)
-  const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
-  const { taskTitle, needsAttention } = activityThreadRowCopy(thread, t)
-  const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
-  const copyPathLabel = t('auto.components.activity.ActivityThreadHoverCard.copyPath', 'Copy path')
+  const { taskTitle, needsAttention, workspaceLabel } = activityThreadRowCopy(thread, t)
+  const { showWorkspace } = activityThreadRowIdentity(thread, 'none')
 
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
@@ -101,141 +89,76 @@ export function ActivityThreadHoverCardSummary({
     [executionHostId, onJumpToWorkspace, thread.paneKey, worktree.id]
   )
 
-  const handleCopyPath = useCallback(async () => {
-    if (!worktree.path) {
-      return
-    }
-    try {
-      const owner = getWorktreeRowLocalPathOpenOwner(
-        useAppStore.getState(),
-        worktree,
-        repo?.connectionId
-      )
-      await window.api.ui.writeClipboardText(formatClipboardFilePath(worktree.path, owner))
-      toast.success(
-        translate(
-          'auto.components.activity.ActivityThreadHoverCard.pathCopied',
-          'Path copied to clipboard'
-        )
-      )
-    } catch {
-      toast.error(
-        translate(
-          'auto.components.activity.ActivityThreadHoverCard.copyPathFailed',
-          'Failed to copy path'
-        )
-      )
-    }
-  }, [repo?.connectionId, worktree])
-
   return (
-    <>
-      <div className="space-y-1.5 border-b border-border/40 pb-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="inline-flex shrink-0">
-              <AgentTypeIcon agentType={thread.agentType} size={14} />
+    <div className="space-y-1.5">
+      <div className="flex items-start justify-between gap-2 pb-0.5">
+        {/* Why: wrap rather than truncate, so long project and workspace names stay readable. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] font-medium text-muted-foreground">
+          {repo ? <ProjectChip repo={repo} className="max-w-full" /> : null}
+          {showWorkspace ? (
+            <span className="min-w-0 max-w-full truncate" title={workspaceLabel}>
+              {workspaceLabel}
             </span>
-            <span className="truncate text-[12px] font-semibold text-foreground">
-              {formatAgentTypeLabel(thread.agentType)}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ThreadAgentStateIndicator thread={thread} />
-            <span
-              className={cn(
-                'text-[11px] font-medium capitalize',
-                needsAttention ? 'text-agent-question-text' : 'text-muted-foreground'
-              )}
-            >
-              {threadAgentStateLabel(thread, t)}
-            </span>
-            <span className="text-muted-foreground/40">•</span>
-            <EventTime timestamp={thread.latestTimestamp} compact />
-          </div>
+          ) : null}
+          {remoteHostLabel ? (
+            <>
+              <span className="text-muted-foreground/40">•</span>
+              <span className="min-w-0 max-w-full truncate" title={remoteHostLabel}>
+                {remoteHostLabel}
+              </span>
+            </>
+          ) : null}
         </div>
-
-        <div className="break-words text-[13px] font-semibold leading-snug text-foreground">
-          {taskTitle}
-        </div>
-
-        {thread.responsePreview ? (
-          <div className="max-h-36 overflow-y-auto break-words rounded-md border border-border/40 bg-accent/40 p-2 text-[11.5px] leading-relaxed text-foreground/80 scrollbar-sleek">
-            <CommentMarkdown
-              content={thread.responsePreview}
-              className="text-[11.5px] leading-relaxed [&_*]:!m-0 [&_*]:!p-0"
-            />
-          </div>
+        {canJump ? (
+          <MetadataActionIcon
+            label={t(
+              'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
+              'Jump to workspace'
+            )}
+            onClick={handleJumpToWorkspace}
+          >
+            <LocateFixed className="size-3" />
+          </MetadataActionIcon>
         ) : null}
       </div>
 
-      <WorktreeCardDetailSection>
-        <DetailHeader
-          icon={<FolderGit2 className="size-3 text-muted-foreground" />}
-          label={t('auto.components.activity.ActivityThreadHoverCard.workspace', 'Workspace')}
-          actions={
-            canJump ? (
-              <MetadataActionIcon
-                label={t(
-                  'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
-                  'Jump to workspace'
-                )}
-                onClick={handleJumpToWorkspace}
-              >
-                <LocateFixed className="size-3" />
-              </MetadataActionIcon>
-            ) : null
-          }
-        />
-        <WorktreeCardDetailSectionContent className="space-y-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {repo ? (
-              <div className="flex shrink-0 items-center gap-1 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 dark:border-border/60 dark:bg-accent/50">
-                <RepoBadgeMark color={repo.badgeColor} />
-                <span className="max-w-[7rem] truncate text-[10px] font-semibold lowercase text-foreground">
-                  {repo.displayName}
-                </span>
-              </div>
-            ) : null}
-            <span className="truncate text-[12.5px] font-semibold text-foreground">
-              {workspaceTitle}
-            </span>
-          </div>
-
-          {branchIdentityDisplay ? (
-            <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
-              <GitBranch className="size-3 shrink-0" />
-              <span className="truncate">
-                {branchIdentityDisplay.kind === 'branch'
-                  ? branchIdentityDisplay.branchName
-                  : branchIdentityDisplay.sidebarLabel}
-              </span>
-            </div>
-          ) : null}
-
-          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            {parsedHost?.kind === 'runtime' ? (
-              <Cloud className="size-3 shrink-0" />
-            ) : parsedHost?.kind === 'ssh' ? (
-              <Server className="size-3 shrink-0" />
-            ) : (
-              <Laptop className="size-3 shrink-0" />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="inline-flex shrink-0">
+            <AgentTypeIcon agentType={thread.agentType} size={14} />
+          </span>
+          <span className="truncate text-[12px] font-semibold text-foreground">
+            {formatAgentTypeLabel(thread.agentType)}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <ThreadAgentStateIndicator thread={thread} />
+          <span
+            className={cn(
+              'text-[11px] font-medium capitalize',
+              needsAttention ? 'text-agent-question-text' : 'text-muted-foreground'
             )}
-            <span className="truncate font-medium">{hostDisplayLabel}</span>
-          </div>
+          >
+            {threadAgentStateLabel(thread, t)}
+          </span>
+          <span className="text-muted-foreground/40">•</span>
+          <EventTime timestamp={thread.latestTimestamp} compact />
+        </div>
+      </div>
 
-          {worktree.path ? (
-            <div className="flex items-center justify-between gap-1.5 rounded border border-border/30 bg-accent/40 px-2 py-1 font-mono text-[10.5px] text-muted-foreground">
-              <span className="truncate" title={worktree.path}>
-                {worktree.path}
-              </span>
-              <MetadataActionIcon label={copyPathLabel} onClick={handleCopyPath}>
-                <Copy className="size-2.5" />
-              </MetadataActionIcon>
-            </div>
-          ) : null}
-        </WorktreeCardDetailSectionContent>
-      </WorktreeCardDetailSection>
-    </>
+      <div className="break-words text-[13px] font-semibold leading-snug text-foreground">
+        {taskTitle}
+      </div>
+
+      {thread.responsePreview ? (
+        <div className="max-h-36 overflow-y-auto break-words rounded-md border border-border/40 bg-accent/40 p-2 text-[11.5px] leading-relaxed text-foreground/80 scrollbar-sleek">
+          <CommentMarkdown
+            content={thread.responsePreview}
+            singleTildeStrikethrough={false}
+            className="text-[11.5px] leading-relaxed [&_*]:!m-0 [&_*]:!p-0"
+          />
+        </div>
+      ) : null}
+    </div>
   )
 }

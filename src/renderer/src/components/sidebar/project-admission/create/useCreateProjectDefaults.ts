@@ -1,9 +1,9 @@
 // Resolve parent and Git defaults on the chosen host while rejecting stale async results.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
-import { getDefaultCreateProjectParent, type GitAvailability } from './create-project-defaults'
+import type { GitAvailability } from './create-project-defaults'
+import { getRuntimeDefaultCreateProjectParent } from './runtime-create-project-parent'
 
 const LOCAL_GIT_AVAILABILITY_TIMEOUT_MS = 1500
 const RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS = 3000
@@ -211,17 +211,19 @@ export function useCreateProjectDefaults({
     const gen = ++createParentDefaultGenRef.current
     setCreateRuntimeParentStatus('checking')
     void withTimeout(
-      browseRuntimeServerDirectory(runtimeEnvironmentId, '~'),
+      getRuntimeDefaultCreateProjectParent(
+        runtimeEnvironmentId,
+        RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS
+      ),
       RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS
     )
-      .then((result) => {
+      .then((parent) => {
         if (
           gen !== createParentDefaultGenRef.current ||
           !canReplaceCreateParentDefault(createParent)
         ) {
           return
         }
-        const parent = getDefaultCreateProjectParent(result.resolvedPath)
         createStepAutoFilledRef.current = true
         autoFilledCreateParentRef.current = {
           parent,

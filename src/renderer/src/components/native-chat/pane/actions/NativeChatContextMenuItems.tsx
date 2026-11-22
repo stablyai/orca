@@ -1,8 +1,11 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
+import { Copy, ExternalLink, FileText, Globe, Quote, Search, Trash2, Undo2 } from 'lucide-react'
+import {
+  useNativeChatRewindConfirm,
+  useNativeChatSlackMirrorContext
+} from '../../slack-mirror/native-chat-slack-mirror'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
@@ -24,7 +27,8 @@ export function NativeChatContextMenuTargetItems({
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
   const t = useTranslate()
-  const { quoteText, link, codeText, messageText, rewindItemId } = target
+  const { quoteText, link, codeText, messageText, rewindItemId, slackPostedItemId } = target
+  const slackMirror = useNativeChatSlackMirrorContext()
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
     <>
@@ -65,6 +69,12 @@ export function NativeChatContextMenuTargetItems({
       {rewindItemId && rewind ? (
         <NativeChatRewindMenuItem itemId={rewindItemId} rewind={rewind} />
       ) : null}
+      {slackPostedItemId && slackMirror ? (
+        <DropdownMenuItem onSelect={() => void slackMirror.post(slackPostedItemId, 'delete')}>
+          <Trash2 />
+          {t('components.native-chat.slackMirror.delete', 'Delete from Slack')}
+        </DropdownMenuItem>
+      ) : null}
     </>
   )
 }
@@ -91,18 +101,19 @@ function NativeChatRewindMenuItem({
   rewind: NativeChatRewindSurface
 }): React.JSX.Element {
   const t = useTranslate()
-  const confirm = useConfirmationDialog()
+  const confirm = useNativeChatRewindConfirm()
   return (
     <DropdownMenuItem
       disabled={Boolean(rewind.disabledReason)}
       onSelect={() => void rewind.request(itemId, confirm)}
     >
       <Undo2 />
-      <span className="grid min-w-0">
+      <span className="grid min-w-0 flex-1">
         {t('components.native-chat.rewind.action', 'Rewind to here')}
-        {/* A disabled row cannot show the button's tooltip, so its reason sits under the label. */}
+        {/* A disabled row cannot show the button's tooltip, so its reason sits under the label,
+            wrapping to the other rows' width (contain-inline-size) instead of widening the menu. */}
         {rewind.disabledReason ? (
-          <span className="text-xs whitespace-normal text-muted-foreground">
+          <span className="text-xs whitespace-normal text-muted-foreground contain-inline-size">
             {rewind.disabledReason}
           </span>
         ) : null}

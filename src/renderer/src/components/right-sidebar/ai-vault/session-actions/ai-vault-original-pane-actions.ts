@@ -12,7 +12,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
+import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
@@ -21,7 +21,7 @@ import {
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export function useAiVaultOriginalPaneActions(): {
@@ -102,12 +102,7 @@ export function useAiVaultOriginalPaneActions(): {
         }
         // Wait for workspace activation to reveal the retained chat pane.
         requestAnimationFrame(() => {
-          const pane = document.querySelector<HTMLElement>(
-            `[data-structured-agent-session-overlay-tab-id="${CSS.escape(result.tab.id)}"]`
-          )
-          if (pane) {
-            flashFocusedPaneRim(pane)
-          }
+          flashChatPaneRim(result.tab.id)
         })
         return true
       }

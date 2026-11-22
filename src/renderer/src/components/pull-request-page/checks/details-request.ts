@@ -11,7 +11,7 @@ import {
   settleGitHubChecksTabDetails,
   type CheckDetailsLoadState,
   type GitHubChecksTabState
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import {
   getGitHubRuntimeRepoId,
   type GitHubRuntimeHost

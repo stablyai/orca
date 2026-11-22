@@ -4,6 +4,7 @@ import {
   agentSessionTextAppendRequest
 } from '../../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import {
+  AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
 } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
@@ -14,32 +15,39 @@ import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibil
 
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 
-// Read once per chat run, overlapping hydration; a host that later refuses the param drops appends.
-async function environmentTextAppends(
-  environmentId: string
-): Promise<AgentSessionTextAppendCapabilities | null> {
-  const [textAppend, toolOutputAppend] = await runtimeEnvironmentSupportsCapabilities(
-    environmentId,
-    [
-      AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
-      AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-    ]
-  ).catch(() => [false, false])
-  return agentSessionTextAppendRequest({ textAppend, toolOutputAppend })
+// Read once per chat run, overlapping hydration; a host that later refuses the param drops what
+// it asked for. Older hosts' params predate each key, and a failed check asks for none.
+function environmentSubscribeAsks(environmentId: string): {
+  textAppend: Promise<AgentSessionTextAppendCapabilities | null>
+  promptSuggestions: Promise<boolean>
+} {
+  const supported = runtimeEnvironmentSupportsCapabilities(environmentId, [
+    AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY
+  ]).catch(() => [false, false, false])
+  return {
+    textAppend: supported.then(([textAppend, toolOutputAppend]) =>
+      agentSessionTextAppendRequest({ textAppend, toolOutputAppend })
+    ),
+    promptSuggestions: supported.then(([, , promptSuggestions]) => promptSuggestions === true)
+  }
 }
 
 export function startStructuredAgentSessionReadTransport(
-  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe'> & {
+  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe' | 'promptSuggestions'> & {
     target: RuntimeClientTarget
+    /** This reader shows prompt suggestions, so the host should generate them while it reads. */
+    showsPromptSuggestions?: boolean
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
-  const { target, ...read } = args
+  const { target, showsPromptSuggestions, ...read } = args
+  // Only a network hop pays for whole-reply restatements; local IPC keeps opening in the same turn.
+  const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
   return startStructuredAgentSessionLiveRead({
     ...read,
-    // Only a network hop pays for whole-reply restatements; local IPC keeps opening in the same turn.
-    ...(target.kind === 'environment'
-      ? { textAppend: environmentTextAppends(target.environmentId) }
-      : {}),
+    ...(asks ? { textAppend: asks.textAppend } : {}),
+    ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>

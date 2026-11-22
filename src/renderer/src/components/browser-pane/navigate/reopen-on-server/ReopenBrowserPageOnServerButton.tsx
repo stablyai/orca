@@ -100,7 +100,8 @@ export function ReopenBrowserPageOnServerButton({
           )}
           aria-hidden={!showPending}
         >
-          <Loader2 className="size-3.5 animate-spin" />
+          {/* Spin only while shown: the hidden copy just reserves width. */}
+          <Loader2 className={cn('size-3.5', showPending && 'animate-spin')} />
           {t('browser.reopenOnServer.pending', 'Reopening…')}
         </span>
       </span>
