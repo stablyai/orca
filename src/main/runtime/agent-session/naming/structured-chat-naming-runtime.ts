@@ -91,7 +91,8 @@ export function structuredChatNamingDeps(
           'droid',
           'qwen-code',
           'cline',
-          'devin'
+          'devin',
+          'codebuddy'
         ].includes(record.provider)
       ) {
         return null

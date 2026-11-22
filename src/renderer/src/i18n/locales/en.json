@@ -29859,6 +29859,7 @@
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

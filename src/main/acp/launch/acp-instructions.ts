@@ -181,6 +181,14 @@ export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, 
   return {}
 }
 
+// CodeBuddy rebuilds its system prompt from the folder's CODEBUDDY.local.md at every start, reopens
+// included (checked live on 2.185.0). Its --append-system-prompt takes only inline text, which a
+// grown bot preamble would push past Windows' command-line limit.
+export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'CODEBUDDY.local.md', 'CodeBuddy', text)
+  return {}
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
