@@ -1,7 +1,8 @@
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { AlertCircle, ChevronDown, ChevronUp, Play, Trash2 } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -100,9 +101,8 @@ export function NativeChatQueuedMessageList({
   return (
     <div ref={regionRef} aria-live="polite">
       {cards.length > 0 ? (
-        // The background-task strip's frame and width, so the two read as one stack above the chat box.
-        <div ref={queueRef} className="shrink-0 bg-chat-pane px-3 pt-2 sm:px-4">
-          <div className="mx-auto w-full max-w-(--chat-content-max-width) rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs">
+        <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
+          <div className="divide-y divide-border rounded-md border border-border bg-card text-card-foreground">
             <NativeChatQueueHeader
               count={cards.length}
               attentionCaption={attentionCaption}
@@ -123,7 +123,7 @@ export function NativeChatQueuedMessageList({
               aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
               // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
-                'scrollbar-sleek overflow-y-auto px-1.5 pb-1.5',
+                'scrollbar-sleek divide-y divide-border overflow-y-auto',
                 controller.editor ? 'max-h-72' : 'max-h-40'
               )}
             >
@@ -191,47 +191,38 @@ function NativeChatQueueHeader({
   onResume: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const state = pause
-    ? t('components.native-chat.queuedMessages.paused', 'Paused')
-    : t('components.native-chat.queuedMessages.queued', 'Queued')
-  // Rows already show how many are queued; only a collapsed list needs the count.
-  const hiddenCount = t('components.native-chat.queuedMessages.queuedCount', '{{count}} queued', {
-    count,
-    defaultValue_one: '{{count}} queued'
-  })
+  const toggleLabel = expanded
+    ? t('components.native-chat.queuedMessages.collapse', 'Collapse')
+    : t('components.native-chat.queuedMessages.expand', 'Expand')
   return (
-    <div className="flex h-8 items-center gap-1 px-1.5">
-      <button
-        type="button"
-        className="group/queue-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        aria-expanded={expanded}
-        aria-controls={listId}
-        onClick={onToggle}
-      >
-        <span className="min-w-0 truncate">
-          {pause && !expanded ? <span>{state} · </span> : null}
-          <span className="font-medium text-foreground group-hover/queue-header:text-accent-foreground">
-            {expanded ? state : hiddenCount}
-          </span>
+    <div
+      className={cn(
+        'flex items-center gap-1 rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground',
+        pause && 'bg-muted',
+        !expanded && 'rounded-b-md'
+      )}
+    >
+      <p className={cn('truncate', pause && 'font-medium text-foreground')}>
+        {pause
+          ? t('components.native-chat.queuedMessages.paused', 'Paused')
+          : t('components.native-chat.queuedMessages.queued', 'Queued')}
+      </p>
+      <span aria-hidden>·</span>
+      <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
+        {count}
+      </span>
+      {attentionCaption ? (
+        <span className="flex min-w-0 flex-1 items-center gap-1 text-destructive">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{attentionCaption}</span>
         </span>
-        {expanded ? (
-          <ChevronUp className="size-3 shrink-0" aria-hidden />
-        ) : (
-          <ChevronDown className="size-3 shrink-0" aria-hidden />
-        )}
-        {attentionCaption ? (
-          <span className="flex min-w-0 items-center gap-1 text-destructive">
-            <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">{attentionCaption}</span>
-          </span>
-        ) : null}
-      </button>
+      ) : null}
       {pause ? (
         <>
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
           <Button
             type="button"
-            variant="chat-tool"
+            variant="ghost"
             size="xs"
             disabled={!clearCapable || queuePending !== null}
             onClick={onClearAll}
@@ -255,6 +246,24 @@ function NativeChatQueueHeader({
           </Button>
         </>
       ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={onToggle}
+          >
+            {expanded ? <ChevronDown /> : <ChevronRight />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {toggleLabel}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

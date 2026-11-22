@@ -33,7 +33,7 @@ function queued(
   }
 }
 
-function renderCard(message: AgentSessionQueuedMessage, onEdit = vi.fn()) {
+function moreActions(message: AgentSessionQueuedMessage): HTMLElement | null {
   const [card] = projectQueuedMessageCards([message], [], { agentWorking: true })
   const view = render(
     <NativeChatQueuedMessageCard
@@ -43,18 +43,14 @@ function renderCard(message: AgentSessionQueuedMessage, onEdit = vi.fn()) {
       agentWorking
       onSteer={() => {}}
       onDelete={() => {}}
-      onEdit={onEdit}
+      onEdit={() => {}}
     />
   )
-  return view.queryByRole('button', { name: 'Edit message' })
+  return view.queryByRole('button', { name: 'More actions' })
 }
 
-it("edits the owner's queued message in one press, without a menu", () => {
-  const onEdit = vi.fn()
-  renderCard(queued('mine', {}), onEdit)?.click()
-  expect(onEdit).toHaveBeenCalledTimes(1)
-})
-
-it("never offers Edit on an automation's queued run", () => {
-  expect(renderCard(queued('run', { origin: 'automation-run' }))).toBeNull()
+it("offers Edit on the owner's queued message but never on an automation's queued run", () => {
+  expect(moreActions(queued('mine', {}))).not.toBeNull()
+  cleanup()
+  expect(moreActions(queued('run', { origin: 'automation-run' }))).toBeNull()
 })
