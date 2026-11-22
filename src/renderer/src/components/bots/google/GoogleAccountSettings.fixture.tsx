@@ -76,10 +76,10 @@ export const removeDefault = defineFixture({
   render: () => <Settings />,
   interact: async () => {
     await clickWhenShown('dana@acme.com actions')
-    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent?.trim() === 'Remove from this computer'
     )
-    ;(item as HTMLElement | undefined)?.click()
+    item?.click()
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
 })
